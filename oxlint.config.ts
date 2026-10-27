@@ -2034,6 +2034,7 @@ const config = defineConfig({
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
+    "./.oxlint-plugins/no-lazy-wrapped-content.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
     "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
@@ -3836,6 +3837,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
+      },
+    },
+    {
+      // React mounts a Suspense boundary's content in place of its fallback,
+      // so a lazy chunk mounted around content already on screen (a reader,
+      // a viewer) replaces it, DOM node, scroll position and focus included.
+      // Lazy chunks mount beside the content they add to.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-lazy-wrapped-content.fixture.tsx",
+      ],
+      rules: {
+        "no-lazy-wrapped-content/no-lazy-wrapped-content": "error",
       },
     },
     {

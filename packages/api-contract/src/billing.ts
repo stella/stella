@@ -15,8 +15,13 @@ true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
 /** ISO 4217 code for an entry whose financial value has not been configured. */
 export const UNPRICED_TIME_ENTRY_CURRENCY = "XXX";
 
+/**
+ * An entry's review lifecycle: a timekeeper's draft is submitted for review,
+ * approved (or returned to draft with a reason), then billed or written off.
+ */
 export const TIME_ENTRY_STATUSES = [
   "draft",
+  "submitted",
   "approved",
   "billed",
   "written_off",
@@ -26,6 +31,7 @@ export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
 
 export const BILLING_STATUS = {
   DRAFT: "draft",
+  SUBMITTED: "submitted",
   APPROVED: "approved",
   BILLED: "billed",
   WRITTEN_OFF: "written_off",

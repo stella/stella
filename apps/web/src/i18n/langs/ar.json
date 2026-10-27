@@ -508,14 +508,20 @@
     "amount": "المبلغ",
     "amountMustBePositive": "يجب أن يكون المبلغ أكبر من صفر",
     "approval": {
+      "approveAll": "{count, plural, zero {اعتماد القيود} one {اعتماد قيد واحد} two {اعتماد القيدين} few {اعتماد # قيود} many {اعتماد # قيدًا} other {اعتماد # قيد}}",
       "approveSelected": "اعتماد {count, plural, zero {لا قيود محددة} one {قيد محدد واحد} two {قيدين محددين} few {# قيود محددة} many {# قيدًا محددًا} other {# قيد محدد}}",
+      "billedTotal": "{duration} مفوتر",
       "empty": "لا يوجد ما ينتظر الاعتماد في هذا الملف القانوني.",
+      "emptyWeek": "لا شيء بانتظار الاعتماد هذا الأسبوع. يظهر الوقت المُرسَل هنا.",
+      "everyone": "الجميع",
       "failed": "لم يُحفظ التغيير. حاول مرة أخرى.",
       "myTime": "وقتي",
+      "pending": "{count, plural, zero {لا قيود للاعتماد} one {قيد واحد للاعتماد} two {قيدان للاعتماد} few {# قيود للاعتماد} many {# قيدًا للاعتماد} other {# قيد للاعتماد}}",
       "refusals": {
         "invalidEntry": "أضف وصفًا وتحقق من تاريخ العمل، ثم اعتمد القيد.",
         "notApprover": "لا يعتمد هذا القيد إلا المعتمِد المعيّن له أو مسؤول.",
         "notFound": "هذا القيد لم يعد موجودًا. حدّث القائمة.",
+        "notSubmitted": "لم يُرسَل هذا القيد بعد. يجب أن يرسله صاحبه أولًا.",
         "runningTimer": "أوقف المؤقّت الجاري قبل اعتماد هذا القيد.",
         "unpriced": "لا يوجد سعر لهذا القيد. اضبط سعرًا لهذا الملف القانوني ثم اعتمد القيد.",
         "wrongStatus": "هذا القيد لم يعد مسودة. حدّث القائمة."
@@ -827,6 +833,7 @@
       "approved": "مُعتمد",
       "billed": "مُفوتر",
       "draft": "مسودة",
+      "submitted": "مُرسَل",
       "written_off": "مشطوب"
     },
     "stopTimer": "إيقاف",
@@ -2095,7 +2102,6 @@
       "orLetUsKnowAt": "أو أخبرنا عبر",
       "viewDocumentation": "عرض التوثيق"
     },
-    "error": "خطأ",
     "expenses": "المصروفات",
     "export": {
       "citations": "الاستشهادات",
@@ -2169,6 +2175,7 @@
     "lastUpdated": "آخر تحديث",
     "layoutResetAfterProblem": "تمت إعادة ضبط التخطيط بعد حدوث مشكلة.",
     "legalDatabase": "قاعدة البيانات القانونية",
+    "loadFailed": "تعذّر التحميل.",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
@@ -2257,7 +2264,7 @@
     "showMore": "عرض المزيد",
     "showSecretValue": "إظهار القيمة السرية",
     "signOut": "تسجيل الخروج",
-    "somethingWentWrong": "حدث خطأ ما",
+    "somethingWentWrong": "حدث خطأ ما. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "sort": "فرز",
     "source": "المصدر",
     "stale": "قديم",
@@ -2734,7 +2741,7 @@
       "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
       "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
     },
-    "actionFailed": "فشل الإجراء",
+    "actionFailed": "لم تنجح العملية. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
       "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
@@ -3285,7 +3292,7 @@
     "saveSerializeFailedTitle": "تعذّر إنشاء ملف DOCX",
     "savingDocument": "جارٍ الحفظ...",
     "showDetails": "إظهار التفاصيل",
-    "somethingWentWrong": "حدث خطأ ما",
+    "somethingWentWrong": "حدث خطأ ما. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "synced": "تمت المزامنة",
     "syncing": "جارٍ المزامنة",
     "tableBordersAll": "كل الحدود",
@@ -5898,6 +5905,16 @@
       "pendingCount": "{count, plural, zero {لا مقترحات} one {مقترح واحد} two {مقترحان} few {# مقترحات} many {# مقترحًا} other {# مقترح}}",
       "previousWeek": "الأسبوع السابق",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "تحقق من تاريخ العمل، ثم أرسل هذا القيد.",
+        "narrativeRequired": "أضف وصفًا، ثم أرسل هذا القيد.",
+        "runningTimer": "أوقف المؤقت الجاري، ثم أرسل هذا القيد.",
+        "unpriced": "لا يوجد سعر لهذا القيد. اطلب سعرًا للملف القانوني، ثم أرسله."
+      },
+      "returned": "أُعيد: {comment}",
+      "submitAndApprove": "إرسال واعتماد",
+      "submitResult": "مُرسَل: {submitted} · معتمد: {approved} · للتصحيح: {refused}",
+      "submitWeek": "إرسال الأسبوع",
       "title": "أسبوعي",
       "totals": "{logged} مُسجَّلة · {billable} قابلة للفوترة"
     }
