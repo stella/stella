@@ -23,10 +23,67 @@ export const storedSessionSchema = v.object({
 
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
 
-export type SessionStore = {
+type SessionPersistence = {
   readonly read: () => Promise<StoredSession | undefined>;
   readonly write: (session: StoredSession) => Promise<void>;
   readonly clear: () => Promise<void>;
+};
+
+const sessionGenerationBrand = Symbol("session-generation");
+export type SessionGeneration = {
+  readonly [sessionGenerationBrand]: true;
+};
+
+export type SessionStore = {
+  readonly read: () => Promise<StoredSession | undefined>;
+  readonly generation: () => SessionGeneration;
+  readonly advance: () => SessionGeneration;
+  readonly isCurrent: (generation: SessionGeneration) => boolean;
+  readonly write: (
+    session: StoredSession,
+    generation: SessionGeneration,
+  ) => Promise<boolean>;
+  readonly clear: () => Promise<void>;
+};
+
+/** Owns every credential mutation and orders it against session generation changes. */
+export const createSessionStore = (
+  persistence: SessionPersistence,
+): SessionStore => {
+  let generation: SessionGeneration = { [sessionGenerationBrand]: true };
+  let mutations = Promise.resolve();
+
+  const advance = (): SessionGeneration => {
+    generation = { [sessionGenerationBrand]: true };
+    return generation;
+  };
+  const enqueue = async <Value>(mutation: () => Promise<Value>) => {
+    const pending = mutations.then(mutation, mutation);
+    mutations = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await pending;
+  };
+
+  return {
+    read: persistence.read,
+    generation: () => generation,
+    advance,
+    isCurrent: (captured) => captured === generation,
+    write: async (session, captured) =>
+      await enqueue(async () => {
+        if (captured !== generation) {
+          return false;
+        }
+        await persistence.write(session);
+        return true;
+      }),
+    clear: async () => {
+      advance();
+      await enqueue(persistence.clear);
+    },
+  };
 };
 
 export type AccessToken = {
@@ -75,12 +132,18 @@ export const createAccessTokenSource = ({
 }): AccessTokenSource => {
   let current = session;
   let access = initialAccess;
+  const generation = store.generation();
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
   const refresh = async (): Promise<
     Result<string, SignedOutError | TokenError>
   > => {
+    if (!store.isCurrent(generation)) {
+      return Result.err(
+        new SignedOutError({ message: "The session is no longer current" }),
+      );
+    }
     const refreshed = await refreshTokens({
       fetch,
       clientId: current.clientId,
@@ -107,9 +170,7 @@ export const createAccessTokenSource = ({
     ) {
       current = { ...current, refreshToken: tokens.refresh_token };
       const persisted = await Result.tryPromise({
-        try: async () => {
-          await store.write(current);
-        },
+        try: async () => await store.write(current, generation),
         catch: (cause) =>
           new TokenError({
             message: "Could not keep the rotated session",
@@ -119,6 +180,16 @@ export const createAccessTokenSource = ({
       if (Result.isError(persisted)) {
         return Result.err(persisted.error);
       }
+      if (!persisted.value) {
+        return Result.err(
+          new SignedOutError({ message: "The session is no longer current" }),
+        );
+      }
+    }
+    if (!store.isCurrent(generation)) {
+      return Result.err(
+        new SignedOutError({ message: "The session is no longer current" }),
+      );
     }
     access = {
       token: tokens.access_token,

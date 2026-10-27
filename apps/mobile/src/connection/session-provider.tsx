@@ -90,10 +90,9 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         return Result.err(signedIn.error);
       }
       const { session } = signedIn.value;
+      const generation = deviceSessionStore.advance();
       const stored = await Result.tryPromise({
-        try: async () => {
-          await deviceSessionStore.write(session);
-        },
+        try: async () => await deviceSessionStore.write(session, generation),
         catch: (cause) =>
           new TokenError({
             message: "The keychain refused the session",
@@ -112,6 +111,9 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
           })
         ).unwrapOr(undefined);
         return Result.err(stored.error);
+      }
+      if (!stored.value) {
+        return Result.ok(undefined);
       }
       setState({
         status: "signed-in",

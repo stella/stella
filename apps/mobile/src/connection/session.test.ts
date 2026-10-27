@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import type { Fetch } from "./http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   EARLY_REFRESH_MS,
   type SessionStore,
   type StoredSession,
@@ -40,7 +44,7 @@ const rotatingTokenEndpoint = () => {
 
 const memoryStore = (initial: StoredSession | undefined) => {
   let stored = initial;
-  const store: SessionStore = {
+  const store = createSessionStore({
     read: async () => stored,
     write: async (session) => {
       stored = session;
@@ -48,7 +52,7 @@ const memoryStore = (initial: StoredSession | undefined) => {
     clear: async () => {
       stored = undefined;
     },
-  };
+  });
   return { store, stored: () => stored };
 };
 
@@ -140,5 +144,97 @@ describe("access tokens", () => {
     expect(memory.stored()).toEqual(SESSION);
     reachable = true;
     expect(await token(source)).toBe("access-1");
+  });
+
+  test("a refresh resolving after sign-out cannot restore credentials", async () => {
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    const memory = memoryStore(SESSION);
+    const source = createAccessTokenSource({
+      fetch: async () =>
+        await new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    const refreshing = token(source);
+    await Promise.resolve();
+    await memory.store.clear();
+    resolveRefresh?.(
+      Response.json({
+        access_token: "late-access",
+        expires_in: 900,
+        refresh_token: "late-refresh",
+        token_type: "Bearer",
+      }),
+    );
+
+    expect(await refreshing).toBe("SignedOutError");
+    expect(memory.stored()).toBeUndefined();
+    expect(await token(source)).toBe("SignedOutError");
+    expect(memory.stored()).toBeUndefined();
+  });
+
+  test("credentials follow session generations across event interleavings", async () => {
+    type Event =
+      | "refresh-start"
+      | "refresh-resolve"
+      | "refresh-fail"
+      | "sign-out"
+      | "sign-in";
+    const event = fc.constantFrom<Event>(
+      "refresh-start",
+      "refresh-resolve",
+      "refresh-fail",
+      "sign-out",
+      "sign-in",
+    );
+
+    await assertProperty(
+      "credentials follow session generations across event interleavings",
+      fc.asyncProperty(fc.array(event, { maxLength: 40 }), async (events) => {
+        const memory = memoryStore(undefined);
+        const pending: {
+          generation: ReturnType<SessionStore["generation"]>;
+          session: StoredSession;
+        }[] = [];
+        let expected: StoredSession | undefined;
+        let sequence = 1;
+
+        for (const currentEvent of events) {
+          if (currentEvent === "sign-in") {
+            expected = { ...SESSION, refreshToken: `sign-in-${sequence++}` };
+            const generation = memory.store.advance();
+            await memory.store.write(expected, generation);
+          } else if (currentEvent === "sign-out") {
+            expected = undefined;
+            await memory.store.clear();
+          } else if (currentEvent === "refresh-start") {
+            pending.push({
+              generation: memory.store.generation(),
+              session: {
+                ...SESSION,
+                refreshToken: `refresh-${sequence++}`,
+              },
+            });
+          } else {
+            const refresh = pending.shift();
+            if (refresh !== undefined && currentEvent === "refresh-resolve") {
+              const stored = await memory.store.write(
+                refresh.session,
+                refresh.generation,
+              );
+              if (stored) {
+                expected = refresh.session;
+              }
+            }
+          }
+          expect(memory.stored()).toEqual(expected);
+        }
+      }),
+    );
   });
 });

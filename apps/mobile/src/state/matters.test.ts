@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { Fetch } from "@/connection/http";
 import {
   createAccessTokenSource,
+  createSessionStore,
   type StoredSession,
 } from "@/connection/session";
 
@@ -56,11 +57,11 @@ const sourceFor = (fetch: Fetch) =>
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: {
+    store: createSessionStore({
       read: async () => SESSION,
       write: async () => {},
       clear: async () => {},
-    },
+    }),
   });
 
 const outcome = async (fetch: Fetch) => {

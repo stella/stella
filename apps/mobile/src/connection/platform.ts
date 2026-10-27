@@ -12,8 +12,7 @@ import { openAuthSessionAsync } from "expo-web-browser";
 import * as v from "valibot";
 
 import type { AuthorizationCrypto } from "./pkce";
-import { storedSessionSchema } from "./session";
-import type { SessionStore } from "./session";
+import { createSessionStore, storedSessionSchema } from "./session";
 import type { OpenAuthSession } from "./sign-in";
 
 export const deviceCrypto: AuthorizationCrypto = {
@@ -31,7 +30,7 @@ const SESSION_KEY = "stella.session";
  */
 const KEYCHAIN = { keychainAccessible: AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY };
 
-export const deviceSessionStore: SessionStore = {
+export const deviceSessionStore = createSessionStore({
   read: async () => {
     const stored = await getItemAsync(SESSION_KEY, KEYCHAIN);
     if (stored === null) {
@@ -55,7 +54,7 @@ export const deviceSessionStore: SessionStore = {
   clear: async () => {
     await deleteItemAsync(SESSION_KEY, KEYCHAIN);
   },
-};
+});
 
 /**
  * The system authentication session (ASWebAuthenticationSession, Custom Tabs).
