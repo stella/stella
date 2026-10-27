@@ -6,6 +6,7 @@ import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
@@ -132,7 +133,6 @@ afterEach(() => {
   searchHits = [hit];
   assignUserStorage(undefined);
   useDevStore.setState({ publicLawPreview: false });
-  jest.useRealTimers();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -209,7 +209,7 @@ const typeQuery = async (expectedTitle: string = hit.title) => {
   await testing.act(async () => {
     testing.fireEvent.input(input, { target: { value: "engagement" } });
     jest.advanceTimersByTime(301);
-    jest.useRealTimers();
+    restoreRealTimers();
   });
   await testing.waitFor(() =>
     expect(testing.screen.getAllByText(expectedTitle).length).toBeGreaterThan(

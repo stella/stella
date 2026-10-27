@@ -21952,14 +21952,6 @@
         "job": "measure-2"
       }
     },
-    "src/tests/query-perf/baseline-recording.test.ts": {
-      "peakMb": 218,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/tests/query-perf/deadline.test.ts": {
       "peakMb": 202,
       "baselineMb": 202,

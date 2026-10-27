@@ -18842,7 +18842,7 @@
       "version": "0.17.14"
     },
     {
-      "bom-ref": "pkg:cargo/rust-ini@0.21.3",
+      "bom-ref": "pkg:cargo/rust-ini@0.21.1",
       "evidence": {
         "identity": [
           {
@@ -18863,7 +18863,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "796e8d2b6696392a43bea58116b667fb4c29727dc5abd27d6acf338bb4f688c7"
+          "content": "4e310ef0e1b6eeb79169a1171daf9abcb87a2e17c03bee2c4bb100b55c75409f"
         }
       ],
       "licenses": [
@@ -18880,9 +18880,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/rust-ini@0.21.3",
+      "purl": "pkg:cargo/rust-ini@0.21.1",
       "type": "library",
-      "version": "0.21.3"
+      "version": "0.21.1"
     },
     {
       "bom-ref": "pkg:cargo/rustc-demangle@0.1.28",
@@ -25457,6 +25457,49 @@
       "purl": "pkg:cargo/tree_magic_mini@3.2.2",
       "type": "library",
       "version": "3.2.2"
+    },
+    {
+      "bom-ref": "pkg:cargo/trim-in-place@0.1.8",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "daa60874b45b168f67f3f9ba1ee821ad77144d6fa19cef1cd1874a7450a948da"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "trim-in-place",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/trim-in-place@0.1.8",
+      "type": "library",
+      "version": "0.1.8"
     },
     {
       "bom-ref": "pkg:cargo/try-lock@0.2.5",
@@ -35399,9 +35442,10 @@
     {
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/ordered-multimap@0.7.3"
+        "pkg:cargo/ordered-multimap@0.7.3",
+        "pkg:cargo/trim-in-place@0.1.8"
       ],
-      "ref": "pkg:cargo/rust-ini@0.21.3"
+      "ref": "pkg:cargo/rust-ini@0.21.1"
     },
     {
       "dependsOn": [],
@@ -36218,7 +36262,7 @@
       "dependsOn": [
         "pkg:cargo/dunce@1.0.5",
         "pkg:cargo/plist@1.10.2",
-        "pkg:cargo/rust-ini@0.21.3",
+        "pkg:cargo/rust-ini@0.21.1",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.154",
         "pkg:cargo/tauri-plugin@2.7.1",
@@ -36715,6 +36759,10 @@
         "pkg:cargo/petgraph@0.8.3"
       ],
       "ref": "pkg:cargo/tree_magic_mini@3.2.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/trim-in-place@0.1.8"
     },
     {
       "dependsOn": [],

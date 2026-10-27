@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { expect, spyOn, test } from "bun:test";
+import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
@@ -31,6 +31,11 @@ import type {
 } from "./screening-failure";
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 // Work usage is asserted where it is produced; replies only carry it.
 const SCREENED_WORK = { spent: expect.any(Number), limit: expect.any(Number) };
