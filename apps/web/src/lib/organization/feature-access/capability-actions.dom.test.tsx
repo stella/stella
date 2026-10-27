@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import messages from "@/i18n/langs/en.json";
@@ -184,7 +186,7 @@ const surfaces = [
     name: "row actions",
     capability: "ocr",
     surface: "menu",
-    label: messages.workspaces.files.runOcr,
+    label: messages.workspaces.files.queueForOcr,
   },
   {
     name: "command palette",
@@ -218,7 +220,9 @@ for (const fixture of surfaces) {
             role,
             ai: fixture.name === "document toolbar" ? false : available,
             deepl: available,
-            ocr: available,
+            ocr: available
+              ? DOCUMENT_OCR_AVAILABILITY.live
+              : DOCUMENT_OCR_AVAILABILITY.unconfigured,
             desktop: available ? "current" : "none",
             settings: undefined,
           });
@@ -270,11 +274,9 @@ for (const fixture of surfaces) {
                     }}
                     onEditPages={undefined}
                     onOpenVersionHistory={undefined}
-                    onSign={undefined}
                     onTranslate={() => {
                       calls += 1;
                     }}
-                    signLabel="Sign"
                     translationTarget={
                       fixture.name === "file context menu"
                         ? {
@@ -398,3 +400,88 @@ for (const fixture of surfaces) {
     }
   });
 }
+
+describe("OCR batch help", () => {
+  // An administrator sees the action in every status, so the absence of
+  // help below is not the absence of the whole row.
+  const renderOcrActions = async (status: DocumentOcrAvailability) => {
+    const runs = { count: 0 };
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    clients.push(client);
+    render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <ActionCapabilitiesProvider
+            value={resolveActionCapabilities({
+              role: "admin",
+              ai: true,
+              deepl: true,
+              ocr: status,
+              desktop: "current",
+              settings: undefined,
+            })}
+          >
+            <Menu open>
+              <MenuPopup>
+                <RowOcrMenuActions
+                  canRunOcr
+                  isPending={false}
+                  onRun={async () => {
+                    runs.count += 1;
+                  }}
+                  rowSources={[]}
+                  selectedSource={undefined}
+                />
+              </MenuPopup>
+            </Menu>
+          </ActionCapabilitiesProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+    const queue = await screen.findByRole("menuitem", {
+      name: messages.workspaces.files.queueForOcr,
+    });
+    return { queue, runs };
+  };
+
+  test("a batched deployment offers help that is its own menu item", async () => {
+    const { queue, runs } = await renderOcrActions(
+      DOCUMENT_OCR_AVAILABILITY.batched,
+    );
+    const help = screen.getByRole("menuitem", {
+      name: messages.workspaces.files.ocrBatchHelp,
+    });
+
+    queue.focus();
+    fireEvent.keyDown(queue, { key: "ArrowDown" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(help);
+    });
+    fireEvent.click(help);
+    fireEvent.keyDown(help, { key: "Enter" });
+    expect(runs.count).toBe(0);
+    expect(
+      screen.getByRole("menuitem", {
+        name: messages.workspaces.files.queueForOcr,
+      }),
+    ).toBe(queue);
+
+    fireEvent.click(queue);
+    expect(runs.count).toBe(1);
+  });
+
+  test.each([
+    DOCUMENT_OCR_AVAILABILITY.live,
+    DOCUMENT_OCR_AVAILABILITY.unconfigured,
+  ])("no batch help while OCR is $type", async (status) => {
+    await renderOcrActions(status);
+
+    expect(
+      screen.queryByRole("menuitem", {
+        name: messages.workspaces.files.ocrBatchHelp,
+      }),
+    ).toBeNull();
+  });
+});

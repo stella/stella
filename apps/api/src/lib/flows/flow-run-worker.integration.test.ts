@@ -81,6 +81,7 @@ import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -103,6 +104,11 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+beforeEach(() => {
+  enqueueFlowStepMock.mockClear();
+  generateTanStackTextForTaskMock.mockClear();
+});
 
 setDefaultTimeout(60_000);
 
@@ -287,6 +293,10 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       name: "Flow Worker Test Org",
       slug: `flow-worker-test-${organizationId}`,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
     });
     await testDb.insert(user).values({
       id: userId,

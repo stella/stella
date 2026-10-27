@@ -1,8 +1,9 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/utils";
 
 import type { Week, WeekTotals } from "@/features/my-week/my-week.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { plainDateEpoch } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 

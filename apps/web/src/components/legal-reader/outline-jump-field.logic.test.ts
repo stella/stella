@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
-import { stripDiacritics } from "@stll/text-normalize";
+import { foldSearchMatchText } from "@stll/text-normalize";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 
 import {
@@ -98,9 +98,9 @@ describe("rankOutlineMatches", () => {
     ["C\u030capkov", ["czech"]],
     ["[a+b]", ["punctuation"]],
     ["a.b", []],
-    ["strasse", []],
-    ["filing", []],
-    ["σ", []],
+    ["strasse", ["german"]],
+    ["filing", ["ligature"]],
+    ["σ", ["greek"]],
     ["😀", ["astral"]],
     // A half-emoji query becomes U+FFFD instead of matching inside the emoji.
     ["\ud83d", ["unpaired"]],
@@ -108,7 +108,7 @@ describe("rankOutlineMatches", () => {
     ["\ud800", ["unpaired"]],
     ["capek novak", []],
   ])(
-    "preserves literal substring and existing folding for %s",
+    "keeps punctuation literal and folds the search key for %s",
     (query, expected) => {
       const entries: OutlineItem[] = [
         { id: "czech", label: "O Čapkově návrhu", level: 0 },
@@ -216,9 +216,9 @@ const searchText = fc.string({
   size: "medium",
 });
 
-test("outline literal engine agrees with scalar substring oracle", () => {
+test("outline literal engine agrees with folded substring oracle", () => {
   assertProperty(
-    "outline literal engine agrees with scalar substring oracle",
+    "outline literal engine agrees with folded substring oracle",
     fc.property(fc.array(searchText), searchText, (texts, query) => {
       const entries = texts.map((title, index) => ({
         id: String(index),
@@ -226,8 +226,7 @@ test("outline literal engine agrees with scalar substring oracle", () => {
         level: 0,
         title,
       }));
-      const fold = (value: string) =>
-        stripDiacritics(value.toWellFormed()).toLowerCase();
+      const fold = (value: string) => foldSearchMatchText(value.toWellFormed());
       const expected =
         fold(query.trim()) === ""
           ? []
