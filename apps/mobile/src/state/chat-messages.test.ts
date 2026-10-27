@@ -7,6 +7,7 @@ import {
 } from "@/connection/session";
 
 import {
+  messagesQuery,
   prependOlderPage,
   readChatThread,
   readOlderChatMessages,
@@ -106,13 +107,19 @@ describe("reading a thread", () => {
       });
     };
     const source = sourceFor(fetch);
-    const latest = await readChatThread({ fetch, source, threadId: "t 1" });
+    const latest = await readChatThread({
+      fetch,
+      matterId: "matter 1",
+      source,
+      threadId: "t 1",
+    });
     expect(latest.isOk() ? latest.value.olderCursor : latest.error._tag).toBe(
       "cursor/1",
     );
     const older = await readOlderChatMessages({
       before: "cursor/1",
       fetch,
+      matterId: "matter 1",
       source,
       threadId: "t 1",
     });
@@ -120,9 +127,16 @@ describe("reading a thread", () => {
       older.isOk() ? older.value.entries.map(({ id }) => id) : older.error._tag,
     ).toEqual(["m0"]);
     expect(calls).toEqual([
-      "https://stella.example.com/v1/chat/threads/t%201/messages",
-      "https://stella.example.com/v1/chat/threads/t%201/messages/older?before=cursor%2F1",
+      "https://stella.example.com/v1/chat/threads/t%201/messages?workspaceId=matter%201",
+      "https://stella.example.com/v1/chat/threads/t%201/messages/older?before=cursor%2F1&workspaceId=matter%201",
     ]);
+  });
+
+  test("a global thread is read without a matter", () => {
+    expect(messagesQuery({ matterId: undefined })).toBe("");
+    expect(messagesQuery({ before: "c", matterId: undefined })).toBe(
+      "?before=c",
+    );
   });
 
   test("an older page goes in front, without a message twice", () => {

@@ -34,6 +34,7 @@ export type ChatThreadSummary = {
   readonly id: string;
   readonly title: string;
   readonly updatedAt: string;
+  readonly matterId: string | undefined;
   readonly matterName: string | undefined;
 };
 
@@ -52,10 +53,15 @@ export const flattenThreadsPage = (
 ): ChatThreadsPage => ({
   nextCursor: page.nextCursor,
   threads: [
-    ...page.global.map((thread) => ({ ...thread, matterName: undefined })),
+    ...page.global.map((thread) => ({
+      ...thread,
+      matterId: undefined,
+      matterName: undefined,
+    })),
     ...page.workspaces.flatMap((group) =>
       group.threads.map((thread) => ({
         ...thread,
+        matterId: group.workspaceId,
         matterName: group.workspaceName,
       })),
     ),

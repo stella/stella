@@ -11,18 +11,19 @@ import { useAppColors } from "@/theme";
 
 /**
  * One chat thread, opened from the Chat tab, which passes its title along so
- * the header shows it before the messages load. A new conversation arrives
- * `fresh`, under an id the phone chose. The message box rides above the
- * keyboard; the view sits under the header, so the keyboard's offset counts
- * from there.
+ * the header shows it before the messages load, and its matter, which the
+ * server asks for. A new conversation arrives `fresh`, under an id the phone
+ * chose. The message box rides above the keyboard; the view sits under the
+ * header, so the keyboard's offset counts from there.
  */
 const ThreadScreen = () => {
   const colors = useAppColors();
   const t = useTranslations("chat");
   const headerHeight = useHeaderHeight();
   const { state } = useSession();
-  const { fresh, threadId, title } = useLocalSearchParams<{
+  const { fresh, matterId, threadId, title } = useLocalSearchParams<{
     fresh?: string;
+    matterId?: string;
     threadId: string;
     title?: string;
   }>();
@@ -50,6 +51,7 @@ const ThreadScreen = () => {
         {state.status === "signed-in" ? (
           <ChatThreadView
             fresh={fresh === "1"}
+            matterId={matterId}
             source={state.source}
             threadId={threadId}
           />

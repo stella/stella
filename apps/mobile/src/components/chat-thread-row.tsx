@@ -35,7 +35,13 @@ export const ChatThreadRow = ({
       asChild
       href={{
         pathname: "/thread/[threadId]",
-        params: { threadId: thread.id, title },
+        params: {
+          threadId: thread.id,
+          title,
+          ...(thread.matterId === undefined
+            ? {}
+            : { matterId: thread.matterId }),
+        },
       }}
     >
       <Pressable

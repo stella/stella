@@ -79,12 +79,14 @@ describe("listing chat threads", () => {
           id: "m1",
           title: "Thread m1",
           updatedAt: "2026-10-21T10:00:00.000Z",
+          matterId: "matter-1",
           matterName: "Novák v. Svoboda",
         },
         {
           id: "g1",
           title: "Thread g1",
           updatedAt: "2026-10-20T10:00:00.000Z",
+          matterId: undefined,
           matterName: undefined,
         },
       ],
@@ -153,6 +155,7 @@ describe("sectioning threads by day", () => {
     id,
     title: id,
     updatedAt,
+    matterId: undefined,
     matterName: undefined,
   });
 
