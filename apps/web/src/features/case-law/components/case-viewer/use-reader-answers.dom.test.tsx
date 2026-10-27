@@ -461,7 +461,8 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
@@ -655,7 +656,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}

@@ -6,6 +6,7 @@ import { immer } from "zustand/middleware/immer";
 
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
@@ -1313,7 +1314,7 @@ const disposeLifecycleFixture = async (real: LifecycleReal) => {
     dispose();
   }
   propertyBackend = null;
-  jest.useRealTimers();
+  restoreRealTimers();
 };
 
 test("a failed page-host save becomes clean after reverting to freshly confirmed server values", async () => {
@@ -1527,7 +1528,7 @@ test("a failing real editor autosave stays paused after successful verification 
       dispose();
     }
     propertyBackend = null;
-    jest.useRealTimers();
+    restoreRealTimers();
   }
 });
 
@@ -2037,7 +2038,7 @@ test(
               dispose();
             }
             propertyBackend = null;
-            jest.useRealTimers();
+            restoreRealTimers();
           }
         },
       ),
