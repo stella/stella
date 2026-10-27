@@ -1,5 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
@@ -36,31 +46,7 @@ const readBody = async (request: Request): Promise<unknown> => {
 // The network is the only boundary: every drop below runs the real Files
 // rows, drop zone and upload paths up to the request that names where the
 // bytes go. That request is refused, so nothing continues past it.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      requests.push({
-        method: request.method,
-        pathname,
-        body: await readBody(request),
-      });
-      // The matter has no file column yet; the upload path creates it first.
-      if (request.method === "PUT" && pathname.startsWith("/v1/properties/")) {
-        return Response.json({ id: filePropertyId });
-      }
-      return Response.json(
-        { error: { code: "test_refused", message: "refused by test" } },
-        { status: 422 },
-      );
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -347,7 +333,39 @@ const uploadParentIds = () =>
         : undefined,
     );
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        requests.push({
+          method: request.method,
+          pathname,
+          body: await readBody(request),
+        });
+        // The matter has no file column yet; the upload path creates it first.
+        if (
+          request.method === "PUT" &&
+          pathname.startsWith("/v1/properties/")
+        ) {
+          return Response.json({ id: filePropertyId });
+        }
+        return Response.json(
+          { error: { code: "test_refused", message: "refused by test" } },
+          { status: 422 },
+        );
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
   requests.length = 0;
 });
