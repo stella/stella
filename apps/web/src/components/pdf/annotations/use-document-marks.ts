@@ -33,6 +33,7 @@ import type {
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -104,6 +105,7 @@ export const useDocumentMarks = ({
 }: DocumentMarksScope): DocumentMarks => {
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
+  const submitIntent = useIdempotentSubmit();
   const options = documentAnnotationsOptions({
     entityId,
     fieldId,
@@ -153,9 +155,9 @@ export const useDocumentMarks = ({
     queryKey: options.queryKey,
     create: async ({ spans, ...input }: CreateDocumentMarkInput) =>
       unwrapApiResponse(
-        await routes()
-          .field({ fieldId: toSafeId<"field">(fieldId) })
-          .annotations.post({
+        await submitIntent.run({
+          operation: "document-annotations.create",
+          body: {
             ...input,
             spans: spans.map(
               ({ endOffset, pageNumber, quote, startOffset }) => ({
@@ -165,7 +167,10 @@ export const useDocumentMarks = ({
                 startOffset,
               }),
             ),
-          }),
+          },
+          send: routes().field({ fieldId: toSafeId<"field">(fieldId) })
+            .annotations.post,
+        }),
       ),
     pendingRows: ({ author, input, stamp }): DocumentAnnotation[] => {
       const { groupId, rowId } = pendingMarkIds(stamp, input.spans.length);
