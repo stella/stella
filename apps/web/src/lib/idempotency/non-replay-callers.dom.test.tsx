@@ -10,7 +10,7 @@ import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, renderHook, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -23,6 +23,10 @@ const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { viewsOptions } = await import("@/lib/workspaces/queries/views");
+const { createMemory } = await import("@/lib/memory-api");
+const { useCreateWorkspace } = await import("@/lib/workspaces/mutations");
+const { useIdempotentSubmit } =
+  await import("@/lib/idempotency/use-idempotent-submit");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -41,6 +45,81 @@ const wrapper = ({ children }: { children: ReactNode }) => (
     {children}
   </IntlProvider>
 );
+
+test("a single-request memory intent keeps its key after a lost response and changes it after success", async () => {
+  const requests: Request[] = [];
+  const memoryId = "00000000-0000-4000-8000-000000000031";
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      if (requests.length === 1) {
+        throw new TypeError("Response lost after memory creation");
+      }
+      return Response.json({ id: memoryId });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { result } = renderHook(useIdempotentSubmit);
+  const body = {
+    content: "Use numbered paragraphs.",
+    kind: "preference",
+    scope: "user",
+  } satisfies Parameters<typeof createMemory>[0];
+  const submit = async () =>
+    await result.current.run({
+      body,
+      operation: "memory.create",
+      send: createMemory,
+    });
+  const failed = await submit().then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(failed).toBeInstanceOf(TypeError);
+  expect(await submit()).toMatchObject({ id: memoryId });
+  const keys = requests.map((request) =>
+    request.headers.get("Idempotency-Key"),
+  );
+  expect(keys.at(0)).toBeString();
+  expect(keys.at(1)).toBe(keys.at(0));
+  expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
+    "/v1/memories",
+    "/v1/memories",
+  ]);
+  expect(await submit()).toMatchObject({ id: memoryId });
+  expect(requests.at(2)?.headers.get("Idempotency-Key")).not.toBe(keys.at(0));
+});
+
+test("a matter creation caller with a generated identity sends no replay key", async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return Response.json({ created: true });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const client = new QueryClient();
+  clients.push(client);
+  const { result } = renderHook(useCreateWorkspace, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  await act(async () => {
+    await result.current.mutateAsync({ name: "Review matter" });
+  });
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(requests).toHaveLength(1);
+  expect(new URL(requests.at(0)?.url ?? "").pathname).toBe("/v1/workspaces");
+  expect(requests.at(0)?.headers.get("Idempotency-Key")).toBeNull();
+  expect(await requests.at(0)?.json()).toMatchObject({
+    id: result.current.data?.id,
+    name: "Review matter",
+  });
+});
 
 test("the real message export callback downloads successfully without a replay key", async () => {
   const requests: Request[] = [];

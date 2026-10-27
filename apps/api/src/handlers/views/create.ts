@@ -44,7 +44,6 @@ import {
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Add a view (a tab) to a matter with a name and a layout. Duplicate " +
     "sorts and multiple kind filters are refused, the columns the layout " +

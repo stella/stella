@@ -182,12 +182,14 @@ type CreateMutationViolationsOptions = {
   file: string;
   text: string;
   creates: ReadonlySet<string>;
+  allCreates?: ReadonlySet<string>;
   roots?: ReadonlyMap<string, readonly string[]>;
 };
 const createMutationViolations = ({
   file,
   text,
   creates,
+  allCreates = creates,
   roots = new Map([["api", []]]),
 }: CreateMutationViolationsOptions) => {
   const tree = parse({ file, text });
@@ -574,10 +576,13 @@ const createMutationViolations = ({
         roots: environment.roots,
       },
     });
-    if (!route || !creates.has(`${node.name.text}:${route.join("/")}`)) {
+    if (!route || !allCreates.has(`${node.name.text}:${route.join("/")}`)) {
       return;
     }
     createCalls += 1;
+    if (!creates.has(`${node.name.text}:${route.join("/")}`)) {
+      return;
+    }
     const call = node.parent;
     let protectedCall =
       ts.isCallExpression(call) &&
@@ -649,7 +654,13 @@ test("every web call to a registered JSON create route carries submit-intent hea
     if (!/\.(?:put|post)\b/u.test(text)) {
       continue;
     }
-    const result = createMutationViolations({ file, text, creates, roots });
+    const result = createMutationViolations({
+      file,
+      text,
+      creates,
+      allCreates: all,
+      roots,
+    });
     createCalls += result.createCalls;
     violations.push(...result.violations);
   }
@@ -686,6 +697,20 @@ test("create census rejects unrelated options and includes unnamed component act
       creates: routes,
     }).violations,
   ).toHaveLength(2);
+});
+
+test("create census counts excluded calls while requiring keys only for replay-capable owners", () => {
+  const result = createMutationViolations({
+    file: "component.tsx",
+    text: "api.views.put(body); api.memories.post(body);",
+    allCreates: new Set(["put:views", "post:memories"]),
+    creates: new Set(["post:memories"]),
+  });
+  expect(result.createCalls).toBe(2);
+  expect(result.violations).toHaveLength(1);
+  expect(result.violations.at(0)).toContain(
+    "post:memories needs submit-intent headers",
+  );
 });
 
 test("create census follows client aliases, dynamic IDs and owned method references", () => {

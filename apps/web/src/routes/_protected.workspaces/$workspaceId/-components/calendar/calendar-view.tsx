@@ -77,28 +77,25 @@ type HandleDropParams = {
   kind: string;
 };
 
-export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
+export const useCalendarCreateTask = ({
+  workspaceId,
+  datePropertyId,
+}: {
+  workspaceId: string;
+  datePropertyId: string | undefined;
+}) => {
   const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
-  const locale = useLocale();
-  const firstWeekday = getFirstWeekday(locale);
-  const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
-  const weekdayLabels = getWeekdayLabels(locale);
-  const { filters, sorts } = view.layout;
-  const { datePropertyId, endDatePropertyId, additionalDatePropertyIds, mode } =
-    view.layout;
   const upsertField = useUpsertField();
+  const isEditable =
+    !!datePropertyId && !isInternalDateProperty(datePropertyId);
   const invalidateCalendarTasks = async () => {
     await queryClient.invalidateQueries({
       queryKey: calendarTasksKeys.all(workspaceId),
     });
   };
-
-  const isEditable =
-    !!datePropertyId && !isInternalDateProperty(datePropertyId);
-
-  const handleCreate = async (date: string, kind: EntityKind) => {
+  return async (date: string, kind: EntityKind) => {
     if (!isEditable || kind !== "task") {
       return;
     }
@@ -160,6 +157,29 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
   };
+};
+
+export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
+  const t = useTranslations();
+  const locale = useLocale();
+  const firstWeekday = getFirstWeekday(locale);
+  const weekend = getWeekendDays(locale);
+  const queryClient = useQueryClient();
+  const weekdayLabels = getWeekdayLabels(locale);
+  const { filters, sorts } = view.layout;
+  const { datePropertyId, endDatePropertyId, additionalDatePropertyIds, mode } =
+    view.layout;
+  const upsertField = useUpsertField();
+  const invalidateCalendarTasks = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: calendarTasksKeys.all(workspaceId),
+    });
+  };
+
+  const isEditable =
+    !!datePropertyId && !isInternalDateProperty(datePropertyId);
+
+  const handleCreate = useCalendarCreateTask({ workspaceId, datePropertyId });
 
   // Current viewport date (month/week navigation state)
   const [viewDate, setViewDate] = useState(appToday);

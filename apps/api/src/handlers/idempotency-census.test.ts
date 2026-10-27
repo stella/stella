@@ -13,6 +13,23 @@ const apiRoot = path.resolve(import.meta.dir, "../..");
 
 // These lifecycle boundaries cannot retain a scoped JSON replay receipt.
 const IDEMPOTENCY_EXCEPTIONS = {
+  "src/handlers/contacts/create.ts":
+    "Contact creation is followed by matter-client assignment and uses caller-generated IDs outside the create receipt.",
+  "src/handlers/entities/create.ts":
+    "Folder reservations, file uploads and file organization require lifecycle work beyond the create response.",
+  "src/handlers/invoices/create.ts":
+    "The create response is one step of create, finalize and read workflows; replaying it does not replay their completion.",
+  "src/handlers/lists/items/sources/create.ts":
+    "The source form resolves a live document version before creation, so a manual retry can submit a different version for the same user intent.",
+  "src/handlers/properties/create.ts":
+    "Property creation participates in upload task chains whose completion is outside this create operation.",
+  "src/handlers/tasks/create.ts":
+    "Task creation is followed by field writes, so the create response does not represent the completed task workflow.",
+  "src/handlers/views/create.ts":
+    "View selection and template workflows generate fresh caller IDs, so a create receipt cannot represent the complete selection intent.",
+  "src/handlers/workspaces/create.ts":
+    "Matter creation uses a browser-generated identity derived from its workflow key, outside this request receipt.",
+
   "src/handlers/account-exports/create.ts":
     "Retains native account-scoped request serialization and durable queue handoff.",
   "src/handlers/api-keys/create.ts":

@@ -21,7 +21,6 @@ import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock"
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   description:
     "Add one property (a column) to a matter: its name, value type, and " +
     "either an AI prompt tool, optionally depending on other columns, or a " +

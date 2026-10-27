@@ -14,7 +14,6 @@ export const createTaskForFeatures = (features: TaskDeploymentFeatures) =>
   createSafeHandler(
     {
       contract: "patch",
-      idempotency: { type: "replay" },
       description:
         "Create a task in the current matter: name plus optional parent, " +
         "status, priority, due date, assignees, calendar fields for an " +

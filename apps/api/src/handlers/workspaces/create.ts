@@ -65,7 +65,6 @@ const createWorkspaceBodySchema = v.object({
 
 const config = {
   contract: "patch",
-  idempotency: { type: "replay" },
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +

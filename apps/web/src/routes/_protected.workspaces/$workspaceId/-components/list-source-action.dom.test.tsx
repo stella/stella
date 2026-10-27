@@ -315,6 +315,7 @@ for (const { locale, messages } of [
     await save(mounted);
     await waitFor(() => expect(mounted.created).toEqual([itemEntityId]));
     const post = requests.find((request) => request.method === "POST");
+    expect(post?.headers.get("Idempotency-Key")).toBeNull();
     expect(await post?.json()).toEqual({
       listId,
       itemEntityId,

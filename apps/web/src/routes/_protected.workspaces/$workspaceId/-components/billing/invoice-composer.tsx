@@ -379,7 +379,7 @@ type CreateInvoiceBody = Parameters<ReturnType<typeof api.invoices>["put"]>[0];
  * saved draft and says why, so nothing the person composed is lost; so
  * does an issue or read that fails after the draft was saved.
  */
-const useComposerSubmit = ({
+export const useComposerSubmit = ({
   workspaceId,
   onDone,
 }: {
