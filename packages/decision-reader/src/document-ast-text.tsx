@@ -22,6 +22,7 @@ import {
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import {
@@ -852,6 +853,15 @@ export const HighlightedText = ({
 export type ReaderVariant = "case-law" | "statute";
 
 /**
+ * The corpus a block renders in and, for a statute, the scheme its
+ * publisher's anchors state list nesting in. A statute surface names it,
+ * because the same anchor shape means different things to two publishers.
+ */
+type BlockRendererCorpus =
+  | { statuteLists?: never; variant: "case-law" }
+  | { statuteLists: StatuteListScheme; variant: "statute" };
+
+/**
  * Class per variant and heading depth. Total over both, so neither a new
  * reader nor a depth the AST can carry reaches the page with no styling.
  */
@@ -1100,6 +1110,7 @@ export const BlockRenderer = ({
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
+  statuteLists,
   variant,
 }: {
   activeMatchIndex: number;
@@ -1139,8 +1150,7 @@ export const BlockRenderer = ({
    */
   noteHead?: boolean | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
-  variant: ReaderVariant;
-}) => {
+} & BlockRendererCorpus) => {
   const attributes = ANCHOR_ATTRIBUTES[anchorPresentation];
   const documentAnchorProps = {
     "data-anchor": attributes.dataAnchor ? block.anchorId : undefined,
@@ -1258,13 +1268,17 @@ export const BlockRenderer = ({
       anchorsByPieceId,
       // A statute's list nesting lives in its anchors, so it is read here,
       // where every statute surface draws its paragraphs.
-      block: variant === "statute" ? withStatuteListDepth(block) : block,
+      block:
+        variant === "statute"
+          ? withStatuteListDepth(block, statuteLists)
+          : block,
       documentAnchorProps,
       isAddressable,
       noteBackJumpTo,
       noteHead,
       permalink,
       rangesByPieceId,
+      statuteLists: variant === "statute" ? statuteLists : null,
     });
   }
 
@@ -1324,6 +1338,8 @@ type RenderTextBlockOptions = {
 
 type RenderParagraphOptions = RenderTextBlockOptions & {
   block: ParagraphBlock;
+  /** The statute's list scheme; null for a decision, whose items never hang. */
+  statuteLists: StatuteListScheme | null;
 };
 
 /** The case number a decision prints at its head, set to the end edge. */
@@ -1337,33 +1353,49 @@ const CASE_NUMBER_CLASS =
  * stored: the designator keeps its characters and its offsets in the piece,
  * so search ranges and annotation offsets index the text as before.
  *
- * Only a designator wholly inside a plain first text node, with no anchor
- * (a citation link) reaching into it, is split; any other item keeps its
- * indent with the designator running in its text.
+ * Only a designator wholly inside the leading plain text nodes, with no
+ * anchor (a citation link) reaching into it, is split; any other item keeps
+ * its indent with the designator running in its text.
  */
 type HangingListMarker = { end: number; marker: string; rest: Inline[] };
 
-const hangingListMarker = (
-  block: ParagraphBlock,
-  anchors: readonly TextAnchor[],
-): HangingListMarker | null => {
-  const end = statuteListMarkerEnd(block);
-  const [first, ...others] = block.inlines;
-  if (
-    end === null ||
-    first?.type !== "text" ||
-    first.anonymized === true ||
-    first.text.length < end ||
-    anchors.some((anchor) => anchor.start < end)
-  ) {
+type HangingListMarkerOptions = {
+  anchors: readonly TextAnchor[];
+  block: ParagraphBlock;
+  statuteLists: StatuteListScheme | null;
+};
+
+const hangingListMarker = ({
+  anchors,
+  block,
+  statuteLists,
+}: HangingListMarkerOptions): HangingListMarker | null => {
+  const end =
+    statuteLists === null ? null : statuteListMarkerEnd(block, statuteLists);
+  if (end === null || anchors.some((anchor) => anchor.start < end)) {
     return null;
   }
-  const rest = first.text.slice(end);
-  return {
-    end,
-    marker: first.text.slice(0, end),
-    rest: rest === "" ? others : [{ text: rest, type: "text" }, ...others],
-  };
+  // A publisher may store the designator, its space and the words as
+  // separate text runs (Slov-Lex: `a)`, ` `, `spáchal …`); the designator is
+  // split off them as long as only plain text precedes its end.
+  let marker = "";
+  for (const [index, inline] of block.inlines.entries()) {
+    if (inline.type !== "text" || inline.anonymized === true) {
+      return null;
+    }
+    const needed = end - marker.length;
+    if (inline.text.length >= needed) {
+      const rest = inline.text.slice(needed);
+      const others = block.inlines.slice(index + 1);
+      return {
+        end,
+        marker: marker + inline.text.slice(0, needed),
+        rest: rest === "" ? others : [{ text: rest, type: "text" }, ...others],
+      };
+    }
+    marker += inline.text;
+  }
+  return null;
 };
 
 /** A paragraph's classes, for `cn`: shared by a block and a wrapped run. */
@@ -1427,6 +1459,7 @@ const renderParagraphBlock = ({
   noteHead,
   permalink,
   rangesByPieceId,
+  statuteLists,
 }: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
@@ -1435,7 +1468,7 @@ const renderParagraphBlock = ({
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
   const anchors = anchorsForPiece(anchorsByPieceId, block.id);
   const ranges = rangesForPiece(rangesByPieceId, block.id);
-  const listMarker = hangingListMarker(block, anchors);
+  const listMarker = hangingListMarker({ anchors, block, statuteLists });
   return (
     <p
       className={cn(
