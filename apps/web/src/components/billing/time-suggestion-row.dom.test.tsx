@@ -50,9 +50,15 @@ const renderRow = () => {
         <ul>
           <TimeSuggestionRow
             busy={false}
-            onAccept={() => calls.push("accept")}
-            onDismiss={() => calls.push("dismiss")}
-            onEdit={() => calls.push("edit")}
+            onAccept={() => {
+              calls.push("accept");
+            }}
+            onDismiss={() => {
+              calls.push("dismiss");
+            }}
+            onEdit={() => {
+              calls.push("edit");
+            }}
             suggestion={suggestion}
           />
         </ul>

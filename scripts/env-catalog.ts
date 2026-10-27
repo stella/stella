@@ -1322,6 +1322,8 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "DB_STATEMENT_TIMEOUT_MS",
   "DB_TRANSACTION_TIMEOUT_MS",
   "DISABLED_ADAPTERS",
+  // Expo inlines it into the mobile bundle; apps/mobile/src/env.ts reads it.
+  "EXPO_PUBLIC_STELLA_SERVER_URL",
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
@@ -1727,6 +1729,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Development render census: verify React Refresh with isolated temporary modules.
+  "STELLA_RENDER_CENSUS_HMR",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",

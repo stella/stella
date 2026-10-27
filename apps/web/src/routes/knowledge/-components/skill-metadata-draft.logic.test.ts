@@ -109,6 +109,7 @@ describe("suggesting a command from the skill name", () => {
     ["Prüfung der Verträge", "prufung-der-vertrage"],
     ["Révision des clauses", "revision-des-clauses"],
     ["İstanbul Sözleşme İncelemesi", "istanbul-sozlesme-incelemesi"],
+    ["Analiza umów w Łodzi", "analiza-umow-w-lodzi"],
     ["  --Rules!!  ", "rules"],
     ["契約書", ""],
   ])("%s becomes %s", (name, command) => {

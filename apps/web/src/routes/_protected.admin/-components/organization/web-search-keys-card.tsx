@@ -112,6 +112,7 @@ const WebSearchKeyField = ({
             disabled={disabled}
             onClick={onRemove}
             size="sm"
+            tooltip={t("common.remove")}
             variant="ghost"
           >
             <Trash2Icon className="size-4" />

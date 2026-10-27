@@ -156,6 +156,9 @@ export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
 /** Access-token claim naming the membership row the token was issued under. */
 export const MCP_MEMBER_ID_CLAIM = "member_id";
 
+/** The `purpose` claim that marks an access token minted for one agent run. */
+export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
+
 /**
  * Why an authenticated tools/list projection left a static tool out. A client
  * diffs its baked-in registry against that projection, so an omission the

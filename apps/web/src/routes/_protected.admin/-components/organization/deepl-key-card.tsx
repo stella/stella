@@ -64,6 +64,7 @@ export const DeepLKeyCard = ({
             disabled={disabled}
             onClick={onRemove}
             size="sm"
+            tooltip={removeLabel}
             variant="ghost"
           >
             <Trash2Icon className="size-4" />

@@ -36,6 +36,7 @@ import {
   actNumberCondition,
   actYearCondition,
 } from "@/api/lib/legal-search/legislation-act-number";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
   isLatestOpenedVersionOfWorkAt,
   listedLegislationRef,
@@ -485,7 +486,7 @@ export const buildListStatutesQuery = (
       country: legislationDocuments.country,
       language: legislationDocuments.language,
       documentType: legislationDocuments.documentType,
-      status: legislationDocuments.status,
+      status: legislationDocumentStatusToday,
       effectiveDate: legislationDocuments.effectiveDate,
       versionValidFrom: legislationDocuments.versionValidFrom,
       versionValidTo: legislationDocuments.versionValidTo,
