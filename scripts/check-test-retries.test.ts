@@ -219,6 +219,16 @@ test("configuration composition excludes other modules that reach its bases", ()
     expect(scan(`import type { Unused } from "./absent"; ${caller}`)).toEqual(
       [],
     );
+    expect(
+      scan(
+        `import "./extra"; ${caller.replace("defineConfig(base,", "defineConfig(base satisfies object,")}`,
+      ),
+    ).toEqual([UNREADABLE_CONFIG]);
+    writeFileSync(
+      path.join(root, "apps/example/extra.ts"),
+      'export const label = "browser";',
+    );
+    expect(scan(`import { label } from "./extra"; ${caller}`)).toEqual([]);
   } finally {
     rmSync(root, { force: true, recursive: true });
   }

@@ -899,6 +899,131 @@ const verifiedImportedConfig = (
   return expression?.type === "ObjectExpression" ? expression : undefined;
 };
 
+const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
+  const specifiers: string[] = [];
+  let staticImports = true;
+  walk(source.program, (node) => {
+    if (
+      node.type === "ImportExpression" ||
+      node.type === "TSImportEqualsDeclaration" ||
+      (node.type === "Identifier" &&
+        (node.name === "require" || node.name === "eval"))
+    ) {
+      staticImports = false;
+    }
+  });
+  for (const statement of source.program.body) {
+    if (statement.type === "ImportDeclaration") {
+      if (
+        statement.importKind === "type" ||
+        (statement.specifiers.length > 0 &&
+          statement.specifiers.every(
+            (specifier) =>
+              specifier.type === "ImportSpecifier" &&
+              specifier.importKind === "type",
+          ))
+      ) {
+        continue;
+      }
+      specifiers.push(statement.source.value);
+    } else if (
+      (statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportAllDeclaration") &&
+      statement.exportKind !== "type" &&
+      statement.source !== null
+    ) {
+      specifiers.push(statement.source.value);
+    }
+  }
+  return staticImports && !specifiers.includes("node:module")
+    ? specifiers
+    : undefined;
+};
+
+const importedRepositoryModule = (source: Source, specifier: string) => {
+  const module = repositoryModule(
+    { ...source, configAncestry: new Set() },
+    specifier,
+  );
+  if (module !== null) {
+    return module;
+  }
+  return specifier.startsWith(".") ||
+    specifier.startsWith("@stll/") ||
+    path.isAbsolute(specifier)
+    ? null
+    : undefined;
+};
+
+const composedConfigurationSources = (source: Source) => {
+  const configs = new Map([[source.file, source]]);
+  for (const config of configs.values()) {
+    for (const statement of config.program.body) {
+      const expression = exportedExpression(statement);
+      if (expression?.type !== "CallExpression") {
+        continue;
+      }
+      for (const argument of expression.arguments) {
+        const value = unwrap(argument, [
+          "ParenthesizedExpression",
+          "TSAsExpression",
+          "TSSatisfiesExpression",
+        ]);
+        const binding =
+          value.type === "Identifier"
+            ? importedBinding(config, value.name)
+            : undefined;
+        if (
+          binding?.type !== "default" &&
+          !(binding?.type === "named" && binding.name === "default")
+        ) {
+          continue;
+        }
+        const module = importedRepositoryModule(config, binding.module);
+        if (module !== undefined && module !== null) {
+          configs.set(module.file, module);
+        }
+      }
+    }
+  }
+  return configs;
+};
+
+// Follow static repository edges, not helper execution. A module outside
+// configuration composition must never acquire a mutable configuration base.
+const isolatedConfigurationImports = (source: Source): boolean => {
+  const configs = composedConfigurationSources(source);
+  const pending = [source];
+  const visited = new Set<string>();
+  for (const current of pending) {
+    if (visited.has(current.file)) {
+      continue;
+    }
+    visited.add(current.file);
+    const specifiers = runtimeModuleSpecifiers(current);
+    if (specifiers === undefined) {
+      return false;
+    }
+    for (const specifier of specifiers) {
+      const module = importedRepositoryModule(current, specifier);
+      if (module === null) {
+        return false;
+      }
+      if (module === undefined) {
+        continue;
+      }
+      if (
+        configs.has(module.file) &&
+        (!configs.has(current.file) || !staticConfigModule(current))
+      ) {
+        return false;
+      }
+      pending.push(module);
+    }
+  }
+  return true;
+};
+
 const scanConfig = (
   file: string,
   sourceText: string,
@@ -908,7 +1033,9 @@ const scanConfig = (
   if (parsed === undefined) {
     return [{ file, message: "Playwright config has TypeScript parse errors" }];
   }
-  const target = configTarget(parsed);
+  const target = isolatedConfigurationImports(parsed)
+    ? configTarget(parsed)
+    : undefined;
   return target === undefined
     ? [
         {
