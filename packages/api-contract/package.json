@@ -78,6 +78,8 @@
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
+    "./mobile-client": "./src/mobile-client.ts",
+    "./api-oauth-resource": "./src/api-oauth-resource.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",

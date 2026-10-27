@@ -19,10 +19,10 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
-import { useQueryView } from "@/lib/use-query-view";
 import { UsagePlansCard } from "@/routes/_protected.admin/-components/organization/usage-plans-card";
 import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
 
@@ -59,7 +59,7 @@ function UsageSettingsPage() {
   const entitlementQuery = useQuery(
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
-  const entitlementView = useQueryView(entitlementQuery);
+  const entitlementView = queryView(entitlementQuery);
   const data =
     entitlementView.type === "items" ? entitlementView.items : undefined;
   const isLoading = entitlementView.type === "pending";

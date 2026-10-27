@@ -17,6 +17,7 @@ import {
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -235,6 +236,7 @@ type PendingMirrorPayload = Pick<
   CorpusWritePayload,
   "ast" | "sections" | "text"
 > & {
+  astStatus: ReturnType<typeof prepareCorpusAst>["type"];
   sourceObservationHash: string | null;
   sourceObservationOrder: bigint | null;
 };
@@ -250,6 +252,7 @@ export const loadPendingMirrorPayload = async (
         documentAst: true,
         fulltext: true,
         sections: true,
+        parserVersion: true,
         sourceObservationHash: true,
         sourceObservationOrder: true,
       },
@@ -258,8 +261,13 @@ export const loadPendingMirrorPayload = async (
   if (!row) {
     panic("Pending case-law corpus mirror disappeared");
   }
-  return {
+  const prepared = prepareCorpusAst({
     ast: row.documentAst,
+    parserVersion: row.parserVersion ?? undefined,
+  });
+  return {
+    astStatus: prepared.type,
+    ast: prepared.ast,
     sections: row.sections,
     sourceObservationHash: row.sourceObservationHash,
     sourceObservationOrder: row.sourceObservationOrder,
@@ -291,7 +299,10 @@ export const caseLawCanonicalPayload = (
 ): CorpusPayload => {
   const sections = decisionSections(result);
   return {
-    ast: result.documentAst,
+    ast: prepareCorpusAst({
+      ast: result.documentAst,
+      parserVersion: result.parserVersion,
+    }).ast,
     sections: sections.length > 0 ? sections : null,
     text: result.fulltext ?? null,
   };

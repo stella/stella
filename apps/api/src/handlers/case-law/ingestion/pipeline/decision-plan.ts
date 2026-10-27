@@ -157,6 +157,11 @@ const verifyStoredCitationScopes = async ({
   signal,
   s3Policy,
 }: VerifyStoredCitationScopesOptions) => {
+  // Opinion scopes address the structure being discarded; the row CAS below
+  // still protects a concurrently replaced envelope.
+  if (pendingMirrorPayload?.astStatus === "text-only") {
+    return Result.ok(false);
+  }
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
@@ -425,14 +430,18 @@ const planCorpusPayload = ({
   // replays it is fenced on the observation that stored it, so the row
   // already holds exactly this payload. Writing it back would copy the
   // whole document into a new row version to say the same thing.
-  const postgresPayload =
-    pendingMirrorPayload === null
-      ? {
-          fulltext: corpusPayload.text,
-          sections: corpusPayload.sections,
-          documentAst: corpusPayload.ast,
-        }
+  const postgresPayload = (() => {
+    if (pendingMirrorPayload === null) {
+      return {
+        fulltext: corpusPayload.text,
+        sections: corpusPayload.sections,
+        documentAst: corpusPayload.ast,
+      };
+    }
+    return pendingMirrorPayload.astStatus === "text-only"
+      ? { documentAst: pendingMirrorPayload.ast }
       : {};
+  })();
 
   const payloadColumns = (() => {
     switch (corpusPlan.type) {

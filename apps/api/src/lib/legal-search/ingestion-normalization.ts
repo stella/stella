@@ -9,7 +9,7 @@ import {
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 import {
-  isDocumentAst,
+  type DocumentAst,
   withProjectedPlainText,
 } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
@@ -31,6 +31,7 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -263,6 +264,10 @@ export const storedCaseNumberOf = (
     : result.caseNumber.replace(DANGEROUS_CHARS, "");
 };
 
+const isPreparedDocumentAst = (
+  ast: ReturnType<typeof prepareCorpusAst>["ast"],
+): ast is DocumentAst => ast !== null && Array.isArray(ast.blocks);
+
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
@@ -319,8 +324,13 @@ export const sanitizeResult = (
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
   const sanitizedDocumentAst = deepSanitize(result.documentAst);
-  const documentAst = isDocumentAst(sanitizedDocumentAst)
-    ? withProjectedPlainText(sanitizedDocumentAst)
+  const preparedAst = prepareCorpusAst({
+    ast: sanitizedDocumentAst,
+    parserVersion: result.parserVersion,
+  });
+  const readableAst = preparedAst.ast;
+  const documentAst = isPreparedDocumentAst(readableAst)
+    ? withProjectedPlainText(readableAst)
     : EMPTY_AST;
 
   const identifiers = sanitizeDecisionIdentifiers(result.identifiers);
@@ -473,6 +483,8 @@ export const sanitizeResult = (
         text: collapseSpacedLetters(strip(section.text) ?? ""),
       })),
       documentAst,
+      citationScopes:
+        preparedAst.type === "text-only" ? undefined : result.citationScopes,
       sourceRaw: strip(result.sourceRaw),
     },
     metadataUrlSchema,

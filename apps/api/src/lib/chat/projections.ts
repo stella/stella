@@ -2001,6 +2001,18 @@ export const SEARCH_BOE_LEGISLATION_PROJECTION = v.union([
             titulo: v.optional(v.string()),
             fecha_publicacion: v.optional(v.string()),
             fecha_disposicion: v.optional(v.string()),
+            fecha_actualizacion: v.optional(v.string()),
+            fecha_vigencia: v.optional(v.string()),
+            numero_oficial: v.optional(v.string()),
+            diario: v.optional(v.string()),
+            diario_numero: v.optional(v.string()),
+            vigencia_agotada: v.optional(v.string()),
+            ambito: v.optional(
+              v.strictObject({
+                codigo: v.optional(v.string()),
+                texto: v.optional(v.string()),
+              }),
+            ),
             departamento: v.optional(
               v.strictObject({
                 codigo: v.optional(v.string()),

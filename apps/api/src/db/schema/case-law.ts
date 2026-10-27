@@ -530,6 +530,25 @@ const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
     .on(t.id)
     .where(sql`${t.parsedSourceRawS3Key} IS DISTINCT FROM ${t.sourceRawS3Key}`);
 
+type PublishedCourtDateColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  court: PgColumn;
+  decisionDate: PgColumn;
+  id: PgColumn;
+};
+const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
+  p
+    .index("case_law_decisions_country_court_date_published_idx")
+    .on(
+      t.country,
+      t.court,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -857,6 +876,9 @@ export const caseLawDecisions = p.pgTable(
         sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
         t.id,
       ),
+    // The vocabulary's loose scan needs no heap publication filter. Keep the
+    // all-row twin for administrative country/court candidate reads.
+    publishedCourtDateIndex(t),
     // The same walk with no court chosen, which is how the browse page opens.
     // Court sits between country and the sort key above, so that index orders
     // a country's rows by court first and cannot serve this walk's ORDER BY;
