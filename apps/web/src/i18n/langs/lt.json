@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "Išsamumas",
       "courtsHeading": "Pagal teismą",
-      "courtsUnavailable": "Suskirstymas pagal teismus šiuo metu nepasiekiamas.",
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "generatedAt": "Duomenys {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "Sustojęs",
       "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",
-      "knownGaps": "Žinomos spragos",
       "lastSync": "Paskutinis sinchronizavimas",
-      "noGapsRecorded": "Spragų neužregistruota",
       "notCountedYet": "Dar nesuskaičiuota",
       "notMeasuredYet": "Dar neišmatuota",
-      "pendingTexts": "Laukiantys tekstai",
       "reportedByListing": "Suskaičiuota pagal skelbėjo sąrašą",
       "reportedByOperator": "Įvesta rankiniu būdu",
       "reportedByPublisher": "Paties skelbėjo skaičius",
       "searchable": "Prieinami paieškai",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
-      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami.",
-      "unreadListingPeriods": "Neperskaityti sąrašo laikotarpiai"
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
     },
     "decisionNotFound": "Sprendimas nerastas",
     "decisionTypes": {

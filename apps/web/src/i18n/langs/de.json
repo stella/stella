@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "Vollständigkeit",
       "courtsHeading": "Nach Gericht",
-      "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
       "generatedAt": "Zahlen vom {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "Stockt",
       "healthUnknown": "Noch nie gelaufen",
       "inPreparation": "In Vorbereitung",
-      "knownGaps": "Bekannte Lücken",
       "lastSync": "Letzte Synchronisierung",
-      "noGapsRecorded": "Keine Lücken verzeichnet",
       "notCountedYet": "Noch nicht gezählt",
       "notMeasuredYet": "Noch nicht gemessen",
-      "pendingTexts": "Ausstehende Texte",
       "reportedByListing": "Aus der Liste des Herausgebers gezählt",
       "reportedByOperator": "Manuell erfasst",
       "reportedByPublisher": "Eigene Zählung des Herausgebers",
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
-      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {

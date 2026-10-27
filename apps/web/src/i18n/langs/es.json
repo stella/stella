@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "Exhaustividad",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "generatedAt": "Datos a {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "Sin avance",
       "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
-      "knownGaps": "Lagunas conocidas",
       "lastSync": "Última sincronización",
-      "noGapsRecorded": "No hay lagunas registradas",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
-      "pendingTexts": "Textos pendientes",
       "reportedByListing": "Contado a partir del listado del organismo publicador",
       "reportedByOperator": "Introducido manualmente",
       "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
-      "unreadListingPeriods": "Periodos del listado no leídos"
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {

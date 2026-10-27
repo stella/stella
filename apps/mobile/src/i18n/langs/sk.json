@@ -8,7 +8,22 @@
   "chat": {
     "description": "Majte rozpracovanú prácu poruke a pokračujte z akéhokoľvek zariadenia.",
     "emptyTitle": "Zatiaľ žiadne konverzácie",
-    "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna."
+    "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna.",
+    "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "untitled": "Konverzácia bez názvu",
+    "loadMoreFailed": "Načítať ďalšie",
+    "loadOlderFailed": "Načítať staršie správy",
+    "toolUsed": "Použité: {tool}",
+    "threadTitle": "Konverzácia",
+    "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
+    "threadEmptyDescription": "Táto konverzácia zatiaľ nemá žiadne správy.",
+    "sections": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "week": "Posledných 7 dní",
+      "earlier": "Skôr"
+    }
   },
   "tasks": {
     "description": "Pozrite sa, čo si vyžaduje pozornosť, bez otvárania celého pracovného priestoru.",

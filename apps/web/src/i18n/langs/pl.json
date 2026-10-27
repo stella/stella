@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "Kompletność",
       "courtsHeading": "Według sądu",
-      "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "generatedAt": "Dane na {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "Bez postępu",
       "healthUnknown": "Jeszcze nieuruchomione",
       "inPreparation": "W przygotowaniu",
-      "knownGaps": "Znane luki",
       "lastSync": "Ostatnia synchronizacja",
-      "noGapsRecorded": "Brak zarejestrowanych luk",
       "notCountedYet": "Jeszcze niepoliczone",
       "notMeasuredYet": "Jeszcze niezmierzone",
-      "pendingTexts": "Oczekujące teksty",
       "reportedByListing": "Policzone z wykazu wydawcy",
       "reportedByOperator": "Wpisane ręcznie",
       "reportedByPublisher": "Własne dane wydawcy",
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
-      "unreadListingPeriods": "Nieodczytane okresy wykazu"
+      "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {

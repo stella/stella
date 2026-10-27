@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "الاكتمال",
       "courtsHeading": "حسب المحكمة",
-      "courtsUnavailable": "التقسيم حسب المحكمة غير متاح حاليًا.",
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "generatedAt": "أرقام بتاريخ {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "متعثّر",
       "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",
-      "knownGaps": "فجوات معروفة",
       "lastSync": "آخر مزامنة",
-      "noGapsRecorded": "لم تُسجّل فجوات",
       "notCountedYet": "لم يُحصَ بعد",
       "notMeasuredYet": "لم يُقَس بعد",
-      "pendingTexts": "نصوص معلقة",
       "reportedByListing": "محسوب من قائمة الجهة الناشرة",
       "reportedByOperator": "مُدخَل يدويًا",
       "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
       "searchable": "قابلة للبحث",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
-      "unavailable": "أرقام التغطية غير متاحة حاليًا.",
-      "unreadListingPeriods": "فترات القائمة غير المقروءة"
+      "unavailable": "أرقام التغطية غير متاحة حاليًا."
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "decisionTypes": {

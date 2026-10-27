@@ -1025,7 +1025,6 @@
     "coverage": {
       "completeness": "Täielikkus",
       "courtsHeading": "Kohtute kaupa",
-      "courtsUnavailable": "Kohtute kaupa jaotus pole praegu saadaval.",
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
       "generatedAt": "Andmed seisuga {date}",
@@ -1036,20 +1035,16 @@
       "healthStalled": "Takerdunud",
       "healthUnknown": "Pole kunagi käivitunud",
       "inPreparation": "Ettevalmistamisel",
-      "knownGaps": "Teadaolevad lüngad",
       "lastSync": "Viimane sünkroonimine",
-      "noGapsRecorded": "Lünki pole registreeritud",
       "notCountedYet": "Veel loendamata",
       "notMeasuredYet": "Veel mõõtmata",
-      "pendingTexts": "Ootel tekstid",
       "reportedByListing": "Loetud avaldaja nimekirja põhjal",
       "reportedByOperator": "Käsitsi sisestatud",
       "reportedByPublisher": "Avaldaja enda loend",
       "searchable": "Otsitavad",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
-      "unreadListingPeriods": "Nimekirja lugemata perioodid"
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
     },
     "decisionNotFound": "Otsust ei leitud",
     "decisionTypes": {
