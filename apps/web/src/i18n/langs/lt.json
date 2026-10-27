@@ -4309,6 +4309,10 @@
       "visibilityShared": "Bendrinama su organizacija",
       "visibilitySharedWithMatter": "Bendrinama su byla"
     },
+    "contents": {
+      "aiSection": "{section} (DI sugeneruota dalis)",
+      "headingWithAiSection": "{heading} (DI sugeneruota dalis: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
       "citationOnly": "Tik nuoroda",

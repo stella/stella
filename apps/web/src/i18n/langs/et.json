@@ -4309,6 +4309,10 @@
       "visibilityShared": "Jagatud organisatsiooniga",
       "visibilitySharedWithMatter": "Jagatud toimikuga"
     },
+    "contents": {
+      "aiSection": "{section} (tehisintellektiga loodud osa)",
+      "headingWithAiSection": "{heading} (tehisintellektiga loodud osa: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Plokktsitaat viitega",
       "citationOnly": "Ainult viide",

@@ -4309,6 +4309,10 @@
       "visibilityShared": "Shared with organization",
       "visibilitySharedWithMatter": "Shared with the matter"
     },
+    "contents": {
+      "aiSection": "{section} (AI-generated section)",
+      "headingWithAiSection": "{heading} (AI-generated section: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Block quote with citation",
       "citationOnly": "Citation only",

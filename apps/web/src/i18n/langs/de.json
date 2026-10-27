@@ -4309,6 +4309,10 @@
       "visibilityShared": "Mit der Organisation geteilt",
       "visibilitySharedWithMatter": "Mit der Akte geteilt"
     },
+    "contents": {
+      "aiSection": "{section} (KI-generierter Abschnitt)",
+      "headingWithAiSection": "{heading} (KI-generierter Abschnitt: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
       "citationOnly": "Nur Fundstelle",

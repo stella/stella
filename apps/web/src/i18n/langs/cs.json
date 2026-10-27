@@ -4309,6 +4309,10 @@
       "visibilityShared": "Sdíleno s organizací",
       "visibilitySharedWithMatter": "Sdíleno se spisem"
     },
+    "contents": {
+      "aiSection": "{section} (část vygenerovaná AI)",
+      "headingWithAiSection": "{heading} (část vygenerovaná AI: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citací",
       "citationOnly": "Pouze citace",
