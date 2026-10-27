@@ -26,18 +26,37 @@ const generatedSha = (source: string, version: string, arch: string) => {
   return match[1];
 };
 
+const pinnedGitleaks = (text: string) => {
+  const toolchain: unknown = JSON.parse(text);
+  if (
+    typeof toolchain === "object" &&
+    toolchain !== null &&
+    "cloud" in toolchain &&
+    typeof toolchain.cloud === "object" &&
+    toolchain.cloud !== null &&
+    "tools" in toolchain.cloud &&
+    typeof toolchain.cloud.tools === "object" &&
+    toolchain.cloud.tools !== null &&
+    "gitleaks" in toolchain.cloud.tools &&
+    typeof toolchain.cloud.tools.gitleaks === "string"
+  ) {
+    return toolchain.cloud.tools.gitleaks;
+  }
+  throw new Error("stll-toolchain.json pins no cloud.tools.gitleaks");
+};
+
 test("the setup script installs exactly the gitleaks the toolchain pins", async () => {
   const source = await readFile(script, "utf-8");
-  const toolchain = JSON.parse(
+  const pinned = pinnedGitleaks(
     await readFile(path.join(root, "stll-toolchain.json"), "utf-8"),
-  ) as { cloud: { tools: { gitleaks: string } } };
+  );
   const generated = await readFile(
     path.join(root, ".agents/cloud-setup.sh"),
     "utf-8",
   );
 
   const version = assignment(source, "VERSION");
-  expect(version).toBe(toolchain.cloud.tools.gitleaks);
+  expect(version).toBe(pinned);
   expect(assignment(source, "SHA256_X64")).toBe(
     generatedSha(generated, version, "x64"),
   );
