@@ -4306,7 +4306,12 @@
       "styleHighlight": "Kiemelés",
       "styleSquiggly": "Hullámos vonal",
       "styleStrikethrough": "Áthúzás",
-      "visibilityShared": "Megosztva a szervezettel"
+      "visibilityShared": "Megosztva a szervezettel",
+      "visibilitySharedWithMatter": "Megosztva az üggyel"
+    },
+    "contents": {
+      "aiSection": "{section} (AI által generált szakasz)",
+      "headingWithAiSection": "{heading} (AI által generált szakasz: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -6470,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
+      "annotations": {
+        "commentedBy": "Megjegyzés: {name}",
+        "detachedHeading": "Nem ebben a verzióban",
+        "detachedOtherVersion": "A(z) {version}. verzióban készült; az oldal szövege azóta megváltozott.",
+        "detachedTextChanged": "Ezek a szavak már nincsenek a(z) {page}. oldalon.",
+        "empty": "Jelöljön ki szavakat a dokumentumban, majd válassza a Megjegyzés lehetőséget.",
+        "highlightedBy": "Kiemelte: {name}",
+        "refusedNoText": "Ezen az oldalon nincs megjelölhető szöveg. Először futtassa a szövegfelismerést a dokumentumon.",
+        "refusedNotFound": "Ezek a szavak nem találhatók az oldal szövegében. Jelölje ki őket újra.",
+        "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet."
+      },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
       "evidence": "Bizonyíték",

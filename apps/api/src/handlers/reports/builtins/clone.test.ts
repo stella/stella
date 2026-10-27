@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -17,6 +17,10 @@ import {
 } from "../builtin-templates";
 import { createCloneBuiltinReportTemplate } from "./clone";
 import type { CloneBuiltinReportTemplateDependencies } from "./clone";
+
+beforeEach(() => {
+  createStoredTemplateMock.mockClear();
+});
 
 // The fidelity regression this file guards is that a clone of the built-in
 // fills the way the built-in does. The configuration travels in the bytes, so

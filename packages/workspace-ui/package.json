@@ -33,6 +33,7 @@
     "./calculation-format": "./src/calculation-format.ts",
     "./calculation-selection": "./src/calculation-selection.ts",
     "./colors": "./src/colors.ts",
+    "./column-sort": "./src/column-sort.ts",
     "./conditions": "./src/conditions/index.ts",
     "./feature-previews": "./src/feature-previews/index.ts",
     "./field-value": "./src/field-value.tsx",

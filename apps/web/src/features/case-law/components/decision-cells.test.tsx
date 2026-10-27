@@ -5,6 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import {
+  NO_QUERY_MARK_TOKENS,
+  queryHighlightTokens,
+} from "@stll/decision-reader/query-marks";
 
 import {
   DecisionKeywords,
@@ -44,7 +48,7 @@ const prose = ({
       contentMode="tight"
       onActivate={() => undefined}
       preview={{ text: PREVIEW, truncated, type: TEXT_FIELD_TYPE.PRESENT }}
-      queryTokens={["výpověď"]}
+      queryTokens={queryHighlightTokens("výpověď")}
       view={view}
     />,
   );
@@ -124,7 +128,7 @@ describe("a classification is drawn as what it is", () => {
         columnId="summary"
         items={["Nájem bytu", "Výpověď"]}
         omitted={0}
-        queryTokens={["výpověď"]}
+        queryTokens={queryHighlightTokens("výpověď")}
       />,
     );
 
@@ -143,7 +147,7 @@ describe("a classification is drawn as what it is", () => {
         columnId="summary"
         items={["Nájem bytu"]}
         omitted={3}
-        queryTokens={[]}
+        queryTokens={NO_QUERY_MARK_TOKENS}
       />,
     );
 
