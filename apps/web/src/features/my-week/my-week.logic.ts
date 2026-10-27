@@ -42,17 +42,6 @@ export type WeekTotals = {
 };
 
 /** Week and per-day totals from the server's per-date sums. */
-/** Minutes of the entries loaded so far for a day. */
-export const loadedMinutes = (
-  entries: readonly { durationMinutes: number }[],
-) => {
-  let total = 0;
-  for (const { durationMinutes } of entries) {
-    total += durationMinutes;
-  }
-  return total;
-};
-
 export const weekTotals = (days: readonly DayTotal[]): WeekTotals => {
   let loggedMinutes = 0;
   let billableMinutes = 0;

@@ -550,40 +550,55 @@ describe("my week", () => {
     });
   });
 
-  test("a day whose entries are on a later page is not shown as empty", async () => {
-    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
-    serveWeek({
-      entries: [
-        draftEntry(),
-        draftEntry({
-          id: "entry-2",
-          dateWorked: tuesday,
-          narrative: "Draft the termination notice",
-        }),
-      ],
-      suggestions: [],
-      pageSize: 1,
-    });
-    mount(tuesday);
+  test.each([
+    ["a logged entry", { durationMinutes: 45, timerStartedAt: null }],
+    // A running timer counts zero minutes, so the day's total is zero too.
+    [
+      "a running timer",
+      { durationMinutes: 0, timerStartedAt: `${MONDAY}T08:00:00.000Z` },
+    ],
+  ] as const)(
+    "a day with %s on a later page is not shown as empty",
+    async (_, later) => {
+      const tuesday = Temporal.PlainDate.from(MONDAY)
+        .add({ days: 1 })
+        .toString();
+      serveWeek({
+        entries: [
+          draftEntry(),
+          draftEntry({
+            id: "entry-2",
+            dateWorked: tuesday,
+            narrative: "Draft the termination notice",
+            ...later,
+          }),
+        ],
+        suggestions: [],
+        pageSize: 1,
+      });
+      mount(tuesday);
 
-    expect(
-      await screen.findByRole("button", { name: messages.common.loadMore }),
-    ).toBeTruthy();
-    expect(screen.queryByText(messages.timesheets.week.noActivity)).toBeNull();
+      expect(
+        await screen.findByRole("button", { name: messages.common.loadMore }),
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(messages.timesheets.week.noActivity),
+      ).toBeNull();
 
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: messages.common.loadMore }),
-      );
-    });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: messages.common.loadMore }),
+        );
+      });
 
-    expect(
-      await screen.findByText("Draft the termination notice"),
-    ).toBeTruthy();
-    expect(
-      await screen.findByText(messages.timesheets.week.allLogged),
-    ).toBeTruthy();
-  });
+      expect(
+        await screen.findByText("Draft the termination notice"),
+      ).toBeTruthy();
+      expect(
+        await screen.findByText(messages.timesheets.week.allLogged),
+      ).toBeTruthy();
+    },
+  );
 
   test("only drafts are editable from the week", async () => {
     serveWeek({
