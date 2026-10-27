@@ -28,9 +28,17 @@ ${job}
 const RUN_STEP = "    steps:\n      - run: echo ok";
 
 // One workflow job, classified with `kind` at its current digest.
-const classifiedFixture = (job: string, kind: string) => {
+const classifiedFixture = (
+  job: string,
+  kind: string,
+  files: Record<string, string> = {},
+) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-writers-"));
   git(root, "init", "-q");
+  for (const [file, text] of Object.entries(files)) {
+    mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    writeFileSync(path.join(root, file), text);
+  }
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   mkdirSync(path.join(root, ".github/ci-job-classification-decisions"));
   writeFileSync(
@@ -74,6 +82,28 @@ const writerJobs = [
 
 test.each(writerJobs)("a job with %s writes the repository", (_, job) => {
   const { jobs } = classifiedFixture(job, "priority");
+  expect([...jobs.values()].map((derived) => derived.writesRepository)).toEqual(
+    [true],
+  );
+});
+
+test("a composite action that requests contents write makes its caller a writer", () => {
+  const { jobs } = classifiedFixture(
+    "    steps:\n      - uses: ./.github/actions/writer",
+    "priority",
+    {
+      ".github/actions/writer/action.yml": [
+        "name: writer",
+        "runs:",
+        "  using: composite",
+        "  steps:",
+        "    - uses: actions/create-github-app-token@0000000000000000000000000000000000000000",
+        "      with:",
+        "        permission-contents: write",
+        "",
+      ].join("\n"),
+    },
+  );
   expect([...jobs.values()].map((derived) => derived.writesRepository)).toEqual(
     [true],
   );

@@ -46,7 +46,7 @@ export const isPrivilegedJob = ({ kind, shape }: PrivilegedJobOptions) =>
 // or pull-request branches, so it is classified `priority`, never a check.
 // Pull-request write alone (labels, comments, auto-merge) publishes nothing.
 const SIGNED_COMMIT_ACTION = /(?:^|\/)actions\/signed-commit@/u;
-const writesRepository = (value: unknown): boolean => {
+export const writesRepository = (value: unknown): boolean => {
   if (Array.isArray(value)) {
     return value.some(writesRepository);
   }
@@ -87,7 +87,7 @@ export const isRepositoryWritingJob = ({
 }: WritingJobOptions) =>
   writesRepository(shape.document) ||
   writesRepository(shape.job) ||
-  [...reachableDocuments].some(writesRepository);
+  [...reachableDocuments].some((document) => document.writesRepository);
 
 type PrivilegedJobClosureOptions = PrivilegedJobOptions & {
   reachableDocuments: Iterable<ParsedDocument>;
