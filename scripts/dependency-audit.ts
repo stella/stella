@@ -963,7 +963,7 @@ export const runReleaseCheck = async ({
     tag === undefined
       ? []
       : await auditPreviousRelease(tag, audit, readGitFile);
-  return checkRelease(current, previous, { enforceDateExpiry: false });
+  return checkRelease(current, previous);
 };
 
 const main = async (): Promise<number> => {
@@ -1013,10 +1013,10 @@ export const runDependencyAuditCli = async (
     return await run();
   } catch (error) {
     console.error(errorMessage(error));
-    if (error instanceof BaselineError) {
-      return 2;
-    }
+    // 2 means lapsed acceptances, which remediation may still fix; an
+    // unreadable baseline is a command failure that must stop it.
     if (
+      error instanceof BaselineError ||
       error instanceof AuditCommandError ||
       error instanceof AuditAssessmentError
     ) {

@@ -781,7 +781,7 @@ describe("advisory service retries", () => {
 
 describe("CLI exit codes", () => {
   test.each([
-    { error: new BaselineError("invalid baseline"), status: 2 },
+    { error: new BaselineError("invalid baseline"), status: 3 },
     { error: new AuditCommandError("audit failed"), status: 3 },
     { error: new Error("unexpected failure"), status: 4 },
   ])("maps $error.name to exit $status", async ({ error, status }) => {

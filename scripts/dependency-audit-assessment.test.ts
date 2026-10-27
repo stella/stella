@@ -305,6 +305,7 @@ test("a workspace manifest pin blocks the fix like a root pin", () => {
   expect(result?.disposition).toEqual({
     status: "pinned_resolution_blocked",
     pins: ["apps/web/package.json dependencies.example=1.0.0"],
+    blockers: [],
     patchedVersions: ["1.0.1"],
   });
 });
@@ -374,6 +375,7 @@ test("an override that blocks one copy's only forward patch is a pin", () => {
   expect(result?.disposition).toEqual({
     status: "pinned_resolution_blocked",
     pins: ["package.json overrides.example=<=2.1.0"],
+    blockers: [],
     patchedVersions: ["1.2.3", "2.1.1"],
   });
 });
@@ -431,6 +433,37 @@ test("a patch on an older release line is no upgrade for a newer locked copy", (
       published: ["1.2.3", "2.1.0"],
     })?.status,
   ).toBe("upstream_blocked");
+});
+
+test("a pinned disposition keeps the upstream blockers of other copies", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: "<1.0.1 || >=2.0.0 <2.0.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        lib: ["lib@1.0.0", "", { dependencies: { example: "2.0.0" } }],
+        example: ["example@1.0.0", "", {}],
+        "lib/example": ["example@2.0.0", "", {}],
+      },
+    }),
+    manifest: { dependencies: { example: "1.0.0" } },
+    versions: new Map([["example", ["1.0.0", "1.0.1", "2.0.0", "2.0.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["package.json dependencies.example=1.0.0"],
+    blockers: ["lib requires example 2.0.0 (lib/example@2.0.0)"],
+    patchedVersions: ["1.0.1", "2.0.1"],
+  });
+  expect(result?.action).toContain(
+    "then upgrade the blocking parent: lib requires example 2.0.0",
+  );
 });
 
 describe("installable versions honour the release-age quarantine", () => {

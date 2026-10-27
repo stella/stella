@@ -20,6 +20,8 @@ export type AuditDisposition =
   | {
       status: "pinned_resolution_blocked";
       pins: string[];
+      // Other copies' upstream blockers, still owed after the pins lift.
+      blockers: string[];
       patchedVersions: string[];
     }
   | {
@@ -379,6 +381,7 @@ export const assessAdvisories = ({
       disposition = {
         status: "pinned_resolution_blocked",
         pins: [...pins],
+        blockers,
         patchedVersions,
       };
     } else if (blockers.length > 0 || patchedVersions.length === 0) {
@@ -398,7 +401,7 @@ const dispositionAction = (disposition: AuditDisposition): string => {
     case "fix_available":
       return `Update the lockfile to a patched release: ${disposition.patchedVersions.slice(-3).join(", ")}`;
     case "pinned_resolution_blocked":
-      return `Lift ${disposition.pins.join("; ")}; patched releases: ${disposition.patchedVersions.slice(-3).join(", ")}`;
+      return `Lift ${disposition.pins.join("; ")}; patched releases: ${disposition.patchedVersions.slice(-3).join(", ")}${disposition.blockers.length > 0 ? `; then upgrade the blocking parent: ${disposition.blockers.join("; ")}` : ""}`;
     case "upstream_blocked":
       return `Upgrade the blocking parent or review a dated acceptance: ${disposition.blockers.join("; ") || "no patched release published"}`;
     case "accepted":
