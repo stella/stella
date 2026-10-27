@@ -49,6 +49,6 @@ test("an invalid publisher identity performs no request", async () => {
   });
   expect(
     (await probeUkFclRemoval("../document", new AbortController().signal)).type,
-  ).toBe("unavailable");
+  ).toBe("unprobeable");
   expect(calls).toBe(0);
 });

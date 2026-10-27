@@ -128,6 +128,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     const sourceKey = `removal-test-${sourceId}`;
     const cycleNow = new Date("2026-10-27T12:00:00.000Z");
+    let currentNow = cycleNow;
     let rawSweeps = 0;
 
     let originalSitemapCounts: (typeof caseLawSitemapShardCounts.$inferSelect)[] =
@@ -182,18 +183,22 @@ if (!databaseUrl || !runPostgresTests) {
         redact: redactWithLocalRawSweep,
       });
 
-    const reconcile = async (options: {
+    const reconcile = async ({
+      now,
+      ...options
+    }: {
       probe: (
         identity: string,
         signal: AbortSignal,
       ) => Promise<PublisherRemovalRead>;
       remove?: typeof removeWithLocalRawSweep;
+      now?: Date;
     }) =>
       await reconcilePublisherRemovals({
         scopedDb,
         sourceId,
         signal: AbortSignal.timeout(10_000),
-        now: () => cycleNow,
+        now: () => now ?? currentNow,
         ...options,
       });
 
@@ -563,9 +568,10 @@ if (!databaseUrl || !runPostgresTests) {
         }),
         remove: removeWithLocalRawSweep,
       });
-      expect(failedCorpusDelete.unwrap()).toEqual({
-        type: "retry",
+      expect(failedCorpusDelete.unwrap()).toMatchObject({
+        type: "complete",
         checked: 1,
+        retried: 1,
       });
       expect(corpusObjects).toEqual(new Set([failedCorpusKey]));
       expect(
@@ -600,11 +606,38 @@ if (!databaseUrl || !runPostgresTests) {
       ).toMatchObject([
         { status: "failed", errorMessage: "simulated corpus delete failure" },
       ]);
+      expect(
+        await db
+          .select({
+            kind: caseLawReconciliationItems.kind,
+            payload: caseLawReconciliationItems.payload,
+          })
+          .from(caseLawReconciliationItems)
+          .where(
+            and(
+              eq(caseLawReconciliationItems.sourceId, sourceId),
+              eq(
+                caseLawReconciliationItems.identityKey,
+                `removal:${decisionId}`,
+              ),
+            ),
+          ),
+      ).toMatchObject([
+        {
+          kind: "removal-pending",
+          payload: {
+            type: "pending",
+            operation: "erase",
+            decisionId,
+            reason: "stores-pending",
+          },
+        },
+      ]);
 
+      currentNow = new Date(cycleNow.getTime() + 2 * 60_000);
       const crashedAfterRemoval = await reconcile({
         probe: async (identity) => {
-          expect(identity).toBe("uksc/2024/900001");
-          return { type: "absent", evidence: "publisher-typed-absence" };
+          throw new Error(`redacted retry must not probe ${identity}`);
         },
         remove: async (options) =>
           await removeWithLocalRawSweep(options).then((outcome) => {
@@ -615,11 +648,11 @@ if (!databaseUrl || !runPostgresTests) {
           }),
       });
 
-      expect(
-        crashedAfterRemoval.isErr()
-          ? Bun.inspect(crashedAfterRemoval.error)
-          : "unexpected success",
-      ).toContain("simulated crash before removal checkpoint");
+      expect(crashedAfterRemoval.unwrap()).toMatchObject({
+        type: "not-due",
+        checked: 0,
+        retried: 1,
+      });
       expect(
         (
           await db
@@ -627,13 +660,10 @@ if (!databaseUrl || !runPostgresTests) {
             .from(caseLawSources)
             .where(eq(caseLawSources.id, sourceId))
         ).at(0)?.removalCheckpoint,
-      ).toMatchObject({
-        status: "running",
-        cursor: null,
-        ceiling: decisionId,
-      });
+      ).toMatchObject({ status: "waiting" });
 
       let replayProbes = 0;
+      currentNow = new Date(cycleNow.getTime() + 10 * 60_000);
       const removed = await reconcile({
         probe: async () => {
           replayProbes++;
@@ -642,7 +672,11 @@ if (!databaseUrl || !runPostgresTests) {
         remove: removeWithLocalRawSweep,
       });
 
-      expect(removed.unwrap()).toEqual({ type: "complete", checked: 1 });
+      expect(removed.unwrap()).toMatchObject({
+        type: "not-due",
+        checked: 0,
+        retried: 1,
+      });
       expect(replayProbes).toBe(0);
       expect(rawSweeps).toBe(3);
       expect(corpusObjects).toEqual(new Set());
@@ -670,6 +704,20 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawReconciliationItems)
           .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
       ).toEqual([]);
+      const fixedPoint = await reconcile({
+        probe: async () => {
+          replayProbes++;
+          return { type: "present", value: null };
+        },
+        remove: removeWithLocalRawSweep,
+      });
+      expect(fixedPoint.unwrap()).toMatchObject({
+        type: "not-due",
+        checked: 0,
+        retried: 0,
+      });
+      expect(replayProbes).toBe(0);
+      expect(rawSweeps).toBe(3);
       expect(
         await db
           .select({ status: caseLawIndexJobs.status })
@@ -933,7 +981,7 @@ if (!databaseUrl || !runPostgresTests) {
       ).toMatchObject([{ removalCheckpoint: { status: "waiting" } }]);
     });
 
-    test("a refused publisher probe leaves the checkpoint and decision unchanged", async () => {
+    test("a refused probe advances discovery and parks a retryable observation", async () => {
       const id = createSafeId<"caseLawDecision">();
       const isolatedSourceId = createSafeId<"caseLawSource">();
       await db.insert(caseLawSources).values(
@@ -969,23 +1017,26 @@ if (!databaseUrl || !runPostgresTests) {
         }),
       });
 
-      expect(outcome.isOk() && outcome.value).toEqual({
-        type: "retry",
+      expect(outcome.unwrap()).toMatchObject({
+        type: "complete",
         checked: 1,
+        retried: 0,
       });
+      const retryAt = new Date(cycleNow.getTime() + 60_000);
       const transient = await reconcilePublisherRemovals({
         scopedDb,
         sourceId: isolatedSourceId,
         signal: AbortSignal.timeout(10_000),
-        now: () => cycleNow,
+        now: () => retryAt,
         probe: async () => ({
           type: "unavailable",
           cause: { kind: "thrown", error: "publisher timed out" },
         }),
       });
-      expect(transient.isOk() && transient.value).toEqual({
-        type: "retry",
-        checked: 1,
+      expect(transient.unwrap()).toMatchObject({
+        type: "not-due",
+        checked: 0,
+        retried: 1,
       });
       expect(
         (
@@ -1005,7 +1056,31 @@ if (!databaseUrl || !runPostgresTests) {
             .from(caseLawSources)
             .where(eq(caseLawSources.id, isolatedSourceId))
         ).at(0)?.removalCheckpoint,
-      ).toMatchObject({ status: "running", cursor: null, ceiling: id });
+      ).toMatchObject({ status: "waiting" });
+      expect(
+        await db
+          .select({
+            kind: caseLawReconciliationItems.kind,
+            payload: caseLawReconciliationItems.payload,
+          })
+          .from(caseLawReconciliationItems)
+          .where(
+            and(
+              eq(caseLawReconciliationItems.sourceId, isolatedSourceId),
+              eq(caseLawReconciliationItems.identityKey, `removal:${id}`),
+            ),
+          ),
+      ).toMatchObject([
+        {
+          kind: "removal-pending",
+          payload: {
+            type: "pending",
+            operation: "probe",
+            decisionId: id,
+            reason: "publisher-unavailable",
+          },
+        },
+      ]);
       await db
         .delete(caseLawSources)
         .where(eq(caseLawSources.id, isolatedSourceId));
@@ -1033,9 +1108,10 @@ if (!databaseUrl || !runPostgresTests) {
         },
       });
 
-      expect(outcome.isOk() && outcome.value).toEqual({
+      expect(outcome.unwrap()).toMatchObject({
         type: "disabled",
         checked: 0,
+        retried: 0,
       });
       expect(probes).toBe(0);
       await db
@@ -1089,7 +1165,10 @@ if (!databaseUrl || !runPostgresTests) {
         });
 
       const firstPage = await run(cycleNow);
-      expect(firstPage.unwrap()).toEqual({ type: "budget", checked: 100 });
+      expect(firstPage.unwrap()).toMatchObject({
+        type: "budget",
+        checked: 100,
+      });
       expect(probes).toBe(100);
       expect(
         (
@@ -1105,16 +1184,22 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       const secondPage = await run(cycleNow);
-      expect(secondPage.unwrap()).toEqual({ type: "complete", checked: 1 });
+      expect(secondPage.unwrap()).toMatchObject({
+        type: "complete",
+        checked: 1,
+      });
       expect(probes).toBe(101);
-      expect((await run(cycleNow)).unwrap()).toEqual({
+      expect((await run(cycleNow)).unwrap()).toMatchObject({
         type: "not-due",
         checked: 0,
       });
       const nextCycle = await run(
         new Date(cycleNow.getTime() + REMOVAL_SWEEP_INTERVAL_MS + 1),
       );
-      expect(nextCycle.unwrap()).toEqual({ type: "budget", checked: 100 });
+      expect(nextCycle.unwrap()).toMatchObject({
+        type: "budget",
+        checked: 100,
+      });
       expect(probes).toBe(201);
       await db
         .delete(caseLawSources)

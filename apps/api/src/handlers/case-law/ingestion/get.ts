@@ -24,6 +24,10 @@ import {
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  REMOVAL_RETRY_KIND,
+  REMOVAL_RETRY_KINDS,
+} from "@/api/lib/legal-search/removal-reconciliation-state";
+import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
@@ -48,6 +52,8 @@ type SourceReconciliationStatus = {
   parked: number;
   /** Listed decisions the retry schedule gave up on; accounted for, not held. */
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
   lastCheckedAt: string | null;
 };
 
@@ -128,6 +134,8 @@ type SourceAggregate = {
   lastCheckedAt: string | null;
   parked: number;
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
 };
 
 type SourceAggregates = Map<string, SourceAggregate>;
@@ -144,6 +152,8 @@ const emptyAggregate = (): SourceAggregate => ({
   lastCheckedAt: null,
   parked: 0,
   terminal: 0,
+  pendingRemovals: 0,
+  unprobeable: 0,
 });
 
 /**
@@ -193,13 +203,22 @@ export const latestIngestionEventsQuery = (
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
-/** The `(source_id, slice, status)` index covers both exact counts. */
+/** The kind-aware source index covers listing and removal health counts. */
 export const reconciliationCountsQuery = (
   db: Transaction,
   sourceIds: SafeId<"caseLawSource">[],
 ) => {
   const counts = db
     .select({
+      pendingRemovals:
+        sql<number>`count(*) filter (where ${caseLawReconciliationItems.kind} IN (${sql.join(
+          REMOVAL_RETRY_KINDS.map((kind) => sql`${kind}`),
+          sql`, `,
+        )}))::int`.as("pending_removals"),
+      unprobeable:
+        sql<number>`count(*) filter (where ${caseLawReconciliationItems.kind} = ${REMOVAL_RETRY_KIND.UNPROBEABLE})::int`.as(
+          "unprobeable",
+        ),
       parked:
         sql<number>`count(*) filter (where ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED})::int`.as(
           "parked",
@@ -218,6 +237,8 @@ export const reconciliationCountsQuery = (
       sourceId: caseLawSources.id,
       parked: counts.parked,
       terminal: counts.terminal,
+      pendingRemovals: counts.pendingRemovals,
+      unprobeable: counts.unprobeable,
     })
     .from(caseLawSources)
     .innerJoinLateral(counts, sql`true`)
@@ -375,6 +396,8 @@ const readSourceAggregates = async ({
     const aggregate = requireAggregate(aggregates, row.sourceId);
     aggregate.parked = row.parked;
     aggregate.terminal = row.terminal;
+    aggregate.pendingRemovals = row.pendingRemovals;
+    aggregate.unprobeable = row.unprobeable;
   }
 
   return aggregates;
@@ -439,6 +462,8 @@ export const getIngestionStatus = async (
               failedSlices: aggregate.failedSlices,
               parked: aggregate.parked,
               terminal: aggregate.terminal,
+              pendingRemovals: aggregate.pendingRemovals,
+              unprobeable: aggregate.unprobeable,
               lastCheckedAt: aggregate.lastCheckedAt,
             };
 
@@ -510,7 +535,7 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items). The fleet event total is an estimate from database " +
+    "and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database " +
     "statistics and may lag recent writes. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate

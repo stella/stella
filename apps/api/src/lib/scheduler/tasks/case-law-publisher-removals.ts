@@ -42,12 +42,17 @@ export const reconcilePublisherRemovalsTask: SchedulerTask = async ({
   logger.info("scheduler.publisher_removals", {
     outcome: result.value.type,
     checked: result.value.checked,
+    retried: result.value.retried,
   });
   if (result.value.type === "budget" || result.value.type === "contended") {
     scheduleContinuation(new Date(dueAt.claimedAtDate().getTime() + 1000));
   }
-  if (result.value.type === "retry") {
-    scheduleContinuation(new Date(dueAt.claimedAtDate().getTime() + 60_000));
+  if (
+    result.value.type !== "budget" &&
+    result.value.type !== "contended" &&
+    result.value.nextRetryAt !== null
+  ) {
+    scheduleContinuation(result.value.nextRetryAt);
   }
   return Result.ok();
 };

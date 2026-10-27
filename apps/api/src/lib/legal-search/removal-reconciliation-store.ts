@@ -1,0 +1,241 @@
+import { panic } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { DAY_IN_MS } from "@stll/time";
+
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import {
+  caseLawReconciliationItems,
+  RECONCILIATION_ITEM_STATUS,
+} from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
+  REMOVAL_RETRY_KIND_BY_TYPE,
+  REMOVAL_RETRY_KINDS,
+  removalRetryPayloadSchema,
+} from "@/api/lib/legal-search/removal-reconciliation-state";
+import type {
+  RemovalRetryPayload,
+  RemovalStepOutcome,
+} from "@/api/lib/legal-search/removal-reconciliation-state";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+
+const REMOVAL_RETRY_SLICE = "publisher-removal";
+const RETRY_DELAYS_MS = [
+  60_000,
+  5 * 60_000,
+  60 * 60_000,
+  DAY_IN_MS,
+  7 * DAY_IN_MS,
+] as const;
+const removalIdentityKey = (id: SafeId<"caseLawDecision">) => `removal:${id}`;
+
+export type RemovalRetryItem = {
+  id: SafeId<"caseLawReconciliationItem">;
+  decisionId: SafeId<"caseLawDecision">;
+  attempts: number;
+  payload: RemovalRetryPayload;
+};
+
+type SelectRemovalRetriesOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  perKindLimit: number;
+};
+
+/** Each kind uses a bounded, ordered range of the same reconciliation lane. */
+export const selectDueRemovalRetries = async ({
+  scopedDb,
+  sourceId,
+  now,
+  perKindLimit,
+}: SelectRemovalRetriesOptions): Promise<RemovalRetryItem[]> => {
+  const items: RemovalRetryItem[] = [];
+  for (const kind of REMOVAL_RETRY_KINDS) {
+    // db-await-in-loop: two fixed kind ranges each have their own indexed limit.
+    const rows = await scopedDb(
+      async (tx) =>
+        await tx
+          .select({
+            id: caseLawReconciliationItems.id,
+            payload: caseLawReconciliationItems.payload,
+            attempts: caseLawReconciliationItems.attempts,
+          })
+          .from(caseLawReconciliationItems)
+          .where(
+            and(
+              eq(caseLawReconciliationItems.sourceId, sourceId),
+              eq(caseLawReconciliationItems.kind, kind),
+              eq(
+                caseLawReconciliationItems.status,
+                RECONCILIATION_ITEM_STATUS.PARKED,
+              ),
+              sql`${caseLawReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
+            ),
+          )
+          .orderBy(
+            caseLawReconciliationItems.nextAttemptAt,
+            caseLawReconciliationItems.id,
+          )
+          .limit(perKindLimit),
+    );
+    for (const row of rows) {
+      const parsed = v.safeParse(removalRetryPayloadSchema, row.payload);
+      if (
+        !parsed.success ||
+        REMOVAL_RETRY_KIND_BY_TYPE[parsed.output.type] !== kind
+      ) {
+        return panic("Invalid publisher-removal retry item");
+      }
+      items.push({
+        payload: parsed.output,
+        id: row.id,
+        attempts: row.attempts,
+        decisionId: brandPersistedCaseLawDecisionId(parsed.output.decisionId),
+      });
+    }
+  }
+  return items;
+};
+
+type PersistRemovalOutcomeOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  decisionId: SafeId<"caseLawDecision">;
+  outcome: RemovalStepOutcome;
+  now: Date;
+  origin: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
+};
+
+/** The caller holds the source row; retry revisions prevent stale attempts recreating settled work. */
+export const persistRemovalOutcomeTx = async (
+  tx: Transaction,
+  { sourceId, decisionId, outcome, now, origin }: PersistRemovalOutcomeOptions,
+): Promise<boolean> => {
+  // audit: skip — durable reconciliation outcome for the canonical removal audit.
+  const identityKey = removalIdentityKey(decisionId);
+  const previous = (
+    await tx
+      .select({
+        id: caseLawReconciliationItems.id,
+        attempts: caseLawReconciliationItems.attempts,
+      })
+      .from(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, identityKey),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (
+    origin.type === "retry" &&
+    (previous?.id !== origin.item.id ||
+      previous.attempts !== origin.item.attempts)
+  ) {
+    return false;
+  }
+  // Enumeration must not overwrite an authorized erasure or reset its retry revision.
+  if (origin.type === "discovery" && previous !== undefined) {
+    return true;
+  }
+  if (outcome.type === "settled") {
+    await tx
+      .delete(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, identityKey),
+        ),
+      );
+    return true;
+  }
+  const discoveryErasure =
+    origin.type === "discovery" &&
+    outcome.type === "pending" &&
+    outcome.operation === "erase";
+  const newlyAuthorizedErasure =
+    outcome.type === "pending" &&
+    outcome.operation === "erase" &&
+    origin.type === "retry" &&
+    (origin.item.payload.type === "unprobeable" ||
+      origin.item.payload.operation === "probe");
+  const attempts = (previous?.attempts ?? 0) + (discoveryErasure ? 0 : 1);
+  const delay =
+    RETRY_DELAYS_MS.at(
+      Math.max(1, Math.min(attempts, RETRY_DELAYS_MS.length)) - 1,
+    ) ?? panic("Missing removal retry delay");
+  const pending = {
+    kind: REMOVAL_RETRY_KIND_BY_TYPE[outcome.type],
+    payload:
+      outcome.type === "unprobeable"
+        ? { type: outcome.type, decisionId, reason: outcome.reason }
+        : {
+            type: outcome.type,
+            operation: outcome.operation,
+            decisionId,
+            reason: outcome.reason,
+          },
+    attempts,
+    nextAttemptAt: new Date(
+      now.getTime() + (discoveryErasure || newlyAuthorizedErasure ? 0 : delay),
+    ),
+    lastAttemptAt: now,
+    lastError: outcome.reason,
+  };
+  await tx
+    .insert(caseLawReconciliationItems)
+    .values({ sourceId, identityKey, slice: REMOVAL_RETRY_SLICE, ...pending })
+    .onConflictDoUpdate({
+      target: [
+        caseLawReconciliationItems.sourceId,
+        caseLawReconciliationItems.identityKey,
+      ],
+      set: pending,
+    });
+  return true;
+};
+
+/** The source task schedules the retry lane independently of the weekly discovery cycle. */
+export const nextRemovalRetryAt = async (
+  scopedDb: ScopedDb,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<Date | null> => {
+  let next: Date | null = null;
+  for (const kind of REMOVAL_RETRY_KINDS) {
+    // db-await-in-loop: one earliest due timestamp per fixed kind, no history scan.
+    const row = await scopedDb(async (tx) =>
+      (
+        await tx
+          .select({ at: caseLawReconciliationItems.nextAttemptAt })
+          .from(caseLawReconciliationItems)
+          .where(
+            and(
+              eq(caseLawReconciliationItems.sourceId, sourceId),
+              eq(caseLawReconciliationItems.kind, kind),
+              eq(
+                caseLawReconciliationItems.status,
+                RECONCILIATION_ITEM_STATUS.PARKED,
+              ),
+            ),
+          )
+          .orderBy(
+            caseLawReconciliationItems.nextAttemptAt,
+            caseLawReconciliationItems.id,
+          )
+          .limit(1)
+      ).at(0),
+    );
+    if (
+      row?.at !== null &&
+      row?.at !== undefined &&
+      (next === null || row.at < next)
+    ) {
+      next = row.at;
+    }
+  }
+  return next;
+};

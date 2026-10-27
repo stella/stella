@@ -2790,3 +2790,16 @@ export const lockCaseLawCoverageSnapshot = async (
     sql`LOCK TABLE case_law_coverage_summaries IN SHARE ROW EXCLUSIVE MODE`,
   );
 };
+
+/** Removal discovery and completion serialize their ledger and checkpoint on one source. */
+export const lockCaseLawRemovalSource = async ({
+  tx,
+  sourceId,
+}: {
+  tx: ExecuteTransaction;
+  sourceId: SafeId<"caseLawSource">;
+}): Promise<void> => {
+  await tx.execute(
+    sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
+  );
+};

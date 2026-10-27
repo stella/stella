@@ -94,6 +94,7 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { REMOVAL_RETRY_KINDS } from "@/api/lib/legal-search/removal-reconciliation-state";
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
@@ -1821,10 +1822,22 @@ export type ReconciliationItemStatus =
 
 export const RECONCILIATION_MAX_REVIVALS = 2;
 
+export const RECONCILIATION_ITEM_KINDS = [
+  "listing",
+  ...REMOVAL_RETRY_KINDS,
+] as const;
+export const RECONCILIATION_ITEM_KIND = {
+  LISTING: RECONCILIATION_ITEM_KINDS[0],
+} as const;
+
 export const caseLawReconciliationItems = p.pgTable(
   "case_law_reconciliation_items",
   {
     id: pUuid<"caseLawReconciliationItem">().primaryKey(),
+    kind: p
+      .varchar({ length: 32, enum: RECONCILIATION_ITEM_KINDS })
+      .default(RECONCILIATION_ITEM_KIND.LISTING)
+      .notNull(),
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
@@ -1853,6 +1866,16 @@ export const caseLawReconciliationItems = p.pgTable(
     p
       .uniqueIndex("case_law_reconciliation_items_source_identity_idx")
       .on(t.sourceId, t.identityKey),
+    p
+      .index("case_law_reconciliation_items_kind_due_idx")
+      .on(t.sourceId, t.kind, t.status, t.nextAttemptAt, t.id),
+    p.check(
+      "case_law_reconciliation_items_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        RECONCILIATION_ITEM_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
     // The due-retry read is the loop's highest-priority work unit, and it
     // asks only about parked rows; terminal ones are dead weight in it.
     p
@@ -2508,6 +2531,24 @@ const removalSnapshotPolicies = () => [
     using: sql`true`,
   }),
 ];
+
+/** Persistent country epochs fence counts staged after a corpus removal. */
+export const caseLawSitemapCountryGenerations = p.pgTable(
+  "case_law_sitemap_country_generations",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    generation: p.bigint({ mode: "bigint" }).default(0n).notNull(),
+  },
+  () => [
+    p.pgPolicy("case_law_sitemap_generation_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
 
 export const caseLawSitemapShards = p.pgTable(
   "case_law_sitemap_shards",

@@ -184,6 +184,10 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "invalidateCaseLawRemovalSnapshotsTx",
   },
+  case_law_sitemap_country_generations: {
+    type: "tombstone",
+    owner: "country generation invalidation",
+  },
   case_law_sitemap_shards: {
     type: "removed-by-owner",
     owner: "invalidateCaseLawRemovalSnapshotsTx",

@@ -1,0 +1,6 @@
+{
+  "add-column": "The reconciliation discriminator has a constant default, a catalog-only addition under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "The discriminator CHECK is NOT VALID and scans no existing rows; validation runs through the online owner after deployment.",
+  "row-level-security": "The new country-generation table is empty; enabling and forcing its row policies changes only its own catalog metadata, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The country-generation policies are catalog-only metadata on the new empty relation, bounded by 1s lock_timeout and 5s statement_timeout."
+}

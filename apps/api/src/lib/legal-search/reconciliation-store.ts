@@ -22,6 +22,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawReconciliationItems,
   caseLawSources,
+  RECONCILIATION_ITEM_KIND,
   RECONCILIATION_ITEM_STATUS,
   RECONCILIATION_MAX_REVIVALS,
 } from "@/api/db/schema";
@@ -493,6 +494,10 @@ export const selectDueReconciliationItems = async (
         .where(
           and(
             eq(caseLawReconciliationItems.sourceId, sourceId),
+            eq(
+              caseLawReconciliationItems.kind,
+              RECONCILIATION_ITEM_KIND.LISTING,
+            ),
             eq(
               caseLawReconciliationItems.status,
               RECONCILIATION_ITEM_STATUS.PARKED,

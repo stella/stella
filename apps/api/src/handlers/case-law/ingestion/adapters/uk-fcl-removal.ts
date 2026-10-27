@@ -4,6 +4,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { readPublisher } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { PublisherRemovalRead } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
+import { REMOVAL_UNPROBEABLE_REASON } from "@/api/lib/legal-search/removal-reconciliation-state";
 
 /** Recheck the exact document endpoint through the source's existing request gate. */
 export const probeUkFclRemoval = async (
@@ -15,8 +16,8 @@ export const probeUkFclRemoval = async (
     sourceDocumentId.length > 256
   ) {
     return {
-      type: "unavailable",
-      cause: { kind: "thrown", error: "Invalid publisher identity" },
+      type: "unprobeable",
+      reason: REMOVAL_UNPROBEABLE_REASON.INVALID_IDENTITY,
     };
   }
   const outcome = await readPublisher(
