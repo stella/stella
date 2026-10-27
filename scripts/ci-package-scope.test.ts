@@ -1152,7 +1152,8 @@ test("owner-named Markdown declarations preserve input scope without duplicate p
 
 test("every owner-named input declaration enters the census even through a delegated reader", () => {
   repository((root, write) => {
-    const declared = ["scripts/owned-reader.ts", "scripts/other-reader.ts"];
+    // Listed in command order, the order the plan returns them in.
+    const declared = ["scripts/other-reader.ts", "scripts/owned-reader.ts"];
     for (const [index, file] of declared.entries()) {
       write(
         file,
