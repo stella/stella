@@ -1519,6 +1519,7 @@ const MatterItem = ({
               <MenuTrigger
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+                tooltip={t("common.actions")}
               >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>

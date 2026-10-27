@@ -65,6 +65,7 @@ const clockSignature = async (
     (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Search history import is unavailable. Retry later.",
         cause,
       }),

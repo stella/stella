@@ -295,6 +295,7 @@ export const ComposerPlusMenu = ({
                 triggerClassName,
               )}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={t("chat.composerMenu.open")}
               type="button"
               variant="secondary"
             />
