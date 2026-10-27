@@ -4120,6 +4120,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
