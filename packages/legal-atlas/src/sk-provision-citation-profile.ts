@@ -94,6 +94,11 @@ export const SK_PROFILE = {
       { prefix: "v znení účinnom od", relation: "from" },
     ],
     amendmentPrefixes: ["v znení zákona č.", "v znení novely č."],
+    currentVersionMarkers: [
+      "v znení neskorších predpisov",
+      "v platnom znení",
+      "v aktuálnom znení",
+    ],
     monthNames: {
       januára: 1,
       februára: 2,
@@ -322,6 +327,17 @@ export const SK_PROFILE = {
     {
       spellings: ["zákon o združovaní občanov", "zákona o združovaní občanov"],
       identifier: zb(83, 1990),
+    },
+  ],
+
+  titleHeads: [
+    {
+      nominative: "zákon",
+      forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
+    },
+    {
+      nominative: "zákonník",
+      forms: ["zákonník", "zákonníka", "zákonníku", "zákonníkom"],
     },
   ],
 

@@ -68,6 +68,8 @@ export {
   EXPENSE_CATEGORIES,
   INVOICE_LANGUAGES,
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
@@ -79,6 +81,7 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
@@ -454,6 +457,7 @@ export type {
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";

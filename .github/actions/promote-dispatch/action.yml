@@ -207,8 +207,7 @@ runs:
           if ! run_id="$(
             bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
               "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
-              --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-              | head -n 1
+              --jq "first(.workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id)"
           )"; then
             echo "::error::Dispatched run lookup failed." >&2
             exit 1

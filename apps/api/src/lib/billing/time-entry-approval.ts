@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -20,17 +21,66 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const TIME_APPROVAL_REFUSALS = [
-  "not_found",
-  "not_approver",
-  "wrong_status",
-  "running_timer",
-  "unpriced",
-  "time_period_locked",
-  "invalid_entry",
-] as const;
-
 type ApprovalEntry = typeof timeEntries.$inferSelect & { running: boolean };
+
+/**
+ * The review lifecycle every status change of a time entry follows; this
+ * module owns it. A timekeeper submits a draft; an approver approves a
+ * submitted entry or returns it (or an approved one) to draft with a reason.
+ * Approving a draft directly is the solo path only: an approver acting on
+ * their own entry. Billing and write-off leave from approved.
+ */
+export const TIME_ENTRY_REVIEW_TRANSITIONS = {
+  submit: { from: [BILLING_STATUS.DRAFT], to: BILLING_STATUS.SUBMITTED },
+  approve: {
+    from: [BILLING_STATUS.SUBMITTED, BILLING_STATUS.DRAFT],
+    to: BILLING_STATUS.APPROVED,
+  },
+  return: {
+    from: [BILLING_STATUS.SUBMITTED, BILLING_STATUS.APPROVED],
+    to: BILLING_STATUS.DRAFT,
+  },
+} as const;
+
+const APPROVABLE_STATUSES: readonly string[] =
+  TIME_ENTRY_REVIEW_TRANSITIONS.approve.from;
+const RETURNABLE_STATUSES: readonly string[] =
+  TIME_ENTRY_REVIEW_TRANSITIONS.return.from;
+
+/**
+ * Whether the entry's status lets this action proceed. Approving an approved
+ * entry and returning an already returned draft replay safely; a draft is
+ * approvable only by its own timekeeper (who is their own approver).
+ */
+const reviewStatusRefusal = ({
+  entry,
+  currentUserId,
+  action,
+}: {
+  entry: ApprovalEntry;
+  currentUserId: SafeId<"user">;
+  action: "approve" | "return";
+}): TimeApprovalRefusal | null => {
+  if (action === "approve") {
+    if (entry.status === BILLING_STATUS.APPROVED) {
+      return null;
+    }
+    if (!APPROVABLE_STATUSES.includes(entry.status)) {
+      return "wrong_status";
+    }
+    return entry.status === BILLING_STATUS.DRAFT &&
+      entry.userId !== currentUserId
+      ? "not_submitted"
+      : null;
+  }
+  if (RETURNABLE_STATUSES.includes(entry.status)) {
+    return null;
+  }
+  if (entry.status === BILLING_STATUS.DRAFT) {
+    return entry.returnedAt === null ? "not_submitted" : null;
+  }
+  return "wrong_status";
+};
 type ApprovalActor = {
   memberRole: AuthorizedMemberRole;
   currentUserId: SafeId<"user">;
@@ -49,7 +99,7 @@ export const timeApprovalRefusal = ({
   policy,
   now,
   action,
-}: ApprovalRefusalOptions): (typeof TIME_APPROVAL_REFUSALS)[number] | null => {
+}: ApprovalRefusalOptions): TimeApprovalRefusal | null => {
   if (
     !canApproveAssignedTimeEntry({
       memberRole,
@@ -59,11 +109,9 @@ export const timeApprovalRefusal = ({
   ) {
     return "not_approver";
   }
-  if (
-    entry.status !== BILLING_STATUS.DRAFT &&
-    entry.status !== BILLING_STATUS.APPROVED
-  ) {
-    return "wrong_status";
+  const statusRefusal = reviewStatusRefusal({ entry, currentUserId, action });
+  if (statusRefusal) {
+    return statusRefusal;
   }
   if (entry.running) {
     return "running_timer";
@@ -106,7 +154,7 @@ type TimeApprovalOutcome =
   | {
       id: SafeId<"timeEntry">;
       status: "refused";
-      reason: (typeof TIME_APPROVAL_REFUSALS)[number];
+      reason: TimeApprovalRefusal;
     };
 
 export const approveTimeEntryBatch = async ({
@@ -179,7 +227,7 @@ export const approveTimeEntryBatch = async ({
         continue;
       }
       results.push({ id, status: "approved" });
-      if (entry && entry.status === BILLING_STATUS.DRAFT) {
+      if (entry && entry.status !== BILLING_STATUS.APPROVED) {
         approved.push(entry);
       }
     }
@@ -202,7 +250,9 @@ export const approveTimeEntryBatch = async ({
               timeEntries.id,
               approved.map(({ id }) => id),
             ),
-            eq(timeEntries.status, BILLING_STATUS.DRAFT),
+            inArray(timeEntries.status, [
+              ...TIME_ENTRY_REVIEW_TRANSITIONS.approve.from,
+            ]),
           ),
         );
       await recordAuditEvent(

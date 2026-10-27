@@ -45,9 +45,14 @@ mod windows_window;
 pub use windows_window::focused_window_title;
 
 #[cfg(target_os = "macos")]
+mod activation;
+#[cfg(target_os = "macos")]
+pub use activation::{ActivationReturn, return_activation};
+
+#[cfg(target_os = "macos")]
 mod park;
 #[cfg(target_os = "macos")]
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
-  prepare_transient_overlay, present_key_panel,
+  prepare_transient_overlay, present_activating_window, present_key_panel,
 };

@@ -182,6 +182,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   contact: null,
   contact_directory: null,
   desktop_edit_session: null,
+  // A mark follows its own sharing scope, never the matter's membership.
+  document_annotation: null,
   document_type: null,
   expense: null,
   feedback_report: null,

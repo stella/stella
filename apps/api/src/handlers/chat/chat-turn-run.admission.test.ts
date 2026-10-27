@@ -465,7 +465,11 @@ describe("chat run admission follows owned settlement", () => {
           }),
         );
         if (exit === "throw") {
-          throw new HandlerError({ status: 503, message: "Provider aborted" });
+          throw new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: "Provider aborted",
+          });
         }
       };
       const output = processServerChatStream({

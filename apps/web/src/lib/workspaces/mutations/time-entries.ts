@@ -1,9 +1,97 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
+import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
+import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
+import {
+  approveTimeEntries,
+  returnTimeEntry,
+  sendTimeEntryMutation,
+} from "@/lib/workspaces/time-entries-api";
+
+// A review decision changes the matters' time and what they can invoice, and
+// every approver's queue.
+const refreshReviewedTime = async (
+  queryClient: QueryClient,
+  workspaceIds: readonly string[],
+) => {
+  await Promise.all([
+    ...[...new Set(workspaceIds)].flatMap((workspaceId) => [
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+    ]),
+    queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+    // A reviewed entry can be the reviewer's own, shown in their week.
+    queryClient.invalidateQueries({ queryKey: myTimeEntriesKeys.root() }),
+  ]);
+};
+
+/**
+ * Approves a selection in one call. The API answers per entry, so a refusal
+ * (no rate, locked month, missing description) comes back as a result, not
+ * as a failed request.
+ */
+export const useApproveTimeEntries = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+    }: {
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
+      ids: readonly string[];
+    }) => await approveTimeEntries(ids),
+    onSuccess: async (_result, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds);
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useApproveTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useApproveTimeEntries:failure" },
+      });
+    },
+  });
+};
+
+export const useReturnTimeEntry = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      comment,
+    }: {
+      /** The matter the entry belongs to; null for internal work. */
+      workspaceId: string | null;
+      id: string;
+      comment: string;
+    }) => await returnTimeEntry({ id, comment }),
+    onSuccess: async (_result, { workspaceId }) => {
+      await refreshReviewedTime(
+        queryClient,
+        workspaceId === null ? [] : [workspaceId],
+      );
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useReturnTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useReturnTimeEntry:failure" },
+      });
+    },
+  });
+};
 
 type CreateTimeEntryVars = {
   workspaceId: string;
@@ -99,7 +187,7 @@ type TimeSuggestionDecision =
       durationMinutes: number;
       narrative: string;
       narrativeLanguage?: string | null;
-      billable: boolean;
+      billable?: boolean;
     }
   | { type: "dismiss" };
 
