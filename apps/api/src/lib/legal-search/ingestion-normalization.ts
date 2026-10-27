@@ -461,6 +461,7 @@ export const sanitizeResult = (
         ?.map((url) => strip(url))
         .filter((url): url is string => url !== undefined),
       legacyEcli: strip(result.legacyEcli),
+      legacyCaseNumber: strip(result.legacyCaseNumber),
       sheetNumber: strip(result.sheetNumber),
       fulltext: result.fulltext
         ? collapseSpacedLetters(strip(result.fulltext) ?? "")

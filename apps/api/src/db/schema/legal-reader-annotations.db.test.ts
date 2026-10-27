@@ -117,4 +117,61 @@ describe("legal reader annotations", () => {
       causeChainText(Result.isError(written) ? written.error : null),
     ).toContain("legal_reader_annotations_target_type_values");
   });
+
+  test("a matter document mark carries its document, a page anchor and the page's digest", async () => {
+    const insertMark = async (
+      row: typeof legalReaderAnnotations.$inferInsert,
+    ) =>
+      await Result.tryPromise(
+        async () => await testDb.insert(legalReaderAnnotations).values(row),
+      );
+    const workspaceId = createSafeId<"workspace">();
+    const documentMark = {
+      ...mark("decision", "deliver the goods"),
+      targetType: "matter-document" as const,
+      workspaceId,
+      entityId: createSafeId<"entity">(),
+      blockAnchorId: "page-2",
+      pageTextSha256: "a".repeat(64),
+    };
+    for (const malformed of [
+      {
+        ...documentMark,
+        id: createSafeId<"legalReaderAnnotation">(),
+        pageTextSha256: null,
+      },
+      {
+        ...documentMark,
+        id: createSafeId<"legalReaderAnnotation">(),
+        entityId: null,
+      },
+      {
+        ...documentMark,
+        id: createSafeId<"legalReaderAnnotation">(),
+        blockAnchorId: "p-1",
+      },
+      {
+        ...documentMark,
+        id: createSafeId<"legalReaderAnnotation">(),
+        blockAnchorId: "page-0",
+      },
+      {
+        ...documentMark,
+        id: createSafeId<"legalReaderAnnotation">(),
+        pageTextSha256: "A".repeat(64),
+      },
+      // A public-law note never carries a document's columns.
+      {
+        ...mark("statute", "§ 2079"),
+        entityId: createSafeId<"entity">(),
+        pageTextSha256: "a".repeat(64),
+      },
+    ]) {
+      const written = await insertMark(malformed);
+      expect(Result.isError(written)).toBe(true);
+      expect(
+        causeChainText(Result.isError(written) ? written.error : null),
+      ).toContain("legal_reader_annotations_matter_document_shape");
+    }
+  });
 });

@@ -188,12 +188,17 @@ export const MODEL_CATALOG_DRIFT_INPUTS = [
   "packages/ai-catalog/src/capabilities.gen.ts",
   "packages/ai-catalog/src/document-input-overrides.ts",
   "packages/ai-catalog/src/index.ts",
+  "packages/ai-catalog/src/model-defaults-ledger.ts",
   "packages/ai-catalog/src/model-rate-policy.ts",
   "packages/ai-catalog/src/model-rate.ts",
   "packages/ai-catalog/src/model-rates.gen.ts",
+  "packages/ai-catalog/src/reasoning-capabilities.ts",
+  "packages/fetch/src/connection-failure.ts",
+  "packages/fetch/src/index.ts",
   "packages/scripts/src/model-catalog-capabilities-gen.ts",
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
+  "packages/scripts/src/model-catalog-snapshot.ts",
 ] as const;
 
 export const ROUTE_TREE_INPUTS = [
