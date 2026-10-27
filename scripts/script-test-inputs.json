@@ -106,6 +106,7 @@
       "scripts/check-release-candidate.sh",
       "scripts/gh-retry.sh",
       "scripts/prepare-release-tag.sh",
+      "scripts/retry.sh",
       "scripts/verify-release-candidate-tree.mjs",
       "scripts/verify-release-tree-proof.sh"
     ],
@@ -299,6 +300,7 @@
     "scripts/oxlint-rule-decisions.test.ts": ["**"],
     "scripts/oxlint-safe-fixers.test.ts": [".oxlint-plugins/**"],
     "scripts/oxlint-tailwind-design-system.test.ts": ["**"],
+    "scripts/oxlint-ui-test-helper-imports.test.ts": ["**"],
     "scripts/postgres-test-maintenance-workflow.test.ts": [".github/**"],
     "scripts/pr-regeneration.test.ts": [".github/workflows/autofix.yml"],
     "scripts/pre-push-affected.test.ts": ["**"],
@@ -365,7 +367,8 @@
       ".github/workflows/main-heavy.yml"
     ],
     "scripts/remediate-dependency-audit.test.sh": [
-      "scripts/remediate-dependency-audit.sh"
+      "scripts/remediate-dependency-audit.sh",
+      "scripts/retry.sh"
     ],
     "scripts/render-web-build-args.test.sh": [
       "scripts/render-web-build-args.sh"
@@ -411,6 +414,7 @@
       ".github/actions/provenance/action.yml",
       ".github/workflows/deploy-staging.yml",
       "scripts/resolve-staging-deploy-sha.sh",
+      "scripts/retry.sh",
       "scripts/staging-source-predicate.sh"
     ],
     "scripts/staging-wake.test.ts": [
