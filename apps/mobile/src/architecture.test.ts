@@ -2,10 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { MOBILE_REDIRECT_SCHEME } from "@stll/api-contract/mobile-client";
+import {
+  MOBILE_APP_VARIANTS,
+  MOBILE_REDIRECT_SCHEMES,
+  mobileRedirectUri,
+} from "@stll/api-contract/mobile-client";
+
+import { appConfigFor } from "../app.config";
 
 const SOURCE_ROOT = import.meta.dir;
-const APP_ROOT = path.dirname(SOURCE_ROOT);
 
 /**
  * The device boundary of the connection layer: the only modules that may
@@ -65,11 +70,33 @@ describe("the connection layer", () => {
   );
 });
 
-describe("the app's redirect", () => {
-  test("is the only scheme the app registers", () => {
-    const config: unknown = JSON.parse(
-      readFileSync(path.join(APP_ROOT, "app.json"), "utf-8"),
-    );
-    expect(config).toMatchObject({ expo: { scheme: MOBILE_REDIRECT_SCHEME } });
+describe("the app's builds", () => {
+  const configs = MOBILE_APP_VARIANTS.map((variant) => ({
+    variant,
+    config: appConfigFor({ buildNumber: 7, variant }),
+  }));
+
+  test.each(configs)(
+    "$variant registers its own redirect scheme and tells the app which build it is",
+    ({ config, variant }) => {
+      expect(config.scheme).toBe(MOBILE_REDIRECT_SCHEMES[variant]);
+      expect(
+        mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
+      ).toBe(true);
+      expect(config.extra).toEqual({ variant });
+      expect(config.ios?.bundleIdentifier).toBe(config.android?.package);
+      expect(config.ios?.buildNumber).toBe("7");
+      expect(config.android?.versionCode).toBe(7);
+    },
+  );
+
+  test("no two builds share a store identity, a scheme or a name", () => {
+    for (const read of [
+      ({ config }: (typeof configs)[number]) => config.ios?.bundleIdentifier,
+      ({ config }: (typeof configs)[number]) => config.scheme,
+      ({ config }: (typeof configs)[number]) => config.name,
+    ]) {
+      expect(new Set(configs.map(read)).size).toBe(configs.length);
+    }
   });
 });

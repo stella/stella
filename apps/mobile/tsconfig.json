@@ -12,6 +12,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "app.config.ts",
+    "xcode.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]

@@ -30,7 +30,9 @@
     "apps/mobile": {
       "typescript": { "config": ["tsconfig*.json"] },
       // Metro requires Babel; the doctor script constructs its executable path.
-      "ignoreDependencies": ["@babel/core", "expo-doctor"]
+      // app.config.ts turns expo-updates on for preview and production
+      // builds; knip evaluates the development one, where it is off.
+      "ignoreDependencies": ["@babel/core", "expo-doctor", "expo-updates"]
     },
     "packages/ai-catalog": {
       // Compile-time provider capability assertions consume the adapter types.
