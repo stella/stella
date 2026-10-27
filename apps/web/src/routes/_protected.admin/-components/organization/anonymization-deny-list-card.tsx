@@ -22,6 +22,7 @@ import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -292,6 +293,10 @@ export const AnonymizationDenyListCard = () => {
   // rows are upserted (keyed on lowercased canonical). Callers
   // therefore submit the full target list, not a delta.
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "AnonymizationDenyListCard.updateMutation.useSettingsMutation",
+    },
     mutationFn: async ({ entries }: UpdateBlacklistVars) =>
       unwrapApiResponse(
         await api["organization-settings"]["anonymization-blacklist"].put({
@@ -334,7 +339,13 @@ export const AnonymizationDenyListCard = () => {
       catch: (error) => error,
     });
     if (Result.isError(saved)) {
-      getAnalytics().captureError(saved.error);
+      getAnalytics().captureError(saved.error, {
+        fingerprintKey: "AnonymizationDenyListCard.submitTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationDenyListCard.submitTerm:failure",
+        },
+      });
       notifyUserError(saved.error, t("errors.actionFailed"));
       return;
     }
@@ -441,6 +452,7 @@ export const AnonymizationDenyListCard = () => {
               <Combobox<LabelOption>
                 autoHighlight
                 disabled={updateMutation.isPending}
+                filter={matchesComboboxItem}
                 items={[...LABEL_OPTIONS]}
                 itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
                 onValueChange={(next) => {

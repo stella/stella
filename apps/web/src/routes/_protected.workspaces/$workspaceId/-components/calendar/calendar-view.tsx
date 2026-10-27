@@ -14,7 +14,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -78,7 +78,7 @@ type HandleDropParams = {
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
@@ -452,7 +452,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
@@ -477,7 +483,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure-2",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure-2",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(

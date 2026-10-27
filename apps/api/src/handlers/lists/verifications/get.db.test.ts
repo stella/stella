@@ -362,7 +362,10 @@ const seed = async (db: GatedTestDb) => {
       },
     });
     const encode = (value: object) =>
-      Buffer.from(JSON.stringify(value)).toString("base64url");
+      Buffer.from(JSON.stringify(value)).toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      });
     const token = `${encode({ alg: "none", typ: "JWT" })}.${encode({
       sub: actor,
       scope: "stella:read",

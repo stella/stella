@@ -1,5 +1,8 @@
 import { isSafeFieldPath } from "@stll/template-conditions";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import {
+  createSearchQueryMatcher,
+  filterBySearchQuery,
+} from "@stll/text-normalize/search-query-matcher";
 
 import { sanitizeFieldPath } from "@/routes/knowledge/-components/template-studio-model";
 import type { StudioField } from "@/routes/knowledge/-components/template-studio-store";
@@ -36,29 +39,21 @@ const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
 export const matchingSlashFields = (
   query: string,
   fields: StudioField[],
-): StudioField[] => {
-  const needle = query.trim().toLowerCase();
-  const matches = (field: StudioField): boolean => {
-    if (needle === "") {
-      return true;
-    }
-    const label = field.label === "" ? field.path : field.label;
-    return (
-      containsSearchMatchKey(field.path.toLowerCase(), needle) ||
-      containsSearchMatchKey(label.toLowerCase(), needle)
-    );
-  };
-  return fields.filter(matches).slice(0, SLASH_MENU_MAX_FIELDS);
-};
+): StudioField[] =>
+  filterBySearchQuery({
+    items: fields,
+    query,
+    fields: ({ label, path }) => [path, label === "" ? path : label],
+  }).slice(0, SLASH_MENU_MAX_FIELDS);
 
 export const buildSlashRootItems = (
   query: string,
   fields: StudioField[],
 ): SlashRootItem[] => {
   const trimmed = query.trim();
-  const needle = trimmed.toLowerCase();
+  const matchesQuery = createSearchQueryMatcher(trimmed);
   const matches = (...keywords: string[]): boolean =>
-    keywords.some((keyword) => containsSearchMatchKey(keyword, needle));
+    keywords.some(matchesQuery);
 
   if (trimmed === "") {
     const items: SlashRootItem[] = [
@@ -98,10 +93,8 @@ export const filterTemplateTagSuggestions = (
   tags: readonly string[],
   input: string,
 ): string[] =>
-  suggestions
-    .filter(
-      (tag) =>
-        !tags.includes(tag) &&
-        containsSearchMatchKey(tag.toLowerCase(), input.trim().toLowerCase()),
-    )
-    .slice(0, MAX_TAG_SUGGESTIONS);
+  filterBySearchQuery({
+    items: suggestions.filter((tag) => !tags.includes(tag)),
+    query: input,
+    fields: (tag) => [tag],
+  }).slice(0, MAX_TAG_SUGGESTIONS);

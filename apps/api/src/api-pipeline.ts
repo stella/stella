@@ -23,6 +23,7 @@ import {
   socketPeerOnce,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -30,10 +31,12 @@ import {
   clientTooOldError,
   LOCAL_CLIENT_IDENTITY_HEADER,
 } from "@/api/lib/mcp-connectors/local-client-support";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   enrichRequestContext,
   getRequestId,
   openRequestContext,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import {
   errorBoundary,
@@ -77,8 +80,24 @@ const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
  * query count. Opened with `run`, so nothing outside the request's own
  * callback tree adopts it.
  */
-const requestScope: Middleware = async (_ctx, inner) =>
-  await runWithHttpRequestScope(async () => await inner());
+const requestScope: Middleware = async (ctx, inner) =>
+  await runWithHttpRequestScope(async () => {
+    const scope = {
+      type: "request",
+      method: ctx.request.method,
+      routeTemplate: ctx.route ?? "unmatched",
+    } as const;
+    recordRequestExceptionScope(ctx.request, scope);
+    return await withExceptionScope(
+      scope,
+      async () =>
+        await runWithStatementCeiling({
+          kind: "request",
+          key: `${ctx.request.method} ${ctx.route ?? "<unmatched>"}`,
+          run: inner,
+        }),
+    );
+  });
 
 /**
  * Who is calling and from where, resolved once while the edge headers are

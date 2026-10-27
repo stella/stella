@@ -442,3 +442,40 @@ export const parseTimeEntrySuggestionDecision = (
         timeEntryId: input.timeEntryId,
       }
     : null;
+
+/** Why the API refuses to approve, or return to draft, one time entry. */
+export const TIME_APPROVAL_REFUSALS = [
+  "not_found",
+  "not_approver",
+  "wrong_status",
+  "running_timer",
+  "unpriced",
+  "time_period_locked",
+  "invalid_entry",
+] as const;
+
+export type TimeApprovalRefusal = (typeof TIME_APPROVAL_REFUSALS)[number];
+
+const timeApprovalBatchSchema = v.object({
+  results: v.array(
+    v.variant("status", [
+      v.object({ id: v.string(), status: v.literal("approved") }),
+      v.object({
+        id: v.string(),
+        status: v.literal("refused"),
+        reason: v.picklist(TIME_APPROVAL_REFUSALS),
+      }),
+    ]),
+  ),
+});
+
+/** One outcome per requested id: approved, or refused with its reason. */
+export const parseTimeApprovalBatch = (input: unknown) => {
+  const parsed = v.safeParse(timeApprovalBatchSchema, input);
+  return parsed.success ? parsed.output : null;
+};
+
+export const parseTimeEntryReturnResponse = (input: unknown) =>
+  isRecord(input) && typeof input.id === "string" && input.status === "draft"
+    ? { id: input.id, status: input.status }
+    : null;

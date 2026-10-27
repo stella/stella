@@ -65,7 +65,7 @@ describe.skipIf(
           const organizationId = mintAuthProviderId<"organization">();
           const correlationId = Bun.randomUUIDv7();
           const verifier = "a".repeat(64);
-          const credential = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
+          const credential = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
           const keyId = mintAuthProviderIdValue();
           const sessionId = mintAuthProviderIdValue();
           await db.transaction(async (tx) => {

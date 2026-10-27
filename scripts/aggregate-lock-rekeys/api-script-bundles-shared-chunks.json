@@ -1,0 +1,23 @@
+[
+  {
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
+    "fromFile": "apps/api/src/scripts/replay-tick.ts",
+    "from": "5d2ff5e173412a2f6563f61cbe7648607a2b8113a3077eee52c0fcea09278c0f",
+    "to": "5d2ff5e173412a2f6563f61cbe7648607a2b8113a3077eee52c0fcea09278c0f",
+    "reason": "Move the replay tick command out of its entry so other scripts import it without importing an entrypoint; the transaction and count are unchanged."
+  },
+  {
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
+    "fromFile": "apps/api/src/scripts/replay-tick.ts",
+    "from": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
+    "to": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
+    "reason": "Move the replay tick command out of its entry so other scripts import it without importing an entrypoint; the transaction and count are unchanged."
+  },
+  {
+    "file": "apps/api/src/scripts/better-auth-migration-audit-command.ts",
+    "fromFile": "apps/api/src/scripts/better-auth-migration-audit.ts",
+    "from": "fc0f0097cd1ab3f2ca6229c95a53ce6b468bb40137d87ce8a48882666d9c9f4a",
+    "to": "fc0f0097cd1ab3f2ca6229c95a53ce6b468bb40137d87ce8a48882666d9c9f4a",
+    "reason": "Move the migration audit command out of its entry so the backfill imports it without importing an entrypoint; the transaction and count are unchanged."
+  }
+]

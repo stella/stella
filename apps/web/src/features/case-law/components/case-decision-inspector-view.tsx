@@ -2,9 +2,10 @@ import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -38,7 +39,7 @@ import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
-import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
@@ -80,7 +81,7 @@ export const CaseDecisionInspectorView = ({
 }: InspectorViewRenderProps<CaseDecisionViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("decision");
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const {
@@ -98,9 +99,22 @@ export const CaseDecisionInspectorView = ({
     sourceAllowsDerivedAi: decision?.source.allowsDerivedAi === true,
     mode: "enabled",
   });
-  const analysisTree =
-    analysis.state.status === "done" ? analysis.state.analysis.tree : null;
-  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(analysisTree);
+  const analysisTree = (() => {
+    switch (analysis.state.status) {
+      case "done":
+        return analysis.state.analysis.tree;
+      // Streamed sections join Contents as they arrive.
+      case "generating":
+        return analysis.state.tree.length === 0 ? null : analysis.state.tree;
+      case "idle":
+      case "error":
+        return null;
+      default:
+        analysis.state satisfies never;
+        return panic("Unhandled analysis state");
+    }
+  })();
+  const analysisContents = useAnalysisReaderOutline(analysisTree);
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
@@ -307,7 +321,7 @@ export const CaseDecisionInspectorView = ({
           textScale={textScale}
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
-          fallbackBreadcrumb={fallbackBreadcrumb}
+          analysis={analysisContents}
           viewport={viewportElement}
           key={decisionId}
         />

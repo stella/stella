@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -172,6 +173,7 @@ import { routes } from "@/api/http/route";
 import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -215,6 +217,10 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -3352,7 +3358,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),
