@@ -23,6 +23,23 @@ type PublicLawResultsBoundaryProps = {
   resetOn: unknown;
 };
 
+// The boundary resets when a new response arrives. Responses are objects,
+// so each distinct one gets its own number; the reset key must be primitive.
+const responseKeys = new WeakMap<object, number>();
+const responseKeyCounter = { next: 0 };
+const resetKeyOf = (value: unknown): string | number => {
+  if (typeof value !== "object" || value === null) {
+    return String(value);
+  }
+  const known = responseKeys.get(value);
+  if (known !== undefined) {
+    return known;
+  }
+  responseKeyCounter.next += 1;
+  responseKeys.set(value, responseKeyCounter.next);
+  return responseKeyCounter.next;
+};
+
 /** A row failure cannot remove the search controls that can recover it. */
 export const PublicLawResultsBoundary = ({
   children,
@@ -31,7 +48,7 @@ export const PublicLawResultsBoundary = ({
 }: PublicLawResultsBoundaryProps) => (
   <CatchBoundary
     key={searchKey}
-    getResetKey={() => resetOn}
+    getResetKey={() => resetKeyOf(resetOn)}
     errorComponent={PublicLawListFailure}
   >
     {children}
