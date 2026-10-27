@@ -27,7 +27,7 @@ test("invoice client backfill resumes committed batches and reaches a fixed poin
  INSERT INTO invoices VALUES ('00000000-0000-0000-0000-000000000002','firm','00000000-0000-0000-0000-000000000001',NULL,'00000000-0000-0000-0001-000000000001');`);
   const migration = await Bun.file(
     new URL(
-      "../../drizzle/20261018220000_client_invoices/migration.sql",
+      "../../drizzle/20261026130000_client_invoices/migration.sql",
       import.meta.url,
     ),
   ).text();

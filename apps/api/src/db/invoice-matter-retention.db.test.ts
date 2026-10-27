@@ -161,8 +161,8 @@ test("the retention migration changes only foreign keys and keeps existing invoi
   await seedDatabase(database, true);
   const before = await readInvoiceState(database);
   for (const name of [
-    "20261021165000_invoice_matter_retention",
-    "20261021165001_invoice_matter_retention_validate",
+    "20261026130001_invoice_matter_retention",
+    "20261026130002_invoice_matter_retention_validate",
   ]) {
     // These additive/catalog migrations release their locks before online validation.
     await database.exec(`BEGIN; ${await retentionMigration(name)} COMMIT;`);
