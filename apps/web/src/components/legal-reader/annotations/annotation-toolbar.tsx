@@ -79,6 +79,11 @@ type AnnotationToolbarProps = {
   /** Why Explain cannot take these spans, or `undefined` when it can. */
   explainRefusal?:
     ((spans: SelectionAnchor[]) => string | undefined) | undefined;
+  /** The paragraphs the settled selection covers, on the same frame the bar
+   * reads them; empty once nothing is selected. Called again on scroll and
+   * resize with the same spans, so a consumer compares before it stores. */
+  onSelectedSpansChange?:
+    ((spans: readonly SelectionAnchor[]) => void) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -105,6 +110,8 @@ type ReaderSelectionSnapshot = {
   focusNode: Node;
   focusOffset: number;
 };
+
+const NO_SELECTED_SPANS: readonly SelectionAnchor[] = [];
 
 const STYLE_ICONS = {
   highlight: HighlighterIcon,
@@ -133,6 +140,7 @@ export const AnnotationToolbar = ({
   onCompose,
   onExplain,
   explainRefusal,
+  onSelectedSpansChange,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
@@ -169,6 +177,9 @@ export const AnnotationToolbar = ({
   );
   const activateAnnotation = useLatestCallback(onActivateAnnotation);
   const clearActive = useLatestCallback(onClearActive);
+  const reportSelectedSpans = useLatestCallback(
+    (spans: readonly SelectionAnchor[]) => onSelectedSpansChange?.(spans),
+  );
 
   useReaderAnnotationShortcuts({
     onRedo: controller.redo,
@@ -277,23 +288,28 @@ export const AnnotationToolbar = ({
           barRef.current?.contains(selection.anchorNode) === true
         ) {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         const text = selection.toString().replace(/\s+/gu, " ").trim();
         if (text === "") {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         // A fresh selection must not inherit the previous one's open menu.
         setCopyOpen(false);
         const range = selection.getRangeAt(0);
+        const spans = selectionAnchorsFrom(selection, root);
+        // Reported before the bar's geometry: words scrolled out of view are
+        // still selected, though the bar has nowhere to float.
+        reportSelectedSpans(spans);
         const geometry = selectionToolbarAnchor({ range, root });
         if (geometry === null) {
           setSelected(null);
           return;
         }
         const cleanText = cleanSelectionText(range);
-        const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
           locator: locatorOf(range, root, spans),

@@ -1027,6 +1027,12 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "loadingMore": "Cargando más...",
+    "marginFilter": {
+      "label": "Filtro de disposiciones citadas",
+      "paragraph": "{count, plural, =0 {Ninguna disposición citada en el ¶{paragraph}} one {# disposición citada en el ¶{paragraph}} many {# de disposiciones citadas en el ¶{paragraph}} other {# disposiciones citadas en el ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Ninguna disposición citada en la selección} one {# disposición citada en la selección} many {# de disposiciones citadas en la selección} other {# disposiciones citadas en la selección}}",
+      "unnumberedParagraph": "{count, plural, =0 {Ninguna disposición citada en este párrafo} one {# disposición citada en este párrafo} many {# de disposiciones citadas en este párrafo} other {# disposiciones citadas en este párrafo}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# resolución ya estaba guardada aquí} other {# resoluciones ya estaban guardadas aquí}}",
       "empty": "Todavía no hay jurisprudencia guardada en este asunto.",

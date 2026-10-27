@@ -1027,6 +1027,12 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "marginFilter": {
+      "label": "Filter für zitierte Vorschriften",
+      "paragraph": "{count, plural, =0 {Keine Vorschriften in ¶{paragraph} zitiert} one {# Vorschrift in ¶{paragraph} zitiert} other {# Vorschriften in ¶{paragraph} zitiert}}",
+      "selection": "{count, plural, =0 {Keine Vorschriften in der Auswahl zitiert} one {# Vorschrift in der Auswahl zitiert} other {# Vorschriften in der Auswahl zitiert}}",
+      "unnumberedParagraph": "{count, plural, =0 {Keine Vorschriften in diesem Absatz zitiert} one {# Vorschrift in diesem Absatz zitiert} other {# Vorschriften in diesem Absatz zitiert}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
       "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",

@@ -1027,6 +1027,12 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "marginFilter": {
+      "label": "Citēto normu filtrs",
+      "paragraph": "{count, plural, =0 {¶{paragraph} nav citētu normu} one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
+      "selection": "{count, plural, =0 {Atlasē nav citētu normu} one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šajā rindkopā nav citētu normu} one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, zero {# nolēmumu jau bija saglabāti šeit} one {# nolēmums jau bija saglabāts šeit} other {# nolēmumi jau bija saglabāti šeit}}",
       "empty": "Šajā lietā vēl nav saglabāta tiesu prakse.",

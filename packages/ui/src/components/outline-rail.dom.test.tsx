@@ -222,6 +222,8 @@ test("the tick strip opens the panel only when the pointer rests on it", async (
     });
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
   } finally {
+    // Bun discards pending fake timeouts on the switch; fire them first.
+    jest.runOnlyPendingTimers();
     jest.useRealTimers();
     outside.remove();
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
@@ -251,6 +253,7 @@ test("focus inside a hover-opened panel holds it open after the pointer leaves",
         jest.advanceTimersByTime(200);
       });
     } finally {
+      jest.runOnlyPendingTimers();
       jest.useRealTimers();
     }
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
