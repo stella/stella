@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { parseSource, walk } from "@stll/scripts/src/syntax-tree.ts";
+import { parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import {

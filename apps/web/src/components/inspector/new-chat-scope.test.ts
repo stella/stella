@@ -9,7 +9,7 @@ import {
   type Node,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
