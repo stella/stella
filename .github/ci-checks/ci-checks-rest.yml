@@ -114,7 +114,7 @@ checks:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Runs repository script tests whose declared cost requires the full-depth path."
     id: depth_repository_scripts
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && needs.ci-plan.outputs.suite_depth == 'full' && github.event_name != 'merge_group' && (inputs.pr_depth_only == true || inputs.heavy_only == true) }}
+    if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.suite_depth == 'full' && github.event_name != 'merge_group' && (inputs.pr_depth_only == true || inputs.heavy_only == true)) }}
     run: bun scripts/run-unlisted-script-tests.ts --depth --timeout 120000
 
   - name: Test remaining repository scripts
