@@ -1729,6 +1729,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Development render census: verify React Refresh with isolated temporary modules.
+  "STELLA_RENDER_CENSUS_HMR",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",
