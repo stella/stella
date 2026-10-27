@@ -23,6 +23,7 @@ import listResearchColumns from "@/api/handlers/case-law/research/columns-list";
 import reorderResearchColumns from "@/api/handlers/case-law/research/columns-reorder";
 import updateResearchColumn from "@/api/handlers/case-law/research/columns-update";
 import { runResearchAnswersBodySchema } from "@/api/handlers/case-law/research/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -77,7 +78,7 @@ const contextFor = (
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/research/columns"),
-  route: "/case/research/columns",
+  route: "/v1/case/research/columns" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [], organizationId, userId),
   scopedDb: createScopedDb(testDb, [], organizationId, userId),
   session: { activeOrganizationId: organizationId },

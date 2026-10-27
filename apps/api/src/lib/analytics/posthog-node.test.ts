@@ -4,6 +4,12 @@ import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/server-an
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 
+beforeEach(() => {
+  clientCaptureMock.mockClear();
+  clientFlushMock.mockClear();
+  clientGroupIdentifyMock.mockClear();
+});
+
 const clientCaptureMock = mock((_event: unknown) => undefined);
 const clientGroupIdentifyMock = mock((_params: unknown) => undefined);
 const clientFlushMock = mock(async () => undefined);

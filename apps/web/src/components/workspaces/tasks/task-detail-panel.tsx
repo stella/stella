@@ -25,6 +25,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import {
   isListItemType,
   isTaskPriority,
@@ -617,13 +618,12 @@ const TaskDetailPanelContent = ({
               />
             </span>
           ) : (
-            <button
-              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
-              onClick={startEditingName}
-              type="button"
+            <InspectorTitle
+              isEmpty={task.name === ""}
+              onEdit={startEditingName}
             >
-              {name}
-            </button>
+              {task.name === "" ? t("untitled") : task.name}
+            </InspectorTitle>
           )}
         </div>
 

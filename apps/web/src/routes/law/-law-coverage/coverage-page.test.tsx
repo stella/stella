@@ -11,6 +11,7 @@ import {
 import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { caseLawCoverageAnchor } from "@/features/case-law/case-law-jurisdiction";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
@@ -344,6 +345,15 @@ describe("the coverage page states what it counts", () => {
 
     expect(markup).toContain(messages.caseLaw.coverage.healthDelayed);
     expect(markup).toContain(messages.caseLaw.coverage.healthCurrent);
+  });
+
+  test("each country is a section a link from elsewhere can land on", () => {
+    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+
+    // The badge beside the search box links here by this fragment.
+    for (const { country } of COVERAGE.countries) {
+      expect(markup).toContain(`id="${caseLawCoverageAnchor(country)}"`);
+    }
   });
 
   test("a publisher's own count is named as such", () => {

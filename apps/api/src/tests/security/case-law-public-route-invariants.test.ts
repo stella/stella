@@ -9,6 +9,7 @@ import {
   PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
+import { DECISION_LIST_SORTS } from "@stll/api-contract/search";
 import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -681,10 +682,13 @@ describe("public case-law route boundary", () => {
       "public cursor decoders reject invalid IDs and round-trip issued cursors",
       fc.property(invalidId, (id) => {
         const invalidCursors = [
-          [
-            decodeDecisionDateCursor,
-            encodePaginationCursor(["2026-01-01", id]),
-          ],
+          ...DECISION_LIST_SORTS.map(
+            (sort) =>
+              [
+                (cursor: string) => decodeDecisionDateCursor(cursor, sort),
+                encodePaginationCursor([sort, "2026-01-01", id]),
+              ] as const,
+          ),
           [
             (cursor: string) => decodeCitationCursor(cursor, CITATION_QUERY),
             encodePaginationCursor([id, CITATION_QUERY.direction, null, null]),
@@ -725,18 +729,21 @@ describe("public case-law route boundary", () => {
         ).toBe(TEST_CITATION_ID);
 
         const roundTrips = [
-          {
+          ...DECISION_LIST_SORTS.map((sort) => ({
             decoded: decodeDecisionDateCursor(
               encodeDecisionDateCursor({
+                sort,
                 decisionDate: "2026-01-01",
                 id: TEST_DECISION_ID,
               }),
+              sort,
             ),
             expected: {
+              sort,
               decisionDate: "2026-01-01",
               id: TEST_DECISION_ID,
             },
-          },
+          })),
           {
             decoded: decodeDecisionCitationCursor(
               encodeDecisionCitationCursor({
