@@ -82,6 +82,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.AT_FINDOK]: "findok-bmf",
   [ADAPTER_KEYS.EU_ECJ]: "cellar-eu",
   [ADAPTER_KEYS.HU_BHGY]: "birosag-hu",
+  [ADAPTER_KEYS.UK_FCL]: "fcl-uk",
   [ADAPTER_KEYS.PL_KIS]: "eureka-mf",
   [ADAPTER_KEYS.PL_UODO]: "uodo-gov-pl",
   [ADAPTER_KEYS.PL_UOKIK]: "uokik-gov-pl",
