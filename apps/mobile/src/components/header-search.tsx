@@ -1,12 +1,18 @@
-import { createContext, use, useRef, useState } from "react";
+import { createContext, use, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { panic } from "better-result";
+import type { SearchBarCommands } from "react-native-screens";
 
 /** How long typing pauses before a search counts as settled. */
 const SETTLE_MS = 300;
 
 type HeaderSearch = {
-  /** Whether the field is open under the header. */
+  /** The tab the search belongs to: the tab on screen, or the last one. */
+  readonly tab: string;
+  /** The system's search bar in the header, for closing it from code. */
+  readonly searchBar: RefObject<SearchBarCommands | null>;
+  /** Whether the field is open in the header. */
   readonly searching: boolean;
   readonly setSearching: (searching: boolean) => void;
   /** What the field holds now, for a list that filters as it is typed. */
@@ -47,9 +53,18 @@ export const HeaderSearchProvider = ({
 }>) => {
   const [search, setSearch] = useState(() => closedSearch(activeTab ?? ""));
   const pause = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const searchBar = useRef<SearchBarCommands | null>(null);
+  const fieldTab = useRef(search.tab);
   if (activeTab !== undefined && search.tab !== activeTab) {
     setSearch(closedSearch(activeTab));
   }
+  // The field is the system's and keeps its text; a new tab closes it.
+  useEffect(() => {
+    if (fieldTab.current !== search.tab) {
+      fieldTab.current = search.tab;
+      searchBar.current?.cancelSearch();
+    }
+  }, [search.tab]);
   const setQuery = (next: string) => {
     const { tab } = search;
     setSearch((current) => ({ ...current, query: next }));
@@ -75,10 +90,12 @@ export const HeaderSearchProvider = ({
     <HeaderSearchContext
       value={{
         query: search.query,
+        searchBar,
         searching: search.searching,
         setQuery,
         setSearching,
         settledQuery: search.settledQuery,
+        tab: search.tab,
       }}
     >
       {children}

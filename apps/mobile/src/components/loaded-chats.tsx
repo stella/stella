@@ -101,6 +101,8 @@ const ThreadTimeline = ({
   return (
     <SectionList
       contentContainerStyle={screenStyles.content}
+      // The header is the platform's translucent bar; the list scrolls under it.
+      contentInsetAdjustmentBehavior="automatic"
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
         firstPage === undefined ? (

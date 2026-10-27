@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tareas",
+    "law": "Jurisprudencia",
     "matters": "Asuntos",
+    "more": "Más",
     "settings": "Configuración",
-    "law": "Jurisprudencia"
+    "tasks": "Tareas"
   },
   "chat": {
     "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Aún no hay asuntos",
     "emptyDescription": "Aquí aparecerán tus asuntos recientes.",
     "loadFailed": "No se pudieron cargar tus asuntos.",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "groupBy": "Agrupar por",
+    "noGrouping": "No agrupar",
+    "groupClient": "Cliente",
+    "personal": "Personal"
   },
   "matter": {
     "documents": "Documentos",
@@ -122,5 +127,10 @@
     "openSource": "Abrir fuente original",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
+  },
+  "more": {
+    "soon": "Próximamente",
+    "timers": "Temporizadores",
+    "voiceInput": "Entrada de voz"
   }
 }

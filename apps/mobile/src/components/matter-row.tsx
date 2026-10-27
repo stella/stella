@@ -9,10 +9,16 @@ import type { MatterSummary } from "@/state/matters";
 /**
  * One matter: its name, then reference, client and the day of its last
  * activity. The day is a date, not "2 days ago": Hermes, the app's
- * JavaScript engine, cannot format relative times. Tapping it opens the
- * matter.
+ * JavaScript engine, cannot format relative times. Under its client's
+ * heading the client goes unsaid. Tapping it opens the matter.
  */
-export const MatterRow = ({ matter }: { matter: MatterSummary }) => {
+export const MatterRow = ({
+  matter,
+  underClient = false,
+}: {
+  matter: MatterSummary;
+  underClient?: boolean;
+}) => {
   const format = useFormatter();
   const router = useRouter();
   const activity =
@@ -24,7 +30,7 @@ export const MatterRow = ({ matter }: { matter: MatterSummary }) => {
         });
   const details = [
     matter.reference,
-    matter.client?.displayName,
+    underClient ? undefined : matter.client?.displayName,
     activity,
   ].filter(
     (detail): detail is string =>

@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Pokalbis",
-    "tasks": "Užduotys",
+    "law": "Teismų praktika",
     "matters": "Bylos",
+    "more": "Daugiau",
     "settings": "Nustatymai",
-    "law": "Teismų praktika"
+    "tasks": "Užduotys"
   },
   "chat": {
     "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Bylų dar nėra",
     "emptyDescription": "Čia bus rodomos jūsų naujausios bylos.",
     "loadFailed": "Nepavyko įkelti jūsų bylų.",
-    "retry": "Bandyti dar kartą"
+    "retry": "Bandyti dar kartą",
+    "groupBy": "Grupuoti pagal",
+    "noGrouping": "Negrupuoti",
+    "groupClient": "Klientas",
+    "personal": "Asmeninė"
   },
   "matter": {
     "documents": "Dokumentai",
@@ -122,5 +127,10 @@
     "openSource": "Atverti pirminį šaltinį",
     "loadFailed": "Nepavyko įkelti teismų praktikos.",
     "share": "Bendrinti"
+  },
+  "more": {
+    "soon": "Netrukus",
+    "timers": "Laikmačiai",
+    "voiceInput": "Balso įvestis"
   }
 }

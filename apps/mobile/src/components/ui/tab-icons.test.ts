@@ -30,7 +30,7 @@ const tabGlyphs = (): Map<string, string> => {
   return new Map(
     [
       ...layout.matchAll(
-        /Trigger name="(\w+)">[\s\S]*?VectorIcon[\s\S]*?name="([\w-]+)"/gu,
+        /Trigger name="(\w+)"[^>]*>[\s\S]*?VectorIcon[\s\S]*?name="([\w-]+)"/gu,
       ),
     ].map(([, route, glyph]) => [route ?? "", glyph ?? ""]),
   );
@@ -39,7 +39,7 @@ const tabGlyphs = (): Map<string, string> => {
 test("every tab draws a glyph the lucide font has", () => {
   const glyphs = tabGlyphs();
   expect([...glyphs.keys()].toSorted()).toEqual(
-    ["index", "law", "matters", "tasks"].toSorted(),
+    ["index", "matters", "more", "tasks"].toSorted(),
   );
   for (const glyph of glyphs.values()) {
     expect(Object.keys(codepoints)).toContain(glyph);
@@ -52,12 +52,14 @@ test("the chat tab draws the web navigation's chat glyph", () => {
   );
 });
 
-test("the law tab draws the web navigation's case-law glyph", () => {
+test("More's case-law row draws the web navigation's case-law glyph", () => {
   expect(webNavIcons().get("caseLaw")).toBe("CaseLawIcon");
   expect(read("packages/ui/src/icons.ts")).toContain(
     "export { BookOpenIcon as CaseLawIcon }",
   );
-  expect(tabGlyphs().get("law")).toBe(glyphOf("BookOpenIcon"));
+  expect(read("apps/mobile/src/app/(tabs)/more.tsx")).toMatch(
+    new RegExp(`glyph: "${glyphOf("BookOpenIcon")}",\\s*href: "/law"`, "u"),
+  );
 });
 
 test("the matters tab draws the web's matter glyph, lucide's layers", () => {
@@ -68,11 +70,11 @@ test("the matters tab draws the web's matter glyph, lucide's layers", () => {
   expect(tabGlyphs().get("matters")).toBe("layers");
 });
 
-test("the header's settings button draws the web user menu's settings glyph", () => {
+test("More's settings row draws the web user menu's settings glyph", () => {
   expect(read("apps/web/src/components/sidebar-user-menu.tsx")).toContain(
     "<CogIcon />",
   );
-  expect(read("apps/mobile/src/components/protected-screens.tsx")).toContain(
-    `useGlyphImage("${glyphOf("CogIcon")}")`,
+  expect(read("apps/mobile/src/app/(tabs)/more.tsx")).toMatch(
+    new RegExp(`glyph: "${glyphOf("CogIcon")}",\\s*href: "/settings"`, "u"),
   );
 });

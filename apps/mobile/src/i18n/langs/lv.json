@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Tērzēšana",
-    "tasks": "Uzdevumi",
+    "law": "Tiesu prakse",
     "matters": "Lietas",
+    "more": "Vairāk",
     "settings": "Iestatījumi",
-    "law": "Tiesu prakse"
+    "tasks": "Uzdevumi"
   },
   "chat": {
     "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Lietu vēl nav",
     "emptyDescription": "Šeit tiks parādītas jūsu nesenās lietas.",
     "loadFailed": "Jūsu lietas neizdevās ielādēt.",
-    "retry": "Mēģināt vēlreiz"
+    "retry": "Mēģināt vēlreiz",
+    "groupBy": "Grupēt pēc",
+    "noGrouping": "Negrupēt",
+    "groupClient": "Klients",
+    "personal": "Personīga"
   },
   "matter": {
     "documents": "Dokumenti",
@@ -122,5 +127,10 @@
     "openSource": "Atvērt sākotnējo avotu",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
+  },
+  "more": {
+    "soon": "Drīzumā",
+    "timers": "Taimeri",
+    "voiceInput": "Balss ievade"
   }
 }

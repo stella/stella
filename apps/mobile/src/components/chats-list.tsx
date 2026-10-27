@@ -1,14 +1,12 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { useHeaderHeight } from "expo-router/react-navigation";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator } from "react-native";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import { useHeaderSearch } from "@/components/header-search";
 import { LoadedChats } from "@/components/loaded-chats";
-import { NewChatButton } from "@/components/new-chat-button";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -19,12 +17,11 @@ import { useAppColors } from "@/theme";
 
 /**
  * Loads the signed-in person's recent threads once, again on every pull to
- * refresh, and again once typing pauses in the header's search field, which
- * the platform draws above the list.
+ * refresh, and again once typing pauses in the header's search field. A new
+ * conversation starts from the header's button, as t3code's does.
  */
 export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
-  const headerHeight = useHeaderHeight();
   const { settledQuery } = useHeaderSearch();
   const searched = settledQuery.slice(0, SEARCH_QUERY_MAX_LENGTH);
   const { end } = useSession();
@@ -55,21 +52,16 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <View className="flex-1">
-      <View className="px-4 pb-1" style={{ paddingTop: headerHeight + 8 }}>
-        <NewChatButton />
-      </View>
-      <Suspense
-        fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-      >
-        <LoadedChats
-          load={request.load}
-          onReload={reload}
-          refreshing={refreshing}
-          search={request.search}
-          source={source}
-        />
-      </Suspense>
-    </View>
+    <Suspense
+      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
+    >
+      <LoadedChats
+        load={request.load}
+        onReload={reload}
+        refreshing={refreshing}
+        search={request.search}
+        source={source}
+      />
+    </Suspense>
   );
 };

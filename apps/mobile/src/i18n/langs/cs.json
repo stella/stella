@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Úkoly",
+    "law": "Judikatura",
     "matters": "Spisy",
+    "more": "Další",
     "settings": "Nastavení",
-    "law": "Judikatura"
+    "tasks": "Úkoly"
   },
   "chat": {
     "description": "Mějte rozpracovanou práci po ruce a pokračujte z jakéhokoli zařízení.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Zatím žádné spisy",
     "emptyDescription": "Zde se zobrazí vaše nedávné spisy.",
     "loadFailed": "Vaše spisy se nepodařilo načíst.",
-    "retry": "Zkusit znovu"
+    "retry": "Zkusit znovu",
+    "groupBy": "Seskupit podle",
+    "noGrouping": "Neseskupovat",
+    "groupClient": "Klient",
+    "personal": "Osobní"
   },
   "matter": {
     "documents": "Dokumenty",
@@ -122,5 +127,10 @@
     "openSource": "Otevřít originál",
     "loadFailed": "Judikaturu se nepodařilo načíst.",
     "share": "Sdílet"
+  },
+  "more": {
+    "soon": "Již brzy",
+    "timers": "Časovače",
+    "voiceInput": "Hlasové zadávání"
   }
 }

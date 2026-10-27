@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tasks",
+    "law": "Case Law",
     "matters": "Matters",
+    "more": "More",
     "settings": "Settings",
-    "law": "Case Law"
+    "tasks": "Tasks"
   },
   "chat": {
     "description": "Keep ongoing work close and continue from any device.",
@@ -49,7 +50,11 @@
     "emptyTitle": "No matters yet",
     "emptyDescription": "Your recent matters will appear here.",
     "loadFailed": "Your matters could not be loaded.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "groupBy": "Group by",
+    "noGrouping": "No grouping",
+    "groupClient": "Client",
+    "personal": "Personal"
   },
   "matter": {
     "documents": "Documents",
@@ -122,5 +127,10 @@
     "openSource": "Open original source",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
+  },
+  "more": {
+    "soon": "Coming soon",
+    "timers": "Timers",
+    "voiceInput": "Voice input"
   }
 }

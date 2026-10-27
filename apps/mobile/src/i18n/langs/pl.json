@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Czat",
-    "tasks": "Zadania",
+    "law": "Orzecznictwo",
     "matters": "Sprawy",
+    "more": "Więcej",
     "settings": "Ustawienia",
-    "law": "Orzecznictwo"
+    "tasks": "Zadania"
   },
   "chat": {
     "description": "Miej bieżącą pracę pod ręką i kontynuuj na dowolnym urządzeniu.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Nie ma jeszcze spraw",
     "emptyDescription": "Tutaj pojawią się Twoje ostatnie sprawy.",
     "loadFailed": "Nie udało się wczytać Twoich spraw.",
-    "retry": "Spróbuj ponownie"
+    "retry": "Spróbuj ponownie",
+    "groupBy": "Grupuj według",
+    "noGrouping": "Nie grupuj",
+    "groupClient": "Klient",
+    "personal": "Osobista"
   },
   "matter": {
     "documents": "Dokumenty",
@@ -122,5 +127,10 @@
     "openSource": "Otwórz źródło oryginalne",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
+  },
+  "more": {
+    "soon": "Wkrótce",
+    "timers": "Stopery",
+    "voiceInput": "Wprowadzanie głosowe"
   }
 }

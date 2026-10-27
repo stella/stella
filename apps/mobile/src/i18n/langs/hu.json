@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Csevegés",
-    "tasks": "Feladatok",
+    "law": "Ítélkezési gyakorlat",
     "matters": "Ügyek",
+    "more": "Továbbiak",
     "settings": "Beállítások",
-    "law": "Ítélkezési gyakorlat"
+    "tasks": "Feladatok"
   },
   "chat": {
     "description": "Tartsa kéznél a folyamatban lévő munkát, és folytassa bármely eszközről.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Még nincsenek ügyek",
     "emptyDescription": "A legutóbbi ügyei itt jelennek meg.",
     "loadFailed": "Az ügyeit nem sikerült betölteni.",
-    "retry": "Próbálja újra"
+    "retry": "Próbálja újra",
+    "groupBy": "Csoportosítás",
+    "noGrouping": "Ne csoportosítson",
+    "groupClient": "Ügyfél",
+    "personal": "Személyes"
   },
   "matter": {
     "documents": "Dokumentumok",
@@ -122,5 +127,10 @@
     "openSource": "Eredeti forrás megnyitása",
     "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
     "share": "Megosztás"
+  },
+  "more": {
+    "soon": "Hamarosan",
+    "timers": "Időmérők",
+    "voiceInput": "Hangbevitel"
   }
 }

@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Aufgaben",
+    "law": "Rechtsprechung",
     "matters": "Akten",
+    "more": "Mehr",
     "settings": "Einstellungen",
-    "law": "Rechtsprechung"
+    "tasks": "Aufgaben"
   },
   "chat": {
     "description": "Behalten Sie laufende Arbeit im Blick und machen Sie auf jedem Gerät weiter.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Noch keine Akten",
     "emptyDescription": "Ihre zuletzt bearbeiteten Akten erscheinen hier.",
     "loadFailed": "Ihre Akten konnten nicht geladen werden.",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "groupBy": "Gruppieren nach",
+    "noGrouping": "Nicht gruppieren",
+    "groupClient": "Klient",
+    "personal": "Persönlich"
   },
   "matter": {
     "documents": "Dokumente",
@@ -122,5 +127,10 @@
     "openSource": "Originalquelle öffnen",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
+  },
+  "more": {
+    "soon": "Demnächst verfügbar",
+    "timers": "Timer",
+    "voiceInput": "Spracheingabe"
   }
 }

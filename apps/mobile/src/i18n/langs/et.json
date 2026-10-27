@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Vestlus",
-    "tasks": "Ülesanded",
+    "law": "Kohtupraktika",
     "matters": "Toimikud",
+    "more": "Veel",
     "settings": "Seaded",
-    "law": "Kohtupraktika"
+    "tasks": "Ülesanded"
   },
   "chat": {
     "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Toimikuid veel pole",
     "emptyDescription": "Teie hiljutised toimikud ilmuvad siia.",
     "loadFailed": "Teie toimikuid ei õnnestunud laadida.",
-    "retry": "Proovi uuesti"
+    "retry": "Proovi uuesti",
+    "groupBy": "Rühmita",
+    "noGrouping": "Ära rühmita",
+    "groupClient": "Klient",
+    "personal": "Isiklik"
   },
   "matter": {
     "documents": "Dokumendid",
@@ -122,5 +127,10 @@
     "openSource": "Ava algallikas",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
+  },
+  "more": {
+    "soon": "Tulemas peagi",
+    "timers": "Taimerid",
+    "voiceInput": "Häälsisestus"
   }
 }

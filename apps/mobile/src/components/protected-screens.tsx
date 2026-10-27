@@ -1,4 +1,5 @@
 import { Stack, useRouter, useSegments } from "expo-router";
+import type { NativeStackHeaderItem } from "expo-router/native-stack";
 import { useWindowDimensions, View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -6,6 +7,8 @@ import {
   HeaderSearchProvider,
   useHeaderSearch,
 } from "@/components/header-search";
+import { MattersViewProvider, useMattersView } from "@/components/matters-view";
+import { useNewChat } from "@/components/new-chat";
 import { StellaWordmark } from "@/components/ui/stella-wordmark";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
@@ -19,16 +22,21 @@ export const ProtectedScreens = () => {
     segments[0] === "(tabs)" ? (segments[1] ?? "index") : undefined;
   return (
     <HeaderSearchProvider activeTab={activeTab}>
-      <Screens />
+      <MattersViewProvider>
+        <Screens />
+      </MattersViewProvider>
     </HeaderSearchProvider>
   );
 };
 
 /**
- * The app's screens. The tabs share t3code's header: the platform's own bar,
- * glass where the system has it, with the stella wordmark leading, and search
- * and settings trailing; search is the system's field, which the list under
- * it filters by.
+ * The app's screens. The tabs share one header, the platform's own bar with
+ * glass where the system has it, laid out as GitHub's app lays its out: the
+ * person's button leading, to the settings, then the stella wordmark; the
+ * tab's own action and search trailing, together. The action is the tab's
+ * "+", a new conversation over the chats, and how to group the matters over
+ * theirs. Search is the system's field, which the list under it filters by;
+ * More has nothing to search.
  */
 const Screens = () => {
   const { state } = useSession();
@@ -38,11 +46,9 @@ const Screens = () => {
   const signedIn = state.status === "signed-in";
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { searching, setQuery, setSearching } = useHeaderSearch();
-  const settingsGlyph = useGlyphImage("cog");
-  const searchGlyph = useGlyphImage("search");
-  // Search folds into a header button, as t3code's does, and opens the
-  // system's field under the bar when pressed.
+  const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
+  const accountGlyph = useGlyphImage("circle-user-round");
+  const tabItems = useTabHeaderItems(tab);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -55,58 +61,67 @@ const Screens = () => {
             headerTintColor: colors.text,
             // The wordmark leads, as a title the width of the bar would not.
             headerTitle: () => (
-              <View style={{ width: Math.max(0, width - 140) }}>
+              <View style={{ width: Math.max(0, width - 200) }}>
                 <StellaWordmark height={20} />
               </View>
             ),
             headerTransparent: true,
-            headerSearchBarOptions: searching
-              ? {
-                  autoCapitalize: "none",
-                  autoFocus: true,
-                  hideWhenScrolling: false,
-                  onCancelButtonPress: () => {
-                    setSearching(false);
-                  },
-                  onChangeText: (event) => {
-                    setQuery(event.nativeEvent.text);
-                  },
-                  placeholder: header("search"),
-                  placement: "stacked",
-                }
-              : undefined,
-            title: "stella",
-            // UIKit lays trailing items out from the edge inward.
-            unstable_headerRightItems: () => [
-              ...(searchGlyph === null
-                ? []
-                : [
-                    {
-                      icon: { source: searchGlyph, type: "image" as const },
-                      label: header("search"),
-                      onPress: () => {
-                        setSearching(true);
-                      },
-                      type: "button" as const,
+            // The system's own search button, which opens straight into the
+            // field, as t3code's search does; the bar's trailing edge holds it.
+            headerSearchBarOptions:
+              tab === "more"
+                ? undefined
+                : {
+                    allowToolbarIntegration: false,
+                    autoCapitalize: "none",
+                    hideWhenScrolling: false,
+                    onClose: () => {
+                      setSearching(false);
                     },
-                  ]),
-              ...(settingsGlyph === null
+                    onChangeText: (event) => {
+                      setQuery(event.nativeEvent.text);
+                    },
+                    onOpen: () => {
+                      setSearching(true);
+                    },
+                    placeholder: header("search"),
+                    placement: "integratedButton",
+                    ref: searchBar,
+                  },
+            title: "stella",
+            unstable_headerLeftItems: () =>
+              accountGlyph === null
                 ? []
                 : [
                     {
-                      icon: { source: settingsGlyph, type: "image" as const },
+                      icon: { source: accountGlyph, type: "image" },
                       label: tabs("settings"),
                       onPress: () => {
                         router.push("/settings");
                       },
-                      type: "button" as const,
+                      type: "button",
                     },
-                  ]),
-            ],
+                  ],
+            unstable_headerRightItems: () => tabItems,
           }}
         />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
         <Stack.Screen name="thread/[threadId]" />
+        <Stack.Screen
+          name="law/index"
+          options={{
+            contentStyle: { backgroundColor: colors.background },
+            headerBackTitle: tabs("more"),
+            headerLargeTitle: true,
+            headerLargeTitleShadowVisible: false,
+            headerShadowVisible: false,
+            headerShown: true,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.accent,
+            headerTitleStyle: { color: colors.text },
+            title: tabs("law"),
+          }}
+        />
         <Stack.Screen name="law/[decisionId]" />
         <Stack.Screen
           name="matter/[workspaceId]/index"
@@ -137,4 +152,56 @@ const Screens = () => {
       </Stack.Protected>
     </Stack>
   );
+};
+
+/** The header's action for a tab, if it has one. */
+const useTabHeaderItems = (tab: string): NativeStackHeaderItem[] => {
+  const chat = useTranslations("chat");
+  const matters = useTranslations("matters");
+  const newChat = useNewChat();
+  const { groupBy, setGroupBy } = useMattersView();
+  const newChatGlyph = useGlyphImage("plus");
+  const groupGlyph = useGlyphImage("sliders-horizontal");
+
+  if (tab === "index" && newChatGlyph !== null) {
+    return [
+      {
+        icon: { source: newChatGlyph, type: "image" },
+        label: chat("newChat"),
+        onPress: newChat,
+        type: "button",
+      },
+    ];
+  }
+  if (tab === "matters" && groupGlyph !== null) {
+    return [
+      {
+        icon: { source: groupGlyph, type: "image" },
+        label: matters("groupBy"),
+        menu: {
+          items: [
+            {
+              label: matters("groupClient"),
+              onPress: () => {
+                setGroupBy("client");
+              },
+              state: groupBy === "client" ? "on" : "off",
+              type: "action",
+            },
+            {
+              label: matters("noGrouping"),
+              onPress: () => {
+                setGroupBy("none");
+              },
+              state: groupBy === "none" ? "on" : "off",
+              type: "action",
+            },
+          ],
+          title: matters("groupBy"),
+        },
+        type: "menu",
+      },
+    ];
+  }
+  return [];
 };

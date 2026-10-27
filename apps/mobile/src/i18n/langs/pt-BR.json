@@ -1,10 +1,11 @@
 {
   "tabs": {
     "chat": "Chat",
-    "tasks": "Tarefas",
+    "law": "Jurisprudência",
     "matters": "Casos",
+    "more": "Mais",
     "settings": "Configurações",
-    "law": "Jurisprudência"
+    "tasks": "Tarefas"
   },
   "chat": {
     "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
@@ -49,7 +50,11 @@
     "emptyTitle": "Ainda não há casos",
     "emptyDescription": "Seus casos recentes aparecerão aqui.",
     "loadFailed": "Não foi possível carregar seus casos.",
-    "retry": "Tente novamente"
+    "retry": "Tente novamente",
+    "groupBy": "Agrupar por",
+    "noGrouping": "Sem agrupamento",
+    "groupClient": "Cliente",
+    "personal": "Pessoal"
   },
   "matter": {
     "documents": "Documentos",
@@ -122,5 +127,10 @@
     "openSource": "Abrir fonte original",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
+  },
+  "more": {
+    "soon": "Em breve",
+    "timers": "Cronômetros",
+    "voiceInput": "Entrada por voz"
   }
 }
