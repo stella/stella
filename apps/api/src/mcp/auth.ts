@@ -8,6 +8,7 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { OAUTH_GRANT_ID_CLAIM } from "@/api/lib/auth/oauth-grant-identity";
 import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
 import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
@@ -32,7 +33,12 @@ export type McpSession = {
   scopes: string[];
   credential?:
     | { type: "agent_run"; runId: string }
-    | { type: "oauth_client"; clientId: string; issuedAt: number }
+    | {
+        type: "oauth_client";
+        clientId: string;
+        grantId?: string;
+        issuedAt: number;
+      }
     /**
      * `permissions` is the key's own permission set, already checked to be a
      * subset of its owner's current role when the credential resolved. It rides
@@ -169,6 +175,9 @@ export const extractMcpSession = (
       credential = {
         type: "oauth_client",
         clientId: rawClientId,
+        ...(typeof payload[OAUTH_GRANT_ID_CLAIM] === "string"
+          ? { grantId: payload[OAUTH_GRANT_ID_CLAIM] }
+          : {}),
         issuedAt: payload.iat,
       };
     } else {

@@ -372,9 +372,6 @@ describe("disconnecting a connected app", () => {
     expect(await opensMcpContext(delegatedToken)).toBe(true);
     expect(await opensMcpContext(agentRunToken.token)).toBe(true);
 
-    // real-time: token issue times have one-second resolution, so a grant made
-    // in the revocation's second would still read as revoked.
-    await Bun.sleep(1100);
     const reconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
     expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(true);
   });

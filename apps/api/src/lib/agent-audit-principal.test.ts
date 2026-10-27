@@ -7,7 +7,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 let registrationRows: {
   registrationId: string | null;
-  revocationStatus: "active" | "revoked";
+  revokedAt: Date | null;
+  revokedGrantId: string | null;
 }[] = [];
 let selectCalls = 0;
 const selectMock = () => {
@@ -102,7 +103,11 @@ describe("resolveAgentAuditExecution", () => {
 
   test("promotes a claimed agent registration to agent activity", async () => {
     registrationRows = [
-      { registrationId: "agent-registration-1", revocationStatus: "active" },
+      {
+        registrationId: "agent-registration-1",
+        revokedAt: null,
+        revokedGrantId: null,
+      },
     ];
 
     const execution = Result.unwrap(
@@ -134,7 +139,13 @@ describe("resolveAgentAuditExecution", () => {
   });
 
   test("refuses an OAuth token issued before its grant was revoked", async () => {
-    registrationRows = [{ registrationId: null, revocationStatus: "revoked" }];
+    registrationRows = [
+      {
+        registrationId: null,
+        revokedAt: new Date(1_700_000_000_500),
+        revokedGrantId: null,
+      },
+    ];
 
     const execution = await resolveAgentAuditExecution({
       credential: {
@@ -151,5 +162,46 @@ describe("resolveAgentAuditExecution", () => {
     if (execution.isErr()) {
       expect(execution.error.message).toBe("Invalid or expired token");
     }
+  });
+
+  test("refuses a revoked grant but accepts its same-second replacement", async () => {
+    const issuedAt = 1_700_000_000;
+    registrationRows = [
+      {
+        registrationId: null,
+        revokedAt: new Date(issuedAt * 1000 + 500),
+        revokedGrantId: "revoked-grant",
+      },
+    ];
+
+    const revoked = await resolveAgentAuditExecution({
+      credential: {
+        clientId: "reconnected-client",
+        grantId: "revoked-grant",
+        issuedAt,
+        type: "oauth_client",
+      },
+      organizationId,
+      userId,
+      db: database,
+    });
+
+    const renewed = await resolveAgentAuditExecution({
+      credential: {
+        clientId: "reconnected-client",
+        grantId: "renewed-grant",
+        issuedAt,
+        type: "oauth_client",
+      },
+      organizationId,
+      userId,
+      db: database,
+    });
+
+    expect(revoked.isErr()).toBe(true);
+    expect(Result.unwrap(renewed)).toEqual({
+      performer: { id: userId, type: "user" },
+      trigger: { source: "mcp", type: "direct" },
+    });
   });
 });

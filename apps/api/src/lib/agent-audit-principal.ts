@@ -74,9 +74,8 @@ export const resolveAgentAuditExecution = async ({
       const match = await db
         .select({
           registrationId: agentRegistration.id,
-          revocationStatus: sql<
-            "active" | "revoked"
-          >`CASE WHEN ${oauthGrantRevocations.userId} IS NULL THEN 'active' ELSE 'revoked' END`,
+          revokedAt: oauthGrantRevocations.revokedAt,
+          revokedGrantId: oauthGrantRevocations.grantId,
         })
         .from(sql`(SELECT 1) AS oauth_session`)
         .leftJoin(
@@ -94,13 +93,18 @@ export const resolveAgentAuditExecution = async ({
             eq(oauthGrantRevocations.oauthClientId, credential.clientId),
             eq(oauthGrantRevocations.userId, userId),
             eq(oauthGrantRevocations.organizationId, organizationId),
-            sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${credential.issuedAt})`,
           ),
         )
         .limit(1)
         .then((rows) => rows.at(0) ?? null);
 
-      if (match?.revocationStatus === "revoked") {
+      const isRevoked =
+        match?.revokedAt !== null &&
+        match?.revokedAt !== undefined &&
+        (credential.grantId === undefined || match.revokedGrantId === null
+          ? match.revokedAt.getTime() >= credential.issuedAt * 1000
+          : match.revokedGrantId === credential.grantId);
+      if (isRevoked) {
         return Result.err(
           new McpAuthenticationError({
             message: "Invalid or expired token",

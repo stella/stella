@@ -15,6 +15,7 @@ export const oauthGrantRevocations = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     oauthClientId: text("oauth_client_id").notNull(),
+    grantId: text("grant_id"),
     revokedAt: timestamptz("revoked_at").notNull(),
   },
   (table) => [

@@ -148,6 +148,7 @@ import {
   createOAuthConsentInfoPlugin,
   getVerifiedOAuthOrigins,
 } from "@/api/lib/auth/oauth-consent-info";
+import { getOAuthGrantIdentityClaims } from "@/api/lib/auth/oauth-grant-identity";
 import { withOwnClientDocuments } from "@/api/lib/auth/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
@@ -2449,7 +2450,10 @@ export const createAuth = (
                     });
                     throw error;
                   }
-                  return claims.value;
+                  return {
+                    ...claims.value,
+                    ...(await getOAuthGrantIdentityClaims(input)),
+                  };
                 },
               },
             },
