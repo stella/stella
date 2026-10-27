@@ -1,7 +1,7 @@
 import { use } from "react";
 
 import { Result } from "better-result";
-import { FlatList, RefreshControl, SectionList, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, SectionList } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
 
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -10,6 +10,7 @@ import { MatterRow } from "@/components/matter-row";
 import { useMattersView } from "@/components/matters-view";
 import { RetryButton } from "@/components/retry-button";
 import { Text } from "@/components/ui/text";
+import { ChevronDownIcon, ChevronRightIcon } from "@/icons.gen";
 import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { groupByClient } from "@/state/matters-groups";
 import { useAppColors } from "@/theme";
@@ -17,6 +18,8 @@ import { useAppColors } from "@/theme";
 /**
  * The matters a load returned, or why it could not, with pull-to-refresh
  * either way; under their clients unless the header's menu says otherwise.
+ * A client's heading folds its matters away; a search shows every match,
+ * folded or not.
  */
 export const LoadedMatters = ({
   load,
@@ -29,7 +32,7 @@ export const LoadedMatters = ({
 }) => {
   const t = useTranslations("matters");
   const { query } = useHeaderSearch();
-  const { groupBy } = useMattersView();
+  const { collapsed, groupBy, toggleGroup } = useMattersView();
   const locale = useLocale();
   const colors = useAppColors();
   const { result } = use(load);
@@ -40,6 +43,7 @@ export const LoadedMatters = ({
   }
 
   const matters = Result.isOk(result) ? matching(result.value, query) : [];
+  const searching = query.trim() !== "";
   const empty = Result.isOk(result) ? (
     <EmptyCard description={t("emptyDescription")} title={t("emptyTitle")} />
   ) : (
@@ -67,12 +71,35 @@ export const LoadedMatters = ({
         renderItem={({ item, section }) => (
           <MatterRow matter={item} underClient={section.client !== null} />
         )}
-        renderSectionHeader={({ section }) => (
-          <View className="pt-4 pb-1">
-            <Text variant="section">{section.client ?? t("personal")}</Text>
-          </View>
+        renderSectionHeader={({ section }) => {
+          const open = searching || !collapsed.has(section.key);
+          const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: open }}
+              className="flex-row items-center gap-1.5 pt-4 pb-1 active:opacity-60"
+              disabled={searching}
+              onPress={() => {
+                toggleGroup(section.key);
+              }}
+            >
+              <Chevron color={colors.muted} size={14} />
+              <Text className="flex-1" variant="section">
+                {section.client ?? t("personal")}
+              </Text>
+              <Text variant="section">{section.count}</Text>
+            </Pressable>
+          );
+        }}
+        sections={groupByClient(matters, locale).map(
+          ({ client, data, key }) => ({
+            client,
+            count: data.length,
+            data: searching || !collapsed.has(key) ? data : [],
+            key,
+          }),
         )}
-        sections={groupByClient(matters, locale)}
         stickySectionHeadersEnabled={false}
       />
     );
