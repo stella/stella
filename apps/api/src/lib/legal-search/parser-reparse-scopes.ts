@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {

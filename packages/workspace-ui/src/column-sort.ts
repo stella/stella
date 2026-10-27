@@ -11,3 +11,17 @@ export type ColumnSortKind = (typeof COLUMN_SORT_KINDS)[number];
 export const SORT_DIRECTIONS = ["asc", "desc"] as const;
 
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+/**
+ * What each direction of each kind is called, in the reader's language: total
+ * over both, so every place that names an order (a header's sort items, a
+ * view's sort chips) reads its wording from one record the caller translates.
+ */
+export type SortDirectionLabels = Record<
+  ColumnSortKind,
+  Record<SortDirection, string>
+>;
+
+/** The direction a stored `desc` flag orders in. */
+export const sortDirectionOf = (desc: boolean): SortDirection =>
+  desc ? "desc" : "asc";

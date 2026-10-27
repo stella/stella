@@ -1568,17 +1568,27 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         false,
       );
     }
-    // `newest` lists dated decisions only; date both for its pages.
-    await db
-      .update(caseLawDecisions)
-      .set({ decisionDate: "2024-01-01" })
-      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
+    // Both decisions are undated, and `newest` lists them, in its last band.
     const newest = await list({ ...request, sort: "newest" });
     if (!("hits" in newest) || newest.nextCursor === null) {
       throw new Error("expected a newest first page with a continuation");
     }
-    const [newestContext, , newestId] =
+    const [newestContext, newestDate, newestId] =
       decodePaginationCursor(newest.nextCursor) ?? [];
+    expect(newestDate).toBeNull();
+    const newestRest = await list({
+      ...request,
+      sort: "newest",
+      cursor: newest.nextCursor,
+    });
+    if (!("hits" in newestRest)) {
+      throw new Error("expected the newest second page");
+    }
+    expect(
+      [...newest.hits, ...newestRest.hits]
+        .map(({ decisionId }) => decisionId)
+        .toSorted(),
+    ).toEqual([String(czechId), String(slovakId)].toSorted());
     if (typeof newestContext !== "string" || typeof newestId !== "string") {
       throw new TypeError("expected a context and an id in the cursor");
     }
@@ -1590,10 +1600,6 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       ).toBe(false);
     }
   } finally {
-    await db
-      .update(caseLawDecisions)
-      .set({ decisionDate: null })
-      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
     if (extra !== undefined) {
       await db
         .delete(caseLawProvisionCitations)

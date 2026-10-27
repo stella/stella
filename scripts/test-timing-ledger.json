@@ -1321,7 +1321,7 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/handlers/case-law/decisions/browse-order.db.test.ts::<module>::test timeout",
-    "count": 7,
+    "count": 6,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
