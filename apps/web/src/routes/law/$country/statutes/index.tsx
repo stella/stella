@@ -66,7 +66,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
-import { STATUTE_FILTER_KEYS } from "@/features/statutes/statute-filters.logic";
+import { activeStatuteFilterCount } from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
@@ -144,9 +144,6 @@ const withFilter = (
       return panic(`Unhandled statute filter: ${String(key)}`);
   }
 };
-
-const activeStatuteFilterCount = (search: StatutesIndexSearch): number =>
-  STATUTE_FILTER_KEYS.filter((key) => search[key] !== undefined).length;
 
 const createStatutesIndexPath = (
   country: string,

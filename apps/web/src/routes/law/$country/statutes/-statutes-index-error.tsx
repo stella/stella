@@ -14,6 +14,7 @@ import {
   statuteFacetsOptions,
   statuteKeys,
 } from "@/features/statutes/queries/statutes";
+import { activeStatuteFilterCount } from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
@@ -86,10 +87,7 @@ export const PublicStatutesIndexError = ({ error }: ErrorComponentProps) => {
       />
       <QueryViewFeedback view={facetsView} />
       <StatuteFilterPopover
-        activeFilterCount={
-          Number(search.type !== undefined) +
-          Number(search.validity !== undefined)
-        }
+        activeFilterCount={activeStatuteFilterCount(search)}
         onSelect={(key, value) =>
           recoverSearch(
             changeStatutesIndexQuery({

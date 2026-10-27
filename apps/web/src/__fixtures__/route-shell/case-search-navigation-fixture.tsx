@@ -284,6 +284,104 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
     }
   });
 
+  test("case search finishes page navigation when delayed expansion replaces its unexpanded prefetch", async () => {
+    const expansion = Promise.withResolvers<undefined>();
+    const pendingPage = Promise.withResolvers<Response>();
+    let pageStarted = false;
+    let pageCancelled = false;
+    let expandedRequestStarted = false;
+    fixture.state.audience = "member";
+    fixture.state.response = async (request) => {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/v1/case/decisions/search/expand") {
+        await expansion.promise;
+        return Response.json({
+          alternatives: [
+            { term: "odpovědnost", alternatives: ["zodpovednosť"] },
+          ],
+          outcome: "expanded",
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<typeof api.case.decisions.search.expand.post>
+          >["data"]
+        >);
+      }
+      if (pathname === "/v1/case/research/answers/lookup") {
+        return Response.json({ items: [] });
+      }
+      if (pathname !== "/v1/case/decisions/search") {
+        return undefined;
+      }
+      const body = v.parse(
+        v.object({
+          ...searchBody.entries,
+          alternatives: v.optional(v.unknown()),
+        }),
+        await request.json(),
+      );
+      if (body.alternatives !== undefined) {
+        expandedRequestStarted = true;
+      }
+      if (
+        body.offset === 50 &&
+        body.alternatives === undefined &&
+        !pageStarted
+      ) {
+        pageStarted = true;
+        if (request.signal.aborted) {
+          pageCancelled = true;
+          throw abortFailure(request.signal);
+        }
+        const abortPage = () => {
+          pageCancelled = true;
+          pendingPage.reject(abortFailure(request.signal));
+        };
+        request.signal.addEventListener("abort", abortPage, { once: true });
+        try {
+          return await pendingPage.promise;
+        } finally {
+          request.signal.removeEventListener("abort", abortPage);
+        }
+      }
+      return Response.json(response(body.offset));
+    };
+    const runtime = await mountCaseSearch(fixture);
+    try {
+      await typeQuery(fixture, query);
+      await fixture.waitFor(() => {
+        expect(pageStarted).toBe(true);
+        expect(document.body.textContent).toContain("SYN 1/2026");
+      });
+      const navigation = runtime.router.navigate({
+        to: "/law/cases",
+        search: { country: "svk", q: query, page: 2 },
+      });
+      await fixture.waitFor(() =>
+        expect(runtime.router.state.isLoading).toBe(true),
+      );
+      fixture.act(() => expansion.resolve(undefined));
+      await fixture.waitFor(() => expect(expandedRequestStarted).toBe(true));
+      await fixture.act(async () => {
+        pendingPage.resolve(Response.json(response(50)));
+        await navigation;
+      });
+      await fixture.waitFor(() => {
+        expect(
+          runtime.router.state.matches.find(
+            (match) => match.routeId === "/law/cases/",
+          )?.status,
+        ).toBe("success");
+        expect(document.body.textContent).toContain("SYN 51/2026");
+      });
+      expect(pageCancelled).toBe(false);
+      expect(runtime.caughtErrors).toEqual([]);
+    } finally {
+      expansion.resolve(undefined);
+      pendingPage.resolve(Response.json(response(50)));
+      await unmountCaseSearch(fixture, runtime);
+    }
+  });
+
   test("case search corrects a client navigation past the results to the last page", async () => {
     fixture.state.audience = "anonymous";
     fixture.state.response = async (request) => {

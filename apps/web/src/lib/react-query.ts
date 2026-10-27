@@ -1,8 +1,11 @@
 import {
   defaultShouldDehydrateQuery,
+  InfiniteQueryObserver,
   QueryClient,
+  QueryObserver,
 } from "@tanstack/react-query";
 import type {
+  FetchStatus,
   InfiniteData,
   InfiniteQueryExecuteOptions,
   Query,
@@ -42,6 +45,37 @@ export class CriticalQueryTimeoutError extends TaggedError(
 
 type EnsureCriticalQueryDataConfig = {
   timeoutMs?: number;
+};
+
+type QueryReadObserver = {
+  subscribe: (listener: () => void) => () => void;
+  getCurrentQuery: () => {
+    promise: Promise<unknown> | undefined;
+    state: { fetchStatus: FetchStatus };
+  };
+};
+
+/** A route still owns the flight when the component that started it leaves. */
+const withQueryReadObserver = async <TData>(
+  observer: QueryReadObserver,
+  read: () => Promise<TData>,
+): Promise<TData> => {
+  const unsubscribe = observer.subscribe(() => undefined);
+  try {
+    return await read();
+  } finally {
+    const query = observer.getCurrentQuery();
+    // A cache hit can return while a background refresh still owns the flight.
+    // Releasing its last observer here would cancel that unrelated read.
+    if (query.state.fetchStatus === "fetching" && query.promise !== undefined) {
+      detached(
+        query.promise.then(unsubscribe, unsubscribe),
+        "react-query.release-read-observer",
+      );
+    } else {
+      unsubscribe();
+    }
+  }
 };
 
 const formatQueryKey = (queryKey: QueryKey): string => {
@@ -112,7 +146,12 @@ export const ensureCriticalQueryData = async <
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () => await queryClient.query({ ...options, staleTime: "static" }),
+    async () =>
+      await withQueryReadObserver(
+        new QueryObserver(queryClient, { ...options, enabled: false }),
+        async () =>
+          await queryClient.query({ ...options, staleTime: "static" }),
+      ),
     config,
   );
 
@@ -204,7 +243,14 @@ export const ensureRouteQueryData = async <
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () => await queryClient.query(routeQueryOptions(options)),
+    async () =>
+      await withQueryReadObserver(
+        new QueryObserver(queryClient, {
+          ...routeQueryOptions(options),
+          enabled: false,
+        }),
+        async () => await queryClient.query(routeQueryOptions(options)),
+      ),
     config,
   );
 
@@ -222,7 +268,14 @@ export const fetchRouteQuery = async <
     TQueryFnData,
     TQueryKey
   >,
-): Promise<TData> => await queryClient.query(routeQueryOptions(options));
+): Promise<TData> =>
+  await withQueryReadObserver(
+    new QueryObserver(queryClient, {
+      ...routeQueryOptions(options),
+      enabled: false,
+    }),
+    async () => await queryClient.query(routeQueryOptions(options)),
+  );
 
 export const prefetchRouteQuery = async <
   TQueryFnData,
@@ -272,7 +325,15 @@ export const ensureRouteInfiniteQueryData = async <
   await withCriticalQueryTimeout(
     queryClient,
     options.queryKey,
-    async () => await queryClient.infiniteQuery(routeQueryOptions(options)),
+    async () =>
+      await withQueryReadObserver(
+        new InfiniteQueryObserver(queryClient, {
+          getNextPageParam: () => undefined,
+          ...routeQueryOptions(options),
+          enabled: false,
+        }),
+        async () => await queryClient.infiniteQuery(routeQueryOptions(options)),
+      ),
     config,
   );
 
