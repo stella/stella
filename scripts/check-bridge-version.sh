@@ -59,7 +59,7 @@ version_re='^pub const BRIDGE_VERSION: u32 = ([0-9]+);'
 
 extract_version() {
   local content="$1" line
-  line=$(printf '%s\n' "$content" | grep -E "$version_re" | head -n 1 || true)
+  line=$(grep -m 1 -E "$version_re" <<<"$content" || true)
   if [[ -z "$line" ]]; then
     echo ""
     return
