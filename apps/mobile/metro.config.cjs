@@ -38,5 +38,5 @@ config.resolver.resolveRequest = (context, moduleName, platform) =>
 // Tailwind classes, compiled to native styles, over the web's tokens.
 module.exports = withUniwindConfig(config, {
   cssEntryFile: "./global.css",
-  dtsFile: "./uniwind-types.d.ts",
+  dtsFile: "./uniwind-types.gen.d.ts",
 });
