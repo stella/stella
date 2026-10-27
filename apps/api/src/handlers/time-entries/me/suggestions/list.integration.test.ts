@@ -267,7 +267,7 @@ describe("my suggestion range", () => {
     for (const day of response.days) {
       for (const group of day.matters) {
         expect(group.items).toHaveLength(1);
-        expect(group.activeMinutes).toBe(group.items[0]?.durationMinutes);
+        expect(group.items[0]?.durationMinutes).toBe(group.activeMinutes);
       }
     }
   });

@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import type { MyTimeEntry } from "@/features/my-week/my-week-day";
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import type { MyTimeSuggestionRange as MySuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -29,12 +30,12 @@ const { MyWeek } = await import("@/features/my-week/my-week");
 const ORGANIZATION_ID = "organization-1";
 const USER_ID = "user-1";
 const LEASE_MATTER = {
-  id: "matter-lease",
+  id: toSafeId<"workspace">("matter-lease"),
   name: "Harbour lease",
   reference: "M-1",
 };
 const SUPPLY_MATTER = {
-  id: "matter-supply",
+  id: toSafeId<"workspace">("matter-supply"),
   name: "Supply agreement",
   reference: "M-2",
 };
@@ -57,7 +58,7 @@ afterAll(async () => {
 
 const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
   ({
-    id: "entry-1",
+    id: toSafeId<"timeEntry">("entry-1"),
     activityGroup: "client",
     workspaceId: LEASE_MATTER.id,
     workspaceName: LEASE_MATTER.name,
@@ -229,7 +230,7 @@ const serveWeek = ({
       });
     }
     const created = draftEntry({
-      id: `entry-${entries.length + 1}`,
+      id: toSafeId<"timeEntry">(`entry-${entries.length + 1}`),
       workspaceId: group.matter.id,
       workspaceName: group.matter.name,
       workspaceReference: group.matter.reference,
@@ -525,7 +526,7 @@ describe("my week", () => {
         entries: [
           draftEntry(),
           draftEntry({
-            id: "entry-2",
+            id: toSafeId<"timeEntry">("entry-2"),
             dateWorked: tuesday,
             narrative: "Draft the termination notice",
             ...later,
@@ -562,7 +563,7 @@ describe("my week", () => {
     serveWeek({
       entries: [
         draftEntry({
-          id: "entry-approved",
+          id: toSafeId<"timeEntry">("entry-approved"),
           narrative: "Approved call",
           status: "approved",
         }),
