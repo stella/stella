@@ -28,6 +28,10 @@ import {
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  type ChatToolMap,
+  chatToolMapToArray,
+} from "@/api/lib/chat/chat-tool-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
@@ -112,7 +116,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
           };
         },
       };
-      const tools = {
+      const tools: ChatToolMap = {
         [tool.name]: tool,
         ...(isMatterTool ? { [codeMode.tool.name]: codeMode.tool } : {}),
       };
@@ -161,7 +165,7 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
               adapter,
               agentLoopStrategy: maxIterations(3),
               messages,
-              tools: Object.values(tools),
+              tools: chatToolMapToArray(tools),
               threadId,
               runId: runContext?.runId,
             });
