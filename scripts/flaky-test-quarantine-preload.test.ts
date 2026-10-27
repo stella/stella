@@ -190,6 +190,34 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("reused describe.each registrars restart row IDs for each suite", () => {
+    const names = [
+      "outer > first 0 alpha > case",
+      "outer > first 1 beta > case",
+      "outer > second 0 alpha > case",
+      "outer > second 1 beta > case",
+    ];
+    const result = run({
+      names,
+      source: `import { describe, test } from "bun:test";
+describe("outer", () => {
+  const cases = describe.each(["alpha", "beta"]);
+  cases("first %# %s", () => {
+    test("case", () => { throw new TypeError("fixture failure"); });
+  });
+  cases("second %# %s", () => {
+    test("case", () => { throw new TypeError("fixture failure"); });
+  });
+});`,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(
+      result.records
+        .flatMap((record) => (record.type === "failed" ? [record.id] : []))
+        .toSorted(),
+    ).toEqual(names.map((name) => `${FIXTURE}::${name}`));
+  });
+
   test.each(["skip", "only", "concurrent", "serial"])(
     "retains native test.%s.each receivers and behavior",
     (modifier) => {
