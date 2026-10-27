@@ -140,7 +140,7 @@ it("keeps publisher summaries before the body and publisher notes after it", () 
   expect(paragraphs.map(({ role }) => role)).toEqual([
     "syllabus",
     "holding",
-    ...metadata.map(() => "publisher-note"),
+    ...metadata.map(() => "publisher-note" as const),
   ]);
   expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
 });
