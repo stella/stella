@@ -901,7 +901,7 @@ const verifiedImportedConfig = (
 
 const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
   const specifiers: string[] = [];
-  let staticImports = true;
+  const dynamicImports = new Set<Node>();
   walk(source.program, (node) => {
     if (
       node.type === "ImportExpression" ||
@@ -909,7 +909,7 @@ const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
       (node.type === "Identifier" &&
         (node.name === "require" || node.name === "eval"))
     ) {
-      staticImports = false;
+      dynamicImports.add(node);
     }
   });
   for (const statement of source.program.body) {
@@ -935,7 +935,7 @@ const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
       specifiers.push(statement.source.value);
     }
   }
-  return staticImports && !specifiers.includes("node:module")
+  return dynamicImports.size === 0 && !specifiers.includes("node:module")
     ? specifiers
     : undefined;
 };

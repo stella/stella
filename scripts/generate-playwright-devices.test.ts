@@ -12,7 +12,7 @@ import {
 
 test("configured presets match the pinned SDK and generated runtime data", async () => {
   expect(Object.keys(devices).toSorted()).toEqual(usedPlaywrightDevices());
-  expect(devices).toEqual(configuredPlaywrightDevices());
+  expect(configuredPlaywrightDevices()).toEqual(devices);
   expect(
     readFileSync(
       path.resolve(import.meta.dirname, "..", DEVICE_OUTPUT),

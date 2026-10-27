@@ -94,7 +94,6 @@ const frozenDataExpression = (value: unknown): string => {
   }
   if (
     typeof value !== "object" ||
-    value === null ||
     (Object.getPrototypeOf(value) !== Object.prototype &&
       Object.getPrototypeOf(value) !== null)
   ) {
