@@ -164,7 +164,8 @@ jobs:
             node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
             echo "rc_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
           else
-            rc_ref="$(git tag --points-at "$RELEASE_SHA" --sort=-v:refname | grep -E "^v${file_version//./\.}-rc\.[0-9]+$" | head -1)"
+            rc_tags="$(git tag --points-at "$RELEASE_SHA" --sort=-v:refname)"
+            rc_ref="$(grep -E -m 1 "^v${file_version//./\.}-rc\.[0-9]+$" <<<"$rc_tags" || true)"
             [[ -n "$rc_ref" ]] || { echo '::error::No RC tag on the final SHA'; exit 1; }
             bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" "$RELEASE_SHA"
             echo "rc_ref=$rc_ref" >> "$GITHUB_OUTPUT"
@@ -1687,7 +1688,7 @@ jobs:
           latest=false
           health=false
           production=false
-          if bash scripts/gh-retry.sh release view "$RELEASE_REF" --json isDraft --jq '.isDraft == false' | grep -qx true; then release=true; fi
+          if [[ "$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json isDraft --jq '.isDraft == false' || true)" == true ]]; then release=true; fi
           api="$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
           web="$(docker buildx imagetools inspect "${REGISTRY}/${WEB_IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
           if [[ -n "$API_DIGEST" && -n "$WEB_DIGEST" && "$api" == "$API_DIGEST" && "$web" == "$WEB_DIGEST" ]]; then latest=true; fi

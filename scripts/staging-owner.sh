@@ -1,44 +1,56 @@
 #!/usr/bin/env bash
 # Waits until a staging promotion can begin without replacing another proof.
+# A failed read refuses: an unknown owner is never treated as a free one.
 set -euo pipefail
 
 : "${GH_RETRY_SCRIPT:?GH_RETRY_SCRIPT is required}"
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 
+readonly workflow="deploy-staging.yml"
 mode="${STAGING_OWNER_MODE:?STAGING_OWNER_MODE is required}"
-attempts="${STAGING_OWNER_ATTEMPTS:-18}"
 interval="${STAGING_OWNER_INTERVAL_SECONDS:-30}"
-workflow="${STAGING_OWNER_WORKFLOW:-deploy-staging.yml}"
 
 api() {
   bash "$GH_RETRY_SCRIPT" api "$@"
 }
 
+read_failed() {
+  echo "::error::Reading staging ownership failed; refusing to promote." >&2
+  exit 1
+}
+
 candidate_busy() {
-  api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?per_page=100" --jq \
-    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Staging release proof \")) | select(.status == \"queued\" or .status == \"in_progress\") | .id" |
-    grep -q .
+  local runs
+  runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?per_page=100" --jq \
+    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Staging release proof \")) | select(.status == \"queued\" or .status == \"in_progress\") | .id")" ||
+    read_failed
+  [[ -n "$runs" ]]
 }
 
 ordinary_promote_busy() {
-  local run_id
+  local runs run_id jobs
+  runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=in_progress&per_page=100" --jq \
+    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Deploy main to staging \")) | .id")" ||
+    read_failed
   while IFS= read -r run_id; do
     [[ -n "$run_id" ]] || continue
-    if api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" --jq \
-      '.jobs[] | select(.name == "Promote staging images" and .status == "in_progress") | .id' | grep -q .; then
-      return 0
-    fi
-  done < <(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=in_progress&per_page=100" --jq \
-    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Deploy main to staging \")) | .id")
+    jobs="$(api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" --jq \
+      '.jobs[] | select(.name == "Promote staging images" and .status == "in_progress") | .id')" ||
+      read_failed
+    [[ -z "$jobs" ]] || return 0
+  done <<<"$runs"
   return 1
 }
 
+# An ordinary deploy waits out a whole candidate proof (promote and smokes);
+# a candidate waits only for an ordinary promote already applying.
 case "$mode" in
-  ordinary) busy=candidate_busy; owner="a release-candidate staging proof" ;;
-  candidate) busy=ordinary_promote_busy; owner="an ordinary staging promotion" ;;
+  ordinary) busy=candidate_busy; owner="a release-candidate staging proof"; default_attempts=240 ;;
+  candidate) busy=ordinary_promote_busy; owner="an ordinary staging promotion"; default_attempts=60 ;;
   *) echo "::error::STAGING_OWNER_MODE must be candidate or ordinary." >&2; exit 2 ;;
 esac
+attempts="${STAGING_OWNER_ATTEMPTS:-$default_attempts}"
 
 for ((attempt = 1; attempt <= attempts; attempt += 1)); do
   if ! "$busy"; then

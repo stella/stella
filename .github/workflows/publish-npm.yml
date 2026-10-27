@@ -415,7 +415,8 @@ jobs:
             exit 1
           fi
           stable_version="${release_ref#v}"
-          rc_tag=$(git tag --points-at "$release_sha" --list "v${stable_version}-rc.*" --sort=-v:refname | head -n 1)
+          rc_tags=$(git tag --points-at "$release_sha" --list "v${stable_version}-rc.*" --sort=-v:refname)
+          rc_tag="${rc_tags%%$'\n'*}"
           [[ -n "$rc_tag" ]] || { echo 'Final npm source must be the exact RC-proven SHA' >&2; exit 1; }
           [[ "$(git rev-parse "refs/tags/${rc_tag}^{commit}")" == "$source_sha" ]] || exit 1
           if [[ "$(tr -d '[:space:]' < VERSION)" != "$stable_version" ]]; then

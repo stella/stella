@@ -108,6 +108,47 @@ describe("staging promotion ownership", () => {
     expect(result.exitCode).toBe(1);
   });
 
+  for (const mode of ["candidate", "ordinary"] as const) {
+    test(`${mode} promotion refuses when ownership cannot be read`, async () => {
+      // A string has no workflow_runs, so the fixture reader fails.
+      const result = await runGate(mode, "unreadable");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Reading staging ownership failed");
+    });
+  }
+
+  test("each gate waits at least as long as the owner it waits for may run", async () => {
+    const source = await readFile(script, "utf-8");
+    const workflow: unknown = Bun.YAML.parse(
+      await readFile(workflowPath, "utf-8"),
+    );
+    const field = (value: unknown, key: string): unknown =>
+      typeof value === "object" && value !== null
+        ? Reflect.get(value, key)
+        : undefined;
+    const steps = field(
+      field(field(workflow, "jobs"), "promote-staging"),
+      "steps",
+    );
+    if (!Array.isArray(steps)) {
+      throw new TypeError("promote-staging declares no steps");
+    }
+    const gate: unknown = steps.find(
+      (step) => field(step, "name") === "Wait for the current staging owner",
+    );
+    const attempts = [...source.matchAll(/default_attempts=(\d+)/gu)].map(
+      ([, value]) => Number(value),
+    );
+    const interval = Number(
+      /STAGING_OWNER_INTERVAL_SECONDS:-(\d+)/u.exec(source)?.[1],
+    );
+    expect(attempts).toHaveLength(2);
+    // The step outlives the longest wait, so the script names the timeout.
+    expect(Number(field(gate, "timeout-minutes")) * 60).toBeGreaterThan(
+      Math.max(...attempts) * interval,
+    );
+  });
+
   test("workflow separates owners and gates each before dispatch", async () => {
     const workflow = await readFile(workflowPath, "utf-8");
     expect(workflow).toContain(

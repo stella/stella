@@ -738,7 +738,7 @@ jobs:
           echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the current staging owner
-        timeout-minutes: 10
+        timeout-minutes: 125
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_OWNER_MODE: ${{ inputs.release_ref != '' && 'candidate' || 'ordinary' }}

@@ -1501,6 +1501,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
+  // The same script requests a candidate's power lease without waiting for
+  // readiness, for the hours the promotion asks.
+  "STAGING_LEASE_ONLY",
+  "STAGING_LEASE_HOURS",
+  // A staging promotion waits for the other owner kind (scripts/staging-owner.sh).
+  "STAGING_OWNER_MODE",
+  "STAGING_OWNER_ATTEMPTS",
+  "STAGING_OWNER_INTERVAL_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to.
   "DATED_WAIVER_FIX_REPO",
   // Preserve Bun global-store links inside browser containers.
