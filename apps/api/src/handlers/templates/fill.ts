@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -7,10 +7,12 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { fillDiagnosticHeaders } from "@/api/lib/templates/fill-diagnostic-headers";
@@ -27,13 +29,13 @@ import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-const fillBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  values: t.String({ description: "Map of field path to value." }),
+const fillBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
+  values: v.pipe(v.string(), v.description("Map of field path to value.")),
 });
 
-const fillQuerySchema = t.Object({
-  format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
+const fillQuerySchema = v.object({
+  format: v.exactOptional(v.picklist(["docx", "pdf"])),
 });
 
 type FillProps = {
@@ -189,11 +191,14 @@ export const fillHandler = async ({
         diagnostics,
       }),
   ).catch((error: unknown) => {
-    captureError(error, {
-      operation: "template_fill_analytics",
-      organizationId,
-      userId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("templates.fillHandler", {
+        operation: "template_fill_analytics",
+        organizationId,
+        userId,
+      }),
+    );
   });
 
   const additionalHeaders = fillDiagnosticHeaders({ diagnostics, format });
@@ -237,9 +242,8 @@ export const fillHandler = async ({
   return secureDocumentResponse({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content).
+    // Octet-stream, not the DOCX mime type: the API client decodes
+    // octet-stream as an `ArrayBuffer`; the DOCX type travels in the filename.
     contentType: OCTET_STREAM_MIME_TYPE,
     disposition: "attachment",
     fileName: sanitizeFilename("filled.docx"),

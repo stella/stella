@@ -1,15 +1,13 @@
 import { Result } from "better-result";
-import Elysia, { status, t } from "elysia";
+import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { decodeCitationCursor } from "@/api/handlers/case-law/decisions/citation-graph";
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
 import {
-  decodeDecisionCitationCursor,
   readDecisionHandler,
   readDecisionQuerySchema,
 } from "@/api/handlers/case-law/decisions/get";
@@ -52,12 +50,10 @@ import {
   statuteCitationCountsQuerySchema,
 } from "@/api/handlers/case-law/provisions/citation-counts";
 import {
-  decodeCitingDecisionsCursor,
   listCitingDecisionsHandler,
   listCitingDecisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/citing-decisions";
 import {
-  decodeProvisionCursor,
   listDecisionProvisionsHandler,
   listDecisionProvisionsQuerySchema,
 } from "@/api/handlers/case-law/provisions/list-for-decision";
@@ -79,6 +75,7 @@ import {
   sitemapDecisionsResponseSchema,
   sitemapShardsResponseSchema,
 } from "@/api/handlers/case-law/public-response-schemas";
+import { routes } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -88,8 +85,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readCourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
-import { tSafeId } from "@/api/lib/custom-schema";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 import {
   readPublicLawCountry,
@@ -136,7 +132,7 @@ const listDecisions = createSafeBoundedPublicHandler(
   },
 );
 
-export const readStatuteCitationCounts = createSafeBoundedPublicHandler(
+const readStatuteCitationCounts = createSafeBoundedPublicHandler(
   {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -244,7 +240,7 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "tool", name: "read_case_law_decision" },
     cache: { kind: "none" },
-    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
     query: readDecisionQuerySchema,
     response: readDecisionResponseSchema,
   },
@@ -271,15 +267,15 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
-    params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
+    params: v.object({
+      slug: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+    }),
     response: withPublicCountryUnavailable(readDecisionResponseSchema),
-    query: t.Composite([
-      readDecisionQuerySchema,
-      t.Object({
-        country: tPublicLawCountry,
-        language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
-      }),
-    ]),
+    query: v.object({
+      ...readDecisionQuerySchema.entries,
+      country: tPublicLawCountry,
+      language: v.optional(v.pipe(v.string(), v.minLength(2), v.maxLength(8))),
+    }),
   },
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { slug }, query: { country, language } }) => {
@@ -328,14 +324,6 @@ const projectDecisionProvisionPage = async (
   );
 };
 
-const rejectInvalidCursor = (
-  cursor: string | undefined,
-  decode: (value: string) => unknown,
-) =>
-  cursor !== undefined && decode(cursor) === null
-    ? status(400, { message: "Invalid cursor" })
-    : undefined;
-
 /**
  * Provision references of a decision, each with the wording it points at.
  *
@@ -351,7 +339,7 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
     response: safePublicHandlerResponseSchemasWithStatusText(
       decisionProvisionsSuccessResponseSchema,
     ),
-    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+    params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
     query: listDecisionProvisionsQuerySchema,
   },
   caseLawDb: caseLawPublicReadDb,
@@ -493,118 +481,31 @@ const listSitemapShards = createSafeBoundedPublicHandler(
  * Public-read routes: no auth, no session, no organization context.
  * Decisions are public records; protected workspace features live elsewhere.
  */
-const publicCaseLawContentRoute = new Elysia({
-  prefix: "/case",
-})
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
-    ),
-  )
-  .get("/coverage", readCaseLawCoverage.handler, {
-    response: readCaseLawCoverage.config.response,
-  })
-  .get("/decisions", listDecisions.handler, {
-    query: listDecisions.config.query,
-    response: listDecisions.config.response,
-  })
-  .get("/decisions/facets", listDecisionFacets.handler, {
-    query: listDecisionFacets.config.query,
-    response: listDecisionFacets.config.response,
-  })
-  .get("/decisions/status", readCaseLawCorpusStatus.handler, {
-    query: readCaseLawCorpusStatus.config.query,
-    response: readCaseLawCorpusStatus.config.response,
-  })
-  .get("/decisions/latest", listLatestDecisions.handler, {
-    query: listLatestDecisions.config.query,
-    response: listLatestDecisions.config.response,
-  })
-  .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
-    params: readDecisionBySlug.config.params,
-    query: readDecisionBySlug.config.query,
-    response: readDecisionBySlug.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
-  })
-  .get("/decisions/:decisionId", readDecision.handler, {
-    params: readDecision.config.params,
-    query: readDecision.config.query,
-    response: readDecision.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.citationsCursor, decodeDecisionCitationCursor),
-  })
-  .get("/decisions/:decisionId/citations", listDecisionCitations.handler, {
-    params: listDecisionCitations.config.params,
-    query: listDecisionCitations.config.query,
-    response: listDecisionCitations.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, (cursor) =>
-        decodeCitationCursor(cursor, query),
-      ),
-  })
-  .get(
-    "/decisions/:decisionId/citations/summary",
-    summarizeDecisionCitations.handler,
-    {
-      params: summarizeDecisionCitations.config.params,
-      response: summarizeDecisionCitations.config.response,
+export const publicCaseLawRoute = routes(
+  {
+    "/coverage": { GET: readCaseLawCoverage },
+    "/decisions": { GET: listDecisions },
+    "/decisions/facets": { GET: listDecisionFacets },
+    "/decisions/status": { GET: readCaseLawCorpusStatus },
+    "/decisions/latest": { GET: listLatestDecisions },
+    "/decisions/by-slug/:slug": { GET: readDecisionBySlug },
+    "/decisions/:decisionId": { GET: readDecision },
+    "/decisions/:decisionId/citations": { GET: listDecisionCitations },
+    "/decisions/:decisionId/citations/summary": {
+      GET: summarizeDecisionCitations,
     },
-  )
-  .get(
-    "/decisions/:decisionId/citations/leading",
-    listLeadingCitations.handler,
-    {
-      params: listLeadingCitations.config.params,
-      query: listLeadingCitations.config.query,
-      response: listLeadingCitations.config.response,
-    },
-  )
-  .get("/decisions/:decisionId/provisions", listDecisionProvisions.handler, {
-    params: listDecisionProvisions.config.params,
-    query: listDecisionProvisions.config.query,
-    response: listDecisionProvisions.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, decodeProvisionCursor),
-  })
-  .get("/judges/:judgeId/portrait", readJudgePortrait.handler, {
-    params: readJudgePortrait.config.params,
-  })
-  .get("/provisions/citing-decisions", listCitingDecisions.handler, {
-    query: listCitingDecisions.config.query,
-    response: listCitingDecisions.config.response,
-    beforeHandle: ({ query }) =>
-      rejectInvalidCursor(query.cursor, decodeCitingDecisionsCursor),
-  })
-  .get("/provisions/citation-counts", readStatuteCitationCounts.handler, {
-    query: readStatuteCitationCounts.config.query,
-    response: readStatuteCitationCounts.config.response,
-  })
-  .post("/decisions/search", searchDecisions.handler, {
-    body: searchDecisions.config.body,
-    response: searchDecisions.config.response,
-  })
-  .get("/sitemap/shards", listSitemapShards.handler, {
-    response: listSitemapShards.config.response,
-  })
-  .get("/sitemap/decisions/shard", listSitemapShardDecisions.handler, {
-    query: listSitemapShardDecisions.config.query,
-    response: listSitemapShardDecisions.config.response,
-  });
-
-// The summary has no cursor hook. Keep its chain separate so the capability
-// compiler can prove its only route gate is the shared deployment flag.
-const publicDecisionSummaryRoute = new Elysia({ prefix: "/case" })
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_PUBLIC_LAW"),
-    ),
-  )
-  .get("/decisions/:decisionId/summary", readDecisionSummaryRoute.handler, {
-    params: readDecisionSummaryRoute.config.params,
-    response: readDecisionSummaryRoute.config.response,
-  });
-
-export const publicCaseLawRoute = new Elysia()
-  .use(publicCaseLawContentRoute)
-  .use(publicDecisionSummaryRoute);
+    "/decisions/:decisionId/citations/leading": { GET: listLeadingCitations },
+    "/decisions/:decisionId/provisions": { GET: listDecisionProvisions },
+    "/decisions/:decisionId/summary": { GET: readDecisionSummaryRoute },
+    "/judges/:judgeId/portrait": { GET: readJudgePortrait },
+    "/provisions/citing-decisions": { GET: listCitingDecisions },
+    "/provisions/citation-counts": { GET: readStatuteCitationCounts },
+    "/decisions/search": { POST: searchDecisions },
+    "/sitemap/shards": { GET: listSitemapShards },
+    "/sitemap/decisions/shard": { GET: listSitemapShardDecisions },
+  },
+  {
+    prefix: "/case",
+    middleware: [deploymentFeatureGate("FEATURE_PUBLIC_LAW")],
+  },
+);

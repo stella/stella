@@ -197,6 +197,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
   ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
+  ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",
     "Drains the platform's inbound mail queue across organizations; each delivery is filed only after its recipient token resolves the matter and the sender's current access is rechecked.",

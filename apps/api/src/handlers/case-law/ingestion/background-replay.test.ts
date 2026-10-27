@@ -41,6 +41,8 @@ const fixture = (dailyBudget = 3) => {
     decisionId: createSafeId<"caseLawDecision">(),
     parserVersionFrom: 1,
     targetParserVersion: 3,
+    sourceRawS3Key: `fixture/receipt-${spent}`,
+    claimReadmission: 0,
   });
   const success = (current: BackgroundReplayBatch): ReplayRunReport => ({
     visited: 1,

@@ -879,6 +879,20 @@ const PL_NSA_WSA_PATTERN = new RegExp(
   "gu",
 );
 
+// The seated register spelled with dots, "II S.A./Po 1234/01". The capture
+// is loose about the seat; it stands only when the undotted spelling parses
+// as an administrative docket (`foldPolishDottedRegister`).
+const PL_NSA_WSA_DOTTED_PATTERN = new RegExp(
+  String.raw`(?:${PL_SYGN_PREFIX})?\b(?<!\b[IVX]+\s+)(?<caseNumber>(?:[IVX]{1,4}\s{0,3})?S\.\s?A\.\s{0,3}\/\s{0,3}\p{Lu}\p{Ll}?\s{1,3}\d{1,6}\/\d{2}(?:\d{2})?)(?!\d)`,
+  "gu",
+);
+
+const POLISH_DOTTED_REGISTER_RE = /(?<![\p{L}\d.])S\.\s?A\.(?=\s{0,3}\/)/gu;
+
+/** "II S.A./Po 1234/01" in the register's undotted spelling, "II SA/Po". */
+const foldPolishDottedRegister = (text: string): string =>
+  text.replace(POLISH_DOTTED_REGISTER_RE, "SA");
+
 // The pre-2004 seatless Warsaw form, including a joined range of numbers
 // the bare Polish pattern does not read ("I SA 1234-1236/98"). The range
 // stays one citation keyed with both ends, as a consolidated Czech docket
@@ -1122,6 +1136,7 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_KIO_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
+  PL_NSA_WSA_DOTTED_PATTERN,
   PL_NSA_SEATLESS_PATTERN,
   PL_NSA_PRE_REFORM_RESOLUTION_PATTERN,
 
@@ -1367,7 +1382,8 @@ const canonicalizeDedupKey = (text: string): string => {
     .trim();
   // A leading `N/` some registers print ahead of an administrative docket
   // ("12/II SA/Po 1234/99") is not part of it.
-  const spaced = polishAdministrativeDocketOf(normalized) ?? normalized;
+  const undotted = foldPolishDottedRegister(normalized);
+  const spaced = polishAdministrativeDocketOf(undotted) ?? normalized;
 
   // Read before the registry dot is stripped below: in a Hungarian docket
   // that dot is the separator ("Pfv. 20.187/2017/12").
@@ -2040,6 +2056,15 @@ export const extractCitations = (
           CZE_GATED_PATTERNS.has(pattern) &&
           (caseNumber === undefined ||
             DECISION_DOCKET_GRAMMARS.CZE.parse(caseNumber) === null)
+        ) {
+          continue;
+        }
+        if (
+          pattern === PL_NSA_WSA_DOTTED_PATTERN &&
+          (caseNumber === undefined ||
+            polishAdministrativeDocketOf(
+              foldPolishDottedRegister(caseNumber),
+            ) === null)
         ) {
           continue;
         }

@@ -8,7 +8,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -75,7 +75,7 @@ const fetchDecisionProvisionsPage = async ({
       fetch: { signal },
     });
 
-  return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
+  return unwrapPublicLawResponse(response, DECISION_PROVISIONS_ACTION);
 };
 
 type DecisionProvisionsPage = Awaited<
@@ -121,7 +121,7 @@ export const decisionProvisionsInfiniteOptions = (decisionId: string) =>
           exact: true,
         });
       }
-      return unwrapPublicLawEden(response, DECISION_PROVISIONS_ACTION);
+      return unwrapPublicLawResponse(response, DECISION_PROVISIONS_ACTION);
     },
     initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -201,7 +201,7 @@ const fetchStatutesResolveChunk = async (
     { fetch: { signal } },
   );
 
-  return unwrapPublicLawEden(response, "resolvePublicStatutes").items;
+  return unwrapPublicLawResponse(response, "resolvePublicStatutes").items;
 };
 
 type ResolvedCitedWork = Awaited<
@@ -299,7 +299,7 @@ export const statuteVersionsOptions = (documentId: string) =>
           fetch: { signal },
         });
 
-      const data = unwrapPublicLawEden(
+      const data = unwrapPublicLawResponse(
         response,
         "listPublicStatuteVersionsForProvision",
       );

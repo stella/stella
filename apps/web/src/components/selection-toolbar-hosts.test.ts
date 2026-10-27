@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+import {
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 const primitive = path.join(sourceRoot, "components/selection-toolbar.tsx");
@@ -24,7 +28,7 @@ type ToolbarMount = {
   props: readonly string[];
 };
 const mountCache = new Map<string, ToolbarMount[]>();
-const trees = new Map<string, ts.SourceFile>();
+const trees = new Map<string, ParsedSource>();
 const mountsOf = (target: string): ToolbarMount[] => {
   const cached = mountCache.get(target);
   if (cached !== undefined) {
@@ -35,70 +39,62 @@ const mountsOf = (target: string): ToolbarMount[] => {
     if (!text.includes(path.basename(target, ".tsx"))) {
       continue;
     }
-    const tree =
-      trees.get(file) ??
-      ts.createSourceFile(
-        file,
-        text,
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TSX,
-      );
+    const tree = trees.get(file) ?? parseSource(file, text);
     trees.set(file, tree);
     const importedNames = new Set<string>();
-    for (const statement of tree.statements) {
+    for (const statement of tree.program.body) {
       if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        resolveImport(file, statement.moduleSpecifier.text) !== target
+        statement.type !== "ImportDeclaration" ||
+        resolveImport(file, statement.source.value) !== target
       ) {
         continue;
       }
-      const bindings = statement.importClause?.namedBindings;
-      if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const entry of bindings.elements) {
-          importedNames.add(entry.name.text);
+      for (const entry of statement.specifiers) {
+        if (entry.type === "ImportSpecifier") {
+          importedNames.add(entry.local.name);
         }
       }
     }
-    const visit = (node: ts.Node) => {
+    walk(tree.program, (node, ancestors) => {
       if (
-        (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&
-        ts.isIdentifier(node.tagName) &&
-        importedNames.has(node.tagName.text)
+        node.type === "JSXOpeningElement" &&
+        node.name.type === "JSXIdentifier" &&
+        importedNames.has(node.name.name)
       ) {
-        let owner = node.parent;
         let component = "";
-        while (!ts.isSourceFile(owner)) {
-          // Local content components can sit behind an exported boundary.
+        for (const owner of ancestors.toReversed()) {
           // The mounting function owns the toolbar regardless of its exports.
           if (
-            ts.isVariableDeclaration(owner) &&
-            ts.isIdentifier(owner.name) &&
-            owner.initializer !== undefined &&
-            (ts.isArrowFunction(owner.initializer) ||
-              ts.isFunctionExpression(owner.initializer))
+            owner.type === "VariableDeclarator" &&
+            owner.id.type === "Identifier" &&
+            owner.init &&
+            (owner.init.type === "ArrowFunctionExpression" ||
+              owner.init.type === "FunctionExpression")
           ) {
-            component = owner.name.text;
+            component = owner.id.name;
             break;
           }
-          if (ts.isFunctionDeclaration(owner)) {
-            component = owner.name?.text ?? "";
+          if (owner.type === "FunctionDeclaration") {
+            component = owner.id?.name ?? "";
             break;
           }
-          owner = owner.parent;
         }
         mounts.push({
           file,
           component,
-          props: node.attributes.properties.flatMap((attribute) =>
-            ts.isJsxAttribute(attribute) ? [attribute.name.getText(tree)] : [],
+          props: node.attributes.flatMap((attribute) =>
+            attribute.type === "JSXAttribute"
+              ? [
+                  tree.sourceText.slice(
+                    attribute.name.start,
+                    attribute.name.end,
+                  ),
+                ]
+              : [],
           ),
         });
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(tree);
+    });
   }
   mountCache.set(target, mounts);
   return mounts;
@@ -133,40 +129,36 @@ test("every discovered selection toolbar mount supplies its own clipping boundar
     const tree = trees.get(wrapper.file);
     expect(tree).toBeDefined();
     const canonicalNames = new Set<string>();
-    for (const statement of tree?.statements ?? []) {
+    for (const statement of tree?.program.body ?? []) {
       if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !==
-          "@/components/selection-toolbar.logic"
+        statement.type !== "ImportDeclaration" ||
+        statement.source.value !== "@/components/selection-toolbar.logic"
       ) {
         continue;
       }
-      const bindings = statement.importClause?.namedBindings;
-      if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const entry of bindings.elements) {
-          if (
-            (entry.propertyName ?? entry.name).text === "selectionToolbarAnchor"
-          ) {
-            canonicalNames.add(entry.name.text);
-          }
+      for (const entry of statement.specifiers) {
+        if (
+          entry.type === "ImportSpecifier" &&
+          (entry.imported.type === "Identifier"
+            ? entry.imported.name
+            : entry.imported.value) === "selectionToolbarAnchor"
+        ) {
+          canonicalNames.add(entry.local.name);
         }
       }
     }
     expect(canonicalNames.size).toBeGreaterThan(0);
     let callsSharedAnchor = false;
-    const findAnchorCall = (node: ts.Node) => {
-      if (
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        canonicalNames.has(node.expression.text)
-      ) {
-        callsSharedAnchor = true;
-      }
-      ts.forEachChild(node, findAnchorCall);
-    };
     if (tree !== undefined) {
-      findAnchorCall(tree);
+      walk(tree.program, (node) => {
+        if (
+          node.type === "CallExpression" &&
+          node.callee.type === "Identifier" &&
+          canonicalNames.has(node.callee.name)
+        ) {
+          callsSharedAnchor = true;
+        }
+      });
     }
     expect(callsSharedAnchor).toBe(true);
     expect(

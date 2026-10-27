@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { organizationDataExports } from "@/api/db/schema";
 import type { UNPROJECTED_DATA_EXPORT_COLUMNS } from "@/api/handlers/data-exports/summary";
@@ -13,7 +15,7 @@ import {
 } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
@@ -38,10 +40,17 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(
-      t.Integer({ minimum: 1, maximum: DATA_EXPORT_PAGE_SIZE_MAX }),
+  query: v.strictObject({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(DATA_EXPORT_PAGE_SIZE_MAX),
+        ),
+      ),
     ),
   }),
 } satisfies HandlerConfig;

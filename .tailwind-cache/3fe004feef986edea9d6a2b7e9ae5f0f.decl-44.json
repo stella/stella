@@ -1,0 +1,1 @@
+{"grid-cols-[1.25rem_minmax(0,1fr)_auto]":{"valid":true,"declarations":[["","grid-template-columns","1.25rem minmax(0,1fr) auto"]],"values":{"1.25rem minmax(0,1fr) auto":{"p":[],"f":[],"u":false}}},"has-[:checked]:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

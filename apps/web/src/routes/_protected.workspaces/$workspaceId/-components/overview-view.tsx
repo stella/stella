@@ -65,13 +65,13 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { routeQueryOptions } from "@/lib/react-query";
@@ -165,7 +165,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
   const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
@@ -255,7 +255,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([

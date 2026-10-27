@@ -1,99 +1,72 @@
 import { panic } from "better-result";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { createResponseSet } from "@/api/http/context";
+import type { HandlerContext } from "@/api/http/context";
+import type { RawHeaders } from "@/api/http/route-input";
+import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
-import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type {
+  AuditRecorderFactory,
+  MemberCaller,
+  WorkspaceCaller,
+} from "@/api/lib/auth/member-caller";
 import type { SafeId } from "@/api/lib/branded-types";
 import { capabilityRoute } from "@/api/lib/capability-route";
-import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
-import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
 
 /**
- * The subset of an Elysia safe-handler context the generic capability path
- * reconstructs from an `McpRequestContext` plus the gateway `Request`. It is a
- * structural superset of both `RootHandlerContext` and (with `workspaceId`)
- * `WorkspaceHandlerContext` for every field a safe handler or the safe-handler
- * wrapper actually reads: `body`/`params`/`query` (validated input), the
- * request/route used only for logging, the DB accessors, org/user identity, the
- * member role in `{ role }` shape, the org AI config, and the audit recorders.
- *
- * It deliberately does not model the full Elysia `Context` (response `set`,
- * cookies, redirect, parsed `headers`): a handler that reaches for those is
- * refused at invoke via the context-fidelity waiver table, so the generic path
- * never runs one that would read a field this shape omits. `set` is present as a
- * minimal, inert object so a stray read does not throw.
+ * What a capability's handler is given through MCP: the context a route
+ * handler sees, built from the gateway request and the decoded input, plus the
+ * member (and matter) the MCP session proved. These are the types a REST
+ * request produces, so a handler cannot rely on a field one transport omits.
+ * The response `set` is a fresh one the capability executors never read: a
+ * handler that answers through headers is refused before it runs (see the
+ * context-fidelity waivers).
  */
-export type SynthesizedCapabilityContext = {
-  featureAccessSnapshot?: FeatureAccessSnapshot;
-  body: unknown;
-  params: unknown;
-  query: unknown;
-  request: Request;
-  route: string;
-  set: { headers: Record<string, string> };
-  user: { id: SafeId<"user">; email: string };
-  session: { activeOrganizationId: SafeId<"organization"> };
-  scopedDb: ScopedDb;
-  safeDb: SafeDb;
-  getActiveWorkspaceIds: () => Promise<SafeId<"workspace">[]>;
-  getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
-  getWorkspaceAccess: (
-    workspaceId: SafeId<"workspace">,
-  ) => Promise<AccessibleWorkspace | null>;
-  pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
-  memberRole: AuthorizedMemberRole;
-  orgAIConfig: OrgAIConfig | null;
-  orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
-  managedAIResidency: ManagedAIResidency;
-  recordAuditEvent: AuditRecorder;
-  createAuditRecorder: (opts?: {
-    workspaceId?: SafeId<"workspace"> | null;
-  }) => AuditRecorder;
-  workspaceId?: SafeId<"workspace">;
-};
+export type CapabilityHandlerContext = HandlerContext<
+  unknown,
+  unknown,
+  unknown,
+  RawHeaders
+> &
+  MemberCaller &
+  Partial<WorkspaceCaller>;
+
+const recorderFactory =
+  (
+    context: McpRequestResources,
+    request: Request,
+    defaultWorkspaceId: SafeId<"workspace"> | null,
+  ): AuditRecorderFactory =>
+  (opts) => {
+    const execution = opts?.execution ?? context.auditExecution;
+    return createAuditRecorder({
+      ...(execution === undefined ? {} : { execution }),
+      organizationId: context.organizationId,
+      userId: context.userId,
+      request,
+      server: null,
+      workspaceId:
+        opts && "workspaceId" in opts
+          ? (opts.workspaceId ?? null)
+          : defaultWorkspaceId,
+    });
+  };
 
 /**
- * Build the safe-handler context an enumerated capability's `{ config, handler }`
- * export expects. Mirrors what the REST `validateAuth` resolve assembles per
- * request, sourced from the already-resolved MCP session context: identity and
- * DB accessors are rebound to an operation-local authorization snapshot, the
- * member role carries the credential's own permission set (`mcpMemberAuthority`),
- * the org AI config is loaded lazily (one
- * indexed `organization_settings` read, paid only on an actual invoke), and the
- * audit recorder is bound to the resolved workspace exactly as
- * `workspaceAccessMacro` does. `workspaceId` is set only for workspace-kind
- * capabilities (root/session skip it).
+ * The member an MCP session proved, in the shape a browser session proves
+ * one. Identity and databases are rebound to an operation-local authorization
+ * snapshot, the member role carries the credential's own permission set
+ * (`mcpMemberAuthority`), and the org AI config is loaded on an actual invoke
+ * only (one indexed `organization_settings` read).
  */
-export const synthesizeCapabilityContext = async ({
-  capabilityId,
-  context,
-  input,
-  request,
-  workspaceId,
-}: {
-  capabilityId: string;
-  context: McpRequestContext;
-  input: { body: unknown; params: unknown; query: unknown };
-  request: Request;
-  workspaceId: SafeId<"workspace"> | undefined;
-}): Promise<SynthesizedCapabilityContext> => {
-  const featureAccessSnapshot =
-    context.testDependencies?.featureAccessSnapshot ??
-    context.featureAccessSnapshot;
-  const recordAuditEvent =
-    workspaceId === undefined
-      ? context.recordAuditEvent
-      : bindWorkspaceRecorder(context, workspaceId);
-
+const mcpMemberCaller = async (
+  context: McpRequestResources,
+  request: Request,
+): Promise<MemberCaller> => {
   // Executable gateway contexts must provide an operation-local scope. The
   // session-authenticated chat projection omits it because that surface never
   // dispatches generic capabilities; reaching this path without one is an
@@ -103,13 +76,9 @@ export const synthesizeCapabilityContext = async ({
   if (!operationDatabaseScope) {
     panic("Executable MCP context is missing an operation database scope");
   }
-  if (
-    workspaceId !== undefined &&
-    !operationDatabaseScope.pinServerValidatedWorkspaceId(workspaceId)
-  ) {
-    panic("Capability workspace was not present in the MCP access map");
-  }
-
+  const featureAccessSnapshot =
+    context.testDependencies?.featureAccessSnapshot ??
+    context.featureAccessSnapshot;
   const reader = {
     organizationId: context.organizationId,
     userId: context.userId,
@@ -125,32 +94,26 @@ export const synthesizeCapabilityContext = async ({
     ));
 
   return {
-    ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
-    body: input.body,
-    params: input.params,
-    query: input.query,
-    request,
-    route: capabilityRoute(capabilityId),
-    set: { headers: {} },
     user: { id: context.userId, email: context.userEmail },
-    session: { activeOrganizationId: context.organizationId },
+    session: { id: null, activeOrganizationId: context.organizationId },
+    ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
     getActiveWorkspaceIds: async () =>
       await Promise.resolve(context.accessibleWorkspaceIds),
     getAccessibleWorkspaces: async () =>
       await Promise.resolve(context.accessibleWorkspaces),
-    getWorkspaceAccess: async (targetWorkspaceId) => {
-      const status =
-        context.accessibleWorkspaceStatusById.get(targetWorkspaceId);
+    getWorkspaceAccess: async (workspaceId) => {
+      const workspaceStatus =
+        context.accessibleWorkspaceStatusById.get(workspaceId);
       if (
-        status &&
-        !operationDatabaseScope.pinServerValidatedWorkspaceId(targetWorkspaceId)
+        workspaceStatus &&
+        !operationDatabaseScope.pinServerValidatedWorkspaceId(workspaceId)
       ) {
         panic("Capability target was not present in the MCP access map");
       }
       return await Promise.resolve(
-        status ? { id: targetWorkspaceId, status } : null,
+        workspaceStatus ? { id: workspaceId, status: workspaceStatus } : null,
       );
     },
     pinServerValidatedWorkspaceId:
@@ -162,21 +125,59 @@ export const synthesizeCapabilityContext = async ({
     orgAIConfigStatus,
     promptCachingEnabled,
     managedAIResidency,
-    recordAuditEvent,
-    createAuditRecorder: (opts) =>
-      createAuditRecorder({
-        ...(context.auditExecution
-          ? { execution: context.auditExecution }
-          : {}),
-        organizationId: context.organizationId,
-        userId: context.userId,
-        request,
-        server: null,
-        workspaceId:
-          opts && "workspaceId" in opts
-            ? (opts.workspaceId ?? null)
-            : (workspaceId ?? null),
-      }),
-    ...(workspaceId === undefined ? {} : { workspaceId }),
+    recordAuditEvent: context.recordAuditEvent,
+    createAuditRecorder: recorderFactory(context, request, null),
+  };
+};
+
+/**
+ * The context an enumerated capability's handler runs with. `workspaceId` is
+ * set only for workspace-kind capabilities, after the executor proved the
+ * matter is one this session may use; its audit recorder defaults to that
+ * matter, as a REST workspace route's does.
+ */
+export const capabilityHandlerContext = async ({
+  capabilityId,
+  context,
+  input,
+  request,
+  workspaceId,
+}: {
+  capabilityId: string;
+  context: McpRequestResources;
+  input: { body: unknown; params: unknown; query: unknown };
+  request: Request;
+  workspaceId: SafeId<"workspace"> | undefined;
+}): Promise<CapabilityHandlerContext> => {
+  const member = await mcpMemberCaller(context, request);
+  if (
+    workspaceId !== undefined &&
+    !member.pinServerValidatedWorkspaceId(workspaceId)
+  ) {
+    panic("Capability workspace was not present in the MCP access map");
+  }
+  const workspace: WorkspaceCaller | undefined =
+    workspaceId === undefined
+      ? undefined
+      : {
+          workspaceId,
+          recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+          createAuditRecorder: recorderFactory(context, request, workspaceId),
+        };
+
+  return {
+    request,
+    server: null,
+    path: new URL(request.url).pathname,
+    route: capabilityRoute(capabilityId),
+    routeEntry: undefined,
+    set: createResponseSet(),
+    params: input.params,
+    query: input.query,
+    body: input.body,
+    headers: {},
+    status,
+    ...member,
+    ...workspace,
   };
 };

@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
+
 import type {
   AnnotationVisibility,
   UpdateAnnotationInput,
@@ -11,7 +13,7 @@ import type { VerificationClaim } from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -40,7 +42,7 @@ export type ClaimComments = {
 const claimAnchorId = (anchor: VerificationClaim["anchor"]): string =>
   anchor.type === "docx-block"
     ? anchor.blockId
-    : `page-${String(anchor.pageNumber)}`;
+    : readerPdfPageAnchorId(anchor.pageNumber);
 
 /**
  * The comments on one verification claim, with the reader's ways to change
@@ -66,7 +68,7 @@ export const useClaimComments = ({
   });
   const queryKey = options.queryKey;
   const view = useQueryView(useQuery({ ...options, enabled: user !== null }));
-  useQueryViewError(view);
+  useQueryViewError(view, "useClaimComments:query");
   const comments = view.type === "items" ? view.items : [];
   const commentRoutes = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })[
@@ -76,6 +78,7 @@ export const useClaimComments = ({
     commentRoutes()({ annotationId: toSafeId<"legalReaderAnnotation">(id) });
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: "claim-comments",
     create: async ({
       body,
       visibility,
@@ -83,7 +86,7 @@ export const useClaimComments = ({
       body: string;
       visibility: AnnotationVisibility;
     }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await commentRoutes().post({
           body,
           claimId: toSafeId<"legalListClaim">(claim.id),
@@ -105,9 +108,10 @@ export const useClaimComments = ({
       visibility,
     }),
     queryKey,
-    remove: async (id: string) => unwrapEden(await oneComment(id).delete()),
+    remove: async (id: string) =>
+      unwrapApiResponse(await oneComment(id).delete()),
     update: async ({ id, ...change }: ClaimCommentChange) =>
-      unwrapEden(await oneComment(id).patch(change)),
+      unwrapApiResponse(await oneComment(id).patch(change)),
   });
 
   return {

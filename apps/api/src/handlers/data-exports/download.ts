@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { organizationDataExports } from "@/api/db/schema";
@@ -9,7 +9,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS,
   DATA_EXPORT_MANIFEST_FILE_NAME,
@@ -54,14 +54,19 @@ const config = {
   realtime: noResourceSetUpdates(
     "Signing a download link only records an audit event.",
   ),
-  params: t.Object({ exportId: tSafeId("dataExport") }),
-  body: t.Object({
-    file: t.Union([
-      t.Object({
-        type: t.Literal(DOWNLOAD_FILE.PART),
-        index: t.Integer({ minimum: 1, description: "1-based part number." }),
+  params: v.strictObject({ exportId: resourceIdSchema("dataExport") }),
+  body: v.strictObject({
+    file: v.union([
+      v.strictObject({
+        type: v.literal(DOWNLOAD_FILE.PART),
+        index: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.description("1-based part number."),
+        ),
       }),
-      t.Object({ type: t.Literal(DOWNLOAD_FILE.MANIFEST) }),
+      v.strictObject({ type: v.literal(DOWNLOAD_FILE.MANIFEST) }),
     ]),
   }),
 } satisfies HandlerConfig;

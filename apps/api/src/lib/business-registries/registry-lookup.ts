@@ -10,6 +10,7 @@ import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/cr
 import { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
+  LoadRegistryWebSearch,
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +24,7 @@ type LookupBusinessRegistryProps = {
   q: string;
   detail?: BusinessRegistryLookupDetail | undefined;
   executeLookup?: typeof executeRegistryLookup | undefined;
+  loadWebSearch?: LoadRegistryWebSearch | undefined;
 };
 
 // Native-tool preferences control discovery, not access to public records.
@@ -35,6 +37,7 @@ export const lookupBusinessRegistryShared = async ({
   q,
   detail,
   executeLookup = executeRegistryLookup,
+  loadWebSearch,
 }: LookupBusinessRegistryProps): Promise<
   Result<RegistryLookupResponse, HandlerError>
 > => {
@@ -72,6 +75,7 @@ export const lookupBusinessRegistryShared = async ({
     detail,
     observer,
     permit,
+    loadWebSearch,
   });
   if (result instanceof HandlerError) {
     return Result.err(result);

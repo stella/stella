@@ -10,8 +10,8 @@
 // through (`tool`/`covered` name their curated tool; `capability` names its
 // reason). Each entry is
 // a pure projection of the handler's config: id (from the file path), input JSON
-// Schema (`body`/`params`/`query`, TypeBox symbols stripped by a JSON round
-// trip), permissions, handler-scope kind, access (read/write) + destructive
+// Schema (`body`/`params`/`query`, rendered from the route's valibot
+// schemas), permissions, handler-scope kind, access (read/write) + destructive
 // flag, and the MCP OAuth scope for the capability's domain.
 //
 // Each capability is a compact JSON shard with sorted object keys. Each
@@ -34,7 +34,6 @@
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
@@ -50,6 +49,7 @@ import type { RouteNode } from "../../../packages/cli/src/route-types";
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
 import { hasPreparedGeneratedSources } from "../../../packages/scripts/src/prepared-generated-sources";
+import type { Middleware, RouteEntry } from "../src/http/route";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
@@ -61,6 +61,7 @@ import {
   type ServiceClassification,
   VALIDATED_INPUT_SERVICE_CLASSIFICATION,
 } from "../src/lib/rate-limit/service-classification";
+import type { RouteGate } from "../src/lib/route-gates";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
@@ -75,6 +76,7 @@ import {
   CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityDispatchRecord,
   type CapabilityInputSchema,
+  checkCapabilityRouteGates,
   checkTransportAgainstDerived,
   compareCapabilityIds,
   compareScopeStrictness,
@@ -97,7 +99,6 @@ import {
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
-  scanRouteHookGuards,
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
@@ -387,7 +388,7 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
 
 /**
  * Files with `capability`-annotated endpoints defined INLINE in route files
- * (mounted directly into Elysia, never exported as `{ config, handler }`).
+ * (mounted directly in a route table, never exported as `{ config, handler }`).
  * These are known catalog GAPS: an inline endpoint cannot be enumerated, so its
  * capability is not projected into the catalog (nor invokable through the
  * generic path) until the handler is refactored into an endpoint module. Counts
@@ -398,54 +399,14 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
 const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {};
 
 /**
- * Capabilities whose REST route resolves workspace access through
- * `validateWorkspaceAccessIncludingArchived` (so they may run against an
- * archived workspace), carried into the catalog as `allowsArchivedWorkspace` and
- * consulted by the invoke write gate (see capability-tools.ts). Sweep of
- * `validateWorkspaceAccessIncludingArchived` usages over capability endpoints
- * (apps/api/src/handlers/workspaces/routes.ts): only `unarchive`. Stale-checked:
- * a flagged id that is no longer a discovered capability fails the export.
- *
- * - `matters.unarchive`: flips an archived workspace back to active; must be
- *   reachable while the workspace is archived.
+ * Waivers for capability endpoints mounted under a route middleware the
+ * capability executors do not run (see `checkCapabilityRouteGates`). Each entry
+ * is a reviewed decision that the gate is also enforced on the capability path
+ * (id -> justification), or the export fails on the hit. A budget, a
+ * deployment-feature gate over the entry's own `feature` flag and a
+ * feature-access gate over the config's own `featureAccess` need no waiver.
  */
-const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
-  "matters.unarchive",
-]);
-
-/**
- * Waivers for capability endpoints mounted under a route-level
- * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
- * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
- * gate is also enforced on the invoke path (id -> justification), or the export
- * fails on the hit. A `deploymentFeatureGate` over a canonical flag needs no
- * waiver when the entry carries that feature tag; custom hooks are listed here.
- */
-const ROUTE_HOOK_WAIVERS: Record<string, string> = {
-  "template-packs.get":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.installs.create":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.list":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "template-packs.visibility.update":
-    "template-packs onBeforeHandle only 404s while FEATURE_TEMPLATE_PACKS is off; the catalog entry carries that feature tag",
-  "usage.entitlement.get":
-    "usage onRequest only 404s /usage paths while FEATURE_USAGE is off (the provider webhook keeps its own contract); get_usage carries FEATURE_USAGE",
-};
-
-/** Source of an `@/api/...` module, for the route-hook guard's feature-gate helpers. */
-const readApiModule = (importPath: string): string | undefined => {
-  if (!importPath.startsWith("@/api/")) {
-    return undefined;
-  }
-  const file = path.join(
-    import.meta.dir,
-    "../src",
-    `${importPath.slice("@/api/".length)}.ts`,
-  );
-  return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
-};
+const ROUTE_GATE_WAIVERS: Record<string, string> = {};
 
 /**
  * Deployment feature flag per capability domain, mirroring the `feature` field
@@ -528,7 +489,7 @@ type CapabilityEntry = {
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
-  /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
+  /** The route admits archived matters (`workspaceStatus: "active-or-archived"`). */
   allowsArchivedWorkspace?: true;
   /**
    * How this capability's payload crosses the generic JSON transport. Total and
@@ -821,6 +782,8 @@ type BuildCatalogEntryOptions = {
     { featureId: string; type: "required" | "conditional" } | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
+  /** The route admits archived matters (`workspaceStatus: "active-or-archived"`). */
+  allowsArchivedWorkspace: boolean;
 };
 
 /**
@@ -847,6 +810,7 @@ const buildCatalogEntry = ({
   feature,
   featureAccess,
   transport,
+  allowsArchivedWorkspace,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
   ...(description === undefined ? {} : { description }),
@@ -864,7 +828,7 @@ const buildCatalogEntry = ({
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
-  ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
+  ...(allowsArchivedWorkspace
     ? { allowsArchivedWorkspace: true as const }
     : {}),
   transport,
@@ -928,7 +892,7 @@ const compactInputSchemaGuarded = ({
   const bytes = inputSchemaByteSize(compacted);
   if (bytes > MAX_CAPABILITY_SCHEMA_BYTES) {
     errors.push(
-      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable TypeBox type) or improve compaction; the cap is not the thing to raise`,
+      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable valibot schema) or improve compaction; the cap is not the thing to raise`,
     );
     return compacted;
   }
@@ -942,23 +906,25 @@ const compactInputSchemaGuarded = ({
  *    context must be waived;
  *  - file-response (fix-6): a handler returning a file/stream Response must be
  *    flagged (refused at invoke);
- *  - route-hook (fix-2): a capability endpoint under a route-level pre-handler
- *    hook the generic path bypasses must be waived (gate also in the handler);
- *  - archived-flag (fix-4) stale check: a flagged id must still be a capability.
+ *  - route-gate (fix-2): every middleware on a capability's mounted routes is
+ *    either reproduced by the capability executors or waived with a reason.
  */
 const collectClassGuardErrors = ({
   entries,
   entrySources,
-  routeFiles,
+  entryDefinitions,
+  routes,
+  classifyRouteGate,
   toolFeatureByName,
 }: {
   entries: readonly CapabilityEntry[];
   entrySources: readonly { id: string; source: string }[];
-  routeFiles: readonly { id: string; source: string }[];
+  entryDefinitions: ReadonlyMap<string, object>;
+  routes: readonly RouteEntry[];
+  classifyRouteGate: (middleware: Middleware) => RouteGate;
   toolFeatureByName: ReadonlyMap<string, string>;
 }): string[] => {
   const errors: string[] = [];
-  const capabilityIdSet = new Set(entries.map((entry) => entry.id));
 
   // Read-scope guard: a READ capability must never require a write-only scope,
   // or a read-only credential (`stella:read` / `stella:admin_read`) could not
@@ -1008,37 +974,38 @@ const collectClassGuardErrors = ({
     );
   }
 
-  const routeHooks = scanRouteHookGuards({
-    routeFiles,
-    capabilityIds: capabilityIdSet,
-    capabilityFeatures: new Map(
-      entries.map((entry) => [entry.id, entry.feature]),
-    ),
-    readModule: readApiModule,
-    waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
+  const routeGates = checkCapabilityRouteGates({
+    capabilities: entries.flatMap((entry) => {
+      const definition = entryDefinitions.get(entry.id);
+      return definition === undefined
+        ? []
+        : [
+            {
+              id: entry.id,
+              definition,
+              feature: entry.feature,
+              featureId: entry.featureId,
+            },
+          ];
+    }),
+    routes,
+    classify: classifyRouteGate,
+    waivedIds: new Set(Object.keys(ROUTE_GATE_WAIVERS)),
   });
-  for (const { routeFile, id } of routeHooks.violations) {
+  for (const { id, method, path: routePath, reason } of routeGates.violations) {
     errors.push(
-      `route-hook: capability "${id}" is mounted under a route-level hook (onBeforeHandle, beforeHandle, onRequest or deploymentFeatureGate) in ${routeFile} that capability executors bypass (a hook that only checks a FEATURE_ flag passes when the catalog entry carries that feature tag). Move the gate into the handler config (like case-law.ingestion.get), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+      `route-gate: capability "${id}" is mounted at ${method} ${routePath} behind ${reason}, which capability executors bypass. Declare the gate in the handler config (featureAccess, or the entry's feature flag), or add "${id}" to ROUTE_GATE_WAIVERS with a justification`,
     );
   }
-  for (const { routeFile, route } of routeHooks.childRouteMounts) {
+  for (const id of routeGates.unmounted) {
     errors.push(
-      `route-hook: ${routeFile} mounts child route ${route} under a route-level hook, so the hook covers handlers this guard cannot attribute. Apply the hook inside ${route}, or mount it outside the hooked instance`,
+      `route-gate: capability "${id}" is not mounted on any route; mount its definition in apps/api/src/api-routes.ts (capabilities run the same definition REST serves)`,
     );
   }
-  for (const id of routeHooks.staleWaivers) {
+  for (const id of routeGates.staleWaivers) {
     errors.push(
-      `stale ROUTE_HOOK_WAIVERS entry "${id}": it is no longer mounted under any route hook (remove it)`,
+      `stale ROUTE_GATE_WAIVERS entry "${id}": every gate on its routes is reproduced on the capability path (remove it)`,
     );
-  }
-
-  for (const id of ALLOWS_ARCHIVED_WORKSPACE) {
-    if (!capabilityIdSet.has(id)) {
-      errors.push(
-        `stale ALLOWS_ARCHIVED_WORKSPACE entry "${id}": no catalog capability has that id (remove it)`,
-      );
-    }
   }
 
   // Feature-gate coherence: DOMAIN_FEATURE must stay in lockstep with the
@@ -1129,8 +1096,7 @@ const validateGeneratedFeatureDeclarations = ({
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, routeFiles, importErrors } =
-    await discoverSafeHandlers();
+  const { endpoints, files, importErrors } = await discoverSafeHandlers();
   const errors: string[] = [];
   const featureSources = await readFeatureDeclarationSources();
 
@@ -1182,6 +1148,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const entries: CapabilityEntry[] = [];
   const dispatchRecords: CapabilityDispatchRecord[] = [];
   const entrySources: { id: string; source: string }[] = [];
+  const entryDefinitions = new Map<string, object>();
   const idToFile = new Map<string, string>();
   const presentDomains = new Set<string>();
   const kindOverrideUses: string[] = [];
@@ -1570,8 +1537,11 @@ const buildCatalog = async (): Promise<BuildResult> => {
           endpoint.config["featureAccess"],
         ),
         transport,
+        allowsArchivedWorkspace:
+          endpoint.config["workspaceStatus"] === "active-or-archived",
       }),
     );
+    entryDefinitions.set(id, endpoint.definition);
     dispatchRecords.push({
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
@@ -1598,10 +1568,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
   // Class guards over the built entries (context-fidelity, file-response,
   // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in
   // check; each pushes reviewer-actionable errors that fail the export.
+  // The mounted routes, after discovery seeded the env defaults their module
+  // graph validates at load.
+  const { apiRoutes } = await import("../src/api-routes");
+  const { classifyRouteGate } = await import("../src/lib/route-gates");
   for (const message of collectClassGuardErrors({
     entries,
     entrySources,
-    routeFiles,
+    entryDefinitions,
+    routes: apiRoutes,
+    classifyRouteGate,
     toolFeatureByName,
   })) {
     errors.push(message);

@@ -117,6 +117,7 @@ export const sourceWriteExceptionIssues = ({
   observed,
   git = (args) =>
     spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
       timeout: GIT_TIMEOUT_MS,

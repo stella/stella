@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationDataExports } from "@/api/db/schema";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -28,7 +28,7 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  params: t.Object({ exportId: tSafeId("dataExport") }),
+  params: v.strictObject({ exportId: resourceIdSchema("dataExport") }),
 } satisfies HandlerConfig;
 
 const readDataExport = createSafeRootHandler(

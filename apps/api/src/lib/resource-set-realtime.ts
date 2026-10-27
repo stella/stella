@@ -1,7 +1,6 @@
-import { ElysiaCustomStatusResponse } from "elysia";
-
 import type { ResourceType } from "@stll/api-contract";
 
+import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   broadcastOrganizationResourceSetUpdated,
@@ -59,7 +58,7 @@ export const noResourceSetUpdates = (reason: string): NoResourceSetUpdates => ({
 
 /** A handler result counts as a committed success unless it is an error status. */
 export const isSuccessfulHandlerResult = (result: unknown): boolean => {
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     return result.code < 400;
   }
   if (result instanceof Response) {

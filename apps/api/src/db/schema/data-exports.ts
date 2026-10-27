@@ -150,10 +150,21 @@ export const organizationDataExports = p.pgTable(
       .index("organization_data_exports_org_created_idx")
       .on(table.organizationId, table.createdAt.desc(), table.id.desc()),
     p.index("organization_data_exports_requested_by_idx").on(table.requestedBy),
+    // Maintenance selects global status pages, independently of tenant size.
     p
-      .index("organization_data_exports_ready_expires_idx")
-      .on(table.expiresAt)
-      .where(sql`${table.status} = 'ready'`),
+      .index("organization_data_exports_status_expires_idx")
+      .on(table.status, table.expiresAt, table.id),
+    p
+      .index("organization_data_exports_status_heartbeat_idx")
+      .on(table.status, table.heartbeatAt, table.id),
+    p
+      .index("organization_data_exports_queued_requester_idx")
+      .on(table.status, table.createdAt, table.id)
+      .where(sql`${table.requestedBy} IS NOT NULL`),
+    p
+      .index("organization_data_exports_queued_abandoned_idx")
+      .on(table.status, table.createdAt, table.id)
+      .where(sql`${table.requestedBy} IS NULL`),
     p.check(
       "organization_data_exports_status_check",
       sql`${table.status} IN (${sqlValues(DATA_EXPORT_STATUSES)})`,

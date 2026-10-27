@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   DATA_EXPORT_START_OUTCOME,
@@ -48,11 +48,13 @@ const config = {
   realtime: noResourceSetUpdates(
     "Exports are not a live resource set: clients follow an export by polling data-exports.get.",
   ),
-  body: t.Object({
-    versions: t.UnionEnum(DATA_EXPORT_VERSION_SCOPE_VALUES, {
-      description:
+  body: v.strictObject({
+    versions: v.pipe(
+      v.picklist(DATA_EXPORT_VERSION_SCOPE_VALUES),
+      v.description(
         "`all` includes every earlier version of every document; `current` only each document's current version.",
-    }),
+      ),
+    ),
   }),
 } satisfies HandlerConfig;
 

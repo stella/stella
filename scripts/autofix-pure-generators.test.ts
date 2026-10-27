@@ -27,6 +27,9 @@ import {
 const PURE_AUTOFIX = {
   // Converts the static manifest schema and shared version policy; no DB imports.
   "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
+  // Runs local Oxlint against committed web and Tailwind sources; cache keys and
+  // contents use content hashes and never consult the network, clock, or env.
+  "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",

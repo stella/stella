@@ -55,6 +55,11 @@ if [[ "${1:-}" == push || "${1:-}" == fetch || "${1:-}" == ls-remote ]]; then
     exit 1
   }
 fi
+if [[ "${1:-}" == ls-remote && -n "${TEST_LS_REMOTE_FAILS_ONCE:-}" && ! -e "$TEST_LS_REMOTE_FAILS_ONCE" ]]; then
+  : > "$TEST_LS_REMOTE_FAILS_ONCE"
+  echo 'transient ls-remote failure' >&2
+  exit 128
+fi
 if [[ "${1:-}" == push ]]; then
   printf 'git push %s\n' "$*" >> "$TEST_CALLS"
   if [[ -n "${TEST_CONCURRENT_SHA:-}" ]]; then
@@ -115,6 +120,17 @@ fi
 TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true bash "$subject"
 [[ "$(grep -Ec '^git push ' "$TEST_CALLS")" == 1 ]]
 [[ "$(grep -Ec '^gh pr create ' "$TEST_CALLS")" == 1 ]]
+[[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
+
+# A lookup that fails once and then finds no branch creates it.
+git checkout --detach "$initial_sha"
+git --git-dir="$TEST_REMOTE" update-ref -d refs/heads/automation/dependency-audit-fix
+git update-ref -d refs/remotes/origin/automation/dependency-audit-fix
+: > "$TEST_CALLS"
+TEST_OPEN_PRS=0 TEST_FIX_AVAILABLE=true RETRY_DELAYS_SECONDS=0 \
+  TEST_LS_REMOTE_FAILS_ONCE="$fixture/ls-remote-failed" bash "$subject"
+[[ -e "$fixture/ls-remote-failed" ]]
+[[ "$(grep -Ec '^git push ' "$TEST_CALLS")" == 1 ]]
 [[ "$(git --git-dir="$TEST_REMOTE" show refs/heads/automation/dependency-audit-fix:bun.lock)" == updated ]]
 
 # A remote update after observation must survive a rejected lease.

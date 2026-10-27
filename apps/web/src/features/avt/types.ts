@@ -8,7 +8,7 @@
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 
 type ListsRoutes = WebApiRoutes["lists"][":workspaceId"];
 

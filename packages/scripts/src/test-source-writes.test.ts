@@ -8,10 +8,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import type { IdentifierNode as Identifier } from "./syntax-estree-names";
+import { type Node, parseSource, walk } from "./syntax-tree";
 import {
   sourceWriteExceptionIssues,
   validateSourceWriteExceptions,
@@ -50,32 +51,66 @@ const inspectSourceWrites = (source: string, file: string) => {
     repositoryRoot,
     file.split("/").slice(0, 2).join("/"),
   );
-  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const bindings = new Map<ts.Node, Map<string, ts.Expression>>();
+  const tree = parseSource(file, source);
+  const parents = new Map<Node, Node>();
+  walk(tree.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent) {
+      parents.set(node, parent);
+    }
+  });
+  const bindings = new Map<Node, Map<string, Node>>();
   const aliases = new Map<string, string>();
-  const scopeOf = (node: ts.Node): ts.Node => {
-    let scope = node.parent;
-    while (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
-      scope = scope.parent;
-    }
-    return scope;
-  };
-  const collect = (node: ts.Node) => {
-    if (ts.isImportSpecifier(node)) {
-      aliases.set(node.name.text, (node.propertyName ?? node.name).text);
-    }
-    if (
-      ts.isBindingElement(node) &&
-      ts.isIdentifier(node.name) &&
-      node.propertyName !== undefined &&
-      ts.isIdentifier(node.propertyName)
+  const scopeOf = (node: Node): Node => {
+    let scope = parents.get(node);
+    while (
+      scope &&
+      scope.type !== "BlockStatement" &&
+      scope.type !== "Program"
     ) {
-      aliases.set(node.name.text, node.propertyName.text);
+      scope = parents.get(scope);
+    }
+    return scope ?? tree.program;
+  };
+  const collect = (node: Node, ancestors: readonly Node[]): undefined => {
+    if (node.type === "ImportSpecifier") {
+      aliases.set(
+        node.local.name,
+        node.imported.type === "Identifier"
+          ? node.imported.name
+          : node.imported.value,
+      );
     }
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
+      node.type === "Property" &&
+      !node.shorthand &&
+      !node.computed &&
+      ancestors.at(-1)?.type === "ObjectPattern" &&
+      node.key.type === "Identifier"
+    ) {
+      const owner = ancestors.findLast(
+        (ancestor) =>
+          ![
+            "ObjectPattern",
+            "ArrayPattern",
+            "Property",
+            "AssignmentPattern",
+            "RestElement",
+          ].includes(ancestor.type),
+      );
+      const binding =
+        node.value.type === "AssignmentPattern" ? node.value.left : node.value;
+      if (
+        owner?.type !== "AssignmentExpression" &&
+        binding.type === "Identifier"
+      ) {
+        aliases.set(binding.name, node.key.name);
+      }
+    }
+    if (
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
       const scope = scopeOf(node);
       let entries = bindings.get(scope);
@@ -83,76 +118,85 @@ const inspectSourceWrites = (source: string, file: string) => {
         entries = new Map();
         bindings.set(scope, entries);
       }
-      entries.set(node.name.text, node.initializer);
+      entries.set(node.id.name, node.init);
     }
-    ts.forEachChild(node, collect);
   };
-  collect(tree);
-  const bindingFor = (node: ts.Identifier) => {
-    let scope = node.parent;
-    while (true) {
-      const initializer = bindings.get(scope)?.get(node.text);
+  walk(tree.program, collect);
+  const bindingFor = (node: Identifier) => {
+    let scope = parents.get(node);
+    while (scope) {
+      const initializer = bindings.get(scope)?.get(node.name);
       if (initializer !== undefined) {
         return initializer;
       }
-      if (ts.isSourceFile(scope)) {
+      if (scope.type === "Program") {
         return undefined;
       }
-      scope = scope.parent;
+      scope = parents.get(scope);
     }
+    return undefined;
   };
   const callName = (
-    expression: ts.Expression,
-    seen = new Set<ts.Node>(),
+    expression: Node,
+    seen = new Set<Node>(),
   ): string | undefined => {
     if (seen.has(expression)) {
       return undefined;
     }
-    if (ts.isIdentifier(expression)) {
+    if (expression.type === "ChainExpression") {
+      return callName(expression.expression, new Set(seen).add(expression));
+    }
+    if (expression.type === "Identifier") {
       const initializer = bindingFor(expression);
       if (initializer !== undefined) {
         return callName(initializer, new Set(seen).add(expression));
       }
-      return expression.text === "write" && !aliases.has(expression.text)
+      return expression.name === "write" && !aliases.has(expression.name)
         ? undefined
-        : (aliases.get(expression.text) ?? expression.text);
-    }
-    if (ts.isPropertyAccessExpression(expression)) {
-      if (
-        expression.name.text === "write" &&
-        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
-      ) {
-        return undefined;
-      }
-      return expression.name.text;
+        : (aliases.get(expression.name) ?? expression.name);
     }
     if (
-      ts.isElementAccessExpression(expression) &&
-      ts.isStringLiteral(expression.argumentExpression)
+      expression.type === "MemberExpression" &&
+      !expression.computed &&
+      expression.property.type === "Identifier"
     ) {
       if (
-        expression.argumentExpression.text === "write" &&
-        callName(expression.expression, new Set(seen).add(expression)) !== "Bun"
+        expression.property.name === "write" &&
+        callName(expression.object, new Set(seen).add(expression)) !== "Bun"
       ) {
         return undefined;
       }
-      return expression.argumentExpression.text;
+      return expression.property.name;
+    }
+    if (
+      expression.type === "MemberExpression" &&
+      expression.computed &&
+      expression.property.type === "Literal" &&
+      typeof expression.property.value === "string"
+    ) {
+      if (
+        expression.property.value === "write" &&
+        callName(expression.object, new Set(seen).add(expression)) !== "Bun"
+      ) {
+        return undefined;
+      }
+      return expression.property.value;
     }
     return undefined;
   };
   const evaluatePath = (
-    node: ts.Expression,
-    seen = new Set<ts.Node>(),
+    node: Node,
+    seen = new Set<Node>(),
   ): string | undefined => {
     if (seen.has(node)) {
       return undefined;
     }
     const nextSeen = new Set(seen).add(node);
-    if (ts.isStringLiteralLike(node)) {
-      return node.text;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      return node.value;
     }
-    if (ts.isIdentifier(node)) {
-      if (node.text === "__dirname") {
+    if (node.type === "Identifier") {
+      if (node.name === "__dirname") {
         return path.dirname(absoluteFile);
       }
       const initializer = bindingFor(node);
@@ -161,44 +205,51 @@ const inspectSourceWrites = (source: string, file: string) => {
         : evaluatePath(initializer, nextSeen);
     }
     if (
-      ts.isPropertyAccessExpression(node) &&
-      ts.isMetaProperty(node.expression)
+      node.type === "MemberExpression" &&
+      !node.computed &&
+      node.property.type === "Identifier" &&
+      node.object.type === "MetaProperty"
     ) {
-      if (node.name.text === "dir" || node.name.text === "dirname") {
+      if (node.property.name === "dir" || node.property.name === "dirname") {
         return path.dirname(absoluteFile);
       }
-      if (node.name.text === "url") {
+      if (node.property.name === "url") {
         return `file://${absoluteFile}`;
       }
     }
     if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAwaitExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isNonNullExpression(node)
+      node.type === "ChainExpression" ||
+      node.type === "ParenthesizedExpression" ||
+      node.type === "AwaitExpression" ||
+      node.type === "TSAsExpression" ||
+      node.type === "TSNonNullExpression"
     ) {
-      return evaluatePath(node.expression, nextSeen);
+      return evaluatePath(
+        node.type === "AwaitExpression" ? node.argument : node.expression,
+        nextSeen,
+      );
     }
-    if (ts.isTemplateExpression(node)) {
-      let value = node.head.text;
-      for (const span of node.templateSpans) {
-        value += `${evaluatePath(span.expression, nextSeen) ?? "__dynamic__"}${span.literal.text}`;
-      }
-      return value;
+    if (node.type === "TemplateLiteral") {
+      return node.quasis
+        .map((quasi, index) => {
+          const text = quasi.value.cooked ?? quasi.value.raw;
+          const expression = node.expressions.at(index);
+          return expression
+            ? `${text}${evaluatePath(expression, nextSeen) ?? "__dynamic__"}`
+            : text;
+        })
+        .join("");
     }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.PlusToken
-    ) {
+    if (node.type === "BinaryExpression" && node.operator === "+") {
       const left = evaluatePath(node.left, nextSeen);
       const right = evaluatePath(node.right, nextSeen);
       return left === undefined && right === undefined
         ? undefined
         : `${left ?? "__dynamic__"}${right ?? "__dynamic__"}`;
     }
-    if (ts.isNewExpression(node) && callName(node.expression) === "URL") {
-      const relative = node.arguments?.at(0);
-      const base = node.arguments?.at(1);
+    if (node.type === "NewExpression" && callName(node.callee) === "URL") {
+      const relative = node.arguments.at(0);
+      const base = node.arguments.at(1);
       const relativeValue =
         relative === undefined ? undefined : evaluatePath(relative, nextSeen);
       const baseValue =
@@ -207,10 +258,10 @@ const inspectSourceWrites = (source: string, file: string) => {
         return path.resolve(path.dirname(baseValue.slice(7)), relativeValue);
       }
     }
-    if (!ts.isCallExpression(node)) {
+    if (node.type !== "CallExpression") {
       return undefined;
     }
-    const name = callName(node.expression);
+    const name = callName(node.callee);
     if (name === "tmpdir") {
       return "/__outside_repository_tmp__";
     }
@@ -241,36 +292,37 @@ const inspectSourceWrites = (source: string, file: string) => {
     }
     return undefined;
   };
-  const visit = (node: ts.Node) => {
+  const visit = (node: Node): undefined => {
     if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-      ts.isIdentifier(node.left)
+      node.type === "AssignmentExpression" &&
+      node.operator === "=" &&
+      node.left.type === "Identifier"
     ) {
-      let scope = node.parent;
+      let scope = parents.get(node);
       while (
-        !ts.isSourceFile(scope) &&
-        !bindings.get(scope)?.has(node.left.text)
+        scope &&
+        scope.type !== "Program" &&
+        !bindings.get(scope)?.has(node.left.name)
       ) {
-        scope = scope.parent;
+        scope = parents.get(scope);
       }
-      const targetScope = bindings.get(scope)?.has(node.left.text)
-        ? scope
-        : scopeOf(node);
+      const targetScope =
+        scope && bindings.get(scope)?.has(node.left.name)
+          ? scope
+          : scopeOf(node);
       let entries = bindings.get(targetScope);
       if (entries === undefined) {
         entries = new Map();
         bindings.set(targetScope, entries);
       }
-      entries.set(node.left.text, node.right);
+      entries.set(node.left.name, node.right);
     }
-    const writer = ts.isCallExpression(node)
-      ? callName(node.expression)
-      : undefined;
+    const writer =
+      node.type === "CallExpression" ? callName(node.callee) : undefined;
     const argumentIndexes =
       writer === undefined ? undefined : writers.get(writer);
     if (
-      ts.isCallExpression(node) &&
+      node.type === "CallExpression" &&
       writer !== undefined &&
       argumentIndexes !== undefined
     ) {
@@ -287,19 +339,16 @@ const inspectSourceWrites = (source: string, file: string) => {
             path.resolve(base, value),
           );
           if (/^(?:apps|packages)\/[^/]+\/src(?:\/|$)/u.test(relative)) {
-            const { line } = tree.getLineAndCharacterOfPosition(
-              node.getStart(tree),
-            );
+            const { line } = tree.locate(node.start);
             violations.push(
-              `${file}:${line + 1}: ${writer} writes into src (${relative})`,
+              `${file}:${line}: ${writer} writes into src (${relative})`,
             );
           }
         }
       }
     }
-    ts.forEachChild(node, visit);
   };
-  visit(tree);
+  walk(tree.program, visit);
   return violations;
 };
 
@@ -540,6 +589,12 @@ test("only Bun.write is treated as the filesystem write API", () => {
   ).toEqual([]);
   expect(
     inspectSourceWrites(
+      `let save; ({ writeFileSync: save } = fixture()); save(${destination}, "");`,
+      "packages/scripts/src/example.test.ts",
+    ),
+  ).toEqual([]);
+  expect(
+    inspectSourceWrites(
       `fixture.write(${destination}, "");`,
       "packages/scripts/src/example.test.ts",
     ),
@@ -556,6 +611,8 @@ test("the census rejects every writer through direct and derived source destinat
   const destinations = [
     'import.meta.dir + "/mutation.ts"',
     'path.join(__dirname, "mutation.ts")',
+    'path?.join(import.meta.dir, "mutation.ts")',
+    'import.meta?.dir + "/mutation.ts"',
     'path.resolve(import.meta.dir, "nested", name)',
     'path.join("apps/api/src", name)',
     '"src/mutation.ts"',
@@ -572,6 +629,15 @@ test("the census rejects every writer through direct and derived source destinat
       expect(
         inspectSourceWrites(fixture, "apps/api/src/tests/example.test.ts"),
         fixture,
+      ).toHaveLength(argumentIndexes.length);
+      const alias = writer === "write" ? "Bun?.write" : `fs?.${writer}`;
+      const aliasedFixture = `const target = ${destination}; const save = ${alias}; save(${arguments_.join(", ")});`;
+      expect(
+        inspectSourceWrites(
+          aliasedFixture,
+          "apps/api/src/tests/example.test.ts",
+        ),
+        aliasedFixture,
       ).toHaveLength(argumentIndexes.length);
     }
   }

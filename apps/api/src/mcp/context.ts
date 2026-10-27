@@ -5,7 +5,7 @@ import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
@@ -75,7 +75,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -115,12 +118,17 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import {
+  type OrgWebSearchKeyRow,
+  resolveWebSearchProvidersResultFromOrgSettingsRow,
+} from "@/api/lib/web-search/load-org-keys";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
-import type { McpSession } from "@/api/mcp/auth";
+import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
@@ -146,6 +154,11 @@ export type McpOperationDatabaseScope = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
 };
+
+export type McpRequestDataAccess = Pick<
+  McpOperationDatabaseScope,
+  "safeDb" | "scopedDb"
+>;
 
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
@@ -180,6 +193,10 @@ export type McpRequestContext = {
     readCaseLawProvisionScope?: (
       scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
@@ -241,8 +258,8 @@ export type McpRequestContext = {
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
-   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
-   * "active".
+   * core's `authorizeWorkspace`, which 404s a workspace whose status the route
+   * does not admit ("active" unless it admits archived matters).
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
@@ -257,6 +274,8 @@ export type McpRequestContext = {
   clientIp?: string | null;
   credentialType?: "oauth" | "api-key" | "anonymous";
   clientId?: string | null;
+  /** Credential classification copied from the authenticated MCP session. */
+  sessionCredentialType?: McpCredentialType | undefined;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -293,6 +312,14 @@ export type McpRequestContext = {
    */
   loadEnabledRegistrySlugs?:
     (() => Promise<ReadOutcome<readonly BusinessRegistrySlug[]>>) | undefined;
+  /**
+   * The web search provider, loaded on first use within this request only, so
+   * a call that does no web search never reads or decrypts the stored key.
+   * An error means the settings read failed; an unavailable result names why
+   * web search is off (not configured, turned off, or an unreadable key).
+   */
+  loadWebSearchProvider?:
+    (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>) | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -324,10 +351,14 @@ export type McpRequestContext = {
    * declared with `withThirdPartyOutbound`.
    */
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** Resources built with the caller context but kept outside its authority. */
+export type McpRequestResources = McpRequestContext & {
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
 };
 
 /**
@@ -335,9 +366,9 @@ export type McpRequestContext = {
  * contexts carry the request needed to rebuild the recorder; chat contexts
  * already receive a recorder whose approval was resolved by the chat gate.
  */
-export const bindApprovedMcpAuditContext = (
-  context: McpRequestContext,
-): McpRequestContext => {
+export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
+  context: TContext,
+): TContext => {
   if (context.request === undefined) {
     return context;
   }
@@ -393,6 +424,97 @@ export const loadAccessibleMcpWorkspaces = async ({
     throw error;
   }
   return outcome.value.workspaces;
+};
+
+export type McpWebSearchAvailability =
+  | { status: "available"; provider: WebSearchProvider }
+  | {
+      status: "unavailable";
+      reason: "not-configured" | "key-unreadable";
+    };
+
+const MCP_WEB_SEARCH_KEY_RESOLUTION_SINK = failureSink({
+  event: "mcp.web_search.key_resolution_failed",
+  expected: [],
+});
+
+export const resolveEnabledMcpWebSearchProvider = async ({
+  disabledNativeToolSlugs,
+  organizationId,
+  row,
+}: {
+  disabledNativeToolSlugs: readonly string[] | undefined;
+  organizationId: SafeId<"organization">;
+  row: OrgWebSearchKeyRow | null | undefined;
+}): Promise<McpWebSearchAvailability> => {
+  if (disabledNativeToolSlugs?.includes("web-search")) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  const resolved = await resolveWebSearchProvidersResultFromOrgSettingsRow(
+    organizationId,
+    row,
+  );
+  if (resolved.isErr()) {
+    observeFailure(resolved.error, {
+      sink: MCP_WEB_SEARCH_KEY_RESOLUTION_SINK,
+    });
+    return { status: "unavailable", reason: "key-unreadable" };
+  }
+  if (resolved.value.webSearchProvider === null) {
+    return { status: "unavailable", reason: "not-configured" };
+  }
+  return { status: "available", provider: resolved.value.webSearchProvider };
+};
+
+const credentialPermissionContext = (
+  session: McpSession,
+): Pick<McpRequestContext, "credentialPermissions"> =>
+  session.credential?.type === "machine_api_key" ||
+  session.credential?.type === "personal_api_key"
+    ? { credentialPermissions: session.credential.permissions }
+    : {};
+
+export const providerFromMcpWebSearchAvailability = (
+  availability: McpWebSearchAvailability,
+): WebSearchProvider | null =>
+  availability.status === "available" ? availability.provider : null;
+
+/**
+ * The web search provider one organization can use, from its settings row
+ * (native tool overrides and the stored key) in one scoped read.
+ */
+const readMcpWebSearchProvider = async ({
+  organizationId,
+  safeDb,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+}): Promise<Result<McpWebSearchAvailability, SafeDbError>> => {
+  const settings = await safeDb((tx) =>
+    tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: {
+        practiceJurisdictions: true,
+        nativeToolOverrides: true,
+        webSearchApiKeyEncrypted: true,
+        webSearchApiKeyIv: true,
+        urlFetchApiKeyEncrypted: true,
+        urlFetchApiKeyIv: true,
+      },
+    }),
+  );
+  if (Result.isError(settings)) {
+    return settings;
+  }
+  return Result.ok(
+    await resolveEnabledMcpWebSearchProvider({
+      disabledNativeToolSlugs: getDisabledNativeToolSlugsFromSettingsRow(
+        settings.value ?? undefined,
+      ),
+      organizationId,
+      row: settings.value,
+    }),
+  );
 };
 
 const resolveMcpWebHandoffIdentity = (session: McpSession) => {
@@ -466,7 +588,7 @@ export const resolveMcpSessionContext = async (
     checkAccountOperation?: typeof checkDemoAccountOperation;
     checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
     userId: session.userId,
@@ -475,16 +597,11 @@ export const resolveMcpSessionContext = async (
     organizationId,
     userId,
   });
-
   if (!authorization) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
     });
   }
-
-  // A restricted account is refused its operation here, and an account bound
-  // to one organization opens no other, whatever grant or membership the
-  // credential was issued under.
   const accountOperation = checkAccountOperation(authorization.email);
   const accountAccess = Result.isError(accountOperation)
     ? accountOperation
@@ -497,7 +614,6 @@ export const resolveMcpSessionContext = async (
       message: accountAccess.error.message,
     });
   }
-
   // OAuth access tokens issued before the member_id claim existed carry none
   // and open on live membership alone. Remove this allowance (require the
   // claim on OAuth client tokens) once every such token has expired, i.e.
@@ -510,17 +626,14 @@ export const resolveMcpSessionContext = async (
       message: "Token was issued for a previous membership",
     });
   }
-
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
-
   const auditExecution = await resolveAgentAuditExecution({
     credential: session.credential,
     organizationId,
     userId,
   });
-
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
     organizationId,
@@ -531,9 +644,6 @@ export const resolveMcpSessionContext = async (
     organizationId,
     scopedDb: bootstrapScopedDb,
   });
-  // Business-logic fields exclude deleting workspaces so MCP tools don't
-  // surface content from sealed workspaces. RLS derives membership from the
-  // organization/user transaction settings independently.
   const usableWorkspaces = filterUsableMcpWorkspaces({
     accessibleWorkspaces,
     tokenWorkspaceIds: session.workspaceIds,
@@ -556,7 +666,6 @@ export const resolveMcpSessionContext = async (
         }
         return true;
       });
-
     // A workspace_ids claim is a signed attenuation boundary, not just a
     // tool-discovery hint. After intersecting it with live authorization
     // above, carry that exact subset into RLS explicit mode so root/list
@@ -573,7 +682,6 @@ export const resolveMcpSessionContext = async (
         ),
       };
     }
-
     const databaseIdentity = {
       organizationId,
       serverValidatedWorkspaceIds,
@@ -605,6 +713,15 @@ export const resolveMcpSessionContext = async (
     });
     return await enabledRegistrySlugs;
   };
+  let webSearchAvailability:
+    Promise<Result<McpWebSearchAvailability, SafeDbError>> | undefined;
+  const loadWebSearchProvider = async () => {
+    webSearchAvailability ??= readMcpWebSearchProvider({
+      organizationId,
+      safeDb: requestDatabaseScope.safeDb,
+    });
+    return await webSearchAvailability;
+  };
 
   const webHandoffIdentity = resolveMcpWebHandoffIdentity(session);
 
@@ -618,17 +735,17 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
+    ...(session.credential === undefined
+      ? {}
+      : { sessionCredentialType: session.credential.type }),
     createOperationDatabaseScope,
     featureAccessSnapshot,
-    ...(session.credential?.type === "machine_api_key" ||
-    session.credential?.type === "personal_api_key"
-      ? { credentialPermissions: session.credential.permissions }
-      : {}),
-    // An agent run has no person at the tool boundary to confirm a call.
+    ...credentialPermissionContext(session),
     ...(session.credential?.type === "agent_run"
       ? { toolConfirmation: TOOL_CONFIRMATION.unavailable }
       : {}),
     loadEnabledRegistrySlugs,
+    loadWebSearchProvider,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,
@@ -643,8 +760,6 @@ export const resolveMcpSessionContext = async (
     }),
     pinServerValidatedWorkspaceId:
       requestDatabaseScope.pinServerValidatedWorkspaceId,
-    // The MCP caller invokes each tool directly, so the request may reach the
-    // third-party services its tools front.
     thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,

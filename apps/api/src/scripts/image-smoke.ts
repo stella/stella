@@ -39,6 +39,7 @@ import {
   runtimeOcrPdfFontPath,
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
+import { RTF_MIME_TYPE } from "@/api/mime-types";
 import { checkBundledSanctionsMatcher } from "@/api/scripts/image-smoke-sanctions";
 import { checkBundledPublicTemplates } from "@/api/scripts/image-smoke-template-packs";
 
@@ -201,6 +202,144 @@ await probe("model ingress script bundle", async () => {
   }
   if (stdout.trim() !== "image-smoke ok: model ingress guard") {
     panic("model ingress script did not finish its native matcher probe");
+  }
+});
+
+// Error fingerprints group by source positions, so the long-running bundles
+// must map their frames through the shipped, content-stripped source maps.
+// Started without configuration, each fails environment validation; its stack
+// must name a source file rather than a bundle offset.
+// The case-law runner maps relative to its own package, so its frames read
+// /api/src/... rather than /apps/api/src/....
+const SOURCE_FRAME = /\/api\/src\/\S+\.ts:\d+:\d+/u;
+const LONG_RUNNING_BUNDLES = [
+  ["/app/server.js"],
+  ["/app/document-processing-worker.js"],
+  ["/app/legal-atlas.js", "run", "case-law-ingest", "__smoke__"],
+] as const;
+for (const [bundle, ...args] of LONG_RUNNING_BUNDLES) {
+  await probe(`${bundle} frames map to source`, async () => {
+    const subprocess = Bun.spawn(["bun", "--no-env-file", bundle, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      env: { PATH: process.env["PATH"] ?? "", HOME: "/tmp" },
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    const output = `${stdout}\n${stderr}`;
+    if (exitCode === 0 || !output.includes("Invalid environment variables")) {
+      panic(`${bundle} did not stop at environment validation: ${output}`);
+    }
+    if (output.includes("Could not decode sourcemap")) {
+      panic(`${bundle} could not decode its source map: ${output}`);
+    }
+    if (!SOURCE_FRAME.test(output)) {
+      panic(`${bundle} printed no source-mapped frame: ${output}`);
+    }
+  });
+}
+
+// Office formats convert through anydoc's native binding inside the extraction
+// worker bundle; RTF is the smallest document that takes that path.
+await probe("extraction worker anydoc native", async () => {
+  const workerDir =
+    runtimeWorkerDir() ??
+    panic("STELLA_WORKER_DIR must be set for the image smoke");
+  const subprocess = Bun.spawn(
+    [
+      "bun",
+      "--no-env-file",
+      path.join(workerDir, RUNTIME_WORKER_FILES.extraction),
+      RTF_MIME_TYPE,
+    ],
+    {
+      stdin: new Blob(["{\\rtf1\\ansi image smoke anydoc\\par}"]),
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+    },
+  );
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
+  if (exitCode !== 0 || !stdout.includes("image smoke anydoc")) {
+    panic(`extraction worker did not convert RTF (${exitCode}): ${stderr}`);
+  }
+});
+
+// The image is glibc (Debian); a musl build of a native addon can never load
+// here. napi-rs loaders reference both builds, so the bundler ships both
+// unless the build marks the musl package external.
+await probe("no musl native addons", async () => {
+  const musl = await Array.fromAsync(
+    new Bun.Glob("**/*musl*.node").scan({ cwd: "/app", onlyFiles: true }),
+  );
+  if (musl.length > 0) {
+    panic(
+      `musl native addons ship in the glibc image: ${musl.join(", ")}; mark their packages --external in the bundle build`,
+    );
+  }
+});
+
+// The operator scripts build together and share their code through
+// /app/chunk-*.js. A script whose `import.meta.main` block lands in a chunk
+// loads, does nothing and exits 0. Started without configuration or
+// arguments, every script that loads a shared chunk must reach its own
+// environment or argument validation and say so. Chunks import each other, so
+// only the non-chunk files that import one are scripts.
+const SHARED_CHUNK_PREFIX = "chunk-";
+const SHARED_CHUNK_IMPORT = `"/app/${SHARED_CHUNK_PREFIX}`;
+await probe("every split script runs its main block", async () => {
+  const names = await Array.fromAsync(
+    new Bun.Glob("*.js").scan({ cwd: "/app", onlyFiles: true }),
+  );
+  const scripts: string[] = [];
+  for (const name of names.toSorted()) {
+    if (
+      name.startsWith(SHARED_CHUNK_PREFIX) ||
+      name.startsWith("image-smoke")
+    ) {
+      continue;
+    }
+    const source = await Bun.file(path.join("/app", name)).text();
+    if (source.includes(SHARED_CHUNK_IMPORT)) {
+      scripts.push(path.join("/app", name));
+    }
+  }
+  if (scripts.length === 0) {
+    panic("no script in /app loads a shared chunk; is the split build gone?");
+  }
+  for (const script of scripts) {
+    const subprocess = Bun.spawn(["bun", "--no-env-file", script], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      env: { PATH: process.env["PATH"] ?? "", HOME: "/tmp" },
+    });
+    const [stdout, stderr] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    const output = `${stdout}\n${stderr}`.trim();
+    if (subprocess.signalCode !== null) {
+      panic(`${script} did not stop within 30 s: ${output}`);
+    }
+    if (/cannot (?:find|resolve) (?:module|package)/iu.test(output)) {
+      panic(`${script} could not load its code: ${output}`);
+    }
+    if (output === "") {
+      panic(
+        `${script} exited ${String(subprocess.exitCode)} without output; its main block did not run`,
+      );
+    }
   }
 });
 

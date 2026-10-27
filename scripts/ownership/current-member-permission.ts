@@ -13,6 +13,11 @@ export default {
     names: ["hasCurrentMemberPermission"],
     allowed: [
       {
+        path: "apps/api/src/lib/business-registries/desktop/issuance.ts",
+        reason:
+          "Revalidates the locked membership before issuing a desktop credential under the credential fence.",
+      },
+      {
         path: "apps/api/src/lib/business-registries/desktop/renewal.ts",
         reason:
           "Revalidates the locked membership after desktop credential authorization.",
@@ -26,6 +31,26 @@ export default {
         path: "apps/api/src/handlers/data-exports/data-export-worker.ts",
         reason:
           "Revalidates the requester's membership before each queued export attempt reads the organization.",
+      },
+      {
+        path: "apps/api/src/lib/db/member-authority.ts",
+        reason:
+          "Provides shared transaction-held organization and matter membership rechecks for deferred actions.",
+      },
+      {
+        path: "apps/api/src/lib/memory/persist-explicit-memory.ts",
+        reason:
+          "Revalidates the locked member role immediately before persisting an explicit memory.",
+      },
+      {
+        path: "apps/api/src/lib/flows/start-automated-flow-run.ts",
+        reason:
+          "Revalidates the definition author's current role before scheduling a durable run.",
+      },
+      {
+        path: "apps/api/src/handlers/reports/report-export-queue.ts",
+        reason:
+          "Revalidates the queued export requester's current role before loading report content.",
       },
     ],
   },
