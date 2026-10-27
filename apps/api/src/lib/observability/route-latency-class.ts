@@ -95,6 +95,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /api/auth/*": "crud",
   "GET /auth.md": "crud",
   "GET /dev-public/last-otp": "crud",
+  "GET /favicon.ico": "crud",
   "GET /health": "crud",
   "GET /live": "crud",
   "GET /mcp": "search",
