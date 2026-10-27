@@ -14968,14 +14968,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/legal-search/case-law-dated-decisions.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/legal-search/case-law-index-groups.db.test.ts": {
       "peakMb": 875,
       "baselineMb": 216,

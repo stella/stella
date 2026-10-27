@@ -315,7 +315,6 @@ const readListDecisionsPage = async ({
 }: ListDecisionsPageOptions) => {
   const rows = [];
   let skip = offset;
-  // db-await-in-loop: at most two bands, read in order; the second only when the first ends inside the page
   for (const band of decisionDateBandsFrom(position)) {
     if (rows.length > limit) {
       break;
@@ -330,6 +329,7 @@ const readListDecisionsPage = async ({
       position: position?.band === band ? position : undefined,
       tx,
     };
+    // db-await-in-loop: at most two bands, read in order; the second only when the first ends inside the page
     const bandRows = await listDecisionsPageQuery({
       ...walkOptions,
       take: limit + 1 - rows.length,
@@ -345,6 +345,7 @@ const readListDecisionsPage = async ({
       skip = 0;
       continue;
     }
+    // db-await-in-loop: one count per band at most, only for a page addressed past the dated band
     const [ahead] = await countDecisionBandRowsAhead({
       ...walkOptions,
       offset: skip,
