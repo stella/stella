@@ -258,12 +258,12 @@ const install = (reportDir: string): void => {
   type DescribeCallableOptions = {
     original: CallableFunction;
     receiver?: CallableFunction | undefined;
-    rows?: { index: number } | undefined;
+    titleMode: "plain" | "table";
   };
   const wrapDescribe = ({
     original,
     receiver,
-    rows,
+    titleMode,
   }: DescribeCallableOptions): TestFunction => {
     const forward = (...args: unknown[]) =>
       Reflect.apply(original, receiver, args);
@@ -274,12 +274,16 @@ const install = (reportDir: string): void => {
           return value;
         }
         if (key !== "each") {
-          return wrapDescribe({ original: value, receiver: original, rows });
+          return wrapDescribe({
+            original: value,
+            receiver: original,
+            titleMode,
+          });
         }
         return (...eachArgs: unknown[]) => {
           const registerRows = Reflect.apply(value, original, eachArgs);
           return isFunction(registerRows)
-            ? wrapDescribe({ original: registerRows, rows: { index: 0 } })
+            ? wrapDescribe({ original: registerRows, titleMode: "table" })
             : registerRows;
         };
       },
@@ -288,19 +292,20 @@ const install = (reportDir: string): void => {
         if (!isFunction(body)) {
           const result = forward(...args);
           return isFunction(result)
-            ? wrapDescribe({ original: result, rows })
+            ? wrapDescribe({ original: result, titleMode })
             : result;
         }
         const declaredPath = describePath;
         const declaredName = isFunction(label) ? label.name : String(label);
+        let rowIndex = 0;
         return forward(
           label,
           (...bodyArgs: unknown[]) => {
             const scope = [
               ...declaredPath,
-              rows === undefined
+              titleMode === "plain"
                 ? declaredName
-                : formatEachTitle(String(label), bodyArgs, rows.index++),
+                : formatEachTitle(String(label), bodyArgs, rowIndex++),
             ];
             const outer = describePath;
             describePath = scope;
@@ -315,7 +320,10 @@ const install = (reportDir: string): void => {
       },
     });
   };
-  const describe = wrapDescribe({ original: bunTest.describe });
+  const describe = wrapDescribe({
+    original: bunTest.describe,
+    titleMode: "plain",
+  });
 
   const quarantine =
     (id: string, fn: TestFunction, budget: number) =>
