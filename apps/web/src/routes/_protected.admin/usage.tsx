@@ -16,7 +16,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
@@ -37,7 +37,14 @@ export const Route = createFileRoute("/_protected/admin/usage")({
         context.queryClient,
         usagePoliciesOptions,
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "admin.usage.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/admin/usage",
+            },
+          });
         },
       );
     }
@@ -212,7 +219,7 @@ function ManageUsageButton() {
   const mutation = useMutation({
     mutationFn: async () => {
       const response = await api.usage.hosted.management.post();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: () => setPending(true),
     onSuccess: ({ url }) => {

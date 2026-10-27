@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { formatFieldContent } from "@/api/lib/views/export-format";
@@ -90,10 +91,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 request: new Request(
                   "https://example.test/v1/entities/filesystem-tree",
                 ),
-                route: "/v1/entities/:workspaceId/filesystem-tree",
+                route:
+                  "/v1/entities/:workspaceId/filesystem-tree" satisfies ApiRoutePath,
               }),
             );
-            if (response instanceof ElysiaCustomStatusResponse) {
+            if (response instanceof HttpStatusResponse) {
               panic("Filesystem cursor fixture requires a successful page");
             }
             expect(response.items).toHaveLength(1);

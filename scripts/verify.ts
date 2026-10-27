@@ -281,7 +281,7 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
       if (patch.exitCode !== 0) {
         throw new VerifyError("Unable to collect remote autofix changes");
       }
-      console.log(`STELLA_VERIFY_PATCH=${patch.stdout.toString("base64")}`);
+      console.log(`STELLA_VERIFY_PATCH=${patch.stdout.toBase64()}`);
     }
     return status;
   } finally {

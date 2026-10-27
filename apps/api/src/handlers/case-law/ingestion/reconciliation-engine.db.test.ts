@@ -5,6 +5,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -75,6 +76,11 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
@@ -586,7 +592,7 @@ test("a settled slice is touched out of the window so the one behind it is reach
       reason: SLICE_WALK_REASON.SHORT,
     },
   });
-  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, OWED_SLICE]);
 });
 
 test("a walk ingests no more than the unit's slice budget and defers the rest", async () => {
@@ -768,10 +774,10 @@ test("a slow multi-page listing still completes instead of restarting forever", 
     },
   });
 
-  // Both pages walk, then ingestion gets its own full phase budget. Starting
-  // that clock before listing would defer both misses and repeat the same
-  // listing forever.
-  expect(listed).toHaveLength(2);
+  // Both pages walk, twice with the verification pass, then ingestion gets
+  // its own full phase budget. Starting that clock before listing would defer
+  // both misses and repeat the same listing forever.
+  expect(listed).toHaveLength(4);
   expect(outcome).toMatchObject({
     type: "worked",
     summary: { slice: OWED_SLICE, listed: 4, keyable: 2, deferred: 0 },
@@ -1482,7 +1488,7 @@ test("held slices are excluded from the backlog window, not filtered after it", 
   expect(await runUnitWith({ sourceId, sliceRetries })).toMatchObject({
     type: "worked",
   });
-  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, OWED_SLICE]);
 });
 
 // ── Rechecking a settled slice ──────────────────────────
@@ -1555,7 +1561,7 @@ test("a settled slice past the recheck window is re-walked, and a grown listing 
       reason: SLICE_WALK_REASON.RECHECK,
     },
   });
-  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, OWED_SLICE]);
 
   // The publisher now lists two where the row claimed one, and the walk held
   // neither: the row records short and the slice rejoins the ordinary cycle at
@@ -1602,7 +1608,7 @@ test("a held recheck candidate yields to the next settled row, not to idle", asy
       reason: SLICE_WALK_REASON.RECHECK,
     },
   });
-  expect(listed.map(({ slice }) => slice)).toEqual([behind]);
+  expect(listed.map(({ slice }) => slice)).toEqual([behind, behind]);
 });
 
 test("a settled slice inside the recheck window is left alone", async () => {

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { UI_LANGUAGES } from "@stll/locales";
+import type { UiLanguageCode } from "@stll/locales";
+
 import {
   citationCopyText,
   quotationMarksFor,
@@ -8,6 +11,22 @@ import {
 const CITATION =
   "nález Ústavního soudu ze dne 15. 4. 2026, sp. zn. III.ÚS 2429/24, bod 22";
 const QUOTE = "Rozhodování samosoudcem lze akceptovat pouze tam";
+
+const EXPECTED_QUOTATION_BY_LANGUAGE = {
+  ar: "«text»",
+  cs: "„text“",
+  de: "„text“",
+  en: "“text”",
+  es: "«text»",
+  et: "„text“",
+  fr: "«\u202Ftext\u202F»",
+  hu: "„text”",
+  lt: "„text“",
+  lv: "„text“",
+  pl: "„text”",
+  pt: "“text”",
+  sk: "„text“",
+} as const satisfies Record<UiLanguageCode, string>;
 
 describe("quotation marks follow the source's language", () => {
   test("a Czech decision is quoted „…“ whatever the interface language", () => {
@@ -67,4 +86,18 @@ describe("quotation marks follow the source's language", () => {
       citationCopyText("textOnly", { citation: CITATION, marks, quote: QUOTE }),
     ).toBe(QUOTE);
   });
+});
+
+describe("every UI language has its own quotation marks", () => {
+  test.each(UI_LANGUAGES)(
+    "$code text is quoted in its marks, by base code or UI locale",
+    ({ code, uiLocale }) => {
+      for (const language of [code, uiLocale, uiLocale.toUpperCase()]) {
+        const marks = quotationMarksFor({ country: null, language });
+        expect(`${marks.open}text${marks.close}`).toBe(
+          EXPECTED_QUOTATION_BY_LANGUAGE[code],
+        );
+      }
+    },
+  );
 });

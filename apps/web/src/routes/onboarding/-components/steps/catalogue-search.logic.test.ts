@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { compareByLocale } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterOnboardingCatalogueEntries } from "./catalogue-search.logic";
 
@@ -33,6 +34,11 @@ const searchTextArbitrary = fc
   )
   .map((parts) => parts.join(""));
 const compareName = compareByLocale("en");
+
+const matchesFolded = (field: string, query: string) =>
+  foldSearchMatchText(field.toWellFormed()).includes(
+    foldSearchMatchText(query.trim().toWellFormed()),
+  );
 
 const recommended = [
   {
@@ -71,7 +77,7 @@ const filter = (query: string, jurisdictionFilter = new Set<string>()) =>
   });
 
 describe("onboarding catalogue filtering", () => {
-  test("matches trimmed lowercase substrings across display name, description, and tags", () => {
+  test("matches trimmed substrings across display name, description, and tags", () => {
     expect(filter("  LEGAL ").map(({ slug }) => slug)).toEqual(["recommended"]);
     expect(filter("contract").map(({ slug }) => slug)).toEqual(["other"]);
     expect(filter("support").map(({ slug }) => slug)).toEqual(["universal"]);
@@ -89,7 +95,7 @@ describe("onboarding catalogue filtering", () => {
     ]);
   });
 
-  test("preserves literal punctuation and case-only folding", () => {
+  test("keeps punctuation literal while ignoring case and accents", () => {
     expect(
       filterOnboardingCatalogueEntries({
         compareName,
@@ -113,7 +119,8 @@ describe("onboarding catalogue filtering", () => {
         recommendedEntries: [],
       }).map(({ displayName }) => displayName),
     ).toEqual(["Literal"]);
-    expect(filter("cesky")).toEqual([]);
+    expect(filter("cesky").map(({ slug }) => slug)).toEqual(["recommended"]);
+    expect(filter("ČESKÝ").map(({ slug }) => slug)).toEqual(["recommended"]);
   });
 
   test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
@@ -149,9 +156,9 @@ describe("onboarding catalogue filtering", () => {
     expect(filterEntries(astralEntries, "\ude00")).toEqual([]);
   });
 
-  test("onboarding catalogue filtering matches the previous pipeline for generated Unicode inputs", () => {
+  test("onboarding catalogue filtering keeps exactly the folded matches for generated Unicode inputs", () => {
     assertProperty(
-      "onboarding catalogue filtering matches the previous pipeline for generated Unicode inputs",
+      "onboarding catalogue filtering keeps exactly the folded matches for generated Unicode inputs",
       fc.property(
         fc.array(
           fc.record({
@@ -191,7 +198,6 @@ describe("onboarding catalogue filtering", () => {
           const localizedName = (entry: (typeof recommendedEntries)[number]) =>
             entry.localizedName;
           const jurisdictionFilter = new Set(jurisdictionCodes);
-          const normalised = query.trim().toLowerCase().toWellFormed();
           const matchesSearch = (
             entry: (typeof recommendedEntries)[number],
           ) => {
@@ -203,25 +209,11 @@ describe("onboarding catalogue filtering", () => {
                 return false;
               }
             }
-            if (normalised === "") {
-              return true;
-            }
             return (
-              entry.displayName
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              localizedName(entry)
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              entry.description
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              entry.tags.some((tag) =>
-                tag.toLowerCase().toWellFormed().includes(normalised),
-              )
+              matchesFolded(entry.displayName, query) ||
+              matchesFolded(localizedName(entry), query) ||
+              matchesFolded(entry.description, query) ||
+              entry.tags.some((tag) => matchesFolded(tag, query))
             );
           };
           const expected = [...recommendedEntries, ...otherEntries]

@@ -1,17 +1,18 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedKeyForOrganization } from "@/api/lib/file-key";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 
-const getTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const getTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 /** Presigned URL validity in seconds (15 min). */
@@ -81,7 +82,7 @@ const getTemplate = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
           resourceId: templateId,
           userId: user.id,
-          source: { kind: "request", sessionId: session.id },
+          source: callerDownloadSource(session),
           s3Key,
           expiresInSeconds: PRESIGN_EXPIRES_IN,
           fileName: template.fileName,

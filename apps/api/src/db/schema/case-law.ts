@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
@@ -510,6 +511,24 @@ export const caseLawCorpusJurisdictions = p.pgTable(
   () => [...globalCaseLawPolicies()],
 );
 
+type ParsedSourceSchemaColumns = {
+  id: PgColumn;
+  parsedSourceHash: SQLWrapper;
+  parsedSourceHashVersion: SQLWrapper;
+  parsedSourceRawS3Key: SQLWrapper;
+  sourceRawS3Key: SQLWrapper;
+};
+const parsedSourceComplete = (t: ParsedSourceSchemaColumns) =>
+  p.check(
+    "case_law_decisions_parsed_source_complete",
+    sql`(${t.parsedSourceHash} IS NULL AND ${t.parsedSourceHashVersion} IS NULL AND ${t.parsedSourceRawS3Key} IS NULL) OR (${t.parsedSourceHash} IS NOT NULL AND ${t.parsedSourceHashVersion} IS NOT NULL AND ${t.parsedSourceHashVersion} >= 0 AND ${t.parsedSourceRawS3Key} IS NOT NULL)`,
+  );
+const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
+  p
+    .index("case_law_decisions_parse_pending_idx")
+    .on(t.id)
+    .where(sql`${t.parsedSourceRawS3Key} IS DISTINCT FROM ${t.sourceRawS3Key}`);
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -645,6 +664,13 @@ export const caseLawDecisions = p.pgTable(
     sourceHash: p.varchar("source_hash", { length: 64 }),
     /** Algorithm version under which `sourceHash` was computed. */
     sourceHashVersion: p.smallint("source_hash_version").default(0).notNull(),
+    /** Input fingerprint retained with the parse, not a guess for legacy output. */
+    parsedSourceHash: p.varchar("parsed_source_hash", { length: 64 }),
+    parsedSourceHashVersion: p.smallint("parsed_source_hash_version"),
+    /** Immutable raw object actually used for the stored parse. */
+    parsedSourceRawS3Key: p.varchar("parsed_source_raw_s3_key", {
+      length: 512,
+    }),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",
@@ -715,6 +741,7 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    parsedSourceComplete(t),
     p.check(
       "case_law_decisions_projection_epoch_nonnegative",
       sql`${t.projectionEpoch} >= 0`,
@@ -801,6 +828,7 @@ export const caseLawDecisions = p.pgTable(
       .on(t.languageGroupKey)
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+    parsedSourcePendingIndex(t),
     // The generation rebuild walks its snapshot in decision-date order, so the
     // documents one split receives cover a contiguous span of dates and a
     // timestamp-filtered query can skip the splits outside its window. The

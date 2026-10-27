@@ -220,6 +220,18 @@ const scenario = (
   if (context.kind === "mcp") {
     return { kind: "mcp", name: literal.text };
   }
+  const definition = properties.get("definition");
+  if (definition !== undefined) {
+    return {
+      kind: "api",
+      name: literal.text,
+      handlerOwner: handlerOwner(
+        { file, expression: unwrap(definition) },
+        context,
+      ),
+    };
+  }
+  // A base registry written before the HTTP core names `owner.handler`.
   const handler = properties.get("handler");
   const value = handler === undefined ? undefined : unwrap(handler);
   if (
@@ -228,7 +240,7 @@ const scenario = (
     value.name.text !== "handler"
   ) {
     return unsupported(
-      `API scenario needs the imported owner's handler in ${file}`,
+      `API scenario needs the imported owner's definition in ${file}`,
     );
   }
   return {

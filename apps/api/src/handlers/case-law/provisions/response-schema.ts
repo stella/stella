@@ -1,6 +1,4 @@
-import type { TSchema } from "@sinclair/typebox";
-import { Type } from "@sinclair/typebox";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-version";
@@ -13,45 +11,45 @@ import { languageAlternatesSchema } from "@/api/handlers/case-law/decisions/sear
 import { PROVISION_COUNT_LIMIT } from "@/api/handlers/case-law/provisions/citation-counts";
 import type { listCitingDecisionsHandler } from "@/api/handlers/case-law/provisions/citing-decisions";
 import type { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
   boundedString,
   nullableBoundedString,
 } from "@/api/lib/search/response-text-bounds";
 
-const evidenceFields = { start: t.Number(), end: t.Number() };
-const expression = t.Union([
-  t.Object({ date: boundedString(128), eli: boundedString(2048) }),
-  t.Null(),
+const evidenceFields = { start: v.number(), end: v.number() };
+const expression = v.union([
+  v.object({ date: boundedString(128), eli: boundedString(2048) }),
+  v.null(),
 ]);
-const versionBasisSchema = t.Union([
-  t.Object({ type: t.Literal("inferred"), kind: t.Literal("decision_date") }),
-  t.Object({ type: t.Literal("not_stated") }),
-  t.Object({
-    type: t.Literal("stated_date"),
+const versionBasisSchema = v.union([
+  v.object({ type: v.literal("inferred"), kind: v.literal("decision_date") }),
+  v.object({ type: v.literal("not_stated") }),
+  v.object({
+    type: v.literal("stated_date"),
     date: boundedString(128),
-    relation: t.UnionEnum(STATED_DATE_RELATIONS),
+    relation: v.picklist(STATED_DATE_RELATIONS),
     expression,
-    evidence: t.Object({ ...evidenceFields, kind: t.Literal("stated_date") }),
+    evidence: v.object({ ...evidenceFields, kind: v.literal("stated_date") }),
   }),
-  t.Object({
-    type: t.Literal("stated_version"),
+  v.object({
+    type: v.literal("stated_version"),
     amendmentWorkIdentifier: boundedString(1024),
     expression,
-    evidence: t.Object({
+    evidence: v.object({
       ...evidenceFields,
-      kind: t.Literal("stated_version"),
+      kind: v.literal("stated_version"),
     }),
   }),
 ]);
-const inferredVersionCandidateSchema = t.Object({
-  type: t.Literal("inferred"),
-  kind: t.Literal("decision_date"),
+const inferredVersionCandidateSchema = v.object({
+  type: v.literal("inferred"),
+  kind: v.literal("decision_date"),
   versionValidFrom: nullableBoundedString(128),
 });
 
-const nullableNumber = t.Union([t.Number(), t.Null()]);
+const nullableNumber = v.union([v.number(), v.null()]);
 const date = nullableBoundedString(128);
 const shortText = nullableBoundedString(1024);
 const cursor = nullableBoundedString(4096);
@@ -71,29 +69,29 @@ const citationFields = {
   workYear: nullableNumber,
   workCollection: boundedString(1024),
   workEli: nullableBoundedString(2048),
-  workSource: t.Union([
-    t.UnionEnum(caseLawProvisionCitations.workSource.enumValues),
-    t.Null(),
+  workSource: v.union([
+    v.picklist(caseLawProvisionCitations.workSource.enumValues),
+    v.null(),
   ]),
-  unit: t.UnionEnum(caseLawProvisionCitations.unit.enumValues),
-  section: t.Number(),
+  unit: v.picklist(caseLawProvisionCitations.unit.enumValues),
+  section: v.number(),
   sectionSuffix: shortText,
   subsection: shortText,
   letter: shortText,
   point: shortText,
   sentence: shortText,
-  openEnded: t.Boolean(),
+  openEnded: v.boolean(),
   anchor: boundedString(1024),
   versionValidFrom: date,
   versionBasis: versionBasisSchema,
   inferredVersionCandidate: inferredVersionCandidateSchema,
   sentenceText: boundedString(16_384),
-  spanStart: t.Number(),
-  spanEnd: t.Number(),
-  confidence: t.Number(),
-  spanRole: t.Union([
-    t.UnionEnum(caseLawProvisionCitations.spanRole.enumValues),
-    t.Null(),
+  spanStart: v.number(),
+  spanEnd: v.number(),
+  confidence: v.number(),
+  spanRole: v.union([
+    v.picklist(caseLawProvisionCitations.spanRole.enumValues),
+    v.null(),
   ]),
   printPieceId: nullableBoundedString(256),
   printStart: nullableNumber,
@@ -103,70 +101,83 @@ const citationFields = {
   nameStart: nullableNumber,
   nameEnd: nullableNumber,
   nameText: shortText,
-  selection: t.Union([
-    t.UnionEnum(caseLawProvisionCitations.selection.enumValues),
-    t.Null(),
+  selection: v.union([
+    v.picklist(caseLawProvisionCitations.selection.enumValues),
+    v.null(),
   ]),
   printedWorkIdentifier: shortText,
-  targetDocumentId: t.Union([tSafeId("legislationDocument"), t.Null()]),
-  targetStatus: t.Union([
-    t.UnionEnum(caseLawProvisionCitations.targetStatus.enumValues),
-    t.Null(),
+  targetDocumentId: v.union([
+    resourceIdSchema("legislationDocument"),
+    v.null(),
+  ]),
+  targetStatus: v.union([
+    v.picklist(caseLawProvisionCitations.targetStatus.enumValues),
+    v.null(),
   ]),
   previewKey: nullableBoundedString(1061),
-} as const satisfies Record<keyof ProvisionItem | "previewKey", TSchema>;
+} as const satisfies Record<
+  keyof ProvisionItem | "previewKey",
+  v.GenericSchema
+>;
 
 const previewHeading = {
   anchorId: boundedString(1024),
   // HeadingLevel; a wider data type fails the handler's schema check.
-  level: t.Union([
-    t.Literal(1),
-    t.Literal(2),
-    t.Literal(3),
-    t.Literal(4),
-    t.Literal(5),
-    t.Literal(6),
+  level: v.union([
+    v.literal(1),
+    v.literal(2),
+    v.literal(3),
+    v.literal(4),
+    v.literal(5),
+    v.literal(6),
   ]),
   text: boundedString(PROVISION_PREVIEW_TEXT_BYTES),
 };
-const provisionPreviewSchema = t.Object({
+const provisionPreviewSchema = v.object({
   key: boundedString(1061),
-  documentId: tSafeId("legislationDocument"),
+  documentId: resourceIdSchema("legislationDocument"),
   language: boundedString(32),
   anchorId: boundedString(1024),
   citedAnchorId: shortText,
-  headings: t.Array(t.Object(previewHeading), {
-    maxItems: PROVISION_PREVIEW_HEADINGS_MAX,
-  }),
-  heading: t.Union([
-    t.Object({ ...previewHeading, id: boundedString(1024) }),
-    t.Null(),
-  ]),
-  blocks: t.Array(
-    t.Object({
-      id: boundedString(1024),
-      anchorId: boundedString(1024),
-      text: boundedString(PROVISION_PREVIEW_TEXT_BYTES),
-    }),
-    { maxItems: PROVISION_PREVIEW_BLOCKS_MAX },
+  headings: v.pipe(
+    v.array(v.object(previewHeading)),
+    v.maxLength(PROVISION_PREVIEW_HEADINGS_MAX),
   ),
-  truncated: t.Boolean(),
+  heading: v.union([
+    v.object({ ...previewHeading, id: boundedString(1024) }),
+    v.null(),
+  ]),
+  blocks: v.pipe(
+    v.array(
+      v.object({
+        id: boundedString(1024),
+        anchorId: boundedString(1024),
+        text: boundedString(PROVISION_PREVIEW_TEXT_BYTES),
+      }),
+    ),
+    v.maxLength(PROVISION_PREVIEW_BLOCKS_MAX),
+  ),
+  truncated: v.boolean(),
 });
 
 type ProvisionCapabilitySchemas = {
-  readonly [Kind in ProvisionLinkCapability["type"]]: TSchema & {
-    static: Extract<ProvisionLinkCapability, { type: Kind }>;
-  };
+  readonly [Kind in ProvisionLinkCapability["type"]]: v.GenericSchema<
+    Extract<ProvisionLinkCapability, { type: Kind }>
+  >;
 };
 
 const provisionCapabilitySchemas = {
-  supported: t.Object({
-    type: t.Literal("supported"),
-    languages: t.Array(boundedString(32), { minItems: 1, maxItems: 64 }),
+  supported: v.object({
+    type: v.literal("supported"),
+    languages: v.pipe(
+      v.array(boundedString(32)),
+      v.minLength(1),
+      v.maxLength(64),
+    ),
   }),
-  notSupportedYet: t.Object({
-    type: t.Literal("notSupportedYet"),
-    reason: t.UnionEnum([
+  notSupportedYet: v.object({
+    type: v.literal("notSupportedYet"),
+    reason: v.picklist([
       "no_profile",
       "no_multilingual_profile",
       "language_not_supported",
@@ -175,89 +186,98 @@ const provisionCapabilitySchemas = {
   }),
 } as const satisfies ProvisionCapabilitySchemas;
 
-const provisionCapabilitySchema = t.Union([
+const provisionCapabilitySchema = v.union([
   provisionCapabilitySchemas.supported,
   provisionCapabilitySchemas.notSupportedYet,
 ]);
 
-export const decisionProvisionsSuccessResponseSchema = t.Object({
-  items: t.Array(t.Object(citationFields), {
-    maxItems: LIMITS.caseLawSearchPageSizeMax,
-  }),
-  limit: t.Number(),
+export const decisionProvisionsSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(v.object(citationFields)),
+    v.maxLength(LIMITS.caseLawSearchPageSizeMax),
+  ),
+  limit: v.number(),
   nextCursor: cursor,
-  status: t.Object({ type: t.UnionEnum(PROVISION_LINK_STATUS_TYPES) }),
+  status: v.object({ type: v.picklist(PROVISION_LINK_STATUS_TYPES) }),
   capability: provisionCapabilitySchema,
   pendingSince: nullableBoundedString(128),
   generation: boundedString(128),
   publishedProjectionDigest: nullableBoundedString(128),
-  previews: t.Array(provisionPreviewSchema, {
-    maxItems: LIMITS.caseLawSearchPageSizeMax,
-  }),
+  previews: v.pipe(
+    v.array(provisionPreviewSchema),
+    v.maxLength(LIMITS.caseLawSearchPageSizeMax),
+  ),
 });
 
-export const citingDecisionsSuccessResponseSchema = t.Object({
-  items: t.Array(
-    t.Object({
-      decisionId: tSafeId("caseLawDecision"),
-      caseNumber: boundedString(1024),
-      slug: nullableBoundedString(1024),
-      court: boundedString(2048),
-      courtAbbreviation: nullableBoundedString(2048),
-      courtTier: t.UnionEnum(COURT_TIER_LABELS),
-      mentionCount: Type.Integer({ minimum: 1 }),
-      snippetCitation: t.Union([
-        t.Object({
-          start: Type.Integer({ minimum: 0 }),
-          end: Type.Integer({ minimum: 1 }),
-        }),
-        t.Null(),
-      ]),
-      sourceUrl: nullableBoundedString(8192),
-      country: boundedString(12),
-      language: boundedString(32),
-      decisionDate: date,
-      versionBasis: versionBasisSchema,
-      versionValidFrom: date,
-      inferredVersionCandidate: inferredVersionCandidateSchema,
-      citationAuthority: t.Number(),
-      sentenceText: nullableBoundedString(16_384),
-      spanStart: t.Number(),
-      spanEnd: t.Number(),
-      languageAlternates: languageAlternatesSchema,
-    } satisfies Record<
-      keyof Extract<
-        Awaited<ReturnType<typeof listCitingDecisionsHandler>>,
-        { items: unknown[] }
-      >["items"][number],
-      TSchema
-    >),
-    {
-      maxItems: Math.max(
+export const citingDecisionsSuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        decisionId: resourceIdSchema("caseLawDecision"),
+        caseNumber: boundedString(1024),
+        slug: nullableBoundedString(1024),
+        court: boundedString(2048),
+        courtAbbreviation: nullableBoundedString(2048),
+        courtTier: v.picklist(COURT_TIER_LABELS),
+        mentionCount: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        snippetCitation: v.union([
+          v.object({
+            start: v.pipe(v.number(), v.integer(), v.minValue(0)),
+            end: v.pipe(v.number(), v.integer(), v.minValue(1)),
+          }),
+          v.null(),
+        ]),
+        sourceUrl: nullableBoundedString(8192),
+        country: boundedString(12),
+        language: boundedString(32),
+        decisionDate: date,
+        versionBasis: versionBasisSchema,
+        versionValidFrom: date,
+        inferredVersionCandidate: inferredVersionCandidateSchema,
+        citationAuthority: v.number(),
+        sentenceText: nullableBoundedString(16_384),
+        spanStart: v.number(),
+        spanEnd: v.number(),
+        languageAlternates: languageAlternatesSchema,
+      } satisfies Record<
+        keyof Extract<
+          Awaited<ReturnType<typeof listCitingDecisionsHandler>>,
+          { items: unknown[] }
+        >["items"][number],
+        v.GenericSchema
+      >),
+    ),
+    v.maxLength(
+      Math.max(
         LIMITS.caseLawSearchPageSizeMax,
         PROVISION_CITING_SNAPSHOT_LIMIT,
       ),
-    },
+    ),
   ),
-  limit: t.Number(),
+  limit: v.number(),
   nextCursor: cursor,
-  snapshot: t.Union([
-    t.Object({
-      type: t.Union([t.Literal("complete"), t.Literal("capped")]),
-      limit: t.Literal(PROVISION_CITING_SNAPSHOT_LIMIT),
+  snapshot: v.union([
+    v.object({
+      type: v.picklist(["complete", "capped"]),
+      limit: v.literal(PROVISION_CITING_SNAPSHOT_LIMIT),
     }),
-    t.Null(),
+    v.null(),
   ]),
 });
 
-export const citationCountsSuccessResponseSchema = t.Union([
-  t.Object({ status: t.Literal("building") }),
-  t.Object({ status: t.Literal("unavailable") }),
-  t.Object({
-    status: t.Literal("ready"),
-    provisions: t.Array(
-      t.Object({ anchor: boundedString(1024), decisionCount: Type.Integer() }),
-      { maxItems: PROVISION_COUNT_LIMIT },
+export const citationCountsSuccessResponseSchema = v.union([
+  v.object({ status: v.literal("building") }),
+  v.object({ status: v.literal("unavailable") }),
+  v.object({
+    status: v.literal("ready"),
+    provisions: v.pipe(
+      v.array(
+        v.object({
+          anchor: boundedString(1024),
+          decisionCount: v.pipe(v.number(), v.integer()),
+        }),
+      ),
+      v.maxLength(PROVISION_COUNT_LIMIT),
     ),
   }),
 ]);

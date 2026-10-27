@@ -8,7 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { MCP_DEFAULT_RESOURCE_SCOPES, type McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   hiddenMcpDescriptorIds,
   scopeMcpDescriptorProse,
@@ -57,13 +57,13 @@ const principal = ({
   enrolment,
   hiddenDescriptors = [],
   grantedScopes = [],
-}: PrincipalOptions): McpRequestContext => {
+}: PrincipalOptions): McpRequestResources => {
   const organizationId = `org_${id}`;
   const userId = `user_${id}`;
   const hiddenBindings = new Map(
     hiddenDescriptors.map((descriptor) => [descriptor, UNENROLLED_FEATURE_ID]),
   );
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<McpRequestResources>({
     accessibleWorkspaceIds: [],
     organizationId,
     userId,
@@ -115,7 +115,7 @@ const servedShape = (tools: readonly McpTool[]): unknown =>
 const uncachedShape = (
   definitions: readonly McpToolDefinition[],
   mode: McpMode,
-  context: McpRequestContext,
+  context: McpRequestResources,
 ): unknown => {
   const hidden = hiddenMcpDescriptorIds(context, DEFAULT_MCP_TOOL_DEFINITIONS);
   const scope = (schema: Record<string, unknown>) =>
@@ -244,7 +244,7 @@ describe("tools/list scope isolation over HTTP", () => {
     resolveMcpSessionContext: async (session) =>
       await Promise.resolve(
         contexts.get(session.userId.replace("user_", "")) ??
-          asTestRaw<McpRequestContext>({}),
+          asTestRaw<McpRequestResources>({}),
       ),
   });
 
@@ -297,7 +297,7 @@ describe("registry narrowing is resolved only for discovery", () => {
     const resolve = mock(
       async () => await Promise.resolve(readPresent(["ares" as const])),
     );
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<McpRequestResources>({
       loadEnabledRegistrySlugs: resolve,
     });
 
@@ -317,7 +317,7 @@ describe("registry narrowing is resolved only for discovery", () => {
   });
 
   test("an unavailable read leaves the full enum advertised", async () => {
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<McpRequestResources>({
       loadEnabledRegistrySlugs: async () =>
         await Promise.resolve(
           readUnavailable({ kind: "thrown", error: new Error("read failed") }),
@@ -396,7 +396,7 @@ describe("registry narrowing is resolved only for discovery", () => {
 
 describe("reference visibility with memoized tool mentions", () => {
   test("each request's own tool vocabulary still decides whether a reference is served", () => {
-    const served = (context: McpRequestContext) =>
+    const served = (context: McpRequestResources) =>
       listMcpResources("default", context).some(
         ({ uri }) => uri === TEMPLATE_WORKFLOW_REFERENCE_URI,
       );

@@ -68,6 +68,7 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Select the release commit
+        timeout-minutes: 5
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -75,9 +76,12 @@ jobs:
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --candidate-only >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
+        timeout-minutes: 5
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/retry.sh "$RUNNER_TEMP/retry.sh"
+          cp scripts/verify-release-candidate-tree.mjs "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
           cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
@@ -86,6 +90,7 @@ jobs:
       # Every gate below runs even when an earlier one fails; each records
       # its outcome and the verdict step lists all failures in one run.
       - name: Require release evidence
+        timeout-minutes: 5
         id: evidence
         continue-on-error: true
         env:

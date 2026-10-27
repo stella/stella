@@ -86,6 +86,8 @@ import {
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
+  SLICE_LISTING_PASSES,
+  SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -203,14 +205,18 @@ const ITEM_FETCH_TIMEOUT_MS = 5 * 60_000;
  */
 export const RECONCILIATION_INGEST_BUDGET_MS = 30 * 60_000;
 /**
- * The longest a lawful listing can take: every page may spend its timeout, and
- * the politeness pause separates them. Exported because the caller's hard
+ * The longest a lawful listing can take: both passes of the identity proof,
+ * every page of each spending its timeout, the politeness pause separating
+ * pages and the two passes. Exported because the caller's hard
  * deadline has to clear it -- a backstop for a wedged await must sit above
  * everything a healthy unit can do, and a complete listing of a large slice is
  * the slowest of those things.
  */
 export const RECONCILIATION_LISTING_WORST_CASE_MS =
-  MAX_SLICE_PAGES * (LIST_DELAY_MS + LIST_TIMEOUT_MS);
+  SLICE_LISTING_PASSES.identities *
+    MAX_SLICE_PAGES *
+    (LIST_DELAY_MS + LIST_TIMEOUT_MS) +
+  LIST_DELAY_MS;
 /**
  * Headroom on top of the phases above: the request already in flight when the
  * ingest budget runs out, plus the ledger writes that close the unit.
@@ -1508,6 +1514,7 @@ const walkSlice = async ({
   // the failure surfaces in the loop's tally.
   const listing = await listReconciliationSlice({
     adapterKey,
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,

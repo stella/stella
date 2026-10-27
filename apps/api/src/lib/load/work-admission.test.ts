@@ -121,6 +121,7 @@ test("generator work is rejected by the admission contract", () => {
 
 test("deadline aborts with a typed reason but holds the slot until run settles", async () => {
   const admission = createWorkAdmission({ readRssBytes: () => 0 });
+  const aborted = Promise.withResolvers<undefined>();
   let proof: WorkAdmission | undefined;
   let settle: () => void = () => undefined;
   const blocked = new Promise<void>((resolve) => {
@@ -137,6 +138,7 @@ test("deadline aborts with a typed reason but holds the slot until run settles",
           "abort",
           () => {
             expect(value.signal.reason).toBeInstanceOf(WorkDeadlineError);
+            aborted.resolve(undefined);
             resolve();
           },
           { once: true },
@@ -145,7 +147,7 @@ test("deadline aborts with a typed reason but holds the slot until run settles",
       await blocked;
     },
   });
-  await Bun.sleep(20);
+  await aborted.promise;
   const refused = await admission.admit({
     pool: "heavy-sidecar",
     kind: "next",

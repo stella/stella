@@ -29,6 +29,7 @@ import {
   installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawCountryShape,
   installPgliteCaseLawObservationFence,
+  installPgliteCaseLawParsedSourceInvalidation,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatRunLogRls,
   installPgliteChatSecretRls,
@@ -47,7 +48,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteProvisionExtractionState,
-  installPgliteReaderAnnotationClaimComments,
+  installPgliteReaderAnnotationMatterRows,
   installPgliteReaderAnswerRls,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
@@ -816,6 +817,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawCountryShape(db);
   await installPgliteCaseLawObservationFence(db);
+  await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
@@ -828,7 +830,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatSecretRls(db);
   await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
-  await installPgliteReaderAnnotationClaimComments(db);
+  await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 
