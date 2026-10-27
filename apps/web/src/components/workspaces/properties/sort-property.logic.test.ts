@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import {
   COLUMN_SORT_KINDS,
   SORT_DIRECTIONS,
-} from "@stll/api-contract/column-sort";
+} from "@stll/workspace-ui/column-sort";
 
 import { SORT_DIRECTION_LABEL_KEYS } from "@/components/workspaces/properties/sort-property.logic";
 
