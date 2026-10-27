@@ -52,15 +52,21 @@ type TimeApprovalsPageProps = {
   onThisWeek: () => void;
 };
 
-/** The queue the page reads: one week, everyone the approver reviews. */
+/**
+ * The queue the page reads: one week, narrowed by the server to a person and
+ * a matter, so a filter never depends on which pages happen to be loaded.
+ */
 export const timeApprovalsQuery = (
   organizationId: string,
   userId: string,
   week: Week,
+  { member, matter }: Pick<TimeApprovalsFilter, "member" | "matter">,
 ) =>
   timeApprovalQueueOptions(organizationId, userId, {
     from: week.start,
     to: week.end,
+    ...(member === undefined ? {} : { member }),
+    ...(matter === undefined ? {} : { matter }),
   });
 
 const reviewRowOf = (item: TimeApprovalItem): ReviewRowWithPerson => ({
@@ -203,16 +209,11 @@ export const TimeApprovalsPage = ({
   const format = useFormatter();
   const week = weekOf(filter.date);
   const queue = useSuspenseInfiniteQuery(
-    timeApprovalsQuery(organizationId, userId, week),
+    timeApprovalsQuery(organizationId, userId, week, filter),
   );
   const review = useTimeReview();
   const rows = queue.data.pages.flatMap((page) => page.items.map(reviewRowOf));
-  const visible = rows.filter(
-    (row) =>
-      (filter.member === undefined || row.timekeeperId === filter.member) &&
-      (filter.matter === undefined || row.workspaceId === filter.matter),
-  );
-  const people = groupForReview(visible, locale);
+  const people = groupForReview(rows, locale);
   const moveTo = (weeks: number) =>
     onFilterChange({ ...filter, date: shiftWeeks(filter.date, weeks) });
 

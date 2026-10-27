@@ -23,7 +23,11 @@ const todayIn = (timezoneId: string) =>
 
 export const Route = createFileRoute("/_protected/time_/approvals")({
   validateSearch: timeApprovalsSearchSchema,
-  loaderDeps: ({ search }) => ({ date: search.date }),
+  loaderDeps: ({ search }) => ({
+    date: search.date,
+    member: search.member,
+    matter: search.matter,
+  }),
   beforeLoad: async ({ context }) => {
     if (
       !(await isTimeBillingRouteEnabled(context.queryClient, {
@@ -51,6 +55,7 @@ export const Route = createFileRoute("/_protected/time_/approvals")({
         context.user.activeOrganizationId,
         context.user.id,
         weekOf(date),
+        { member: deps.member, matter: deps.matter },
       ),
     );
   },

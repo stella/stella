@@ -68,7 +68,12 @@ const submitted = (
     ...overrides,
   }) satisfies TimeApprovalItem;
 
-type ApiCall = { method: string; path: string; body: unknown };
+type ApiCall = {
+  method: string;
+  path: string;
+  search: URLSearchParams;
+  body: unknown;
+};
 
 /** The approval queue, approve and return endpoints over in-memory rows. */
 const serveQueue = (
@@ -92,7 +97,12 @@ const serveQueue = (
       const path = url.pathname.replace(/^.*\/v1/u, "");
       const text = request.method === "GET" ? "" : await request.text();
       const body: unknown = text === "" ? null : JSON.parse(text);
-      calls.push({ method: request.method, path, body });
+      calls.push({
+        method: request.method,
+        path,
+        search: url.searchParams,
+        body,
+      });
       if (request.method === "GET" && path === "/time-entries/approval-queue") {
         const from = url.searchParams.get("from") ?? "";
         const to = url.searchParams.get("to") ?? "";
@@ -100,8 +110,14 @@ const serveQueue = (
         if (failLaterPages && cursor !== null) {
           return new Response("unavailable", { status: 503 });
         }
+        const member = url.searchParams.get("member");
+        const matter = url.searchParams.get("matter");
         const inRange = queue.filter(
-          (item) => item.dateWorked >= from && item.dateWorked <= to,
+          (item) =>
+            item.dateWorked >= from &&
+            item.dateWorked <= to &&
+            (member === null || item.userId === member) &&
+            (matter === null || item.workspaceId === matter),
         );
         const offset = cursor === null ? 0 : Number(cursor);
         const more = offset + pageSize < inRange.length;
@@ -136,10 +152,10 @@ const serveQueue = (
   return calls;
 };
 
-const Harness = () => {
+const Harness = ({ member }: { member: string | undefined }) => {
   const [filter, setFilter] = useState({
     date: MONDAY,
-    member: undefined as string | undefined,
+    member,
     matter: undefined as string | undefined,
   });
   return (
@@ -153,7 +169,7 @@ const Harness = () => {
   );
 };
 
-const mount = () => {
+const mount = (member?: string) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -162,7 +178,7 @@ const mount = () => {
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en-GB" timeZone="UTC">
           <Suspense fallback={null}>
-            <Harness />
+            <Harness member={member} />
           </Suspense>
         </FormattingProvider>
       </IntlProvider>
@@ -256,6 +272,31 @@ describe("approving time by person", () => {
         name: "Approve 1 entry",
       }),
     ).toBeTruthy();
+  });
+
+  test("a person filter reads that person's entries even when others fill the first page", async () => {
+    const calls = serveQueue(
+      [
+        submitted("beata-1", {
+          userId: "user-beata",
+          timekeeperName: "Beata Kral",
+        }),
+        submitted("adam-1"),
+      ],
+      { pageSize: 1 },
+    );
+    mount("user-adam");
+
+    expect(await personSection("Adam Novak")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Beata Kral" })).toBeNull();
+    expect(
+      calls.some(
+        ({ method, path, search }) =>
+          method === "GET" &&
+          path === "/time-entries/approval-queue" &&
+          search.get("member") === "user-adam",
+      ),
+    ).toBe(true);
   });
 
   test("returning an entry sends the reason and takes it off the page", async () => {
