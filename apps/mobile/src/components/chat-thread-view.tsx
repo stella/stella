@@ -164,8 +164,14 @@ const ThreadMessages = ({
   const [older, setOlder] = useState<PagingState>("idle");
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
+    matterId,
     onSettled: async () => {
-      const latest = await readChatThread({ fetch, source, threadId });
+      const latest = await readChatThread({
+        fetch,
+        matterId,
+        source,
+        threadId,
+      });
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
         return true;
