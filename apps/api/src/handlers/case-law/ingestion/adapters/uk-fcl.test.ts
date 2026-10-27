@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, expect, setSystemTime, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -15,7 +16,9 @@ const feed = await Bun.file(
 const document = await Bun.file(
   new URL("../parsers/__fixtures__/uk-fcl.xml", import.meta.url),
 ).text();
-const entry = readUkFclFeed(feed, 50).unwrap().entries.at(0);
+const entry =
+  readUkFclFeed(feed, 50).unwrap().entries.at(0) ??
+  panic("Expected a UK feed fixture entry");
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -62,14 +65,14 @@ test("next links alone determine pagination and other origins fail before a requ
 
 test("daily watermark includes ties and advances after the complete page", async () => {
   const calls: string[] = [];
-  globalThis.fetch = asFetchMock((input) => {
+  globalThis.fetch = asFetchMock((input: string | URL | Request) => {
     const url = String(input);
     calls.push(url);
     return Promise.resolve(
       new Response(url.endsWith("/data.xml") ? document : feed),
     );
   });
-  const frontier = entry?.updated ?? "";
+  const frontier = entry.updated;
   const page = await ukFclAdapter.fetchPage(
     JSON.stringify({
       type: "tip",
@@ -90,7 +93,7 @@ test("daily watermark includes ties and advances after the complete page", async
 });
 
 test("failed detail requests hold the page checkpoint", async () => {
-  globalThis.fetch = asFetchMock((input) =>
+  globalThis.fetch = asFetchMock((input: string | URL | Request) =>
     Promise.resolve(
       new Response(String(input).endsWith("/data.xml") ? "" : feed, {
         status: String(input).endsWith("/data.xml") ? 404 : 200,
@@ -129,7 +132,7 @@ const sweep = (
 
 test("backfill snapshots the daily frontier and walks the listed continuation before the next court", async () => {
   const calls: URL[] = [];
-  globalThis.fetch = asFetchMock(async (input) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     const url = new URL(String(input));
     calls.push(url);
     if (url.pathname.endsWith("/data.xml")) {
@@ -157,7 +160,7 @@ test("backfill snapshots the daily frontier and walks the listed continuation be
     url: `${origin}/atom.xml?court=uksc&page=2`,
   });
   calls.length = 0;
-  globalThis.fetch = asFetchMock(async (input) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     calls.push(new URL(String(input)));
     return new Response(String(input).endsWith("/data.xml") ? document : feed);
   });
@@ -174,7 +177,7 @@ test("backfill snapshots the daily frontier and walks the listed continuation be
 test("the final backfill slice resumes daily discovery from its original frontier", async () => {
   setSystemTime(new Date("2026-10-01T00:00:00Z"));
   globalThis.fetch = asFetchMock(
-    async (input) =>
+    async (input: string | URL | Request) =>
       new Response(String(input).endsWith("/data.xml") ? document : feed),
   );
   const page = (
@@ -198,7 +201,7 @@ test("daily pagination retains its old frontier until every tied entry is read",
     .replace(boundary, () => newest)
     .replace("</feed>", '<link rel="next" href="/atom.xml?page=2"/></feed>');
   let calls = 0;
-  globalThis.fetch = asFetchMock(async (input) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     calls++;
     return new Response(
       String(input).endsWith("/data.xml") ? document : firstFeed,
@@ -222,7 +225,7 @@ test("daily pagination retains its old frontier until every tied entry is read",
   });
   const tiedFeed = feed.replace(boundary, () => frontier);
   globalThis.fetch = asFetchMock(
-    async (input) =>
+    async (input: string | URL | Request) =>
       new Response(String(input).endsWith("/data.xml") ? document : tiedFeed),
   );
   const second = (await ukFclAdapter.fetchPage(first.nextCursor, {})).unwrap();
@@ -252,7 +255,7 @@ test("a full unlinked page and failed later details cannot produce a checkpoint"
   ).join("");
   const full = feed.replace(match, () => entries);
   let details = 0;
-  globalThis.fetch = asFetchMock(async (input) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     if (String(input).endsWith("/data.xml")) {
       details++;
     }
@@ -264,7 +267,7 @@ test("a full unlinked page and failed later details cannot produce a checkpoint"
     "d-00000000-0000-4000-8000-000000000001",
     "synthetic-second",
   );
-  globalThis.fetch = asFetchMock(async (input) => {
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     const url = String(input);
     if (!url.endsWith("/data.xml")) {
       return new Response(feed.replace(match, () => match + second));
@@ -300,12 +303,12 @@ test.each([
     const result = (
       await fetchUkFclDecision({
         feed: transform(feed),
-        sourceDocumentId: entry?.sourceDocumentId ?? "",
+        sourceDocumentId: entry.sourceDocumentId,
       })
     ).unwrap();
-    expect(result.court).toBe(court);
-    expect(result.caseNumber).toBe(caseNumber);
-    expect(result.sourceDocumentId).toBe(entry?.sourceDocumentId);
+    expect(String(result.court)).toBe(court);
+    expect(String(result.caseNumber)).toBe(caseNumber);
+    expect(String(result.sourceDocumentId)).toBe(entry.sourceDocumentId);
   },
 );
 
@@ -419,10 +422,12 @@ test.each(["sweep", "tip"] as const)(
             pending: boundary,
             url: `${origin}/atom.xml`,
           });
-    expect(await ukFclAdapter.fetchPage(cursor, {})).toMatchObject({
-      status: "error",
-      error: expect.any(ParseXmlError),
-    });
+    const page = await ukFclAdapter.fetchPage(cursor, {});
+    expect(page.isErr()).toBe(true);
+    if (page.isErr()) {
+      expect(page.error).toBeInstanceOf(AdapterFetchError);
+      expect(page.error.cause).toBeInstanceOf(ParseXmlError);
+    }
   },
 );
 
@@ -432,7 +437,7 @@ test("reconciliation retains typed detail errors at its promise boundary", async
     await rejectionOf(
       ukFclAdapter.reconciliation.buildDecision({
         feed,
-        sourceDocumentId: entry?.sourceDocumentId ?? "",
+        sourceDocumentId: entry.sourceDocumentId,
       }),
     ),
   ).toBeInstanceOf(AdapterFetchError);
@@ -446,10 +451,10 @@ test("reconciliation revisions require a valid feed entry belonging to the paylo
   ).toBeNull();
   expect(revisionOf({ feed, sourceDocumentId: "missing" })).toBeNull();
   expect(
-    revisionOf({ feed, sourceDocumentId: entry?.sourceDocumentId ?? "" }),
+    revisionOf({ feed, sourceDocumentId: entry.sourceDocumentId }),
   ).toEqual({
-    sourceDocumentId: entry?.sourceDocumentId,
-    contentHash: entry?.contentHash,
-    updated: entry?.updated,
+    sourceDocumentId: entry.sourceDocumentId,
+    contentHash: entry.contentHash,
+    updated: entry.updated,
   });
 });

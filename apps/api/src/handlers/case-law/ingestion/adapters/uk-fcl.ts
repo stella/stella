@@ -70,15 +70,24 @@ const request = (url: string, signal?: AbortSignal) =>
     if (target === null) {
       return Result.err(fail("Invalid publisher URL"));
     }
-    const outcome = await readPublisher(target, {
-      adapterKey: KEY,
-      fetchStage: target.pathname === "/atom.xml" ? "listing" : "document",
-      retryPolicy: "publisher-backoff",
-      redirect: "error",
-      headers: { "User-Agent": INGESTION_USER_AGENT },
-      signal,
-      timeoutMs: 30_000,
-    });
+    const outcome = yield* Result.await(
+      Result.tryPromise({
+        try: () =>
+          readPublisher(target, {
+            adapterKey: KEY,
+            fetchStage:
+              target.pathname === "/atom.xml" ? "listing" : "document",
+            refusalScope:
+              target.pathname === "/atom.xml" ? "source" : "document",
+            retryPolicy: "publisher-backoff",
+            redirect: "error",
+            headers: { "User-Agent": INGESTION_USER_AGENT },
+            signal,
+            timeoutMs: 30_000,
+          }),
+        catch: adapterCatch(KEY, null),
+      }),
+    );
     switch (outcome.type) {
       case "present":
         break;
@@ -140,6 +149,11 @@ const feedUrl = ({ year, court, page = 1 }: FeedUrlOptions = {}) => {
   return url.toString();
 };
 
+const courtFilter = (index: number) => {
+  const court = UK_FCL_COURTS.at(index);
+  return court === undefined ? {} : { court };
+};
+
 const payloadSchema = v.strictObject({
   feed: v.string(),
   sourceDocumentId: v.string(),
@@ -185,12 +199,13 @@ const tipSchema = v.strictObject({
   url: v.string(),
 });
 const cursorSchema = v.variant("type", [sweepSchema, tipSchema]);
+type CrawlCursor = v.InferOutput<typeof cursorSchema>;
 const tip = (frontier: string) =>
   ({ type: "tip", frontier, pending: frontier, url: feedUrl() }) as const;
 const currentYear = () => Temporal.Now.plainDateISO("UTC").year;
 const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
   Result.gen(async function* () {
-    let state;
+    let state: CrawlCursor;
     if (cursor === null) {
       const head = yield* readUkFclFeed(
         yield* Result.await(request(feedUrl(), signal)),
@@ -207,7 +222,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         boundary,
         year: FIRST_YEAR,
         court: 0,
-        url: feedUrl({ year: FIRST_YEAR, court: UK_FCL_COURTS.at(0) }),
+        url: feedUrl({ year: FIRST_YEAR, ...courtFilter(0) }),
       } as const;
     } else {
       const decoded = Result.try({
@@ -317,7 +332,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
                   boundary: state.boundary,
                   year,
                   court,
-                  url: feedUrl({ year, court: UK_FCL_COURTS.at(court) }),
+                  url: feedUrl({ year, ...courtFilter(court) }),
                 };
           if (
             decisions.length > 0 ||
@@ -500,7 +515,10 @@ export const ukFclAdapter = defineSourceAdapter({
       const $ = xml(raw);
       const count = parseIntegerToken(
         $("opensearch\\:totalResults").text().trim(),
-        { sign: "unsigned", min: 0 },
+        {
+          sign: "unsigned",
+          min: 0,
+        },
       );
       if ($("opensearch\\:totalResults").length !== 1 || count.isErr()) {
         return Result.err(fail("Publisher total unavailable"));
@@ -568,7 +586,7 @@ export const ukFclAdapter = defineSourceAdapter({
       }
       const { year, court } = coordinates.value;
       const requested = await request(
-        feedUrl({ year, court: UK_FCL_COURTS.at(court), page: page + 1 }),
+        feedUrl({ year, ...courtFilter(court), page: page + 1 }),
         signal,
       );
       if (requested.isErr()) {
@@ -603,6 +621,8 @@ export const ukFclAdapter = defineSourceAdapter({
     },
   },
   async fetchPage(cursor, _config, signal) {
-    return await fetchPage(cursor, signal);
+    return (await fetchPage(cursor, signal)).mapError(
+      adapterCatch(KEY, cursor),
+    );
   },
 });

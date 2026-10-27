@@ -51,12 +51,16 @@ test("feed identity and repeated fields survive raw assembly and offline replay"
   const initial = build();
   expect(initial.plainTextOutcome.type).toBe("accepted");
   expect(initial.sourceDocumentId).toBe(sourceDocumentId);
-  expect(initial.decisionType).toBe("judgment");
-  expect(initial.metadata["ecliAvailability"]).toEqual({
-    status: "not_published",
+  expect(String(initial.decisionType)).toBe("judgment");
+  expect(initial.metadata).toMatchObject({
+    ecliAvailability: {
+      status: "not_published",
+    },
   });
-  expect(initial.metadata["feedFields"]).toMatchObject({
-    "{http://www.w3.org/2005/Atom}link": [{}, {}, {}],
+  expect(initial.metadata).toMatchObject({
+    feedFields: {
+      "{http://www.w3.org/2005/Atom}link": [{}, {}, {}],
+    },
   });
   const archived = decodeSourceRawEnvelope(initial.sourceRaw ?? "");
   expect(archived?.["document"]).toBe(document);
@@ -77,7 +81,10 @@ test("feed identity and repeated fields survive raw assembly and offline replay"
   });
   expect(
     reparseUkFclStoredRaw({ ...stored(), caseNumber: "[2026] UKSC 900002" }),
-  ).toMatchObject({ type: "rejected", rejection: "identity-mismatch" });
+  ).toMatchObject({
+    type: "rejected",
+    rejection: "identity-mismatch",
+  });
   expect(
     reparseUkFclStoredRaw({
       ...stored(),
