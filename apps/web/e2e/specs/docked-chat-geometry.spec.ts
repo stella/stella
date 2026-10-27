@@ -3,6 +3,7 @@ import path from "node:path";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_SHARD_COUNT, partitionRoundRobin } from "../execution-profile";
+import { pushRouterPath } from "../helpers/decision-reader";
 import {
   createDockedChatWorld,
   deleteDockedChatWorld,
@@ -188,10 +189,10 @@ for (const host of partitionRoundRobin(hosts, E2E_SHARD_COUNT).flat()) {
               page.getByText("Saved geometry test answer.", { exact: true }),
             ).not.toBeVisible();
           }
-          await page.evaluate(
-            (url) => history.pushState(null, "", url),
-            destination,
-          );
+          // Host templates span decision, statute and research shells; the
+          // dock geometry below waits for the member chat thread, which only
+          // the authenticated workspace mounts.
+          await pushRouterPath(page, destination);
           await expect(
             page.locator('nav a[href="/law"]').first(),
           ).toBeAttached();

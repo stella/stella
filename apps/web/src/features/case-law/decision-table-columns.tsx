@@ -14,7 +14,6 @@ import type { SortingState } from "@tanstack/react-table";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
 import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
 import {
@@ -30,6 +29,7 @@ import {
   TagIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
 import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";

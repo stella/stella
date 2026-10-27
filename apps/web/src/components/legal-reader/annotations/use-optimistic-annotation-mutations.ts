@@ -8,6 +8,9 @@ import { useTranslations } from "use-intl";
 import { Temporal } from "@stll/time";
 
 import type {
+  AnnotationColor,
+  AnnotationStyle,
+  AnnotationVisibility,
   CreateAnnotationInput,
   UpdateAnnotationInput,
 } from "@/components/legal-reader/annotations/annotation-types";
@@ -25,6 +28,20 @@ const PENDING_ID_PREFIX = "pending:";
 export const isPendingAnnotationId = (id: string): boolean =>
   id.startsWith(PENDING_ID_PREFIX);
 
+/** Who a pending mark shows as written by: the signed-in reader. */
+type PendingMarkAuthor = {
+  id: string;
+  image: string | null;
+  name: string | null;
+};
+
+/** The ids a new mark's rows carry until the server answers. */
+export const pendingMarkIds = (stamp: number, rowCount: number) => ({
+  groupId: rowCount > 1 ? `${PENDING_ID_PREFIX}${stamp}` : null,
+  rowId: (index: number) =>
+    toSafeId<"legalReaderAnnotation">(`${PENDING_ID_PREFIX}${stamp}:${index}`),
+});
+
 /**
  * The rows a new mark will have once stored, so the text shows it the moment
  * the reader picks a colour. One row per paragraph, under one group when
@@ -35,12 +52,11 @@ const pendingRows = ({
   input,
   stamp,
 }: {
-  author: { id: string; image: string | null; name: string | null };
+  author: PendingMarkAuthor;
   input: CreateAnnotationInput;
   stamp: number;
 }): ReaderAnnotation[] => {
-  const groupId =
-    input.spans.length > 1 ? `${PENDING_ID_PREFIX}${stamp}` : null;
+  const { groupId, rowId } = pendingMarkIds(stamp, input.spans.length);
   const now = Temporal.Now.instant().toString();
   return input.spans.map((span, index) => ({
     authorId: author.id,
@@ -52,9 +68,7 @@ const pendingRows = ({
     createdAt: now,
     endOffset: span.endOffset,
     groupId,
-    id: toSafeId<"legalReaderAnnotation">(
-      `${PENDING_ID_PREFIX}${stamp}:${index}`,
-    ),
+    id: rowId(index),
     kind: input.kind,
     mine: true,
     quote: span.quote,
@@ -65,11 +79,22 @@ const pendingRows = ({
   }));
 };
 
+/** What every stored mark carries that a change reaches. */
+type MarkRow = {
+  id: string;
+  groupId: string | null;
+  body: string | null;
+  color: AnnotationColor | null;
+  style: AnnotationStyle | null;
+  visibility: AnnotationVisibility;
+  updatedAt: string;
+};
+
 /** The rows one change reaches: the whole group of the named row. */
-const rowsOfSame = (
-  rows: readonly ReaderAnnotation[],
+const rowsOfSame = <TRow extends MarkRow>(
+  rows: readonly TRow[],
   id: string,
-): ((row: ReaderAnnotation) => boolean) => {
+): ((row: TRow) => boolean) => {
   const target = rows.find((row) => row.id === id);
   return (row) =>
     row.id === id ||
@@ -79,10 +104,10 @@ const rowsOfSame = (
 };
 
 /** The row as the server will store it, `updatedAt` included. */
-const applyChange = (
-  row: ReaderAnnotation,
+const applyChange = <TRow extends MarkRow>(
+  row: TRow,
   change: UpdateAnnotationInput,
-): ReaderAnnotation => {
+): TRow => {
   const updatedAt = Temporal.Now.instant().toString();
   switch (change.change) {
     case "body": {
@@ -104,18 +129,30 @@ const applyChange = (
   }
 };
 
-type OptimisticAnnotationRequests<TCreate, TCreated, TChange> = {
+type OptimisticMarkRequests<TCreate, TCreated, TChange, TRow> = {
   handlerId: string;
   /** The cached rows the changes land in at once. */
-  queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>;
+  queryKey: DataTag<QueryKey, TRow[], Error>;
   /** Stores a new mark on the server. */
   create: (input: TCreate) => Promise<TCreated>;
-  /** The mark a create request shows in the cache until the server answers. */
-  pendingInput: (input: TCreate) => CreateAnnotationInput;
+  /** The rows a create request shows in the cache until the server answers. */
+  pendingRows: (pending: {
+    author: PendingMarkAuthor;
+    input: TCreate;
+    stamp: number;
+  }) => TRow[];
   /** Changes one mark (and the rest of its group) on the server. */
   update: (change: TChange) => Promise<unknown>;
   /** Deletes one mark (and the rest of its group) on the server. */
   remove: (id: string) => Promise<unknown>;
+};
+
+type OptimisticAnnotationRequests<TCreate, TCreated, TChange> = Omit<
+  OptimisticMarkRequests<TCreate, TCreated, TChange, ReaderAnnotation>,
+  "pendingRows"
+> & {
+  /** The mark a create request shows in the cache until the server answers. */
+  pendingInput: (input: TCreate) => CreateAnnotationInput;
 };
 
 type OptimisticAnnotationMutations<TCreate, TCreated, TChange> = {
@@ -124,11 +161,11 @@ type OptimisticAnnotationMutations<TCreate, TCreated, TChange> = {
   update: (change: TChange) => Promise<unknown>;
 };
 
-export const patchAnnotationCache = async (
+export const patchAnnotationCache = async <TRow>(
   queryClient: QueryClient,
-  queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>,
-  patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
+  queryKey: DataTag<QueryKey, TRow[], Error>,
+  patch: (rows: readonly TRow[]) => TRow[],
+): Promise<{ previous: TRow[] | undefined }> => {
   await queryClient.cancelQueries({ queryKey });
   const previous = queryClient.getQueryData(queryKey);
   if (previous !== undefined) {
@@ -141,23 +178,26 @@ export const patchAnnotationCache = async (
  * Creates, changes and removes signed-in marks the way every reader does:
  * each change lands in the cache at once, rolls back on failure, and is then
  * refetched, because the server knows what a colleague shared meanwhile.
- * Callers name only the routes the marks are stored through.
+ * Callers name only the routes the marks are stored through and the rows a
+ * new mark shows as.
  */
-export const useOptimisticAnnotationMutations = <
+export const useOptimisticMarkMutations = <
   TCreate,
   TCreated,
   TChange extends UpdateAnnotationInput,
+  TRow extends MarkRow,
 >({
   create: createRequest,
   handlerId,
-  pendingInput,
+  pendingRows: pendingRowsOf,
   queryKey,
   remove: removeRequest,
   update: updateRequest,
-}: OptimisticAnnotationRequests<
+}: OptimisticMarkRequests<
   TCreate,
   TCreated,
-  TChange
+  TChange,
+  TRow
 >): OptimisticAnnotationMutations<TCreate, TCreated, TChange> => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -165,15 +205,15 @@ export const useOptimisticAnnotationMutations = <
   const pendingSequence = useRef(0);
 
   const patchCache = async (
-    patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-  ): Promise<{ previous: ReaderAnnotation[] | undefined }> =>
+    patch: (rows: readonly TRow[]) => TRow[],
+  ): Promise<{ previous: TRow[] | undefined }> =>
     await patchAnnotationCache(queryClient, queryKey, patch);
 
   const settle = (operation: "create" | "update" | "delete") => ({
     onError: (
       error: unknown,
       _input: unknown,
-      context: { previous: ReaderAnnotation[] | undefined } | undefined,
+      context: { previous: TRow[] | undefined } | undefined,
     ) => {
       if (context !== undefined) {
         queryClient.setQueryData(queryKey, context.previous);
@@ -198,13 +238,13 @@ export const useOptimisticAnnotationMutations = <
       const stamp = pendingSequence.current;
       return await patchCache((rows) => [
         ...rows,
-        ...pendingRows({
+        ...pendingRowsOf({
           author: {
             id: user?.id ?? "",
             image: user?.image ?? null,
             name: user?.name ?? null,
           },
-          input: pendingInput(input),
+          input,
           stamp,
         }),
       ]);
@@ -240,3 +280,22 @@ export const useOptimisticAnnotationMutations = <
     update: update.mutateAsync,
   };
 };
+
+/** The reader-annotation rows of the case-law reader and claim comments. */
+export const useOptimisticAnnotationMutations = <
+  TCreate,
+  TCreated,
+  TChange extends UpdateAnnotationInput,
+>({
+  pendingInput,
+  ...requests
+}: OptimisticAnnotationRequests<
+  TCreate,
+  TCreated,
+  TChange
+>): OptimisticAnnotationMutations<TCreate, TCreated, TChange> =>
+  useOptimisticMarkMutations({
+    ...requests,
+    pendingRows: ({ author, input, stamp }) =>
+      pendingRows({ author, input: pendingInput(input), stamp }),
+  });

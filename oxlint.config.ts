@@ -192,6 +192,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
   ]),
+  fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
+    "no-raw-e2e-router-push/no-raw-e2e-router-push",
+  ]),
   fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
     "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
   ]),
@@ -1963,6 +1966,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/require-stable-geometry.ts",
+    "./.oxlint-plugins/no-raw-e2e-router-push.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -2162,6 +2166,15 @@ const config = defineConfig({
       ],
       rules: {
         "require-stable-geometry/require-stable-geometry": "error",
+      },
+    },
+    {
+      // A member's decision page swaps its gated fallback reader for the
+      // authenticated one; the navigation owner waits for the one that stays.
+      files: ["apps/web/e2e/**/*.ts"],
+      excludeFiles: ["apps/web/e2e/helpers/decision-reader.ts"],
+      rules: {
+        "no-raw-e2e-router-push/no-raw-e2e-router-push": "error",
       },
     },
     {

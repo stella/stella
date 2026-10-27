@@ -1,6 +1,6 @@
 import { panic, TaggedError } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,13 +10,22 @@ import {
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { generateBunToolchain } from "./generate-bun-toolchain";
-import { type Generator, GENERATORS } from "./generated-files";
 import {
+  type Generator,
+  GENERATORS,
+  matchesGeneratedGlob,
+} from "./generated-files";
+import {
+  affectedGeneratorIds,
+  changedSince,
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
+  generatorInputCensus,
+  guardSelectionSources,
   runGeneratorChecks,
   UNCHANGED_CHECKS_ENV,
   unchangedGeneratorIds,
+  undeclaredInputFailure,
 } from "./generated-files-guard";
 import { type Context, evaluate } from "./github-expression";
 import { workflowJobSteps } from "./workflow-steps";
@@ -40,6 +49,193 @@ class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
 
+test("a change to the guard's own sources selects every family", () => {
+  const sources = guardSelectionSources();
+  for (const file of [
+    "scripts/generated-files-guard.ts",
+    "scripts/generated-files.ts",
+    "packages/scripts/src/generated-files.ts",
+  ]) {
+    expect(sources.has(file), file).toBe(true);
+  }
+  // Only the manifest changed, for example one family's check command.
+  const affected = affectedGeneratorIds(
+    GENERATORS,
+    ["scripts/generated-files.ts"],
+    sources,
+  );
+  expect([...affected].toSorted()).toEqual(
+    GENERATORS.map(({ id }) => id).toSorted(),
+  );
+  // An unrelated file still selects none.
+  expect(
+    affectedGeneratorIds(GENERATORS, ["docs/changelog/example.md"], sources)
+      .size,
+  ).toBe(0);
+});
+
+test("the census resolves a filtered workspace script and fails on an unknown command form", () => {
+  const skills =
+    GENERATORS.find(({ id }) => id === "skill-manifests") ??
+    panic("Missing skill-manifests");
+  // `bun --filter @stll/skills generate` runs packages/skills/scripts/generate-manifests.ts.
+  const undeclared = {
+    ...skills,
+    write: ["bun", "--filter", "@stll/skills", "generate"],
+    inputs: [],
+    checkInputs: [],
+  } satisfies Generator;
+  expect(generatorInputCensus([undeclared])).toContain(
+    "skill-manifests: undeclared import packages/skills/scripts/generate-manifests.ts",
+  );
+  // A form the census cannot resolve fails instead of contributing nothing.
+  expect(() =>
+    generatorInputCensus([
+      { ...skills, write: ["bun", "--some-new-flag", "something"] },
+    ]),
+  ).toThrow("Census cannot resolve the command");
+});
+
+test("the census follows both a preload and the entry point of one Bun command", () => {
+  const skills =
+    GENERATORS.find(({ id }) => id === "skill-manifests") ??
+    panic("Missing skill-manifests");
+  const command = [
+    "bun",
+    "--preload",
+    "scripts/offline-network-preload.ts",
+    "scripts/check-mcp-generated-tracking.ts",
+  ];
+  const preloaded = {
+    ...skills,
+    write: command,
+    inputs: [],
+    checkInputs: [],
+  } satisfies Generator;
+  const failures = generatorInputCensus([preloaded]);
+  expect(failures).toContain(
+    "skill-manifests: undeclared import scripts/check-mcp-generated-tracking.ts",
+  );
+  expect(failures).toContain(
+    "skill-manifests: undeclared import scripts/offline-network-preload.ts",
+  );
+});
+
+test("selects direct, output, and transitive changes while unrelated files select none", () => {
+  const direct = affectedGeneratorIds(GENERATORS, [
+    "apps/web/src/components/example.tsx",
+  ]);
+  expect(direct.has("tailwind-class-cache")).toBe(true);
+  const output = affectedGeneratorIds(GENERATORS, [
+    "scripts/bun-toolchain.gen.json",
+  ]);
+  expect(output.has("bun-toolchain")).toBe(true);
+  const transitive = affectedGeneratorIds(GENERATORS, [
+    "apps/api/src/mcp/example.ts",
+  ]);
+  expect(transitive.has("cli-registry")).toBe(true);
+  expect(
+    affectedGeneratorIds(GENERATORS, ["docs/changelog/example.md"]).size,
+  ).toBe(0);
+  expect(affectedGeneratorIds(GENERATORS, null).size).toBe(GENERATORS.length);
+});
+
+test("a glob that matches nothing leaves every family unaffected", () => {
+  const fixture = [
+    { ...generator("bun-toolchain"), inputs: ["missing/**/*.ts"] },
+  ] satisfies Generator[];
+  expect(affectedGeneratorIds(fixture, ["docs/other.md"])).toEqual(new Set());
+});
+
+test("a check-only input change selects its generator family", () => {
+  const fixture = [
+    {
+      ...generator("bun-toolchain"),
+      checkInputs: ["scripts/check-only.ts"],
+    },
+  ] satisfies Generator[];
+  expect(affectedGeneratorIds(fixture, ["scripts/check-only.ts"])).toEqual(
+    new Set(["bun-toolchain"]),
+  );
+});
+
+test("a renamed input reports both the removed and destination paths", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generator-rename-"));
+  const runGit = (args: string[]) =>
+    Bun.spawnSync(["git", ...args], { cwd: root, stderr: "pipe" });
+  try {
+    expect(runGit(["init", "-q"]).exitCode).toBe(0);
+    expect(runGit(["config", "user.email", "test@example.com"]).exitCode).toBe(
+      0,
+    );
+    expect(runGit(["config", "user.name", "Test"]).exitCode).toBe(0);
+    await mkdir(path.join(root, "scripts"));
+    await writeFile(path.join(root, "scripts/generate-bun-toolchain.ts"), "x");
+    expect(runGit(["add", "."]).exitCode).toBe(0);
+    expect(runGit(["commit", "-qm", "fixture"]).exitCode).toBe(0);
+    const base = runGit(["rev-parse", "HEAD"]).stdout.toString().trim();
+    await mkdir(path.join(root, "docs"));
+    await rename(
+      path.join(root, "scripts/generate-bun-toolchain.ts"),
+      path.join(root, "docs/unrelated.md"),
+    );
+    expect(runGit(["add", "-A"]).exitCode).toBe(0);
+    expect(runGit(["commit", "-qm", "move input"]).exitCode).toBe(0);
+
+    const changed = changedSince(base, root);
+    expect(changed).toContain("scripts/generate-bun-toolchain.ts");
+    expect(changed).toContain("docs/unrelated.md");
+    expect(affectedGeneratorIds(GENERATORS, changed)).toContain(
+      "bun-toolchain",
+    );
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("formatter configuration changes select formatter-backed families", () => {
+  const affected = affectedGeneratorIds(GENERATORS, ["bunfig.toml"]);
+  for (const id of ["failure-tags", "status-tables", "account-export-tables"]) {
+    expect(affected.has(id), id).toBe(true);
+  }
+});
+
+test("the census accepts closure files in either input declaration", () => {
+  const tailwind = generator("tailwind-class-cache");
+  const closureFile = "scripts/generate-tailwind-classes.ts";
+  const withoutClosureFile = (inputs: readonly string[]) =>
+    inputs.filter((input) => !matchesGeneratedGlob(input, closureFile));
+  const mutated = {
+    ...tailwind,
+    inputs: withoutClosureFile(tailwind.inputs),
+    checkInputs: withoutClosureFile(tailwind.checkInputs ?? []),
+  };
+  expect(generatorInputCensus([mutated])).toContain(
+    `tailwind-class-cache: undeclared import ${closureFile}`,
+  );
+  expect(
+    generatorInputCensus([
+      { ...mutated, checkInputs: [closureFile, ...mutated.checkInputs] },
+    ]),
+  ).not.toContain(`tailwind-class-cache: undeclared import ${closureFile}`);
+});
+
+test("full runs reject diffs from families unchanged since HEAD~1", () => {
+  expect(
+    undeclaredInputFailure(
+      generator("bun-toolchain"),
+      ["docs/changelog/x.md"],
+      ["scripts/bun-toolchain.gen.json"],
+    ),
+  ).toContain("bun-toolchain");
+  expect(
+    undeclaredInputFailure(
+      generator("bun-toolchain"),
+      ["package.json"],
+      ["scripts/bun-toolchain.gen.json"],
+    ),
+  ).toBeUndefined();
+});
 const exited = (exit: number) => ({ exit, peakMiB: 0 });
 
 test("runs every manifest check exactly once and continues after failed and rejected checks", async () => {
@@ -311,6 +507,7 @@ test("rejects delegated checks that no other CI step runs", () => {
 // owning job runs its `checkedBy` step.
 const DELEGABLE = ["scan-engine-wasm", "api-typecheck-projects"] as const;
 
+// timeout: exhaustively evaluates every Boolean CI context combination.
 test("Guard B delegates each check exactly in runs whose owning job runs it", () => {
   const step = namedJobStep(GUARD_JOB, "Generated files manifest guard");
   const env = step?.["env"];
@@ -377,7 +574,7 @@ test("Guard B delegates each check exactly in runs whose owning job runs it", ()
       id,
     ).toBe(true);
   }
-});
+}, 10_000);
 
 test("rejects unchanged checks that no CI step proves", () => {
   expect(unchangedGeneratorIds(undefined)).toEqual(new Set());

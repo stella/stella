@@ -25,10 +25,6 @@ import {
   decodeDecisionCitationCursor,
   encodeDecisionCitationCursor,
 } from "@/api/handlers/case-law/decisions/get";
-import {
-  decodeDecisionDateCursor,
-  encodeDecisionDateCursor,
-} from "@/api/handlers/case-law/decisions/list";
 import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
   decodeCitingDecisionsCursor,
@@ -59,6 +55,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  decodeDecisionDateCursor,
+  encodeDecisionDateCursor,
+} from "@/api/lib/case-law/decision-date-order";
 import {
   decodeDecisionSearchCursor,
   encodeDecisionSearchCursor,
@@ -706,7 +706,14 @@ describe("public case-law route boundary", () => {
             decodeProvisionHistoryCursor,
             encodePaginationCursor(["2026-01-01", id]),
           ],
-          [decodeDecisionSearchCursor, encodeCursor(1, `relevance:${id}`)],
+          [
+            (cursor: string) => decodeDecisionSearchCursor(cursor, "relevance"),
+            encodeCursor(1, `relevance:${id}`),
+          ],
+          [
+            (cursor: string) => decodeDecisionSearchCursor(cursor, "newest"),
+            encodePaginationCursor(["newest", "2026-01-01", id]),
+          ],
           [decodeCorpusSearchCursor, encodeCursor(1, `0:none:relevance:${id}`)],
         ] as const;
 
@@ -729,21 +736,22 @@ describe("public case-law route boundary", () => {
         ).toBe(TEST_CITATION_ID);
 
         const roundTrips = [
-          ...DECISION_LIST_SORTS.map((sort) => ({
-            decoded: decodeDecisionDateCursor(
-              encodeDecisionDateCursor({
-                sort,
+          ...DECISION_LIST_SORTS.flatMap((sort) =>
+            [
+              {
+                band: "dated",
                 decisionDate: "2026-01-01",
                 id: TEST_DECISION_ID,
-              }),
-              sort,
-            ),
-            expected: {
-              sort,
-              decisionDate: "2026-01-01",
-              id: TEST_DECISION_ID,
-            },
-          })),
+              } as const,
+              { band: "undated", id: TEST_DECISION_ID } as const,
+            ].map((position) => ({
+              decoded: decodeDecisionDateCursor(
+                encodeDecisionDateCursor(sort, position),
+                sort,
+              ),
+              expected: position,
+            })),
+          ),
           {
             decoded: decodeDecisionCitationCursor(
               encodeDecisionCitationCursor({
@@ -841,6 +849,7 @@ describe("public case-law route boundary", () => {
                 sort: "relevance",
                 sortKey: 1,
               }),
+              "relevance",
             ),
             expected: {
               id: TEST_DECISION_ID,
