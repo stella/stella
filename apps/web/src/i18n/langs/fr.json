@@ -1027,6 +1027,12 @@
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
+    "marginFilter": {
+      "label": "Filtre des dispositions citées",
+      "paragraph": "{count, plural, =0 {Aucune disposition citée au ¶{paragraph}} one {# disposition citée au ¶{paragraph}} many {# de dispositions citées au ¶{paragraph}} other {# dispositions citées au ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Aucune disposition citée dans la sélection} one {# disposition citée dans la sélection} many {# de dispositions citées dans la sélection} other {# dispositions citées dans la sélection}}",
+      "unnumberedParagraph": "{count, plural, =0 {Aucune disposition citée dans ce paragraphe} one {# disposition citée dans ce paragraphe} many {# de dispositions citées dans ce paragraphe} other {# dispositions citées dans ce paragraphe}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# décision était déjà enregistrée ici} other {# décisions étaient déjà enregistrées ici}}",
       "empty": "Aucune jurisprudence n’est encore conservée dans ce dossier.",
