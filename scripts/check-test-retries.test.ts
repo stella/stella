@@ -367,6 +367,44 @@ test("resolves literal array/object spreads and inspects their retry policies", 
 const NOT_INSPECTABLE =
   "Playwright project/use configuration is not statically inspectable";
 
+test.each([
+  "if (alternate) { return defineConfig({ retries: 2 }); }",
+  'switch (mode) { case "alternate": return defineConfig({ retries: 2 }); }',
+  "for (const mode of modes) { return defineConfig({ retries: 2 }); }",
+  "try { if (alternate) { return defineConfig({ retries: 2 }); } } finally {}",
+])("config helpers must have one return path: %s", (branch) => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-return-"));
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    writeFileSync(
+      path.join(root, "apps/example/shared-config.ts"),
+      `import { defineConfig } from "@playwright/test";
+      export function sharedConfig() {
+        ${branch}
+        return defineConfig({ retries: 0 });
+      }`,
+    );
+    expect(
+      findTestRetryViolations(
+        new Map([
+          [
+            "apps/example/playwright.config.ts",
+            'import { sharedConfig } from "./shared-config"; export default sharedConfig();',
+          ],
+        ]),
+        root,
+      ),
+    ).toEqual([
+      {
+        file: "apps/example/playwright.config.ts",
+        message: "Playwright config must explicitly set top-level retries: 0",
+      },
+    ]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("reads device presets from the @playwright/test devices export", () => {
   const withPreset = (name: string) => `
     import { defineConfig, devices } from "@playwright/test";
