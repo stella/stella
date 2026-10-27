@@ -27,7 +27,10 @@ import {
 
 const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
-const latest = (version: string | undefined) => () => version;
+const latest = (version: string | undefined) => () =>
+  version === undefined
+    ? undefined
+    : { version, installableSince: "2026-10-01T00:00:00.000Z" };
 const currentAdvisory: Advisory = {
   ...advisory,
   severity: "high",
@@ -55,6 +58,10 @@ const runCheck = async (
   accepted: Baseline,
   today: string,
   warningFormat: "github" | "plain" = "plain",
+  latestVersion = async () => ({
+    version: "1.4.0",
+    installableSince: "2026-10-01T00:00:00.000Z",
+  }),
 ) => {
   const output: { info: string[]; warn: string[] } = { info: [], warn: [] };
   const info = spyOn(console, "info").mockImplementation((message) => {
@@ -69,6 +76,7 @@ const runCheck = async (
       baseline: accepted,
       now: () => new Date(`${today}T00:00:00Z`),
       warningFormat,
+      latestVersion,
     });
     return { ...output, status };
   } finally {
@@ -101,7 +109,10 @@ const runReleaseCheck = async (
   try {
     const status = await checkRelease(advisories, previousAdvisories, {
       baseline,
-      latestVersion: async () => "1.4.0",
+      latestVersion: async () => ({
+        version: "1.4.0",
+        installableSince: "2026-10-01T00:00:00.000Z",
+      }),
       now: () => new Date(`${today}T00:00:00Z`),
       warningFormat: "plain",
     });
@@ -298,6 +309,25 @@ describe("audit acceptance expiry", () => {
     );
   });
 
+  test("an installable patch reports its grace window before lapse", async () => {
+    const baseline = auditBaseline("2026-11-01");
+    baseline.accepted[0]!.untilPatched = true;
+    const result = await runCheck(
+      [currentAdvisory],
+      baseline,
+      "2026-10-02",
+      "plain",
+      async () => ({
+        version: "1.4.1",
+        installableSince: "2026-10-02T00:00:00.000Z",
+      }),
+    );
+    expect(result.status).toBe(0);
+    expect(result.info).toContain(
+      `${advisory.id} for pkg: patch installable since 2026-10-02T00:00:00.000Z, lapses at 2026-10-03T00:00:00.000Z`,
+    );
+  });
+
   test("a new advisory is reported and fails", async () => {
     const newBaseline = { ...auditBaseline(), accepted: [] };
     const newResult = await runCheck(
@@ -392,7 +422,10 @@ describe("audit acceptance expiry", () => {
       await check([currentAdvisory], {
         ...options,
         baseline,
-        latestVersion: async () => "1.4.1",
+        latestVersion: async () => ({
+          version: "1.4.1",
+          installableSince: "2026-10-01T00:00:00.000Z",
+        }),
       }),
     ).toBe(2);
   });
@@ -403,6 +436,7 @@ describe("audit acceptance expiry", () => {
         accepted: [{ id: advisory.id, package: "pkg" }],
         current: [advisory],
         today: "2099-01-01",
+        now: new Date("2099-01-01T00:00:00Z"),
         latestVersion: latest(undefined),
       }),
     ).toEqual([]);
@@ -418,6 +452,7 @@ describe("audit acceptance expiry", () => {
           accepted,
           current: [advisory],
           today,
+          now: new Date(`${today}T00:00:00Z`),
           latestVersion: latest("1.4.0"),
         }),
       ).toEqual([]);
@@ -427,6 +462,7 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [advisory],
         today: "2026-11-02",
+        now: new Date("2026-11-02T00:00:00Z"),
         latestVersion: latest("1.4.0"),
       }).map(({ reason }) => reason),
     ).toEqual(["the acceptance expired on 2026-11-01"]);
@@ -439,6 +475,7 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", expiresOn }],
           current: [advisory],
           today: "2026-10-02",
+          now: new Date("2026-10-02T00:00:00Z"),
           latestVersion: latest("1.4.0"),
         }),
         expiresOn,
@@ -451,6 +488,7 @@ describe("audit acceptance expiry", () => {
         ],
         current: [advisory],
         today: "2026-10-02",
+        now: new Date("2026-10-02T00:00:00Z"),
         latestVersion: latest("1.4.0"),
       }),
     ).toEqual([]);
@@ -463,6 +501,7 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", untilPatched }],
           current: [advisory],
           today: "2026-10-02",
+          now: new Date("2026-10-02T00:00:00Z"),
           latestVersion: latest("1.4.0"),
         }).map(({ reason }) => reason),
       ).toEqual(["untilPatched must be true or false"]);
@@ -476,6 +515,7 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [advisory],
         today: "2026-10-02",
+        now: new Date("2026-10-02T00:00:00Z"),
         latestVersion: latest("1.4.0"),
       }),
     ).toEqual([]);
@@ -483,10 +523,11 @@ describe("audit acceptance expiry", () => {
       accepted,
       current: [advisory],
       today: "2026-10-02",
+      now: new Date("2026-10-02T00:00:01Z"),
       latestVersion: latest("1.4.1"),
     });
     expect(lapsed).toHaveLength(1);
-    expect(lapsed[0]?.reason).toContain("a patched release exists");
+    expect(lapsed[0]?.reason).toContain("has been installable since");
   });
 
   test("untilPatched fails closed when the lookup or the range is missing", () => {
@@ -496,6 +537,7 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [advisory],
         today: "2026-10-02",
+        now: new Date("2026-10-02T00:00:00Z"),
         latestVersion: latest(undefined),
       }),
     ).toHaveLength(1);
@@ -504,6 +546,7 @@ describe("audit acceptance expiry", () => {
         accepted,
         current: [{ id: advisory.id, vulnerableVersions: "" }],
         today: "2026-10-02",
+        now: new Date("2026-10-02T00:00:00Z"),
         latestVersion: latest("1.4.0"),
       }),
     ).toHaveLength(1);
@@ -522,6 +565,7 @@ describe("audit acceptance expiry", () => {
           accepted: [{ id: advisory.id, package: "pkg", ...terms }],
           current: [],
           today: "2026-10-02",
+          now: new Date("2026-10-02T00:00:00Z"),
           latestVersion: latest(undefined),
         }),
       ).toEqual([]);

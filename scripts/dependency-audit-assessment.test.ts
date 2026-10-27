@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Advisory, BaselineEntry } from "./dependency-audit";
+import { lapsedAcceptances } from "./dependency-audit-acceptance";
 import {
   assessAdvisories,
+  installableReleases,
   installableVersions,
   readReleaseAgePolicy,
 } from "./dependency-audit-assessment";
@@ -524,5 +526,59 @@ describe("installable versions honour the release-age quarantine", () => {
         now,
       }),
     ).toEqual(["1.4.0"]);
+  });
+
+  test("remediation sees a patch before its acceptance lapses", () => {
+    const installableAt = new Date("2026-11-01T04:44:07.718Z");
+    const afterOneHour = new Date(installableAt.getTime() + 60 * 60 * 1000);
+    const releases = installableReleases({
+      name: "node-forge",
+      versions: ["1.4.0", "1.4.1"],
+      publishedAt,
+      policy,
+      now: afterOneHour,
+    });
+    const audit = {
+      id: "GHSA-test-node-forge",
+      package: "node-forge",
+      severity: "high",
+      title: "test advisory",
+      vulnerableVersions: "<=1.4.0",
+    } satisfies Advisory;
+    const [assessment] = assessAdvisories({
+      advisories: [audit],
+      accepted: [],
+      lockfile: JSON.stringify({
+        packages: { "node-forge": ["node-forge@1.4.0", "", {}] },
+      }),
+      manifest: { dependencies: { "node-forge": "^1.4.0" } },
+      versions: new Map([
+        ["node-forge", releases.map(({ version }) => version)],
+      ]),
+    });
+    expect(assessment?.disposition.status).toBe("fix_available");
+
+    const accepted = [
+      { id: audit.id, package: audit.package, untilPatched: true },
+    ];
+    const latest = () => releases.at(-1);
+    expect(
+      lapsedAcceptances({
+        accepted,
+        current: [audit],
+        today: "2026-11-01",
+        now: afterOneHour,
+        latestVersion: latest,
+      }),
+    ).toEqual([]);
+    expect(
+      lapsedAcceptances({
+        accepted,
+        current: [audit],
+        today: "2026-11-02",
+        now: new Date(installableAt.getTime() + 24 * 60 * 60 * 1000 + 1000),
+        latestVersion: latest,
+      }),
+    ).toHaveLength(1);
   });
 });

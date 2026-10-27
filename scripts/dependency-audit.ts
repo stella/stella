@@ -50,11 +50,14 @@ import {
   expiringAcceptances,
   type LapsedAcceptance,
   lapsedAcceptances,
+  type LatestInstallableRelease,
+  patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
 import {
   assessAdvisories,
   AuditAssessmentError,
   printAssessments,
+  readInstallableReleases,
   readInstallableVersions,
   readReleaseAgePolicy,
 } from "./dependency-audit-assessment";
@@ -495,16 +498,19 @@ const readRootReleaseAgePolicy = async () =>
 // The newest stable release Bun would install now, or undefined when the
 // lookup fails; an `untilPatched` acceptance then lapses (fail closed). A
 // patch still in quarantine is not installable, so it lapses nothing yet.
-const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
+const fetchLatestVersion = async (
+  pkg: string,
+  now: Date,
+): Promise<LatestInstallableRelease | undefined> => {
   const installable = await Result.tryPromise(async () =>
-    readInstallableVersions(pkg, await readRootReleaseAgePolicy(), new Date()),
+    readInstallableReleases(pkg, await readRootReleaseAgePolicy(), now),
   );
   if (Result.isError(installable)) {
     return undefined;
   }
   return installable.value
-    .filter((version) => !version.includes("-"))
-    .toSorted(Bun.semver.order)
+    .filter(({ version }) => !version.includes("-"))
+    .toSorted((left, right) => Bun.semver.order(left.version, right.version))
     .at(-1);
 };
 
@@ -512,13 +518,20 @@ type CheckLapsedAcceptancesOptions = {
   advisories: Advisory[];
   baseline: Baseline;
   today: string;
+  now: Date;
   enforceDateExpiry: boolean;
-  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
+  latestVersion?:
+    | ((
+        pkg: string,
+        now: Date,
+      ) => Promise<LatestInstallableRelease | undefined>)
+    | undefined;
 };
 const checkLapsedAcceptances = async ({
   advisories,
   baseline,
   today,
+  now,
   enforceDateExpiry,
   latestVersion = fetchLatestVersion,
 }: CheckLapsedAcceptancesOptions): Promise<LapsedAcceptance[]> => {
@@ -530,7 +543,7 @@ const checkLapsedAcceptances = async ({
   const latest = new Map(
     await Promise.all(
       [...packages].map(
-        async (pkg) => [pkg, await latestVersion(pkg)] as const,
+        async (pkg) => [pkg, await latestVersion(pkg, now)] as const,
       ),
     ),
   );
@@ -540,7 +553,18 @@ const checkLapsedAcceptances = async ({
     today,
     enforceDateExpiry,
     latestVersion: (pkg) => latest.get(pkg),
+    now,
   });
+  const windows = patchedAcceptanceWindows({
+    accepted: baseline.accepted,
+    current: advisories,
+    latestVersion: (pkg) => latest.get(pkg),
+  });
+  for (const window of windows) {
+    console.info(
+      `${window.id} for ${window.package}: patch installable since ${window.installableSince}, lapses at ${window.lapsesAt}`,
+    );
+  }
   if (lapsed.length === 0) {
     return [];
   }
@@ -602,7 +626,10 @@ type CheckOptions = {
   baseline?: Baseline;
   /** Defaults to true for API callers; scheduled CLI audits opt out. */
   enforceDateExpiry?: boolean;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  latestVersion?: (
+    pkg: string,
+    now: Date,
+  ) => Promise<LatestInstallableRelease | undefined>;
   now?: () => Date;
   packages?: ReadonlySet<string>;
   /** Defaults to GitHub annotations inside GitHub Actions. */
@@ -635,7 +662,8 @@ const checkResult = async (
     baseline,
   );
   // UTC calendar date; an acceptance holds through its expiresOn day.
-  const today = (options.now?.() ?? new Date()).toISOString().slice(0, 10);
+  const now = options.now?.() ?? new Date();
+  const today = now.toISOString().slice(0, 10);
   const warningFormat =
     options.warningFormat ??
     (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain");
@@ -644,6 +672,7 @@ const checkResult = async (
     advisories,
     baseline,
     today,
+    now,
     enforceDateExpiry: options.enforceDateExpiry ?? true,
     latestVersion: options.latestVersion,
   });
