@@ -44,6 +44,9 @@ const administrativeId = createSafeId<"caseLawDecision">();
 const listingOnlyId = createSafeId<"caseLawDecision">();
 const restrictedId = createSafeId<"caseLawDecision">();
 const reportedId = createSafeId<"caseLawDecision">();
+const plenaryId = createSafeId<"caseLawDecision">();
+/** As the Constitutional Court publishes it: the ordinal's `Pl` is mixed case. */
+const plenaryEcli = "ECLI:CZ:US:2025:Pl.US.32.25.1";
 const euSourceId = createSafeId<"caseLawSource">();
 const euEcli = "ECLI:EU:C:2019:801";
 const euVersions = [
@@ -199,6 +202,20 @@ beforeAll(
         languageGroupKey: "lookup-restricted",
       },
       {
+        // Its ECLI is held in the column alone, with no identifier row.
+        id: plenaryId,
+        sourceId: openSourceId,
+        caseNumber: "Pl.ÚS 32/25",
+        citationKey: citationKeyOf("Pl.ÚS 32/25"),
+        court: "Ústavní soud",
+        country: "CZE",
+        decisionDate: "2025-12-10",
+        ecli: plenaryEcli,
+        language: "cs",
+        languageGroupKey: "lookup-plenary",
+        slug: "pl-us-32-25",
+      },
+      {
         id: reportedId,
         sourceId: openSourceId,
         caseNumber: "1",
@@ -352,6 +369,24 @@ test("an ECLI held only in the identifier rows resolves", async () => {
   });
 
   expect(rows.map(({ id }) => id)).toEqual([administrativeId]);
+});
+
+test("an ECLI held only in the column resolves in any letter case", async () => {
+  for (const value of [
+    plenaryEcli,
+    plenaryEcli.toUpperCase(),
+    plenaryEcli.toLowerCase(),
+  ]) {
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: { kind: "ecli", value },
+    });
+    expect(
+      rows.map(({ id }) => id),
+      value,
+    ).toEqual([plenaryId]);
+  }
 });
 
 test("a decision with several parallel identifiers is one candidate", async () => {

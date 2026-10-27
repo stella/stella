@@ -547,9 +547,9 @@ const idsOf = (resolution: ReturnType<typeof resolve>): string[] => {
     case "none":
       return [];
     case "unique":
+    case "incomplete_identifier":
       return [resolution.decision.id];
     case "ambiguous":
-    case "incomplete_identifier":
       return resolution.candidates.map(({ id }) => id).toSorted();
     default: {
       resolution satisfies never;
