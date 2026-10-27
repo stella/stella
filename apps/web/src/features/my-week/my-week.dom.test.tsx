@@ -690,6 +690,27 @@ describe("my week", () => {
       }) === null,
     ).toBe(true);
   });
+  test("the week can be submitted while its drafts are on a page not loaded yet", async () => {
+    serveWeek({
+      entries: [
+        draftEntry({ status: "submitted" }),
+        draftEntry({
+          id: toSafeId<"timeEntry">("entry-later"),
+          narrative: "Later draft",
+        }),
+      ],
+      suggestions: [],
+      pageSize: 1,
+    });
+    mount();
+
+    const submit = await screen.findByRole("button", {
+      name: messages.timesheets.week.submitWeek,
+    });
+    expect(screen.queryByText("Later draft")).toBeNull();
+    expect(submit.hasAttribute("disabled")).toBe(false);
+  });
+
   test("a week with more drafts than one batch is submitted day by day", async () => {
     const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
     const drafts = Array.from(

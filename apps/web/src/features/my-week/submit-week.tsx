@@ -31,7 +31,8 @@ type SubmitOutcome = {
 
 type SubmitWeekActionsProps = {
   week: Week;
-  draftCount: number;
+  /** True while the week may hold drafts, including on unloaded pages. */
+  canSubmit: boolean;
   /** Offer "Submit and approve" to someone who approves their own time. */
   canApproveOwn: boolean;
   submitting: boolean;
@@ -94,7 +95,7 @@ const submitWeekInParts = async ({
  */
 export const SubmitWeekActions = ({
   week,
-  draftCount,
+  canSubmit,
   canApproveOwn,
   submitting,
   submit,
@@ -135,7 +136,7 @@ export const SubmitWeekActions = ({
     <>
       {canApproveOwn && (
         <Button
-          disabled={draftCount === 0}
+          disabled={!canSubmit}
           loading={submitting}
           onClick={() => detached(run(true), "my-week.submit-and-approve")}
           size="sm"
@@ -145,7 +146,7 @@ export const SubmitWeekActions = ({
         </Button>
       )}
       <Button
-        disabled={draftCount === 0}
+        disabled={!canSubmit}
         loading={submitting}
         onClick={() => detached(run(false), "my-week.submit")}
         size="sm"

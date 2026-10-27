@@ -154,10 +154,13 @@ export const MyWeek = ({
   const suggestionDay = suggestionRange.days.find((day) => day.date === date);
   const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
-  // Every draft of the week, across all its loaded pages, can be submitted.
-  const weekDrafts = pages
-    .flatMap((page) => page.items)
-    .filter((entry) => entry.status === "draft").length;
+  // Submission covers the whole week, so drafts on pages not loaded yet count:
+  // with a page left, the week may still hold some.
+  const canSubmitWeek =
+    entriesQuery.hasNextPage ||
+    pages
+      .flatMap((page) => page.items)
+      .some((entry) => entry.status === "draft");
   const refusalNotes = new Map(
     [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
   );
@@ -195,7 +198,7 @@ export const MyWeek = ({
             )}
             <SubmitWeekActions
               canApproveOwn={canApprove}
-              draftCount={weekDrafts}
+              canSubmit={canSubmitWeek}
               onRefusals={setRefusals}
               submit={actions.submitWeek}
               submitting={actions.submitting}

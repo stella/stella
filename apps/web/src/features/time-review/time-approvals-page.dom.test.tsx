@@ -209,6 +209,39 @@ describe("approving time by person", () => {
     expect(await personSection("Beata Kral")).toBeTruthy();
   });
 
+  test("checking entries narrows a person's approval to them", async () => {
+    const calls = serveQueue([submitted("adam-1"), submitted("adam-2")]);
+    mount();
+
+    const adam = await personSection("Adam Novak");
+    const [first] = within(adam).getAllByRole("checkbox", {
+      name: messages.billing.approval.selectEntry,
+    });
+    if (!first) {
+      throw new Error("expected a selection checkbox");
+    }
+    await act(async () => {
+      fireEvent.click(first);
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(adam).getByRole("button", { name: "Approve 1 selected entry" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        calls.find(({ path }) => path === "/time-entries/approve")?.body,
+      ).toEqual({ ids: ["adam-1"] });
+    });
+    // The unchecked entry is still waiting.
+    expect(
+      await within(await personSection("Adam Novak")).findByRole("button", {
+        name: "Approve 1 entry",
+      }),
+    ).toBeTruthy();
+  });
+
   test("returning an entry sends the reason and takes it off the page", async () => {
     const calls = serveQueue([submitted("adam-1"), submitted("adam-2")]);
     mount();

@@ -117,6 +117,9 @@ const PersonSection = ({
   const t = useTranslations();
   const format = useFormatter();
   const rows = person.days.flatMap((day) => day.rows);
+  // Checked entries narrow the approval; with none checked it covers them all.
+  const selected = review.selectedOf(rows);
+  const target = selected.length > 0 ? selected : rows;
   return (
     <section
       aria-label={person.timekeeperName ?? undefined}
@@ -137,11 +140,13 @@ const PersonSection = ({
           </p>
         </div>
         <Button
-          loading={rows.some(({ id }) => review.isPending(id))}
-          onClick={() => review.approve(rows)}
+          loading={target.some(({ id }) => review.isPending(id))}
+          onClick={() => review.approve(target)}
           size="sm"
         >
-          {t("billing.approval.approveAll", { count: rows.length })}
+          {selected.length > 0
+            ? t("billing.approval.approveSelected", { count: selected.length })
+            : t("billing.approval.approveAll", { count: rows.length })}
         </Button>
       </div>
       {person.days.map((day) => (
