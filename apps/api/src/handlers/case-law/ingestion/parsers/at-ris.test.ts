@@ -114,7 +114,7 @@ it("keeps publisher summaries before the body and publisher notes after it", () 
     ["leitsatz", "Leitsatz"],
     ["betreff", "Betreff"],
     ["rechtssatz", "Rechtssatz"],
-  ];
+  ] as const;
   const xml = `<risdok><nutzdaten><abschnitt>
     <ueberschrift>Leitsatz</ueberschrift><absatz ct="leitsatz">Vor der Entscheidung</absatz>
     <ueberschrift>Spruch</ueberschrift><absatz ct="spruch">Die Revision wird zurückgewiesen.</absatz>
