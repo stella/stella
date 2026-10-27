@@ -12,6 +12,7 @@ import {
 } from "jose";
 import { randomBytes } from "node:crypto";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { sha256Base64Url } from "@stll/sha256/bun";
 
 import {
@@ -716,26 +717,21 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
                       ...fixture,
                     }).then(() => undefined);
               drain = Promise.allSettled([first, second]);
-              const deadline = performance.now() + 5000;
-              while (performance.now() < deadline) {
-                const snapshot = (
-                  await observerDb
-                    .select({
-                      waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
-                    WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
-                      AND wait_event_type = 'Lock')`,
-                    })
-                    .from(apikey)
-                    .where(eq(apikey.id, fixture.keyId))
-                ).at(0);
-                if (snapshot?.waiting === 2) {
-                  return;
-                }
-                await Bun.sleep(10);
-              }
-              throw new TypeError(
-                "Both credential writers must wait before releasing the row lock",
-              );
+              await waitForExternalState({
+                description:
+                  "both credential writers wait before the row lock is released",
+                read: async () =>
+                  (
+                    await observerDb
+                      .select({
+                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
+                      WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
+                        AND wait_event_type = 'Lock')`,
+                      })
+                      .from(apikey)
+                      .where(eq(apikey.id, fixture.keyId))
+                  ).at(0)?.waiting === 2,
+              });
             });
           } finally {
             if (drain) {

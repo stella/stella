@@ -28,6 +28,7 @@
  * Usage:
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only
+ *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only --celex 61990CJ0006
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --notice-only
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
@@ -39,7 +40,10 @@ import path from "node:path";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
+  ecjEnvelopeDocument,
+  fetchDecisionsByCelex,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   manifestationStem,
@@ -48,6 +52,7 @@ import {
   type PortalPair,
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
+import { parseFormex } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
 
 import {
@@ -97,6 +102,31 @@ const PARSER_CORPUS = [
     languages: ["EN"],
     why: "General Court judgment: a different signature block (per-judge cells rather than one [Signatures] line).",
   },
+  {
+    celex: "61990CJ0006",
+    languages: ["EN"],
+    why: "Oldest layout from the 1990s: paragraph numbers printed as text (`37 It follows`), sub-headings as plain paragraphs between them, a contents line of in-document links before the parties, and the sections (parties, grounds, costs, operative part) named only by the publisher's anchors.",
+  },
+  {
+    celex: "61978CJ0120",
+    languages: ["EN"],
+    why: "Oldest layout as typeset in the 1970s: the number is glued to the paragraph (`1BY ORDER OF`), and a quoted question inside a paragraph opens with `1 .`, which is not the Court's numbering.",
+  },
+  {
+    celex: "61955CJ0008",
+    languages: ["DA", "EN"],
+    why: "A 1956 judgment. DA is converter output whose operative part and summary each restart `pointN` at 1, so the publisher's anchors repeat. EN is the oldest layout with printed report page markers (`P . 255`) as paragraphs and no paragraph numbers at all.",
+  },
+  {
+    celex: "62004CJ0144",
+    languages: ["HU"],
+    why: "Oldest layout in a language where headings carry no marker (`Jogi háttér`), among quoted lists whose items end in punctuation.",
+  },
+  {
+    celex: "62019CO0791",
+    languages: ["EN"],
+    why: "Interim-measures order: its operative part follows the last reasoning heading with no heading of its own, and its reasoning quotes numbered lists (`1) disciplinary proceedings:`).",
+  },
 ] as const;
 
 /**
@@ -134,6 +164,9 @@ const log = (message: string): void => {
 };
 
 // ── Formex, for the oracle ─────────────────────────────────
+
+/** Formex roots that encode the decision itself. */
+const ORACLE_KINDS = new Set(["JUDGMENT", "ORDER", "CONCLUSION"]);
 
 /**
  * Resolve a decision's Formex manifestation and download it. Cellar
@@ -334,8 +367,13 @@ const portalPairFor = (stem: string): PortalPair | undefined =>
  * before either is written, and a portal fetch that returns no document
  * leaves the pair exactly as it was.
  */
-const recordParserFixtures = async (): Promise<void> => {
+const recordParserFixtures = async (
+  only: readonly string[] | undefined,
+): Promise<void> => {
   for (const { celex, languages } of PARSER_CORPUS) {
+    if (only !== undefined && !only.includes(celex)) {
+      continue;
+    }
     const decisions = await fetchDecisionsByCelex({
       celexNumbers: [celex],
       languages,
@@ -344,7 +382,13 @@ const recordParserFixtures = async (): Promise<void> => {
 
     for (const decision of decisions) {
       const stem = `${celex}.${decision.language}`;
-      if (decision.sourceRaw === undefined) {
+      // The result stores an envelope of every response fetched for the
+      // variant; the parser fixture is the manifestation alone.
+      const xhtml =
+        decision.sourceRaw === undefined
+          ? undefined
+          : ecjEnvelopeDocument(decision.sourceRaw);
+      if (xhtml === undefined) {
         log(`  ${stem}: no XHTML, skipped`);
         continue;
       }
@@ -361,14 +405,23 @@ const recordParserFixtures = async (): Promise<void> => {
       const staged: StagedFixture[] = [
         {
           name: `${stem}.html.gz`,
-          bytes: Bun.gzipSync(Buffer.from(decision.sourceRaw)),
+          bytes: Bun.gzipSync(Buffer.from(xhtml)),
           sourceUrl: decision.documentUrl,
         },
       ];
 
       const formex = await fetchFormex(celex, languageUriOf(decision));
+      const formexKind =
+        formex === undefined
+          ? undefined
+          : parseFormex(new TextDecoder().decode(formex.bytes)).kind;
       if (formex === undefined) {
         log(`  ${stem}: no Formex published`);
+      } else if (!ORACLE_KINDS.has(formexKind ?? "")) {
+        // The oldest works' Formex can be another document of the case
+        // (the report for the hearing, the summary), which states nothing
+        // about this one's structure and would mislead the oracle.
+        log(`  ${stem}: Formex is a ${formexKind ?? "?"}, not the decision`);
       } else {
         staged.push({
           name: `${stem}.fmx.xml.gz`,
@@ -562,12 +615,19 @@ if (import.meta.main) {
   const seedOnly = process.argv.includes("--seed-only");
   const noticeOnly = process.argv.includes("--notice-only");
   const only = parserOnly || seedOnly || noticeOnly;
+  // `--celex 61990CJ0006,61978CJ0120` records only those parser-corpus
+  // entries, so adding a decision does not re-record the rest.
+  const celexIndex = process.argv.indexOf("--celex");
+  const celexOnly =
+    celexIndex === -1
+      ? undefined
+      : (process.argv[celexIndex + 1] ?? "").split(",").filter(Boolean);
 
   if (parserOnly || !only) {
     log(
       `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
     );
-    await recordParserFixtures();
+    await recordParserFixtures(celexOnly);
   }
 
   if (noticeOnly || !only) {

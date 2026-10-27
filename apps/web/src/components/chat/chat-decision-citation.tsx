@@ -26,7 +26,7 @@ import {
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { inlineDecisionCitationPresentation } from "@/components/references/decision-citation-chip.logic";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
@@ -117,7 +117,8 @@ const CitationView = ({
     return (
       <>
         {presentation.before}
-        <DecisionCitationChip
+        <CitationChip
+          kind="decision"
           decision={decision}
           onOpen={onOpen}
           presentation="inline"
@@ -135,7 +136,8 @@ const CitationView = ({
           {presentation.kind === "chip-after-text"
             ? presentation.label
             : passage}{" "}
-          <DecisionCitationChip
+          <CitationChip
+            kind="decision"
             decision={decision}
             onOpen={onOpen}
             presentation="inline"
@@ -143,7 +145,8 @@ const CitationView = ({
           />
         </>
       ) : (
-        <DecisionCitationChip
+        <CitationChip
+          kind="decision"
           decision={decision}
           passage={passage}
           paragraphNumber={paragraph?.courtParagraphNumber ?? null}

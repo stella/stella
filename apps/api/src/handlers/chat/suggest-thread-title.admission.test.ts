@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -165,7 +166,8 @@ const runDeniedTitle = async ({
         promptCachingEnabled: false,
         query: { workspaceId },
         request: new Request("https://example.test/title/suggest"),
-        route: "/title/suggest",
+        route:
+          "/v1/chat/threads/:threadId/title/suggest" satisfies ApiRoutePath,
         safeDb: db.safeDb,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
