@@ -57,11 +57,16 @@ export const Text = ({
 
 const INPUT_VARIANTS = {
   /** The web's input: hairline border, card fill. */
-  default: "min-h-11 rounded-lg border border-input bg-card px-3",
+  default: "min-h-11 rounded-lg border border-input bg-card px-3 text-base",
   /** A search field, filled and borderless, as iOS lists set one. */
-  search: "min-h-10 rounded-xl bg-secondary px-3",
+  search: "min-h-10 rounded-xl bg-secondary px-3 text-base",
   /** No box of its own, for a field inside a container that draws one. */
-  bare: "min-h-9 py-2",
+  bare: "min-h-9 py-2 text-base",
+  /**
+   * The composer's text: the web's `COMPOSER_TEXT_CLASS` stature (text-sm at
+   * leading-5) with no box, inside the composer's text cell.
+   */
+  composer: "p-0 text-sm leading-5",
 } as const;
 
 /** A text field in the web's type, in one of the app's input shapes. */
@@ -76,7 +81,7 @@ export const TextInput = ({
 }) => (
   <NativeTextInput
     style={[{ fontFamily: "DMSans-Regular" }, style]}
-    className={`text-foreground text-base ${INPUT_VARIANTS[variant]} ${className ?? ""}`}
+    className={`text-foreground ${INPUT_VARIANTS[variant]} ${className ?? ""}`}
     cursorColorClassName="accent-foreground"
     placeholderTextColorClassName="accent-muted-foreground"
     selectionColorClassName="accent-ring"

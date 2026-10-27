@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFormatter } from "use-intl";
 
+import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text } from "@/components/ui/text";
 import type { MatterSummary } from "@/state/matters";
 
@@ -33,7 +34,7 @@ export const MatterRow = ({ matter }: { matter: MatterSummary }) => {
   return (
     <Pressable
       accessibilityRole="button"
-      className="border-border active:bg-accent gap-0.5 border-b py-3"
+      className="border-border active:bg-accent flex-row gap-3 border-b py-3"
       onPress={() => {
         router.push({
           pathname: "/matter/[workspaceId]",
@@ -41,14 +42,19 @@ export const MatterRow = ({ matter }: { matter: MatterSummary }) => {
         });
       }}
     >
-      <Text numberOfLines={2} variant="rowTitle">
-        {matter.name}
-      </Text>
-      {details.length === 0 ? null : (
-        <Text numberOfLines={1} variant="caption">
-          {details.join(" · ")}
+      <View className="pt-0.5">
+        <MatterIcon matter={matter} size={18} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text numberOfLines={2} variant="rowTitle">
+          {matter.name}
         </Text>
-      )}
+        {details.length === 0 ? null : (
+          <Text numberOfLines={1} variant="caption">
+            {details.join(" · ")}
+          </Text>
+        )}
+      </View>
     </Pressable>
   );
 };

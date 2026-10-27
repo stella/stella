@@ -35,7 +35,8 @@
     "answerWorking": "En cours…",
     "answerStopped": "Arrêté.",
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
-    "answerFailed": "La réponse n’a pas pu être terminée."
+    "answerFailed": "La réponse n’a pas pu être terminée.",
+    "composerMenu": "Ouvrir le menu des pièces jointes et des outils"
   },
   "tasks": {
     "description": "Voyez ce qui demande votre attention sans ouvrir tout l’espace de travail.",

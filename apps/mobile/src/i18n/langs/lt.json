@@ -35,7 +35,8 @@
     "answerWorking": "Dirbu…",
     "answerStopped": "Sustabdyta.",
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
-    "answerFailed": "Atsakymo užbaigti nepavyko."
+    "answerFailed": "Atsakymo užbaigti nepavyko.",
+    "composerMenu": "Atverti priedų ir įrankių meniu"
   },
   "tasks": {
     "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",

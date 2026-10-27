@@ -35,7 +35,8 @@
     "answerWorking": "Töötan…",
     "answerStopped": "Peatatud.",
     "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
-    "answerFailed": "Vastust ei õnnestunud lõpetada."
+    "answerFailed": "Vastust ei õnnestunud lõpetada.",
+    "composerMenu": "Ava manuste ja tööriistade menüü"
   },
   "tasks": {
     "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",

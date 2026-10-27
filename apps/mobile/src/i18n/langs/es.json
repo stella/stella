@@ -35,7 +35,8 @@
     "answerWorking": "Trabajando…",
     "answerStopped": "Detenido.",
     "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
-    "answerFailed": "No se pudo completar la respuesta."
+    "answerFailed": "No se pudo completar la respuesta.",
+    "composerMenu": "Abrir el menú de archivos adjuntos y herramientas"
   },
   "tasks": {
     "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",

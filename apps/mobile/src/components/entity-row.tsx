@@ -1,12 +1,14 @@
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
 
+import { EntityKindIcon } from "@/components/entity-kind-icon";
 import { Text } from "@/components/ui/text";
 import { isKnownEntityKind } from "@/state/matter-entities";
 import type { MatterEntity } from "@/state/matter-entities";
+import { useUiColors } from "@/theme";
 
 const TASK_STATUSES: ReadonlySet<string> = new Set(Object.values(TASK_STATUS));
 
@@ -26,6 +28,7 @@ export const EntityRow = ({
   onPress: () => void;
 }) => {
   const t = useTranslations("matter");
+  const ui = useUiColors();
   const format = useFormatter();
   const changedAt = entity.updatedAt ?? entity.createdAt;
   const label = (() => {
@@ -48,17 +51,22 @@ export const EntityRow = ({
   return (
     <Pressable
       accessibilityRole="button"
-      className="border-border active:bg-accent gap-0.5 border-b py-3"
+      className="border-border active:bg-accent flex-row gap-3 border-b py-3"
       onPress={onPress}
     >
-      <Text numberOfLines={2} variant="rowTitle">
-        {entity.name === null || entity.name === ""
-          ? t("untitled")
-          : entity.name}
-      </Text>
-      <Text numberOfLines={1} variant="caption">
-        {details.join(" · ")}
-      </Text>
+      <View className="pt-0.5">
+        <EntityKindIcon color={ui.mutedForeground} kind={entity.kind} />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text numberOfLines={2} variant="rowTitle">
+          {entity.name === null || entity.name === ""
+            ? t("untitled")
+            : entity.name}
+        </Text>
+        <Text numberOfLines={1} variant="caption">
+          {details.join(" · ")}
+        </Text>
+      </View>
     </Pressable>
   );
 };

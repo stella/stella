@@ -35,7 +35,8 @@
     "answerWorking": "Wird bearbeitet…",
     "answerStopped": "Gestoppt.",
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
-    "answerFailed": "Die Antwort konnte nicht abgeschlossen werden."
+    "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
+    "composerMenu": "Menü für Anhänge und Werkzeuge öffnen"
   },
   "tasks": {
     "description": "Sehen Sie, was Aufmerksamkeit braucht, ohne den ganzen Arbeitsbereich zu öffnen.",

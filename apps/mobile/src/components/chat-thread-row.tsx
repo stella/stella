@@ -2,6 +2,7 @@ import { Link } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text } from "@/components/ui/text";
 import type {
   ChatThreadSection,
@@ -55,10 +56,16 @@ export const ChatThreadRow = ({
           </View>
           <Text variant="caption">{when}</Text>
         </View>
-        {thread.matterName === undefined ? null : (
-          <Text numberOfLines={1} variant="caption">
-            {thread.matterName}
-          </Text>
+        {thread.matterName === undefined ||
+        thread.matterId === undefined ? null : (
+          <View className="flex-row items-center gap-1.5">
+            <MatterIcon matter={{ id: thread.matterId }} size={12} />
+            <View className="flex-1">
+              <Text numberOfLines={1} variant="caption">
+                {thread.matterName}
+              </Text>
+            </View>
+          </View>
         )}
       </Pressable>
     </Link>

@@ -35,7 +35,8 @@
     "answerWorking": "Strādāju…",
     "answerStopped": "Apturēts.",
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
-    "answerFailed": "Atbildi neizdevās pabeigt."
+    "answerFailed": "Atbildi neizdevās pabeigt.",
+    "composerMenu": "Atvērt pielikumu un rīku izvēlni"
   },
   "tasks": {
     "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",

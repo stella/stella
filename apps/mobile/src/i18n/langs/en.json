@@ -35,7 +35,8 @@
     "answerWorking": "Working…",
     "answerStopped": "Stopped.",
     "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
-    "answerFailed": "The answer could not be completed."
+    "answerFailed": "The answer could not be completed.",
+    "composerMenu": "Open attachments and tools menu"
   },
   "tasks": {
     "description": "See what needs attention without opening the full workspace.",

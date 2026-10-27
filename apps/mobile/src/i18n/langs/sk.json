@@ -35,7 +35,8 @@
     "answerWorking": "Pracujem…",
     "answerStopped": "Zastavené.",
     "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
-    "answerFailed": "Odpoveď sa nepodarilo dokončiť."
+    "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
+    "composerMenu": "Otvoriť ponuku príloh a nástrojov"
   },
   "tasks": {
     "description": "Pozrite sa, čo si vyžaduje pozornosť, bez otvárania celého pracovného priestoru.",

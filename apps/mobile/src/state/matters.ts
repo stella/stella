@@ -14,6 +14,8 @@ const matterSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
   name: v.string(),
   reference: v.nullish(v.string()),
+  /** The matter's colour, as the web stores it; absent, one is hashed from the id. */
+  color: v.nullish(v.string()),
   lastActivityAt: v.nullish(v.string()),
   client: v.nullish(v.object({ displayName: v.string() })),
 });
