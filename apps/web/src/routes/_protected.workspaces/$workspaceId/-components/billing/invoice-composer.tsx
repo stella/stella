@@ -165,6 +165,11 @@ const RowText = ({
 type InvoiceComposerProps = {
   workspaceId: string;
   prefill: InvoicePrefill;
+  /**
+   * Draft time entries and expenses on the matter the viewer may approve;
+   * zero for someone who cannot approve them.
+   */
+  pendingApprovalCount: number;
 };
 
 /**
@@ -176,6 +181,7 @@ type InvoiceComposerProps = {
 export const InvoiceComposer = ({
   workspaceId,
   prefill,
+  pendingApprovalCount,
 }: InvoiceComposerProps) => {
   const t = useTranslations();
   const currency = prefill.currency;
@@ -242,13 +248,26 @@ export const InvoiceComposer = ({
     return (
       <div className="text-muted-foreground flex flex-col items-start gap-2 p-6 text-sm">
         <p>{t("billing.invoiceComposer.nothingToBill")}</p>
-        <Link
-          className="text-foreground underline underline-offset-4"
-          params={{ workspaceId }}
-          to="/workspaces/$workspaceId/timesheets"
-        >
-          {t("billing.timesheets")}
-        </Link>
+        {pendingApprovalCount > 0 ? (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            search={{ view: "approvals" }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.invoiceComposer.pendingApprovals", {
+              count: pendingApprovalCount,
+            })}
+          </Link>
+        ) : (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.timesheets")}
+          </Link>
+        )}
       </div>
     );
   }

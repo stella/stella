@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import { Temporal } from "@stll/time";
 import {
   CalendarIcon,
@@ -20,7 +21,7 @@ import {
   DocumentExtractionStatus,
   readDocumentProcessingStatus,
 } from "@/components/workspaces/document-extraction-status";
-import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import { orderedColumn } from "@/components/workspaces/properties/sort-property.logic";
 import { COLUMN_CONTEXT_MENU } from "@/components/workspaces/row-actions.logic";
 import type { ColumnContextMenu } from "@/components/workspaces/row-actions.logic";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
@@ -150,8 +151,8 @@ const useColumnDefFactory = (
     () =>
       (column: WorkspaceColumnDescriptor): TableColumnDef => {
         const base = columnBase(column);
-        const metadataHeader = (icon: LucideIcon, sortHint: SortHint) =>
-          createMetadataHeader({ icon, label: column.label, sortHint });
+        const metadataHeader = (icon: LucideIcon, sortKind: ColumnSortKind) =>
+          createMetadataHeader({ icon, label: column.label, sortKind });
         const { render } = column;
 
         switch (render.type) {
@@ -289,19 +290,24 @@ const useColumnDefFactory = (
 type MetadataHeaderOptions = {
   icon: LucideIcon;
   label: string;
-  sortHint: SortHint;
+  sortKind: ColumnSortKind;
 };
 
-const createMetadataHeader =
-  ({ icon, label, sortHint }: MetadataHeaderOptions) =>
-  ({ header }: TableHeaderContext) => (
+const createMetadataHeader = ({
+  icon,
+  label,
+  sortKind,
+}: MetadataHeaderOptions) => {
+  const sort = orderedColumn(sortKind);
+  return ({ header }: TableHeaderContext) => (
     <MetadataPopover
       column={header.column}
       icon={icon}
       label={label}
-      sortHint={sortHint}
+      sort={sort}
     />
   );
+};
 
 const renderNothing = () => null;
 

@@ -932,6 +932,12 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -953,6 +959,18 @@
       "de",
       "fr",
       "pl"
+    ],
+    "workspaces.properties.sortAscendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "workspaces.properties.sortDescendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "workspaces.properties.text": [
       "cs",

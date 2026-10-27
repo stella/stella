@@ -19,6 +19,7 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
 import {
   SYNTHETIC_PRINCIPAL,
   SYNTHETIC_SESSION_PREFIX,
@@ -50,6 +51,12 @@ export const user = pgTable(
     // did not advertise a country (local dev, self-hosted without a proxy).
     detectedCountry: text("detected_country"),
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    // The mail provider refused this address: which address (so a changed
+    // email is deliverable again), why, and since when. All null, or all set.
+    // Written only by the account-row owner from the provider's own events.
+    emailUndeliverableAddress: text("email_undeliverable_address"),
+    emailUndeliverableReason: text("email_undeliverable_reason"),
+    emailUndeliverableAt: timestamptz("email_undeliverable_at"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -61,6 +68,10 @@ export const user = pgTable(
     // Keyset pagination over registrations (operator observability)
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
+    check(
+      "user_email_undeliverable_check",
+      sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${table.emailUndeliverableReason} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
+    ),
     ...authUserPolicies(),
   ],
 );
@@ -89,6 +100,9 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   guideProgress: "guide_progress",
   detectedCountry: "detected_country",
   twoFactorEnabled: "two_factor_enabled",
+  emailUndeliverableAddress: "email_undeliverable_address",
+  emailUndeliverableReason: "email_undeliverable_reason",
+  emailUndeliverableAt: "email_undeliverable_at",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",

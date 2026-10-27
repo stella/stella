@@ -888,7 +888,7 @@ const compactInputSchemaGuarded = ({
   const bytes = inputSchemaByteSize(compacted);
   if (bytes > MAX_CAPABILITY_SCHEMA_BYTES) {
     errors.push(
-      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable TypeBox type) or improve compaction; the cap is not the thing to raise`,
+      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable valibot schema) or improve compaction; the cap is not the thing to raise`,
     );
     return compacted;
   }
