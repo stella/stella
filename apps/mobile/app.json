@@ -4,7 +4,7 @@
     "slug": "stella",
     "version": "0.1.0",
     "orientation": "default",
-    "scheme": "stella",
+    "scheme": "app.stll",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true

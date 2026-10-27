@@ -82,7 +82,8 @@ import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
@@ -350,7 +351,7 @@ const useMcpApprovalIconHref = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== null,
   });
-  const connectorsView = useQueryView(mcpConnectorsQuery);
+  const connectorsView = queryView(mcpConnectorsQuery);
   const availableConnectors =
     connectorsView.type === "items" ? connectorsView.items.connectors : [];
   return connectorSlug === null
@@ -773,7 +774,7 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
     }),
     enabled: user !== null,
   });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useMattersById:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();

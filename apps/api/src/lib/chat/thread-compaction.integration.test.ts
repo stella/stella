@@ -879,6 +879,7 @@ describe("chat thread compaction retry semantics", () => {
     const outputCeilingError = new HandlerError({
       message: "AI generation did not complete",
       status: 502,
+      code: "internal_error",
     });
 
     const result = await runChatThreadCompaction({

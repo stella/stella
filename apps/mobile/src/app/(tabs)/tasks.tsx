@@ -1,12 +1,18 @@
+import { useTranslations } from "use-intl";
+
 import { EmptyStateScreen } from "@/components/empty-state-screen";
 
-const TasksScreen = () => (
-  <EmptyStateScreen
-    description="See what needs attention without opening the full workspace."
-    emptyDescription="Assigned and upcoming work will appear here."
-    emptyTitle="No open tasks"
-    title="Tasks"
-  />
-);
+const TasksScreen = () => {
+  const t = useTranslations();
+
+  return (
+    <EmptyStateScreen
+      description={t("tasks.description")}
+      emptyDescription={t("tasks.emptyDescription")}
+      emptyTitle={t("tasks.emptyTitle")}
+      title={t("tabs.tasks")}
+    />
+  );
+};
 
 export default TasksScreen;

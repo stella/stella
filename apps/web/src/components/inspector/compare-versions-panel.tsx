@@ -26,8 +26,9 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys } from "@/lib/files/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   type EntityVersion,
   entityVersionsKeys,
@@ -136,7 +137,7 @@ export const CompareVersionsPanel = ({
     ...outcomeOptions,
     enabled: false,
   });
-  const outcomeQueryView = useQueryView(outcomeQuery);
+  const outcomeQueryView = queryView(outcomeQuery);
   useQueryViewError(outcomeQueryView, "CompareVersionsPanel:query");
   const [requestedSelection, setRequestedSelection] =
     useState<CompareVersionSelection | null>(null);
