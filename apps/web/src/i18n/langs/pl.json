@@ -4306,7 +4306,12 @@
       "styleHighlight": "Wyróżnienie",
       "styleSquiggly": "Falista linia",
       "styleStrikethrough": "Przekreślenie",
-      "visibilityShared": "Udostępnione organizacji"
+      "visibilityShared": "Udostępnione organizacji",
+      "visibilitySharedWithMatter": "Udostępnione w sprawie"
+    },
+    "contents": {
+      "aiSection": "{section} (część wygenerowana przez AI)",
+      "headingWithAiSection": "{heading} (część wygenerowana przez AI: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
@@ -6470,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Dostosuj strony do trybu ciemnego",
+      "annotations": {
+        "commentedBy": "Komentarz: {name}",
+        "detachedHeading": "Poza tą wersją",
+        "detachedOtherVersion": "Utworzono w wersji {version}; tekst strony się zmienił.",
+        "detachedTextChanged": "Tych słów nie ma już na stronie {page}.",
+        "empty": "Zaznacz słowa w dokumencie i wybierz Komentarz.",
+        "highlightedBy": "Wyróżnienie: {name}",
+        "refusedNoText": "Na tej stronie nie ma tekstu do oznaczenia. Najpierw uruchom rozpoznawanie tekstu dokumentu.",
+        "refusedNotFound": "Tych słów nie znaleziono w tekście strony. Zaznacz je ponownie.",
+        "refusedTooLong": "Ten fragment jest za długi, aby go oznaczyć. Zaznacz krótszy."
+      },
       "backToPeek": "Wróć do podglądu",
       "entitySidebar": "Szczegóły dokumentu",
       "evidence": "Uzasadnienie",

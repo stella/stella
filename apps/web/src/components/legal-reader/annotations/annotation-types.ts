@@ -1,7 +1,3 @@
-import {
-  READER_ANNOTATION_COLORS,
-  READER_ANNOTATION_STYLES,
-} from "@stll/api-contract/legal-reader-annotations";
 import type {
   ReaderAnnotationColor,
   ReaderAnnotationStyle,
@@ -13,10 +9,6 @@ import type { SelectionAnchor } from "@/components/legal-reader/annotations/sele
 export type AnnotationColor = ReaderAnnotationColor;
 export type AnnotationStyle = ReaderAnnotationStyle;
 export type AnnotationVisibility = ReaderAnnotationVisibility;
-
-export const ANNOTATION_COLORS = READER_ANNOTATION_COLORS;
-
-export const ANNOTATION_STYLES = READER_ANNOTATION_STYLES;
 
 export type CreateAnnotationInput = { spans: SelectionAnchor[] } & (
   | {

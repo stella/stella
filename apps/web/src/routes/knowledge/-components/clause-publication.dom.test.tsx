@@ -7,6 +7,8 @@ import {
   describe,
   expect,
   jest,
+  type Mock,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -28,27 +30,7 @@ import type { ClauseBodyWrite } from "./use-clause-body-save";
 GlobalRegistrator.register({ url: "http://localhost:3000/knowledge" });
 // Importing the real page also initializes the auth client. Its unauthenticated
 // session probe is the only ambient transport this harness permits.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL) => {
-      let url;
-      if (typeof input === "string") {
-        url = new URL(input, "http://localhost:3000");
-      } else if (input instanceof URL) {
-        url = input;
-      } else {
-        url = new URL(input.url);
-      }
-      if (url.pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      throw new Error(
-        `unexpected network transport in clause test: ${url.pathname}`,
-      );
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, renderHook, waitFor, within } =
@@ -108,7 +90,34 @@ type Operation =
     };
 
 beforeEach(() => jest.useFakeTimers());
-afterEach(cleanup);
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL) => {
+        let url;
+        if (typeof input === "string") {
+          url = new URL(input, "http://localhost:3000");
+        } else if (input instanceof URL) {
+          url = input;
+        } else {
+          url = new URL(input.url);
+        }
+        if (url.pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        throw new Error(
+          `unexpected network transport in clause test: ${url.pathname}`,
+        );
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
+afterEach(() => {
+  mock.restore();
+  cleanup();
+});
 afterAll(async () => {
   fetchBoundary.mockRestore();
   jest.restoreAllMocks();

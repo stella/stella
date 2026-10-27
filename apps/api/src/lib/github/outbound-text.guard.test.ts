@@ -14,7 +14,14 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  isObjectLiteralProperty,
+  type Node,
+  type ObjectProperty,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
 const OWNER_IMPORT = "@/api/lib/github/outbound-text";
@@ -37,55 +44,71 @@ type GithubModule = {
   untaggedMarkdown: number[];
 };
 
-const propertyName = (name: ts.PropertyName): string | undefined =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+const propertyName = (property: ObjectProperty): string | undefined => {
+  if (property.computed) {
+    return undefined;
+  }
+  if (property.key.type === "Identifier") {
+    return property.key.name;
+  }
+  return property.key.type === "Literal" &&
+    typeof property.key.value === "string"
+    ? property.key.value
+    : undefined;
+};
+
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
 
 const scanGithubModule = (file: string, source: string): GithubModule => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const parsed = parseSource(file, source);
   const result: GithubModule = {
     file,
     talksToGithub: GITHUB_HOST.test(source),
     writes: /@octokit\//u.test(source),
     untaggedMarkdown: [],
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAssignment(node) && propertyName(node.name) === "method") {
-      const value = node.initializer;
-      const literal =
-        ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)
-          ? value.text.toUpperCase()
-          : undefined;
-      if (literal === undefined || !READ_METHODS.has(literal)) {
+  const untagged = new Set<number>();
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (
+      isObjectLiteralProperty(node, parent) &&
+      node.kind === "init" &&
+      !node.method &&
+      propertyName(node) === "method"
+    ) {
+      if (node.shorthand) {
         result.writes = true;
+      } else {
+        const literal = literalText(node.value)?.toUpperCase();
+        if (literal === undefined || !READ_METHODS.has(literal)) {
+          result.writes = true;
+        }
       }
     }
-    if (ts.isShorthandPropertyAssignment(node) && node.name.text === "method") {
-      result.writes = true;
-    }
-    if (ts.isIdentifier(node) && node.text === "githubMarkdown") {
-      const parent = node.parent;
+    if (node.type === "Identifier" && node.name === "githubMarkdown") {
       const isTag =
-        ts.isTaggedTemplateExpression(parent) && parent.tag === node;
+        parent?.type === "TaggedTemplateExpression" && parent.tag === node;
       const isImport =
-        ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent);
+        parent?.type === "ImportSpecifier" ||
+        parent?.type === "ExportSpecifier";
       // The owner's own definition of the tag.
       const isDefinition =
-        ts.isVariableDeclaration(parent) && parent.name === node;
-      if (!isTag && !isImport && !isDefinition) {
-        result.untaggedMarkdown.push(
-          sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-        );
+        parent?.type === "VariableDeclarator" && parent.id === node;
+      // A shorthand property carries the name as both key and value.
+      if (!isTag && !isImport && !isDefinition && !untagged.has(node.start)) {
+        untagged.add(node.start);
+        result.untaggedMarkdown.push(parsed.locate(node.start).line);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return result;
 };
 

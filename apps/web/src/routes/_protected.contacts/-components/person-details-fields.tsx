@@ -19,7 +19,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
 import {
   filterNationalityOptions,
@@ -42,7 +42,7 @@ export const PersonDetailsFields = ({
 }: PersonDetailsFieldsProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const parsedNationalityCodes = nationalityCodes.filter(isCountryCode);
