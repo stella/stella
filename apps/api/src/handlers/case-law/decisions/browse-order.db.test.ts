@@ -353,9 +353,11 @@ test.each(DECISION_LIST_SORTS)(
     if (!("items" in next)) {
       throw new Error("list failed");
     }
-    expect(next.items.map((item) => item.id)).toEqual([
-      all[datedCount]?.id ?? "",
-    ]);
+    const firstUndated = all.at(datedCount);
+    if (firstUndated === undefined) {
+      throw new Error("the walk listed no undated decision");
+    }
+    expect(next.items.map((item) => item.id)).toEqual([firstUndated.id]);
     expect(next.items[0]?.decisionDate).toBeNull();
   },
   DB_TEST_TIMEOUT_MS,

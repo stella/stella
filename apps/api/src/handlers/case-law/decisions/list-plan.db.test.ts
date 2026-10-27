@@ -310,11 +310,14 @@ const orderedWalk = (plan: string, sort: DecisionListSort) => {
 // Every band a request with the filter reads; a date bound reads no undated
 // band, so it has no plan there to declare.
 test.each(
-  ORDERS_BY_BAND.flatMap(([sort, band]) =>
-    Object.entries(FILTER_ACCESS_BY_BAND[band])
+  ORDERS_BY_BAND.flatMap(([sort, band]) => {
+    // The two bands' tables differ in shape; read either as one access map.
+    const accessByFilter: Readonly<Record<string, FilterAccess>> =
+      FILTER_ACCESS_BY_BAND[band];
+    return Object.entries(accessByFilter)
       .filter(([, access]) => admitsDecisionDateBand(access.query, band))
-      .map(([filter, access]) => [sort, band, filter, access] as const),
-  ),
+      .map(([filter, access]) => [sort, band, filter, access] as const);
+  }),
 )(
   "the %s-first browse walk's %s band reads its %s filter through the access path it declares",
   async (sort, band, _filter, access) => {
