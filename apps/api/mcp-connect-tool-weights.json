@@ -88,10 +88,10 @@
     {
       "name": "delete_matter",
       "nameChars": 13,
-      "descriptionChars": 223,
+      "descriptionChars": 167,
       "inputSchemaChars": 331,
-      "totalChars": 567,
-      "estimatedTokens": 217
+      "totalChars": 511,
+      "estimatedTokens": 198
     },
     {
       "name": "delete_reader_annotation",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127509,
-    "estimatedTokens": 50545
+    "characters": 127453,
+    "estimatedTokens": 50526
   }
 }

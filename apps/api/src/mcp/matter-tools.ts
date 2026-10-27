@@ -2514,10 +2514,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       readOnlyHint: false,
     },
     description:
-      "Permanently delete a matter and all its documents, tasks, fields, and " +
-      "chat history. This is irreversible. A matter with time entries, " +
-      "expenses or invoices is refused with 409; archive it instead to keep " +
-      "its billing records.",
+      "Permanently delete a matter with its documents, tasks, fields and " +
+      "chat history; irreversible. Refused (409) when it has time, expenses " +
+      "or invoices: archive it instead.",
     inputSchema: deleteMatterArgsSchema,
     access: "write",
     accountAccess: "sandbox",
