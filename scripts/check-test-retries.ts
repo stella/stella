@@ -782,40 +782,31 @@ const helperBindingNames = (
 ) => {
   const names = new Set(helper.params.flatMap(bindingNames));
   walk(helper, (node) => {
-    switch (node.type) {
-      case "FunctionDeclaration":
-        if (node !== helper) {
-          if (node.id !== null) {
-            names.add(node.id.name);
-          }
-          return "skip-children";
-        }
-        break;
-      case "FunctionExpression":
-      case "ArrowFunctionExpression":
-        if (node !== helper) {
-          return "skip-children";
-        }
-        break;
-      case "VariableDeclarator":
-        for (const name of bindingNames(node.id)) {
-          names.add(name);
-        }
-        break;
-      case "ClassDeclaration":
-        if (node.id !== null) {
-          names.add(node.id.name);
-        }
-        break;
-      case "CatchClause":
-        if (node.param !== null) {
-          for (const name of bindingNames(node.param)) {
-            names.add(name);
-          }
-        }
-        break;
-      default:
-        break;
+    if (node.type === "FunctionDeclaration" && node !== helper) {
+      if (node.id !== null) {
+        names.add(node.id.name);
+      }
+      return "skip-children";
+    }
+    if (
+      (node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression") &&
+      node !== helper
+    ) {
+      return "skip-children";
+    }
+    if (node.type === "VariableDeclarator") {
+      for (const name of bindingNames(node.id)) {
+        names.add(name);
+      }
+    }
+    if (node.type === "ClassDeclaration" && node.id !== null) {
+      names.add(node.id.name);
+    }
+    if (node.type === "CatchClause" && node.param !== null) {
+      for (const name of bindingNames(node.param)) {
+        names.add(name);
+      }
     }
     return undefined;
   });
