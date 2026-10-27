@@ -46,6 +46,8 @@ export type HeaderAction = {
   render: () => ReactNode;
 };
 
+const NO_HEADER_ACTIONS: readonly HeaderAction[] = [];
+
 type RenameState = {
   /** Whether the label is currently being edited inline. */
   active: boolean;
@@ -114,16 +116,13 @@ export const InspectorTabHeader = ({
   onLabelContextMenu,
   rename,
   matter,
-  actions,
+  actions = NO_HEADER_ACTIONS,
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const renaming = rename?.active === true;
-  const visibleActions = filterAvailable(
-    actions ?? [],
-    usePlatformCapabilities(),
-  );
+  const visibleActions = filterAvailable(actions, usePlatformCapabilities());
 
   return (
     <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
