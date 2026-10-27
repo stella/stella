@@ -4,17 +4,20 @@ export const AI_PROVIDER_CONFIGURATION = {
   accountRestricted: "account_restricted",
 } as const;
 
+export const AI_UNAVAILABLE_REASON = {
+  providerNotConfigured: "provider_not_configured",
+  ownKeyRequired: "own_key_required",
+  memberAssignmentRequired: "member_assignment_required",
+  unreadable: "unreadable",
+} as const;
+
 /** Member-visible AI availability, without provider credentials or configuration. */
 export type OrganizationAIAvailability = {
   available: boolean;
   instanceProvisioned: boolean;
   orgConfigured: boolean;
   unavailableReason:
-    | "provider_not_configured"
-    | "own_key_required"
-    | "member_assignment_required"
-    | "unreadable"
-    | null;
+    (typeof AI_UNAVAILABLE_REASON)[keyof typeof AI_UNAVAILABLE_REASON] | null;
   providerConfiguration: (typeof AI_PROVIDER_CONFIGURATION)[keyof typeof AI_PROVIDER_CONFIGURATION];
   deferredServiceTierAvailable: boolean;
   mockAnswers: boolean;

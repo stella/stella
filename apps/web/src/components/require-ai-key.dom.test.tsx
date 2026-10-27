@@ -3,7 +3,10 @@ import type { PropsWithChildren, ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
-import { AI_PROVIDER_CONFIGURATION } from "@stll/api-contract/organization-ai-availability";
+import {
+  AI_PROVIDER_CONFIGURATION,
+  AI_UNAVAILABLE_REASON,
+} from "@stll/api-contract/organization-ai-availability";
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
 
@@ -20,7 +23,9 @@ let configStatus = 200;
 let availabilityStatus = 200;
 let availabilityHold: Promise<void> | null = null;
 let instanceProvisioned = false;
-let unreadable = false;
+let unavailableReason: NonNullable<
+  OrganizationAIAvailability["unavailableReason"]
+> = "provider_not_configured";
 let providerConfiguration: OrganizationAIAvailability["providerConfiguration"] =
   "allowed";
 let aiConfigRequests = 0;
@@ -40,7 +45,7 @@ globalThis.fetch = Object.assign(
           { status: availabilityStatus },
         );
       }
-      if (unreadable) {
+      if (unavailableReason === "unreadable") {
         return Response.json(
           aiUnavailableResponse({
             providerConfiguration,
@@ -54,7 +59,9 @@ globalThis.fetch = Object.assign(
           providerConfiguration,
         });
       }
-      return Response.json(aiUnavailableResponse({ providerConfiguration }));
+      return Response.json(
+        aiUnavailableResponse({ providerConfiguration, unavailableReason }),
+      );
     }
     if (
       url.pathname.endsWith("/organization-settings/ai-config/defaults-preview")
@@ -124,7 +131,7 @@ afterEach(() => {
   availabilityStatus = 200;
   availabilityHold = null;
   instanceProvisioned = false;
-  unreadable = false;
+  unavailableReason = "provider_not_configured";
   aiConfigRequests = 0;
 });
 
@@ -148,7 +155,7 @@ test.each([
   [403, "escape"],
   [500, "cancel"],
 ] as const)(
-  "an automatically opened AI key dialog stays closed after dismissal (config read %d, %s)",
+  "an explicitly opened AI key dialog stays closed after dismissal (config read %d, %s)",
   async (status, dismissal) => {
     configStatus = status;
     const queryClient = new QueryClient({
@@ -186,6 +193,10 @@ test.each([
         popup instanceof HTMLElement && popup.dataset["open"] !== undefined
       );
     };
+    expect(isOpen()).toBe(false);
+    fireEvent.click(
+      await screen.findByRole("button", { name: messages.ai.keyRequired.cta }),
+    );
     const heading = await screen.findByRole("heading", {
       name: "Connect AI provider",
     });
@@ -399,7 +410,10 @@ const surfaceBoundaries = {
   settings: AIProviderSettingsBoundary,
 };
 
-const renderSurface = (Boundary: (props: PropsWithChildren) => ReactNode) => {
+const renderSurface = (
+  Boundary: (props: PropsWithChildren) => ReactNode,
+  children: ReactNode = <button type="button">{messages.common.cancel}</button>,
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -426,9 +440,7 @@ const renderSurface = (Boundary: (props: PropsWithChildren) => ReactNode) => {
           <FormattingProvider locale="en" timeZone="UTC">
             <AIAvailabilityProvider>
               <Capture />
-              <Boundary>
-                <button type="button">{messages.common.cancel}</button>
-              </Boundary>
+              <Boundary>{children}</Boundary>
             </AIAvailabilityProvider>
           </FormattingProvider>
         </IntlProvider>
@@ -489,7 +501,8 @@ const unavailableSurfaceCases = Object.entries(surfaceBoundaries)
 test.each(unavailableSurfaceCases)(
   "$surface preserves chat and blocks sends while availability is $failure, then retries",
   async ({ Boundary, failure }) => {
-    unreadable = failure === "unreadable";
+    unavailableReason =
+      failure === "unreadable" ? "unreadable" : "provider_not_configured";
     availabilityStatus = failure === "unreadable" ? 200 : Number(failure);
     const { queryClient, gates } = renderSurface(Boundary);
     expect(
@@ -512,7 +525,7 @@ test.each(unavailableSurfaceCases)(
     expect(
       screen.queryByRole("heading", { name: messages.ai.keyRequired.title }),
     ).toBeNull();
-    unreadable = false;
+    unavailableReason = "provider_not_configured";
     availabilityStatus = 200;
     instanceProvisioned = true;
     fireEvent.click(
@@ -630,5 +643,163 @@ test("settings admission reports failed refreshes instead of retaining cached ma
   expect(
     screen.queryByRole("button", { name: messages.common.cancel }),
   ).toBeNull();
+  queryClient.clear();
+});
+
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { toChatThreadId } = await import("@/lib/chat-thread-ref");
+const { ChatEditorProvider, useChatEditor, CHAT_SEND_SENT, CHAT_SEND_KEPT } =
+  await import("./chat-editor-provider");
+const { composerText } = await import("./chat-editor-source");
+const { ChatInputSurface } = await import("./chat-input-surface");
+const { LandingLayout } = await import("@stll/ui/landing");
+
+const canaryThread = {
+  scope: "global",
+  threadId: toChatThreadId("availability-composer"),
+} as const;
+
+type CanaryComposerProps = {
+  controllers: Map<"editor", ReturnType<typeof useChatEditor>>;
+  sends: string[];
+};
+
+const CanaryComposer = ({ controllers, sends }: CanaryComposerProps) => {
+  const controller = useChatEditor({ threadRef: canaryThread });
+  controllers.set("editor", controller);
+  const { availability, ensureAIAvailable } = useAIKeyGate();
+  return (
+    <LandingLayout
+      hero={
+        <ChatInputSurface
+          controller={controller}
+          sendDisabled={availability !== "available"}
+          variant="large"
+          reservedCommands={{ hasPersistedThread: false }}
+          onSubmit={async (draft) => {
+            if (!(await ensureAIAvailable())) {
+              return CHAT_SEND_KEPT;
+            }
+            sends.push(draft.html);
+            return CHAT_SEND_SENT;
+          }}
+        />
+      }
+    >
+      {null}
+    </LandingLayout>
+  );
+};
+
+const renderCanaryComposer = () => {
+  const controllers = new Map<"editor", ReturnType<typeof useChatEditor>>();
+  const sends: string[] = [];
+  const surface = renderSurface(
+    RequireAIKey,
+    <ChatThreadTestRouter>
+      <ChatEditorProvider>
+        <CanaryComposer controllers={controllers} sends={sends} />
+      </ChatEditorProvider>
+    </ChatThreadTestRouter>,
+  );
+  return { ...surface, controllers, sends };
+};
+
+const composerAvailabilityCases = [
+  { type: "available" } as const,
+  ...Object.values(AI_UNAVAILABLE_REASON).map(
+    (reason) => ({ type: "unavailable", reason }) as const,
+  ),
+  ...[403, 500].map((status) => ({ type: "readFailed", status }) as const),
+];
+
+test.each(composerAvailabilityCases)(
+  "the real chat textbox stays editable and sends follow provider state: %j",
+  async (state) => {
+    switch (state.type) {
+      case "available":
+        instanceProvisioned = true;
+        break;
+      case "unavailable":
+        unavailableReason = state.reason;
+        break;
+      case "readFailed":
+        availabilityStatus = state.status;
+        break;
+    }
+    const { queryClient, controllers, sends } = renderCanaryComposer();
+    const textbox = await screen.findByRole("textbox", {
+      name: messages.chat.placeholder,
+    });
+    await settle();
+    expect(textbox.getAttribute("contenteditable")).toBe("true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await act(async () => {
+      controllers
+        .get("editor")
+        ?.setContent(composerText("Which clauses need revision?"));
+    });
+    const send = screen.getByRole("button", { name: messages.chat.sendPrompt });
+    expect(send.hasAttribute("disabled")).toBe(state.type !== "available");
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    await settle();
+    expect(sends.length).toBe(state.type === "available" ? 1 : 0);
+    if (state.type !== "available") {
+      expect(textbox.textContent).toContain("Which clauses need revision?");
+      unavailableReason = "provider_not_configured";
+      availabilityStatus = 200;
+      instanceProvisioned = true;
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.retry }),
+      );
+      await waitFor(() => {
+        expect(send.hasAttribute("disabled")).toBe(false);
+      });
+      expect(
+        screen.getByRole("textbox", { name: messages.chat.placeholder }),
+      ).toBe(textbox);
+      expect(textbox.textContent).toContain("Which clauses need revision?");
+      fireEvent.click(send);
+      await waitFor(() => {
+        expect(sends.length).toBe(1);
+      });
+    }
+    queryClient.clear();
+  },
+);
+
+test("the real chat textbox mounts during a pending availability read", async () => {
+  const admission = Promise.withResolvers<undefined>();
+  availabilityHold = admission.promise;
+  const { queryClient, controllers, sends } = renderCanaryComposer();
+  const textbox = await screen.findByRole("textbox", {
+    name: messages.chat.placeholder,
+  });
+  await act(async () => {
+    controllers
+      .get("editor")
+      ?.setContent(composerText("Which clauses need revision?"));
+  });
+  expect(
+    screen
+      .getByRole("button", { name: messages.chat.sendPrompt })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  expect(textbox.getAttribute("contenteditable")).toBe("true");
+  expect(sends.length).toBe(0);
+  instanceProvisioned = true;
+  await act(async () => {
+    admission.resolve(undefined);
+  });
+  await waitFor(() => {
+    expect(
+      screen
+        .getByRole("button", { name: messages.chat.sendPrompt })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+  });
+  expect(screen.getByRole("textbox", { name: messages.chat.placeholder })).toBe(
+    textbox,
+  );
   queryClient.clear();
 });

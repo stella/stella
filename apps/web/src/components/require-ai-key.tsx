@@ -2,7 +2,6 @@ import type { PropsWithChildren } from "react";
 import { createContext, use, useCallback, useMemo, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -19,7 +18,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { LoaderState } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
@@ -47,7 +45,6 @@ import type {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -65,7 +62,10 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
+type AIAvailabilityStatus = "pending" | "available" | "unavailable";
+
 type AIAvailabilityContextValue = {
+  availability: AIAvailabilityStatus;
   ensureAIAvailable: () => Promise<boolean>;
   openAIKeyDialog: () => void;
   openIfAIUnavailable: () => void;
@@ -75,7 +75,12 @@ const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
   null,
 );
 type AIUnavailableState =
-  | { type: "configurationRequired"; availability: OrganizationAIAvailability }
+  | {
+      type: "configurationRequired";
+      availability: OrganizationAIAvailability;
+      retry: () => void;
+      retrying: boolean;
+    }
   | { type: "unavailable"; retry: () => void; retrying: boolean };
 
 const AIUnavailableContext = createContext<AIUnavailableState | null>(null);
@@ -209,7 +214,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     !data.available &&
     !isFetching
   ) {
-    aiUnavailable = { type: "configurationRequired", availability: data };
+    aiUnavailable = {
+      type: "configurationRequired",
+      availability: data,
+      retry: () => detached(dataQuery.refetch(), "ai-availability.retry"),
+      retrying: isFetching,
+    };
   }
 
   // Force-close the dialog whenever the availability query flips to available
@@ -224,13 +234,21 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     }
   }
 
+  let availability: AIAvailabilityStatus = "unavailable";
+  if (dataQuery.status === "pending") {
+    availability = "pending";
+  } else if (dataQuery.status === "success" && data?.available) {
+    availability = "available";
+  }
+
   const value = useMemo(
     () => ({
+      availability,
       ensureAIAvailable,
       openAIKeyDialog,
       openIfAIUnavailable,
     }),
-    [ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
+    [availability, ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
   );
 
   return (
@@ -252,13 +270,6 @@ export const useAIKeyGate = () =>
     scope: PROVIDER_SCOPE.ai,
     missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
   });
-
-const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
-  useMountEffect(() => {
-    open();
-  });
-  return null;
-};
 
 export const AIUnavailableDialogTrigger = () => {
   const state = use(AIUnavailableContext);
@@ -287,90 +298,46 @@ export const AIUnavailableDialogTrigger = () => {
         </div>
       );
     case "configurationRequired":
-      return state.availability.providerConfiguration === "allowed" ? (
-        <OpenAIKeyDialogOnMount open={openAIKeyDialog} />
-      ) : null;
+      return (
+        <div
+          role="status"
+          className="bg-muted text-muted-foreground flex shrink-0 flex-wrap items-center gap-3 rounded-md p-3 text-sm"
+        >
+          <p>{t(aiUnavailableMessageKey(state.availability))}</p>
+          {state.availability.providerConfiguration === "allowed" ? (
+            <Button size="sm" variant="ghost" onClick={openAIKeyDialog}>
+              {t("ai.keyRequired.cta")}
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={state.retrying}
+            onClick={state.retry}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      );
     default:
       state satisfies never;
       return panic("Unhandled AI availability feedback state");
   }
 };
 
-/**
- * Keep chat mounted while availability recovers. A confirmed missing provider
- * opens configuration only for a principal who can manage it; send-time
- * surfaces check the same availability through `useAIKeyGate()`.
- */
-// Explicit ReactNode: returning bare `children` infers a type containing
-// React 19's Promise<AwaitedReactNode> member, which promise-function-async
-// would otherwise flag on this intentionally sync component.
-export const RequireAIKey = ({
-  children,
-}: PropsWithChildren): React.ReactNode => {
-  const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const dataQuery = useChromeQuery(
-    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-  );
-  const dataView = queryView(dataQuery);
-  useQueryViewError(dataView, "RequireAIKey:query");
-  const { isFetching, isPending } = dataQuery;
-  const data = dataView.type === "items" ? dataView.items : undefined;
-  const { openAIKeyDialog } = useAIKeyGate();
-
-  // Preserve the chat runtime and draft across failed reads and retries.
-  if (
-    isPending ||
-    dataQuery.status === "error" ||
-    data?.unavailableReason === "unreadable" ||
-    data?.available
-  ) {
-    return (
-      <div className="flex h-full min-h-0 flex-1 flex-col">
-        {isPending ? (
-          <QueryViewFeedback view={dataView} />
-        ) : (
-          <AIUnavailableDialogTrigger />
-        )}
-        <AIAvailabilityFeedbackContext value={true}>
-          {children}
-        </AIAvailabilityFeedbackContext>
-      </div>
-    );
-  }
-  if (isFetching && data?.available === false) {
-    return <LoaderState label={t("common.loading")} />;
-  }
-
+/** Keep the route's composer and draft mounted in every availability state. */
+export const RequireAIKey = ({ children }: PropsWithChildren) => {
+  const { availability } = useAIKeyGate();
   return (
-    <div className="flex h-full w-full flex-1 items-center justify-center p-6">
-      {data?.providerConfiguration === "allowed" ? (
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
+      {availability === "pending" ? (
+        <QueryViewFeedback view={{ type: "pending" }} />
+      ) : (
         <AIUnavailableDialogTrigger />
-      ) : null}
-      <div className="border-border bg-card text-card-foreground flex max-w-md flex-col gap-4 rounded-lg border p-6 shadow-sm">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-foreground text-lg font-semibold">
-            {t("ai.keyRequired.title")}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {data === undefined
-              ? t("ai.keyRequired.description")
-              : t(aiUnavailableMessageKey(data))}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {data?.providerConfiguration === "allowed" ? (
-            <>
-              <Button onClick={openAIKeyDialog}>
-                {t("ai.keyRequired.cta")}
-              </Button>
-              <Button render={<Link to="/admin/ai" />} variant="ghost">
-                {t("organization.aiConfig.title")}
-              </Button>
-            </>
-          ) : null}
-        </div>
-      </div>
+      )}
+      <AIAvailabilityFeedbackContext value={true}>
+        {children}
+      </AIAvailabilityFeedbackContext>
     </div>
   );
 };

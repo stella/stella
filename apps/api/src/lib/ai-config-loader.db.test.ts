@@ -6,6 +6,7 @@
  * organization's settings row present.
  */
 
+import { panic } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -21,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import readAIAvailability from "@/api/handlers/organization-settings/ai-availability/get";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
@@ -39,6 +41,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   loadWebSearchKeys,
   loadWebSearchProvidersForOrg,
@@ -48,6 +51,11 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import {
+  createTestHandlerContext,
+  NO_AUDIT,
+  NO_DB,
+} from "@/api/tests/helpers/handler-context";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -90,6 +98,7 @@ let ids: TestIds;
 const corruptOrgId = mintAuthProviderId<"organization">();
 /** An organization with no settings row at all. */
 const unsetOrgId = mintAuthProviderId<"organization">();
+const seededOrgId = mintAuthProviderId<"organization">();
 
 /** The request scope authentication builds for a member of `organizationId`. */
 const requestScope = (
@@ -167,22 +176,32 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     },
     {
+      id: seededOrgId,
+      name: "Seeded settings",
+      slug: `seeded-settings-${seededOrgId}`,
+      createdAt: new Date(),
+    },
+    {
       id: unsetOrgId,
       name: "No settings",
       slug: `no-settings-${unsetOrgId}`,
       createdAt: new Date(),
     },
   ]);
-  // userA1 joins both, so each scope below is built for a real member.
+  // Each scope below belongs to a current organization member.
   await testDb.insert(member).values(
-    [corruptOrgId, unsetOrgId].map((organizationId) => ({
+    [corruptOrgId, unsetOrgId, seededOrgId].map((organizationId) => ({
       id: mintAuthProviderIdValue(),
       organizationId,
       userId: ids.userA1,
-      role: "member",
+      role: organizationId === seededOrgId ? "owner" : "member",
       createdAt: new Date(),
     })),
   );
+  await testDb.insert(organizationSettings).values({
+    organizationId: seededOrgId,
+    practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
+  });
   await testDb.insert(organizationSettings).values({
     organizationId: corruptOrgId,
     aiConfigEncrypted: Buffer.from("{not an encrypted config"),
@@ -194,11 +213,8 @@ testState.beforeAll(async () => {
 
 afterAll(async () => {
   await testDb
-    .delete(member)
-    .where(inArray(member.organizationId, [corruptOrgId, unsetOrgId]));
-  await testDb
     .delete(organization)
-    .where(inArray(organization.id, [corruptOrgId, unsetOrgId]));
+    .where(inArray(organization.id, [corruptOrgId, unsetOrgId, seededOrgId]));
   await releaseTestDb();
 });
 
@@ -382,6 +398,46 @@ describe("organization settings under the request scope", () => {
         }),
       ),
     );
+  });
+});
+
+test("a jurisdiction-only settings row keeps the default chat provider available", async () => {
+  testState.patchConfig({
+    AI_PROVIDER: "openrouter",
+    OPENROUTER_API_KEY: "test-instance-key",
+    REQUIRE_PERSONAL_AI_KEY: false,
+    FEATURE_ORG_ACCESS_STATE: false,
+  });
+  const settings = await loadOrgSettingsForAuth(testDb, {
+    organizationId: seededOrgId,
+    userId: ids.userA1,
+  });
+  expect(settings).toEqual({
+    orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu",
+    promptCachingEnabled: true,
+  });
+  if (settings.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
+    return panic("Seeded settings must be readable");
+  }
+  const availability = await readAIAvailability.handler(
+    createTestHandlerContext<Parameters<typeof readAIAvailability.handler>[0]>({
+      ...settings,
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
+      scopedDb: NO_DB,
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: seededOrgId },
+      user: { id: ids.userA1, email: "seed@example.test" },
+    }),
+  );
+  expect(availability).toMatchObject({
+    available: true,
+    instanceProvisioned: true,
+    orgConfigured: false,
+    unavailableReason: null,
+    providerConfiguration: "allowed",
   });
 });
 

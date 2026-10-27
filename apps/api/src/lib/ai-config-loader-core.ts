@@ -1,3 +1,5 @@
+import { AI_UNAVAILABLE_REASON } from "@stll/api-contract/organization-ai-availability";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -45,9 +47,9 @@ export type DecryptOrgAIConfigRowResult =
  */
 export const ORG_AI_CONFIG_STATUS = {
   ok: "ok",
-  unreadable: "unreadable",
-  ownKeyRequired: "own_key_required",
-  memberAssignmentRequired: "member_assignment_required",
+  unreadable: AI_UNAVAILABLE_REASON.unreadable,
+  ownKeyRequired: AI_UNAVAILABLE_REASON.ownKeyRequired,
+  memberAssignmentRequired: AI_UNAVAILABLE_REASON.memberAssignmentRequired,
 } as const;
 
 export type OrgAIConfigStatus =
