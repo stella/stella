@@ -7473,6 +7473,6 @@ test("an event type outside the engine's types reaches the client between answer
   );
 
   expect(collectText(visible)).toBe("The answer continues.");
-  expect(visible.map(({ type }) => type)).toContain("FUTURE_EVENT");
+  expect(visible.map(({ type }): string => type)).toContain("FUTURE_EVENT");
   expect(visible.at(-1)?.type).toBe(EventType.RUN_FINISHED);
 });
