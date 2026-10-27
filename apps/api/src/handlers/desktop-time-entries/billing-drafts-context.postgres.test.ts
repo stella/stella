@@ -187,6 +187,7 @@ if (!databaseUrl || !runPostgres) {
         const body = {
           entries: [
             {
+              entryId: "selected-entry",
               matterId: workspaceId,
               date: today.toString(),
               timezone: "Europe/Prague",
@@ -282,6 +283,7 @@ if (!databaseUrl || !runPostgres) {
           body: {
             entries: [
               {
+                entryId: "selected-entry-1",
                 matterId: createSafeId<"workspace">(),
                 date: today.toString(),
                 timezone: "Europe/Prague",
@@ -322,6 +324,7 @@ if (!databaseUrl || !runPostgres) {
           body: {
             entries: [
               {
+                entryId: "selected-entry-2",
                 matterId: createSafeId<"workspace">(),
                 date: today.toString(),
                 timezone: "Europe/Prague",
@@ -431,6 +434,7 @@ if (!databaseUrl || !runPostgres) {
           body: {
             entries: [
               {
+                entryId: "selected-entry-3",
                 matterId: createSafeId<"workspace">(),
                 date: today.toString(),
                 timezone: "Europe/Prague",
@@ -495,6 +499,7 @@ if (!databaseUrl || !runPostgres) {
           body: {
             entries: [
               {
+                entryId: "selected-entry-4",
                 matterId: createSafeId<"workspace">(),
                 date: today.toString(),
                 timezone: "Europe/Prague",

@@ -68,6 +68,7 @@ export const desktopBillingDraftEvidenceSchema = v.strictObject({
 });
 
 export const desktopBillingDraftEntrySchema = v.strictObject({
+  entryId: identifierSchema,
   matterId: matterIdSchema,
   date: dateSchema,
   timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),

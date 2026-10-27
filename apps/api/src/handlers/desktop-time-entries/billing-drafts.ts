@@ -326,14 +326,10 @@ export const createDesktopBillingDraftEndpoint = ({
             }),
           );
         }
-        const selectedEntries = body.entries.map((entry, index) => ({
-          ...entry,
-          entryId: `entry_${index + 1}`,
-        }));
         yield* validateEntryDates(body.entries);
         const context = yield* Result.await(loadContext({ ...account, body }));
         const validationContext = {
-          entries: selectedEntries,
+          entries: body.entries,
           matters: context.matters,
           earlierEntries: context.earlierEntries,
           guidelines: context.guidelines,
@@ -363,7 +359,7 @@ export const createDesktopBillingDraftEndpoint = ({
         }
         const { refs, prompt } = prepareBillingDraftPrompt({
           body,
-          selectedEntries,
+          selectedEntries: body.entries,
           context,
         });
         if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {

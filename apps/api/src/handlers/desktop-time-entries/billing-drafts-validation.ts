@@ -26,9 +26,7 @@ class BillingDraftValidationError extends TaggedError(
 )<{ message: string }> {}
 
 export type BillingDraftValidationContext = {
-  entries: (DesktopBillingDraftRequest["entries"][number] & {
-    entryId: string;
-  })[];
+  entries: DesktopBillingDraftRequest["entries"];
   matters: readonly { matterId: string; ledesEnabled: boolean }[];
   earlierEntries: readonly {
     id: string;
