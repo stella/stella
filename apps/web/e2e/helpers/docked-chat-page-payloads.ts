@@ -15,6 +15,7 @@ export const dockedChatPagePayloads = ({
   const invoice = {
     id: toSafeId<"invoice">(resourceId),
     workspaceId: toSafeId<"workspace">(workspaceId),
+    clientId: null,
     organizationId: toSafeId<"organization">(resourceId),
     status: "draft" as const,
     documentType: "invoice" as const,

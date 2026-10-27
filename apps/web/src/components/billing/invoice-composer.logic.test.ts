@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  billableCurrencies,
+  clientInvoiceDetails,
   composeTotals,
   dueDateFor,
   editableHoursText,
@@ -286,6 +288,48 @@ describe("submitComposedInvoice", () => {
   });
 });
 
+describe("billableCurrencies", () => {
+  const eurEntry = (rateAtEntry: number): ComposerEntry => ({
+    id: `eur-${rateAtEntry}`,
+    dateWorked: "2026-09-03",
+    billedMinutes: 60,
+    rateAtEntry,
+    noCharge: false,
+    currency: "EUR",
+  });
+
+  test("the currency with the largest unbilled amount comes first", () => {
+    // CZK: 375,000 + 90,000 + 60,000 = 525,000; EUR: 600,000.
+    expect(
+      billableCurrencies([
+        { timeEntries: entries, expenses },
+        { timeEntries: [eurEntry(600_000)], expenses: [] },
+      ]),
+    ).toEqual(["EUR", "CZK"]);
+    expect(
+      billableCurrencies([
+        { timeEntries: entries, expenses },
+        { timeEntries: [eurEntry(500_000)], expenses: [] },
+      ]),
+    ).toEqual(["CZK", "EUR"]);
+  });
+
+  test("equal amounts keep the first matter's currency first", () => {
+    expect(
+      billableCurrencies([
+        { timeEntries: [eurEntry(525_000)], expenses: [] },
+        { timeEntries: entries, expenses },
+      ]),
+    ).toEqual(["EUR", "CZK"]);
+    expect(
+      billableCurrencies([
+        { timeEntries: entries, expenses },
+        { timeEntries: [eurEntry(525_000)], expenses: [] },
+      ]),
+    ).toEqual(["CZK", "EUR"]);
+  });
+});
+
 describe("includedExpenseIdsOf", () => {
   test("drops a selected expense that a refresh no longer offers", () => {
     // "x" is still offered; "billed-elsewhere" left the refreshed prefill.
@@ -308,4 +352,27 @@ describe("editableHoursText", () => {
       expect(parseHoursInput(text)).toBe(minutes);
     },
   );
+});
+
+describe("clientInvoiceDetails", () => {
+  test("keeps every detail and drops only the per-matter sources", () => {
+    const details = clientInvoiceDetails({
+      invoiceDate: "2026-10-20",
+      dueDate: "2026-11-03",
+      currency: "EUR",
+      language: "pl" as const,
+      sellerProfileId: "seller",
+      timeEntryIds: ["entry"],
+      expenseIds: ["expense"],
+      entryAdjustments: [],
+      documentType: "invoice" as const,
+    });
+    expect(details).toEqual({
+      invoiceDate: "2026-10-20",
+      dueDate: "2026-11-03",
+      currency: "EUR",
+      language: "pl",
+      sellerProfileId: "seller",
+    });
+  });
 });

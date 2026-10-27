@@ -536,6 +536,17 @@
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
+    "clientComposer": {
+      "flatFeeNote": "Az átalánydíjas ügyeket az ügy számlázási oldalán számlázza.",
+      "includeMatter": "{matterName} hozzáadása",
+      "invalidPeriod": "A záró dátum nem lehet korábbi a kezdő dátumnál.",
+      "loadFailed": "A még nem számlázott munka betöltése sikertelen. Próbálja újra.",
+      "matterSubtotal": "Ügy összege áfával: {amount} · a számla {share} része",
+      "periodEnd": "Időszak vége",
+      "periodStart": "Időszak kezdete",
+      "title": "Ügyfél számlázása",
+      "visibility": "Ezt a számlát csak az összes érintett ügyhöz hozzáférő személyek és a számlázási rendszergazdák láthatják."
+    },
     "codes": {
       "activity": "Tevékenység",
       "activityCode": "Tevékenységkód",
@@ -679,6 +690,11 @@
       "invoiceDate": "Számla kelte",
       "invoiceDetail": "Számla részletei",
       "invoiceNumber": "Számlaszám",
+      "lineOverrides": {
+        "editedRecorded": "Módosítva · rögzítve: {description}, {quantity} × {rate}",
+        "quantity": "Mennyiség",
+        "resetRecorded": "Rögzített értékek visszaállítása"
+      },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
       "markPaid": "Fizetettnek jelöl",

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { calculateDocumentTotals, standardVatRateOn } from "@stll/invoicing";
 import type {
   InvoiceTotals,
@@ -132,6 +133,34 @@ export const includedExpenseIdsOf = (
     .filter((expense) => includedExpenseIds.has(expense.id))
     .map((expense) => expense.id);
 
+/**
+ * The currencies the billable items are recorded in, the one with the largest
+ * unbilled amount first. An invoice has one currency, so these are the
+ * invoices the items can go on. Equal amounts keep the order the matters list
+ * their items in, so the first matter's currency wins a tie.
+ */
+export const billableCurrencies = (
+  prefills: readonly {
+    timeEntries: readonly ComposerEntry[];
+    expenses: readonly ComposerExpense[];
+  }[],
+): string[] => {
+  const amounts = new Map<string, number>();
+  const add = (currency: string, amount: number) =>
+    amounts.set(currency, (amounts.get(currency) ?? 0) + amount);
+  for (const { timeEntries, expenses } of prefills) {
+    for (const entry of timeEntries) {
+      add(entry.currency, entryAmount(entry, initialEntryChoice(entry)));
+    }
+    for (const expense of expenses) {
+      add(expense.currency, expenseAmount(expense));
+    }
+  }
+  return [...amounts]
+    .toSorted(([, left], [, right]) => right - left)
+    .map(([currency]) => currency);
+};
+
 export const hasBillableItems = ({
   flatFeeAmount,
   includedEntryCount,
@@ -232,12 +261,42 @@ export const parseHoursInput = (text: string): number | null => {
     return null;
   }
   const fraction = match?.groups?.["fraction"] ?? "";
-  const hundredThousandths =
-    Number(whole) * 10_000 + Number(fraction.padEnd(4, "0") || "0");
+  const wholeHours = parseIntegerToken(whole, { sign: "unsigned" }).unwrap(
+    "Hours grammar admits at most four decimal digits",
+  );
+  const fractionalHours = parseIntegerToken(fraction.padEnd(4, "0"), {
+    sign: "unsigned",
+  }).unwrap("Hours grammar admits at most four fractional decimal digits");
+  const hundredThousandths = wholeHours * 10_000 + fractionalHours;
   return Math.round((hundredThousandths * 60) / 10_000);
 };
 
 /** The issue date plus a payment term, as an ISO date. */
+/**
+ * What a client invoice states from the composed body: everything a matter
+ * invoice states except its sources, which the client invoice groups per
+ * matter. Removing only those keeps every other detail (language, dates,
+ * seller) on both paths.
+ */
+export const clientInvoiceDetails = <
+  TBody extends {
+    timeEntryIds?: unknown;
+    expenseIds?: unknown;
+    entryAdjustments?: unknown;
+    documentType?: unknown;
+    originalInvoiceId?: unknown;
+    invoiceNumber?: unknown;
+  },
+>({
+  timeEntryIds: _timeEntryIds,
+  expenseIds: _expenseIds,
+  entryAdjustments: _entryAdjustments,
+  documentType: _documentType,
+  originalInvoiceId: _originalInvoiceId,
+  invoiceNumber: _invoiceNumber,
+  ...details
+}: TBody) => details;
+
 export const dueDateFor = (invoiceDate: string, days: number) =>
   parsePlainDate(invoiceDate)?.add({ days }).toString() ?? null;
 

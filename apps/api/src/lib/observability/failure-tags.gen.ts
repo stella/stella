@@ -461,6 +461,7 @@ export const FAILURE_TAGS = [
   "WorkflowRunStateReplyError",
   "WorkflowRunStateUnavailableError",
   "WorkflowValidationError",
+  "WorkspaceBillingHistoryError",
   "WorkspaceStorageTeardownBoundError",
   "WorkspaceStorageTeardownStateError",
   "WorktreeEnvLinkError",

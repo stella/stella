@@ -116,7 +116,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
           : undefined;
       const stem = single
         ? `invoice-${single.number}`
-        : `invoices-${records[0]?.matter.reference ?? workspaceId}`;
+        : `invoices-${loaded.matter?.reference ?? workspaceId}`;
       const fileName = sanitizeFilenamePreservingExtension(
         `${stem}-${body.format.replaceAll("_", "-")}.${file.extension}`,
       );

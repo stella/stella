@@ -6,7 +6,9 @@ import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOriginalInvoice } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const tInvoiceDocumentType = v.picklist([
@@ -21,6 +23,20 @@ true satisfies [InvoiceDocumentType] extends [
     ? true
     : never
   : never;
+
+/** A status revert keeps the issued document frozen; corrections use a credit note. */
+export const invoiceContentMutationRefusal = ({
+  finalizedAt,
+}: {
+  finalizedAt: Date | null;
+}) =>
+  finalizedAt === null
+    ? undefined
+    : new HandlerError({
+        status: 409,
+        message:
+          "Issued invoice content cannot be edited; create a credit note instead",
+      });
 
 type ValidateInvoiceDocumentOptions = {
   workspaceId: SafeId<"workspace">;
@@ -62,22 +78,10 @@ export const validateInvoiceDocument = async (
       }),
     );
   }
-  const rows = await tx
-    .select({
-      status: invoices.status,
-      documentType: invoices.documentType,
-      currency: invoices.currency,
-      totalAmount: invoices.totalAmount,
-    })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.id, originalInvoiceId),
-        eq(invoices.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1)
-    .for("update");
+  const rows = await lockOriginalInvoice(tx, {
+    invoiceId: originalInvoiceId,
+    workspaceId,
+  });
   const original = rows.at(0);
   if (!original) {
     return Result.err(
@@ -119,6 +123,10 @@ export const validateInvoiceDocument = async (
     return Result.ok(undefined);
   }
   // The original row serializes reservations across every related credit note.
+  // This sum reads through row security, and it is complete: the original is
+  // visible only to a caller authorized for every matter it bills
+  // (stella_invoice_access), and a credit note bills only those matters
+  // (insertInvoiceLines), so every related credit note is visible here.
   const credits = await tx
     .select({
       amount: sql<string>`coalesce(sum(abs(${invoices.totalAmount})), 0)`,
@@ -126,7 +134,7 @@ export const validateInvoiceDocument = async (
     .from(invoices)
     .where(
       and(
-        eq(invoices.workspaceId, workspaceId),
+        invoiceInMatter(invoices, workspaceId),
         eq(invoices.originalInvoiceId, originalInvoiceId),
         ne(invoices.status, INVOICE_STATUS.VOID),
         ne(invoices.id, invoiceId),
@@ -148,4 +156,27 @@ export const validateInvoiceDocument = async (
     );
   }
   return Result.ok(undefined);
+};
+
+type ActiveInvoiceCreditOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const hasActiveInvoiceCredit = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: ActiveInvoiceCreditOptions,
+) => {
+  const credits = await tx
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(
+      and(
+        invoiceInMatter(invoices, workspaceId),
+        eq(invoices.originalInvoiceId, invoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+      ),
+    )
+    .limit(1);
+  return credits.length > 0;
 };

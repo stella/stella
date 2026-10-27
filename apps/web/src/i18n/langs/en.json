@@ -536,6 +536,17 @@
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
+    "clientComposer": {
+      "flatFeeNote": "Bill flat-fee matters from the matter’s invoice page.",
+      "includeMatter": "Include {matterName}",
+      "invalidPeriod": "Choose an end date on or after the start date.",
+      "loadFailed": "Could not load unbilled work. Try again.",
+      "matterSubtotal": "Matter total incl. VAT: {amount} · {share} of invoice",
+      "periodEnd": "Period end",
+      "periodStart": "Period start",
+      "title": "Bill client",
+      "visibility": "This invoice is visible only to people who can access every included matter, and billing administrators."
+    },
     "codes": {
       "activity": "Activity",
       "activityCode": "Activity code",
@@ -679,6 +690,11 @@
       "invoiceDate": "Invoice date",
       "invoiceDetail": "Invoice detail",
       "invoiceNumber": "Invoice number",
+      "lineOverrides": {
+        "editedRecorded": "Edited · recorded: {description}, {quantity} × {rate}",
+        "quantity": "Quantity",
+        "resetRecorded": "Reset to recorded"
+      },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
       "markPaid": "Mark paid",

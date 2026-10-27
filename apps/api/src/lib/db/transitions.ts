@@ -1,5 +1,13 @@
 import { panic } from "better-result";
-import { getColumns, isSQLWrapper, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getColumns,
+  inArray,
+  isNull,
+  isSQLWrapper,
+  sql,
+} from "drizzle-orm";
 import type { DriverValueDecoder, GetColumnData, SQL } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
@@ -11,9 +19,23 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
+import {
+  BILLING_STATUS,
+  expenses,
+  INVOICE_ATTACHMENT,
+  timeEntries,
+} from "@/api/db/schema";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1703,4 +1725,168 @@ export const defineFixedLifecycle = <
     panic(`Unknown lifecycle column ${column}`);
   }
   return Object.freeze({ kind: "fixed", table, column, value } as const);
+};
+
+type ClaimInvoiceTimeEntriesOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  invoiceId: SafeId<"invoice">;
+  timeEntryIds: SafeId<"timeEntry">[];
+  currency: string;
+  invoiceAttachment:
+    typeof INVOICE_ATTACHMENT.CHARGED | typeof INVOICE_ATTACHMENT.COVERED;
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Atomically claims and audits only approved eligible work. */
+export const claimInvoiceTimeEntries = async ({
+  tx,
+  workspaceId,
+  invoiceId,
+  timeEntryIds,
+  currency,
+  invoiceAttachment,
+  now,
+  recordAuditEvent,
+}: ClaimInvoiceTimeEntriesOptions) => {
+  const updated = await tx
+    .update(timeEntries)
+    .set({
+      invoiceId,
+      invoiceAttachment,
+      status: BILLING_STATUS.BILLED,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+        inArray(timeEntries.id, timeEntryIds),
+        eq(timeEntries.status, BILLING_STATUS.APPROVED),
+        invoiceAttachment === INVOICE_ATTACHMENT.CHARGED
+          ? eq(timeEntries.billable, true)
+          : undefined,
+        isNull(timeEntries.invoiceId),
+        invoiceAttachment === INVOICE_ATTACHMENT.CHARGED
+          ? eq(timeEntries.currency, currency)
+          : undefined,
+      ),
+    )
+    .returning({
+      id: timeEntries.id,
+      dateWorked: timeEntries.dateWorked,
+      billedMinutes: timeEntries.billedMinutes,
+      rateAtEntry: timeEntries.rateAtEntry,
+      narrative: timeEntries.narrative,
+      invoiceNarrative: timeEntries.invoiceNarrative,
+      noCharge: timeEntries.noCharge,
+    });
+  if (updated.length > 0) {
+    await recordAuditEvent(
+      tx,
+      updated.map((entry) => ({
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+        resourceId: entry.id,
+        changes: {
+          status: { old: BILLING_STATUS.APPROVED, new: BILLING_STATUS.BILLED },
+          invoiceId: { old: null, new: invoiceId },
+        },
+      })),
+    );
+  }
+  return updated;
+};
+
+type ClaimInvoiceExpensesOptions = {
+  workspaceId: SafeId<"workspace">;
+  invoiceId: SafeId<"invoice">;
+  expenseIds: readonly SafeId<"expense">[];
+  currency: string;
+  now: Date;
+};
+
+/**
+ * Marks approved, billable, not-yet-invoiced expenses in the invoice
+ * currency billed on a draft invoice, and returns the ones it claimed; fewer
+ * rows than requested means a concurrent change. Callers record the attach
+ * events and write the lines in the same transaction.
+ */
+export const claimInvoiceExpenses = async (
+  tx: Transaction,
+  {
+    workspaceId,
+    invoiceId,
+    expenseIds,
+    currency,
+    now,
+  }: ClaimInvoiceExpensesOptions,
+) =>
+  // audit: skip - callers record each claimed expense in the same transaction
+  await tx
+    .update(expenses)
+    .set({ invoiceId, status: BILLING_STATUS.BILLED, updatedAt: now })
+    .where(
+      and(
+        eq(expenses.workspaceId, workspaceId),
+        inArray(expenses.id, [...expenseIds]),
+        eq(expenses.status, BILLING_STATUS.APPROVED),
+        eq(expenses.billable, true),
+        isNull(expenses.invoiceId),
+        eq(expenses.currency, currency),
+      ),
+    )
+    .returning({
+      id: expenses.id,
+      dateIncurred: expenses.dateIncurred,
+      amount: expenses.amount,
+      markup: expenses.markup,
+      description: expenses.description,
+      invoiceDescription: expenses.invoiceDescription,
+    });
+
+type ReleaseInvoiceTimeEntriesOptions = {
+  matterLocks: AcquiredInvoiceMatterLocks;
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** The caller retains the successful guard's timer-owner, matter and source-row locks. */
+export const releaseInvoiceTimeEntries = async (
+  tx: Transaction,
+  {
+    matterLocks: { invoiceId },
+    now,
+    recordAuditEvent,
+  }: ReleaseInvoiceTimeEntriesOptions,
+) => {
+  const reverted = await tx
+    .update(timeEntries)
+    .set({
+      status: BILLING_STATUS.APPROVED,
+      invoiceId: null,
+      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
+      updatedAt: now,
+    })
+    .where(and(eq(timeEntries.invoiceId, invoiceId)))
+    .returning({ id: timeEntries.id });
+  if (reverted.length === 0) {
+    return;
+  }
+  await recordAuditEvent(
+    tx,
+    reverted.map((row) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+      resourceId: row.id,
+      changes: {
+        status: {
+          old: BILLING_STATUS.BILLED,
+          new: BILLING_STATUS.APPROVED,
+        },
+        invoiceId: { old: invoiceId, new: null },
+      },
+    })),
+  );
 };

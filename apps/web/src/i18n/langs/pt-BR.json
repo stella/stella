@@ -536,6 +536,17 @@
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
+    "clientComposer": {
+      "flatFeeNote": "Fature os casos com honorários fixos pela página de faturas do caso.",
+      "includeMatter": "Incluir {matterName}",
+      "invalidPeriod": "Escolha uma data final igual ou posterior à data inicial.",
+      "loadFailed": "Não foi possível carregar o trabalho não faturado. Tente novamente.",
+      "matterSubtotal": "Total do caso com IVA: {amount} · {share} da fatura",
+      "periodEnd": "Fim do período",
+      "periodStart": "Início do período",
+      "title": "Faturar cliente",
+      "visibility": "Esta fatura só fica visível para pessoas com acesso a todos os casos incluídos e administradores de faturamento."
+    },
     "codes": {
       "activity": "Atividade",
       "activityCode": "Código de atividade",
@@ -679,6 +690,11 @@
       "invoiceDate": "Data da fatura",
       "invoiceDetail": "Detalhe da fatura",
       "invoiceNumber": "Número da fatura",
+      "lineOverrides": {
+        "editedRecorded": "Editado · registrado: {description}, {quantity} × {rate}",
+        "quantity": "Quantidade",
+        "resetRecorded": "Restaurar valores registrados"
+      },
       "linkedExpenses": "Despesas vinculadas",
       "linkedTimeEntries": "Entradas de tempo vinculadas",
       "markPaid": "Marcar como pago",

@@ -536,6 +536,17 @@
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
+    "clientComposer": {
+      "flatFeeNote": "Esitage fikseeritud tasuga toimikute arved toimiku arvete lehel.",
+      "includeMatter": "Kaasa {matterName}",
+      "invalidPeriod": "Valige lõppkuupäev, mis ei ole alguskuupäevast varasem.",
+      "loadFailed": "Arveldamata töö laadimine ebaõnnestus. Proovige uuesti.",
+      "matterSubtotal": "Toimiku summa koos käibemaksuga: {amount} · {share} arvest",
+      "periodEnd": "Perioodi lõpp",
+      "periodStart": "Perioodi algus",
+      "title": "Esita kliendile arve",
+      "visibility": "Seda arvet näevad ainult inimesed, kellel on juurdepääs kõigile kaasatud toimikutele, ja arvelduse haldurid."
+    },
     "codes": {
       "activity": "Tegevus",
       "activityCode": "Tegevuskood",
@@ -679,6 +690,11 @@
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
       "invoiceNumber": "Arve number",
+      "lineOverrides": {
+        "editedRecorded": "Muudetud · salvestatud: {description}, {quantity} × {rate}",
+        "quantity": "Kogus",
+        "resetRecorded": "Taasta salvestatud väärtused"
+      },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
       "markPaid": "Märgi makstuks",

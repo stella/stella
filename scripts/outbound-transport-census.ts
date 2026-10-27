@@ -976,7 +976,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    path: "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
     class: "operator-configured-infrastructure",
     reason: "Downloads invoice PDFs from API-issued storage URLs.",
     transports: ["module:@stll/fetch"],
