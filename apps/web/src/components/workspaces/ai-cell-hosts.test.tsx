@@ -260,7 +260,8 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
         if (
           found ||
           (isObjectLiteralProperty(node, ancestors.at(-1)) &&
-            source.sourceText.slice(node.key.start, node.key.end) === "cell") ||
+            ((node.key.type === "Identifier" && node.key.name === "cell") ||
+              (node.key.type === "Literal" && node.key.value === "cell"))) ||
           (node.type === "CallExpression" &&
             node.callee.type === "Identifier" &&
             node.callee.name === "getPropertyColumnRender")
