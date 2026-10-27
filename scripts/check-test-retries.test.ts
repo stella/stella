@@ -22,7 +22,8 @@ const config = (source: string) =>
 
 test("requires retries: 0 as the effective top-level Playwright setting", () => {
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       export default defineConfig({
         testDir: "./tests",
         retries: 0,
@@ -31,16 +32,21 @@ test("requires retries: 0 as the effective top-level Playwright setting", () => 
   ).toEqual([]);
 
   expect(
-    config("export default defineConfig({ testDir: './tests' });"),
+    config(
+      "import { defineConfig } from \"@playwright/test\";\nexport default defineConfig({ testDir: './tests' });",
+    ),
   ).toHaveLength(1);
-  expect(config("export default defineConfig({ retries: 2 });")).toHaveLength(
-    1,
-  );
+  expect(
+    config(
+      'import { defineConfig } from "@playwright/test";\nexport default defineConfig({ retries: 2 });',
+    ),
+  ).toHaveLength(1);
 });
 
 test("all root factory arguments contribute to the effective retry policy", () => {
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const overrides = { retries: 2 };
       export default defineConfig({ retries: 0 }, overrides);
     `),
@@ -52,13 +58,15 @@ test("all root factory arguments contribute to the effective retry policy", () =
     },
   ]);
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const overrides = { retries: 0 };
       export default defineConfig({ retries: 2 }, overrides);
     `),
   ).toEqual([]);
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const projects = () => ({ projects: [{ name: "browser", retries: 2 }] });
       export default defineConfig(projects(), { retries: 0 });
     `),
@@ -90,15 +98,15 @@ test("imported configuration arguments are verified before composition", () => {
     );
     expect(scan()).toEqual([]);
     base("export default { retries: 2 };");
-    expect(scan()).toEqual([UNREADABLE_HELPER]);
+    expect(scan()).toEqual([UNREADABLE_CONFIG]);
     base(
       'export default { retries: 0, projects: [{ name: "browser", retries: 2 }] };',
     );
-    expect(scan()).toEqual([UNREADABLE_HELPER]);
+    expect(scan()).toEqual([UNREADABLE_CONFIG]);
     base(
       'import { defineConfig } from "@playwright/test"; import original from "./playwright.config"; export default defineConfig(original, { retries: 0 });',
     );
-    expect(scan()).toEqual([UNREADABLE_HELPER]);
+    expect(scan()).toEqual([UNREADABLE_CONFIG]);
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
@@ -106,7 +114,8 @@ test("imported configuration arguments are verified before composition", () => {
 
 test("follows literal config spreads and rejects a later override", () => {
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const base = { retries: 2 };
       export default defineConfig({
         ...base,
@@ -116,7 +125,8 @@ test("follows literal config spreads and rejects a later override", () => {
   ).toEqual([]);
 
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const override = { retries: 2 };
       export default defineConfig({
         retries: 0,
@@ -128,7 +138,8 @@ test("follows literal config spreads and rejects a later override", () => {
 
 test("rejects retries overrides inside Playwright projects and use options", () => {
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       export default defineConfig({
         retries: 0,
         projects: [
@@ -142,18 +153,21 @@ test("rejects retries overrides inside Playwright projects and use options", () 
 
 test("resolves named projects and checks computed retry properties", () => {
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       const projects = [{ name: "chromium", retries: 2 }];
       export default defineConfig({ retries: 0, projects });
     `),
   ).toHaveLength(1);
 
   expect(
-    config(`export default defineConfig({ retries: 0, ["retries"]: 2 });`),
+    config(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ retries: 0, ["retries"]: 2 });`),
   ).toHaveLength(1);
 
   expect(
-    config(`
+    config(`import { defineConfig } from "@playwright/test";
+
       export default defineConfig({
         retries: 0,
         [getConfigKey()]: "dynamic override",
@@ -338,7 +352,8 @@ test.each(["2", "0", "getRetryCount()"])(
   "rejects shorthand retry settings in projects: %s",
   (initializer) => {
     expect(
-      config(`
+      config(`import { defineConfig } from "@playwright/test";
+
       const retries = ${initializer};
       export default defineConfig({ retries: 0, projects: [{ retries }] });
     `),
@@ -400,7 +415,8 @@ test.each([
   "projects: [{ ...defaults }]",
 ])("fails closed on unresolved project/use spreads: %s", (settings) => {
   expect(
-    config(`export default defineConfig({ retries: 0, ${settings} });`).some(
+    config(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ retries: 0, ${settings} });`).some(
       ({ message }) =>
         message ===
         "Playwright project/use configuration is not statically inspectable",
@@ -452,10 +468,84 @@ const inspectHelper = (source: string) => {
   }
 };
 
-const UNREADABLE_HELPER = {
+const UNREADABLE_CONFIG = {
   file: "apps/example/playwright.config.ts",
   message: "Playwright config must explicitly set top-level retries: 0",
 };
+
+test.each([
+  ["plain object", "export default { retries: 0 };"],
+  [
+    "named alias",
+    'import { defineConfig as build } from "@playwright/test"; export default build({ retries: 0 });',
+  ],
+  [
+    "namespace",
+    'import * as playwright from "@playwright/test"; export default playwright.defineConfig({ retries: 0 });',
+  ],
+  [
+    "computed namespace",
+    'import * as playwright from "@playwright/test"; export default playwright["defineConfig"]({ retries: 0 });',
+  ],
+  [
+    "ordered arguments",
+    'import { defineConfig } from "@playwright/test"; export default defineConfig({ retries: 2 }, { retries: 0 });',
+  ],
+  [
+    "named argument",
+    'import { defineConfig } from "@playwright/test"; const overrides = { retries: 0 }; export default defineConfig({ retries: 2 }, overrides);',
+  ],
+])(
+  "static configuration factories retain supported forms: %s",
+  (_name, source) => {
+    expect(
+      findTestRetryViolations(
+        new Map([["apps/example/playwright.config.ts", source]]),
+      ),
+    ).toEqual([]);
+  },
+);
+
+test.each([
+  'export default defineConfig({ retries: 0, get projects() { return [{ name: "browser", retries: 2 }]; } });',
+  'const base = { get projects() { return [{ name: "browser", retries: 2 }]; } }; export default defineConfig({ ...base, retries: 0 });',
+])("configuration policy objects do not execute accessors: %s", (source) => {
+  expect(
+    findTestRetryViolations(
+      new Map([
+        [
+          "apps/example/playwright.config.ts",
+          `import { defineConfig } from "@playwright/test"; ${source}`,
+        ],
+      ]),
+    ),
+  ).toContainEqual({
+    file: "apps/example/playwright.config.ts",
+    message: NOT_INSPECTABLE,
+  });
+});
+
+test.each([
+  `const settings = { retries: 0 }; const trigger = { get value() { settings.retries = 2; return 0; } };
+   function sharedConfig() { return defineConfig({ retries: 0, ignored: trigger.value, ...settings }); }
+   export default sharedConfig();`,
+  `const settings = { retries: 0 }; function sharedConfig() { return defineConfig(settings); }
+   export default sharedConfig(settings.retries = 2);`,
+])(
+  "function construction effects cannot supply configuration data: %s",
+  (source) => {
+    expect(
+      findTestRetryViolations(
+        new Map([
+          [
+            "apps/example/playwright.config.ts",
+            `import { defineConfig } from "@playwright/test"; ${source}`,
+          ],
+        ]),
+      ),
+    ).toEqual([UNREADABLE_CONFIG]);
+  },
+);
 
 test.each([
   "if (alternate) { return defineConfig({ retries: 2 }); }",
@@ -469,59 +559,48 @@ test.each([
         ${branch}
         return defineConfig({ retries: 0 });
       }`),
-  ).toEqual([UNREADABLE_HELPER]);
+  ).toEqual([UNREADABLE_CONFIG]);
 });
 
 const RETRY_WRAPPER =
   "const enableRetries = config => ({ ...config, retries: 2 });";
 
 test.each([
-  ["argument parameter", "overrides = { retries: 2 }", "", "overrides", "top"],
+  ["argument parameter", "overrides = { retries: 2 }", "", "overrides"],
   [
     "local argument",
     "",
     "const overrides = { retries: 2 };",
     "{ retries: 0 }, overrides",
-    "top",
   ],
   [
     "destructured argument",
     "{ settings: overrides } = { settings: { retries: 2 } }",
     "",
     "overrides",
-    "top",
   ],
   [
     "local spread",
     "",
     "const overrides = { retries: 2 };",
     "{ retries: 0, ...overrides }",
-    "nested",
   ],
   [
     "project parameter",
     'projects = [{ name: "browser", retries: 2 }]',
     "",
     "{ retries: 0, projects }",
-    "nested",
   ],
-  [
-    "local use",
-    "",
-    "const use = { retries: 2 };",
-    "{ retries: 0, use }",
-    "nested",
-  ],
+  ["local use", "", "const use = { retries: 2 };", "{ retries: 0, use }"],
   [
     "device parameter",
     'devices = { "Desktop Chrome": { retries: 2 } }',
     "",
     '{ retries: 0, projects: [{ use: { ...devices["Desktop Chrome"] } }] }',
-    "nested",
   ],
 ])(
   "helper-local bindings never resolve to module values: %s",
-  (_name, parameters, declarations, argumentsSource, location) => {
+  (_name, parameters, declarations, argumentsSource) => {
     expect(
       config(`
         import { defineConfig, devices } from "@playwright/test";
@@ -534,14 +613,11 @@ test.each([
         }
         export default sharedConfig();
       `),
-    ).toContainEqual({
-      file: "apps/example/playwright.config.ts",
-      message: location === "top" ? UNREADABLE_HELPER.message : NOT_INSPECTABLE,
-    });
+    ).toEqual([UNREADABLE_CONFIG]);
   },
 );
 
-test("helper binding scopes preserve unshadowed module values", () => {
+test("function roots fail closed even with unshadowed module values", () => {
   expect(
     config(`
       import { defineConfig } from "@playwright/test";
@@ -552,7 +628,7 @@ test("helper binding scopes preserve unshadowed module values", () => {
       }
       export default sharedConfig();
     `),
-  ).toEqual([]);
+  ).toEqual([UNREADABLE_CONFIG]);
 });
 
 test.each([
@@ -577,11 +653,11 @@ test.each([
       }
       export default sharedConfig();
     `),
-    ).toEqual([UNREADABLE_HELPER]);
+    ).toEqual([UNREADABLE_CONFIG]);
   },
 );
 
-test("unexecuted nested functions do not change the helper's policy", () => {
+test("function roots fail closed even with unused nested functions", () => {
   expect(
     config(`
       import { defineConfig } from "@playwright/test";
@@ -592,7 +668,7 @@ test("unexecuted nested functions do not change the helper's policy", () => {
       }
       export default sharedConfig();
     `),
-  ).toEqual([]);
+  ).toEqual([UNREADABLE_CONFIG]);
 });
 
 test.each([
@@ -643,23 +719,17 @@ test.each([
      }`,
   ],
 ])("config helper factories must be verified: %s", (_name, source) => {
-  expect(inspectHelper(source)).toEqual([UNREADABLE_HELPER]);
+  expect(inspectHelper(source)).toEqual([UNREADABLE_CONFIG]);
 });
 
-test("a resolved helper override is rejected as a nonzero retry policy", () => {
+test("resolved values do not make a function configuration root readable", () => {
   expect(
     inspectHelper(`import { defineConfig } from "@playwright/test";
       const overrides = { retries: 2 };
       export function sharedConfig() {
         return defineConfig({ retries: 0 }, overrides);
       }`),
-  ).toEqual([
-    {
-      file: "apps/example/playwright.config.ts",
-      message:
-        "Playwright config must explicitly set top-level retries: 0 as its effective value",
-    },
-  ]);
+  ).toEqual([UNREADABLE_CONFIG]);
 });
 
 test.each([
@@ -694,9 +764,12 @@ test.each([
        return defineConfig({ retries: 2 }, overrides);
      }`,
   ],
-])("config helpers retain supported factory forms: %s", (_name, source) => {
-  expect(inspectHelper(source)).toEqual([]);
-});
+])(
+  "function configuration roots fail closed for every factory form: %s",
+  (_name, source) => {
+    expect(inspectHelper(source)).toEqual([UNREADABLE_CONFIG]);
+  },
+);
 
 test("reads device presets from the @playwright/test devices export", () => {
   const withPreset = (name: string) => `
@@ -736,7 +809,7 @@ test("every device preset a tracked config names exists in @playwright/test", ()
   }
 });
 
-test("reads a config built by a repository helper from what the helper returns", () => {
+test("repository function configuration roots fail closed", () => {
   const root = mkdtempSync(path.join(tmpdir(), "test-retries-helper-"));
   try {
     mkdirSync(path.join(root, "apps/example"), { recursive: true });
@@ -768,31 +841,22 @@ test("reads a config built by a repository helper from what the helper returns",
     const arrow = `import { sharedConfig } from "./shared-config";\nexport default sharedConfig({ app: "web" });`;
     const block = `import { blockConfig as build } from "./shared-config.ts";\nexport default build();`;
     helper(0);
-    expect(scan(arrow)).toEqual([]);
-    expect(scan(block)).toEqual([]);
+    expect(scan(arrow)).toEqual([UNREADABLE_CONFIG]);
+    expect(scan(block)).toEqual([UNREADABLE_CONFIG]);
     helper(2);
-    const effective = {
-      file: "apps/example/playwright.config.ts",
-      message:
-        "Playwright config must explicitly set top-level retries: 0 as its effective value",
-    };
-    expect(scan(arrow)).toEqual([effective]);
-    expect(scan(block)).toEqual([effective]);
-    // A helper the reader cannot follow fails closed, whatever its arguments say.
-    const unread = {
-      file: "apps/example/playwright.config.ts",
-      message: "Playwright config must explicitly set top-level retries: 0",
-    };
+    expect(scan(arrow)).toEqual([UNREADABLE_CONFIG]);
+    expect(scan(block)).toEqual([UNREADABLE_CONFIG]);
+    // Supplying a literal policy does not make an arbitrary factory readable.
     expect(
       scan(
         `import { notAConfig } from "./shared-config";\nexport default notAConfig({ retries: 0 });`,
       ),
-    ).toEqual([unread]);
+    ).toEqual([UNREADABLE_CONFIG]);
     expect(
       scan(
         `import { gone } from "./gone";\nexport default gone({ retries: 0 });`,
       ),
-    ).toEqual([unread]);
+    ).toEqual([UNREADABLE_CONFIG]);
   } finally {
     rmSync(root, { force: true, recursive: true });
   }
