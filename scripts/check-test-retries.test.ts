@@ -112,6 +112,15 @@ test("imported configuration arguments are verified before composition", () => {
   }
 });
 
+test("local configuration arguments require static construction", () => {
+  expect(
+    config(`import { defineConfig } from "@playwright/test";
+      const settings = { retries: 0 };
+      settings.retries = 2;
+      export default defineConfig(settings);`),
+  ).toEqual([UNREADABLE_CONFIG]);
+});
+
 test("imported configuration composition requires static module construction", () => {
   const root = mkdtempSync(path.join(tmpdir(), "test-retries-construction-"));
   const file = "apps/example/playwright.config.ts";
