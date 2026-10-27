@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sha256 } from "./classification-values";
-import { writesRepository } from "./review";
+import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
 
 export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
@@ -358,10 +358,9 @@ const parse = (text: string): ParsedDocument => {
       privileged(shape) ||
       Object.values(jobs).some(({ shape: jobShape }) => privileged(jobShape)),
     writesRepository:
-      writesRepository(shape) ||
-      writesRepository(actionSteps) ||
+      requestsRepositoryWrite(actionSteps) ||
       Object.values(jobs).some(({ shape: jobShape }) =>
-        writesRepository(jobShape),
+        shapeWritesRepository(jobShape),
       ),
     jobs,
     dependencies,

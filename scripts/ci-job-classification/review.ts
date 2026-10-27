@@ -46,22 +46,26 @@ export const isPrivilegedJob = ({ kind, shape }: PrivilegedJobOptions) =>
 // or pull-request branches, so it is classified `priority`, never a check.
 // Pull-request write alone (labels, comments, auto-merge) publishes nothing.
 const SIGNED_COMMIT_ACTION = /(?:^|\/)actions\/signed-commit@/u;
-export const writesRepository = (value: unknown): boolean => {
+const grantsContentsWrite = (permissions: unknown) =>
+  permissions === "write-all" ||
+  (typeof permissions === "object" &&
+    permissions !== null &&
+    "contents" in permissions &&
+    permissions.contents === "write");
+
+// Steps and inputs that write regardless of the job token: an app token that
+// requests contents write, or the signed-commit action. Permission blocks are
+// resolved per job instead, since a job's own block replaces the workflow's.
+export const requestsRepositoryWrite = (value: unknown): boolean => {
   if (Array.isArray(value)) {
-    return value.some(writesRepository);
+    return value.some(requestsRepositoryWrite);
   }
   if (typeof value !== "object" || value === null) {
     return false;
   }
   return Object.entries(value).some(([key, child]) => {
     if (key === "permissions") {
-      return (
-        child === "write-all" ||
-        (typeof child === "object" &&
-          child !== null &&
-          "contents" in child &&
-          child.contents === "write")
-      );
+      return false;
     }
     if (key === "permission-contents" && child === "write") {
       return true;
@@ -73,9 +77,14 @@ export const writesRepository = (value: unknown): boolean => {
     ) {
       return true;
     }
-    return writesRepository(child);
+    return requestsRepositoryWrite(child);
   });
 };
+
+export const shapeWritesRepository = ({ document, job }: JobShape) =>
+  grantsContentsWrite(
+    "permissions" in job ? job["permissions"] : document["permissions"],
+  ) || requestsRepositoryWrite(job);
 
 type WritingJobOptions = {
   shape: JobShape;
@@ -85,8 +94,7 @@ export const isRepositoryWritingJob = ({
   shape,
   reachableDocuments,
 }: WritingJobOptions) =>
-  writesRepository(shape.document) ||
-  writesRepository(shape.job) ||
+  shapeWritesRepository(shape) ||
   [...reachableDocuments].some((document) => document.writesRepository);
 
 type PrivilegedJobClosureOptions = PrivilegedJobOptions & {

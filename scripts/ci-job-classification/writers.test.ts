@@ -109,6 +109,52 @@ test("a composite action that requests contents write makes its caller a writer"
   );
 });
 
+test("a job's own permissions replace the workflow's contents write", () => {
+  const overriding = (permissions: string) =>
+    [
+      "name: overriding",
+      "on: push",
+      "permissions:",
+      "  contents: write",
+      "jobs:",
+      "  job:",
+      "    runs-on: ubuntu-latest",
+      `    permissions: ${permissions}`,
+      "    steps:",
+      "      - run: echo ok",
+      "",
+    ].join("\n");
+  const inheriting = [
+    "name: inheriting",
+    "on: push",
+    "permissions:",
+    "  contents: write",
+    "jobs:",
+    "  job:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo ok",
+    "",
+  ].join("\n");
+  const { jobs } = classifiedFixture(RUN_STEP, "priority", {
+    ".github/workflows/read.yml": overriding("{ contents: read }"),
+    ".github/workflows/none.yml": overriding("{}"),
+    ".github/workflows/inheriting.yml": inheriting,
+  });
+  const writes = Object.fromEntries(
+    [...jobs].map(([key, derived]) => [
+      key.replace(/^candidate:\.github\/workflows\//u, ""),
+      derived.writesRepository,
+    ]),
+  );
+  expect(writes).toEqual({
+    "fixture.yml/job": false,
+    "inheriting.yml/job": true,
+    "none.yml/job": false,
+    "read.yml/job": false,
+  });
+});
+
 test("pull-request write alone publishes nothing", () => {
   const { jobs } = classifiedFixture(
     `    permissions:\n      pull-requests: write\n${RUN_STEP}`,
