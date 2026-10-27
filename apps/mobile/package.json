@@ -16,31 +16,45 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/mobile",
     "start": "expo start",
     "test": "bun test",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=tsconfig.scripts.json",
     "web": "expo start --web"
   },
   "dependencies": {
+    "@stll/api-contract": "workspace:*",
+    "@stll/locales": "workspace:*",
+    "better-result": "catalog:",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
+    "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.25",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-updates": "~57.0.25",
+    "expo-web-browser": "~57.0.3",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "4.26.2",
-    "react-native-web": "~0.21.4"
+    "react-native-web": "~0.21.4",
+    "temporal-polyfill": "catalog:",
+    "use-intl": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
-    "expo-doctor": "1.20.4"
+    "expo-doctor": "1.20.4",
+    "fast-check": "catalog:"
   },
   "crawlPosture": "unserved",
   "expo": {

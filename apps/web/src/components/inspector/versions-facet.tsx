@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
@@ -9,9 +11,7 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
  * the selection). Document comparison opens as a subview here so
  * version operations stay owned by one inspector facet.
  */
-
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -32,11 +32,16 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
 } from "@/lib/workspaces/queries/entity-versions";
+import {
+  getCurrentWorkspaceDocument,
+  useWorkspaceViewParams,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type VersionsFacetProps = {
   workspaceId: string;
@@ -53,9 +58,8 @@ export const VersionsFacet = ({
 }: VersionsFacetProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const dataQuery = useQuery(
     entityVersionsOptions({
@@ -64,7 +68,7 @@ export const VersionsFacet = ({
       filePropertyId: currentFilePropertyId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
@@ -216,27 +220,14 @@ export const VersionsFacet = ({
     // intentionally do NOT navigate — the user picked a
     // version from sidepeek and expects to stay where they
     // are.
-    // Detect "we're on the document route" by structure, not
-    // by entityId-as-segment: the path is
-    // `/workspaces/{workspaceId}/{viewId}/document` where
-    // viewId is the view selector (typically "all"), not the
-    // entity id. The previous literal `${entityId}` check
-    // never matched in normal navigation, so version switches
-    // skipped the URL sync.
-    const onDocumentRoute = new RegExp(
-      `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
-      "u",
-    ).test(pathname);
+    const onDocumentRoute =
+      getCurrentWorkspaceDocument(router.state.matches)?.workspaceId ===
+      workspaceId;
     if (onDocumentRoute) {
-      // Pull the current viewId out of the path (typically
-      // "all") instead of swapping it for entityId — the
-      // route lives under whichever view the user opened it
-      // from, the entity is identified by the search param.
-      const segments = pathname.split("/");
-      const currentViewId = segments[3] ?? "all";
+      // The route stays under whichever view the user opened it from.
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: currentViewId },
+        params: viewParams,
         replace: true,
         search: (prev) => ({
           ...prev,

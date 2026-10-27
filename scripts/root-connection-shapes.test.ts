@@ -718,3 +718,19 @@ test("reads a generic arrow in a .ts file", () => {
     ),
   ).toEqual([ROOT_CONNECTION_SHAPE.parameterDefault]);
 });
+
+test("dynamic imports retain handle identity through destructuring defaults", () => {
+  for (const [binding, local] of [
+    ["rootDb = fallback", "rootDb"],
+    ["rootDb: owner = fallback", "owner"],
+    ["rlsDb = fallback", "rlsDb"],
+    ["rlsDb: owner = fallback", "owner"],
+  ] as const) {
+    expect(
+      shapesOf(
+        `const { ${binding} } = await import("@/api/db/root");`,
+        `const config = { db: ${local} };`,
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.dependencyProperty]);
+  }
+});

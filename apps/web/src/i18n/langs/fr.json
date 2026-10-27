@@ -507,6 +507,24 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approval": {
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "failed": "La modification n’a pas été enregistrée. Réessayez.",
+      "myTime": "Mon temps",
+      "refusals": {
+        "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
+        "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
+        "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
+        "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
+      },
+      "returnComment": "Motif du renvoi",
+      "selectEntry": "Sélectionner la saisie",
+      "timeEntries": "Saisies de temps",
+      "title": "Approbations"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -594,6 +612,7 @@
       "openInvoice": "Ouvrir la facture",
       "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -798,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# action} many {# actions} other {# actions}}",
       "activeVsLogged": "Activité : {active} · Saisi : {logged}",
+      "alreadyCovered": "Déjà couvert par le temps enregistré",
       "chatEvidence": "{count, plural, one {# message} many {# messages} other {# messages}} dans « {title} »",
+      "engagedTime": "{duration} d’activité",
       "keyboardHint": "Entrée accepte, E modifie avant d’accepter, Suppr écarte",
       "privacyNote": "Vous seul voyez ces suggestions. Rien n’est enregistré tant que vous n’avez pas accepté.",
       "title": "Suggestions issues de votre activité",
@@ -892,9 +913,14 @@
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "dateUnavailable": "Date indisponible",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
+      "goToMention": "Aller à la mention nº {number}",
+      "goToParagraph": "Aller au point {paragraph}",
       "lastNegative": "dernière citation négative en {year}",
+      "mentionMark": "mention nº {number}",
+      "mentionsInDecision": "{count, plural, one {Citée une fois dans cette décision} other {Citée # fois dans cette décision}}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
+      "notInStella": "Pas encore dans stella",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
       "paragraphLabel": "Point {paragraph}",
@@ -1003,6 +1029,12 @@
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
+    "marginFilter": {
+      "label": "Filtre des dispositions citées",
+      "paragraph": "{count, plural, =0 {Aucune disposition citée au ¶{paragraph}} one {# disposition citée au ¶{paragraph}} many {# de dispositions citées au ¶{paragraph}} other {# dispositions citées au ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Aucune disposition citée dans la sélection} one {# disposition citée dans la sélection} many {# de dispositions citées dans la sélection} other {# dispositions citées dans la sélection}}",
+      "unnumberedParagraph": "{count, plural, =0 {Aucune disposition citée dans ce paragraphe} one {# disposition citée dans ce paragraphe} many {# de dispositions citées dans ce paragraphe} other {# dispositions citées dans ce paragraphe}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# décision était déjà enregistrée ici} other {# décisions étaient déjà enregistrées ici}}",
       "empty": "Aucune jurisprudence n’est encore conservée dans ce dossier.",
@@ -1024,8 +1056,10 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humaines"
+      "human": "Humaines",
+      "toggleState": "{label} : {state, select, on {activé} other {désactivé}}"
     },
+    "oldestDecisions": "Décisions les plus anciennes",
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
@@ -1087,8 +1121,7 @@
       "runEstimate": "{rows, plural, one {# décision} other {# décisions}} × {columns, plural, one {# question} other {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites}}.",
       "runTitle": "Répondre pour cette page",
       "savedQuestions": "Questions enregistrées",
-      "title": "Tableaux de recherche",
-      "updated": "Dernière modification le {date}"
+      "title": "Tableaux de recherche"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1165,8 @@
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
+      "oldest": "Les plus anciennes",
+      "oldestUnavailable": "Une recherche est triée par pertinence ou de la plus récente à la plus ancienne. Effacez la recherche pour afficher d'abord les décisions les plus anciennes.",
       "relevance": "Les plus pertinentes"
     },
     "viewer": {
@@ -1147,6 +1182,7 @@
       "citedDecisionPassage": "Passage dans la décision",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Aller au paragraphe} other {Aller aux paragraphes}}",
       "judgeRole": {
         "advocateGeneral": "Avocat général",
         "dissenting": "Opinion dissidente",
@@ -1698,21 +1734,8 @@
       "describe-stella-function": "Préparation de la recherche de données",
       "describe_template": "Lecture des champs du modèle",
       "discover_tools": "Préparation de la recherche de données",
-      "docxCommentSummary": "Ajouter un commentaire à {blockId}",
-      "docxDeleteSummary": "Supprimer {blockId}",
-      "docxDeleteTableColumnSummary": "Supprimer la colonne de tableau à {blockId}",
-      "docxDeleteTableRowSummary": "Supprimer la ligne de tableau à {blockId}",
       "docxEditMore": "{count, plural, one {# modification de plus} many {# modifications de plus} other {# modifications de plus}}",
       "docxEditSummary": "{count, plural, one {# modification proposée} many {# modifications proposées} other {# modifications proposées}}",
-      "docxInsertAfterSummary": "Insérer du texte après {blockId}",
-      "docxInsertBeforeSummary": "Insérer du texte avant {blockId}",
-      "docxInsertTableColumnSummary": "Insérer une colonne de tableau près de {blockId}",
-      "docxInsertTableRowSummary": "Insérer une ligne de tableau près de {blockId}",
-      "docxMergeTableCellsSummary": "Fusionner les cellules de tableau à {blockId}",
-      "docxReplaceBlockSummary": "Remplacer {blockId}",
-      "docxReplaceSummary": "Remplacer « {find} » par « {replace} »",
-      "docxSignatureTableSummary": "Insérer un bloc de signature près de {blockId}",
-      "docxSplitTableCellSummary": "Fractionner la cellule de tableau à {blockId}",
       "execute-typescript": "Lecture des données du dossier",
       "execute_typescript": "Lecture des données du dossier",
       "expand-chat-history": "Lecture de l’historique des conversations",
@@ -2056,7 +2079,6 @@
       "orLetUsKnowAt": "ou écrivez-nous à",
       "viewDocumentation": "Voir la documentation"
     },
-    "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
     "export": {
@@ -2205,10 +2227,12 @@
     "scrollToTop": "Retour en haut",
     "search": "Rechercher...",
     "searchIn": "Rechercher dans",
+    "searchMembers": "Rechercher des membres…",
     "selectAMatter": "Sélectionnez un dossier",
     "selectARole": "Sélectionner un rôle",
     "selectAll": "Tout sélectionner",
     "selectDate": "Sélectionner une date…",
+    "selected": "Sélectionné",
     "sessions": "Sessions",
     "settings": "Paramètres",
     "showAll": "Tout afficher",
@@ -4253,6 +4277,8 @@
       "commentPlaceholder": "Écrire un commentaire…",
       "commentText": "Texte du commentaire",
       "commentedPassage": "Passage commenté",
+      "editComment": "Modifier le commentaire",
+      "editedAt": "Modifié {time}",
       "guestAuthor": "Vous",
       "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
       "guestMigrationComplete": "Surlignages et notes enregistrés.",
@@ -4282,7 +4308,12 @@
       "styleHighlight": "Surlignage",
       "styleSquiggly": "Ondulé",
       "styleStrikethrough": "Barré",
-      "visibilityShared": "Partagé avec l’organisation"
+      "visibilityShared": "Partagé avec l’organisation",
+      "visibilitySharedWithMatter": "Partagé avec le dossier"
+    },
+    "contents": {
+      "aiSection": "{section} (partie générée par IA)",
+      "headingWithAiSection": "{heading} (partie générée par IA : {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -4759,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Le budget consacré aux réponses est épuisé.",
-    "citation": "¶{paragraph}",
     "expand": "Développer la réponse",
     "explain": "Expliquer",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Poser une question complémentaire",
     "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
     "loading": "Génération de la réponse…",
@@ -4770,6 +4799,7 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans la décision elle-même.",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
@@ -6209,8 +6239,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Définir le responsable",
-        "noLead": "Aucun responsable",
-        "searchMembers": "Rechercher des membres…"
+        "noLead": "Aucun responsable"
       },
       "to": "Jusqu'à"
     },
@@ -6272,6 +6301,7 @@
       "deleteAll": "Tout supprimer",
       "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
       "hideColumn": "Masquer la colonne",
+      "moveFailed": "{failed, plural, one {# élément sur {total} n’a pas pu être déplacé.} other {# éléments sur {total} n’ont pas pu être déplacés.}}",
       "readOnlyGrouping": "Ce regroupement est en lecture seule",
       "selectPropertyHint": "Sélectionnez une propriété de regroupement dans la barre d'outils",
       "uploadDocument": "Téléverser un document",
@@ -6290,10 +6320,10 @@
       "addMember": "Ajouter un membre",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
+      "alreadyOnMatter": "Déjà dans ce dossier",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",
-      "removeMemberConfirm": "Retirer ce membre du dossier ?",
-      "selectMember": "Sélectionner un membre"
+      "removeMemberConfirm": "Retirer ce membre du dossier ?"
     },
     "newDocument": "Nouveau document",
     "newFolder": "Nouveau dossier",
@@ -6331,7 +6361,6 @@
           "approvedBy": "Approuvée par",
           "channel": "Canal",
           "dateTime": "Date et heure",
-          "eventId": "ID de l’événement",
           "notAvailable": "Non disponible",
           "openTarget": "Ouvrir l’élément",
           "runId": "ID d’exécution",
@@ -6418,6 +6447,7 @@
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
+      "movedToClient": "Dossier <bdi>{matterName}</bdi> déplacé vers <bdi>{clientName}</bdi>",
       "noClient": "Aucun client attribué",
       "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
@@ -6436,6 +6466,7 @@
       "personalLabel": "Personnel",
       "promoteCta": "Promouvoir au client",
       "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
+      "promoteToClientConfirm": "Le dossier <bdi>{matterName}</bdi> sera associé à <bdi>{clientName}</bdi> et partagé avec l'équipe. Il ne pourra plus redevenir personnel.",
       "promotedSuccess": "Dossier promu",
       "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
@@ -6446,6 +6477,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adapter les pages au mode sombre",
+      "annotations": {
+        "commentedBy": "Commentaire de {name}",
+        "detachedHeading": "Hors de cette version",
+        "detachedOtherVersion": "Créé dans la version {version} ; la page se lit désormais autrement.",
+        "detachedTextChanged": "Ces mots ne figurent plus à la page {page}.",
+        "empty": "Sélectionnez des mots du document, puis choisissez Commenter.",
+        "highlightedBy": "Surligné par {name}",
+        "refusedNoText": "Cette page ne contient aucun texte à marquer. Lancez d’abord la reconnaissance de texte sur le document.",
+        "refusedNotFound": "Ces mots sont introuvables dans le texte de la page. Sélectionnez-les à nouveau.",
+        "refusedTooLong": "Ce passage est trop long pour être marqué. Sélectionnez-en un plus court."
+      },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
       "evidence": "Pièce à conviction",
@@ -6454,6 +6496,36 @@
       "pageEditor": {
         "addPDF": "Ajouter un PDF",
         "applyCrop": "Appliquer le rognage",
+        "cleanScan": {
+          "applied": "Version nettoyée appliquée",
+          "apply": "Appliquer",
+          "applyAll": "Tout appliquer",
+          "applyPage": "Appliquer la page nettoyée {number}",
+          "cleaned": "Nettoyée",
+          "cleaning": "Nettoyage de la page",
+          "contentCrop": "Rogner au contenu",
+          "description": "{count, plural, one {Vérifiez la page nettoyée avant de l’utiliser. Le document ne change qu’à ce moment-là.} other {Vérifiez chacune des # pages nettoyées avant de les utiliser. Le document ne change qu’à ce moment-là.}}",
+          "deskew": "Redresser",
+          "failedEngine": "Le nettoyage a échoué. La page reste inchangée.",
+          "failedRender": "La page n’a pas pu être préparée pour le nettoyage. Elle reste inchangée.",
+          "failedTimeout": "Le nettoyage a pris trop de temps. La page reste inchangée.",
+          "heading": "Nettoyer le scan",
+          "output": "Mode couleur",
+          "outputBinary": "Noir et blanc",
+          "outputGrayscale": "Niveaux de gris",
+          "pageLimit": "Vous pouvez nettoyer jusqu’à {max} pages à la fois. Sélectionnez moins de pages.",
+          "preview": "Page nettoyée {number}",
+          "progress": "{done} pages traitées sur {total}",
+          "reject": "Garder l’original",
+          "rejectPage": "Garder la page d’origine {number}",
+          "rejected": "Original conservé",
+          "scope": "{count, plural, =0 {Redresser et nettoyer toutes les pages} one {Redresser et nettoyer la page sélectionnée} other {Redresser et nettoyer les # pages sélectionnées}}",
+          "unrecognized": "La page n’a pas été reconnue comme un scan. Elle reste inchangée.",
+          "unrecognizedNoContent": "Aucun contenu n’a été trouvé sur cette page. Elle reste inchangée.",
+          "unrecognizedNoPage": "Les bords de la page sont introuvables. La page reste inchangée.",
+          "unrecognizedTooLarge": "La page est trop grande pour être nettoyée. Elle reste inchangée.",
+          "use": "{count, plural, =0 {Utiliser les pages nettoyées} one {Utiliser # page nettoyée} other {Utiliser # pages nettoyées}}"
+        },
         "crop": "Rogner",
         "cropAdvanced": "Options avancées",
         "cropBottom": "Bas (mm)",
@@ -6501,7 +6573,10 @@
         "saveVersion": "Enregistrer la version",
         "selectAll": "Tout sélectionner",
         "selectPage": "Sélectionner la page {number}",
+        "signAfterSave": "Enregistre vos modifications de pages dans une nouvelle version, puis la signe",
+        "signSavedVersionMissing": "La nouvelle version a été enregistrée, mais elle n’a pas pu être ouverte pour la signature. Signez-la depuis la visionneuse du document.",
         "signatureWarning": "La modification de ce PDF invalidera les signatures numériques.",
+        "signatureWarningWithSign": "La modification invalide les signatures numériques existantes. Signer depuis ici enregistre d’abord vos modifications, puis signe la nouvelle version.",
         "sourceLimit": "La taille totale des fichiers PDF ne peut pas dépasser 100 Mo.",
         "title": "Modifier les pages",
         "undo": "Annuler la modification de page",
@@ -6512,6 +6587,11 @@
       },
       "passwordLabel": "Saisir le mot de passe du PDF",
       "previousPage": "Page précédente",
+      "selection": {
+        "explainPassagePrompt": "Explique ce passage de {citation} :\n\n« {quote} »",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}-{end}"
+      },
       "showOriginal": "Afficher les pages originales",
       "unlock": "Déverrouiller"
     },
@@ -6625,10 +6705,12 @@
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
-      "sortAscending": "Tri croissant",
       "sortAscendingDate": "Plus anciens en premier",
-      "sortDescending": "Tri décroissant",
+      "sortAscendingNumber": "Plus petits en premier",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Plus récents en premier",
+      "sortDescendingNumber": "Plus grands en premier",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",

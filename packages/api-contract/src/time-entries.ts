@@ -343,11 +343,33 @@ export const parsePolishedTimeEntryNarrativeResponse = (input: unknown) =>
     ? { narrative: input.narrative }
     : null;
 
-const parseTimeEntrySuggestionEvidence = (
+export const parseTimeEntrySuggestionEvidence = (
   input: unknown,
 ): TimeEntrySuggestionEvidence | null => {
   if (!isRecord(input) || typeof input.id !== "string") {
     return null;
+  }
+  if (!Array.isArray(input["signals"])) {
+    return null;
+  }
+  const signals: TimeEntrySuggestionEvidence["signals"] = [];
+  for (const signal of input["signals"]) {
+    if (!isRecord(signal)) {
+      return null;
+    }
+    const { source } = signal;
+    if (
+      (source !== "chat_message" && source !== "audit_log") ||
+      typeof signal["resourceId"] !== "string" ||
+      typeof signal["timestamp"] !== "string"
+    ) {
+      return null;
+    }
+    signals.push({
+      source,
+      resourceId: signal["resourceId"],
+      timestamp: signal["timestamp"],
+    });
   }
   if (input.type === "chat_thread") {
     return typeof input.title === "string" && isInteger(input.messageCount)
@@ -356,6 +378,7 @@ const parseTimeEntrySuggestionEvidence = (
           id: input.id,
           title: input.title,
           messageCount: input.messageCount,
+          signals,
         }
       : null;
   }
@@ -369,6 +392,7 @@ const parseTimeEntrySuggestionEvidence = (
           resourceType: input.resourceType,
           name: input.name,
           actions: input.actions,
+          signals,
         }
       : null;
   }
@@ -384,6 +408,9 @@ const parseTimeEntrySuggestion = (
     typeof input.startedAt !== "string" ||
     typeof input.endedAt !== "string" ||
     !isInteger(input.durationMinutes) ||
+    !isInteger(input["engagedMinutes"]) ||
+    typeof input["alreadyCovered"] !== "boolean" ||
+    typeof input["billableByDefault"] !== "boolean" ||
     !isInteger(input.signalCount) ||
     !Array.isArray(input.evidence)
   ) {
@@ -402,6 +429,9 @@ const parseTimeEntrySuggestion = (
     startedAt: input.startedAt,
     endedAt: input.endedAt,
     durationMinutes: input.durationMinutes,
+    engagedMinutes: input["engagedMinutes"],
+    alreadyCovered: input["alreadyCovered"],
+    billableByDefault: input["billableByDefault"],
     signalCount: input.signalCount,
     evidence,
   };
@@ -414,6 +444,7 @@ export const parseTimeEntrySuggestionsResponse = (
     !isRecord(input) ||
     typeof input.date !== "string" ||
     !isInteger(input.activeMinutes) ||
+    !isInteger(input["loggedMinutes"]) ||
     !Array.isArray(input.items)
   ) {
     return null;
@@ -426,7 +457,12 @@ export const parseTimeEntrySuggestionsResponse = (
     }
     items.push(parsed);
   }
-  return { date: input.date, activeMinutes: input.activeMinutes, items };
+  return {
+    date: input.date,
+    activeMinutes: input.activeMinutes,
+    loggedMinutes: input["loggedMinutes"],
+    items,
+  };
 };
 
 export const parseTimeEntrySuggestionDecision = (
@@ -441,4 +477,41 @@ export const parseTimeEntrySuggestionDecision = (
         status: input.status,
         timeEntryId: input.timeEntryId,
       }
+    : null;
+
+/** Why the API refuses to approve, or return to draft, one time entry. */
+export const TIME_APPROVAL_REFUSALS = [
+  "not_found",
+  "not_approver",
+  "wrong_status",
+  "running_timer",
+  "unpriced",
+  "time_period_locked",
+  "invalid_entry",
+] as const;
+
+export type TimeApprovalRefusal = (typeof TIME_APPROVAL_REFUSALS)[number];
+
+const timeApprovalBatchSchema = v.object({
+  results: v.array(
+    v.variant("status", [
+      v.object({ id: v.string(), status: v.literal("approved") }),
+      v.object({
+        id: v.string(),
+        status: v.literal("refused"),
+        reason: v.picklist(TIME_APPROVAL_REFUSALS),
+      }),
+    ]),
+  ),
+});
+
+/** One outcome per requested id: approved, or refused with its reason. */
+export const parseTimeApprovalBatch = (input: unknown) => {
+  const parsed = v.safeParse(timeApprovalBatchSchema, input);
+  return parsed.success ? parsed.output : null;
+};
+
+export const parseTimeEntryReturnResponse = (input: unknown) =>
+  isRecord(input) && typeof input.id === "string" && input.status === "draft"
+    ? { id: input.id, status: input.status }
     : null;

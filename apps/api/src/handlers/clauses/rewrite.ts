@@ -191,6 +191,7 @@ const rewriteClause = createSafeRootHandler(
           aiAnalytics.captureError(cause);
           return new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "AI rewrite failed",
             cause,
           });

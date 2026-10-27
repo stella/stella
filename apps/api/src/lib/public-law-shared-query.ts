@@ -19,6 +19,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawSearchFacet: "case-law.search-facet",
   caseLawSearchHits: "case-law.search-hits",
   caseLawSearchTotal: "case-law.search-total",
+  caseLawSourceHealth: "case-law.source-health",
   legislationNonRedistributableSources:
     "legislation.non-redistributable-sources",
   legislationSearchHits: "legislation.search-hits",

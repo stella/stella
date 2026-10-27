@@ -17,11 +17,17 @@ on:
         description: Owning generator ID
         required: true
         type: string
-  # Workflow files are never fixed (the App cannot push them), but every one
-  # feeds the job classification digests, so no path is filtered out. A test
-  # derives this from the generators and the Tauri alignment.
+  # Workflow files are never fixed (the App cannot push them), so a workflow
+  # edit runs autofix only where a generator or the Tauri alignment reads that
+  # workflow. A test derives this list from the generators.
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - .github/workflows/autofix.yml
+      - .github/workflows/ci.yml
+      - .github/workflows/release.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}

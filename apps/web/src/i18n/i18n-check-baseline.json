@@ -94,7 +94,6 @@
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
     "chat.tool.delete_matter",
-    "chat.tool.docxReplaceSummary",
     "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
@@ -109,7 +108,6 @@
     "contacts.search",
     "docxReview.applyTracked",
     "docxReview.reject",
-    "docxReview.summary.replaceInBlock",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
     "fileDetail.current",
@@ -932,6 +930,12 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -953,6 +957,18 @@
       "de",
       "fr",
       "pl"
+    ],
+    "workspaces.properties.sortAscendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "workspaces.properties.sortDescendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "workspaces.properties.text": [
       "cs",
