@@ -2,12 +2,38 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 const source = readFileSync(
   new URL("../.github/workflows/publish-npm.yml", import.meta.url),
   "utf-8",
 );
-const workflow = Bun.YAML.parse(source);
+const stepSchema = v.object({
+  id: v.optional(v.string()),
+  run: v.optional(v.string()),
+});
+const readWorkflow = (text: string) =>
+  v.parse(
+    v.object({
+      jobs: v.object({
+        "release-trigger": v.object({ steps: v.array(stepSchema) }),
+        pack: v.object({ if: v.string(), steps: v.array(stepSchema) }),
+        release: v.object({
+          if: v.string(),
+          uses: v.string(),
+          with: v.record(v.string(), v.unknown()),
+          permissions: v.record(v.string(), v.string()),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(text),
+  );
+const workflow = readWorkflow(source);
+const requiredRun = (steps: v.InferOutput<typeof stepSchema>[], id: string) =>
+  v.parse(
+    v.object({ run: v.string() }),
+    steps.find((step) => step.id === id),
+  ).run;
 
 test("RC runs publish no npm version or dist-tag", () => {
   const work = mkdtempSync(path.join(tmpdir(), "stella-npm-trigger-"));
@@ -25,10 +51,11 @@ test("RC runs publish no npm version or dist-tag", () => {
     const retry = path.join(work, "gh-retry.sh");
     writeFileSync(retry, '[[ "$1" == run && "$2" == download ]] || exit 99\n');
     const output = path.join(work, "output");
-    const resolution = workflow.jobs["release-trigger"].steps.find(
-      (step: { id?: string }) => step.id === "source",
+    const resolution = requiredRun(
+      workflow.jobs["release-trigger"].steps,
+      "source",
     );
-    const result = Bun.spawnSync(["bash", "-c", resolution.run], {
+    const result = Bun.spawnSync(["bash", "-c", resolution], {
       env: {
         ...process.env,
         EVENT_NAME: "workflow_run",
@@ -58,15 +85,13 @@ test("stable npm source must equal the final tag and its RC SHA through the unch
   expect(workflow.jobs.release.uses).toBe(
     "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
   );
-  const validation = workflow.jobs.pack.steps.find(
-    (step: { id?: string }) => step.id === "release-source",
-  );
-  expect(validation.run).toContain('if [[ "$source_sha" != "$release_sha" ]]');
-  expect(validation.run).toContain('git tag --points-at "$release_sha"');
-  expect(validation.run).toContain(
+  const validation = requiredRun(workflow.jobs.pack.steps, "release-source");
+  expect(validation).toContain('if [[ "$source_sha" != "$release_sha" ]]');
+  expect(validation).toContain('git tag --points-at "$release_sha"');
+  expect(validation).toContain(
     `[[ "$(git rev-parse "refs/tags/\${rc_tag}^{commit}")" == "$source_sha" ]]`,
   );
-  expect(validation.run).not.toContain("merge-base --is-ancestor");
+  expect(validation).not.toContain("merge-base --is-ancestor");
   expect(workflow.jobs.release.permissions).toEqual({
     actions: "read",
     contents: "write",

@@ -9,7 +9,7 @@ const withMergedRelease = (
       strict?: boolean;
       head?: string;
       rc?: boolean;
-    }) => ReturnType<typeof Bun.spawnSync>,
+    }) => Bun.ReadableSyncSubprocess,
   ) => void,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-pr-retry-"));

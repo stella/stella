@@ -199,8 +199,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
+          proof_args=()
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            proof_args+=(--allow-pr-head)
+          fi
           {
-            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
+            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA"
             echo "sha=$SHA"
             echo "task_cache_producer=validated-main"
           } >> "$GITHUB_OUTPUT"

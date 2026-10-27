@@ -220,6 +220,9 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve release verification tooling across source checkouts
+        run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
 
@@ -337,7 +340,6 @@ jobs:
             echo "Start staging, then dispatch this workflow again."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error::staging off: nothing was deployed. Start staging, then dispatch again."
-          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           bash "$STAGING_STATUS_WRITER" error "staging off"
           exit 1
 
@@ -383,12 +385,15 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
-          echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
 
       # Scoped to the infra repository with actions: write, as the promote
       # dispatch is. A failed mint leaves the token empty, and the next step
       # still runs to refuse with the staging/verified error.
+      - name: Preserve release verification tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
+          echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
+
       - name: Mint staging power token
         id: power-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -661,6 +666,9 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve release verification tooling across source checkouts
+        run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"

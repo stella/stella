@@ -78,9 +78,12 @@ jobs:
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"* "$RUNNER_TEMP/"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve release verification tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"* "$RUNNER_TEMP/"
 
       - name: Preserve release candidate verifier across source checkouts
         run: |
@@ -1257,6 +1260,19 @@ jobs:
       api-image-digest: ${{ steps.alias.outputs.api }}
       production-web-image-digest: ${{ steps.alias.outputs.web }}
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
       - name: Checkout trusted tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1278,11 +1294,10 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
           RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
           RC_REF: ${{ needs.resolve.outputs.rc_ref }}
-          GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
         run: |
           set -euo pipefail
           mkdir rc
-          bash scripts/gh-retry.sh release download "$RC_REF" --dir rc
+          bash "$GH_RETRY_SCRIPT" release download "$RC_REF" --dir rc
           bash scripts/alias-release-manifest.sh rc/release-manifest.json "$RELEASE_REF" "$RELEASE_SHA" > release-manifest.json
           api="$(jq -r '.image.digest' release-manifest.json)"
           web="$(jq -r '.productionWebImage.digest' release-manifest.json)"
@@ -1293,9 +1308,9 @@ jobs:
             if [[ -n "$existing" && "$existing" != "$digest" ]]; then echo '::error::Stable image tag differs from RC'; exit 1; fi
             if [[ -z "$existing" ]]; then docker buildx imagetools create --tag "$image:$RELEASE_REF" "$image@$digest"; fi
           done
-          if ! bash scripts/gh-retry.sh release view "$RELEASE_REF" >/dev/null; then
-            bash scripts/gh-retry.sh release view "$RC_REF" --json body --jq .body > NOTES.md
-            bash scripts/gh-retry.sh release create "$RELEASE_REF" --draft --verify-tag --title "$RELEASE_REF" --notes-file NOTES.md
+          if ! bash "$GH_RETRY_SCRIPT" release view "$RELEASE_REF" >/dev/null; then
+            bash "$GH_RETRY_SCRIPT" release view "$RC_REF" --json body --jq .body > NOTES.md
+            bash "$GH_RETRY_SCRIPT" release create "$RELEASE_REF" --draft --verify-tag --title "$RELEASE_REF" --notes-file NOTES.md
           fi
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" release-manifest.json --clobber
           for asset in rc/*.zip; do
@@ -1397,14 +1412,17 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
 
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
       # job can be dispatched manually against any existing tag, including one
       # cut before the action existed: checking out that release first would
       # leave `uses: ./...` unresolvable and fail before dispatching.
+      - name: Preserve release verification tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1465,13 +1483,24 @@ jobs:
     permissions:
       contents: write # publish the draft release
     steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
       - name: Checkout trusted tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - name: Locate API retry tooling
-        run: echo "GH_RETRY_SCRIPT=$GITHUB_WORKSPACE/scripts/gh-retry.sh" >> "$GITHUB_ENV"
       # Everything below is the publication: it runs only once production
       # verifiably serves the release, so nothing users can reach moves on a
       # failed promotion. Each step is idempotent for a rerun.

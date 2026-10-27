@@ -62,9 +62,18 @@ test("the production promotion job reports the name the publication guard matche
   );
   const matched = /^job=(\S+)$/mu.exec(guard)?.[1];
   expect(matched).toBe("promote-production");
+  if (matched === undefined) {
+    throw new TypeError(
+      "Publication guard must name the production promotion job",
+    );
+  }
   const workflow: unknown = Bun.YAML.parse(read("release.yml"));
   const job = field(field(workflow, "jobs"), "promote-production");
   expect(job).toBeDefined();
-  const displayName = field(job, "name") ?? "promote-production";
+  const name = field(job, "name");
+  if (name !== undefined && typeof name !== "string") {
+    throw new TypeError("Promotion job display name must be a string");
+  }
+  const displayName = name ?? "promote-production";
   expect(displayName).toBe(matched);
 });

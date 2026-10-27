@@ -12,7 +12,7 @@ const withCandidate = (
       sha: string,
       verifierExit?: string,
       trusted?: boolean,
-    ) => ReturnType<typeof Bun.spawnSync>,
+    ) => Bun.ReadableSyncSubprocess,
   ) => void,
 ) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-candidate-"));

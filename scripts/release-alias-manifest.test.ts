@@ -2,6 +2,21 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
+
+const readJob = (source: unknown, name: string) => {
+  const { jobs } = v.parse(
+    v.object({ jobs: v.record(v.string(), v.unknown()) }),
+    source,
+  );
+  return v.parse(
+    v.object({
+      if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
+    }),
+    jobs[name],
+  );
+};
 
 const sha = "a".repeat(40);
 const image = (hex: string, targetEnvironment?: string) => ({
@@ -53,19 +68,19 @@ test("final release declares no build, smoke, or web-image work", () => {
     "prepare-production-web-image",
     "prove-production-web-image",
   ]) {
-    expect(workflow.jobs[name].if).toContain(
+    expect(readJob(workflow, name).if).toContain(
       "needs.resolve.outputs.channel == 'rc'",
     );
   }
-  expect(workflow.jobs["alias-manifest"].if).toContain(
+  expect(readJob(workflow, "alias-manifest").if).toContain(
     "needs.resolve.outputs.channel == 'final'",
   );
-  expect(workflow.jobs["alias-manifest"].needs).toBe("resolve");
+  expect(readJob(workflow, "alias-manifest").needs).toBe("resolve");
   for (const name of [
     "publish-release",
     "publish-latest",
     "dispatch-release-health",
   ]) {
-    expect(workflow.jobs[name].needs).toContain("promote-production");
+    expect(readJob(workflow, name).needs).toContain("promote-production");
   }
 });

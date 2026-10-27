@@ -141,6 +141,8 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+      - name: Preserve release publication verification
+        run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-publication-source.sh" "$RUNNER_TEMP/check-release-publication-source.sh"
 
       - name: Resolve upstream release receipt

@@ -134,7 +134,7 @@ exec "${realGit}" "$@"
       ["bash", "finalize-release.sh", "stella/stella", sha],
       {
         ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
+        PATH: `${bin}:${process.env["PATH"]}`,
         TEST_ROOT: root,
         GH_TOKEN: "fixture-token",
         RELEASE_HEALTH_TOKEN: "fixture-read-token",
