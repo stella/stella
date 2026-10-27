@@ -12,35 +12,36 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { TimeEntryStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
-import { user as authUser } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  auditLogs,
-  featureEnrolments,
-  organizationSettings,
-  timeEntries,
-} from "@/api/db/schema";
+import { auditLogs, organizationSettings, timeEntries } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import prefillInvoice from "@/api/handlers/invoices/prefill";
 import approve from "@/api/handlers/time-entries/approval-queue/approve";
 import list from "@/api/handlers/time-entries/approval-queue/list";
 import returnEntry from "@/api/handlers/time-entries/approval-queue/return";
 import listMyTimeEntries from "@/api/handlers/time-entries/me/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import type { TimeSubmitOutcome } from "@/api/lib/billing/time-entry-submission";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
+import {
+  enrolledTimeBillingSnapshot,
+  enrolTimeBilling,
+} from "@/api/tests/helpers/time-billing-enrolment";
 import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
-import type { TestDatabase } from "@/api/tests/security/test-utils";
+import type {
+  TestDatabase,
+  TestDatabaseTransaction,
+} from "@/api/tests/security/test-utils";
 
 import submit from "./create";
 
@@ -65,20 +66,13 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   db = fixture.testDb;
   ids = fixture.ids;
-  await db
-    .update(authUser)
-    .set({ emailVerified: true })
-    .where(inArray(authUser.id, [ids.userA1, ids.userA2, ids.userAdmin]));
-  await db
-    .insert(featureEnrolments)
-    .values(
-      [ids.userA1, ids.userA2, ids.userAdmin].map((userId) => ({
-        organizationId: ids.orgA,
-        userId,
-        featureId: "time-billing",
-      })),
-    )
-    .onConflictDoNothing();
+  await enrolTimeBilling(
+    db,
+    [ids.userA1, ids.userA2, ids.userAdmin].map((userId) => ({
+      organizationId: ids.orgA,
+      userId,
+    })),
+  );
 });
 
 const cleanup = async () => {
@@ -127,25 +121,32 @@ const seedEntry = async (
 
 const context = (actor: SafeId<"user">, role: Role = "member") => {
   const request = new Request("https://example.test/v1/time-entries");
-  const recorder = createAuditRecorder({
-    organizationId: ids.orgA,
-    workspaceId: null,
-    userId: actor,
+  const recorder = (workspaceId: SafeId<"workspace"> | null) =>
+    createAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId,
+      userId: actor,
+      request,
+      server: null,
+    });
+  return {
     request,
-    server: null,
-  });
-  return withTimeBillingEnrolment({
-    request,
-    route: "/v1/time-entries/me/submissions",
+    route: "/v1/time-entries/me/submissions" satisfies ApiRoutePath,
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
     memberRole: sessionMemberRole(role),
+    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+      userId: actor,
+      organizationId: ids.orgA,
+    }),
     safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
     scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
     getActiveWorkspaceIds: async () => [ids.wsA2],
-    recordAuditEvent: recorder,
-    createAuditRecorder: () => recorder,
-  });
+    recordAuditEvent: recorder(null),
+    createAuditRecorder: (options?: {
+      workspaceId?: SafeId<"workspace"> | null;
+    }) => recorder(options?.workspaceId ?? null),
+  };
 };
 
 const submitFor = async (
@@ -182,6 +183,9 @@ const queueFor = async (actor: SafeId<"user">, role: Role = "member") =>
   await list.handler(
     asTestRaw<ListCtx>({ ...context(actor, role), query: {} }),
   );
+
+const byEntryId = (a: { id: string }, b: { id: string }) =>
+  a.id < b.id ? -1 : 1;
 
 const statusOf = async (id: SafeId<"timeEntry">) =>
   (await db.query.timeEntries.findFirst({ where: { id: { eq: id } } }))?.status;
@@ -228,17 +232,19 @@ describe("submitting a week", () => {
     if (!("results" in outcome)) {
       throw new Error(`unexpected submit outcome: ${JSON.stringify(outcome)}`);
     }
-    expect(outcome.results.toSorted((a, b) => (a.id < b.id ? -1 : 1))).toEqual(
-      [
-        { id: entries.ready, status: "submitted" },
-        { id: entries.unpriced, status: "refused", reason: "unpriced" },
-        {
-          id: entries.noNarrative,
-          status: "refused",
-          reason: "narrative_required",
-        },
-        { id: entries.running, status: "refused", reason: "running_timer" },
-      ].toSorted((a, b) => (a.id < b.id ? -1 : 1)),
+    expect(outcome.results.toSorted(byEntryId)).toEqual(
+      (
+        [
+          { id: entries.ready, status: "submitted" },
+          { id: entries.unpriced, status: "refused", reason: "unpriced" },
+          {
+            id: entries.noNarrative,
+            status: "refused",
+            reason: "narrative_required",
+          },
+          { id: entries.running, status: "refused", reason: "running_timer" },
+        ] satisfies TimeSubmitOutcome[]
+      ).toSorted(byEntryId),
     );
     expect(await statusesOf(entries)).toEqual({
       ready: "submitted",
@@ -280,7 +286,7 @@ describe("submitting a week", () => {
 // would look to that write.
 const safeDbEditingBeforeWrite = (
   actor: SafeId<"user">,
-  edit: (tx: Transaction) => Promise<unknown>,
+  edit: (tx: TestDatabaseTransaction) => Promise<unknown>,
 ) => {
   const base = createSafeDb(db, [ids.wsA2], ids.orgA, actor);
   const dialect = new PgDialect();
@@ -290,7 +296,7 @@ const safeDbEditingBeforeWrite = (
     /^\s*UPDATE "time_entries"/u.test(dialect.sqlToQuery(query.getSQL()).sql);
   return asTestRaw<SafeDb>(
     async (
-      run: (tx: Transaction) => Promise<unknown>,
+      run: (tx: TestDatabaseTransaction) => Promise<unknown>,
       retry?: Parameters<SafeDb>[1],
     ) =>
       await base(
@@ -344,11 +350,13 @@ describe("a draft edited between the submit's read and its write", () => {
       throw new Error(`unexpected submit outcome: ${JSON.stringify(outcome)}`);
     }
     // The edit happened after the read saw a description.
-    expect(outcome.results.toSorted((a, b) => (a.id < b.id ? -1 : 1))).toEqual(
-      [
-        { id: untouched, status: "submitted" },
-        { id: edited, status: "refused", reason: "narrative_required" },
-      ].toSorted((a, b) => (a.id < b.id ? -1 : 1)),
+    expect(outcome.results.toSorted(byEntryId)).toEqual(
+      (
+        [
+          { id: untouched, status: "submitted" },
+          { id: edited, status: "refused", reason: "narrative_required" },
+        ] satisfies TimeSubmitOutcome[]
+      ).toSorted(byEntryId),
     );
     expect(await statusOf(edited)).toBe("draft");
     expect(await statusOf(untouched)).toBe("submitted");
