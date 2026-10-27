@@ -1016,6 +1016,7 @@ const GENERATOR_DECLARATIONS = [
       "bun.lock",
     ],
     checkInputs: [
+      "bunfig.toml",
       ".prettierrc.yml",
       ...TRANSITIVE_GENERATOR_INPUTS["mobile-ui-theme"],
     ],
