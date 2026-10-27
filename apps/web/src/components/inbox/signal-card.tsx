@@ -275,6 +275,7 @@ export const SignalCard = ({
                   aria-label={t("inbox.snooze")}
                   disabled={busy}
                   size="sm"
+                  tooltip={t("inbox.snooze")}
                   variant="muted"
                 />
               }
@@ -623,6 +624,7 @@ const DismissPopover = ({ disabled, onDismiss }: DismissPopoverProps) => {
             aria-label={t("common.dismiss")}
             disabled={disabled}
             size="sm"
+            tooltip={t("common.dismiss")}
             variant="muted"
           />
         }

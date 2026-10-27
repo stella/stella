@@ -1060,6 +1060,7 @@ export const AnonymizationFacet = ({
                               primaryDisabled={
                                 createAllowlistMutation.isPending
                               }
+                              primaryContent="icon"
                               primaryLabel={t(
                                 "inspector.anonymization.ignoreAction",
                               )}
