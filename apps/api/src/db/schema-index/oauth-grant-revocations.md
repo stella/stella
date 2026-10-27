@@ -12,6 +12,6 @@ OAuth grants disconnected while a signed access token may still be live.
 oauth_grant_revocations.organization_id  text         fk,not null  oauth-grant-revocations.ts:11
 oauth_grant_revocations.user_id          text         fk,not null  oauth-grant-revocations.ts:14
 oauth_grant_revocations.oauth_client_id  text         not null     oauth-grant-revocations.ts:17
-oauth_grant_revocations.grant_id         text         null         oauth-grant-revocations.ts:18
+oauth_grant_revocations.grant_id         text         not null     oauth-grant-revocations.ts:18
 oauth_grant_revocations.revoked_at       timestamptz  not null     oauth-grant-revocations.ts:19
 ```
