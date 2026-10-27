@@ -571,20 +571,40 @@ describe("styleDocumentCitations", () => {
         document: { ...document.package.document, content },
       },
     };
-    const markersOf = (blocks: readonly BlockContent[]): BlockContent[] =>
-      blocks.flatMap((block) => {
+    // Each marker with its container (the body, or a table cell by row and
+    // column) and the number of content blocks before it there, so a marker
+    // that crosses a paragraph or a cell boundary changes the record.
+    type PlacedMarker = {
+      container: string;
+      precededBy: number;
+      marker: BlockContent;
+    };
+    const markersOf = (
+      blocks: readonly BlockContent[],
+      container = "body",
+    ): PlacedMarker[] => {
+      let precededBy = 0;
+      return blocks.flatMap((block) => {
         if (block.type.startsWith("move")) {
-          return [block];
+          return [{ container, precededBy, marker: block }];
         }
+        const table = `${container}/${String(precededBy)}`;
+        precededBy += 1;
         if (block.type === "table") {
-          return block.rows.flatMap((row) =>
-            row.cells.flatMap((cell) => markersOf(cell.content)),
+          return block.rows.flatMap((row, rowIndex) =>
+            row.cells.flatMap((cell, cellIndex) =>
+              markersOf(
+                cell.content,
+                `${table}/${String(rowIndex)}/${String(cellIndex)}`,
+              ),
+            ),
           );
         }
         return [];
       });
+    };
 
-    // Every marker comes back in the block or cell it was in, in order.
+    // Every marker comes back in the container it was in, at its place.
     const placed = markersOf(content);
     expect(placed.length).toBeGreaterThan(moveMarkers.length);
     for (const style of ["none", "footnotes"] as const) {
