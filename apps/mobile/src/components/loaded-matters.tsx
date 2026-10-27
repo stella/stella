@@ -27,7 +27,7 @@ export const LoadedMatters = ({
   const t = useTranslations("matters");
   const tabs = useTranslations("tabs");
   const colors = useAppColors();
-  const { loadedAt, result } = use(load);
+  const { result } = use(load);
 
   // The session provider is already returning to sign-in.
   if (Result.isError(result) && result.error._tag === "SignedOutError") {
@@ -61,7 +61,7 @@ export const LoadedMatters = ({
           tintColor={colors.muted}
         />
       }
-      renderItem={({ item }) => <MatterRow loadedAt={loadedAt} matter={item} />}
+      renderItem={({ item }) => <MatterRow matter={item} />}
     />
   );
 };
