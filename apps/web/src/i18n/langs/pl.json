@@ -527,6 +527,15 @@
         "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
       },
       "returnComment": "Powód zwrotu",
+      "returnRefusals": {
+        "invalidEntry": "Sprawdź datę pracy we wpisie, a potem go zwróć.",
+        "notApprover": "Ten wpis może zwrócić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje, więc nie można go zwrócić. Odśwież listę.",
+        "notSubmitted": "Ta wersja robocza nigdy nie została przesłana, więc nie ma czego zwracać.",
+        "runningTimer": "Zatrzymaj działający stoper przed zwróceniem wpisu.",
+        "timePeriodLocked": "Ten miesiąc jest zablokowany, więc wpisu nie można zwrócić. Poproś administratora o jego odblokowanie.",
+        "wrongStatus": "Zafakturowanego ani odpisanego czasu nie można zwrócić autorowi."
+      },
       "returnSelected": "Zwróć {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
       "selectEntry": "Wybierz wpis",
       "timeEntries": "Wpisy czasu",

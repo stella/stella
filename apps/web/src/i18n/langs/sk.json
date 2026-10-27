@@ -527,6 +527,15 @@
         "wrongStatus": "Tento záznam už nie je koncept. Obnovte zoznam."
       },
       "returnComment": "Dôvod vrátenia",
+      "returnRefusals": {
+        "invalidEntry": "Skontrolujte dátum práce pri zázname a potom ho vráťte.",
+        "notApprover": "Záznam môže vrátiť len jeho priradený schvaľovateľ alebo správca.",
+        "notFound": "Tento záznam už neexistuje, a preto ho nemožno vrátiť. Obnovte zoznam.",
+        "notSubmitted": "Tento koncept nebol odoslaný na schválenie, takže nie je čo vracať.",
+        "runningTimer": "Pred vrátením záznamu zastavte bežiaci časovač.",
+        "timePeriodLocked": "Tento mesiac je uzamknutý, a preto záznam nemožno vrátiť. Požiadajte správcu o jeho odomknutie.",
+        "wrongStatus": "Fakturovaný alebo odpísaný čas nemožno vrátiť jeho autorovi."
+      },
       "returnSelected": "Vrátiť {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamov}}",
       "selectEntry": "Vybrať záznam",
       "timeEntries": "Časové záznamy",

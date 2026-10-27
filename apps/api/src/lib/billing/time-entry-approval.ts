@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
-import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
+import type {
+  TimeApprovalRefusal,
+  TimeReturnRefusal,
+} from "@stll/api-contract/time-entries";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -63,7 +66,7 @@ const reviewStatusRefusal = ({
   entry: ApprovalEntry;
   currentUserId: SafeId<"user">;
   action: "approve" | "return";
-}): TimeApprovalRefusal | null => {
+}): TimeReturnRefusal | null => {
   if (action === "approve") {
     if (entry.status === BILLING_STATUS.APPROVED) {
       return null;
@@ -131,21 +134,21 @@ type ApprovalActor = {
   memberRole: AuthorizedMemberRole;
   currentUserId: SafeId<"user">;
 };
-type ApprovalRefusalOptions = ApprovalActor & {
+type ReviewRefusalOptions = ApprovalActor & {
   entry: ApprovalEntry;
   policy: TimePolicy;
   now: Date;
-  action: "approve" | "return";
 };
 
-export const timeApprovalRefusal = ({
-  entry,
-  memberRole,
-  currentUserId,
-  policy,
-  now,
-  action,
-}: ApprovalRefusalOptions): TimeApprovalRefusal | null => {
+/**
+ * What refuses either decision: the actor is not the entry's approver, its
+ * status does not allow the move, a timer runs on it, or its date is locked
+ * or invalid. Each reason here is one a return can report.
+ */
+const reviewRefusal = (
+  { entry, memberRole, currentUserId }: ReviewRefusalOptions,
+  action: "approve" | "return",
+): TimeReturnRefusal | null => {
   if (
     !canApproveAssignedTimeEntry({
       memberRole,
@@ -162,14 +165,13 @@ export const timeApprovalRefusal = ({
   if (entry.running) {
     return "running_timer";
   }
-  if (
-    action === "approve" &&
-    entry.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
-    entry.billable &&
-    entry.currency === UNPRICED_TIME_ENTRY_CURRENCY
-  ) {
-    return "unpriced";
-  }
+  return null;
+};
+
+const periodRefusal = (
+  { entry, policy, now }: ReviewRefusalOptions,
+  narrative: string | undefined,
+): TimeReturnRefusal | null => {
   const today = formatTodayInTimeZone({ timezoneId: entry.timezoneId, now });
   if (today.isErr()) {
     return "invalid_entry";
@@ -179,7 +181,7 @@ export const timeApprovalRefusal = ({
     dateWorked: entry.dateWorked,
     today: today.value,
     canApprove: true,
-    narrative: action === "approve" ? entry.narrative : undefined,
+    narrative,
   });
   if (violation) {
     return violation.code === "time_period_locked"
@@ -188,6 +190,31 @@ export const timeApprovalRefusal = ({
   }
   return null;
 };
+
+/** Why one entry cannot be approved; approval also needs a price and a narrative. */
+const timeApprovalRefusal = (
+  options: ReviewRefusalOptions,
+): TimeApprovalRefusal | null => {
+  const { entry } = options;
+  const refusal = reviewRefusal(options, "approve");
+  if (refusal) {
+    return refusal;
+  }
+  if (
+    entry.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
+    entry.billable &&
+    entry.currency === UNPRICED_TIME_ENTRY_CURRENCY
+  ) {
+    return "unpriced";
+  }
+  return periodRefusal(options, entry.narrative);
+};
+
+/** Why one entry cannot be returned to draft. */
+const timeReturnRefusal = (
+  options: ReviewRefusalOptions,
+): TimeReturnRefusal | null =>
+  reviewRefusal(options, "return") ?? periodRefusal(options, undefined);
 
 /**
  * Locks the reviewed entries in id order, after the caller took the policy,
@@ -278,7 +305,6 @@ export const approveTimeEntryBatch = async ({
             currentUserId,
             policy,
             now,
-            action: "approve",
           })
         : "not_found";
       if (reason) {
@@ -345,7 +371,7 @@ type TimeReturnOutcome =
   | {
       id: SafeId<"timeEntry">;
       status: "refused";
-      reason: TimeApprovalRefusal;
+      reason: TimeReturnRefusal;
     };
 
 /** Whether the entry already carries this return, so repeating it is a no-op. */
@@ -396,13 +422,12 @@ export const returnTimeEntryBatch = async ({
         results.push({ id, status: "refused", reason: "not_found" });
         continue;
       }
-      const reason = timeApprovalRefusal({
+      const reason = timeReturnRefusal({
         entry,
         memberRole,
         currentUserId,
         policy,
         now,
-        action: "return",
       });
       if (reason) {
         results.push({ id, status: "refused", reason });

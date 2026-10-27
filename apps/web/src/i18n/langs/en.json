@@ -527,6 +527,15 @@
         "wrongStatus": "This entry is no longer a draft. Refresh the list."
       },
       "returnComment": "Reason for returning",
+      "returnRefusals": {
+        "invalidEntry": "Check the entry's work date, then return it.",
+        "notApprover": "Only the entry's assigned approver or an administrator can return it.",
+        "notFound": "This entry no longer exists, so it cannot be returned. Refresh the list.",
+        "notSubmitted": "This draft was never submitted, so there is nothing to return.",
+        "runningTimer": "Stop the running timer before returning this entry.",
+        "timePeriodLocked": "This month is locked, so the entry cannot be returned. Ask an administrator to unlock it.",
+        "wrongStatus": "Billed or written-off time cannot be returned to its timekeeper."
+      },
       "returnSelected": "Return {count, plural, one {# selected entry} other {# selected entries}}",
       "selectEntry": "Select entry",
       "timeEntries": "Time entries",

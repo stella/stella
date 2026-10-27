@@ -527,6 +527,15 @@
         "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
       },
       "returnComment": "Motif du renvoi",
+      "returnRefusals": {
+        "invalidEntry": "Vérifiez la date de travail de la saisie, puis renvoyez-la.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut renvoyer cette saisie.",
+        "notFound": "Cette saisie n’existe plus et ne peut donc pas être renvoyée. Actualisez la liste.",
+        "notSubmitted": "Ce brouillon n’a jamais été soumis : il n’y a rien à renvoyer.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant de renvoyer cette saisie.",
+        "timePeriodLocked": "Ce mois est verrouillé, la saisie ne peut donc pas être renvoyée. Demandez à un administrateur de le déverrouiller.",
+        "wrongStatus": "Le temps facturé ou passé en pertes ne peut pas être renvoyé à son auteur."
+      },
       "returnSelected": "Renvoyer {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
       "selectEntry": "Sélectionner la saisie",
       "timeEntries": "Saisies de temps",

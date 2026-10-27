@@ -527,6 +527,15 @@
         "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
       },
       "returnComment": "Grund für Rückgabe",
+      "returnRefusals": {
+        "invalidEntry": "Prüfen Sie das Arbeitsdatum des Eintrags und geben Sie ihn dann zurück.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag zurückgeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr und kann nicht zurückgegeben werden. Aktualisieren Sie die Liste.",
+        "notSubmitted": "Dieser Entwurf wurde nie eingereicht, es gibt also nichts zurückzugeben.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag zurückgeben.",
+        "timePeriodLocked": "Dieser Monat ist gesperrt, daher kann der Eintrag nicht zurückgegeben werden. Bitten Sie einen Administrator, ihn zu entsperren.",
+        "wrongStatus": "Abgerechnete oder abgeschriebene Zeit kann nicht an die erfassende Person zurückgegeben werden."
+      },
       "returnSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} zurückgeben",
       "selectEntry": "Eintrag auswählen",
       "timeEntries": "Zeiteinträge",

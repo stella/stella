@@ -527,6 +527,15 @@
         "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
       },
       "returnComment": "Motivo da devolução",
+      "returnRefusals": {
+        "invalidEntry": "Confira a data do trabalho do registro e depois devolva-o.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode devolver este registro.",
+        "notFound": "Este registro não existe mais, então não pode ser devolvido. Atualize a lista.",
+        "notSubmitted": "Este rascunho nunca foi enviado, então não há nada a devolver.",
+        "runningTimer": "Pare o cronômetro em andamento antes de devolver este registro.",
+        "timePeriodLocked": "Este mês está bloqueado, então o registro não pode ser devolvido. Peça a um administrador para desbloqueá-lo.",
+        "wrongStatus": "Tempo faturado ou anulado não pode ser devolvido a quem o registrou."
+      },
       "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados}}",
       "selectEntry": "Selecionar registro",
       "timeEntries": "Registros de tempo",

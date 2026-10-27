@@ -3,7 +3,10 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
-import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
+import type {
+  TimeApprovalRefusal,
+  TimeReturnRefusal,
+} from "@stll/api-contract/time-entries";
 
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -24,6 +27,17 @@ const REFUSAL_KEYS = {
   time_period_locked: "billing.globalTimer.periodLocked",
   invalid_entry: "billing.approval.refusals.invalidEntry",
 } as const satisfies Record<TimeApprovalRefusal, TranslationKey>;
+
+// A return reports only these, in its own words.
+const RETURN_REFUSAL_KEYS = {
+  not_found: "billing.approval.returnRefusals.notFound",
+  not_approver: "billing.approval.returnRefusals.notApprover",
+  not_submitted: "billing.approval.returnRefusals.notSubmitted",
+  wrong_status: "billing.approval.returnRefusals.wrongStatus",
+  running_timer: "billing.approval.returnRefusals.runningTimer",
+  time_period_locked: "billing.approval.returnRefusals.timePeriodLocked",
+  invalid_entry: "billing.approval.returnRefusals.invalidEntry",
+} as const satisfies Record<TimeReturnRefusal, TranslationKey>;
 
 const isRefusal = (code: string | undefined): code is TimeApprovalRefusal =>
   code !== undefined && Object.hasOwn(REFUSAL_KEYS, code);
@@ -60,6 +74,8 @@ export const useItemErrors = () => {
   return {
     errors,
     refusalText: (reason: TimeApprovalRefusal) => t(REFUSAL_KEYS[reason]),
+    returnRefusalText: (reason: TimeReturnRefusal) =>
+      t(RETURN_REFUSAL_KEYS[reason]),
     errorText: (error: unknown) =>
       APIError.is(error) && isRefusal(error.code)
         ? t(REFUSAL_KEYS[error.code])
@@ -81,9 +97,9 @@ const matterIdsOf = (targets: readonly ReviewTarget[]) =>
   );
 
 /** A review call's answer: one outcome per entry, refused ones with why. */
-type ReviewBatch = {
+type ReviewBatch<TRefusal extends string> = {
   results: readonly (
-    | { id: string; status: "refused"; reason: TimeApprovalRefusal }
+    | { id: string; status: "refused"; reason: TRefusal }
     | { id: string; status: "approved" | "returned" }
   )[];
 };
@@ -110,9 +126,10 @@ export const useTimeReview = () => {
     });
 
   /** Shows each entry's refusal, or the failure on all of them. */
-  const settle = async (
+  const settle = async <TRefusal extends string>(
     ids: readonly string[],
-    request: Promise<ReviewBatch>,
+    request: Promise<ReviewBatch<TRefusal>>,
+    refusalText: (reason: TRefusal) => string,
   ) => {
     const outcome = await request.then(
       (batch) => ({ type: "answered" as const, batch }),
@@ -132,7 +149,7 @@ export const useTimeReview = () => {
       Object.fromEntries(
         outcome.batch.results.flatMap((result) =>
           result.status === "refused"
-            ? [[result.id, itemErrors.refusalText(result.reason)]]
+            ? [[result.id, refusalText(result.reason)]]
             : [],
         ),
       ),
@@ -142,9 +159,10 @@ export const useTimeReview = () => {
 
   // The API takes a bounded batch; a larger selection goes out in batches,
   // each settling its own entries. One request per batch.
-  const inBatches = (
+  const inBatches = <TRefusal extends string>(
     targets: readonly ReviewTarget[],
-    send: (batch: readonly ReviewTarget[]) => Promise<ReviewBatch>,
+    send: (batch: readonly ReviewTarget[]) => Promise<ReviewBatch<TRefusal>>,
+    refusalText: (reason: TRefusal) => string,
   ) => {
     const requests: Promise<void>[] = [];
     for (
@@ -157,7 +175,7 @@ export const useTimeReview = () => {
         start + TIME_ENTRIES_APPROVAL_BATCH_MAX,
       );
       const ids = batch.map(({ id }) => id);
-      requests.push(pending.track(ids, settle(ids, send(batch))));
+      requests.push(pending.track(ids, settle(ids, send(batch), refusalText)));
     }
     return requests;
   };
@@ -187,6 +205,7 @@ export const useTimeReview = () => {
             workspaceIds: matterIdsOf(batch),
             ids: batch.map(({ id }) => id),
           }),
+        itemErrors.refusalText,
       );
       for (const request of requests) {
         detached(request, "time-review.approve");
@@ -202,6 +221,7 @@ export const useTimeReview = () => {
             ids: batch.map(({ id }) => id),
             comment: comment.trim(),
           }),
+        itemErrors.returnRefusalText,
       );
       for (const request of requests) {
         detached(request, "time-review.return");

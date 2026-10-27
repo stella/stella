@@ -527,6 +527,15 @@
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
       },
       "returnComment": "Visszaküldés oka",
+      "returnRefusals": {
+        "invalidEntry": "Ellenőrizze a bejegyzés munkavégzési dátumát, majd küldje vissza.",
+        "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda küldheti vissza.",
+        "notFound": "Ez a bejegyzés már nem létezik, ezért nem küldhető vissza. Frissítse a listát.",
+        "notSubmitted": "Ezt a piszkozatot sosem küldték be, így nincs mit visszaküldeni.",
+        "runningTimer": "A visszaküldés előtt állítsa le a futó időmérőt.",
+        "timePeriodLocked": "Ez a hónap zárolva van, ezért a bejegyzés nem küldhető vissza. Kérje meg a rendszergazdát a feloldására.",
+        "wrongStatus": "A számlázott vagy leírt idő nem küldhető vissza a rögzítőjének."
+      },
       "returnSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} visszaküldése",
       "selectEntry": "Bejegyzés kijelölése",
       "timeEntries": "Időbejegyzések",

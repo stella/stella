@@ -622,7 +622,9 @@ describe("returning approved time to its timekeeper", () => {
     await clickIn(locked, messages.billing.revertToDraft);
 
     const alert = await testing.screen.findByRole("alert");
-    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    expect(alert.textContent).toBe(
+      messages.billing.approval.returnRefusals.timePeriodLocked,
+    );
     expect(rowOf("Narrative entry-locked").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
     expect(server.returnCalls).toEqual([
@@ -668,7 +670,9 @@ describe("returning approved time to its timekeeper", () => {
 
     await releaseHeld(0);
     const alert = await testing.screen.findByRole("alert");
-    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    expect(alert.textContent).toBe(
+      messages.billing.approval.returnRefusals.timePeriodLocked,
+    );
     await releaseHeld(1);
     // The returned entry goes back to its timekeeper and leaves the list.
     await testing.waitFor(() =>

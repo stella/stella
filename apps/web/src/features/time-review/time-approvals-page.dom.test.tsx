@@ -503,9 +503,15 @@ describe("approving time by person", () => {
     if (!(refused instanceof HTMLElement)) {
       throw new Error("no row for adam-2");
     }
+    // In return wording, never the approval's.
     expect(within(refused).getByRole("alert").textContent).toBe(
-      messages.billing.approval.refusals.runningTimer,
+      messages.billing.approval.returnRefusals.runningTimer,
     );
+    expect(
+      within(refused).queryByText(
+        messages.billing.approval.refusals.runningTimer,
+      ),
+    ).toBeNull();
   });
 
   test("a later page that fails to load says so and keeps the loaded entries", async () => {

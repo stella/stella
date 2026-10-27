@@ -496,6 +496,22 @@ export const TIME_APPROVAL_REFUSALS = [
 
 export type TimeApprovalRefusal = (typeof TIME_APPROVAL_REFUSALS)[number];
 
+/**
+ * Why the API refuses to return one time entry to draft: the approval
+ * refusals a return can reach. Returning never prices, so never `unpriced`.
+ */
+export const TIME_RETURN_REFUSALS = [
+  "not_found",
+  "not_approver",
+  "not_submitted",
+  "wrong_status",
+  "running_timer",
+  "time_period_locked",
+  "invalid_entry",
+] as const satisfies readonly TimeApprovalRefusal[];
+
+export type TimeReturnRefusal = (typeof TIME_RETURN_REFUSALS)[number];
+
 const timeApprovalBatchSchema = v.object({
   results: v.array(
     v.variant("status", [
@@ -557,7 +573,7 @@ const timeReturnBatchSchema = v.object({
       v.object({
         id: v.string(),
         status: v.literal("refused"),
-        reason: v.picklist(TIME_APPROVAL_REFUSALS),
+        reason: v.picklist(TIME_RETURN_REFUSALS),
       }),
     ]),
   ),
