@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { SORT_DIRECTIONS } from "@stll/api-contract/column-sort";
 import {
   DECISION_LIST_SORTS,
   DECISION_SORTS,
@@ -9,6 +8,7 @@ import {
   SEARCH_SORTS,
 } from "@stll/api-contract/search";
 import type { DecisionSort } from "@stll/api-contract/search";
+import { SORT_DIRECTIONS } from "@stll/workspace-ui/column-sort";
 
 import {
   decisionDateDirectionOffers,
