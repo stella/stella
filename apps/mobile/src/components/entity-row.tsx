@@ -15,15 +15,14 @@ const isTaskStatus = (status: string): status is TaskStatus =>
 
 /**
  * One document, folder or task: its name, then its kind (or a task's
- * status) and when it last changed, relative to when the page loaded.
+ * status) and the day it last changed. A date, not "2 days ago": Hermes,
+ * the app's JavaScript engine, cannot format relative times.
  */
 export const EntityRow = ({
   entity,
-  loadedAt,
   onPress,
 }: {
   entity: MatterEntity;
-  loadedAt: number;
   onPress: () => void;
 }) => {
   const t = useTranslations("matter");
@@ -39,7 +38,12 @@ export const EntityRow = ({
   })();
   const details = [
     label,
-    t("updated", { time: format.relativeTime(new Date(changedAt), loadedAt) }),
+    t("updated", {
+      time: format.dateTime(new Date(changedAt), {
+        day: "numeric",
+        month: "short",
+      }),
+    }),
   ].filter((detail): detail is string => detail !== undefined);
 
   return (
