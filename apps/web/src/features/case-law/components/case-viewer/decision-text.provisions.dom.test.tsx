@@ -921,8 +921,9 @@ describe("the provision card header", () => {
       // at the text must not light every card's button at once.
       expect(card.classList.contains("group/provision-card")).toBe(true);
       const slot =
-        card.querySelector<HTMLElement>('[data-slot="reference-peek-actions"]') ??
-        panic("The card has no actions slot");
+        card.querySelector<HTMLElement>(
+          '[data-slot="reference-peek-actions"]',
+        ) ?? panic("The card has no actions slot");
       for (const token of REVEAL) {
         expect(slot.classList.contains(token)).toBe(true);
       }
