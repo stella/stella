@@ -10,6 +10,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { AnyColumn } from "drizzle-orm";
 
 import { parseTimeEntrySuggestionEvidence } from "@stll/api-contract/time-entries";
 import { Temporal } from "@stll/time";
@@ -228,9 +229,91 @@ type SuggestionReadScope = {
   /** Range bounds as ISO instants of whole calendar days. */
   rangeStart: string;
   rangeEnd: string;
-  /** Activity rows read per source: the per-day cap times the range's days. */
+  /** The zone whose calendar days partition the per-day signal cap. */
+  timezoneId: string;
+  /**
+   * Bound on rows per source: the per-day cap for every matter and day of the
+   * range, so it never cuts a matter-day short of its own cap.
+   */
   limit: number;
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+};
+
+type MatterDayRankOptions = {
+  id: AnyColumn;
+  workspaceId: AnyColumn;
+  createdAt: AnyColumn;
+  timezoneId: string;
+};
+// Each matter and calendar day keeps its first signals up to the per-day cap,
+// whatever the range, so a week read and a one-day decision reload offer and
+// validate the same clusters.
+const rankWithinMatterDay = ({
+  id,
+  workspaceId,
+  createdAt,
+  timezoneId,
+}: MatterDayRankOptions) =>
+  sql<number>`row_number() OVER (PARTITION BY ${workspaceId}, (${createdAt} AT TIME ZONE ${timezoneId})::date ORDER BY ${createdAt}, ${id})`;
+
+const chatSignalFilters = (scope: SuggestionReadScope) =>
+  and(
+    eq(chatMessages.userId, scope.userId),
+    inArray(chatMessages.workspaceId, scope.workspaceIds),
+    eq(chatMessages.role, "user"),
+    sql`${chatMessages.createdAt} >= ${scope.rangeStart}::timestamptz`,
+    sql`${chatMessages.createdAt} < ${scope.rangeEnd}::timestamptz`,
+  );
+
+const auditSignalFilters = (scope: SuggestionReadScope) =>
+  and(
+    eq(auditLogs.organizationId, scope.organizationId),
+    inArray(auditLogs.workspaceId, scope.workspaceIds),
+    eq(auditLogs.userId, scope.userId),
+    eq(auditLogs.performerType, "user"),
+    notInArray(auditLogs.resourceType, [...EXCLUDED_AUDIT_RESOURCE_TYPES]),
+    sql`${auditLogs.createdAt} >= ${scope.rangeStart}::timestamptz`,
+    sql`${auditLogs.createdAt} < ${scope.rangeEnd}::timestamptz`,
+  );
+
+const cappedChatSignalIds = (tx: Transaction, scope: SuggestionReadScope) => {
+  const ranked = tx
+    .select({
+      id: chatMessages.id,
+      rank: rankWithinMatterDay({
+        id: chatMessages.id,
+        workspaceId: chatMessages.workspaceId,
+        createdAt: chatMessages.createdAt,
+        timezoneId: scope.timezoneId,
+      }).as("signal_rank"),
+    })
+    .from(chatMessages)
+    .where(chatSignalFilters(scope))
+    .as("ranked_chat_signals");
+  return tx
+    .select({ id: ranked.id })
+    .from(ranked)
+    .where(lte(ranked.rank, LIMITS.timeSuggestionSignalsPerSourceMax));
+};
+
+const cappedAuditSignalIds = (tx: Transaction, scope: SuggestionReadScope) => {
+  const ranked = tx
+    .select({
+      id: auditLogs.id,
+      rank: rankWithinMatterDay({
+        id: auditLogs.id,
+        workspaceId: auditLogs.workspaceId,
+        createdAt: auditLogs.createdAt,
+        timezoneId: scope.timezoneId,
+      }).as("signal_rank"),
+    })
+    .from(auditLogs)
+    .where(auditSignalFilters(scope))
+    .as("ranked_audit_signals");
+  return tx
+    .select({ id: ranked.id })
+    .from(ranked)
+    .where(lte(ranked.rank, LIMITS.timeSuggestionSignalsPerSourceMax));
 };
 
 const readChatSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
@@ -246,11 +329,8 @@ const readChatSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
     .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
     .where(
       and(
-        eq(chatMessages.userId, scope.userId),
-        inArray(chatMessages.workspaceId, scope.workspaceIds),
-        eq(chatMessages.role, "user"),
-        sql`${chatMessages.createdAt} >= ${scope.rangeStart}::timestamptz`,
-        sql`${chatMessages.createdAt} < ${scope.rangeEnd}::timestamptz`,
+        chatSignalFilters(scope),
+        inArray(chatMessages.id, cappedChatSignalIds(tx, scope)),
       ),
     )
     .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
@@ -277,13 +357,8 @@ const readAuditSignals = async (tx: Transaction, scope: SuggestionReadScope) =>
     .from(auditLogs)
     .where(
       and(
-        eq(auditLogs.organizationId, scope.organizationId),
-        inArray(auditLogs.workspaceId, scope.workspaceIds),
-        eq(auditLogs.userId, scope.userId),
-        eq(auditLogs.performerType, "user"),
-        notInArray(auditLogs.resourceType, [...EXCLUDED_AUDIT_RESOURCE_TYPES]),
-        sql`${auditLogs.createdAt} >= ${scope.rangeStart}::timestamptz`,
-        sql`${auditLogs.createdAt} < ${scope.rangeEnd}::timestamptz`,
+        auditSignalFilters(scope),
+        inArray(auditLogs.id, cappedAuditSignalIds(tx, scope)),
       ),
     )
     .orderBy(asc(auditLogs.createdAt), asc(auditLogs.id))
@@ -656,7 +731,11 @@ export const loadTimeSuggestionRange = async function* ({
     // column precision without a cursor codec.
     rangeStart: range.start.toISOString(),
     rangeEnd: range.end.toISOString(),
-    limit: LIMITS.timeSuggestionSignalsPerSourceMax * range.days,
+    timezoneId,
+    limit:
+      LIMITS.timeSuggestionSignalsPerSourceMax *
+      range.days *
+      workspaceIds.length,
     featureAccessSnapshot,
   };
   const inputs = yield* Result.await(

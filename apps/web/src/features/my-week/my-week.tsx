@@ -89,7 +89,7 @@ const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
         dateWorked: dialog.entry.dateWorked,
         durationMinutes: dialog.entry.durationMinutes,
         narrative: dialog.entry.narrative,
-        narrativeLanguage: null,
+        narrativeLanguage: dialog.entry.narrativeLanguage,
         billable: dialog.entry.billable,
       };
     case "closed":
