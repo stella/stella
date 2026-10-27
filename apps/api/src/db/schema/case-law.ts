@@ -68,7 +68,6 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
-import { decisionTypeKindSql } from "@/api/lib/case-law/decision-type-filter-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   publishedCaseLawDecisionFor,
@@ -549,23 +548,6 @@ const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
     )
     .where(publishedCaseLawDecisionFor(t));
 
-type PublishedTypeColumns = Parameters<
-  typeof publishedCaseLawDecisionFor
->[0] & {
-  country: PgColumn;
-  decisionType: PgColumn;
-};
-const publishedTypeIndexes = (t: PublishedTypeColumns) => [
-  p
-    .index("case_law_decisions_country_type_kind_published_idx")
-    .on(t.country, decisionTypeKindSql(t.decisionType).inlineParams())
-    .where(publishedCaseLawDecisionFor(t)),
-  p
-    .index("case_law_decisions_country_type_stated_published_idx")
-    .on(t.country, sql`lower(${t.decisionType})`)
-    .where(publishedCaseLawDecisionFor(t)),
-];
-
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -843,7 +825,6 @@ export const caseLawDecisions = p.pgTable(
     p.index("case_law_decisions_case_number_idx").on(t.caseNumber),
     p.index("case_law_decisions_court_idx").on(t.court),
     p.index("case_law_decisions_country_idx").on(t.country),
-    ...publishedTypeIndexes(t),
     p
       .index("case_law_decisions_provision_scope_cursor_idx")
       .on(t.country, t.language, t.id),

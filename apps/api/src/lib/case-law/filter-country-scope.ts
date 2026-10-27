@@ -10,9 +10,51 @@ import {
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+
+type CaseLawFilterMembershipQueryOptions = {
+  tx: CaseLawPublicReadTransaction;
+  field: Exclude<(typeof CASE_LAW_SCOPED_FILTER_FIELDS)[number], "type">;
+  value: string;
+  country: string;
+};
+
+/** Point membership probes use existing country/court, language and source keys. */
+export const caseLawFilterMembershipQuery = ({
+  tx,
+  field,
+  value,
+  country,
+}: CaseLawFilterMembershipQueryOptions) => {
+  const conditions = {
+    court: eq(publishedCaseLawDecisions.court, value),
+    lang: eq(publishedCaseLawDecisions.language, value),
+    sourceId: sql`${publishedCaseLawDecisions.sourceId} = ${value}::uuid`,
+  };
+  return tx
+    .select({
+      field: sql<typeof field>`${field}::text`.as("facet_key"),
+      value: sql<string>`${value}::text`.as("value"),
+      country: sql<string>`${country}::text`.as("country"),
+    })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        eq(publishedCaseLawDecisions.country, country),
+        conditions[field],
+        redistributableCaseLawSource,
+      ),
+    )
+    .limit(1);
+};
 
 type ReadCaseLawFilterScopeOptions = {
   country: string;
@@ -31,18 +73,20 @@ export const readCaseLawFilterScope = async ({
   const countriesByField: Record<
     (typeof CASE_LAW_SCOPED_FILTER_FIELDS)[number],
     string[]
-  > = { court: [], lang: [], type: [], sourceId: [] };
-  const conditions = {
-    court: (value: string) => eq(publishedCaseLawDecisions.court, value),
-    lang: (value: string) => eq(publishedCaseLawDecisions.language, value),
-    type: (value: string) =>
-      decisionTypeFilterSql(publishedCaseLawDecisions.decisionType, value),
-    sourceId: (value: string) =>
-      sql`${publishedCaseLawDecisions.sourceId} = ${value}::uuid`,
+  > = {
+    court: [],
+    lang: [],
+    type: [],
+    sourceId: [],
   };
+  // There is no bounded type vocabulary yet. Its boundary schema validates
+  // syntax; corpus membership awaits post-promote online index work.
+  if (filters.type !== undefined) {
+    countriesByField.type.push(country);
+  }
   const fields = CASE_LAW_SCOPED_FILTER_FIELDS.filter(
-    (field) => filters[field] !== undefined,
-  );
+    (field) => field !== "type",
+  ).filter((field) => filters[field] !== undefined);
   if (fields.length === 0 && courts.length === 0) {
     return normalizeCaseLawCountryFilters({
       country,
@@ -62,25 +106,7 @@ export const readCaseLawFilterScope = async ({
       const candidates =
         field === "court" ? PUBLIC_CASE_LAW_COUNTRIES : [country];
       return candidates.map((candidate) =>
-        tx
-          .select({
-            field: sql<typeof field>`${field}::text`.as("facet_key"),
-            value: sql<string>`${value}::text`.as("value"),
-            country: sql<string>`${candidate}::text`.as("country"),
-          })
-          .from(publishedCaseLawDecisions)
-          .innerJoin(
-            caseLawSources,
-            eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-          )
-          .where(
-            and(
-              eq(publishedCaseLawDecisions.country, candidate),
-              conditions[field](value),
-              redistributableCaseLawSource,
-            ),
-          )
-          .limit(1),
+        caseLawFilterMembershipQuery({ tx, field, value, country: candidate }),
       );
     });
     const first =

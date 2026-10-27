@@ -4,7 +4,6 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
-import { CASE_LAW_FILTER_SCOPE_INDEXES } from "@/api/lib/case-law/filter-scope-indexes";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -351,7 +350,6 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "sanctions_contact_matches",
   },
   CASE_LAW_COURT_DATE_PUBLISHED_INDEX,
-  ...CASE_LAW_FILTER_SCOPE_INDEXES,
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_country_date_published_idx" ON public."case_law_decisions" USING btree ("country", coalesce("decision_date", '-infinity'::date), "id") WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_PREDICATE}`,
     definitionBody: `ON public.case_law_decisions USING btree (country, COALESCE(decision_date, '-infinity'::date), id) WHERE ${PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION}`,
