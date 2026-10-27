@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,7 +9,10 @@ import {
 } from "@/api/db/schema";
 import { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -38,7 +41,7 @@ test("coverage reads only the stored answer as the corpus grows, including on a 
       await withPublicLawReaderRole(db, async (tx) => {
         measuring = true;
         try {
-          return await read(tx);
+          return await read(asTestRaw<CaseLawPublicReadTransaction>(tx));
         } finally {
           measuring = false;
         }
@@ -100,6 +103,39 @@ test("coverage reads only the stored answer as the corpus grows, including on a 
     const revoked = await readCaseLawCoverageHandler(readDb);
     expect(revoked).toEqual({ message: "Coverage is unavailable" });
     expect(statements).toHaveLength(1);
+  } finally {
+    await client.close();
+  }
+}, 120_000);
+
+// timeout: embedded PostgreSQL builds the complete migration schema for this test.
+test("coverage returns unavailable when a stored answer does not match the current schema", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  const readDb = asTestRaw<CaseLawPublicReadDb>(
+    async (read: Parameters<CaseLawPublicReadDb>[0]) =>
+      await withPublicLawReaderRole(
+        db,
+        async (tx) => await read(asTestRaw<CaseLawPublicReadTransaction>(tx)),
+      ),
+  );
+  try {
+    await db.insert(caseLawCoverageSummaries).values({
+      key: "current",
+      sourcePolicy: "[]",
+      answer: sql`'{"countries": []}'::jsonb`,
+      generatedAt: new Date(CASE_LAW_COVERAGE_FIXTURE.generatedAt),
+    });
+    expect(await readCaseLawCoverageHandler(readDb)).toEqual({
+      message: "Coverage is unavailable",
+    });
+    await db
+      .update(caseLawCoverageSummaries)
+      .set({ answer: CASE_LAW_COVERAGE_FIXTURE })
+      .where(eq(caseLawCoverageSummaries.key, "current"));
+    expect(await readCaseLawCoverageHandler(readDb)).toEqual(
+      CASE_LAW_COVERAGE_FIXTURE,
+    );
   } finally {
     await client.close();
   }

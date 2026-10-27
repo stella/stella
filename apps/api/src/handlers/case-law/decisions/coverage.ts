@@ -34,7 +34,7 @@ import {
   type CaseLawKnownGaps,
   readCaseLawCoverageYearsQuery,
 } from "@/api/handlers/case-law/decisions/coverage-years";
-import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
+import { readBrowseFacetsWithin } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
@@ -51,7 +51,7 @@ import {
   readProvisionPendingCounts,
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
-import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
+import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -681,7 +681,12 @@ export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
     if (!isRecord(row) || row["answer"] === null) {
       return { message: "Coverage is unavailable" };
     }
-    return v.parse(coverageResponseSchema, row["answer"]);
+    const parsed = v.safeParse(coverageResponseSchema, row["answer"]);
+    if (!parsed.success) {
+      logger.warn("case_law.coverage.summary_invalid");
+      return { message: "Coverage is unavailable" };
+    }
+    return parsed.output;
   },
 );
 
@@ -797,13 +802,13 @@ export const computeCaseLawCoverageAnswer = async (
         return arrivals.value;
       },
       readFacets: async (country) =>
-        await readBrowseFacetsUnderPolicy({
-          country,
-          excludedSourceIds,
-        }),
+        await caseLawDb(
+          async (tx) =>
+            await readBrowseFacetsWithin(tx, { country, excludedSourceIds }),
+        ),
       readCourts: async ({ buckets, country, total }) => {
         const [courtWeights, activity, courtCount] = await Promise.all([
-          loadPublicCourtWeights(),
+          caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
           caseLawDb(
             async (tx) =>
               await readCaseLawCourtActivityQuery(tx, {

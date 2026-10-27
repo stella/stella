@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -6,7 +6,9 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
+import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
   type NonRedistributableSourcesError,
   readNonRedistributableCaseLawSourceIds,
@@ -14,7 +16,10 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
+import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
 import {
   readPublicLawCountry,
@@ -105,6 +110,40 @@ export const readBrowseFacetsUnderPolicy = async ({
     excludedSourceIds,
     limit: LIMITS.caseLawFacetLimit,
   });
+
+/** Facets for a caller holding a database connection; every database read uses it. */
+export const readBrowseFacetsWithin = async (
+  tx: CaseLawPublicReadTransaction,
+  { country, excludedSourceIds }: BrowseFacetsUnderPolicyRead,
+): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
+  const query = {
+    jurisdiction: country.toUpperCase(),
+    excludedSourceIds,
+    limit: LIMITS.caseLawFacetLimit,
+  };
+  const engine = envBase.LEGAL_SEARCH_PROVIDER;
+  switch (engine) {
+    case "pg-fts":
+      return await Result.tryPromise({
+        try: async () => await readPgFtsBrowseFacets(tx, query),
+        catch: (cause) =>
+          new LegalBrowseFacetsError({
+            message: "postgres browse facets failed",
+            cause,
+          }),
+      });
+    case "corpus-index":
+      return await corpusIndexBrowseFacets(query, "unobserved", {
+        readServingTarget: async (jurisdiction) =>
+          await readServingCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            jurisdiction,
+          }),
+      });
+    default:
+      return panic("Unhandled legal search engine", engine satisfies never);
+  }
+};
 
 /** The same facets under the current source policy. */
 const readBrowseFacetsResult = async (

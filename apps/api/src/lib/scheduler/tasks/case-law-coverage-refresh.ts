@@ -29,6 +29,12 @@ export const REFRESH_CASE_LAW_COVERAGE_TASK =
 const REFRESH_STATEMENT_TIMEOUT_MS = 30_000;
 const REFRESH_RUN_BUDGET_MS = 60_000;
 
+type CoverageRefreshBatch = {
+  cursor: null;
+  done: boolean;
+  value: Result<string, SchedulerTaskFailure>;
+};
+
 export const createCaseLawCoverageRefreshTask =
   ({
     createRuntime = createScriptBackfillRuntime,
@@ -61,41 +67,54 @@ export const createCaseLawCoverageRefreshTask =
     const settled = await Result.tryPromise({
       try: async () => {
         try {
-          return await runtime.step(async ({ tx }) => {
-            refreshSignal.throwIfAborted();
-            const policy =
-              await readNonRedistributableCaseLawSourceIdsQuery(tx);
-            const { answer, complete } = await compute(async (read) => {
+          return await runtime.step(
+            async ({ tx }): Promise<CoverageRefreshBatch> => {
               refreshSignal.throwIfAborted();
-              return await read(tx);
-            }, policy);
-            refreshSignal.throwIfAborted();
-            if (!complete || "message" in answer) {
-              throw new SchedulerTaskFailure({
-                message: "Coverage refresh did not produce a complete answer",
-                cause: { complete },
+              const policy =
+                await readNonRedistributableCaseLawSourceIdsQuery(tx);
+              const { answer, complete } = await compute(async (read) => {
+                refreshSignal.throwIfAborted();
+                return await read(tx);
+              }, policy);
+              refreshSignal.throwIfAborted();
+              if (!complete || "message" in answer) {
+                return {
+                  cursor: null,
+                  done: false,
+                  value: Result.err(
+                    new SchedulerTaskFailure({
+                      message:
+                        "Coverage refresh did not produce a complete answer",
+                      cause: { complete },
+                    }),
+                  ),
+                };
+              }
+              const summary = {
+                key: "current",
+                sourcePolicy: JSON.stringify(policy.toSorted(compareCodeUnit)),
+                answer: projectResponseText(answer, coverageResponseSchema),
+                generatedAt: new Date(answer.generatedAt),
+              };
+              // audit: skip — derived public summary; the refresh has a system audit below.
+              await tx
+                .insert(caseLawCoverageSummaries)
+                .values(summary)
+                .onConflictDoUpdate({
+                  target: caseLawCoverageSummaries.key,
+                  set: summary,
+                });
+              await recordSystemAudit(tx, "system:case-law-coverage-refresh", {
+                subject: runId,
+                counts: { summaries: 1, countries: answer.countries.length },
               });
-            }
-            const summary = {
-              key: "current",
-              sourcePolicy: JSON.stringify(policy.toSorted(compareCodeUnit)),
-              answer: projectResponseText(answer, coverageResponseSchema),
-              generatedAt: new Date(answer.generatedAt),
-            };
-            // audit: skip — derived public summary; the refresh has a system audit below.
-            await tx
-              .insert(caseLawCoverageSummaries)
-              .values(summary)
-              .onConflictDoUpdate({
-                target: caseLawCoverageSummaries.key,
-                set: summary,
-              });
-            await recordSystemAudit(tx, "system:case-law-coverage-refresh", {
-              subject: runId,
-              counts: { summaries: 1, countries: answer.countries.length },
-            });
-            return { cursor: null, done: true, value: answer.generatedAt };
-          });
+              return {
+                cursor: null,
+                done: true,
+                value: Result.ok(answer.generatedAt),
+              };
+            },
+          );
         } finally {
           await runtime.close();
         }
@@ -114,8 +133,11 @@ export const createCaseLawCoverageRefreshTask =
         }),
       );
     }
+    if (settled.value.value.isErr()) {
+      return Result.err(settled.value.value.error);
+    }
     logger.info("scheduler.case_law_coverage_refreshed", {
-      "caseLawCoverage.generatedAt": settled.value.value,
+      "caseLawCoverage.generatedAt": settled.value.value.value,
     });
     return undefined;
   };
