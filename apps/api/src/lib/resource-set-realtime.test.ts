@@ -5,6 +5,7 @@ import {
   REALTIME_EVENT_TYPE,
   RESOURCE_MUTATION_ID_HEADER,
   RESOURCE_TYPE,
+  resourceMutationDigest,
   type ResourceType,
 } from "@stll/api-contract";
 
@@ -54,11 +55,11 @@ type Announcement =
       audience: "workspace";
       id: SafeId<"workspace">;
       type: ResourceType;
-      mutationId?: string;
+      mutationDigest?: string;
     }
   | {
       audience: "organization";
-      mutationId?: string;
+      mutationDigest?: string;
       id: SafeId<"organization">;
       type: ResourceType;
     };
@@ -74,9 +75,9 @@ const recorder = () => {
             audience: "workspace",
             id,
             type,
-            ...(broadcastOptions?.mutationId === undefined
+            ...(broadcastOptions?.mutationDigest === undefined
               ? {}
-              : { mutationId: broadcastOptions.mutationId }),
+              : { mutationDigest: broadcastOptions.mutationDigest }),
           });
         },
         organization: (id, type, broadcastOptions) => {
@@ -84,9 +85,9 @@ const recorder = () => {
             audience: "organization",
             id,
             type,
-            ...(broadcastOptions?.mutationId === undefined
+            ...(broadcastOptions?.mutationDigest === undefined
               ? {}
-              : { mutationId: broadcastOptions.mutationId }),
+              : { mutationDigest: broadcastOptions.mutationDigest }),
           });
         },
       },
@@ -147,28 +148,35 @@ const baseConfig = {
 } satisfies WorkspaceHandlerConfig;
 
 describe("a matter handler's declared resource sets", () => {
-  test("the workspace broadcaster retains mutation correlation on the wire", () => {
+  test("the workspace broadcaster retains mutation correlation on the wire", async () => {
     const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const mutationDigest = await resourceMutationDigest(mutationId);
     const emitted: unknown[] = [];
     broadcastWorkspaceResourceSetUpdated(WORKSPACE_ID, RESOURCE_TYPE.ENTITY, {
-      mutationId,
+      mutationDigest,
       broadcastEvent: (workspaceId, event) => {
         expect(workspaceId).toBe(WORKSPACE_ID);
         emitted.push(event);
       },
     });
+    expect(JSON.stringify(emitted)).not.toContain(mutationId);
     expect(emitted).toEqual([
       {
         type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
         resourceType: RESOURCE_TYPE.ENTITY,
-        mutationId,
+        mutationDigest,
       },
     ]);
   });
 
-  test("committed resource sets share the request mutation id", async () => {
+  test("committed resource sets share the request mutation digest", async () => {
     const mutationId = "019e7000-0000-7000-8000-0000000000b1";
-    for (const header of [mutationId, "invalid-id"]) {
+    for (const header of [
+      mutationId,
+      mutationId,
+      "019e7000-0000-7000-8000-0000000000b2",
+      "invalid-id",
+    ]) {
       const { announcements, announce } = recorder();
       const endpoint = createSafeHandler(
         {
@@ -186,12 +194,19 @@ describe("a matter handler's declared resource sets", () => {
       const ctx = requestContext();
       ctx.request.headers.set(RESOURCE_MUTATION_ID_HEADER, header);
       expect(await endpoint.handler(asTestRaw(ctx))).toEqual({ ok: true });
+      const expectedDigest =
+        header === "invalid-id"
+          ? undefined
+          : await resourceMutationDigest(header);
+      expect(JSON.stringify(announcements)).not.toContain(mutationId);
       expect(announcements).toEqual(
         [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST].map((type) => ({
           audience: "workspace",
           id: WORKSPACE_ID,
           type,
-          ...(header === mutationId ? { mutationId } : {}),
+          ...(expectedDigest === undefined
+            ? {}
+            : { mutationDigest: expectedDigest }),
         })),
       );
     }

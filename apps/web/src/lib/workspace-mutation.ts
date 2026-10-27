@@ -1,7 +1,10 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
-import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
+import {
+  resourceMutationDigest,
+  type WorkspaceRealtimeEvent,
+} from "@stll/api-contract";
 
 import { createUuid } from "@/lib/uuid";
 
@@ -26,11 +29,12 @@ export const handleWorkspaceMutationEvent = (
   event: WorkspaceRealtimeEvent,
   apply: () => void,
 ): void => {
-  const mutationId = "mutationId" in event ? event.mutationId : undefined;
+  const mutationDigest =
+    "mutationDigest" in event ? event.mutationDigest : undefined;
   const state =
-    mutationId === undefined
+    mutationDigest === undefined
       ? undefined
-      : mutations.get(client)?.get(mutationId);
+      : mutations.get(client)?.get(mutationDigest);
   if (!state) {
     apply();
     return;
@@ -61,14 +65,15 @@ export const runWorkspaceMutation = async <T>({
 }: RunWorkspaceMutationOptions<T>): Promise<T> => {
   const entries = clientMutations(client);
   const mutationId = createUuid();
+  const mutationDigest = await resourceMutationDigest(mutationId);
   const pending: MutationState = { status: "pending", onFailure: [] };
-  entries.set(mutationId, pending);
+  entries.set(mutationDigest, pending);
   const result = await Result.tryPromise({
     try: async () => await request(mutationId),
     catch: (cause) => cause,
   });
   const releaseEvents = () => {
-    entries.delete(mutationId);
+    entries.delete(mutationDigest);
     for (const apply of pending.onFailure) {
       apply();
     }
@@ -92,7 +97,7 @@ export const runWorkspaceMutation = async <T>({
     // The write succeeded; query error state and released echoes own recovery.
     return result.value;
   }
-  entries.set(mutationId, { status: "acknowledged" });
+  entries.set(mutationDigest, { status: "acknowledged" });
   let acknowledged = 0;
   for (const state of entries.values()) {
     if (state.status === "acknowledged") {

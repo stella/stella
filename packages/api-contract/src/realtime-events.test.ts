@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   MAX_RESOURCE_CHANGES_PER_EVENT,
   newNotificationRealtimeEvent,
@@ -10,6 +12,7 @@ import {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   resourceDeletedRealtimeEvent,
+  resourceMutationDigest,
   resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,
@@ -62,8 +65,23 @@ const WORKSPACE_EVENT_FIXTURES = [
 ] satisfies WorkspaceRealtimeEvent[];
 
 describe("realtime event contracts", () => {
-  test("resource facts retain valid mutation correlation and reject malformed ids", () => {
+  test("mutation digests follow the SHA-256 UUID contract", async () => {
+    expect(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b1"),
+    ).toBe("cba7588c0ca99cac5bb1f0818971c997a51b19e0327a2a04a41359c3ca6b5b25");
+    expect(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b2"),
+    ).not.toBe(
+      await resourceMutationDigest("019e7000-0000-7000-8000-0000000000b1"),
+    );
+    expect(
+      await rejectionOf(resourceMutationDigest("invalid-id")),
+    ).toHaveProperty("name", "ValiError");
+  });
+
+  test("resource facts retain valid mutation correlation and reject malformed digests", async () => {
     const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const mutationDigest = await resourceMutationDigest(mutationId);
     const events = [
       RESOURCE_UPDATED_EVENT,
       RESOURCE_DELETED_EVENT,
@@ -71,24 +89,36 @@ describe("realtime event contracts", () => {
       RESOURCE_SET_UPDATED_EVENT,
     ];
     for (const event of events) {
-      expect(parseWorkspaceRealtimeEvent({ ...event, mutationId })).toEqual({
-        ...event,
+      expect(parseWorkspaceRealtimeEvent({ ...event, mutationDigest })).toEqual(
+        {
+          ...event,
+          mutationDigest,
+        },
+      );
+      for (const invalid of [
+        "",
+        "unrelated",
+        "x".repeat(1000),
         mutationId,
-      });
-      for (const invalid of ["", "unrelated", "x".repeat(1000)]) {
+        mutationDigest.toUpperCase(),
+        "a".repeat(63),
+        "a".repeat(65),
+      ]) {
         expect(
-          parseWorkspaceRealtimeEvent({ ...event, mutationId: invalid }),
+          parseWorkspaceRealtimeEvent({ ...event, mutationDigest: invalid }),
         ).toBeNull();
-        expect(parseResourceMutationId(invalid)).toBeUndefined();
       }
     }
     expect(parseResourceMutationId(mutationId)).toBe(mutationId);
     expect(parseResourceMutationId(null)).toBeUndefined();
+    for (const invalid of ["", "unrelated", "x".repeat(1000)]) {
+      expect(parseResourceMutationId(invalid)).toBeUndefined();
+    }
     expect(
       parseOrganizationRealtimeEvent(
-        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY, mutationId),
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY, mutationDigest),
       ),
-    ).toEqual({ ...RESOURCE_SET_UPDATED_EVENT, mutationId });
+    ).toEqual({ ...RESOURCE_SET_UPDATED_EVENT, mutationDigest });
   });
 
   test("accepts every workspace event kind", () => {

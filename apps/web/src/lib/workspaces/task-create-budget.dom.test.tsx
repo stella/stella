@@ -3,7 +3,11 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_TYPE,
+  resourceMutationDigest,
+} from "@stll/api-contract";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -79,7 +83,7 @@ for (const rowCount of [10, 100]) {
       const event = {
         type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
         resourceType: RESOURCE_TYPE.ENTITY,
-        mutationId,
+        mutationDigest: await resourceMutationDigest(mutationId ?? ""),
       } as const;
       const refreshes: Promise<void>[] = [];
       handleWorkspaceMutationEvent(client, event, () => {

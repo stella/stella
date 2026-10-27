@@ -7,6 +7,7 @@ import type { ModelTask } from "@stll/ai-catalog";
 import {
   parseResourceMutationId,
   RESOURCE_MUTATION_ID_HEADER,
+  resourceMutationDigest,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
@@ -1648,15 +1649,19 @@ const createSafeScopedHandler = <
           const mutationId = parseResourceMutationId(
             ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
           );
-          const announcement = Result.try(() =>
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
             announce({
               realtime: config.realtime,
-              ...(mutationId === undefined ? {} : { mutationId }),
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-            }),
-          );
+            });
+          });
           if (Result.isError(announcement)) {
             observeFailure(announcement.error, {
               sink: REALTIME_ANNOUNCEMENT_FAILURE,

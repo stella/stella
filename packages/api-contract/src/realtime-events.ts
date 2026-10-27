@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { sha256Hex } from "@stll/sha256/browser";
+
 import { apiDateTimeSchema } from "./api-date";
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
@@ -43,14 +45,27 @@ export const parseResourceMutationId = (value: unknown): string | undefined => {
   return result.success ? result.output : undefined;
 };
 
+const resourceMutationDigestSchema = v.pipe(
+  v.string(),
+  v.regex(/^[0-9a-f]{64}$/u),
+);
+
+/** Both runtimes hash the validated request UUID before correlating events. */
+export const resourceMutationDigest = async (
+  mutationId: string,
+): Promise<string> => {
+  const id = v.parse(resourceMutationIdSchema, mutationId);
+  return await sha256Hex(id);
+};
+
 const resourceUpdatedEventSchema = v.object({
-  mutationId: v.optional(resourceMutationIdSchema),
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_UPDATED),
   resource: resourceRefSchema,
 });
 
 const resourceDeletedEventSchema = v.object({
-  mutationId: v.optional(resourceMutationIdSchema),
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
   resource: resourceRefSchema,
 });
@@ -67,7 +82,7 @@ const resourceChangeSchema = v.variant("change", [
 ]);
 
 const resourcesChangedEventSchema = v.object({
-  mutationId: v.optional(resourceMutationIdSchema),
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCES_CHANGED),
   changes: v.pipe(
     v.array(resourceChangeSchema),
@@ -84,7 +99,7 @@ const resourceChangeCountSchema = v.pipe(
 );
 
 const resourceSetUpdatedEventSchema = v.object({
-  mutationId: v.optional(resourceMutationIdSchema),
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
 });
@@ -203,12 +218,12 @@ export const resourcesChangedRealtimeEvent = (
 
 export const resourceSetUpdatedRealtimeEvent = (
   resourceType: ResourceType,
-  mutationId?: string,
+  mutationDigest?: string,
 ) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
     resourceType,
-    ...(mutationId === undefined ? {} : { mutationId }),
+    ...(mutationDigest === undefined ? {} : { mutationDigest }),
   }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({

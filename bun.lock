@@ -727,6 +727,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
+        "@stll/sha256": "workspace:^",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.1",
@@ -737,7 +738,6 @@
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
-        "@stll/sha256": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
