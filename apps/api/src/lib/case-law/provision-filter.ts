@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
@@ -204,6 +203,8 @@ export const readProvisionWorkLinked = async (
  * Whether the correlated decision cites the provision. Correlated on the
  * decision id, which leads the links' unique index, so the predicate costs a
  * short index probe per candidate rather than a scan of the work's links.
+ * OFFSET 0 prevents decorrelation into every citing decision before the
+ * ranked page can apply its LIMIT.
  */
 export const provisionCitedSql = ({
   decisionId,
@@ -218,88 +219,63 @@ export const provisionCitedSql = ({
       ...provisionLinkConditions(scope),
     ],
     sql` AND `,
-  )})`;
+  )} LIMIT 1 OFFSET 0)`;
 
-/**
- * Every decision citing the provision, as the engine can filter by: the
- * whole set while it fits {@link LIMITS.caseLawProvisionIdSetMax}, so the
- * engine narrows natively with its totals and facets intact. A larger set is
- * reported by its exact size instead, and the search falls back to checking
- * each candidate it ranks.
- */
+/** A complete small set, or a scope that needs candidate-by-candidate probes. */
 export type CaseLawProvisionScope =
   | { type: "decisions"; decisionIds: readonly SafeId<"caseLawDecision">[] }
-  | { type: "broad"; citingDecisions: number };
-
-export const readCaseLawProvisionScope = async (
-  tx: CaseLawPublicReadTransaction,
-  {
-    idSetMax = LIMITS.caseLawProvisionIdSetMax,
-    ...scope
-  }: ProvisionScopeOptions & { idSetMax?: number },
-): Promise<CaseLawProvisionScope> => {
-  const link = caseLawProvisionCitations;
-  const conditions = and(
-    redistributableCaseLawSource,
-    ...provisionLinkConditions(scope),
-  );
-  // Grouped rather than DISTINCT: the public read transaction exposes only
-  // `select`, and a decision citing the provision at several levels is one.
-  const rows = await tx
-    .select({ decisionId: link.decisionId })
-    .from(link)
-    .innerJoin(
-      publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, link.decisionId),
-    )
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(conditions)
-    .groupBy(link.decisionId)
-    .limit(idSetMax + 1);
-  if (rows.length <= idSetMax) {
-    return {
-      type: "decisions",
-      decisionIds: rows.map(({ decisionId }) => decisionId),
-    };
-  }
-  const [count] = await tx
-    .select({
-      citingDecisions: sql<number>`count(DISTINCT ${link.decisionId})::int`,
-    })
-    .from(link)
-    .innerJoin(
-      publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, link.decisionId),
-    )
-    .innerJoin(
-      caseLawSources,
-      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-    )
-    .where(conditions);
-  return {
-    type: "broad",
-    citingDecisions:
-      count?.citingDecisions ?? panic("A count query returned no row"),
-  };
-};
+  | { type: "broad" };
 
 /**
- * The ids of every decision citing the provision, as a subquery a page read
- * filters by. It drives from the links' work-subtree index, so a
- * provision-only list reads the provision's own links rather than probing
- * every decision or every link of its act.
+ * Bound physical links before deduplication or publication joins. Grouping
+ * before LIMIT still reads every citation of a popular provision. Anchor
+ * order lets the subtree index stop as soon as the row budget is reached.
  */
-export const citingDecisionIdsSubquery = (
+export const provisionScopeLinksQuery = (
   tx: CaseLawPublicReadTransaction,
-  scope: ProvisionScopeOptions,
+  scope: ProvisionScopeOptions & { idSetMax?: number },
 ) =>
   tx
     .select({ decisionId: caseLawProvisionCitations.decisionId })
     .from(caseLawProvisionCitations)
-    .where(and(...provisionLinkConditions(scope)));
+    .where(and(...provisionLinkConditions(scope)))
+    .orderBy(sql`${caseLawProvisionCitations.anchor} COLLATE "C"`)
+    .limit((scope.idSetMax ?? LIMITS.caseLawProvisionIdSetMax) + 1);
+
+export const readCaseLawProvisionScope = async (
+  tx: CaseLawPublicReadTransaction,
+  scope: ProvisionScopeOptions & { idSetMax?: number },
+): Promise<CaseLawProvisionScope> => {
+  const links = await provisionScopeLinksQuery(tx, scope);
+  if (links.length > (scope.idSetMax ?? LIMITS.caseLawProvisionIdSetMax)) {
+    return { type: "broad" };
+  }
+  if (links.length === 0) {
+    return { type: "decisions", decisionIds: [] };
+  }
+  const rows = await tx
+    .select({ decisionId: publishedCaseLawDecisions.id })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        inArray(
+          publishedCaseLawDecisions.id,
+          links.map(({ decisionId }) => decisionId),
+        ),
+        eq(publishedCaseLawDecisions.country, scope.jurisdiction),
+        redistributableCaseLawSource,
+      ),
+    )
+    .limit(scope.idSetMax ?? LIMITS.caseLawProvisionIdSetMax);
+  return {
+    type: "decisions",
+    decisionIds: rows.map(({ decisionId }) => decisionId),
+  };
+};
 
 /**
  * The first sentence of each decision that cites the provision, in text

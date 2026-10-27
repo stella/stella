@@ -38,7 +38,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { citingDecisionIdsSubquery } from "@/api/lib/case-law/provision-filter";
+import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -1553,7 +1553,7 @@ test.each([
   },
 );
 
-test("a provision-only list is the complete citing set with an exact total and its citing sentence", async () => {
+test("a provision-only list returns citing decisions and sentences without counting the full set", async () => {
   const listed = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
@@ -1574,7 +1574,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
     String(czechId),
   ]);
-  expect(listed.total).toEqual({ type: "exact", count: 1 });
+  expect(listed.total).toEqual({ type: "not_counted" });
   expect(listed.nextCursor).toBeNull();
   expect(listed.hits.at(0)?.headline).toBe("sentence par_316-odst_2");
 
@@ -1590,10 +1590,7 @@ test("a provision-only list is the complete citing set with an exact total and i
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  expect("hits" in none ? none.total : null).toEqual({
-    type: "exact",
-    count: 0,
-  });
+  expect("hits" in none ? none.total : null).toEqual({ type: "not_counted" });
 });
 
 test("a provision-only list escapes the citing sentence it shows as markup", async () => {
@@ -1676,7 +1673,7 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       loadCourtWeights: async () => await Promise.resolve(courtWeights),
     },
   });
-  // One read for ids, total, citing sentences and rows (one repeatable-read
+  // One read for ids, citing sentences and rows (one repeatable-read
   // transaction), one for the language alternates.
   expect(reads - before).toBe(2);
 });
@@ -1727,7 +1724,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
     if (!("hits" in first) || first.nextCursor === null) {
       throw new Error("expected a first page with a continuation");
     }
-    expect(first.total).toEqual({ type: "exact", count: 2 });
+    expect(first.total).toEqual({ type: "not_counted" });
     const cursor = first.nextCursor;
 
     // The same request continues, to the other decision and the end.
@@ -1848,7 +1845,7 @@ test("every decision citing a provision is read from the provision's own anchor 
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const plan = JSON.stringify(
       await tx.execute(
-        sql`EXPLAIN (COSTS OFF) ${citingDecisionIdsSubquery(tx, {
+        sql`EXPLAIN (COSTS OFF) ${provisionScopeLinksQuery(tx, {
           jurisdiction: "CZE",
           // § 2910 písm. a): a level below a gap is compared within the
           // seek, never in place of it.

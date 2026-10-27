@@ -58,6 +58,7 @@ import type {
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
+  caseLawSearchTimeoutResult,
   confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
@@ -676,6 +677,13 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  const timeout =
+    toolName === "search_case_law" ? caseLawSearchTimeoutResult(error) : null;
+  if (timeout !== null) {
+    return serializeToolResult(
+      scopeToolResultToSurface(timeout, { mode, context }),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {

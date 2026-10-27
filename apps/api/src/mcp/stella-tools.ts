@@ -214,6 +214,7 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  caseLawSearchTimeoutResult,
   countryInputSchema,
   countryNormalization,
   cursorInput,
@@ -806,7 +807,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
+          'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, with pagination and no exact total.',
         ),
       ),
     ),
@@ -2193,6 +2194,10 @@ const readCaseLawSearchAnswer = (
   answer: Parameters<typeof isSearchCaseLawSuccess>[0],
   cursor: string | undefined,
 ): CaseLawSearchAnswer => {
+  const timeout = caseLawSearchTimeoutResult(answer);
+  if (timeout !== null) {
+    return { type: "failed", result: timeout };
+  }
   if (isSearchIndexUnavailable(answer)) {
     return { type: "failed", result: searchIndexUnavailableResult(answer) };
   }
@@ -2571,7 +2576,7 @@ type SearchProvisionArgRead =
 /**
  * The provision argument, resolved and, for a search with queries, its
  * citing set read once for every phrasing. A set too wide for one search to
- * filter by is said in a warning on each phrasing, with its exact size.
+ * filter by is said in a warning on each phrasing, without enumerating every citation.
  */
 const readSearchProvision = async ({
   args,
@@ -2628,7 +2633,6 @@ const readSearchProvision = async ({
         ? [
             provisionCitedWidelyWarning({
               provision: text,
-              citingDecisions: provisionScope.citingDecisions,
             }),
           ]
         : [],

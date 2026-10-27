@@ -69,6 +69,7 @@ import {
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   publishedCaseLawDecisionFor,
   unredactedCaseLawDecisionFor,
@@ -548,6 +549,21 @@ const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
     )
     .where(publishedCaseLawDecisionFor(t));
 
+type ProvisionSearchIndexColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  citationAuthority: PgColumn;
+  id: PgColumn;
+};
+
+// The id tiebreaker lets a provision page stop within an equal-authority band.
+const provisionSearchIndex = (t: ProvisionSearchIndexColumns) =>
+  p
+    .index(CASE_LAW_PROVISION_SEARCH_INDEX.name)
+    .on(t.country, sql`${t.citationAuthority} DESC`, sql`${t.id} DESC`)
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -963,6 +979,7 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
+    provisionSearchIndex(t),
     // The previous authority sweep's order, kept for the length of one
     // rollout: a task still on the previous revision sorts by it. Removal
     // condition: that release fully rolled out; drop this declaration and the

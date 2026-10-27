@@ -34,7 +34,9 @@ import {
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -53,6 +55,7 @@ import {
   encodePaginationCursor,
   isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
@@ -801,6 +804,30 @@ export const notFoundResult = (
   hint?: string,
 ): InternalToolErrorResult =>
   structuredErrorResult({ code: "not_found", hint, message });
+
+/** A bounded case-law read may be retried with a narrower search. */
+export const caseLawSearchTimeoutResult = (
+  error: unknown,
+): InternalToolErrorResult | null => {
+  const response = isRecord(error) ? error["response"] : undefined;
+  if (
+    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED &&
+    resolveHandlerError(error)?.code !== PUBLIC_READ_TIMEOUT_CODE &&
+    !(isRecord(response) && response["code"] === PUBLIC_READ_TIMEOUT_CODE)
+  ) {
+    return null;
+  }
+  captureError(
+    error,
+    handlerErrorContext("mcp.caseLawSearchTimeout", { source: "mcp" }),
+  );
+  return structuredErrorResult({
+    code: "upstream_unavailable",
+    message: "Case-law search exceeded its time budget.",
+    hint: "Retry search_case_law with fewer queries or a narrower court, date range or provision filter. If it still times out, retry shortly.",
+    retryable: true,
+  });
+};
 
 const SEARCH_INDEX_UNAVAILABLE_SINK = failureSink({
   event: "mcp.search_index_unavailable",

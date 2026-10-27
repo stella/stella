@@ -187,7 +187,7 @@ test("the Postgres search narrows to decisions citing the provision, level by le
   await client.close();
 }, 60_000);
 
-test("the provision scope includes only published redistributable decisions in its set and exact size", async () => {
+test("the provision scope includes only published redistributable decisions in its set within a bounded link read", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   const sourceId = createSafeId<"caseLawSource">();
@@ -304,13 +304,12 @@ test("the provision scope includes only published redistributable decisions in i
   expect(
     scope.type === "decisions" ? scope.decisionIds.map(String).toSorted() : [],
   ).toEqual([first.id, second.id].map(String).toSorted());
-  // Past the bound the set is not handed over, but its size is exact.
+  // Past the physical link budget, use per-candidate probes.
   expect(await read({ work: "262/2006 Sb.", anchor: "par_316" }, 2)).toEqual({
     type: "broad",
-    citingDecisions: 3,
   });
-  // Exactly at the bound the set still fits.
-  expect((await read(subsection, 2)).type).toBe("decisions");
+  // Repeated links spend the physical-row budget too.
+  expect((await read(subsection, 2)).type).toBe("broad");
   expect(await read({ work: "262/2006 Sb.", anchor: "par_317" })).toEqual({
     type: "decisions",
     decisionIds: [],

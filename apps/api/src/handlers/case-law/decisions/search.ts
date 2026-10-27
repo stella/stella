@@ -140,7 +140,6 @@ import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributabl
 import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
-  citingDecisionIdsSubquery,
   provisionCitedSql,
   readCaseLawProvisionScope,
   readProvisionCitingSentences,
@@ -3366,13 +3365,55 @@ const provisionListOrder = ({
   }
 };
 
+type ProvisionDecisionPageQueryOptions = {
+  body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
+  generation: string;
+  after: SQL | undefined;
+  orderBy: SQL[];
+  limit: number;
+  decisionIds?: readonly SafeId<"caseLawDecision">[];
+};
+
+/** Ranked candidates probe their own links; a broad provision is never materialised. */
+export const provisionDecisionPageQuery = (
+  tx: CaseLawPublicReadTransaction,
+  {
+    body,
+    generation,
+    after,
+    orderBy,
+    limit,
+    decisionIds,
+  }: ProvisionDecisionPageQueryOptions,
+) =>
+  tx
+    .select({
+      id: publishedCaseLawDecisions.id,
+      decisionDate: publishedCaseLawDecisions.decisionDate,
+      citationAuthority: publishedCaseLawDecisions.citationAuthority,
+    })
+    .from(publishedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
+    )
+    .where(
+      and(
+        decisionIds === undefined
+          ? undefined
+          : inArray(publishedCaseLawDecisions.id, decisionIds),
+        ...caseLawSearchRowFilters(body, generation),
+        after,
+      ),
+    )
+    .orderBy(...orderBy)
+    .limit(limit);
+
 /**
- * Every decision citing a provision, with no topic to rank by: the complete
- * list, read from the provision links (driven by their work index), ordered
- * by citation authority or, for `newest`, by decision date, with an exact
- * total and keyset pagination. Each hit's excerpt is the first sentence of
- * the decision that cites the provision. The rows are re-checked against the
- * serving generation like every search page.
+ * Decisions citing a provision, read in authority or date order with keyset
+ * pagination. Small citing sets narrow the rank walk by id; broad ones use
+ * one indexed citation probe per candidate. Totals are deliberately not
+ * counted: counting a popular provision defeats the page's read bound.
  */
 export const listCaseLawProvisionDecisions = async ({
   body,
@@ -3432,40 +3473,19 @@ export const listCaseLawProvisionDecisions = async ({
     }
     generation = target.value.serving.generation;
   }
-  // One transaction is one snapshot (public reads are repeatable read): the
-  // ids, the total, the citing sentences and the page rows all describe the
-  // same state, so an excerpt cannot be paired with a later revision.
-  const { rows, total, sentences, byId } = await caseLawDb(async (tx) => {
-    const filters = and(
-      inArray(
-        publishedCaseLawDecisions.id,
-        citingDecisionIdsSubquery(tx, scope),
-      ),
-      ...caseLawSearchRowFilters(body, generation),
-    );
-    const page = await tx
-      .select({
-        id: publishedCaseLawDecisions.id,
-        decisionDate: publishedCaseLawDecisions.decisionDate,
-        citationAuthority: publishedCaseLawDecisions.citationAuthority,
-      })
-      .from(publishedCaseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-      )
-      .where(and(filters, order.after))
-      .orderBy(...order.orderBy)
-      .limit(limit + 1);
-    // sql-perf-allow: bounded by the provision's own links, read through their work-subtree index
-    const [counted] = await tx
-      .select({ total: sql<number>`count(*)::int` })
-      .from(publishedCaseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-      )
-      .where(filters);
+  // The page, citing sentences and hydrated rows share one snapshot.
+  const { rows, sentences, byId } = await caseLawDb(async (tx) => {
+    const provisionScope = await readCaseLawProvisionScope(tx, scope);
+    const page = await provisionDecisionPageQuery(tx, {
+      body,
+      generation,
+      after: order.after,
+      orderBy: order.orderBy,
+      limit: limit + 1,
+      ...(provisionScope.type === "decisions"
+        ? { decisionIds: provisionScope.decisionIds }
+        : {}),
+    });
     const pageIds = page.slice(0, limit).map(({ id }) => id);
     const hydrated = await pageDecisionRowsQuery(tx, {
       body,
@@ -3474,7 +3494,6 @@ export const listCaseLawProvisionDecisions = async ({
     });
     return {
       rows: page,
-      total: counted?.total ?? panic("A count query returned no row"),
       sentences: await readProvisionCitingSentences(tx, scope, pageIds),
       byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
     };
@@ -3522,7 +3541,7 @@ export const listCaseLawProvisionDecisions = async ({
       ),
     ),
     headnotePresentation: body.headnotePresentation,
-    total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, total),
+    total: SEARCH_TOTAL_NOT_COUNTED,
     match: "all_terms",
   });
   return projectCaseLawSearchResponse(
