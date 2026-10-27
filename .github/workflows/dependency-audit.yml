@@ -197,7 +197,7 @@ jobs:
 
       - name: Open one remediation
         if: steps.remediation.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/.github/actions/signed-commit@04c86bb54f4ae022354d72f8a40400bc7cf7428c
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
