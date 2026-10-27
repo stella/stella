@@ -43,9 +43,9 @@ test("next links alone determine pagination and other origins fail before a requ
     ).unwrap().next,
   ).toBeNull();
   let requests = 0;
-  globalThis.fetch = asFetchMock(() => {
+  globalThis.fetch = asFetchMock(async () => {
     requests++;
-    return Promise.resolve(new Response(feed));
+    return new Response(feed);
   });
   const refused = await ukFclAdapter.fetchPage(
     JSON.stringify({
@@ -65,12 +65,10 @@ test("next links alone determine pagination and other origins fail before a requ
 
 test("daily watermark includes ties and advances after the complete page", async () => {
   const calls: string[] = [];
-  globalThis.fetch = asFetchMock((input: string | URL | Request) => {
-    const url = String(input);
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+    const url = input instanceof Request ? input.url : input.toString();
     calls.push(url);
-    return Promise.resolve(
-      new Response(url.endsWith("/data.xml") ? document : feed),
-    );
+    return new Response(url.endsWith("/data.xml") ? document : feed);
   });
   const frontier = entry.updated;
   const page = await ukFclAdapter.fetchPage(
@@ -93,13 +91,12 @@ test("daily watermark includes ties and advances after the complete page", async
 });
 
 test("failed detail requests hold the page checkpoint", async () => {
-  globalThis.fetch = asFetchMock((input: string | URL | Request) =>
-    Promise.resolve(
-      new Response(String(input).endsWith("/data.xml") ? "" : feed, {
-        status: String(input).endsWith("/data.xml") ? 404 : 200,
-      }),
-    ),
-  );
+  globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    return new Response(url.endsWith("/data.xml") ? "" : feed, {
+      status: url.endsWith("/data.xml") ? 404 : 200,
+    });
+  });
   const page = await ukFclAdapter.fetchPage(
     JSON.stringify({
       type: "tip",
@@ -133,7 +130,9 @@ const sweep = (
 test("backfill snapshots the daily frontier and walks the listed continuation before the next court", async () => {
   const calls: URL[] = [];
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = new URL(String(input));
+    const url = new URL(
+      input instanceof Request ? input.url : input.toString(),
+    );
     calls.push(url);
     if (url.pathname.endsWith("/data.xml")) {
       return new Response(document);
@@ -161,8 +160,16 @@ test("backfill snapshots the daily frontier and walks the listed continuation be
   });
   calls.length = 0;
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    calls.push(new URL(String(input)));
-    return new Response(String(input).endsWith("/data.xml") ? document : feed);
+    calls.push(
+      new URL(input instanceof Request ? input.url : input.toString()),
+    );
+    return new Response(
+      (input instanceof Request ? input.url : input.toString()).endsWith(
+        "/data.xml",
+      )
+        ? document
+        : feed,
+    );
   });
   const second = (await ukFclAdapter.fetchPage(first.nextCursor, {})).unwrap();
   expect(calls.at(0)?.searchParams.get("page")).toBe("2");
@@ -178,7 +185,13 @@ test("the final backfill slice resumes daily discovery from its original frontie
   setSystemTime(new Date("2026-10-01T00:00:00Z"));
   globalThis.fetch = asFetchMock(
     async (input: string | URL | Request) =>
-      new Response(String(input).endsWith("/data.xml") ? document : feed),
+      new Response(
+        (input instanceof Request ? input.url : input.toString()).endsWith(
+          "/data.xml",
+        )
+          ? document
+          : feed,
+      ),
   );
   const page = (
     await ukFclAdapter.fetchPage(
@@ -204,7 +217,11 @@ test("daily pagination retains its old frontier until every tied entry is read",
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     calls++;
     return new Response(
-      String(input).endsWith("/data.xml") ? document : firstFeed,
+      (input instanceof Request ? input.url : input.toString()).endsWith(
+        "/data.xml",
+      )
+        ? document
+        : firstFeed,
     );
   });
   const first = (
@@ -226,7 +243,13 @@ test("daily pagination retains its old frontier until every tied entry is read",
   const tiedFeed = feed.replace(boundary, () => frontier);
   globalThis.fetch = asFetchMock(
     async (input: string | URL | Request) =>
-      new Response(String(input).endsWith("/data.xml") ? document : tiedFeed),
+      new Response(
+        (input instanceof Request ? input.url : input.toString()).endsWith(
+          "/data.xml",
+        )
+          ? document
+          : tiedFeed,
+      ),
   );
   const second = (await ukFclAdapter.fetchPage(first.nextCursor, {})).unwrap();
   expect(second.decisions).toHaveLength(1);
@@ -246,7 +269,7 @@ test("daily pagination retains its old frontier until every tied entry is read",
 });
 
 test("a full unlinked page and failed later details cannot produce a checkpoint", async () => {
-  const match = feed.match(/<entry>[\s\S]*?<\/entry>/u)?.at(0) ?? "";
+  const match = /<entry>[\s\S]*?<\/entry>/u.exec(feed)?.at(0) ?? "";
   const entries = Array.from({ length: 50 }, (_, index) =>
     match.replaceAll(
       "d-00000000-0000-4000-8000-000000000001",
@@ -256,7 +279,11 @@ test("a full unlinked page and failed later details cannot produce a checkpoint"
   const full = feed.replace(match, () => entries);
   let details = 0;
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    if (String(input).endsWith("/data.xml")) {
+    if (
+      (input instanceof Request ? input.url : input.toString()).endsWith(
+        "/data.xml",
+      )
+    ) {
       details++;
     }
     return new Response(full);
@@ -268,7 +295,7 @@ test("a full unlinked page and failed later details cannot produce a checkpoint"
     "synthetic-second",
   );
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-    const url = String(input);
+    const url = input instanceof Request ? input.url : input.toString();
     if (!url.endsWith("/data.xml")) {
       return new Response(feed.replace(match, () => match + second));
     }
@@ -308,7 +335,7 @@ test.each([
     ).unwrap();
     expect(String(result.court)).toBe(court);
     expect(String(result.caseNumber)).toBe(caseNumber);
-    expect(String(result.sourceDocumentId)).toBe(entry.sourceDocumentId);
+    expect(result.sourceDocumentId).toBe(entry.sourceDocumentId);
   },
 );
 

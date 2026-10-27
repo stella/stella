@@ -61,7 +61,7 @@ const instant = (value: string) =>
     try: () => Temporal.Instant.from(value).epochMilliseconds,
     catch: () => fail("Invalid publisher timestamp"),
   });
-const request = (url: string, signal?: AbortSignal) =>
+const request = async (url: string, signal?: AbortSignal) =>
   Result.gen(async function* () {
     const target = restrictOutboundUrl({
       rawUrl: url,
@@ -72,7 +72,7 @@ const request = (url: string, signal?: AbortSignal) =>
     }
     const outcome = yield* Result.await(
       Result.tryPromise({
-        try: () =>
+        try: async () =>
           readPublisher(target, {
             adapterKey: KEY,
             fetchStage:
@@ -113,7 +113,7 @@ const request = (url: string, signal?: AbortSignal) =>
         ? null
         : yield* Result.await(
             Result.tryPromise({
-              try: () => readCappedBytes(body, MAX_BYTES),
+              try: async () => readCappedBytes(body, MAX_BYTES),
               catch: adapterCatch(KEY, null),
             }),
           );
