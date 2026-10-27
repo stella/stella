@@ -12,11 +12,12 @@ import type {
 import { Temporal } from "@stll/time";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useMessageLocale } from "@/i18n/message-locale";
+import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -36,6 +37,7 @@ import {
   ReaderAnswerFailure,
 } from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
+import { useReaderAnswerLanguage } from "./use-reader-answer-language";
 
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
@@ -554,16 +556,61 @@ const readerAnswersRecoveryOptions = ({
   });
 };
 
+type SaveReaderAnswerLanguageOptions = {
+  language: ReturnType<typeof useReaderAnswerLanguage>;
+  nextLanguage: string;
+  answerId: string | undefined;
+  run: (input: StreamAnswerOptions) => Promise<void>;
+};
+
+/** Persist before regeneration so subsequent turns use the same preference. */
+const saveReaderAnswerLanguage = async ({
+  language,
+  nextLanguage,
+  answerId,
+  run,
+}: SaveReaderAnswerLanguageOptions) => {
+  const result = await language.saveLanguage(nextLanguage);
+  if (result.isErr()) {
+    notifyUserError(result.error, getTranslator()("errors.actionFailed"));
+    return;
+  }
+  const saved = result.value;
+  switch (saved.status) {
+    case "pending":
+    case "superseded":
+      return;
+    case "saved":
+      if (answerId === undefined) {
+        return;
+      }
+      await run({
+        answerId,
+        operation: "regenerate",
+        path: `/${encodeURIComponent(answerId)}/regenerate`,
+        body: saved.locale === undefined ? {} : { locale: saved.locale },
+        regenerate: true,
+      });
+      return;
+    default:
+      saved satisfies never;
+      panic("Unhandled reader answer language save status");
+  }
+};
+
 export type UseReaderAnswersOptions = {
   decisionId: string;
   generationMode: "enabled" | "gated";
+  documentLanguage?: string;
 };
 export const useReaderAnswers = ({
   decisionId,
   generationMode,
+  documentLanguage,
 }: UseReaderAnswersOptions) => {
   const user = useMaybeAuthenticatedUser();
-  const locale = useMessageLocale();
+  const language = useReaderAnswerLanguage(documentLanguage);
+  const { locale, languagePreference, isSavingLanguage } = language;
   const queryClient = useQueryClient();
   const options = readerAnswersOptions({
     decisionId,
@@ -652,10 +699,15 @@ export const useReaderAnswers = ({
   const answers = query.data ?? [];
   return {
     answers,
+    languagePreference,
+    isSavingLanguage,
+    isLanguagePending: isCreating || isSavingLanguage,
+    setAnswerLanguage: async (nextLanguage: string, answerId?: string) =>
+      await saveReaderAnswerLanguage({ language, nextLanguage, answerId, run }),
     failureNotices: readerAnswerFailureNotices({
       answers,
       failures,
-      queryError: query.error,
+      queryError: query.error ?? language.error ?? null,
     }),
     activeAnswerId: activation.id,
     openRevision: activation.revision,
@@ -663,7 +715,7 @@ export const useReaderAnswers = ({
     busyAnswerIds,
     isCreating,
     errors,
-    error: errors.get("create") ?? query.error,
+    error: errors.get("create") ?? query.error ?? language.error ?? null,
     isLoading: query.isLoading,
     createExplain: async (anchor: ReaderAnswerAnchor) =>
       await run({
@@ -674,7 +726,7 @@ export const useReaderAnswers = ({
           decisionId: toSafeId<"caseLawDecision">(decisionId),
           kind: "explain",
           anchor,
-          locale,
+          ...(locale === undefined ? {} : { locale }),
         },
         anchor,
         regenerate: false,
@@ -684,7 +736,7 @@ export const useReaderAnswers = ({
         answerId,
         operation: "follow-up",
         path: `/${encodeURIComponent(answerId)}/messages`,
-        body: { question, locale },
+        body: { question, ...(locale === undefined ? {} : { locale }) },
         regenerate: false,
       }),
     regenerate: async (answerId: string) =>
@@ -692,7 +744,7 @@ export const useReaderAnswers = ({
         answerId,
         operation: "regenerate",
         path: `/${encodeURIComponent(answerId)}/regenerate`,
-        body: { locale },
+        body: locale === undefined ? {} : { locale },
         regenerate: true,
       }),
     remove: async (answerId: string) =>

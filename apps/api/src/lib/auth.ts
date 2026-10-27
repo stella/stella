@@ -34,6 +34,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
+import { isUiLocale } from "@stll/locales";
 import { ac, assignableRoles, roles } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
@@ -1076,6 +1077,20 @@ const normalizeUserPreferences = <TUser extends Record<string, unknown>>(
   user: TUser,
 ) =>
   Result.gen(function* () {
+    const readerAnswerLanguage = user["readerAnswerLanguage"];
+    if (
+      readerAnswerLanguage !== undefined &&
+      readerAnswerLanguage !== null &&
+      readerAnswerLanguage !== "document" &&
+      (typeof readerAnswerLanguage !== "string" ||
+        !isUiLocale(readerAnswerLanguage))
+    ) {
+      return Result.err(
+        new APIError("BAD_REQUEST", {
+          message: "Invalid reader answer language",
+        }),
+      );
+    }
     const preferredName = yield* normalizeOptionalPreference(
       user["preferredName"],
       {

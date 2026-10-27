@@ -109,6 +109,7 @@ const fakeServer = (
   let rows: ReaderAnswer[] = [];
   let sequence = 0;
   const bodies: unknown[] = [];
+  const preferenceBodies: unknown[] = [];
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
       const request = new Request(input, init);
@@ -121,6 +122,10 @@ const fakeServer = (
         return Response.json({ success: true });
       }
       const body: unknown = await request.json();
+      if (path.endsWith("/auth/update-user")) {
+        preferenceBodies.push(body);
+        return Response.json({ user });
+      }
       bodies.push(body);
       if (request.method === "PATCH") {
         if (
@@ -207,7 +212,7 @@ const fakeServer = (
     },
     { preconnect: originalFetch.preconnect },
   );
-  return { bodies };
+  return { bodies, preferenceBodies };
 };
 
 test("a response with the wrong stream content type cancels its body and releases creation", async () => {
@@ -257,6 +262,111 @@ test("a response with the wrong stream content type cancels its body and release
   expect(hook.result.current.busyAnswerIds.size).toBe(0);
 });
 
+test("a rejected account language update preserves the preference and does not regenerate", async () => {
+  const server = fakeServer();
+  const readerFetch = globalThis.fetch;
+  globalThis.fetch = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const request = new Request(input, init);
+      if (new URL(request.url).pathname.endsWith("/auth/update-user")) {
+        return Response.json(
+          { code: "BAD_REQUEST", message: "Language preference rejected" },
+          { status: 400 },
+        );
+      }
+      return await readerFetch(input, init);
+    },
+    { preconnect: readerFetch.preconnect },
+  );
+  const { wrapper } = setup();
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
+        documentLanguage: "sk",
+      }),
+    { wrapper },
+  );
+  await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+  await act(
+    async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+  );
+  expect(hook.result.current.languagePreference).toBe("document");
+  expect(hook.result.current.isSavingLanguage).toBe(false);
+  expect(server.bodies).toEqual([]);
+});
+
+test.each(["sk", "cs", "pl"])(
+  "reader request uses document language %s and saves a chosen answer language before regenerating",
+  async (documentLanguage) => {
+    const server = fakeServer();
+    const { wrapper, client } = setup();
+    const { sessionOptions, fetchSession } = await import("@/lib/auth-queries");
+    // The session owner supplies this preference after a reload too.
+    const sessionUser = {
+      ...user,
+      readerAnswerLanguage: "en",
+      emailVerified: true,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+      twoFactorEnabled: false,
+    };
+    client.setQueryData(
+      sessionOptions.queryKey,
+      () =>
+        ({
+          user: sessionUser,
+          session: {
+            id: "test-session",
+            userId: user.id,
+            activeOrganizationId: user.activeOrganizationId,
+            expiresAt: new Date("2030-01-01"),
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+            token: "test-token",
+            ipAddress: null,
+            userAgent: null,
+          },
+        }) satisfies NonNullable<Awaited<ReturnType<typeof fetchSession>>>,
+    );
+    const hook = renderHook(
+      () =>
+        useReaderAnswers({
+          decisionId: "decision-1",
+          generationMode: "enabled",
+          documentLanguage,
+        }),
+      { wrapper },
+    );
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(0)).toMatchObject({ locale: "en" });
+    await act(
+      async () =>
+        await hook.result.current.setAnswerLanguage("document", "answer-1"),
+    );
+    expect(server.preferenceBodies).toEqual([
+      { readerAnswerLanguage: "document" },
+    ]);
+    expect(server.bodies.at(-1)).toEqual({ locale: documentLanguage });
+    expect(hook.result.current.languagePreference).toBe("document");
+    await act(
+      async () => await hook.result.current.followUp("answer-1", "Continue"),
+    );
+    expect(server.bodies.at(-1)).toMatchObject({ locale: documentLanguage });
+    await act(
+      async () => await hook.result.current.setAnswerLanguage("en", "answer-1"),
+    );
+    expect(server.preferenceBodies.at(-1)).toEqual({
+      readerAnswerLanguage: "en",
+    });
+    expect(server.bodies.at(-1)).toEqual({ locale: "en" });
+    await act(async () => await hook.result.current.createExplain(anchor));
+    expect(server.bodies.at(-1)).toMatchObject({ locale: "en" });
+  },
+);
+
 test("reader answers create, follow up, regenerate, share, reload and delete through the HTTP boundary", async () => {
   const server = fakeServer();
   const { wrapper } = setup();
@@ -278,7 +388,6 @@ test("reader answers create, follow up, regenerate, share, reload and delete thr
     decisionId: "decision-1",
     kind: "explain",
     anchor,
-    locale: "cs",
   });
   expect(hook.result.current.activeAnswerId).toBe("answer-1");
   await act(async () => {
@@ -737,7 +846,6 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "en",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();

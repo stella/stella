@@ -875,12 +875,16 @@
         "reasoning": "Érvelés"
       },
       "errors": {
+        "analysisDisabled": "Az AI-elemzés készítése ezen a szerveren ki van kapcsolva. Olvassa el a határozat szövegét, vagy próbálja újra később.",
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
+        "decisionNotFound": "Ez a határozat nem található. Nyissa meg újra a keresésből.",
+        "documentUnparseable": "A határozat szövege még nem áll készen az elemzésre. Olvassa el az eredeti forrást.",
+        "languageUnsupported": "Az AI-elemzés még nem támogatja a határozat nyelvét. Olvassa el a határozat szövegét vagy az eredeti forrást.",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
         "retryAfter": "{time} után újra megpróbálhatja.",
-        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}",
-        "unavailable": "Ehhez a határozathoz nem érhető el AI-elemzés."
+        "sourceRestricted": "A forrás nem engedélyezi az AI-elemzést. Olvassa el a határozat szövegét vagy az eredeti forrást.",
+        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}"
       },
       "generate": "AI jogi tételek elkészítése",
       "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
@@ -4789,7 +4793,9 @@
     "viewOnGithub": "Megtekintés GitHubon"
   },
   "readerAnswers": {
+    "answerLanguage": "Válasz nyelve",
     "budgetError": "A válaszokra szánt keret kimerült.",
+    "documentLanguage": "Dokumentum nyelve ({language})",
     "expand": "Válasz kibontása",
     "explain": "Magyarázat",
     "followUp": "Kiegészítő kérdés feltevése",

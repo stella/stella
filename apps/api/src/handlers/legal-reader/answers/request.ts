@@ -17,7 +17,7 @@ type ReaderAnswerRequestOptions = Pick<
   "safeDb" | "recordAuditEvent"
 > & {
   session: { activeOrganizationId: SafeId<"organization"> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; readerAnswerLanguage?: string | null };
   scopedDb: ScopedDb;
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
@@ -59,7 +59,14 @@ export const readerAnswerRequest = ({
     stream: (prepared: PreparedReaderAnswer) =>
       streamReaderAnswer({
         ...scope,
-        prepared,
+        prepared: {
+          ...prepared,
+          locale:
+            prepared.locale ??
+            (user.readerAnswerLanguage === "document"
+              ? undefined
+              : (user.readerAnswerLanguage ?? undefined)),
+        },
         orgAIConfig,
         managedAIResidency,
         requestSignal: request.signal,
