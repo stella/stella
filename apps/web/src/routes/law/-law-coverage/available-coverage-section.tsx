@@ -11,5 +11,5 @@ export const AvailableCoverageSection = <TData,>({
   if (data === null) {
     return null;
   }
-  return children(data);
+  return <>{children(data)}</>;
 };

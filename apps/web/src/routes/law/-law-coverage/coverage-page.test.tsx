@@ -376,7 +376,18 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain(messages.caseLaw.coverage.courtsHeading);
-    expect(markup).toContain(messages.caseLaw.courtTiers.supreme);
+    const courtTable = markup
+      .split(messages.caseLaw.coverage.courtsHeading)
+      .at(1)
+      ?.split("</table>")
+      .at(0);
+    expect(courtTable).toContain(messages.common.court);
+    expect(courtTable).toContain(messages.common.decisions);
+    expect(courtTable).toContain(messages.caseLaw.corpusStatus.newLast7Days);
+    expect(courtTable).toContain(messages.common.lastUpdated);
+    expect(courtTable).toContain("Nejvyšší soud");
+    expect(courtTable).toContain("1,900");
+    expect(courtTable).toContain("court=");
   });
 
   test("an unavailable court breakdown hides the entire section", () => {
@@ -387,7 +398,7 @@ describe("the coverage page states what it counts", () => {
     );
 
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
-    expect(markup).not.toContain(messages.caseLaw.courtTiers.supreme);
+    expect(markup).not.toContain("court=");
   });
 
   test("relative times follow the formatting locale, not the message language", () => {
