@@ -94,6 +94,7 @@ import {
   parseCapabilityTransport,
   readScopeForDomainScope,
   resolveAccess,
+  resolveCapabilityDeploymentFeature,
   resolveHandlerKind,
   resolveScope,
   scanBinarySchemaFields,
@@ -498,7 +499,8 @@ type CapabilityEntry = {
   transport: CapabilityTransport;
   /**
    * Deployment feature flag gating this capability: the covering tool's
-   * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
+   * `feature` (tool/covered dispositions), the DOMAIN_FEATURE table, or the
+   * deployment flag of the handler's required feature-access declaration.
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
@@ -1497,13 +1499,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (transportErrors.length > 0) {
       return;
     }
-    // Deployment feature gate: the covering tool's flag wins (mechanical
-    // inheritance), the reviewed domain table covers the rest.
+    // Preserve reviewed tool/domain gates; required handler feature access
+    // also supplies a deployment gate for capabilities in a mixed domain.
     const coveringToolName = coveringToolOf(endpoint.exposure);
     const inheritedFeature =
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const featureAccess = parseFeatureRequirement(
+      endpoint.config["featureAccess"],
+    );
     const consumesServices = serviceConsumptionOf(
       endpoint.exposure,
       toolServicesByName,
@@ -1528,10 +1533,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
-        featureAccess: parseFeatureRequirement(
-          endpoint.config["featureAccess"],
-        ),
+        feature: resolveCapabilityDeploymentFeature({
+          registry: FEATURE_REGISTRY,
+          requirement: featureAccess,
+          inheritedFeature,
+          domainFeature: DOMAIN_FEATURE[domain],
+        }),
+        featureAccess,
         transport,
         allowsArchivedWorkspace:
           endpoint.config["workspaceStatus"] === "active-or-archived",
@@ -1542,7 +1550,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       importPath: deriveHandlerImportPath(endpoint.file),
       exportName: endpoint.exportName,
-      featureAccess: parseFeatureRequirement(endpoint.config["featureAccess"]),
+      featureAccess,
     });
     const source = sourceByFile.get(endpoint.file);
     if (source !== undefined) {

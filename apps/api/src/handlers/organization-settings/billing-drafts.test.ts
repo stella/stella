@@ -21,7 +21,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { deploymentFeatureGateFlag } from "@/api/lib/deployment-feature-route";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
   hasMemberPermission,
@@ -344,7 +344,7 @@ test("billing administration wire responses have finite text bounds and valid in
     expect(
       Number.isFinite(
         responseSchemaByteBound(
-          toJsonSchema(endpoint.config.response[200], { typeMode: "output" }),
+          toRouteJsonSchema(endpoint.config.response[200]),
         ),
       ),
     ).toBe(true);

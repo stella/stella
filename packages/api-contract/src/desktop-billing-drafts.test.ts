@@ -474,6 +474,22 @@ test("model grammar preserves shape while canonical validation enforces every re
     },
     { ...draft, unexpected: true },
     { ...draft, operations: [{ type: "execute" }] },
+    {
+      ...draft,
+      operations: [
+        {
+          type: "move",
+          targetMatterId: "x".repeat(
+            DESKTOP_BILLING_DRAFT_LIMITS.matterIdLength + 1,
+          ),
+          targetMatterName: "Matter",
+          durationMinutes: 1,
+          narrative: "Move",
+          classification: draft.classification,
+          billable: true,
+        },
+      ],
+    },
   ]) {
     const value = { ...response, drafts: [invalidDraft] };
     expect(

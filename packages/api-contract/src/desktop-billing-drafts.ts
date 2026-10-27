@@ -7,6 +7,8 @@ import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries"
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
   entries: 20,
   identifierLength: 128,
+  matterIdLength: 36,
+  dateLength: 10,
   durationMinutes: 1440,
   flags: 20,
   operations: 20,
@@ -25,7 +27,15 @@ const identifierSchema = v.pipe(
   v.minLength(1),
   v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.identifierLength),
 );
-const matterIdSchema = v.pipe(v.string(), v.uuid());
+const matterIdSchema = v.pipe(
+  v.string(),
+  v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.matterIdLength),
+  v.uuid(),
+);
+const dateSchema = v.pipe(
+  apiDateSchema,
+  v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.dateLength),
+);
 const steeringTextSchema = v.pipe(
   v.string(),
   v.minLength(1),
@@ -62,7 +72,7 @@ export const desktopBillingDraftEvidenceSchema = v.strictObject({
 
 export const desktopBillingDraftEntrySchema = v.strictObject({
   matterId: matterIdSchema,
-  date: apiDateSchema,
+  date: dateSchema,
   timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: durationSchema,
   appNames: v.pipe(v.array(nameSchema), v.maxLength(20)),
@@ -71,7 +81,13 @@ export const desktopBillingDraftEntrySchema = v.strictObject({
 
 const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   const identifier = profile === "canonical" ? identifierSchema : v.string();
-  const matterId = profile === "canonical" ? matterIdSchema : v.string();
+  const matterId =
+    profile === "canonical"
+      ? matterIdSchema
+      : v.pipe(
+          v.string(),
+          v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.matterIdLength),
+        );
   const name = profile === "canonical" ? nameSchema : v.string();
   const narrative = profile === "canonical" ? narrativeSchema : v.string();
   const duration = profile === "canonical" ? durationSchema : v.number();
@@ -218,7 +234,7 @@ export const desktopBillingDraftModelResponseSchema =
  * what "consistent with" refers to without a second request. */
 export const desktopBillingDraftEarlierEntrySchema = v.strictObject({
   id: identifierSchema,
-  dateWorked: apiDateSchema,
+  dateWorked: dateSchema,
   durationMinutes: durationSchema,
   narrative: v.pipe(
     v.string(),
