@@ -381,6 +381,38 @@ test.each([
   },
 );
 
+test("offline closure inspects extensionless modules while preserving inert assets", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-extensionless-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(
+      entry,
+      "require('./helper'); import data from './data.json' with { type: 'json' }; import text from './generated.js.txt' with { type: 'text' }; void data; void text;",
+    );
+    writeFileSync(
+      path.join(directory, "helper"),
+      "Bun.spawn(['curl', 'https://example.invalid']);",
+    );
+    writeFileSync(
+      path.join(directory, "data.json"),
+      JSON.stringify({ source: "Bun.fetch('https://example.invalid')" }),
+    );
+    writeFileSync(
+      path.join(directory, "generated.js.txt"),
+      "Bun.fetch('https://example.invalid');",
+    );
+
+    const violations = offlineImportGraphViolations({
+      entries: [entry],
+      repositoryRoot: directory,
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations.at(0)?.message).toContain("helper: Bun.spawn");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("a dynamic module allowance remains exact", () => {
   const source = "await import(target)";
   const directory = mkdtempSync(path.join(tmpdir(), "offline-dynamic-"));

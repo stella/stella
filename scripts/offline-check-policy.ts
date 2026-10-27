@@ -223,6 +223,7 @@ export const offlineCheckViolations = (
 
 const importCapability = (file: string, capability: string) =>
   `${file}:${capability}`;
+const INERT_IMPORT_EXTENSIONS: ReadonlySet<string> = new Set([".json", ".txt"]);
 
 export const parseOfflineImportAllowances = (
   value: unknown,
@@ -366,8 +367,9 @@ export const offlineImportGraphViolations = ({
       continue;
     }
     const file = resolvedEntry.value;
-    // Imported data (JSON, text assets) holds no code to follow.
-    if (visited.has(file) || !SOURCE_FILE.test(file)) {
+    // JSON and Bun text imports are inert. Every other resolved repository
+    // module is executable or unsupported, so it must reach the parser.
+    if (visited.has(file) || INERT_IMPORT_EXTENSIONS.has(path.extname(file))) {
       continue;
     }
     visited.add(file);
