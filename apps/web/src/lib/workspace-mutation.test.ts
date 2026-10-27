@@ -1,4 +1,5 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -6,7 +7,6 @@ import {
   resourceMutationDigest,
   resourceSetUpdatedRealtimeEvent,
 } from "@stll/api-contract";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createUuid } from "@/lib/uuid";
 
@@ -67,7 +67,7 @@ test("events arriving before the response or refresh defer to the successful mut
   });
   expect(applied).toEqual([]);
   mutation.refreshFinished.resolve(undefined);
-  expect(await mutation.completion).toBe("created");
+  expect(await mutation.completion).toEqual(Result.ok("created"));
   handleWorkspaceMutationEvent(client, await matchingEvent(mutationId), () => {
     applied.push("after refresh");
   });
@@ -75,7 +75,7 @@ test("events arriving before the response or refresh defer to the successful mut
   client.clear();
 });
 
-test("a request failure releases deferred events and preserves the error", async () => {
+test("a request failure releases deferred events and returns a typed error with its cause", async () => {
   const client = new QueryClient();
   const mutation = controlledMutation(client);
   const mutationId = await mutation.registered.promise;
@@ -91,9 +91,14 @@ test("a request failure releases deferred events and preserves the error", async
   }
   expect(applied).toEqual([]);
   const error = new TypeError("request failed");
-  const rejection = rejectionOf(mutation.completion);
   mutation.response.reject(error);
-  expect(await rejection).toBe(error);
+  const result = await mutation.completion;
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isError(result)) {
+    expect(result.error._tag).toBe("WorkspaceMutationError");
+    expect(result.error.message).toBe("Matter mutation request failed");
+    expect(result.error.cause).toBe(error);
+  }
   expect(applied).toEqual([1, 2]);
   handleWorkspaceMutationEvent(client, await matchingEvent(mutationId), () => {
     applied.push(3);
@@ -157,7 +162,7 @@ test("a failed active refresh preserves the write and releases deferred and late
     );
     expect(fetches).toBe(1);
     refreshFinished.reject(new TypeError("refresh failed"));
-    expect(await completion).toBe("created");
+    expect(await completion).toEqual(Result.ok("created"));
     expect(refreshes).toHaveLength(2);
     await Promise.all(refreshes);
     expect(fetches).toBeGreaterThan(1);

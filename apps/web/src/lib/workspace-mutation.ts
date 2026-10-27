@@ -1,5 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import {
   resourceMutationDigest,
@@ -51,6 +51,11 @@ export const handleWorkspaceMutationEvent = (
   }
 };
 
+class WorkspaceMutationError extends TaggedError("WorkspaceMutationError")<{
+  message: string;
+  cause: unknown;
+}> {}
+
 type RunWorkspaceMutationOptions<T> = {
   client: QueryClient;
   request: (mutationId: string) => Promise<T>;
@@ -62,15 +67,32 @@ export const runWorkspaceMutation = async <T>({
   client,
   request,
   queryKeys,
-}: RunWorkspaceMutationOptions<T>): Promise<T> => {
+}: RunWorkspaceMutationOptions<T>): Promise<
+  Result<T, WorkspaceMutationError>
+> => {
   const entries = clientMutations(client);
   const mutationId = createUuid();
-  const mutationDigest = await resourceMutationDigest(mutationId);
+  const digest = await Result.tryPromise({
+    try: async () => await resourceMutationDigest(mutationId),
+    catch: (cause) =>
+      new WorkspaceMutationError({
+        message: "Could not prepare mutation correlation",
+        cause,
+      }),
+  });
+  if (Result.isError(digest)) {
+    return Result.err(digest.error);
+  }
+  const mutationDigest = digest.value;
   const pending: MutationState = { status: "pending", onFailure: [] };
   entries.set(mutationDigest, pending);
   const result = await Result.tryPromise({
     try: async () => await request(mutationId),
-    catch: (cause) => cause,
+    catch: (cause) =>
+      new WorkspaceMutationError({
+        message: "Matter mutation request failed",
+        cause,
+      }),
   });
   const releaseEvents = () => {
     entries.delete(mutationDigest);
@@ -80,7 +102,7 @@ export const runWorkspaceMutation = async <T>({
   };
   if (Result.isError(result)) {
     releaseEvents();
-    throw result.error;
+    return Result.err(result.error);
   }
   const refresh = await Result.tryPromise({
     try: async () => {
@@ -95,7 +117,7 @@ export const runWorkspaceMutation = async <T>({
   if (Result.isError(refresh)) {
     releaseEvents();
     // The write succeeded; query error state and released echoes own recovery.
-    return result.value;
+    return Result.ok(result.value);
   }
   entries.set(mutationDigest, { status: "acknowledged" });
   let acknowledged = 0;
@@ -113,5 +135,5 @@ export const runWorkspaceMutation = async <T>({
       acknowledged -= 1;
     }
   }
-  return result.value;
+  return Result.ok(result.value);
 };

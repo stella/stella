@@ -9,6 +9,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { legalListsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -26,25 +27,27 @@ export const useCreateTask = () => {
 
   return useMutation({
     mutationFn: async (workspaceId: string) =>
-      await runWorkspaceMutation({
-        client: queryClient,
-        request: async (mutationId) => {
-          const response = await api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .put(
-              { name: t("tasks.untitled") },
-              { headers: { [RESOURCE_MUTATION_ID_HEADER]: mutationId } },
-            );
-          return unwrapApiResponse(response);
-        },
-        queryKeys: [
-          entitiesKeys.all(workspaceId),
-          taskKeys.all(workspaceId),
-          workspacesKeys.overview(workspaceId),
-          myWorkKeys.all,
-          legalListsQueryRoot(workspaceId),
-        ],
-      }),
+      readQueryResult(
+        await runWorkspaceMutation({
+          client: queryClient,
+          request: async (mutationId) => {
+            const response = await api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .put(
+                { name: t("tasks.untitled") },
+                { headers: { [RESOURCE_MUTATION_ID_HEADER]: mutationId } },
+              );
+            return unwrapApiResponse(response);
+          },
+          queryKeys: [
+            entitiesKeys.all(workspaceId),
+            taskKeys.all(workspaceId),
+            workspacesKeys.overview(workspaceId),
+            myWorkKeys.all,
+            legalListsQueryRoot(workspaceId),
+          ],
+        }),
+      ),
     onSuccess: (data, workspaceId) => {
       stellaToast.add({
         title: t("success.taskCreated"),
