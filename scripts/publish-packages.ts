@@ -1,8 +1,5 @@
-import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-
-import policy from "./changeset-policy.json" with { type: "json" };
 
 const DEPENDENCY_GROUPS = [
   "dependencies",
@@ -10,6 +7,15 @@ const DEPENDENCY_GROUPS = [
   "peerDependencies",
 ] as const;
 const SCOPE = "@stll/";
+
+class PublishPackageOrderError extends Error {
+  readonly _tag = "PublishPackageOrderError";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PublishPackageOrderError";
+  }
+}
 
 export type PublishManifest = {
   readonly name: string;
@@ -39,11 +45,15 @@ export const publicationOrder = (
       return;
     }
     if (visiting.has(directory)) {
-      panic(`Published workspace dependency cycle at ${directory}`);
+      throw new PublishPackageOrderError(
+        `Published workspace dependency cycle at ${directory}`,
+      );
     }
     const manifest = byDirectory.get(directory);
     if (manifest === undefined) {
-      panic(`Unknown published package '${directory}'`);
+      throw new PublishPackageOrderError(
+        `Unknown published package '${directory}'`,
+      );
     }
     visiting.add(directory);
     for (const group of DEPENDENCY_GROUPS) {
@@ -85,10 +95,14 @@ const readManifest = (directory: string): PublishManifest => {
     ),
   );
   if (typeof parsed !== "object" || parsed === null) {
-    panic(`packages/${directory}/package.json is not an object`);
+    throw new PublishPackageOrderError(
+      `packages/${directory}/package.json is not an object`,
+    );
   }
   if (!("name" in parsed) || typeof parsed.name !== "string") {
-    panic(`packages/${directory}/package.json has no package name`);
+    throw new PublishPackageOrderError(
+      `packages/${directory}/package.json has no package name`,
+    );
   }
   const manifest: PublishManifest = { name: parsed.name };
   for (const group of DEPENDENCY_GROUPS) {
@@ -99,25 +113,71 @@ const readManifest = (directory: string): PublishManifest => {
   }
   return manifest;
 };
-const publishedDirectories = [
-  ...new Set(
-    policy.releasePaths.flatMap((releasePath) => {
-      const match = /^packages\/([^/]+)\//u.exec(releasePath);
-      return match?.at(1) ?? [];
-    }),
-  ),
-];
-const manifests = publishedDirectories.map(readManifest);
+const readPublishedDirectories = (): readonly string[] => {
+  const policy: unknown = JSON.parse(
+    readFileSync(
+      path.join(REPO_ROOT, "scripts", "changeset-policy.json"),
+      "utf-8",
+    ),
+  );
+  if (
+    typeof policy !== "object" ||
+    policy === null ||
+    !("releasePaths" in policy) ||
+    !Array.isArray(policy.releasePaths) ||
+    !policy.releasePaths.every(
+      (releasePath): releasePath is string => typeof releasePath === "string",
+    )
+  ) {
+    throw new PublishPackageOrderError(
+      "scripts/changeset-policy.json has no string releasePaths array; repair the publish policy before publishing.",
+    );
+  }
+  return [
+    ...new Set(
+      policy.releasePaths.flatMap((releasePath) => {
+        const match = /^packages\/([^/]+)\//u.exec(releasePath);
+        return match?.at(1) ?? [];
+      }),
+    ),
+  ];
+};
 
-export const ALL_PACKAGE_ORDER = publicationOrder(
-  manifests,
-  publishedDirectories,
-);
+// The registry journeys run from a deliberately sparse checkout. Keep their
+// package census dependency-free; the selection test binds it to the policy.
+export const ALL_PACKAGE_ORDER = [
+  "country-codes",
+  "conditions",
+  "template-conditions",
+  "text-normalize",
+  "agent-input",
+  "ai-catalog",
+  "anonymize-chat",
+  "auth-model",
+  "business-registries",
+  "money",
+  "calculations",
+  "ui",
+  "chat",
+  "stable-stringify",
+  "cli",
+  "docx-utils",
+  "fetch",
+  "mcp-kit",
+  "scan-engine",
+  "ssr-kit",
+  "ssr-testkit",
+  "start-runtime",
+  "workspace-model",
+  "workspace-ui",
+] as const;
 export const LIBRARY_PACKAGE_ORDER = ALL_PACKAGE_ORDER.filter(
   (directory) => directory !== "cli",
 );
-export const dependenciesFirst = (selected: readonly string[]) =>
-  publicationOrder(manifests, selected);
+export const dependenciesFirst = (selected: readonly string[]) => {
+  const publishedDirectories = readPublishedDirectories();
+  return publicationOrder(publishedDirectories.map(readManifest), selected);
+};
 
 // Packages whose releases moved to another repository, by package directory,
 // with that repository as `github.com/<owner>/<name>`. The journey canary
