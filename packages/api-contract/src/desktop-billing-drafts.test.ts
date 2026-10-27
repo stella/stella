@@ -1,8 +1,10 @@
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { expect, test } from "bun:test";
 import assert from "node:assert/strict";
+import type { GenericSchema } from "valibot";
 import * as v from "valibot";
 
+import { API_DATE_RUNTIME_ONLY_CHECKS } from "./api-date";
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftEntrySchema,
@@ -20,6 +22,8 @@ import {
   desktopBillingDraftSettingsResponseSchema,
 } from "./desktop-billing-drafts";
 import { DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH } from "./desktop-time-entries";
+import { keepUnicodePatternSource } from "./json-schema-regex";
+import { UUID_RUNTIME_ONLY_ACTIONS } from "./uuid";
 
 const entry = {
   matterId: "12345678-1234-4123-8123-123456789abc",
@@ -53,6 +57,20 @@ const response = {
   ],
   checkedGuidelines: [{ fileId: "firm-rules", fileName: "Billing guidelines" }],
 } satisfies DesktopBillingDraftResponse;
+
+const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
+  ...API_DATE_RUNTIME_ONLY_CHECKS,
+  ...UUID_RUNTIME_ONLY_ACTIONS,
+]);
+
+const toBillingDraftJsonSchema = (schema: GenericSchema) =>
+  toJsonSchema(schema, {
+    overrideAction: (context) =>
+      keepUnicodePatternSource(context) ??
+      (RUNTIME_ONLY_ACTIONS.has(context.valibotAction)
+        ? context.jsonSchema
+        : undefined),
+  });
 
 test("billing draft request keys remain limited to selected evidence and steering", () => {
   expect(
@@ -114,7 +132,7 @@ test("billing draft responses emit finite direct JSON schemas for native respons
     desktopBillingDraftResponseSchema,
     desktopBillingDraftSettingsResponseSchema,
   ]) {
-    const jsonSchema = toJsonSchema(schema);
+    const jsonSchema = toBillingDraftJsonSchema(schema);
     const serialized = JSON.stringify(jsonSchema);
     for (const unsupported of ["$ref", "allOf", "oneOf", "not"]) {
       expect(serialized).not.toContain(`"${unsupported}":`);
@@ -246,6 +264,50 @@ test("selected entry inputs and guideline citations have finite validated bounds
       }).success,
     ).toBe(false);
   }
+});
+
+test("billing matter UUIDs normalize casing at the contract boundary", () => {
+  const uppercase = "12345678-1234-4123-8123-123456789ABC";
+  const parsedRequest = v.parse(desktopBillingDraftRequestSchema, {
+    entries: [{ ...entry, matterId: uppercase }],
+  });
+  expect(parsedRequest.entries.at(0)?.matterId).toBe(entry.matterId);
+
+  const moved = {
+    ...response,
+    drafts: response.drafts.map((draft) => ({
+      ...draft,
+      operations: [
+        {
+          type: "move" as const,
+          targetMatterId: uppercase,
+          targetMatterName: "Candidate matter",
+          durationMinutes: 15,
+          narrative: "Reviewed terms",
+          classification: {
+            type: "activity_group" as const,
+            activityGroup: "client" as const,
+          },
+          billable: true,
+        },
+      ],
+    })),
+  };
+  expect(
+    v
+      .parse(desktopBillingDraftResponseSchema, moved)
+      .drafts.at(0)
+      ?.operations.at(0),
+  ).toMatchObject({ targetMatterId: entry.matterId });
+
+  const previousResult = v.parse(desktopBillingDraftRequestSchema, {
+    entries: [entry],
+    steer: "Keep the same proposal",
+    previousResult: moved,
+  });
+  expect(
+    previousResult.previousResult?.drafts.at(0)?.operations.at(0),
+  ).toMatchObject({ targetMatterId: entry.matterId });
 });
 
 test("billing draft request and review dates are real calendar days in CE years", () => {

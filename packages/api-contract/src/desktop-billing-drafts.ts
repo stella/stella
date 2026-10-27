@@ -6,6 +6,7 @@ import {
   DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
   DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
 } from "./desktop-time-entries";
+import { uuidSchema } from "./uuid";
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
   entries: 20,
@@ -30,11 +31,7 @@ const identifierSchema = v.pipe(
   v.minLength(1),
   v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.identifierLength),
 );
-const matterIdSchema = v.pipe(
-  v.string(),
-  v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.matterIdLength),
-  v.uuid(),
-);
+const matterIdSchema = uuidSchema;
 const dateSchema = v.pipe(
   apiDateSchema,
   v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.dateLength),

@@ -110,6 +110,7 @@
     "./provision-link-status": "./src/provision-link-status.ts",
     "./property-policy": "./src/property-policy.ts",
     "./safe-id": "./src/safe-id.ts",
+    "./uuid": "./src/uuid.ts",
     "./public-country-capability": "./src/public-country-capability.ts",
     "./search": "./src/search.ts",
     "./column-sort": "./src/column-sort.ts",
