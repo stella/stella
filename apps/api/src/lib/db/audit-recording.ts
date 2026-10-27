@@ -327,6 +327,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   clause_variant: "other",
   contact: "other",
   contact_directory: "other",
+  document_annotation: "documents",
   document_type: "other",
   file_comparison: "documents",
   usage_allocation: "other",

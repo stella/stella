@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
@@ -790,6 +791,7 @@ export const AnonymizationFacet = ({
           <Combobox<LabelOption>
             autoHighlight
             disabled={createMutation.isPending}
+            filter={matchesComboboxItem}
             items={[...LABEL_OPTIONS]}
             itemToStringLabel={formatLabel}
             onValueChange={(next) => {

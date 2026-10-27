@@ -17,12 +17,7 @@ import {
   useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import {
-  getRouteApi,
-  Link,
-  useMatch,
-  useRouterState,
-} from "@tanstack/react-router";
+import { getRouteApi, Link, useMatch, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -163,6 +158,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
@@ -1613,7 +1609,7 @@ type MatterActivityListProps = {
   workspaceId: string;
 };
 
-const MatterActivityList = ({
+export const MatterActivityList = ({
   activeOrganizationId,
   id,
   userId,
@@ -1622,9 +1618,7 @@ const MatterActivityList = ({
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const mounted = useHasMounted();
   const {
     data,
@@ -1661,7 +1655,7 @@ const MatterActivityList = ({
       await navigateToWorkspaceFolder({
         folderId: entityId,
         navigate,
-        pathname,
+        router,
         queryClient,
         targetWorkspaceId: workspaceId,
       });
@@ -1669,7 +1663,12 @@ const MatterActivityList = ({
     }
 
     if (destination.type === "document") {
-      await openEntityInInspector(entityId, title, workspaceId);
+      await openEntityInInspector({
+        documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+        entityId,
+        label: title,
+        workspaceId,
+      });
       return;
     }
 
