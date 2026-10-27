@@ -41,9 +41,11 @@
  * a wrong answer, and the reader cannot tell that it happened.
  */
 
+import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -54,6 +56,10 @@ import type {
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  normalizeInlineLine,
+  stripInlineLinePrefix,
+} from "@stll/legal-ast/inline-line";
 
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
@@ -611,6 +617,17 @@ export const ecjKeywordSpacingNeedsVerbatim = (html: string): boolean => {
 
 type Zone = "header" | "body" | "operative" | "footnotes";
 
+/**
+ * Which of the publisher's two markups the document is in.
+ *
+ * `classed` is converter output: the class vocabulary, marker cells with
+ * `pointN` anchors. `legacy` is the oldest layout, `div.listNotice >
+ * div.texte`, which carries none of that: its paragraphs are bare `<p>`s
+ * with the number printed as text, and its sections are named only by the
+ * publisher's anchors (`<a name="MO"/>`).
+ */
+type Layout = "classed" | "legacy";
+
 type BlockBuilder = {
   blocks: Block[];
   /** Sequence number for blocks without a publisher anchor. */
@@ -620,7 +637,44 @@ type BlockBuilder = {
   zone: Zone;
   /** True while no block other than a title line has been emitted. */
   inTitleRun: boolean;
+  layout: Layout;
+  /**
+   * Whether the document's `pointN` anchors number its paragraphs. They
+   * do unless an id repeats: a decision whose operative part and summary
+   * each count from 1 holds lists, and a number that names two passages
+   * names none of them.
+   */
+  pointsAreNumbering: boolean;
+  /** How this walk treats numbers the oldest layout prints. */
+  printedNumbers: PrintedNumbering;
+  /** A printed report page marker waiting for the block it precedes. */
+  pendingPage: string | undefined;
 };
+
+/**
+ * A number printed at the start of one of the oldest layout's paragraphs,
+ * which may be the Court's numbering or may not: a quoted list item, a
+ * date, an amount.
+ */
+type PrintedNumberCandidate = {
+  /** The paragraph's position among the walked elements. */
+  index: number;
+  number: number;
+  /** `2. Text` is dotted; `2 Text` and `2TEXT` are bare. */
+  marker: "dotted" | "bare";
+  /** The text after the number reads as a month and a year (`1 May 2000`). */
+  dated: boolean;
+};
+
+/**
+ * Which printed numbers are the Court's can only be told from the whole
+ * sequence, so the oldest layout is walked twice: a `survey` collects every
+ * candidate, and the `settled` walk numbers the paragraphs at the positions
+ * `settlePrintedNumbers` chose.
+ */
+type PrintedNumbering =
+  | { type: "survey"; candidates: PrintedNumberCandidate[] }
+  | { type: "settled"; numbers: ReadonlyMap<number, number> };
 
 const nextId = (builder: BlockBuilder): string => {
   builder.counter += 1;
@@ -652,6 +706,22 @@ const roleOf = (zone: Zone, signature = false): { role?: ParagraphRole } => {
   return {};
 };
 
+/**
+ * The block's inlines with a waiting page marker in front. The marker is
+ * zero-width on the text axis, so the plain text is unchanged.
+ */
+const withPendingPage = (
+  builder: BlockBuilder,
+  inlines: Inline[],
+): Inline[] => {
+  const page = builder.pendingPage;
+  if (page === undefined) {
+    return inlines;
+  }
+  builder.pendingPage = undefined;
+  return [{ type: "page-anchor", label: page }, ...inlines];
+};
+
 const pushHeading = (
   builder: BlockBuilder,
   heading: Omit<HeadingBlock, "id" | "anchorId" | "type">,
@@ -661,6 +731,7 @@ const pushHeading = (
     anchorId: nextAnchor(builder, "h"),
     type: "heading",
     ...heading,
+    inlines: withPendingPage(builder, heading.inlines),
   });
 };
 
@@ -676,6 +747,7 @@ const pushParagraph = (
     anchorId: anchorId ?? nextAnchor(builder, "p"),
     type: "paragraph",
     ...rest,
+    inlines: withPendingPage(builder, rest.inlines),
   });
 };
 
@@ -696,6 +768,13 @@ const flattenChildren = (
   for (const element of elements) {
     const $element = $(element);
     if (isTag(element) && $element.children("p, div, table").length > 0) {
+      // The oldest layout's section anchors are written `<a name="MO"/>`,
+      // which an HTML parser reads as an open `<a>` holding the whole
+      // section. The anchor is kept ahead of its contents, as the marker
+      // that opens the section, and the contents are walked as usual.
+      if (sectionAnchorZone(element) !== undefined) {
+        flat.push(element);
+      }
       flat.push(...flattenChildren($, $element.contents().toArray()));
       continue;
     }
@@ -709,29 +788,56 @@ const buildBlocks = (
   $document: cheerio.Cheerio<AnyNode>,
 ): Block[] => {
   const children = flattenChildren($, $document.contents().toArray());
-  const builder: BlockBuilder = {
-    blocks: [],
-    sequence: 0,
-    counter: 0,
-    zone: "header",
-    inTitleRun: true,
-  };
+  const pointIds = $document
+    .find(sel(CLASS.count))
+    .toArray()
+    .flatMap((marker) => {
+      const id = $(marker).attr("id") ?? "";
+      return POINT_ID.test(id) ? [id] : [];
+    });
+  const layout =
+    $document.find(LEGACY_DOCUMENT_CONTAINER).length > 0 ? "legacy" : "classed";
+  const pointsAreNumbering = new Set(pointIds).size === pointIds.length;
 
   // The operative part is everything between the last numbered
   // paragraph and the signature/footnote tail. Locating its start needs
   // a look-ahead, so resolve it before the forward walk.
-  const lastPointIndex = children.findLastIndex((child) =>
-    $(child)
-      .find(sel(CLASS.count))
-      .toArray()
-      .some((marker) => POINT_ID.test($(marker).attr("id") ?? "")),
-  );
+  const lastPointIndex = pointsAreNumbering
+    ? children.findLastIndex((child) =>
+        $(child)
+          .find(sel(CLASS.count))
+          .toArray()
+          .some((marker) => POINT_ID.test($(marker).attr("id") ?? "")),
+      )
+    : -1;
 
-  for (const [index, child] of children.entries()) {
-    visitChild({ $, builder, $el: $(child), index, lastPointIndex });
+  const walk = (printedNumbers: PrintedNumbering): Block[] => {
+    const builder: BlockBuilder = {
+      blocks: [],
+      sequence: 0,
+      counter: 0,
+      zone: "header",
+      inTitleRun: true,
+      layout,
+      pointsAreNumbering,
+      printedNumbers,
+      pendingPage: undefined,
+    };
+    for (const [index, child] of children.entries()) {
+      visitChild({ $, builder, $el: $(child), index, lastPointIndex });
+    }
+    return builder.blocks;
+  };
+
+  if (layout === "classed") {
+    return walk({ type: "settled", numbers: new Map() });
   }
-
-  return builder.blocks;
+  const candidates: PrintedNumberCandidate[] = [];
+  walk({ type: "survey", candidates });
+  return walk({
+    type: "settled",
+    numbers: settlePrintedNumbers(candidates),
+  });
 };
 
 const tagNameOf = (node: AnyNode | undefined): string | undefined =>
@@ -770,18 +876,32 @@ const visitChild = ({
     return;
   }
 
+  // The oldest layout names its sections only by the publisher's anchor
+  // codes, which are the same in every language. The anchor's contents,
+  // if the HTML parser put the section inside it, follow it in the walk.
+  const sectionZone = node === undefined ? undefined : sectionAnchorZone(node);
+  if (sectionZone !== undefined) {
+    builder.zone = sectionZone;
+    return;
+  }
+
   if (tag === "table") {
     // A document with no numbered paragraphs has no operative part to
     // find; without this guard `index > -1` would mark its very first
     // table as the ruling.
-    if (
+    const opensOperativePart =
       builder.zone !== "footnotes" &&
+      builder.zone !== "operative" &&
       lastPointIndex >= 0 &&
-      index > lastPointIndex
-    ) {
+      index > lastPointIndex;
+    if (opensOperativePart) {
       builder.zone = "operative";
     }
+    const before = builder.blocks.length;
     visitTable($, builder, $el);
+    if (opensOperativePart && opensWithUnmarkedRow($, $el)) {
+      promoteToHeading(builder, before);
+    }
     builder.inTitleRun = false;
     return;
   }
@@ -800,6 +920,10 @@ const visitChild = ({
       inlines: normalizedInlines,
       plainText,
     });
+    return;
+  }
+
+  if (builder.layout === "legacy" && isContentsLine($, $el)) {
     return;
   }
 
@@ -861,11 +985,377 @@ const visitChild = ({
     return;
   }
 
+  if (builder.layout === "legacy" && tag === "p") {
+    visitLegacyParagraph(builder, inlines, index);
+    return;
+  }
+
   pushParagraph(builder, {
     ...roleOf(builder.zone),
     inlines,
     plainText,
   });
+};
+
+// ── The oldest layout ──────────────────────────────────────
+
+/**
+ * The zone each section of the oldest layout opens, by the anchor code
+ * in front of its heading: `I1`, `I2`… the parties and the subject, `MO`
+ * the grounds, `CO` the costs, `VS` the recitals that close the oldest
+ * judgments' grounds, `DI` the operative part. A code outside the set
+ * leaves the zone as it was, so an unknown section cannot reclassify the
+ * one before it.
+ */
+const sectionAnchorZone = (node: AnyNode): Zone | undefined => {
+  const code =
+    isTag(node) && node.tagName === "a" ? node.attribs["name"] : undefined;
+  if (code === undefined) {
+    return undefined;
+  }
+  if (/^I\d+$/u.test(code)) {
+    return "header";
+  }
+  switch (code) {
+    case "MO":
+    case "CO":
+    case "VS":
+      return "body";
+    case "DI":
+      return "operative";
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * The contents line the oldest layout opens with: links to its own
+ * section anchors, separated by breaks. It is the publisher's navigation,
+ * not the Court's text, and every entry repeats a section heading below.
+ */
+const isContentsLine = (
+  $: cheerio.CheerioAPI,
+  $el: cheerio.Cheerio<AnyNode>,
+): boolean => {
+  const nodes = $el.contents().toArray();
+  const links = nodes.filter(
+    (node) =>
+      isTag(node) &&
+      node.tagName === "a" &&
+      ($(node).attr("href") ?? "").startsWith("#"),
+  );
+  return (
+    links.length > 0 &&
+    nodes.every(
+      (node) =>
+        links.includes(node) ||
+        (isTag(node) && node.tagName === "br") ||
+        (isText(node) && node.data.trim() === ""),
+    )
+  );
+};
+
+/**
+ * A page of the printed Reports, which the oldest judgments carry as a
+ * paragraph of its own (`P . 255`, `S . 222`): an abbreviation of up to
+ * four letters, a full stop, a page number, nothing else.
+ */
+const REPORT_PAGE_MARKER = /^\p{L}{1,4}\s*\.\s*(?<page>\d{1,4})$/u;
+
+/**
+ * The paragraph number the oldest layout prints at the start of the
+ * text: `37 It follows`, `1. Dne`, `20. 2003. június 26-án`, or, as the
+ * 1970s typesetting has it, glued to the first word (`1BY ORDER OF`). The
+ * text after it must open with a word, a figure, a quotation mark or a
+ * bracket: `1 . MUST` is an item of a question quoted inside a paragraph,
+ * never the Court's numbering.
+ */
+const PRINTED_PARAGRAPH_NUMBER =
+  /^(?<number>\d{1,4})(?:(?<dot>\.)?\s+(?=[\p{L}\p{N}\p{Pi}\p{Ps}"'])|(?=\p{Lu}))/u;
+
+/**
+ * A paragraph that opens with a day of the month rather than a number:
+ * the text after the figure is a month and a year (`1 May 2000`, `3 mai
+ * 1999`, `12. März 1987`). Read as the text after the figure, so it holds
+ * in every language that writes the day first.
+ */
+const MONTH_AND_YEAR = /^\p{L}{3,}\.?\s+\d{4}(?!\d)/u;
+
+/** Highest day of a month; a larger figure is never a date. */
+const DAYS_IN_MONTH_MAX = 31;
+
+/**
+ * Settle which printed numbers are the Court's paragraph numbering.
+ *
+ * The numbering runs 1, 2, 3… and every number is taken from the
+ * candidates that continue it, so the choice can look ahead:
+ *
+ * - a candidate whose run continues further is preferred, so a stray
+ *   number that the rest of the sequence does not follow is passed over;
+ * - among those, one that does not open a date (`1 May 2000`);
+ * - then one written the way the Court writes its numbers in this
+ *   document (`2 Text` or `2. Text`), read off the numbers that only one
+ *   paragraph carries: a quoted list (`2. Second alternative.`) is
+ *   numbered the other way.
+ *
+ * Where that still leaves more than one, no paragraph takes the number:
+ * a quoted item and the Court's paragraph look alike, and naming the
+ * wrong one would cite text the Court never numbered. The run goes on
+ * from the earliest of them.
+ */
+const settlePrintedNumbers = (
+  candidates: readonly PrintedNumberCandidate[],
+): ReadonlyMap<number, number> => {
+  // How far the numbering runs from each candidate, read backwards: one
+  // more than the longest run of the next number among those after it.
+  const runFrom = new Map<number, number>();
+  const reached: ReachedCandidate[] = [];
+  for (const candidate of candidates.toReversed()) {
+    const reach = 1 + (runFrom.get(candidate.number + 1) ?? 0);
+    reached.push({ candidate, reach });
+    runFrom.set(
+      candidate.number,
+      Math.max(runFrom.get(candidate.number) ?? 0, reach),
+    );
+  }
+  const byNumber = Map.groupBy(
+    reached.toReversed(),
+    ({ candidate }) => candidate.number,
+  );
+
+  const courtMarker = courtMarkerOf(byNumber.values());
+
+  const numbers = new Map<number, number>();
+  let after = -1;
+  for (let expected = 1; ; expected += 1) {
+    const entries = byNumber.get(expected);
+    const open = entries === undefined ? [] : candidatesAfter(entries, after);
+    if (open.length === 0) {
+      return numbers;
+    }
+    const pool = preferredCandidates({ courtMarker, open });
+    const [chosen, ...alike] = pool;
+    if (chosen !== undefined && alike.length === 0) {
+      numbers.set(chosen.index, expected);
+      after = chosen.index;
+    } else {
+      after = Math.min(...pool.map((candidate) => candidate.index));
+    }
+  }
+};
+
+type ReachedCandidate = { candidate: PrintedNumberCandidate; reach: number };
+
+const candidatesAfter = (
+  entries: readonly ReachedCandidate[],
+  after: number,
+): ReachedCandidate[] =>
+  entries.filter(({ candidate }) => candidate.index > after);
+
+/**
+ * How the Court writes its numbers in this document: the marker most of
+ * the numbers only one paragraph carries are written with, if one is.
+ */
+const courtMarkerOf = (
+  groups: Iterable<readonly ReachedCandidate[]>,
+): PrintedNumberCandidate["marker"] | undefined => {
+  const lone = [...groups].flatMap(([only, ...others]) =>
+    only !== undefined && others.length === 0 && !only.candidate.dated
+      ? [only.candidate.marker]
+      : [],
+  );
+  const dotted = lone.filter((marker) => marker === "dotted").length;
+  const bare = lone.length - dotted;
+  if (dotted === bare) {
+    return undefined;
+  }
+  return dotted > bare ? "dotted" : "bare";
+};
+
+const preferring = <T>(pool: T[], test: (item: T) => boolean): T[] => {
+  const preferred = pool.filter(test);
+  return preferred.length > 0 ? preferred : pool;
+};
+
+/** The candidates for one number left once every preference is applied. */
+const preferredCandidates = ({
+  courtMarker,
+  open,
+}: {
+  courtMarker: PrintedNumberCandidate["marker"] | undefined;
+  open: readonly ReachedCandidate[];
+}): PrintedNumberCandidate[] => {
+  const longest = Math.max(...open.map((entry) => entry.reach));
+  return preferring(
+    preferring(
+      open
+        .filter((entry) => entry.reach === longest)
+        .map(({ candidate }) => candidate),
+      (candidate) => !candidate.dated,
+    ),
+    (candidate) => candidate.marker === courtMarker,
+  );
+};
+
+/**
+ * Longest sub-heading of the oldest layout. Its headings are a line of a
+ * few words; a line that long without closing punctuation is a quotation
+ * broken across paragraphs.
+ */
+const LEGACY_HEADING_MAX_LENGTH = 160;
+
+/**
+ * How a sentence, a clause or a quoted list item ends. The Court sets its
+ * sub-headings as bare phrases, so a line ending in none of these is one.
+ */
+const SENTENCE_END = /[.,;:?!…"'”“»«’‘)\]]$/u;
+
+/** A sub-heading opens with a word or a bracketed marker, never a quote or a dash. */
+const HEADING_START = /^(?:\(\p{L}{1,3}\)\s*)?\p{L}/u;
+
+/**
+ * Depth of a sub-heading below the level-1 sections: a bracketed or
+ * lower-case marker (`(a)`, `b)`) sits one level deeper than an unmarked
+ * or capital-marked heading.
+ */
+const legacyHeadingLevel = (text: string): HeadingLevel =>
+  /^(?:\(\p{L}{1,3}\)|\p{Ll}{1,3}\))\s/u.test(text) ? 3 : 2;
+
+const isLegacyHeading = (text: string): boolean =>
+  text.length <= LEGACY_HEADING_MAX_LENGTH &&
+  HEADING_START.test(text) &&
+  !SENTENCE_END.test(text);
+
+/**
+ * One bare paragraph of the oldest layout.
+ *
+ * Its structure is all in the text, so it is read off the text: a report
+ * page marker becomes a page anchor on the next block, a printed number
+ * that continues the Court's numbering becomes the paragraph's number,
+ * and a bare phrase between the numbered paragraphs becomes a heading.
+ * Only the grounds and the costs are numbered or sub-headed, so the
+ * parties and the operative part keep their lines as they are. A number
+ * is taken only where the whole sequence settles it as the Court's
+ * (`settlePrintedNumbers`), so a date, an amount or a quoted list item
+ * that happens to open a paragraph is never read as one.
+ */
+const visitLegacyParagraph = (
+  builder: BlockBuilder,
+  walked: readonly Inline[],
+  index: number,
+): void => {
+  const line = normalizeInlineLine(walked);
+  const page = REPORT_PAGE_MARKER.exec(line.plainText)?.groups?.["page"];
+  if (page !== undefined) {
+    builder.pendingPage = page;
+    return;
+  }
+
+  if (builder.zone !== "body") {
+    pushParagraph(builder, {
+      ...roleOf(builder.zone),
+      inlines: line.inlines,
+      plainText: line.plainText,
+    });
+    return;
+  }
+
+  const { match, line: body } = stripInlineLinePrefix(
+    line,
+    PRINTED_PARAGRAPH_NUMBER,
+  );
+  const printed = parseIntegerToken(match?.groups?.["number"], {
+    sign: "unsigned",
+  });
+  const { printedNumbers } = builder;
+  if (
+    Result.isOk(printed) &&
+    body.plainText !== "" &&
+    printedNumbers.type === "survey"
+  ) {
+    printedNumbers.candidates.push({
+      index,
+      number: printed.value,
+      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      dated:
+        printed.value <= DAYS_IN_MONTH_MAX &&
+        MONTH_AND_YEAR.test(body.plainText),
+    });
+  }
+  const number =
+    printedNumbers.type === "settled"
+      ? printedNumbers.numbers.get(index)
+      : undefined;
+  if (number !== undefined) {
+    pushParagraph(builder, {
+      number,
+      anchorId: `point${number}`,
+      inlines: body.inlines,
+      plainText: body.plainText,
+    });
+    return;
+  }
+
+  if (isLegacyHeading(line.plainText)) {
+    pushHeading(builder, {
+      level: legacyHeadingLevel(line.plainText),
+      role: "section-heading",
+      inlines: line.inlines,
+      plainText: line.plainText,
+    });
+    return;
+  }
+
+  pushParagraph(builder, { inlines: line.inlines, plainText: line.plainText });
+};
+
+// ── The operative part ─────────────────────────────────────
+
+/**
+ * Whether a table's first row has an empty marker cell around a single
+ * passage: the shape of the sentence introducing the ruling ("On those
+ * grounds, the Court hereby rules:"), where a numbered or bulleted row
+ * carries its marker.
+ */
+const opensWithUnmarkedRow = (
+  $: cheerio.CheerioAPI,
+  $table: cheerio.Cheerio<AnyNode>,
+): boolean => {
+  const [marker, content] = ownTableRows($table)
+    .first()
+    .children("td, th")
+    .toArray();
+  return (
+    marker !== undefined &&
+    content !== undefined &&
+    textOf($(marker)) === "" &&
+    $(content).find("table").length === 0
+  );
+};
+
+/**
+ * Turn the sentence introducing the operative part into its heading.
+ *
+ * The operative part has no heading of its own in this markup, so every
+ * outline nested the ruling under whichever heading the reasoning ended
+ * on ("Costs"). The sentence is the Court's own and is there in every
+ * language, so it is the heading, rather than a label this parser would
+ * have to supply in 24 languages.
+ */
+const promoteToHeading = (builder: BlockBuilder, index: number): void => {
+  const block = builder.blocks[index];
+  if (block?.type !== "paragraph" || block.number !== undefined) {
+    return;
+  }
+  builder.blocks[index] = {
+    id: block.id,
+    anchorId: block.anchorId,
+    type: "heading",
+    level: 1,
+    role: "section-heading",
+    inlines: block.inlines,
+    plainText: block.plainText,
+  };
 };
 
 /**
@@ -1027,9 +1517,9 @@ const visitTable = (
     }
 
     const $marker = $(markerCell).find(sel(CLASS.count)).first();
-    const pointNumber = POINT_ID.exec($marker.attr("id") ?? "")?.groups?.[
-      "number"
-    ];
+    const pointNumber = builder.pointsAreNumbering
+      ? POINT_ID.exec($marker.attr("id") ?? "")?.groups?.["number"]
+      : undefined;
 
     if (pointNumber === undefined) {
       // Unanchored markers ("–", "(22)", "1.") belong to the text: they

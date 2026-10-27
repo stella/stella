@@ -507,6 +507,24 @@
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
+    "approval": {
+      "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "myTime": "Mój czas",
+      "refusals": {
+        "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
+        "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
+        "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
+        "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
+      },
+      "returnComment": "Powód zwrotu",
+      "selectEntry": "Wybierz wpis",
+      "timeEntries": "Wpisy czasu",
+      "title": "Zatwierdzenia"
+    },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
     "batchActions": "Działania zbiorcze",
@@ -594,6 +612,7 @@
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
       "outsideScope": "Niepodlegające opodatkowaniu VAT w kraju, 0 %",
+      "pendingApprovals": "{count, plural, one {# pozycja czeka} few {# pozycje czekają} many {# pozycji czeka} other {# pozycji czeka}} na zatwierdzenie. Przejrzyj zatwierdzenia.",
       "rate": "Stawka",
       "readyDescription": "Wystawienie nadaje fakturze kolejny numer z serii i blokuje ją. Szkic można dalej edytować.",
       "readyTitle": "Gotowa do wystawienia",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "dateUnavailable": "Data niedostępna",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
+      "goToMention": "Przejdź do wzmianki {number}",
+      "goToParagraph": "Przejdź do punktu {paragraph}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
+      "mentionMark": "wzmianka {number}",
+      "mentionsInDecision": "{count, plural, one {Cytowane raz w tym orzeczeniu} few {Cytowane # razy w tym orzeczeniu} many {Cytowane # razy w tym orzeczeniu} other {Cytowane # razy w tym orzeczeniu}}",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
+      "notInStella": "Jeszcze nie ma go w stelli",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
       "paragraphLabel": "Punkt {paragraph}",
@@ -1024,7 +1048,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ludzkie"
+      "human": "Ludzkie",
+      "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
@@ -1087,8 +1112,7 @@
       "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
       "runTitle": "Odpowiedz na tej stronie",
       "savedQuestions": "Zapisane pytania",
-      "title": "Tabele badawcze",
-      "updated": "Ostatnia edycja {date}"
+      "title": "Tabele badawcze"
     },
     "results": {
       "excerpt": {
@@ -1147,6 +1171,7 @@
       "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Przejdź do akapitu} few {Przejdź do akapitów} many {Przejdź do akapitów} other {Przejdź do akapitów}}",
       "judgeRole": {
         "advocateGeneral": "Rzecznik generalny",
         "dissenting": "Zdanie odrębne",
@@ -2056,7 +2081,6 @@
       "orLetUsKnowAt": "albo napisz do nas na",
       "viewDocumentation": "Zobacz dokumentację"
     },
-    "enterKey": "↵",
     "error": "Błąd",
     "expenses": "Wydatki",
     "export": {
@@ -2205,10 +2229,12 @@
     "scrollToTop": "Przewiń do góry",
     "search": "Szukaj...",
     "searchIn": "Szukaj w",
+    "searchMembers": "Szukaj członków…",
     "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
     "selectAll": "Zaznacz wszystkie",
     "selectDate": "Wybierz datę…",
+    "selected": "Zaznaczone",
     "sessions": "Sesje",
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
@@ -4253,6 +4279,8 @@
       "commentPlaceholder": "Napisz komentarz…",
       "commentText": "Treść komentarza",
       "commentedPassage": "Skomentowany fragment",
+      "editComment": "Edytuj komentarz",
+      "editedAt": "Edytowano {time}",
       "guestAuthor": "Ty",
       "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
       "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
@@ -6210,8 +6238,7 @@
         "lead": "Prowadzący",
         "leadActive": "Prowadzący",
         "leadInactive": "Ustaw prowadzącego",
-        "noLead": "Brak prowadzącego",
-        "searchMembers": "Szukaj członków…"
+        "noLead": "Brak prowadzącego"
       },
       "to": "Do"
     },
@@ -6273,6 +6300,7 @@
       "deleteAll": "Usuń wszystkie",
       "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
       "hideColumn": "Ukryj kolumnę",
+      "moveFailed": "{failed, plural, one {Nie udało się przenieść # z {total} elementów.} few {Nie udało się przenieść # z {total} elementów.} many {Nie udało się przenieść # z {total} elementów.} other {Nie udało się przenieść # z {total} elementów.}}",
       "readOnlyGrouping": "To grupowanie jest tylko do odczytu",
       "selectPropertyHint": "Wybierz właściwość do grupowania na pasku narzędzi",
       "uploadDocument": "Prześlij dokument",
@@ -6291,10 +6319,10 @@
       "addMember": "Dodaj członka",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
+      "alreadyOnMatter": "Już należy do tej sprawy",
       "cannotRemoveLast": "Nie można usunąć ostatniego członka",
       "noMembersFound": "Nie znaleziono członków",
-      "removeMemberConfirm": "Usunąć tego członka ze sprawy?",
-      "selectMember": "Wybierz członka"
+      "removeMemberConfirm": "Usunąć tego członka ze sprawy?"
     },
     "newDocument": "Nowy dokument",
     "newFolder": "Nowy folder",
@@ -6332,7 +6360,6 @@
           "approvedBy": "Zatwierdził(a)",
           "channel": "Kanał",
           "dateTime": "Data i godzina",
-          "eventId": "ID zdarzenia",
           "notAvailable": "Niedostępne",
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
@@ -6515,6 +6542,11 @@
       },
       "passwordLabel": "Wprowadź hasło do pliku PDF",
       "previousPage": "Poprzednia strona",
+      "selection": {
+        "explainPassagePrompt": "Wyjaśnij ten fragment {citation}:\n\n„{quote}”",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Pokaż oryginalne strony",
       "unlock": "Odblokuj"
     },

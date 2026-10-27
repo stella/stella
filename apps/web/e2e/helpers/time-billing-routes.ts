@@ -1,6 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type CallExpression,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
@@ -15,111 +21,110 @@ const MIXED_ROUTE_REASONS = new Map([
   ],
 ]);
 
-const hasGateCall = (
-  node: ts.Node,
-  gateNames: ReadonlySet<string>,
-): boolean => {
-  if (
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    gateNames.has(node.expression.text)
-  ) {
-    return true;
-  }
-  return (
-    ts.forEachChild(node, (child) => hasGateCall(child, gateNames)) ?? false
-  );
-};
-
-const hasDirectGateCall = (
-  node: ts.Node,
-  gateNames: ReadonlySet<string>,
-): boolean => {
-  if (ts.isFunctionLike(node)) {
-    return false;
-  }
-  if (
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    gateNames.has(node.expression.text)
-  ) {
-    return true;
-  }
-  return (
-    ts.forEachChild(node, (child) => hasDirectGateCall(child, gateNames)) ??
-    false
-  );
-};
-
-const readRoute = (filePath: string) => {
-  const source = ts.createSourceFile(
-    filePath,
-    readFileSync(filePath, "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const gateNames = new Set<string>();
-  for (const statement of source.statements) {
+const hasGateCall = (node: Node, gateNames: ReadonlySet<string>): boolean => {
+  let found = false;
+  walk(node, (child) => {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== TIME_BILLING_HOOK
+      child.type === "CallExpression" &&
+      child.callee.type === "Identifier" &&
+      gateNames.has(child.callee.name)
+    ) {
+      found = true;
+    }
+    return undefined;
+  });
+  return found;
+};
+const hasDirectGateCall = (
+  node: Node,
+  gateNames: ReadonlySet<string>,
+): boolean => {
+  let found = false;
+  walk(node, (child) => {
+    if (
+      [
+        "FunctionDeclaration",
+        "FunctionExpression",
+        "ArrowFunctionExpression",
+      ].includes(child.type)
+    ) {
+      return "skip-children";
+    }
+    if (
+      child.type === "CallExpression" &&
+      child.callee.type === "Identifier" &&
+      gateNames.has(child.callee.name)
+    ) {
+      found = true;
+    }
+    return undefined;
+  });
+  return found;
+};
+const readRoute = (filePath: string) => {
+  const source = parseSource(filePath, readFileSync(filePath, "utf-8"));
+  const gateNames = new Set<string>();
+  for (const statement of source.program.body) {
+    if (
+      statement.type !== "ImportDeclaration" ||
+      statement.source.value !== TIME_BILLING_HOOK
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const element of bindings.elements) {
-      const exportedName = element.propertyName?.text ?? element.name.text;
+    for (const element of statement.specifiers) {
+      if (element.type !== "ImportSpecifier") {
+        continue;
+      }
+      const exportedName =
+        element.imported.type === "Identifier"
+          ? element.imported.name
+          : element.imported.value;
       if (exportedName.startsWith("isTimeBilling")) {
-        gateNames.add(element.name.text);
+        gateNames.add(element.local.name);
       }
     }
   }
-  const findRouteDeclaration = (
-    node: ts.Node,
-  ): ts.CallExpression | undefined => {
+  let declaration: CallExpression | undefined;
+  walk(source.program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isCallExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      node.expression.expression.text === "createFileRoute"
+      declaration === undefined &&
+      node.type === "CallExpression" &&
+      node.callee.type === "CallExpression" &&
+      node.callee.callee.type === "Identifier" &&
+      node.callee.callee.name === "createFileRoute"
     ) {
-      return node;
+      declaration = node;
     }
-    return ts.forEachChild(node, findRouteDeclaration);
-  };
-  const declaration = findRouteDeclaration(source);
+  });
+  if (declaration?.callee.type !== "CallExpression") {
+    return null;
+  }
+  const routeArgument = declaration.callee.arguments.at(0);
   if (
-    declaration === undefined ||
-    !ts.isCallExpression(declaration.expression)
+    routeArgument?.type !== "Literal" ||
+    typeof routeArgument.value !== "string"
   ) {
     return null;
   }
-  const routeArgument = declaration.expression.arguments.at(0);
-  if (routeArgument === undefined || !ts.isStringLiteral(routeArgument)) {
-    return null;
-  }
-  const routePath = routeArgument.text.replace(/\/$/u, "");
+  const routePath = routeArgument.value.replace(/\/$/u, "");
   const options = declaration.arguments.at(0);
   const dedicated =
-    options !== undefined &&
-    ts.isObjectLiteralExpression(options) &&
+    options?.type === "ObjectExpression" &&
     options.properties.some(
       (property) =>
-        ts.isPropertyAssignment(property) &&
-        property.name.getText(source) === "beforeLoad" &&
-        (ts.isArrowFunction(property.initializer) ||
-          ts.isFunctionExpression(property.initializer)) &&
-        hasDirectGateCall(property.initializer.body, gateNames),
+        property.type === "Property" &&
+        source.sourceText.slice(property.key.start, property.key.end) ===
+          "beforeLoad" &&
+        (property.value.type === "ArrowFunctionExpression" ||
+          property.value.type === "FunctionExpression") &&
+        property.value.body !== null &&
+        hasDirectGateCall(property.value.body, gateNames),
     );
   if (
     gateNames.size > 0 &&
     !dedicated &&
-    (!MIXED_ROUTE_REASONS.has(routePath) || !hasGateCall(source, gateNames))
+    (!MIXED_ROUTE_REASONS.has(routePath) ||
+      !hasGateCall(source.program, gateNames))
   ) {
     throw new Error(`Time-billing route lost its beforeLoad gate: ${filePath}`);
   }
