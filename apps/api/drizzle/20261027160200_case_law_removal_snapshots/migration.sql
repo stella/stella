@@ -31,7 +31,7 @@ CREATE POLICY "case_law_removal_ingestion_delete" ON "case_law_coverage_summarie
   FOR DELETE TO stella_ingestion USING (true);--> statement-breakpoint
 GRANT SELECT, DELETE ON "case_law_coverage_summaries" TO stella_ingestion;--> statement-breakpoint
 
-GRANT DELETE ON "case_law_citation_reviews" TO stella_ingestion;
+GRANT DELETE ON "case_law_citation_reviews" TO stella_ingestion;--> statement-breakpoint
 
 ALTER TABLE "case_law_sources" ADD COLUMN "removal_checkpoint" jsonb;--> statement-breakpoint
 GRANT SELECT ("removal_checkpoint"), UPDATE ("removal_checkpoint") ON "case_law_sources" TO stella_ingestion;

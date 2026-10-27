@@ -84,12 +84,14 @@ if (!databaseUrl || !runPostgresTests) {
                     : value;
                 }
                 return async (query: Parameters<Transaction["execute"]>[0]) => {
+                  const statement =
+                    typeof query === "string"
+                      ? query
+                      : new PgDialect().sqlToQuery(query.getSQL()).sql;
                   if (
-                    new PgDialect()
-                      .sqlToQuery(query)
-                      .sql.includes(
-                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
-                      )
+                    statement.includes(
+                      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
+                    )
                   ) {
                     milestones.add("count-snapshot");
                   }

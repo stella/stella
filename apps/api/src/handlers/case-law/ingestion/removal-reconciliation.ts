@@ -2,12 +2,18 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { unreadPublisherError } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  parsePublisherRetryAfter,
+  PublisherRateLimitRefusalError,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { probeUkFclRemoval } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl-removal";
 import { removePublisherDecision } from "@/api/handlers/case-law/publisher-removal";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -17,7 +23,10 @@ import type {
   AbsenceEvidence,
   ReadOutcome,
 } from "@/api/lib/errors/read-outcome";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import {
+  AdapterFetchError,
+  DatabaseError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   REMOVAL_PENDING_REASON,
   REMOVAL_UNPROBEABLE_REASON,
@@ -36,12 +45,15 @@ import {
 import type { RemovalRetryItem } from "@/api/lib/legal-search/removal-reconciliation-store";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const REMOVAL_RECONCILIATION_CONFIG_KEY = "removalReconciliation";
 export const REMOVAL_SWEEP_INTERVAL_MS = 7 * DAY_IN_MS;
 export const REMOVAL_SWEEP_REQUEST_BUDGET = 100;
 export const REMOVAL_SWEEP_TIME_BUDGET_MS = 60_000;
 export const REMOVAL_RETRY_PER_KIND_BUDGET = 10;
+const SOURCE_REFUSAL_MIN_HOLD_MS = 3_600_000;
+const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
 
 export type PublisherRemovalRead =
   | Exclude<ReadOutcome<null>, { type: "absent" }>
@@ -66,10 +78,13 @@ type SweepOptions = {
   probe?: RemovalProbe;
   remove?: typeof removePublisherDecision;
 };
-type DiscoveryOutcome = {
-  type: "disabled" | "not-due" | "complete" | "budget" | "contended";
-  checked: number;
-};
+type SourcePausedOutcome = { type: "source-paused"; resumeAt: string };
+type DiscoveryOutcome =
+  | { type: "paused"; checked: number; resumeAt: Date }
+  | {
+      type: "disabled" | "not-due" | "complete" | "budget" | "contended";
+      checked: number;
+    };
 type SweepOutcome = DiscoveryOutcome & {
   retried: number;
   nextRetryAt: Date | null;
@@ -237,6 +252,7 @@ type ProcessRemovalDecisionOptions = {
   remove: typeof removePublisherDecision;
   signal: AbortSignal;
   mode: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
+  now: () => Date;
 };
 /** Every item-local failure is an explicit durable disposition, never an enumeration stop. */
 const processRemovalDecision = async ({
@@ -247,7 +263,10 @@ const processRemovalDecision = async ({
   remove,
   signal,
   mode,
-}: ProcessRemovalDecisionOptions): Promise<RemovalStepOutcome> => {
+  now,
+}: ProcessRemovalDecisionOptions): Promise<
+  RemovalStepOutcome | SourcePausedOutcome
+> => {
   let operation: "probe" | "erase" =
     mode.type === "retry" && mode.item.payload.type === "pending"
       ? mode.item.payload.operation
@@ -296,6 +315,14 @@ const processRemovalDecision = async ({
               reason: REMOVAL_PENDING_REASON.PUBLISHER_UNAVAILABLE,
             };
           case "refused":
+            if (observation.scope === "source") {
+              throw unreadPublisherError({
+                outcome: observation,
+                adapterKey: "publisher-removal",
+                cursor: null,
+                message: "Publisher removal source paused",
+              });
+            }
             return {
               type: "pending",
               operation: "probe",
@@ -346,6 +373,32 @@ const processRemovalDecision = async ({
   if (result.isOk()) {
     return result.value;
   }
+  if (
+    result.error instanceof AdapterFetchError &&
+    result.error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL
+  ) {
+    const epochMs = now().getTime();
+    const retryAfterMs =
+      parsePublisherRetryAfter(result.error.retryAfter ?? null, epochMs) ?? 0;
+    const sharedCooldown =
+      result.error instanceof PublisherRateLimitRefusalError
+        ? result.error.cooldownUntilEpochMs
+        : epochMs;
+    // Source refusals use at least an hourly hold and preserve longer publisher or gate deadlines.
+    return {
+      type: "source-paused",
+      resumeAt: new Date(
+        Math.min(
+          MAX_DATE_EPOCH_MS,
+          Math.max(
+            epochMs + SOURCE_REFUSAL_MIN_HOLD_MS,
+            epochMs + retryAfterMs,
+            sharedCooldown,
+          ),
+        ),
+      ).toISOString(),
+    };
+  }
   captureError(
     result.error,
     handlerErrorContext("caseLaw.removal.operation_failed", { decisionId }),
@@ -365,8 +418,7 @@ const processRemovalDecision = async ({
 
 type DiscoveryOptions = Required<
   Pick<SweepOptions, "sourceId" | "signal" | "now" | "remove">
-> &
-  Pick<SweepOptions, "probe"> & { scopedDb: ScopedDb; deadline: number };
+> & { probe: RemovalProbe | undefined; scopedDb: ScopedDb; deadline: number };
 const discoverPublisherRemovals = async ({
   scopedDb,
   sourceId,
@@ -411,6 +463,17 @@ const discoverPublisherRemovals = async ({
         items,
         now: now(),
       });
+    if (state?.status === "paused") {
+      const resumeAt = new Date(state.resumeAt);
+      if (resumeAt.getTime() > now().getTime()) {
+        return { type: "paused", checked, resumeAt };
+      }
+      // db-await-in-loop: resume the exact saved discovery state after the durable publisher hold.
+      if (!(await commit(state.resume))) {
+        return { type: "contended", checked };
+      }
+      continue;
+    }
     if (state === null) {
       // db-await-in-loop: initialization pins a finite source range before enumeration.
       const next = await initialRemovalCheckpoint({
@@ -449,10 +512,16 @@ const discoverPublisherRemovals = async ({
           .where(
             and(
               eq(caseLawDecisions.sourceId, sourceId),
-              lte(caseLawDecisions.id, state.ceiling),
+              lte(
+                caseLawDecisions.id,
+                brandPersistedCaseLawDecisionId(state.ceiling),
+              ),
               state.cursor === null
                 ? undefined
-                : gt(caseLawDecisions.id, state.cursor),
+                : gt(
+                    caseLawDecisions.id,
+                    brandPersistedCaseLawDecisionId(state.cursor),
+                  ),
             ),
           )
           .orderBy(caseLawDecisions.id)
@@ -482,17 +551,42 @@ const discoverPublisherRemovals = async ({
       remove,
       signal,
       mode: { type: "discovery" },
+      now,
     });
+    const next = {
+      status: "running",
+      cursor: decision.id,
+      ceiling: state.ceiling,
+    } as const;
+    const disposition =
+      outcome.type === "source-paused"
+        ? ({
+            type: "pending",
+            operation: "probe",
+            reason: REMOVAL_PENDING_REASON.PUBLISHER_REFUSED,
+          } as const)
+        : outcome;
     // db-await-in-loop: a deferred item is recorded atomically with advancing past it.
     if (
       !(await commit(
-        { status: "running", cursor: decision.id, ceiling: state.ceiling },
-        [{ decisionId: decision.id, outcome, origin: { type: "discovery" } }],
+        outcome.type === "source-paused"
+          ? { status: "paused", resume: next, resumeAt: outcome.resumeAt }
+          : next,
+        [
+          {
+            decisionId: decision.id,
+            outcome: disposition,
+            origin: { type: "discovery" },
+          },
+        ],
       ))
     ) {
       return { type: "contended", checked };
     }
     checked++;
+    if (outcome.type === "source-paused") {
+      return { type: "paused", checked, resumeAt: new Date(outcome.resumeAt) };
+    }
   }
   return { type: "budget", checked };
 };
@@ -506,7 +600,7 @@ const retryPublisherRemovals = async ({
   probe,
   remove,
   deadline,
-}: RetryOptions): Promise<number> => {
+}: RetryOptions): Promise<{ retried: number; pauseUntil: Date | null }> => {
   const items = await selectDueRemovalRetries({
     scopedDb,
     sourceId,
@@ -521,7 +615,7 @@ const retryPublisherRemovals = async ({
     signal.throwIfAborted();
     // db-await-in-loop: honor the current kill switch and source CAS before every retry.
     const source = await readSource(scopedDb, sourceId);
-    if (source === undefined) {
+    if (source === undefined || source.removalCheckpoint?.status === "paused") {
       break;
     }
     const reader = readerForSource(source, probe);
@@ -537,18 +631,34 @@ const retryPublisherRemovals = async ({
       remove,
       signal,
       mode: { type: "retry", item },
+      now,
     });
+    const disposition =
+      outcome.type === "source-paused"
+        ? ({
+            type: "pending",
+            operation: "probe",
+            reason: REMOVAL_PENDING_REASON.PUBLISHER_REFUSED,
+          } as const)
+        : outcome;
     // db-await-in-loop: settling a retry never rewinds the independent enumeration cursor.
     if (
       await commitRemovalProgress({
         scopedDb,
         sourceId,
         source,
-        next: source.removalCheckpoint,
+        next:
+          outcome.type === "source-paused"
+            ? {
+                status: "paused",
+                resume: source.removalCheckpoint,
+                resumeAt: outcome.resumeAt,
+              }
+            : source.removalCheckpoint,
         items: [
           {
             decisionId: item.decisionId,
-            outcome,
+            outcome: disposition,
             origin: { type: "retry", item },
           },
         ],
@@ -556,9 +666,14 @@ const retryPublisherRemovals = async ({
       })
     ) {
       retried++;
+      if (outcome.type === "source-paused") {
+        return { retried, pauseUntil: new Date(outcome.resumeAt) };
+      }
+    } else {
+      break;
     }
   }
-  return retried;
+  return { retried, pauseUntil: null };
 };
 
 /** Weekly discovery and bounded durable completion share source control, not a cursor. */
@@ -600,13 +715,25 @@ export const reconcilePublisherRemovals = async ({
         deadline,
       };
       const discovered = await discoverPublisherRemovals(context);
+      if (discovered.type === "paused") {
+        return { ...discovered, retried: 0, nextRetryAt: discovered.resumeAt };
+      }
       if (discovered.type === "disabled" || performance.now() >= deadline) {
         return { ...discovered, retried: 0, nextRetryAt: null };
       }
-      const retried = await retryPublisherRemovals(context);
+      const retry = await retryPublisherRemovals(context);
+      if (retry.pauseUntil !== null) {
+        return {
+          type: "paused",
+          checked: discovered.checked,
+          retried: retry.retried,
+          resumeAt: retry.pauseUntil,
+          nextRetryAt: retry.pauseUntil,
+        };
+      }
       return {
         ...discovered,
-        retried,
+        retried: retry.retried,
         nextRetryAt:
           performance.now() >= deadline
             ? now()

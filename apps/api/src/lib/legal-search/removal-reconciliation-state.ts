@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 const uuid = v.pipe(v.string(), v.uuid());
 
-export const removalCheckpointSchema = v.variant("status", [
+const activeRemovalCheckpointSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("running"),
     cursor: v.nullable(uuid),
@@ -11,6 +11,15 @@ export const removalCheckpointSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("waiting"),
     nextCycleAt: v.pipe(v.string(), v.isoTimestamp()),
+  }),
+]);
+
+export const removalCheckpointSchema = v.variant("status", [
+  ...activeRemovalCheckpointSchema.options,
+  v.strictObject({
+    status: v.literal("paused"),
+    resume: v.nullable(activeRemovalCheckpointSchema),
+    resumeAt: v.pipe(v.string(), v.isoTimestamp()),
   }),
 ]);
 

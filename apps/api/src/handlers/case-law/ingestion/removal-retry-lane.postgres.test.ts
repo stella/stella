@@ -2,8 +2,9 @@
  * Publisher removal retries share the durable reconciliation lane. Run only
  * against the migrated Postgres test database; skipped elsewhere.
  */
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, getTableName, isNull } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -16,6 +17,8 @@ import {
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
+import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { probeUkFclRemoval } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl-removal";
 import { getIngestionStatus } from "@/api/handlers/case-law/ingestion/get";
 import {
   reconcilePublisherRemovals,
@@ -33,7 +36,7 @@ import { REMOVAL_RETRY_KIND } from "@/api/lib/legal-search/removal-reconciliatio
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -471,6 +474,201 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("a source refusal advances discovery and holds all publisher reads until its deadline", async () => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await insertSource(sourceId);
+      const firstId = createSafeId<"caseLawDecision">();
+      const secondId = createSafeId<"caseLawDecision">();
+      await insertDecision({
+        id: firstId,
+        sourceId,
+        sourceDocumentId: "uksc/2024/source-refused",
+        ordinal: "source-refused",
+      });
+      await insertDecision({
+        id: secondId,
+        sourceId,
+        sourceDocumentId: "uksc/2024/source-after",
+        ordinal: "source-after",
+      });
+      await setCheckpoint(sourceId, {
+        status: "running",
+        cursor: null,
+        ceiling: secondId,
+      });
+      const resumeAt = new Date(FIXED_NOW.getTime() + 30_000 + 2 * 3_600_000);
+      let currentTime = FIXED_NOW;
+      let probes = 0;
+      const probe = async (identity: string): Promise<PublisherRemovalRead> => {
+        probes++;
+        if (identity.endsWith("source-refused")) {
+          currentTime = new Date(FIXED_NOW.getTime() + 30_000);
+          const originalFetch = globalThis.fetch;
+          globalThis.fetch = asFetchMock(
+            async () =>
+              new Response("rate limit", {
+                status: 429,
+                headers: { "Retry-After": "7200" },
+              }),
+          );
+          const observed = await Result.tryPromise({
+            try: async () =>
+              await probeUkFclRemoval(
+                "uksc/2024/1",
+                new AbortController().signal,
+              ),
+            catch: (error: unknown) => error,
+          });
+          globalThis.fetch = originalFetch;
+          if (observed.isErr()) {
+            throw observed.error;
+          }
+          return observed.value;
+        }
+        return { type: "absent", evidence: "publisher-typed-absence" };
+      };
+      const paused = await reconcilePublisherRemovals({
+        scopedDb,
+        sourceId,
+        signal: new AbortController().signal,
+        now: () => currentTime,
+        probe,
+      });
+      expect(paused.unwrap()).toMatchObject({
+        type: "paused",
+        checked: 1,
+        retried: 0,
+        nextRetryAt: resumeAt,
+      });
+      const checkpoint = (
+        await db
+          .select({ state: caseLawSources.removalCheckpoint })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+      ).at(0)?.state;
+      expect(checkpoint).toEqual({
+        status: "paused",
+        resumeAt: resumeAt.toISOString(),
+        resume: { status: "running", cursor: firstId, ceiling: secondId },
+      });
+      const held = await reconcile({
+        sourceId,
+        now: new Date(resumeAt.getTime() - 1),
+        probe,
+      });
+      expect(held.unwrap()).toMatchObject({
+        type: "paused",
+        checked: 0,
+        retried: 0,
+        nextRetryAt: resumeAt,
+      });
+      expect(probes).toBe(1);
+      let erasures = 0;
+      const resumed = await reconcile({
+        sourceId,
+        now: resumeAt,
+        probe: async (identity) => {
+          probes++;
+          return identity.endsWith("source-after")
+            ? { type: "absent", evidence: "publisher-typed-absence" }
+            : { type: "present", value: null };
+        },
+        remove: makeRemove(async () => {
+          erasures++;
+          return { type: "swept", legacy: "none" };
+        }),
+      });
+      expect(resumed.unwrap()).toMatchObject({
+        type: "complete",
+        checked: 1,
+        retried: 2,
+        nextRetryAt: null,
+      });
+      expect(erasures).toBe(1);
+      expect(probes).toBe(3);
+      expect(
+        await db
+          .select({ id: publishedCaseLawDecisions.id })
+          .from(publishedCaseLawDecisions)
+          .where(eq(publishedCaseLawDecisions.id, secondId)),
+      ).toEqual([]);
+      expect(
+        await db
+          .select({ id: caseLawReconciliationItems.id })
+          .from(caseLawReconciliationItems)
+          .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
+      ).toEqual([]);
+    });
+
+    test("a source refusal during a document retry preserves the waiting checkpoint", async () => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await insertSource(sourceId);
+      const decisionId = createSafeId<"caseLawDecision">();
+      await insertDecision({
+        id: decisionId,
+        sourceId,
+        sourceDocumentId: "uksc/2024/retry-refused",
+        ordinal: "retry-refused",
+      });
+      const first = await reconcile({
+        sourceId,
+        now: FIXED_NOW,
+        probe: async () => ({
+          type: "refused",
+          scope: "document",
+          status: 403,
+          cause: { kind: "http-status", retryAfter: null },
+        }),
+      });
+      expect(first.unwrap()).toMatchObject({
+        type: "complete",
+        checked: 1,
+        retried: 0,
+      });
+      const attemptAt = new Date(FIXED_NOW.getTime() + 60_000);
+      const retry = await reconcile({
+        sourceId,
+        now: attemptAt,
+        probe: async () => {
+          throw new PublisherRateLimitRefusalError({
+            adapterKey: "uk-fcl",
+            publisherKey: "fcl-uk",
+            status: 429,
+            cursor: null,
+            retryAfter: "7200",
+            cooldownUntilEpochMs: attemptAt.getTime() + 15 * 60_000,
+          });
+        },
+      });
+      const resumeAt = new Date(attemptAt.getTime() + 2 * 3_600_000);
+      expect(retry.unwrap()).toMatchObject({
+        type: "paused",
+        checked: 0,
+        retried: 1,
+        nextRetryAt: resumeAt,
+      });
+      const checkpoint = (
+        await db
+          .select({ state: caseLawSources.removalCheckpoint })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+      ).at(0)?.state;
+      expect(checkpoint).toMatchObject({
+        status: "paused",
+        resume: { status: "waiting" },
+      });
+      const resumed = await reconcile({
+        sourceId,
+        now: resumeAt,
+        probe: async () => ({ type: "present", value: null }),
+      });
+      expect(resumed.unwrap()).toMatchObject({
+        type: "not-due",
+        retried: 1,
+        nextRetryAt: null,
+      });
+    });
+
     test("bounded retries leave the remainder due for the next run", async () => {
       const sourceId = createSafeId<"caseLawSource">();
       await insertSource(sourceId);
@@ -542,7 +740,7 @@ if (!databaseUrl || !runPostgresTests) {
                 return Reflect.get(target, property, receiver);
               }
               return <T extends Parameters<typeof tx.update>[0]>(table: T) => {
-                if (table === caseLawSources) {
+                if (getTableName(table) === getTableName(caseLawSources)) {
                   throw new DatabaseError({
                     message: "synthetic checkpoint failure",
                   });

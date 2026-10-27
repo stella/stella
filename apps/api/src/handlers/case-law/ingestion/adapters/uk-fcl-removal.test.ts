@@ -1,5 +1,9 @@
+import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
+
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { probeUkFclRemoval } from "./uk-fcl-removal";
@@ -52,3 +56,43 @@ test("an invalid publisher identity performs no request", async () => {
   ).toBe("unprobeable");
   expect(calls).toBe(0);
 });
+
+for (const response of [
+  { status: 429, headers: { "Retry-After": "7200" }, body: "rate limit" },
+  {
+    status: 302,
+    headers: { Location: "/rate-limit", "Retry-After": "7200" },
+    body: "",
+  },
+  {
+    status: 200,
+    headers: { "Content-Type": "text/html" },
+    body: "<h1>Too many requests</h1>",
+  },
+]) {
+  test(`publisher rate-limit response ${response.status} stops the source after one request`, async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests++;
+      return new Response(response.body, response);
+    });
+    const observed = await Result.tryPromise({
+      try: async () =>
+        await probeUkFclRemoval("uksc/2024/1", new AbortController().signal),
+      catch: (error: unknown) => error,
+    });
+    expect(observed.isErr()).toBe(true);
+    if (observed.isErr()) {
+      expect(observed.error).toBeInstanceOf(AdapterFetchError);
+      if (observed.error instanceof AdapterFetchError) {
+        expect(observed.error.stopKind).toBe(
+          INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+        );
+        if (response.status !== 200) {
+          expect(observed.error.retryAfter).toBe("7200");
+        }
+      }
+    }
+    expect(requests).toBe(1);
+  });
+}

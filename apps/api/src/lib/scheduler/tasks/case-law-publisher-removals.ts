@@ -29,7 +29,6 @@ export const reconcilePublisherRemovalsTask: SchedulerTask = async ({
     scopedDb: getCaseLawIngestionDb(),
     sourceId: brandPersistedCaseLawSourceId(sourceId),
     signal,
-    now: () => dueAt.claimedAtDate(),
   });
   if (result.isErr()) {
     return Result.err(
