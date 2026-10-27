@@ -247,6 +247,7 @@
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "vite": "catalog:"
   },
   "peerDependencies": {
