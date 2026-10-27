@@ -31,8 +31,10 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./postgres-search-fold": "./src/postgres-search-fold.ts",
     "./search-match-key": "./src/search-match-key.ts",
-    "./search-query-matcher": "./src/search-query-matcher.ts"
+    "./search-query-matcher": "./src/search-query-matcher.ts",
+    "./unaccent-rules": "./src/unaccent-rules.ts"
   },
   "publishConfig": {
     "access": "public"

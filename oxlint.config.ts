@@ -6534,14 +6534,11 @@ const config = defineConfig({
       // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize/search-query-matcher,
       // which fold case, accents and ß/ł/ø alike in every UI locale; a
       // lowercase-only compare misses "Dvořák" for "dvorak". The decision
-      // reader's find and query marks fold through the same key. The table
-      // find highlighter is exempt: it marks what the server's
-      // accent-sensitive ILIKE matched, and marking more would claim matches
-      // the server never made. The contact import derives custom field ids
-      // from labels with stripDiacritics, an id rather than a match, and ids
-      // already minted must not change. Tests compute expected values
-      // independently of the owner, and the design system's browser fixtures
-      // render primitives bare.
+      // reader's find and query marks fold through the same key. The contact
+      // import derives custom field ids from labels with stripDiacritics, an
+      // id rather than a match, and ids already minted must not change. Tests
+      // compute expected values independently of the owner, and the design
+      // system's browser fixtures render primitives bare.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "packages/decision-reader/src/**/*.{ts,tsx}",
@@ -6551,7 +6548,6 @@ const config = defineConfig({
       ],
       excludeFiles: [
         "**/*.test.{ts,tsx}",
-        "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
         "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
         "packages/ui/src/components/fixtures/**",
       ],
