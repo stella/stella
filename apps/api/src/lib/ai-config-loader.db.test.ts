@@ -38,6 +38,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   loadWebSearchKeys,
   loadWebSearchProvidersForOrg,
@@ -457,6 +458,30 @@ describe("absent and unreadable settings", () => {
       error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
     });
   });
+});
+
+test("auth settings reads leave the database reusable for later transactions", async () => {
+  const organizationId = ids.orgA;
+  const userId = ids.userA1;
+  for (let iteration = 0; iteration < 2; iteration += 1) {
+    const settings = await loadOrgSettingsForAuth(testDb, {
+      organizationId,
+      userId,
+    });
+    expect(settings.orgAIConfigStatus).toBe(ORG_AI_CONFIG_STATUS.ok);
+    expect(providerKeys(settings.orgAIConfig)).toEqual(["model-a-key"]);
+    const members = await withAggregateTransaction(
+      testDb,
+      async (tx) =>
+        await tx
+          .select({ userId: member.userId })
+          .from(member)
+          .where(eq(member.organizationId, organizationId)),
+    );
+    expect(members.map(({ userId: memberUserId }) => memberUserId)).toContain(
+      userId,
+    );
+  }
 });
 
 test("strict configuration readers expose settings only for admitted actors", async () => {

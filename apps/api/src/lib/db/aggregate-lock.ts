@@ -736,7 +736,7 @@ export const withExecutorSavepoint = async <T>(
   }
 };
 
-/** Track the public savepoint callback without inspecting driver internals. */
+/** Own a fresh database transaction or track a native nested savepoint. */
 export const withAggregateSavepoint = async <Tx extends object, T>(
   tx: {
     transaction: <Value>(
@@ -745,6 +745,11 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   },
   run: (savepoint: Tx) => Promise<T>,
 ): Promise<T> => {
+  // Only native transaction handles expose rollback. A reusable database
+  // must never enter the per-transaction history registry.
+  if (!("rollback" in tx)) {
+    return await withAggregateTransaction(tx, run);
+  }
   const parent = lockHistory(tx);
   // Non-locking callers retain the driver's existing savepoint behavior.
   if (transactionHasAggregateLocks(parent)) {
