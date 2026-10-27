@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<CONSOLIDATED_LIST xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://www.un.org/sc/resources/sc-sanctions.xsd" dateGenerated="2026-10-24T23:00:07.335Z">
+  <INDIVIDUALS>
+    <INDIVIDUAL>
+      <DATAID>6908566</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>KIM</FIRST_NAME>
+      <SECOND_NAME>CHOL SAM</SECOND_NAME>
+      <UN_LIST_TYPE>DPRK</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>KPi.035</REFERENCE_NUMBER>
+      <LISTED_ON>2016-11-30</LISTED_ON>
+      <COMMENTS1>Kim Chol Sam is a representative for Daedong Credit Bank (DCB) who has been
+                involved in managing transactions on behalf of DCB Finance Limited. As an
+                overseas-based representative of DCB, it is suspected that Kim Chol Sam has
+                facilitated transactions worth hundreds of thousands of dollars and likely managed
+                millions of dollars in DPRK related accounts with potential links to nuclear/missile
+                programs.</COMMENTS1>
+      <HAS_INTERPOL_LINK>NO</HAS_INTERPOL_LINK>
+      <INTERPOL_LINK/>
+      <DESIGNATION>
+        <VALUE>Representative for Daedong Credit Bank (DCB)</VALUE>
+      </DESIGNATION>
+      <NATIONALITY>
+        <VALUE>Democratic People's Republic of Korea</VALUE>
+      </NATIONALITY>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+      <LAST_DAY_UPDATED>
+        <VALUE>2022-07-26</VALUE>
+      </LAST_DAY_UPDATED>
+      <INDIVIDUAL_ALIAS>
+        <QUALITY>Good</QUALITY>
+        <ALIAS_NAME>Jin Tiesan (金铁三)</ALIAS_NAME>
+      </INDIVIDUAL_ALIAS>
+      <INDIVIDUAL_ADDRESS>
+        <COUNTRY/>
+      </INDIVIDUAL_ADDRESS>
+      <INDIVIDUAL_DATE_OF_BIRTH>
+        <TYPE_OF_DATE>EXACT</TYPE_OF_DATE>
+        <DATE>1971-03-11</DATE>
+      </INDIVIDUAL_DATE_OF_BIRTH>
+      <INDIVIDUAL_PLACE_OF_BIRTH>
+        <COUNTRY/>
+      </INDIVIDUAL_PLACE_OF_BIRTH>
+      <INDIVIDUAL_DOCUMENT>
+        <TYPE_OF_DOCUMENT>Passport</TYPE_OF_DOCUMENT>
+        <NUMBER>645120378 </NUMBER>
+        <ISSUING_COUNTRY>Democratic People's Republic of Korea</ISSUING_COUNTRY>
+      </INDIVIDUAL_DOCUMENT>
+      <SORT_KEY/>
+      <SORT_KEY_LAST_MOD/>
+    </INDIVIDUAL>
+  </INDIVIDUALS>
+  <ENTITIES>
+    <ENTITY>
+      <DATAID>6908518</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>KOREA KWANGSON BANKING CORPORATION (KKBC)</FIRST_NAME>
+      <UN_LIST_TYPE>DPRK</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>KPe.025</REFERENCE_NUMBER>
+      <LISTED_ON>2016-03-02</LISTED_ON>
+      <COMMENTS1>KKBC provides financial services in support to Tanchon Commercial Bank and Korea Hyoksin Trading Corporation, a subordinate of the Korea Ryonbong General Corporation. Tanchon Commercial Bank has used KKBC to facilitate funds transfers likely amounting to millions of dollars, including transfers involving Korea Mining Development Corporation related funds.</COMMENTS1>
+      <HAS_INTERPOL_LINK>NO</HAS_INTERPOL_LINK>
+      <INTERPOL_LINK/>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+      <ENTITY_ALIAS>
+        <QUALITY>a.k.a.</QUALITY>
+        <ALIAS_NAME>KKBC</ALIAS_NAME>
+      </ENTITY_ALIAS>
+      <ENTITY_ADDRESS>
+        <STREET>Jungson-dong, Sungri Street, Central District</STREET>
+        <CITY>Pyongyang</CITY>
+        <COUNTRY>Democratic People's Republic of Korea</COUNTRY>
+      </ENTITY_ADDRESS>
+      <SORT_KEY/>
+      <SORT_KEY_LAST_MOD/>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>6908026</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>COMPAGNIE AERIENNE DES GRANDS LACS (CAGL) ; GREAT LAKES BUSINESS COMPANY (GLBC)</FIRST_NAME>
+      <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>CDe.003</REFERENCE_NUMBER>
+      <LISTED_ON>2007-03-29</LISTED_ON>
+      <COMMENTS1>As of December 2008, GLBC no longer had any operational aircraft,
+although several aircraft continued flying in 2008 despite UN sanctions. INTERPOL-UN Security Council Special Notice:https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities</COMMENTS1>
+      <HAS_INTERPOL_LINK>YES</HAS_INTERPOL_LINK>
+      <INTERPOL_LINK>https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities#2013-16686</INTERPOL_LINK>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+      <ENTITY_ALIAS>
+        <QUALITY>a.k.a.</QUALITY>
+        <ALIAS_NAME>CAGL</ALIAS_NAME>
+      </ENTITY_ALIAS>
+      <ENTITY_ADDRESS>
+        <STREET>Avenue Président Mobutu</STREET>
+        <CITY>Goma</CITY>
+        <COUNTRY>Democratic Republic of the Congo</COUNTRY>
+      </ENTITY_ADDRESS>
+      <ENTITY_ADDRESS>
+        <CITY>Gisenyi</CITY>
+        <COUNTRY>Rwanda</COUNTRY>
+      </ENTITY_ADDRESS>
+      <ENTITY_ADDRESS>
+        <STREET>PO BOX 315</STREET>
+        <CITY>Goma</CITY>
+        <COUNTRY>Democratic Republic of the Congo</COUNTRY>
+      </ENTITY_ADDRESS>
+      <SORT_KEY/>
+      <SORT_KEY_LAST_MOD/>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>113338</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>AL-HARAMAYN FOUNDATION (KENYA)</FIRST_NAME>
+      <UN_LIST_TYPE>Al-Qaida</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>QDe.105</REFERENCE_NUMBER>
+      <LISTED_ON>2004-01-26</LISTED_ON>
+      <COMMENTS1>INTERPOL-UN Security Council Special Notice:https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities</COMMENTS1>
+      <HAS_INTERPOL_LINK>YES</HAS_INTERPOL_LINK>
+      <INTERPOL_LINK>https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities#2013-46153</INTERPOL_LINK>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+      <LAST_DAY_UPDATED>
+        <VALUE>2012-03-21</VALUE>
+        <VALUE>2019-05-01</VALUE>
+        <VALUE>2022-11-08</VALUE>
+      </LAST_DAY_UPDATED>
+      <LAST_REVIEWED_ON>
+        <VALUE>2010-06-22</VALUE>
+        <VALUE>2019-02-21</VALUE>
+        <VALUE>2022-11-08</VALUE>
+      </LAST_REVIEWED_ON>
+      <ENTITY_ALIAS>
+        <QUALITY/>
+        <ALIAS_NAME/>
+      </ENTITY_ALIAS>
+      <ENTITY_ADDRESS>
+        <CITY>Nairobi</CITY>
+        <COUNTRY>Kenya</COUNTRY>
+        <NOTE>at time of listing</NOTE>
+      </ENTITY_ADDRESS>
+      <ENTITY_ADDRESS>
+        <CITY>Garissa</CITY>
+        <COUNTRY>Kenya</COUNTRY>
+        <NOTE>at time of listing</NOTE>
+      </ENTITY_ADDRESS>
+      <ENTITY_ADDRESS>
+        <CITY>Dadaab</CITY>
+        <COUNTRY>Kenya</COUNTRY>
+        <NOTE>at time of listing</NOTE>
+      </ENTITY_ADDRESS>
+      <SORT_KEY/>
+      <SORT_KEY_LAST_MOD/>
+    </ENTITY>
+    <ENTITY>
+      <DATAID>6908031</DATAID>
+      <VERSIONNUM>1</VERSIONNUM>
+      <FIRST_NAME>UGANDA COMMERCIAL IMPEX (UCI) LTD</FIRST_NAME>
+      <UN_LIST_TYPE>DRC</UN_LIST_TYPE>
+      <REFERENCE_NUMBER>CDe.009</REFERENCE_NUMBER>
+      <LISTED_ON>2007-03-29</LISTED_ON>
+      <COMMENTS1>Gold export company. (Directors Mr. Jamnadas V. LODHIA – known as
+“Chuni”- and his sons Mr. Kunal LODHIA and Jitendra J. LODHIA). In January 2011, Ugandan
+authorities notified the Committee that following an exemption on its financial
+holdings, Emirates Gold repaid UCI’s debt to Crane Bank in Kampala, leading to final
+closure of its accounts. The directors of UCI have remained involved in purchasing gold
+from eastern DRC. Uganda Commercial Impex (UCI) Ltd last filed a return in 2013 and was listed as “Inactive – status inactive” by the authorities of the Republic of Uganda.  INTERPOL-UN Security Council Special Notice:https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities</COMMENTS1>
+      <HAS_INTERPOL_LINK>YES</HAS_INTERPOL_LINK>
+      <INTERPOL_LINK>https://www.interpol.int/en/How-we-work/Notices/View-UN-Notices-Entities#2013-16795</INTERPOL_LINK>
+      <LIST_TYPE>
+        <VALUE>UN List</VALUE>
+      </LIST_TYPE>
+      <LAST_DAY_UPDATED>
+        <VALUE>2020-08-19</VALUE>
+      </LAST_DAY_UPDATED>
+      <ENTITY_ALIAS>
+        <QUALITY/>
+        <ALIAS_NAME/>
+      </ENTITY_ALIAS>
+      <ENTITY_ADDRESS>
+        <STREET>Plot 22, Kanjokya Street, Kamwokya</STREET>
+        <CITY>Kampala</CITY>
+        <COUNTRY>Uganda</COUNTRY>
+        <NOTE>Tel.: +256 41 533 578/9</NOTE>
+      </ENTITY_ADDRESS>
+      <ENTITY_ADDRESS>
+        <STREET>PO BOX 22709</STREET>
+        <CITY>Kampala</CITY>
+        <COUNTRY>Uganda</COUNTRY>
+      </ENTITY_ADDRESS>
+      <SORT_KEY/>
+      <SORT_KEY_LAST_MOD/>
+    </ENTITY>
+  </ENTITIES>
+</CONSOLIDATED_LIST>

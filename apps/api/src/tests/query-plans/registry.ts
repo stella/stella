@@ -726,6 +726,10 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     type: "excluded",
     reason: "Search total SQL varies by filter profile.",
   },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawSourceHealth]: {
+    type: "excluded",
+    reason: "Reads the small source registry.",
+  },
   [PUBLIC_LAW_SHARED_QUERY.legislationNonRedistributableSources]: {
     type: "excluded",
     reason: "Reads the small legislation source registry.",

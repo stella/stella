@@ -698,11 +698,37 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
           path: "apps/web/package.json",
         },
       ]),
     );
+  });
+
+  test("rejects the TypeScript 6 compiler API in the ported scripts package", async () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {},
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+    writeFileSync(
+      path.join(rootDir, "packages/scripts/package.json"),
+      JSON.stringify({
+        dependencies: { typescript6: "catalog:" },
+        name: "@stll/scripts",
+        scripts: {
+          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+        },
+      }),
+    );
+
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api (and the root)",
+      path: "packages/scripts/package.json",
+    });
   });
 });
 
@@ -750,6 +776,17 @@ const createWorkspaceRoot = ({
   mkdirSync(path.join(rootDir, "apps/web/src"), { recursive: true });
   mkdirSync(path.join(rootDir, "apps/landing"), { recursive: true });
   mkdirSync(path.join(rootDir, "packages/scripts"), { recursive: true });
+  mkdirSync(path.join(rootDir, "apps/api"), { recursive: true });
+  writeFileSync(
+    path.join(rootDir, "apps/api/package.json"),
+    JSON.stringify({
+      devDependencies: { typescript6: "catalog:" },
+      name: "@stll/api",
+      scripts: {
+        typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+      },
+    }),
+  );
   writeFileSync(
     path.join(rootDir, "package.json"),
     JSON.stringify(validRootPackage),
@@ -775,7 +812,6 @@ const createWorkspaceRoot = ({
   writeFileSync(
     path.join(rootDir, "packages/scripts/package.json"),
     JSON.stringify({
-      dependencies: { typescript6: "catalog:" },
       name: "@stll/scripts",
       scripts: {
         typecheck: "bun check --no-pretty --all --project=tsconfig.json",

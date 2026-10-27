@@ -932,6 +932,12 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
