@@ -252,9 +252,11 @@ const fieldFindTextFunctionSql = (): string =>
     "CREATE OR REPLACE FUNCTION field_find_text",
   );
 
-const READER_ANNOTATION_CLAIM_FUNCTIONS = [
+const READER_ANNOTATION_MATTER_ROW_FUNCTIONS = [
   "legal_reader_annotation_claim_visible",
   "legal_reader_annotation_claim_held",
+  "legal_reader_annotation_document_visible",
+  "legal_reader_annotation_document_held",
 ] as const;
 
 export const installPgliteSchemaPrerequisites = async (
@@ -287,11 +289,11 @@ export const installPgliteSchemaPrerequisites = async (
         .replace(/AS \$\$[\s\S]*\$\$;/u, () => "AS $$ SELECT false $$;"),
     ),
   );
-  // The reader-annotation policies call these claim checks, so they must exist
-  // before the push creates the policies; their bodies name the claims table,
-  // which the push creates afterwards, so body validation waits for first use.
+  // The reader-annotation policies call these claim and document checks, so
+  // they must exist before the push creates the policies; their bodies name
+  // tables the push creates afterwards, so body validation waits for first use.
   await db.execute(sql.raw("SET check_function_bodies = off"));
-  for (const name of READER_ANNOTATION_CLAIM_FUNCTIONS) {
+  for (const name of READER_ANNOTATION_MATTER_ROW_FUNCTIONS) {
     await db.execute(
       sql.raw(
         latestMigrationStatementContaining(
@@ -602,34 +604,48 @@ export const installPgliteChatRunLogRls = async (
   await db.execute(sql.raw(entriesStatement));
 };
 
-/** Apply the committed setting omitted by schema push. */
-const READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES = [
-  'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
-  'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
-  'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
-  'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
+/** Apply the committed settings omitted by schema push. */
+const READER_ANNOTATION_MATTER_ROW_STATEMENTS = [
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    prefixes: [
+      'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
+      'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
+      'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
+      'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
+    ],
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    prefixes: [
+      'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_document_marks"',
+      'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_document_marks"',
+      'CREATE TRIGGER "entities_drop_reader_annotations"',
+    ],
+  },
 ] as const;
 
-// The push creates the claim-comment columns and policies; the forced RLS and
-// the claim cleanup trigger exist only in the migration.
-export const installPgliteReaderAnnotationClaimComments = async (
+// The push creates the matter-note columns and policies; the forced RLS and
+// the claim and document cleanup triggers exist only in the migrations.
+export const installPgliteReaderAnnotationMatterRows = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261021080000_reader_annotation_verification_claims",
-      "migration.sql",
-    ),
-  );
-  for (const prefix of READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES) {
-    const statement = statements.find((candidate) =>
-      executableSql(candidate).startsWith(prefix),
+  for (const {
+    migration,
+    prefixes,
+  } of READER_ANNOTATION_MATTER_ROW_STATEMENTS) {
+    const statements = readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     );
-    if (statement === undefined) {
-      panic(`Reader annotation claim comment statement is missing: ${prefix}`);
+    for (const prefix of prefixes) {
+      const statement = statements.find((candidate) =>
+        executableSql(candidate).startsWith(prefix),
+      );
+      if (statement === undefined) {
+        panic(`Reader annotation matter statement is missing: ${prefix}`);
+      }
+      await db.execute(sql.raw(statement));
     }
-    await db.execute(sql.raw(statement));
   }
 };
 

@@ -11,7 +11,7 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -37,7 +37,10 @@ import {
   entityVersionsOptions,
   fetchOlderVersions,
 } from "@/lib/workspaces/queries/entity-versions";
-import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
+import {
+  getCurrentWorkspaceDocument,
+  useWorkspaceViewParams,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type VersionsFacetProps = {
   workspaceId: string;
@@ -54,9 +57,7 @@ export const VersionsFacet = ({
 }: VersionsFacetProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const viewParams = useWorkspaceViewParams(workspaceId);
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const dataQuery = useQuery(
@@ -218,14 +219,9 @@ export const VersionsFacet = ({
     // intentionally do NOT navigate — the user picked a
     // version from sidepeek and expects to stay where they
     // are.
-    // Detect "we're on the document route" by structure, not
-    // by entityId-as-segment: the path is
-    // `/workspaces/{workspaceId}/{viewId}/document`, and the
-    // entity is identified by the search param.
-    const onDocumentRoute = new RegExp(
-      `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
-      "u",
-    ).test(pathname);
+    const onDocumentRoute =
+      getCurrentWorkspaceDocument(router.state.matches)?.workspaceId ===
+      workspaceId;
     if (onDocumentRoute) {
       // The route stays under whichever view the user opened it from.
       await navigate({

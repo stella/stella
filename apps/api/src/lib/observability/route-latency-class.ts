@@ -23,6 +23,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/contacts/:contactId": "crud",
   "DELETE /v1/document-types/:documentTypeId": "crud",
   "DELETE /v1/entities/:workspaceId": "crud",
+  "DELETE /v1/entities/:workspaceId/entity/:entityId/annotations/:annotationId":
+    "crud",
   "DELETE /v1/entities/:workspaceId/entity/:entityId/versions/:versionId":
     "crud",
   "DELETE /v1/entity-views/:viewId": "crud",
@@ -188,6 +190,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/entities/:workspaceId/desktop-edit-handoffs/:handoffId/status":
     "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId": "crud",
+  "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations":
+    "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/file": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId": "crud",
@@ -426,6 +430,8 @@ export const ROUTE_LATENCY_CLASSES = {
     "crud",
   "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert":
     "crud",
+  "PATCH /v1/entities/:workspaceId/entity/:entityId/annotations/:annotationId":
+    "crud",
   "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/description":
     "crud",
   "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/label":
@@ -570,6 +576,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/entities/:workspaceId/desktop-edit-sessions/request-takeover":
     "crud",
   "POST /v1/entities/:workspaceId/duplicate": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations":
+    "crud",
   "POST /v1/entities/:workspaceId/entity/:entityId/ocr": "crud",
   "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/restore":
     "crud",
