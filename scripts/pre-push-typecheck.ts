@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
@@ -81,6 +81,7 @@ type PackageManifest = {
 
 export const selectTouchedPackages = (
   changedFiles: readonly string[],
+  manifestExists: (directory: string) => boolean,
   readManifest: (directory: string) => PackageManifest,
 ): PackageSelection[] => {
   const directories = new Set<string>();
@@ -99,16 +100,20 @@ export const selectTouchedPackages = (
     directories.add(`${workspaceKind}/${workspaceName}`);
   }
 
-  return [...directories].toSorted().map((directory) => {
-    const manifest = readManifest(directory);
-    const name = typeof manifest.name === "string" ? manifest.name : directory;
-    const typecheck = manifest.scripts?.typecheck;
-    return {
-      directory,
-      name,
-      typecheck: typeof typecheck === "string" ? typecheck : undefined,
-    };
-  });
+  return [...directories]
+    .toSorted()
+    .filter(manifestExists)
+    .map((directory) => {
+      const manifest = readManifest(directory);
+      const name =
+        typeof manifest.name === "string" ? manifest.name : directory;
+      const typecheck = manifest.scripts?.typecheck;
+      return {
+        directory,
+        name,
+        typecheck: typeof typecheck === "string" ? typecheck : undefined,
+      };
+    });
 };
 
 export const changedFilesAgainst = (
@@ -176,6 +181,7 @@ const main = async () => {
   );
   const packages = selectTouchedPackages(
     changedFilesAgainst(base),
+    (directory) => existsSync(path.join(REPO_ROOT, directory, "package.json")),
     (directory) =>
       JSON.parse(
         readFileSync(path.join(REPO_ROOT, directory, "package.json"), "utf-8"),

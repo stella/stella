@@ -17,17 +17,25 @@ const manifests: Record<
     name: "@stll/small",
     scripts: { typecheck: "bun check" },
   },
+  "packages/renamed": {
+    name: "@stll/renamed",
+    scripts: { typecheck: "bun check" },
+  },
   "packages/untyped": { name: "@stll/untyped", scripts: {} },
 };
 
 const select = (files: string[]) =>
-  selectTouchedPackages(files, (directory) => {
-    const manifest = manifests[directory];
-    if (manifest === undefined) {
-      throw new TypeError(`Unexpected ${directory}`);
-    }
-    return manifest;
-  });
+  selectTouchedPackages(
+    files,
+    (directory) => manifests[directory] !== undefined,
+    (directory) => {
+      const manifest = manifests[directory];
+      if (manifest === undefined) {
+        throw new TypeError(`Unexpected ${directory}`);
+      }
+      return manifest;
+    },
+  );
 
 test("each changed TypeScript file maps only to its owning package", () => {
   expect(
@@ -49,6 +57,33 @@ test("a deleted TypeScript path still selects its package", () => {
   expect(
     select(["packages/small/src/deleted.ts"]).map(({ name }) => name),
   ).toEqual(["@stll/small"]);
+});
+
+test("a deleted package is ignored without reading its removed manifest", () => {
+  const reads: string[] = [];
+  expect(
+    selectTouchedPackages(
+      ["packages/removed/src/index.ts"],
+      () => false,
+      (directory) => {
+        reads.push(directory);
+        throw new TypeError(`Unexpected manifest read for ${directory}`);
+      },
+    ),
+  ).toEqual([]);
+  expect(reads).toEqual([]);
+});
+
+test("a renamed package is selected at its new location", () => {
+  expect(
+    select(["packages/removed/src/index.ts", "packages/renamed/src/index.ts"]),
+  ).toEqual([
+    {
+      directory: "packages/renamed",
+      name: "@stll/renamed",
+      typecheck: "bun check",
+    },
+  ]);
 });
 
 test("a package without a typecheck script is skipped and named", async () => {
