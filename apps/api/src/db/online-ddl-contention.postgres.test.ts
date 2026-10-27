@@ -230,25 +230,64 @@ const installFixtureSchema = async (main: SQL, owner: ReservedSQL) => {
       ].join(", ")})`,
     );
   }
-  for (const [, functionName] of texts.matchAll(
-    /\b([a-z_][a-z0-9_]*)\s*\(/gu,
-  )) {
-    const matchedName =
-      functionName ??
-      panic("installFixtureSchema: missing matched function name");
-    for (const row of rowsOf(
-      await main.unsafe(
-        `SELECT pg_get_functiondef(p.oid) AS definition
-         FROM pg_catalog.pg_proc p
-         JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-         WHERE n.nspname = 'public' AND p.proname = $1`,
-        [matchedName],
-      ),
+  // A copied function can call an extension's function (`search_fold` calls
+  // `unaccent`) that no opclass or column names, so copied bodies are scanned
+  // too: an extension function installs its extension, a public one is
+  // copied ahead of the functions that call it.
+  const functionStatements: string[] = [];
+  const pending = [texts];
+  for (let text = pending.pop(); text !== undefined; text = pending.pop()) {
+    for (const [, functionName] of text.matchAll(
+      /\b([a-z_][a-z0-9_]*)\s*\(/gu,
     )) {
-      once(`function:${matchedName}`, stringField(row, "definition"));
+      const matchedName =
+        functionName ??
+        panic("installFixtureSchema: missing matched function name");
+      if (installed.has(`function:${matchedName}`)) {
+        continue;
+      }
+      installed.add(`function:${matchedName}`);
+      for (const row of rowsOf(
+        await main.unsafe(
+          `SELECT x.extname AS name FROM pg_catalog.pg_proc p
+           JOIN pg_catalog.pg_depend d ON d.classid = 'pg_catalog.pg_proc'::regclass
+             AND d.objid = p.oid AND d.deptype = 'e'
+           JOIN pg_catalog.pg_extension x ON x.oid = d.refobjid
+           WHERE p.proname = $1`,
+          [matchedName],
+        ),
+      )) {
+        const name = stringField(row, "name");
+        once(
+          `extension:${name}`,
+          `CREATE EXTENSION IF NOT EXISTS ${quoted(name)}`,
+        );
+      }
+      for (const row of rowsOf(
+        await main.unsafe(
+          `SELECT pg_get_functiondef(p.oid) AS definition
+           FROM pg_catalog.pg_proc p
+           JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public' AND p.proname = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM pg_catalog.pg_depend d
+               WHERE d.classid = 'pg_catalog.pg_proc'::regclass
+                 AND d.objid = p.oid AND d.deptype = 'e'
+             )`,
+          [matchedName],
+        ),
+      )) {
+        const definition = stringField(row, "definition");
+        functionStatements.push(definition);
+        pending.push(definition);
+      }
     }
   }
-  for (const statement of [...statements, ...tableStatements]) {
+  for (const statement of [
+    ...statements,
+    ...functionStatements.toReversed(),
+    ...tableStatements,
+  ]) {
     await owner.unsafe(statement);
   }
 };
