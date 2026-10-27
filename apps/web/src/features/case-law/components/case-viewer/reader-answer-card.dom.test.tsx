@@ -454,6 +454,8 @@ test("answer and comment share the canonical gutter placement without overlappin
       text: "A nearby comment",
       startAnchorId: "p-3",
       author: { name: null, image: null },
+      createdAt: "2026-09-01T10:00:00.000Z",
+      updatedAt: "2026-09-01T10:00:00.000Z",
       mine: false,
       visibility: "private",
       onDelete: () => undefined,

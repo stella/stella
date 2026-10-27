@@ -382,6 +382,13 @@ class TransferReadInspector {
         this.isConstant(value.right, depth + 1)
       );
     }
+    // `??`, `||` and `&&` between constants pick a constant.
+    if (value.type === "LogicalExpression") {
+      return (
+        this.isConstant(value.left, depth + 1) &&
+        this.isConstant(value.right, depth + 1)
+      );
+    }
     return (
       value.type === "UnaryExpression" &&
       this.isConstant(value.argument, depth + 1)
