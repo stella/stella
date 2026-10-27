@@ -691,6 +691,90 @@ const playwrightFactoryLocal = (
     : undefined;
 };
 
+const staticConfigCall = (callee: Node, source: Source): boolean => {
+  if (playwrightFactoryLocal(callee, source) !== undefined) {
+    return true;
+  }
+  if (callee.type === "Identifier") {
+    const binding = importedBinding(source, callee.name);
+    return (
+      binding?.type === "named" &&
+      (binding.module === "node:path" || binding.module === "path") &&
+      (binding.name === "join" || binding.name === "resolve")
+    );
+  }
+  if (
+    callee.type !== "MemberExpression" ||
+    callee.object.type !== "Identifier"
+  ) {
+    return false;
+  }
+  const binding = importedBinding(source, callee.object.name);
+  const member =
+    !callee.computed && callee.property.type === "Identifier"
+      ? callee.property.name
+      : literalText(callee.property);
+  return (
+    binding !== undefined &&
+    (binding.type === "default" || binding.type === "namespace") &&
+    (binding.module === "node:path" || binding.module === "path") &&
+    (member === "join" || member === "resolve")
+  );
+};
+
+const DYNAMIC_CONFIG_NODE_TYPES = new Set([
+  "AssignmentExpression",
+  "UpdateExpression",
+  "NewExpression",
+  "TaggedTemplateExpression",
+  "ImportExpression",
+  "AwaitExpression",
+  "YieldExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ClassExpression",
+]);
+
+// Imported configuration is data construction, not a module interpreter.
+// Restrict the whole composition module so statements and calls cannot change
+// policy objects after their literal initializers have been inspected.
+const staticConfigModule = (source: Source): boolean => {
+  const declarationsOnly = source.program.body.every((statement) => {
+    if (
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportDefaultDeclaration" ||
+      statement.type === "EmptyStatement"
+    ) {
+      return true;
+    }
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    return (
+      declaration?.type === "VariableDeclaration" &&
+      declaration.kind === "const"
+    );
+  });
+  if (!declarationsOnly) {
+    return false;
+  }
+  let readable = true;
+  walk(source.program, (node) => {
+    if (
+      DYNAMIC_CONFIG_NODE_TYPES.has(node.type) ||
+      (node.type === "UnaryExpression" && node.operator === "delete") ||
+      (node.type === "Property" && node.kind !== "init") ||
+      (node.type === "CallExpression" && !staticConfigCall(node.callee, source))
+    ) {
+      readable = false;
+    }
+    return readable ? undefined : "skip-children";
+  });
+  return readable;
+};
+
 /**
  * The source of a repository module a config imports, or undefined for a
  * package outside the repository (such as `@playwright/test` itself).
@@ -794,6 +878,9 @@ const verifiedImportedConfig = (
   argument: Node,
   source: Source,
 ): ObjectExpression | undefined => {
+  if (!staticConfigModule(source)) {
+    return undefined;
+  }
   const value = unwrap(argument, [
     "ParenthesizedExpression",
     "TSAsExpression",
@@ -811,7 +898,7 @@ const verifiedImportedConfig = (
     return undefined;
   }
   const module = repositoryModule(source, binding.module);
-  if (module === undefined || module === null) {
+  if (module === undefined || module === null || !staticConfigModule(module)) {
     return undefined;
   }
   const target = configTarget(module);
