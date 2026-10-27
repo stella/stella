@@ -78,6 +78,20 @@ describe("reading the converter's layout", () => {
     expect(visibleText(annex)).toContain("12");
   });
 
+  test("an unstyled final number inherits the body typeface", () => {
+    const bodyText = cheerio.load(
+      '<body style="font-size:12pt"><p>Document text.</p><p>42</p></body>',
+    );
+    expect(readPlKioLayout(bodyText).pageNumbers).toEqual([]);
+    expect(visibleText(bodyText)).toContain("42");
+
+    const footer = cheerio.load(
+      '<body style="font-size:12pt"><p>Document text.</p><p style="font-size:8pt">42</p></body>',
+    );
+    expect(readPlKioLayout(footer).pageNumbers).toEqual(["42"]);
+    expect(visibleText(footer)).not.toContain("42");
+  });
+
   test.each([" / ", " /", "/ ", "/"])(
     "font shorthand parses line-height spacing %j and quoted families",
     (separator) => {

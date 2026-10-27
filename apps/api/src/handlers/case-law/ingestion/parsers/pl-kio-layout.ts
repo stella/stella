@@ -324,6 +324,25 @@ type Typeface = {
   readonly family: string | undefined;
 };
 
+/** The typeface an element inherits from its nearest styled ancestors. */
+const inheritedTypefaceOf = (element: Element): Typeface => {
+  let type: Typeface = { size: undefined, family: undefined };
+  let ancestor = element.parent;
+  while (
+    ancestor !== null &&
+    isTag(ancestor) &&
+    (type.size === undefined || type.family === undefined)
+  ) {
+    const style = fontStyleOf(styleOf(ancestor));
+    type = {
+      size: type.size ?? style.size,
+      family: type.family ?? style.family,
+    };
+    ancestor = ancestor.parent;
+  }
+  return type;
+};
+
 /** Each typeface `root` sets text in, with how many characters it sets. */
 const typefacesOf = (
   root: Element,
@@ -353,7 +372,7 @@ const typefacesOf = (
       walk(child, own);
     }
   };
-  walk(root, { size: undefined, family: undefined });
+  walk(root, inheritedTypefaceOf(root));
   return counted;
 };
 
