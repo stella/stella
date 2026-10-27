@@ -4,6 +4,7 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -22,8 +23,10 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   DuplicateIcon,
   FlagIcon,
@@ -114,6 +117,7 @@ import {
 } from "@/lib/knowledge/position-decisions";
 import { clauseDetailOptions, clausesOptions } from "@/lib/knowledge/queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 // Drag payload shared by the position cards; the parent list interprets a drop
 // as "move dragged sourceId to target sourceId's index".
@@ -403,8 +407,10 @@ export const PositionEditor = ({
               type="button"
               variant="ghost"
             >
-              <ChevronDownIcon
-                className={cn("transition-transform", open && "rotate-180")}
+              <DirectionalIcon
+                className={cn("transition-transform", open && "rotate-90")}
+                flip={!open}
+                icon={ChevronRightIcon}
               />
             </Button>
           </span>
@@ -494,6 +500,7 @@ const PositionSourcesRow = ({
   onRemove: (source: ResolvedPositionSource) => void;
 }) => {
   const t = useTranslations();
+  const router = useRouter();
   if (sources.length === 0) {
     return null;
   }
@@ -512,11 +519,14 @@ const PositionSourcesRow = ({
               className="hover:text-foreground flex min-w-0 items-baseline gap-1.5 py-1 ps-2 text-start"
               onClick={() =>
                 detached(
-                  openEntityInInspector(
-                    source.entityId,
-                    source.name,
-                    source.workspaceId,
-                  ),
+                  openEntityInInspector({
+                    documentOnScreen: getCurrentWorkspaceDocument(
+                      router.state.matches,
+                    ),
+                    entityId: source.entityId,
+                    label: source.name,
+                    workspaceId: source.workspaceId,
+                  }),
                   "position-editor.open-source",
                 )
               }

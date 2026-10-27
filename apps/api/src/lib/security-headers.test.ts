@@ -4,7 +4,7 @@ import { authMetadataRoute } from "@/api/handlers/auth/routes";
 import { createMcpRoute } from "@/api/handlers/mcp/routes-core";
 import { createHttpApp } from "@/api/http/app";
 import { PRIVATE_CACHE_CONTROL, responseCachePolicy } from "@/api/http/cache";
-import type { CachePolicy } from "@/api/http/cache";
+import type { RouteCachePolicy } from "@/api/http/cache";
 import { appendSetCookieHeaders } from "@/api/http/context";
 import { routes } from "@/api/http/route";
 import type {
@@ -45,7 +45,7 @@ const advertisedDiscoveryPaths = new Set([
 
 const definition = (
   answer: (request: RouteRequest) => unknown,
-  cache?: CachePolicy,
+  cache?: RouteCachePolicy,
 ): RouteDefinition => ({
   access: "public",
   config: {},
@@ -172,10 +172,11 @@ test("private icon caching survives finalization while late errors remain uncach
       middleware: [responseCachePolicy, lateFailure],
       routes: routes({
         "/icon": {
-          GET: definition(
-            () => new Blob([new Uint8Array([1])], { type: "image/png" }),
-            { kind: "private", maxAge: 3600 },
-          ),
+          GET: definition(({ ctx }) => {
+            // The handler keeps a found icon privately, as the icon route does.
+            ctx.set.cache = { kind: "private", maxAge: 3600 };
+            return new Blob([new Uint8Array([1])], { type: "image/png" });
+          }),
         },
       }),
     }),
@@ -195,7 +196,7 @@ test("private icon caching survives finalization while late errors remain uncach
 
 describe("response cookies prevent public caching", () => {
   const RENEWED_COOKIE = "session=renewed; HttpOnly; Path=/";
-  const publicCache: CachePolicy = { kind: "public", maxAge: 300 };
+  const publicCache: RouteCachePolicy = { kind: "public", maxAge: 300 };
 
   const cookieServer = serve(
     createHttpApp({

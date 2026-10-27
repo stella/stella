@@ -19,11 +19,13 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import {
   AiActionIcon,
   AlertTriangleIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   LandmarkIcon,
   PencilIcon,
   PlusIcon,
@@ -88,7 +90,7 @@ import {
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -101,6 +103,8 @@ import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -685,7 +689,7 @@ const FieldRenderer = ({
    *  fields, never for array sub-item rows. */
   onEditField?: ((path: string) => void) | undefined;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;
@@ -1471,6 +1475,7 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
+  const [structureWarningsOpen, setStructureWarningsOpen] = useState(false);
   const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -2375,7 +2380,13 @@ export const TemplateForm = ({
           )}
 
           {structureErrors.length > 0 && (
-            <details className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3">
+            <details
+              className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3"
+              onToggle={(event) =>
+                setStructureWarningsOpen(event.currentTarget.open)
+              }
+              open={structureWarningsOpen}
+            >
               <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
                 <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
                 <span className="flex-1">
@@ -2383,7 +2394,11 @@ export const TemplateForm = ({
                     count: structureErrors.length,
                   })}
                 </span>
-                <ChevronDownIcon className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-180" />
+                <DirectionalIcon
+                  className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90"
+                  flip={!structureWarningsOpen}
+                  icon={ChevronRightIcon}
+                />
               </summary>
               <ul className="mt-3 grid gap-2 ps-6">
                 {structureErrors.map((error, index) => (
@@ -2670,6 +2685,7 @@ export const useFillToMatterSaveTarget = (
 ): Extract<SaveTarget, { kind: "chooseMatter" }> => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
   return {
     kind: "chooseMatter",
     onCreated: (created) => {
@@ -2686,7 +2702,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
               search: { entity: entityId, field: created.fieldId },
             }),
             "template-form.navigate",
@@ -2696,7 +2712,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
             }),
             "template-form.navigate",
           );

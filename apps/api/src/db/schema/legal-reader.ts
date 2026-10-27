@@ -1,3 +1,4 @@
+import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import {
@@ -77,6 +78,46 @@ const verificationClaimHeld = (t: VerificationClaimColumns) =>
   sql`public.legal_reader_annotation_claim_held(${t.verificationClaimId}, ${t.verificationRunId}, ${t.workspaceId})`;
 
 /**
+ * A matter document's mark exists for the caller only while the file it was
+ * placed on does: the file field (`targetId`), of a live version of the
+ * document (`entityId`), in the mark's matter. The database function
+ * (migration `20261026120000`) is SECURITY INVOKER, so the field's and the
+ * version's own policies (matter access, the entity feature fence) decide,
+ * and a withdrawn version hides the marks on its words with them.
+ */
+type MatterDocumentColumns = {
+  entityId: AnyPgColumn;
+  targetId: AnyPgColumn;
+  workspaceId: AnyPgColumn;
+};
+
+const matterDocumentVisible = (t: MatterDocumentColumns) =>
+  sql`public.legal_reader_annotation_document_visible(${t.targetId}, ${t.entityId}, ${t.workspaceId})`;
+
+/**
+ * The same test for a new mark, holding the field `FOR KEY SHARE` until the
+ * insert commits, as the claim check does: the document's deletion then
+ * waits for the mark, and its cleanup trigger removes it.
+ */
+const matterDocumentHeld = (t: MatterDocumentColumns) =>
+  sql`public.legal_reader_annotation_document_held(${t.targetId}, ${t.entityId}, ${t.workspaceId})`;
+
+type MatterRowColumns = VerificationClaimColumns &
+  MatterDocumentColumns & { targetType: AnyPgColumn };
+
+/** The matter row a note sits on, by the note's target. */
+const matterRowCheck = ({
+  claim,
+  document,
+  t,
+}: {
+  claim: SQL;
+  document: SQL;
+  t: MatterRowColumns;
+}) =>
+  sql`CASE ${t.targetType} WHEN 'verification-claim' THEN ${claim} WHEN 'matter-document' THEN ${document} ELSE false END`;
+
+/**
  * A reader's highlights and comments on a legal document: a case-law decision
  * or one consolidated statute version, told apart by `targetType`, or a
  * reviewer's comment on one claim of a matter's document verification.
@@ -101,6 +142,16 @@ const verificationClaimHeld = (t: VerificationClaimColumns) =>
  * feature fence reach the notes on it, a shared one included. The claim is not a foreign key, because a key to a
  * fenced table enrols this table in the entity gate graph; a trigger on the
  * claims removes their comments instead, and the matter key cascades.
+ *
+ * A matter document's mark is matter content the same way: `targetId` is the
+ * file field the reader had open, which belongs to one version of the
+ * document (`entityId`), so its anchors belong to the exact bytes they were
+ * placed on. Each row is one page of the PDF (`blockAnchorId` `page-<n>`),
+ * with offsets into that page's extracted text and the text's digest, so a
+ * new version, or the same page read differently, shows the mark as detached
+ * rather than drawn over other words. The field and the document are not
+ * foreign keys for the same reason as the claim; a trigger on the documents
+ * removes their marks.
  */
 export const legalReaderAnnotations = p.pgTable(
   LEGAL_READER_ANNOTATIONS,
@@ -121,6 +172,14 @@ export const legalReaderAnnotations = p.pgTable(
     ),
     /** The commented claim; equal to `targetId` on a claim's comment. */
     verificationClaimId: safeUuid<"legalListClaim">("verification_claim_id"),
+    /** The matter document a mark sits on; null on every other target. */
+    entityId: safeUuid<"entity">("entity_id"),
+    /**
+     * SHA-256 (hex) of the marked page's extracted text when the mark was
+     * made; another digest on the page read now means the offsets no longer
+     * point at these words.
+     */
+    pageTextSha256: p.varchar("page_text_sha256", { length: 64 }),
     /**
      * Ties the rows of one mark that spans several paragraphs; null for a
      * mark inside one. A change to the mark reaches every row of the group.
@@ -186,6 +245,19 @@ export const legalReaderAnnotations = p.pgTable(
       .index(`${LEGAL_READER_ANNOTATIONS}_verification_claim_idx`)
       .on(t.workspaceId, t.verificationClaimId)
       .where(isNotNull(t.workspaceId)),
+    // A matter document's mark carries its document, page and page digest;
+    // nothing else does.
+    p.check(
+      `${LEGAL_READER_ANNOTATIONS}_matter_document_shape`,
+      sql`(${t.targetType} = 'matter-document') = (${t.entityId} IS NOT NULL AND ${t.pageTextSha256} IS NOT NULL)
+        AND (${t.targetType} <> 'matter-document' OR (${t.workspaceId} IS NOT NULL AND ${t.blockAnchorId} ~ '^page-[1-9][0-9]{0,5}$' AND ${t.pageTextSha256} ~ '^[0-9a-f]{64}$'))`,
+    ),
+    // Lists a document's marks oldest first, and serves the document cleanup
+    // trigger.
+    p
+      .index(`${LEGAL_READER_ANNOTATIONS}_matter_document_idx`)
+      .on(t.workspaceId, t.entityId, t.createdAt, t.id)
+      .where(isNotNull(t.entityId)),
     p
       .index(`${LEGAL_READER_ANNOTATIONS}_group_idx`)
       .on(t.organizationId, t.groupId)
@@ -218,8 +290,16 @@ export const legalReaderAnnotations = p.pgTable(
       sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
     ),
     ...authoredOptionalMatterNotePolicies({
-      matterRowCheck: verificationClaimVisible(t),
-      matterRowHold: verificationClaimHeld(t),
+      matterRowCheck: matterRowCheck({
+        claim: verificationClaimVisible(t),
+        document: matterDocumentVisible(t),
+        t,
+      }),
+      matterRowHold: matterRowCheck({
+        claim: verificationClaimHeld(t),
+        document: matterDocumentHeld(t),
+        t,
+      }),
     }),
     p.pgPolicy("account_export_owner_select", {
       for: "select",
@@ -237,6 +317,16 @@ export const legalReaderAnnotations = p.pgTable(
     p.pgPolicy("claim_cleanup_owner_delete", {
       for: "delete",
       using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND verification_claim_id IS NOT NULL`,
+    }),
+    // The document-cleanup trigger does the same for the marks on the
+    // documents a statement deleted.
+    p.pgPolicy("document_cleanup_owner_select", {
+      for: "select",
+      using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND entity_id IS NOT NULL`,
+    }),
+    p.pgPolicy("document_cleanup_owner_delete", {
+      for: "delete",
+      using: sql`${tableOwnerCheck} AND pg_catalog.pg_trigger_depth() > 0 AND entity_id IS NOT NULL`,
     }),
   ],
 );

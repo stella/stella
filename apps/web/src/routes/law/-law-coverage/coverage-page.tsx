@@ -1,12 +1,17 @@
-import { type PropsWithChildren, type ReactNode, useId } from "react";
+import {
+  type PropsWithChildren,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useId,
+} from "react";
 
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -21,13 +26,17 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { Globe, type GlobeMarker } from "@/components/globe";
-import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import {
+  caseLawCoverageAnchor,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
+import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useRelativeTime,
 } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
@@ -39,11 +48,8 @@ import {
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
-  CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS,
-  CASE_LAW_COVERAGE_HEALTH_TONES,
   CASE_LAW_TOTAL_REPORTER_LABEL_KEYS,
   type CaseLawCoverageCountry,
-  type CaseLawCoverageHealth,
   type CaseLawCoverageResponse,
   type CaseLawCoverageSource,
   type CaseLawMeasuredCompleteness,
@@ -134,7 +140,7 @@ export const CaseLawCoveragePage = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   // Not a discriminated union: the endpoint answers either the figures or a
   // message saying it cannot state them.
@@ -447,18 +453,6 @@ const Delta = ({ value }: { value: number | null }) => {
   );
 };
 
-/** Freshness as a word, with the dot as its second reading and never its only one. */
-const HealthSignal = ({ health }: { health: CaseLawCoverageHealth }) => {
-  const t = useTranslations();
-
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
-      <ReviewStatusDot tone={CASE_LAW_COVERAGE_HEALTH_TONES[health]} />
-      {t(CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS[health])}
-    </span>
-  );
-};
-
 type TableBlockProps = PropsWithChildren<{
   title: string;
 }>;
@@ -480,8 +474,11 @@ const TableBlock = ({ children, title }: TableBlockProps) => {
 };
 
 type CountryCardProps = PropsWithChildren<{
+  /** The section's fragment, so a link from elsewhere can land on one country. */
+  anchor?: string;
   header: ReactNode;
   headingId?: string;
+  ref?: Ref<HTMLElement>;
 }>;
 
 /**
@@ -489,10 +486,18 @@ type CountryCardProps = PropsWithChildren<{
  * the other. Side by side, a source's name wraps to three lines and the
  * newest court's date is cut off before the width they would need.
  */
-const CountryCard = ({ children, header, headingId }: CountryCardProps) => (
+const CountryCard = ({
+  anchor,
+  children,
+  header,
+  headingId,
+  ref,
+}: CountryCardProps) => (
   <section
     aria-labelledby={headingId}
-    className="bg-background flex flex-col rounded-xl border shadow-xs/5"
+    className="bg-background flex scroll-mt-4 flex-col rounded-xl border shadow-xs/5"
+    id={anchor}
+    ref={ref}
   >
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
       {header}
@@ -505,9 +510,25 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
   const t = useTranslations();
   const format = useFormatter();
   const headingId = useId();
+  const anchor = caseLawCoverageAnchor(country.country);
+  const isTarget = useLocation({ select: ({ hash }) => hash === anchor });
+  // The figures arrive after the navigation, so the router's own hash scroll
+  // finds no section yet: the section a link named brings itself into view
+  // when it mounts. Stable per target, so a background refetch that
+  // re-renders the page does not pull the reader back.
+  const scrollIntoViewOnArrival = useCallback(
+    (node: HTMLElement | null) => {
+      if (isTarget && node !== null) {
+        node.scrollIntoView({ block: "start" });
+      }
+    },
+    [isTarget],
+  );
 
   return (
     <CountryCard
+      anchor={anchor}
+      ref={scrollIntoViewOnArrival}
       header={
         <>
           <h2 className="text-base font-semibold" id={headingId}>
@@ -654,7 +675,7 @@ const SourcesTable = ({
                 : format.number(source.storedDecisions)}
             </TableCell>
             <TableCell>
-              <HealthSignal health={source.health} />
+              <CaseLawHealthSignal className="text-sm" health={source.health} />
             </TableCell>
             <TableCell className={"text-muted-foreground text-end"}>
               {source.lastSyncAt === null

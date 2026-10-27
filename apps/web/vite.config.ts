@@ -78,6 +78,7 @@ const readCommitSha = () => {
 
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: path.resolve(APP_ROOT, "../.."),
       encoding: "utf-8",
     }).trim();

@@ -1,0 +1,6 @@
+{
+  "metric": "unclassified-handler-failures",
+  "file": "apps/api/src/lib/business-registries/desktop/issuance.ts",
+  "delta": 1,
+  "reason": "Desktop credential issuance maps an unexpected database failure to the same 503 the redemption handler returned before; redeem-link.ts drops its two unclassified 503s, so the total falls."
+}

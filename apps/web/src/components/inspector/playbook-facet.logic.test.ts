@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterPlaybooksByName } from "@/components/inspector/playbook-facet.logic";
 
@@ -29,21 +30,22 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
 describe("playbook picker search", () => {
-  it("trims and locale-lowercases names while preserving accent distinctions and order", () => {
+  it("trims and folds case and accents, preserving order", () => {
     const playbooks = [
       { id: "second", name: "CASE" },
       { id: "accent", name: "Café" },
@@ -53,14 +55,19 @@ describe("playbook picker search", () => {
     expect(
       filterPlaybooksByName(playbooks, " CASE ").map(({ id }) => id),
     ).toEqual(["second", "first"]);
-    expect(filterPlaybooksByName(playbooks, "cafe")).toEqual([]);
+    expect(
+      filterPlaybooksByName(playbooks, "cafe").map(({ id }) => id),
+    ).toEqual(["accent"]);
+    expect(
+      filterPlaybooksByName([{ name: "Revisión de contratos" }], "REVISION"),
+    ).toEqual([{ name: "Revisión de contratos" }]);
   });
 
   it("returns every playbook in input order for an empty query", () => {
     const playbooks = [{ name: "Second" }, { name: "First" }];
 
-    expect(filterPlaybooksByName(playbooks, "")).toBe(playbooks);
-    expect(filterPlaybooksByName(playbooks, "  ")).toBe(playbooks);
+    expect(filterPlaybooksByName(playbooks, "")).toEqual(playbooks);
+    expect(filterPlaybooksByName(playbooks, "  ")).toEqual(playbooks);
   });
 
   it("matches malformed playbook names by replacement scalar without matching emoji", () => {
@@ -78,25 +85,18 @@ describe("playbook picker search", () => {
   });
 });
 
-it("playbook filtering matches the previous locale-lowercase substring behavior", () => {
+it("playbook filtering keeps exactly the playbooks whose name matches", () => {
   assertProperty(
-    "playbook filtering matches the previous locale-lowercase substring behavior",
+    "playbook filtering keeps exactly the playbooks whose name matches",
     fc.property(
       fc.array(fc.record({ id: fc.string(), name: searchText }), {
         maxLength: GENERATED_PLAYBOOKS_MAX_COUNT,
       }),
       searchText,
       (playbooks, query) => {
-        const normalizedFilter = query.trim().toLocaleLowerCase();
-        const expected =
-          normalizedFilter.length === 0
-            ? playbooks
-            : playbooks.filter((playbook) =>
-                containsPreviousScalarSearchKey(
-                  playbook.name.toLocaleLowerCase(),
-                  normalizedFilter,
-                ),
-              );
+        const expected = playbooks.filter((playbook) =>
+          matchesFolded(playbook.name, query),
+        );
 
         expect(filterPlaybooksByName(playbooks, query)).toEqual(expected);
       },

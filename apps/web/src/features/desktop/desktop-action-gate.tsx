@@ -13,14 +13,23 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { DownloadIcon, PlugIcon, RefreshCwIcon } from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
+import { MenuItem } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
 import {
   DESKTOP_ACTION_LABELS,
   DESKTOP_ACTION_REASONS,
+  DESKTOP_SETUP_LABELS,
+  getDesktopActionStatus,
 } from "@/features/desktop/desktop-action-gate.logic";
-import type { DesktopAction } from "@/features/desktop/desktop-action-gate.logic";
+import type {
+  DesktopAction,
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
 import type { DesktopPresenceType } from "@/features/desktop/desktop-presence";
 import { useDesktopPresence } from "@/features/desktop/desktop-presence";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
@@ -36,9 +45,12 @@ type DesktopRequiredPresence = Extract<
 
 type DesktopActionGateResult = {
   label: string;
+  status: DesktopActionStatus;
   isConnecting: boolean;
   /** Links the running app to this account, or offers the install. */
   connect: () => void;
+  /** Starts the step the status names: connect, install or update. */
+  setUp: (step: DesktopSetupStep) => void;
   /** Runs `perform` when the app can do it; otherwise connects or installs it. */
   run: (perform: () => void) => void;
   requiredDialog: DesktopRequiredDialogProps;
@@ -90,33 +102,53 @@ export const useDesktopActionGate = (
     );
   };
 
-  // Toasts retain this callback while presence continues to refresh.
-  const run = useLatestCallback((perform: () => void) => {
-    switch (presence.type) {
-      case "current": {
-        perform();
-        return;
-      }
-      case "not_connected": {
+  const setUp = (step: DesktopSetupStep) => {
+    switch (step) {
+      case "connect": {
         connectApp();
         return;
       }
-      case "none":
-      case "outdated": {
-        setRequired(presence.type);
+      case "install": {
+        setRequired("none");
+        return;
+      }
+      case "update": {
+        setRequired("outdated");
         return;
       }
       default: {
-        presence.type satisfies never;
-        panic(`Unhandled desktop presence: ${String(presence.type)}`);
+        step satisfies never;
+        panic(`Unhandled desktop setup step: ${String(step)}`);
+      }
+    }
+  };
+
+  const status = getDesktopActionStatus(presence.type);
+
+  // Toasts retain this callback while presence continues to refresh.
+  const run = useLatestCallback((perform: () => void) => {
+    switch (status.type) {
+      case "ready": {
+        perform();
+        return;
+      }
+      case "setup": {
+        setUp(status.step);
+        return;
+      }
+      default: {
+        status satisfies never;
+        panic("Unhandled desktop action status");
       }
     }
   });
 
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
+    status,
     isConnecting: state.status === "connecting",
     connect: connectApp,
+    setUp,
     run,
     requiredDialog: {
       action,
@@ -128,6 +160,47 @@ export const useDesktopActionGate = (
       required,
     },
   };
+};
+
+const DESKTOP_SETUP_ICONS = {
+  connect: PlugIcon,
+  install: DownloadIcon,
+  update: RefreshCwIcon,
+} as const satisfies Record<DesktopSetupStep, LucideIcon>;
+
+type DesktopSetupMenuItemProps = {
+  status: DesktopActionStatus;
+  onSetUp: (step: DesktopSetupStep) => void;
+};
+
+/**
+ * The desktop status line at the top of a menu's desktop actions. The actions
+ * keep naming what they do; this row says what stella desktop needs first and
+ * starts that step.
+ */
+export const DesktopSetupMenuItem = ({
+  onSetUp,
+  status,
+}: DesktopSetupMenuItemProps) => {
+  const t = useTranslations();
+  switch (status.type) {
+    case "ready": {
+      return null;
+    }
+    case "setup": {
+      const Icon = DESKTOP_SETUP_ICONS[status.step];
+      return (
+        <MenuItem onClick={() => onSetUp(status.step)}>
+          <Icon />
+          {t(DESKTOP_SETUP_LABELS[status.step])}
+        </MenuItem>
+      );
+    }
+    default: {
+      status satisfies never;
+      return panic("Unhandled desktop action status");
+    }
+  }
 };
 
 export type DesktopRequiredDialogProps = {
