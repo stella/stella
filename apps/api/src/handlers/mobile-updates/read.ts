@@ -30,6 +30,8 @@ const config = {
     reason: "Relays the mobile app's signed public updates.",
   },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  // An update must reach a build the moment it is published; nothing keeps it.
+  cache: { kind: "none" },
   mcp: { type: "internal", reason: "auth_plumbing" },
   params: v.object({ variant: v.picklist(MOBILE_UPDATE_VARIANTS) }),
   // The multipart answer, bounded by what the relay reads from the CDN.
