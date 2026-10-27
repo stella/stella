@@ -177,6 +177,53 @@ test("imported configuration composition requires static module construction", (
   }
 });
 
+test("configuration composition excludes other modules that reach its bases", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-import-graph-"));
+  const file = "apps/example/playwright.config.ts";
+  const caller = `import { defineConfig } from "@playwright/test";
+    import base from "./base-config";
+    export default defineConfig(base, { retries: 0 });`;
+  const base =
+    'export default { retries: 0, projects: [{ name: "browser", retries: 0 }] };';
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    const baseFile = path.join(root, "apps/example/base-config.ts");
+    writeFileSync(baseFile, base);
+    writeFileSync(
+      path.join(root, "apps/example/extra.ts"),
+      `
+      import base from "./base-config";
+      base.projects[0].retries = 2;
+      export const label = "browser";
+    `,
+    );
+    writeFileSync(
+      path.join(root, "apps/example/forward.ts"),
+      'export * from "./extra";',
+    );
+    const scan = (source: string) =>
+      findTestRetryViolations(new Map([[file, source]]), root);
+    expect(scan(caller)).toEqual([]);
+    for (const imported of [
+      'import "./extra";',
+      'import { label } from "./extra";',
+      'import "./forward";',
+    ]) {
+      expect(scan(`${imported} ${caller}`), imported).toEqual([
+        UNREADABLE_CONFIG,
+      ]);
+    }
+    writeFileSync(baseFile, `import "./extra"; ${base}`);
+    expect(scan(caller)).toEqual([UNREADABLE_CONFIG]);
+    writeFileSync(baseFile, base);
+    expect(scan(`import type { Unused } from "./absent"; ${caller}`)).toEqual(
+      [],
+    );
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("follows literal config spreads and rejects a later override", () => {
   expect(
     config(`import { defineConfig } from "@playwright/test";
