@@ -3,6 +3,7 @@ import { panic } from "better-result";
 
 import type { TimeEntrySource, TimeEntryStatus } from "@stll/api-contract";
 
+import { visitCursorPages } from "@/lib/infinite-query";
 import {
   fetchTimeEntries,
   fetchTimeEntrySuggestions,
@@ -203,8 +204,24 @@ export const timeEntriesOptions = (
 ) =>
   queryOptions({
     queryKey: timeEntriesKeys.list(workspaceId, userId, filters),
-    queryFn: async ({ signal }) =>
-      (await listTimeEntries({ workspaceId, filters, signal })).items,
+    // Every page: a caller filtering a whole matter (approvals, pending
+    // counts) must not stop silently at the API's default page size.
+    queryFn: async ({ signal }) => {
+      const items: Awaited<ReturnType<typeof listTimeEntries>>["items"] = [];
+      await visitCursorPages({
+        getPage: async (cursor) =>
+          await listTimeEntries({
+            workspaceId,
+            filters,
+            ...(cursor !== undefined && { cursor }),
+            signal,
+          }),
+        visit: (page) => {
+          items.push(...page.items);
+        },
+      });
+      return items;
+    },
   });
 
 export const timeEntriesInfiniteOptions = (

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const SOURCE_INVENTORY_TIMEOUT_MS = 30_000;
 
@@ -12,71 +13,60 @@ const actionElement =
 const protectedFixture = (child: string) =>
   `<CapabilityAction action={{ capability: "ai" }}>{(capabilityProps) => (${child.replace(">Action", " {...capabilityProps}>Action")})}</CapabilityAction>`;
 const inspect = (source: string, fileName: string) => {
-  const file = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const file = parseSource(fileName, source);
+  const textOf = (node: Node) => source.slice(node.start, node.end);
   const missing: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(file.program, (node, ancestors) => {
     if (
-      ts.isJsxElement(node) &&
-      node.openingElement.tagName.getText(file) === "CapabilityAction"
+      node.type === "JSXElement" &&
+      !node.openingElement.selfClosing &&
+      textOf(node.openingElement.name) === "CapabilityAction"
     ) {
       const expression = node.children.find(
-        (child) => ts.isJsxExpression(child) && child.expression !== undefined,
+        (child) =>
+          child.type === "JSXExpressionContainer" &&
+          child.expression.type !== "JSXEmptyExpression",
       );
       let forwardsLast = false;
       if (
-        expression !== undefined &&
-        ts.isJsxExpression(expression) &&
-        expression.expression !== undefined &&
-        ts.isArrowFunction(expression.expression)
+        expression?.type === "JSXExpressionContainer" &&
+        expression.expression.type === "ArrowFunctionExpression"
       ) {
         const callback = expression.expression;
-        const parameter = callback.parameters.at(0);
+        const parameter = callback.params.at(0);
         let body = callback.body;
-        while (ts.isParenthesizedExpression(body)) {
+        while (body.type === "ParenthesizedExpression") {
           body = body.expression;
         }
         const opening = (() => {
-          if (ts.isJsxElement(body)) {
+          if (body.type === "JSXElement") {
             return body.openingElement;
-          }
-          if (ts.isJsxSelfClosingElement(body)) {
-            return body;
           }
           return undefined;
         })();
-        const last = opening?.attributes.properties.at(-1);
+        const last = opening?.attributes.at(-1);
         forwardsLast =
-          parameter !== undefined &&
-          ts.isIdentifier(parameter.name) &&
-          last !== undefined &&
-          ts.isJsxSpreadAttribute(last) &&
-          ts.isIdentifier(last.expression) &&
-          last.expression.text === parameter.name.text;
+          parameter?.type === "Identifier" &&
+          last?.type === "JSXSpreadAttribute" &&
+          last.argument.type === "Identifier" &&
+          last.argument.name === parameter.name;
       }
       if (!forwardsLast) {
-        missing.push(
-          `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-        );
+        missing.push(`${fileName}:${file.locate(node.start).line}`);
       }
     }
     if (
-      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      actionElement.test(node.tagName.getText(file))
+      node.type === "JSXOpeningElement" &&
+      actionElement.test(textOf(node.name))
     ) {
-      const handlers = node.attributes.properties.filter(
+      const handlers = node.attributes.filter(
         (attribute) =>
-          ts.isJsxAttribute(attribute) &&
-          /^(onClick|onSelect|onUse)$/u.test(attribute.name.getText(file)),
+          attribute.type === "JSXAttribute" &&
+          /^(onClick|onSelect|onUse)$/u.test(textOf(attribute.name)),
       );
       if (
         handlers.some((handler) => {
-          const text = handler.getText(file);
+          const text = textOf(handler);
           if (dependentFlow.test(text)) {
             return true;
           }
@@ -102,103 +92,112 @@ const inspect = (source: string, fileName: string) => {
             fileName.endsWith("search-dialog-results.tsx") &&
             /\bonClick\b/u.test(text)
           ) {
-            let owner: ts.Node = node;
-            while (!ts.isSourceFile(owner)) {
-              if (
-                ts.isVariableDeclaration(owner) &&
-                owner.name.getText(file) === "SearchSummaryItem"
-              ) {
-                return true;
-              }
-              owner = owner.parent;
-            }
+            return ancestors.some(
+              (owner) =>
+                owner.type === "VariableDeclarator" &&
+                textOf(owner.id) === "SearchSummaryItem",
+            );
           }
           return false;
         })
       ) {
-        let parent = node.parent;
         let declared =
-          node.tagName.getText(file) === "BuiltInTemplateRow" &&
-          node.attributes.properties.some(
+          textOf(node.name) === "BuiltInTemplateRow" &&
+          node.attributes.some(
             (attribute) =>
-              ts.isJsxAttribute(attribute) &&
-              attribute.name.getText(file) === "capability" &&
-              attribute.initializer !== undefined,
+              attribute.type === "JSXAttribute" &&
+              textOf(attribute.name) === "capability" &&
+              attribute.value !== null,
           );
-        while (!ts.isSourceFile(parent) && !declared) {
-          if (
-            ts.isJsxElement(parent) &&
-            parent.openingElement.tagName.getText(file) === "CapabilityAction"
-          ) {
-            declared = parent.openingElement.attributes.properties.some(
-              (attribute) => {
-                if (
-                  !ts.isJsxAttribute(attribute) ||
-                  attribute.name.getText(file) !== "action" ||
-                  attribute.initializer === undefined
-                ) {
-                  return false;
-                }
-                if (
-                  !ts.isJsxExpression(attribute.initializer) ||
-                  attribute.initializer.expression === undefined
-                ) {
-                  return false;
-                }
-                const expression = attribute.initializer.expression;
-                if (!ts.isObjectLiteralExpression(expression)) {
-                  return true;
-                }
-                return expression.properties.some(
-                  (property) =>
-                    ts.isPropertyAssignment(property) &&
-                    property.name.getText(file) === "capability" &&
-                    property.initializer.kind !== ts.SyntaxKind.NullKeyword,
-                );
-              },
-            );
+        for (const parent of ancestors.toReversed()) {
+          if (declared) {
             break;
           }
-          parent = parent.parent;
+          if (
+            parent.type === "JSXElement" &&
+            textOf(parent.openingElement.name) === "CapabilityAction"
+          ) {
+            declared = parent.openingElement.attributes.some((attribute) => {
+              if (
+                attribute.type !== "JSXAttribute" ||
+                textOf(attribute.name) !== "action" ||
+                attribute.value === null
+              ) {
+                return false;
+              }
+              if (
+                attribute.value.type !== "JSXExpressionContainer" ||
+                attribute.value.expression.type === "JSXEmptyExpression"
+              ) {
+                return false;
+              }
+              const expression = attribute.value.expression;
+              if (expression.type !== "ObjectExpression") {
+                return true;
+              }
+              return expression.properties.some(
+                (property) =>
+                  property.type === "Property" &&
+                  !property.computed &&
+                  !property.method &&
+                  !property.shorthand &&
+                  property.kind === "init" &&
+                  textOf(property.key) === "capability" &&
+                  !(
+                    property.value.type === "Literal" &&
+                    property.value.value === null
+                  ),
+              );
+            });
+            break;
+          }
         }
         if (!declared) {
-          missing.push(
-            `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-          );
+          missing.push(`${fileName}:${file.locate(node.start).line}`);
         }
       }
     }
-    if (ts.isObjectLiteralExpression(node)) {
+    if (node.type === "ObjectExpression") {
       const callbacks = node.properties.filter(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          /^(run|onClick|onSelect)$/u.test(property.name.getText(file)),
+          property.type === "Property" &&
+          !property.computed &&
+          !property.method &&
+          !property.shorthand &&
+          property.kind === "init" &&
+          /^(run|onClick|onSelect)$/u.test(textOf(property.key)),
       );
       const actionShape = node.properties.some(
         (property) =>
-          ts.isPropertyAssignment(property) &&
-          /^(label|titleKey)$/u.test(property.name.getText(file)),
+          property.type === "Property" &&
+          !property.computed &&
+          !property.method &&
+          !property.shorthand &&
+          property.kind === "init" &&
+          /^(label|titleKey)$/u.test(textOf(property.key)),
       );
       if (
         actionShape &&
-        callbacks.some((callback) => dependentFlow.test(callback.getText(file)))
+        callbacks.some((callback) => dependentFlow.test(textOf(callback)))
       ) {
         const declared = node.properties.some(
           (property) =>
-            ts.isPropertyAssignment(property) &&
-            property.name.getText(file) === "capability" &&
-            property.initializer.kind !== ts.SyntaxKind.NullKeyword,
+            property.type === "Property" &&
+            !property.computed &&
+            !property.method &&
+            !property.shorthand &&
+            property.kind === "init" &&
+            textOf(property.key) === "capability" &&
+            !(
+              property.value.type === "Literal" && property.value.value === null
+            ),
         );
         if (!declared) {
-          missing.push(
-            `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-          );
+          missing.push(`${fileName}:${file.locate(node.start).line}`);
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return [...new Set(missing)];
 };
 describe("capability flow action declarations", () => {

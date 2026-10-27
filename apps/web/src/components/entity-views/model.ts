@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import {
   type ENTITY_VIEW_COLUMNS,
   ENTITY_VIEW_GROUP,
@@ -81,6 +82,18 @@ export const entityViewSortValues = {
     entry.type === "entity" ? entry.entity.priority : null,
   "_due-date": entryDueDate,
 } satisfies Record<SortableColumn, (entry: EntityViewEntry) => string | null>;
+
+/**
+ * What each sortable column orders by, which decides what its header's sort
+ * items say. Status and priority order by their stored names, as
+ * `entityViewSortValues` reads them.
+ */
+export const ENTITY_VIEW_SORT_KINDS = {
+  _name: "text",
+  _status: "text",
+  _priority: "text",
+  "_due-date": "date",
+} as const satisfies Record<SortableColumn, ColumnSortKind>;
 
 export const isEntityViewSortColumn = (
   value: string,

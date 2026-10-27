@@ -507,6 +507,24 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approval": {
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "failed": "La modification n’a pas été enregistrée. Réessayez.",
+      "myTime": "Mon temps",
+      "refusals": {
+        "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
+        "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
+        "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
+        "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
+      },
+      "returnComment": "Motif du renvoi",
+      "selectEntry": "Sélectionner la saisie",
+      "timeEntries": "Saisies de temps",
+      "title": "Approbations"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -594,6 +612,7 @@
       "openInvoice": "Ouvrir la facture",
       "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "dateUnavailable": "Date indisponible",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
+      "goToMention": "Aller à la mention nº {number}",
+      "goToParagraph": "Aller au point {paragraph}",
       "lastNegative": "dernière citation négative en {year}",
+      "mentionMark": "mention nº {number}",
+      "mentionsInDecision": "{count, plural, one {Citée une fois dans cette décision} other {Citée # fois dans cette décision}}",
       "negativeCount": "{count, plural, one {# négative} many {# négatives} other {# négatives}}",
       "none": "Aucune citation enregistrée pour l'instant.",
+      "notInStella": "Pas encore dans stella",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
       "paragraphLabel": "Point {paragraph}",
@@ -1024,8 +1048,10 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humaines"
+      "human": "Humaines",
+      "toggleState": "{label} : {state, select, on {activé} other {désactivé}}"
     },
+    "oldestDecisions": "Décisions les plus anciennes",
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
@@ -1087,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# décision} other {# décisions}} × {columns, plural, one {# question} other {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites}}.",
       "runTitle": "Répondre pour cette page",
       "savedQuestions": "Questions enregistrées",
-      "title": "Tableaux de recherche",
-      "updated": "Dernière modification le {date}"
+      "title": "Tableaux de recherche"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1157,8 @@
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
+      "oldest": "Les plus anciennes",
+      "oldestUnavailable": "Une recherche est triée par pertinence ou de la plus récente à la plus ancienne. Effacez la recherche pour afficher d'abord les décisions les plus anciennes.",
       "relevance": "Les plus pertinentes"
     },
     "viewer": {
@@ -1147,6 +1174,7 @@
       "citedDecisionPassage": "Passage dans la décision",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Aller au paragraphe} other {Aller aux paragraphes}}",
       "judgeRole": {
         "advocateGeneral": "Avocat général",
         "dissenting": "Opinion dissidente",
@@ -2056,7 +2084,6 @@
       "orLetUsKnowAt": "ou écrivez-nous à",
       "viewDocumentation": "Voir la documentation"
     },
-    "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
     "export": {
@@ -2205,10 +2232,12 @@
     "scrollToTop": "Retour en haut",
     "search": "Rechercher...",
     "searchIn": "Rechercher dans",
+    "searchMembers": "Rechercher des membres…",
     "selectAMatter": "Sélectionnez un dossier",
     "selectARole": "Sélectionner un rôle",
     "selectAll": "Tout sélectionner",
     "selectDate": "Sélectionner une date…",
+    "selected": "Sélectionné",
     "sessions": "Sessions",
     "settings": "Paramètres",
     "showAll": "Tout afficher",
@@ -4253,6 +4282,8 @@
       "commentPlaceholder": "Écrire un commentaire…",
       "commentText": "Texte du commentaire",
       "commentedPassage": "Passage commenté",
+      "editComment": "Modifier le commentaire",
+      "editedAt": "Modifié {time}",
       "guestAuthor": "Vous",
       "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
       "guestMigrationComplete": "Surlignages et notes enregistrés.",
@@ -6210,8 +6241,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Définir le responsable",
-        "noLead": "Aucun responsable",
-        "searchMembers": "Rechercher des membres…"
+        "noLead": "Aucun responsable"
       },
       "to": "Jusqu'à"
     },
@@ -6273,6 +6303,7 @@
       "deleteAll": "Tout supprimer",
       "deleteAllConfirm": "Supprimer les {count} éléments de « {column} » ?",
       "hideColumn": "Masquer la colonne",
+      "moveFailed": "{failed, plural, one {# élément sur {total} n’a pas pu être déplacé.} other {# éléments sur {total} n’ont pas pu être déplacés.}}",
       "readOnlyGrouping": "Ce regroupement est en lecture seule",
       "selectPropertyHint": "Sélectionnez une propriété de regroupement dans la barre d'outils",
       "uploadDocument": "Téléverser un document",
@@ -6291,10 +6322,10 @@
       "addMember": "Ajouter un membre",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
+      "alreadyOnMatter": "Déjà dans ce dossier",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",
-      "removeMemberConfirm": "Retirer ce membre du dossier ?",
-      "selectMember": "Sélectionner un membre"
+      "removeMemberConfirm": "Retirer ce membre du dossier ?"
     },
     "newDocument": "Nouveau document",
     "newFolder": "Nouveau dossier",
@@ -6332,7 +6363,6 @@
           "approvedBy": "Approuvée par",
           "channel": "Canal",
           "dateTime": "Date et heure",
-          "eventId": "ID de l’événement",
           "notAvailable": "Non disponible",
           "openTarget": "Ouvrir l’élément",
           "runId": "ID d’exécution",
@@ -6515,6 +6545,11 @@
       },
       "passwordLabel": "Saisir le mot de passe du PDF",
       "previousPage": "Page précédente",
+      "selection": {
+        "explainPassagePrompt": "Explique ce passage de {citation} :\n\n« {quote} »",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}-{end}"
+      },
       "showOriginal": "Afficher les pages originales",
       "unlock": "Déverrouiller"
     },
@@ -6628,10 +6663,12 @@
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
-      "sortAscending": "Tri croissant",
       "sortAscendingDate": "Plus anciens en premier",
-      "sortDescending": "Tri décroissant",
+      "sortAscendingNumber": "Plus petits en premier",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Plus récents en premier",
+      "sortDescendingNumber": "Plus grands en premier",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",
