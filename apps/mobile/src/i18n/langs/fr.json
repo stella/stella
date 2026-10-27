@@ -3,7 +3,8 @@
     "chat": "Conversation",
     "tasks": "Tâches",
     "matters": "Dossiers",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "law": "Jurisprudence"
   },
   "chat": {
     "description": "Gardez votre travail en cours à portée de main et reprenez-le depuis n’importe quel appareil.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Rechercher"
+  },
+  "law": {
+    "title": "Jurisprudence",
+    "newest": "Décisions les plus récentes",
+    "noResults": "Aucun résultat ne correspond aux mots exigés par cette recherche.",
+    "noResultsHint": "Essayez moins de mots ou d’autres mots : les termes qu’emploierait une décision, et non la phrase dans laquelle une question est posée.",
+    "unavailable": "La recherche est temporairement indisponible",
+    "retry": "Réessayer",
+    "headnote": "Sommaire",
+    "textUnavailable": "Aucun texte n'est disponible pour cette décision",
+    "openSource": "Ouvrir la source d’origine",
+    "loadFailed": "Impossible de charger la jurisprudence.",
+    "share": "Partager"
   }
 }

@@ -3,7 +3,8 @@
     "chat": "Csevegés",
     "tasks": "Feladatok",
     "matters": "Ügyek",
-    "settings": "Beállítások"
+    "settings": "Beállítások",
+    "law": "Ítélkezési gyakorlat"
   },
   "chat": {
     "description": "Tartsa kéznél a folyamatban lévő munkát, és folytassa bármely eszközről.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Keresés"
+  },
+  "law": {
+    "title": "Ítélkezési gyakorlat",
+    "newest": "Legújabb határozatok",
+    "noResults": "Semmi nem felel meg a keresés által megkívánt szavaknak.",
+    "noResultsHint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
+    "unavailable": "A keresés átmenetileg nem érhető el",
+    "retry": "Próbálja újra",
+    "headnote": "Jogi tétel",
+    "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+    "openSource": "Eredeti forrás megnyitása",
+    "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
+    "share": "Megosztás"
   }
 }

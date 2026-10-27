@@ -3,7 +3,8 @@
     "chat": "Czat",
     "tasks": "Zadania",
     "matters": "Sprawy",
-    "settings": "Ustawienia"
+    "settings": "Ustawienia",
+    "law": "Orzecznictwo"
   },
   "chat": {
     "description": "Miej bieżącą pracę pod ręką i kontynuuj na dowolnym urządzeniu.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Szukaj"
+  },
+  "law": {
+    "title": "Orzecznictwo",
+    "newest": "Najnowsze orzeczenia",
+    "noResults": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie.",
+    "noResultsHint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
+    "unavailable": "Wyszukiwanie jest tymczasowo niedostępne",
+    "retry": "Spróbuj ponownie",
+    "headnote": "Teza",
+    "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+    "openSource": "Otwórz źródło oryginalne",
+    "loadFailed": "Nie udało się wczytać orzecznictwa.",
+    "share": "Udostępnij"
   }
 }

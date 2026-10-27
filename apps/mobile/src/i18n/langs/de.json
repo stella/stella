@@ -3,7 +3,8 @@
     "chat": "Chat",
     "tasks": "Aufgaben",
     "matters": "Akten",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "law": "Rechtsprechung"
   },
   "chat": {
     "description": "Behalten Sie laufende Arbeit im Blick und machen Sie auf jedem Gerät weiter.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Suchen"
+  },
+  "law": {
+    "title": "Rechtsprechung",
+    "newest": "Neueste Entscheidungen",
+    "noResults": "Nichts entspricht den Wörtern, die diese Suche verlangt hat.",
+    "noResultsHint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
+    "unavailable": "Die Suche ist vorübergehend nicht verfügbar",
+    "retry": "Erneut versuchen",
+    "headnote": "Leitsatz",
+    "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
+    "openSource": "Originalquelle öffnen",
+    "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
+    "share": "Teilen"
   }
 }

@@ -3,7 +3,8 @@
     "chat": "Chat",
     "tasks": "Tasks",
     "matters": "Matters",
-    "settings": "Settings"
+    "settings": "Settings",
+    "law": "Case Law"
   },
   "chat": {
     "description": "Keep ongoing work close and continue from any device.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Search"
+  },
+  "law": {
+    "title": "Case Law",
+    "newest": "Newest decisions",
+    "noResults": "Nothing matched the words this search required.",
+    "noResultsHint": "Try fewer or different words: the terms a judgment would use, not the sentence a question is asked in.",
+    "unavailable": "Search is temporarily unavailable",
+    "retry": "Try again",
+    "headnote": "Headnote",
+    "textUnavailable": "No text is available for this decision",
+    "openSource": "Open original source",
+    "loadFailed": "Case law could not be loaded.",
+    "share": "Share"
   }
 }

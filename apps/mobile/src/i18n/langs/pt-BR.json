@@ -3,7 +3,8 @@
     "chat": "Chat",
     "tasks": "Tarefas",
     "matters": "Casos",
-    "settings": "Configurações"
+    "settings": "Configurações",
+    "law": "Jurisprudência"
   },
   "chat": {
     "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Pesquisar"
+  },
+  "law": {
+    "title": "Jurisprudência",
+    "newest": "Decisões mais recentes",
+    "noResults": "Nada corresponde às palavras exigidas por esta pesquisa.",
+    "noResultsHint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
+    "unavailable": "A pesquisa está temporariamente indisponível",
+    "retry": "Tente novamente",
+    "headnote": "Ementa",
+    "textUnavailable": "Não há texto disponível para esta decisão",
+    "openSource": "Abrir fonte original",
+    "loadFailed": "Não foi possível carregar a jurisprudência.",
+    "share": "Compartilhar"
   }
 }

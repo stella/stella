@@ -3,7 +3,8 @@
     "chat": "Chat",
     "tasks": "Úkoly",
     "matters": "Spisy",
-    "settings": "Nastavení"
+    "settings": "Nastavení",
+    "law": "Judikatura"
   },
   "chat": {
     "description": "Mějte rozpracovanou práci po ruce a pokračujte z jakéhokoli zařízení.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Hledat"
+  },
+  "law": {
+    "title": "Judikatura",
+    "newest": "Nejnovější rozhodnutí",
+    "noResults": "Slovům, která hledání vyžadovalo, nic neodpovídá.",
+    "noResultsHint": "Zkuste méně slov nebo jiná: výrazy, které by použilo rozhodnutí, ne větu, kterou se otázka pokládá.",
+    "unavailable": "Vyhledávání je dočasně nedostupné",
+    "retry": "Zkusit znovu",
+    "headnote": "Právní věta",
+    "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
+    "openSource": "Otevřít originál",
+    "loadFailed": "Judikaturu se nepodařilo načíst.",
+    "share": "Sdílet"
   }
 }

@@ -20,6 +20,15 @@ const TEXT_VARIANTS = {
   headline: "text-lg",
   title: "text-2xl",
   largeTitle: "text-3xl tracking-tight",
+  /**
+   * A decision's text, in the reader's serif at its 1.65 leading
+   * (packages/decision-reader reader.css). Its emphases nest inside it and
+   * keep its size.
+   */
+  reading: "text-base leading-[26px]",
+  readingStrong: "",
+  readingEmphasis: "",
+  readingStrongEmphasis: "",
 } as const;
 
 /**
@@ -37,6 +46,12 @@ const FACES = {
   headline: "DMSans-SemiBold",
   title: "DMSans-SemiBold",
   largeTitle: "DMSans-Bold",
+  // The web reader sets Source Serif 4, which ships only as web fonts; iOS's
+  // own Georgia is the serif the phone has.
+  reading: "Georgia",
+  readingStrong: "Georgia-Bold",
+  readingEmphasis: "Georgia-Italic",
+  readingStrongEmphasis: "Georgia-BoldItalic",
 } as const satisfies Record<keyof typeof TEXT_VARIANTS, string>;
 
 export type TextVariant = keyof typeof TEXT_VARIANTS;

@@ -30,7 +30,8 @@ type ApiRequest<TSchema extends v.GenericSchema> = {
 const requestJson = async <TSchema extends v.GenericSchema>(
   fetch: Fetch,
   url: string,
-  accessToken: string,
+  /** Null for a public route, which answers anyone. */
+  accessToken: string | null,
   { schema, body }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const answered = await Result.tryPromise({
@@ -38,7 +39,9 @@ const requestJson = async <TSchema extends v.GenericSchema>(
       const response = await fetchWithTimeout(fetch, url, {
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          ...(accessToken === null
+            ? {}
+            : { Authorization: `Bearer ${accessToken}` }),
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
         ...(body === undefined
@@ -118,3 +121,19 @@ export const requestApi = async <TSchema extends v.GenericSchema>({
     async (token) => await requestJson(fetch, url, token, request),
   );
 };
+
+/**
+ * One JSON request to a public route of the signed-in server, such as the
+ * case-law corpus, which answers without a token. Sending none keeps the
+ * read working whatever state the session's tokens are in.
+ */
+export const requestPublicApi = async <TSchema extends v.GenericSchema>({
+  fetch,
+  path,
+  serverUrl,
+  ...request
+}: ApiRequest<TSchema> & {
+  readonly fetch: Fetch;
+  readonly serverUrl: string;
+}): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> =>
+  await requestJson(fetch, `${serverUrl}${path}`, null, request);

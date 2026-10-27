@@ -105,6 +105,7 @@ const Screens = () => {
         />
         <Stack.Screen name="settings" options={{ presentation: "modal" }} />
         <Stack.Screen name="thread/[threadId]" />
+        <Stack.Screen name="law/[decisionId]" />
         <Stack.Screen
           name="matter/[workspaceId]/index"
           options={{

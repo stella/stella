@@ -3,7 +3,8 @@
     "chat": "Pokalbis",
     "tasks": "Užduotys",
     "matters": "Bylos",
-    "settings": "Nustatymai"
+    "settings": "Nustatymai",
+    "law": "Teismų praktika"
   },
   "chat": {
     "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Ieškoti"
+  },
+  "law": {
+    "title": "Teismų praktika",
+    "newest": "Naujausi sprendimai",
+    "noResults": "Niekas neatitiko žodžių, kurių reikalavo ši paieška.",
+    "noResultsHint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
+    "unavailable": "Paieška laikinai nepasiekiama",
+    "retry": "Bandyti dar kartą",
+    "headnote": "Santrauka",
+    "textUnavailable": "Šiam sprendimui teksto nėra",
+    "openSource": "Atverti pirminį šaltinį",
+    "loadFailed": "Nepavyko įkelti teismų praktikos.",
+    "share": "Bendrinti"
   }
 }

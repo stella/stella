@@ -39,7 +39,7 @@ const tabGlyphs = (): Map<string, string> => {
 test("every tab draws a glyph the lucide font has", () => {
   const glyphs = tabGlyphs();
   expect([...glyphs.keys()].toSorted()).toEqual(
-    ["index", "matters", "tasks"].toSorted(),
+    ["index", "law", "matters", "tasks"].toSorted(),
   );
   for (const glyph of glyphs.values()) {
     expect(Object.keys(codepoints)).toContain(glyph);
@@ -50,6 +50,14 @@ test("the chat tab draws the web navigation's chat glyph", () => {
   expect(tabGlyphs().get("index")).toBe(
     glyphOf(webNavIcons().get("chat") ?? ""),
   );
+});
+
+test("the law tab draws the web navigation's case-law glyph", () => {
+  expect(webNavIcons().get("caseLaw")).toBe("CaseLawIcon");
+  expect(read("packages/ui/src/icons.ts")).toContain(
+    "export { BookOpenIcon as CaseLawIcon }",
+  );
+  expect(tabGlyphs().get("law")).toBe(glyphOf("BookOpenIcon"));
 });
 
 test("the matters tab draws the web's matter glyph, lucide's layers", () => {

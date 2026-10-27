@@ -3,7 +3,8 @@
     "chat": "Chat",
     "tasks": "Úlohy",
     "matters": "Spisy",
-    "settings": "Nastavenia"
+    "settings": "Nastavenia",
+    "law": "Judikatúra"
   },
   "chat": {
     "description": "Majte rozpracovanú prácu poruke a pokračujte z akéhokoľvek zariadenia.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Hľadať"
+  },
+  "law": {
+    "title": "Judikatúra",
+    "newest": "Najnovšie rozhodnutia",
+    "noResults": "Slovám, ktoré hľadanie vyžadovalo, nič nezodpovedá.",
+    "noResultsHint": "Skúste menej slov alebo iné: výrazy, ktoré by použilo rozhodnutie, nie vetu, ktorou sa otázka kladie.",
+    "unavailable": "Vyhľadávanie je dočasne nedostupné",
+    "retry": "Skúsiť znova",
+    "headnote": "Právna veta",
+    "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
+    "openSource": "Otvoriť originál",
+    "loadFailed": "Judikatúru sa nepodarilo načítať.",
+    "share": "Zdieľať"
   }
 }

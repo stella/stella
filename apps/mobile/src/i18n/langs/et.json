@@ -3,7 +3,8 @@
     "chat": "Vestlus",
     "tasks": "Ülesanded",
     "matters": "Toimikud",
-    "settings": "Seaded"
+    "settings": "Seaded",
+    "law": "Kohtupraktika"
   },
   "chat": {
     "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Otsing"
+  },
+  "law": {
+    "title": "Kohtupraktika",
+    "newest": "Uusimad lahendid",
+    "noResults": "Miski ei vasta sõnadele, mida see otsing nõudis.",
+    "noResultsHint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
+    "unavailable": "Otsing pole ajutiselt saadaval",
+    "retry": "Proovi uuesti",
+    "headnote": "Lühikokkuvõte",
+    "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+    "openSource": "Ava algallikas",
+    "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
+    "share": "Jaga"
   }
 }

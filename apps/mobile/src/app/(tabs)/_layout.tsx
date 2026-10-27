@@ -7,8 +7,8 @@ import { useAppColors } from "@/theme";
 /**
  * The platform's own tab bar (iOS's, with its glass), each tab drawn with the
  * web navigation's glyph (apps/web workspace-primary-nav.ts) from lucide:
- * chat's bubble, tasks' list and the matters layers; settings opens
- * from the header, as in t3code.
+ * chat's bubble, tasks' list, the matters layers and case law's open book;
+ * settings opens from the header, as in t3code.
  * `tab-icons.test.ts` holds them equal.
  */
 const TabLayout = () => {
@@ -52,6 +52,17 @@ const TabLayout = () => {
           }
         />
         <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="law">
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={LucideGlyphs}
+              name="book-open"
+            />
+          }
+        />
+        <NativeTabs.Trigger.Label>{t("law")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

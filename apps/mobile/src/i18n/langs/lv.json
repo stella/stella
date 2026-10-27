@@ -3,7 +3,8 @@
     "chat": "Tērzēšana",
     "tasks": "Uzdevumi",
     "matters": "Lietas",
-    "settings": "Iestatījumi"
+    "settings": "Iestatījumi",
+    "law": "Tiesu prakse"
   },
   "chat": {
     "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
@@ -101,5 +102,18 @@
   },
   "header": {
     "search": "Meklēt"
+  },
+  "law": {
+    "title": "Tiesu prakse",
+    "newest": "Jaunākie nolēmumi",
+    "noResults": "Nekas neatbilst vārdiem, ko pieprasīja šī meklēšana.",
+    "noResultsHint": "Mēģiniet mazāk vai citus vārdus: jēdzienus, ko lietotu nolēmums, nevis teikumu, kādā tiek uzdots jautājums.",
+    "unavailable": "Meklēšana īslaicīgi nav pieejama",
+    "retry": "Mēģināt vēlreiz",
+    "headnote": "Kopsavilkums",
+    "textUnavailable": "Šim nolēmumam teksts nav pieejams",
+    "openSource": "Atvērt sākotnējo avotu",
+    "loadFailed": "Tiesu praksi neizdevās ielādēt.",
+    "share": "Kopīgot"
   }
 }
