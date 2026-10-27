@@ -184,6 +184,7 @@ testState.beforeAll(async () => {
     aiConfigEncrypted: Buffer.from("{not an encrypted config"),
     aiConfigIv: Buffer.alloc(12, 7),
     promptCachingEnabled: false,
+    managedAIResidency: "us",
   });
 });
 
@@ -432,7 +433,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-      managedAIResidency: "eu",
+      managedAIResidency: "us",
       promptCachingEnabled: false,
     });
   });
@@ -463,7 +464,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({
       orgAIConfig: null,
       promptCachingEnabled: false,
-      managedAIResidency: "eu",
+      managedAIResidency: "us",
     });
   });
 });

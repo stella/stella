@@ -17,6 +17,7 @@ const originalFetch = globalThis.fetch;
 let configStatus = 200;
 let availabilityStatus = 200;
 let instanceProvisioned = false;
+let unreadable = false;
 let providerConfiguration:
   "allowed" | "permission_required" | "account_restricted" = "allowed";
 let aiConfigRequests = 0;
@@ -33,11 +34,21 @@ globalThis.fetch = Object.assign(
           { status: availabilityStatus },
         );
       }
-      return Response.json(
-        instanceProvisioned
-          ? { ...aiAvailableResponse(), providerConfiguration }
-          : aiUnavailableResponse({ providerConfiguration }),
-      );
+      if (unreadable) {
+        return Response.json(
+          aiUnavailableResponse({
+            providerConfiguration,
+            unavailableReason: "unreadable",
+          }),
+        );
+      }
+      if (instanceProvisioned) {
+        return Response.json({
+          ...aiAvailableResponse(),
+          providerConfiguration,
+        });
+      }
+      return Response.json(aiUnavailableResponse({ providerConfiguration }));
     }
     if (
       url.pathname.endsWith("/organization-settings/ai-config/defaults-preview")
@@ -106,6 +117,7 @@ afterEach(() => {
   providerConfiguration = "allowed";
   availabilityStatus = 200;
   instanceProvisioned = false;
+  unreadable = false;
   aiConfigRequests = 0;
 });
 
@@ -457,17 +469,80 @@ test.each(roleSurfaceCases)(
   },
 );
 
-test.each([403, 500])(
-  "availability read %d leaves chat send and the full page usable",
-  async (status) => {
-    availabilityStatus = status;
-    const { queryClient, gates } = renderSurface(RequireAIKey);
+const unavailableSurfaceCases = Object.entries(surfaceBoundaries)
+  .filter(([surface]) => surface !== "settings")
+  .flatMap(([surface, Boundary]) =>
+    ["unreadable", "403", "500"].map((failure) => ({
+      surface,
+      Boundary,
+      failure,
+    })),
+  );
+
+test.each(unavailableSurfaceCases)(
+  "$surface preserves chat and blocks sends while availability is $failure, then retries",
+  async ({ Boundary, failure }) => {
+    unreadable = failure === "unreadable";
+    availabilityStatus = failure === "unreadable" ? 200 : Number(failure);
+    const { queryClient, gates } = renderSurface(Boundary);
     expect(
-      await screen.findByRole("button", { name: messages.common.cancel }),
+      await screen.findByText(messages.chat.sendErrorProviderUnavailable),
     ).toBeDefined();
-    expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
-    expect(screen.queryByRole("alert")).toBeNull();
+    const chatControl = screen.getByRole("button", {
+      name: messages.common.cancel,
+    });
+    expect(chatControl).toBeDefined();
+    const gate = gates.get("gate");
+    expect(gate).toBeDefined();
+    let proceeded = true;
+    await act(async () => {
+      proceeded = (await gate?.ensureAIAvailable()) ?? true;
+      gate?.openAIKeyDialog();
+      gate?.openIfAIUnavailable();
+    });
+    expect(proceeded).toBe(false);
     expect(aiConfigRequests).toBe(0);
+    expect(
+      screen.queryByRole("heading", { name: messages.ai.keyRequired.title }),
+    ).toBeNull();
+    unreadable = false;
+    availabilityStatus = 200;
+    instanceProvisioned = true;
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.retry }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText(messages.chat.sendErrorProviderUnavailable),
+      ).toBeNull();
+    });
+    expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
+    expect(screen.getByRole("button", { name: messages.common.cancel })).toBe(
+      chatControl,
+    );
     queryClient.clear();
   },
 );
+
+test("a failed availability refresh cannot reuse a cached successful provider read", async () => {
+  instanceProvisioned = true;
+  const { queryClient, gates } = renderSurface(RequireAIKey);
+  expect(
+    await screen.findByRole("button", { name: messages.common.cancel }),
+  ).toBeDefined();
+  expect(await gates.get("gate")?.ensureAIAvailable()).toBe(true);
+  availabilityStatus = 500;
+  await act(async () => {
+    await queryClient.invalidateQueries();
+  });
+  expect(
+    await screen.findByText(messages.chat.sendErrorProviderUnavailable),
+  ).toBeDefined();
+  let proceeded = true;
+  await act(async () => {
+    proceeded = (await gates.get("gate")?.ensureAIAvailable()) ?? true;
+  });
+  expect(proceeded).toBe(false);
+  expect(aiConfigRequests).toBe(0);
+  queryClient.clear();
+});

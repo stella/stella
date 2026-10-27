@@ -737,9 +737,13 @@ export const withExecutorSavepoint = async <T>(
 };
 
 /** Track the public savepoint callback without inspecting driver internals. */
-export const withAggregateSavepoint = async <T>(
-  tx: Pick<Transaction, "execute" | "transaction">,
-  run: (savepoint: Transaction) => Promise<T>,
+export const withAggregateSavepoint = async <Tx extends object, T>(
+  tx: {
+    transaction: <Value>(
+      run: (savepoint: Tx) => Promise<Value>,
+    ) => Promise<Value>;
+  },
+  run: (savepoint: Tx) => Promise<T>,
 ): Promise<T> => {
   const parent = lockHistory(tx);
   // Non-locking callers retain the driver's existing savepoint behavior.

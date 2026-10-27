@@ -39,9 +39,9 @@ export type DecryptOrgAIConfigRowResult =
   | { status: "corrupt"; error: unknown };
 
 /**
- * AI admission in the request context. Runtime settings loaders apply the
- * default-provider fallback before checking organization and seat access.
- * `unreadable` remains a refusal for callers holding an unresolved config.
+ * AI admission in the request context. Absent settings may use instance
+ * defaults after organization and seat admission. A failed settings read is
+ * `unreadable`: privacy preferences are unknown and AI work must be refused.
  */
 export const ORG_AI_CONFIG_STATUS = {
   ok: "ok",

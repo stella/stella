@@ -16,10 +16,11 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { getPgErrorCode } from "@/api/lib/pg-error";
-import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
-import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
+import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -120,6 +121,29 @@ describe.skipIf(!enabled)("provider settings read recovery (postgres)", () => {
               await tx.execute(
                 sql`SET LOCAL search_path = ${fixtureSchema}, public`,
               );
+              await tx.insert(organizationSettings).values({
+                organizationId,
+                promptCachingEnabled: false,
+                managedAIResidency: "us",
+              });
+              expect(
+                (
+                  await tx
+                    .select({
+                      promptCachingEnabled:
+                        organizationSettings.promptCachingEnabled,
+                      managedAIResidency:
+                        organizationSettings.managedAIResidency,
+                    })
+                    .from(organizationSettings)
+                    .where(
+                      eq(organizationSettings.organizationId, organizationId),
+                    )
+                ).at(0),
+              ).toEqual({
+                promptCachingEnabled: false,
+                managedAIResidency: "us",
+              });
               await tx.execute(sql`SET LOCAL ROLE ${role}`);
               expect(
                 (
@@ -146,47 +170,31 @@ describe.skipIf(!enabled)("provider settings read recovery (postgres)", () => {
                 expect(getPgErrorCode(refused.error)).toBe("42501");
               }
 
-              const providerConfig = (
-                await loadOrgAIConfig(tx, reader)
-              ).unwrap();
-              expect(providerConfig).toBeNull();
-              expect(
-                getTanStackTextModelInfoForTask("chat", providerConfig, {
-                  dataClass: "customer",
-                  organizationId,
-                  modelTier: MANAGED_MODEL_TIER.standard,
-                }),
-              ).toMatchObject({
-                provider: "openrouter",
-                keySource: "instance",
-              });
-              expect((await loadOrgAISettings(tx, reader)).unwrap()).toEqual({
-                orgAIConfig: null,
-                promptCachingEnabled: true,
-                managedAIResidency: "eu",
-              });
+              for (const load of [loadOrgAIConfig, loadOrgAISettings]) {
+                expect(await load(tx, reader)).toMatchObject({
+                  status: "error",
+                  error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+                });
+              }
               expect(await loadOrgSettingsForAuth(tx, reader)).toEqual({
                 orgAIConfig: null,
-                orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-                promptCachingEnabled: true,
-                managedAIResidency: "eu",
+                orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+                promptCachingEnabled: null,
+                managedAIResidency: null,
               });
-              // Each loader has already run a real member read after the denied
-              // SELECT; this also proves the enclosing transaction remains usable.
+              // A failed preferences read cannot choose cache or residency
+              // defaults, but its savepoint leaves authorization reads usable.
+              expect(await memberMayUseAI(tx, organizationId, userId)).toBe(
+                true,
+              );
+              expect(await mayUseInstanceModels(tx, organizationId)).toBe(true);
               expect(
-                await tx
-                  .select({ id: member.id })
-                  .from(member)
-                  .where(eq(member.organizationId, organizationId)),
-              ).toHaveLength(1);
-              expect(
-                (
-                  await loadOrgSettingsForAuth(tx, {
-                    organizationId,
-                    userId: mintAuthProviderId<"user">(),
-                  })
-                ).orgAIConfigStatus,
-              ).toBe(ORG_AI_CONFIG_STATUS.memberAssignmentRequired);
+                await memberMayUseAI(
+                  tx,
+                  organizationId,
+                  mintAuthProviderId<"user">(),
+                ),
+              ).toBe(false);
               tx.rollback();
             }),
           catch: (cause) => cause,

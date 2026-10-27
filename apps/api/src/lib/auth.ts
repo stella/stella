@@ -3747,12 +3747,6 @@ const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const {
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
-  } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -3869,10 +3863,7 @@ const resolveValidateAuth = async ({
     safeDb,
     memberRole,
     featureAccessSnapshot,
-    orgAIConfig,
-    orgAIConfigStatus,
-    promptCachingEnabled,
-    managedAIResidency,
+    ...orgSettings,
     recordAuditEvent: createAuditRecorder(recorderBindings),
     createAuditRecorder: (opts) =>
       createAuditRecorder({

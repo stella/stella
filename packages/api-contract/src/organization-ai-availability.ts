@@ -17,9 +17,10 @@ export type OrganizationAIAvailability = {
 
 export type AIProviderSettingsResolution =
   | { type: "orgSettings" }
+  | { type: "unavailable"; reason: "settingsUnreadable" }
   | {
       type: "defaultProvider";
-      reason: "notPermitted" | "notConfigured" | "unavailable";
+      reason: "notPermitted" | "notConfigured";
     };
 
 type ResolveAIProviderSettingsOptions = {
@@ -35,7 +36,7 @@ export const resolveAIProviderSettings = ({
   readStatus,
 }: ResolveAIProviderSettingsOptions): AIProviderSettingsResolution => {
   if (readStatus === "unavailable") {
-    return { type: "defaultProvider", reason: "unavailable" };
+    return { type: "unavailable", reason: "settingsUnreadable" };
   }
   if (orgConfigured) {
     return { type: "orgSettings" };

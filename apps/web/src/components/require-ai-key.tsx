@@ -51,6 +51,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { invalidateAIConfigurationCaches } from "@/lib/organization/ai-config-cache";
@@ -73,9 +74,12 @@ type AIAvailabilityContextValue = {
 const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
   null,
 );
-const AIUnavailableContext = createContext<OrganizationAIAvailability | null>(
-  null,
-);
+type AIUnavailableState =
+  | { type: "configurationRequired"; availability: OrganizationAIAvailability }
+  | { type: "unavailable"; retry: () => void; retrying: boolean };
+
+const AIUnavailableContext = createContext<AIUnavailableState | null>(null);
+const AIAvailabilityFeedbackContext = createContext(false);
 
 /**
  * Provides the AI key gate. Idempotent: under an existing provider it renders
@@ -110,14 +114,21 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const openAIKeyDialog = useCallback(() => {
-    if (data?.providerConfiguration === "allowed") {
+    if (
+      dataQuery.status === "success" &&
+      data?.providerConfiguration === "allowed" &&
+      data.unavailableReason !== "unreadable"
+    ) {
       setOpen(true);
     }
-  }, [data]);
+  }, [data, dataQuery.status]);
 
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
-      .query(availabilityOptions)
+      .query({
+        ...availabilityOptions,
+        ...(dataQuery.status === "error" ? { staleTime: 0 } : {}),
+      })
       .catch((error: unknown) => {
         getAnalytics().captureError(error, {
           fingerprintKey: "AIAvailabilityRoot:failure",
@@ -126,16 +137,31 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
         return null;
       });
 
-    // Availability is advisory: the send endpoint owns provider selection and
-    // remains the authority when this independent settings read fails.
+    const settingsResolution = resolveAIProviderSettings({
+      orgConfigured: availability?.orgConfigured ?? false,
+      providerConfiguration:
+        availability?.providerConfiguration ?? "permission_required",
+      readStatus:
+        availability === null || availability.unavailableReason === "unreadable"
+          ? "unavailable"
+          : "ready",
+    });
+    switch (settingsResolution.type) {
+      case "unavailable":
+        stellaToast.add({
+          title: t("chat.sendErrorProviderUnavailable"),
+          type: "info",
+        });
+        return false;
+      case "orgSettings":
+      case "defaultProvider":
+        break;
+      default:
+        settingsResolution satisfies never;
+        return panic("Unhandled AI provider settings resolution");
+    }
     if (availability === null) {
-      return (
-        resolveAIProviderSettings({
-          orgConfigured: false,
-          providerConfiguration: "permission_required",
-          readStatus: "unavailable",
-        }).type === "defaultProvider"
-      );
+      return panic("Available provider settings have no availability response");
     }
 
     if (availability.available) {
@@ -153,7 +179,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, queryClient, t]);
+  }, [availabilityOptions, dataQuery.status, queryClient, t]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (
@@ -161,15 +187,30 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       data &&
       !data.available &&
       data.providerConfiguration === "allowed" &&
+      data.unavailableReason !== "unreadable" &&
       !isFetching
     ) {
       setOpen(true);
     }
   }, [data, dataQuery.status, isFetching]);
-  const aiUnavailable =
-    dataQuery.status === "success" && data && !data.available && !isFetching
-      ? data
-      : null;
+  let aiUnavailable: AIUnavailableState | null = null;
+  if (
+    dataQuery.status === "error" ||
+    data?.unavailableReason === "unreadable"
+  ) {
+    aiUnavailable = {
+      type: "unavailable",
+      retry: () => detached(dataQuery.refetch(), "ai-availability.retry"),
+      retrying: isFetching,
+    };
+  } else if (
+    dataQuery.status === "success" &&
+    data &&
+    !data.available &&
+    !isFetching
+  ) {
+    aiUnavailable = { type: "configurationRequired", availability: data };
+  }
 
   // Force-close the dialog whenever the availability query flips to available
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
@@ -196,7 +237,10 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     <AIAvailabilityContext value={value}>
       <AIUnavailableContext value={aiUnavailable}>
         {children}
-        <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />
+        <AIKeyRequiredDialog
+          onOpenChange={setOpen}
+          open={open && aiUnavailable?.type !== "unavailable"}
+        />
       </AIUnavailableContext>
     </AIAvailabilityContext>
   );
@@ -217,21 +261,45 @@ const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
 };
 
 export const AIUnavailableDialogTrigger = () => {
-  const availability = use(AIUnavailableContext);
+  const state = use(AIUnavailableContext);
+  const feedbackAlreadyShown = use(AIAvailabilityFeedbackContext);
   const { openAIKeyDialog } = useAIKeyGate();
-  if (availability === null) {
+  const t = useTranslations();
+  if (state === null || feedbackAlreadyShown) {
     return null;
   }
-  if (availability.providerConfiguration !== "allowed") {
-    return null;
+  switch (state.type) {
+    case "unavailable":
+      return (
+        <div
+          role="status"
+          className="bg-muted text-muted-foreground flex shrink-0 items-center gap-3 rounded-md p-3 text-sm"
+        >
+          <p>{t("chat.sendErrorProviderUnavailable")}</p>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={state.retrying}
+            onClick={state.retry}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      );
+    case "configurationRequired":
+      return state.availability.providerConfiguration === "allowed" ? (
+        <OpenAIKeyDialogOnMount open={openAIKeyDialog} />
+      ) : null;
+    default:
+      state satisfies never;
+      return panic("Unhandled AI availability feedback state");
   }
-  return <OpenAIKeyDialogOnMount open={openAIKeyDialog} />;
 };
 
 /**
- * Gate AI routes when the instance has no provisioned keys and
- * the org has not supplied their own. Send-time surfaces should
- * use `useAIKeyGate()` so every AI action opens the same dialog.
+ * Keep chat mounted while availability recovers. A confirmed missing provider
+ * opens configuration only for a principal who can manage it; send-time
+ * surfaces check the same availability through `useAIKeyGate()`.
  */
 // Explicit ReactNode: returning bare `children` infers a type containing
 // React 19's Promise<AwaitedReactNode> member, which promise-function-async
@@ -250,22 +318,28 @@ export const RequireAIKey = ({
   const data = dataView.type === "items" ? dataView.items : undefined;
   const { openAIKeyDialog } = useAIKeyGate();
 
-  if (isPending) {
-    return <QueryViewFeedback view={dataView} />;
+  // Preserve the chat runtime and draft across failed reads and retries.
+  if (
+    isPending ||
+    dataQuery.status === "error" ||
+    data?.unavailableReason === "unreadable" ||
+    data?.available
+  ) {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col">
+        {isPending ? (
+          <QueryViewFeedback view={dataView} />
+        ) : (
+          <AIUnavailableDialogTrigger />
+        )}
+        <AIAvailabilityFeedbackContext value={true}>
+          {children}
+        </AIAvailabilityFeedbackContext>
+      </div>
+    );
   }
   if (isFetching && data?.available === false) {
     return <LoaderState label={t("common.loading")} />;
-  }
-
-  if (
-    dataView.type === "error" ||
-    (dataView.type === "items" && dataView.refetchError !== undefined)
-  ) {
-    return children;
-  }
-
-  if (data?.available) {
-    return children;
   }
 
   return (

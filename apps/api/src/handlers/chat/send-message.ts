@@ -237,6 +237,8 @@ import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -2271,6 +2273,10 @@ export const createSendMessage = (
       usageLane,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError(undefined));
+      }
+
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
@@ -2582,8 +2588,8 @@ export const createSendMessage = (
             userId: user.id,
           }),
         );
-        const preparedIncomingMessageResult =
-          await prepareValidatedIncomingMessage({
+        const preparedIncomingMessage = yield* Result.await(
+          prepareValidatedIncomingMessage({
             dependencies: {
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
@@ -2625,10 +2631,8 @@ export const createSendMessage = (
               usageLane,
               validationActiveSkillContext,
             },
-          });
-        if (Result.isError(preparedIncomingMessageResult)) {
-          return Result.err(preparedIncomingMessageResult.error);
-        }
+          }),
+        );
         const {
           chatModelOverride,
           chatReasoningEffort,
@@ -2639,7 +2643,7 @@ export const createSendMessage = (
           turnLane,
           uploadedMessage,
           webSearchProviders,
-        } = preparedIncomingMessageResult.value;
+        } = preparedIncomingMessage;
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({

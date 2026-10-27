@@ -30,7 +30,7 @@ test.each(["allowed", "permission_required", "account_restricted"] as const)(
           providerConfiguration,
           readStatus: "unavailable",
         }),
-      ).toEqual({ type: "defaultProvider", reason: "unavailable" });
+      ).toEqual({ type: "unavailable", reason: "settingsUnreadable" });
     }
   },
 );

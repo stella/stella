@@ -726,7 +726,7 @@ describe("AI access for members", () => {
   ): Promise<(string | null)[]> => {
     const scope = requestScope(organizationId, userId);
     const reader = { organizationId, userId };
-    const results: Result<unknown, HandlerError<403>>[] = [
+    const results: Result<unknown, HandlerError<403 | 503>>[] = [
       await scope(async (tx) => await loadOrgAIConfig(tx, reader)),
       await scope(async (tx) => await loadOrgAISettings(tx, reader)),
     ];

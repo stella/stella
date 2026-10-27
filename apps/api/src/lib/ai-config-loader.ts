@@ -28,6 +28,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import {
   memberAssignmentRequiredError,
   ownAIKeyRequiredError,
+  storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
@@ -53,10 +54,9 @@ const AI_SETTINGS_READ_FAILURE = failureSink({
 export type OrgSettingsReader = Pick<Transaction, "select">;
 
 /** Runtime settings reads isolate SQL failures from the caller's transaction. */
-type RecoverableOrgSettingsReader = Pick<
-  Transaction,
-  "select" | "execute" | "transaction"
->;
+type RecoverableOrgSettingsReader = OrgSettingsReader & {
+  transaction: <T>(run: (tx: OrgSettingsReader) => Promise<T>) => Promise<T>;
+};
 
 /**
  * Whose AI work the config is loaded for: the organization, and the member
@@ -109,27 +109,27 @@ const selectAISettingsRow = async (
 
 type ReadProviderConfigOptions = {
   organizationId: SafeId<"organization">;
-  settings: Awaited<ReturnType<typeof selectAISettingsRow>>;
+  settings: Extract<
+    Awaited<ReturnType<typeof selectAISettingsRow>>,
+    { type: "ready" }
+  >;
 };
 
 const readProviderConfig = async ({
   organizationId,
   settings,
 }: ReadProviderConfigOptions) => {
-  const decrypted =
-    settings.type === "ready"
-      ? await decryptOrgAIConfigRow({
-          decrypt: decryptAIConfig,
-          organizationId,
-          row: settings.row,
-        })
-      : null;
-  const resolution = resolveAIProviderSettings({
-    orgConfigured: decrypted?.status === "ok" && decrypted.config !== null,
-    providerConfiguration: "allowed",
-    readStatus: decrypted?.status === "ok" ? "ready" : "unavailable",
+  const decrypted = await decryptOrgAIConfigRow({
+    decrypt: decryptAIConfig,
+    organizationId,
+    row: settings.row,
   });
-  return resolution.type === "orgSettings" && decrypted?.status === "ok"
+  const resolution = resolveAIProviderSettings({
+    orgConfigured: decrypted.status === "ok" && decrypted.config !== null,
+    providerConfiguration: "allowed",
+    readStatus: "ready",
+  });
+  return resolution.type === "orgSettings" && decrypted.status === "ok"
     ? decrypted.config
     : null;
 };
@@ -211,16 +211,19 @@ const readAIConfiguration = async <Settings>({
 
 /**
  * For callers that are about to use the config for an AI call. Uses the
- * default-provider fallback when stored settings cannot be read. An org barred
- * from the instance provider without a config of its own is an error result.
+ * instance-provider fallback only when privacy preferences were read. Failed
+ * settings reads refuse AI work rather than guessing caching or residency.
  */
 export const loadOrgAIConfig = async (
   db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
-): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
+): Promise<Result<OrgAIConfig | null, HandlerError<403 | 503>>> => {
   const checkedReader = snapshotOperationInput(reader);
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
+  if (settings.type === "unavailable") {
+    return Result.err(storedAIConfigUnreadableError(undefined));
+  }
   const orgAIConfig = await readProviderConfig({ organizationId, settings });
   return await readAIConfiguration({
     db,
@@ -250,17 +253,20 @@ export type OrgAISettings = {
 
 /**
  * {@link loadOrgAIConfig} plus the organization's prompt-caching preference in
- * one select, for AI call sites that need both. Unreadable provider settings
- * use platform defaults, with the same member and organization access checks.
+ * one select. An absent row uses platform defaults; a failed read refuses AI
+ * work because neither privacy preference is known.
  */
 export const loadOrgAISettings = async (
   db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
-): Promise<Result<OrgAISettings, HandlerError<403>>> => {
+): Promise<Result<OrgAISettings, HandlerError<403 | 503>>> => {
   const checkedReader = snapshotOperationInput(reader);
   const { organizationId } = checkedReader;
   const settings = await selectAISettingsRow(db, organizationId);
-  const row = settings.type === "ready" ? settings.row : undefined;
+  if (settings.type === "unavailable") {
+    return Result.err(storedAIConfigUnreadableError(undefined));
+  }
+  const { row } = settings;
   const orgAIConfig = await readProviderConfig({ organizationId, settings });
   return await readAIConfiguration({
     db,
@@ -275,27 +281,42 @@ export const loadOrgAISettings = async (
   });
 };
 
-export type OrgSettingsForAuth = {
-  orgAIConfig: OrgAIConfig | null;
-  orgAIConfigStatus: OrgAIConfigStatus;
-  promptCachingEnabled: boolean;
-  managedAIResidency: ManagedAIResidency;
-};
+export type OrgSettingsForAuth =
+  | {
+      orgAIConfig: OrgAIConfig | null;
+      orgAIConfigStatus: Exclude<OrgAIConfigStatus, "unreadable">;
+      promptCachingEnabled: boolean;
+      managedAIResidency: ManagedAIResidency;
+    }
+  | {
+      orgAIConfig: null;
+      orgAIConfigStatus: "unreadable";
+      promptCachingEnabled: null;
+      managedAIResidency: null;
+    };
 
 /**
  * The AI config and prompt-caching preference for callers (the validateAuth
  * resolve, the MCP capability context) that need both on every request, in a
  * single `organization_settings` select.
  *
- * Unreadable settings use the shared default-provider decision. Seat and
- * organization access checks still run before the default can serve AI work.
+ * Failed reads retain an unavailable outcome without inventing privacy
+ * preferences. Non-AI operations can continue; AI admission rejects that state.
  */
 export const loadOrgSettingsForAuth = async (
   db: RecoverableOrgSettingsReader,
   { organizationId, userId }: OrgAIConfigReader,
 ): Promise<OrgSettingsForAuth> => {
   const settings = await selectAISettingsRow(db, organizationId);
-  const row = settings.type === "ready" ? settings.row : undefined;
+  if (settings.type === "unavailable") {
+    return {
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      promptCachingEnabled: null,
+      managedAIResidency: null,
+    };
+  }
+  const { row } = settings;
   const orgAIConfig = await readProviderConfig({ organizationId, settings });
   const promptCachingEnabled = resolvePromptCachingPreference(row);
   const managedAIResidency =

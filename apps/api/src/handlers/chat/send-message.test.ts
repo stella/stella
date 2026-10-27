@@ -35,6 +35,7 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
@@ -161,6 +162,15 @@ afterEach(() => {
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 type SendMessageInput = SendMessageCtx["body"]["forwardedProps"];
+type ReadySendMessageCtx = Extract<
+  SendMessageCtx,
+  {
+    orgAIConfigStatus: Exclude<
+      SendMessageCtx["orgAIConfigStatus"],
+      "unreadable"
+    >;
+  }
+>;
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -306,7 +316,7 @@ const createContext = ({
   truncateAfterMessageId?: SendMessageInput["truncateAfterMessageId"];
   turnIntent?: SendMessageInput["turnIntent"];
   transaction?: unknown;
-}): SendMessageCtx => {
+}): ReadySendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(
     withRegistryCredentialQuery(transaction),
     {
@@ -331,7 +341,7 @@ const createContext = ({
     ...(runMode === undefined ? {} : { runMode }),
   };
 
-  return asTestRaw<SendMessageCtx>({
+  return asTestRaw<ReadySendMessageCtx>({
     body: {
       threadId,
       runId: "run-test",
@@ -364,6 +374,48 @@ const createContext = ({
     user: { id: userId },
   });
 };
+
+test("unreadable settings reject a chat turn before provider work", async () => {
+  const streamResponse = mock(
+    async () =>
+      ({
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      }) as const,
+  );
+  const send = createSendMessage({
+    compactMessagesForContext: compactMessagesForContextMock,
+    createRefRegistry: createChatRefRegistry,
+    indexThread: upsertChatThreadSearchDocumentMock,
+    loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+    loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+    rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+    streamResponse,
+    uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+  });
+  let transactions = 0;
+  const context = createContext({
+    contextMatterIds: [],
+    onSafeDbTransaction: () => {
+      transactions += 1;
+    },
+  });
+  const result = await send.handler({
+    ...context,
+    orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+    promptCachingEnabled: null,
+    managedAIResidency: null,
+  });
+  expect(result).toMatchObject({
+    code: 503,
+    response: { code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+  });
+  expect(streamResponse).not.toHaveBeenCalled();
+  expect(transactions).toBe(0);
+});
 
 describe("send message context-matter authorization", () => {
   test("rejects a requested matter outside the caller's accessible set", async () => {

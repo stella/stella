@@ -1,7 +1,10 @@
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { CaseLawResearchAnswerType } from "@stll/api-contract";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
@@ -65,6 +68,7 @@ const suggestPrompt = createSafeHandler(
   config,
   // oxlint-disable-next-line require-yield -- createSafeHandler mandates AsyncGenerator; no DB ops to Result.await
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     body,
     orgAIConfig,
@@ -76,6 +80,10 @@ const suggestPrompt = createSafeHandler(
     user,
     workspaceId,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     return await suggestColumnPrompt({
       admission: configuredModelAdmission({ modelAdmission }),
       draft: {
