@@ -38,6 +38,8 @@ import type {
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 export const MCP_OAUTH_BINDING_FAILURE_CODE = "mcp_oauth_binding_invalid";
 export const MCP_OAUTH_INVALID_GRANT_CODE = "mcp_oauth_invalid_grant";
+/** The token endpoint refused the refresh for a reason only new credentials or configuration fix. */
+export const MCP_OAUTH_REFRESH_REFUSED_CODE = "mcp_oauth_refresh_refused";
 export const MCP_OAUTH_DISCOVERY_TIMEOUT_CODE = "mcp_oauth_discovery_timeout";
 const OAUTH_FETCH_MAX_BYTES = 1_000_000;
 // A revocation response carries no content worth reading (RFC 7009 §2.2).
@@ -960,14 +962,7 @@ export const refreshOAuthToken = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        // A refused grant needs a new authorization; anything else is the
-        // upstream server failing to answer the refresh.
-        code:
-          oauthError !== null &&
-          Result.isOk(oauthError) &&
-          oauthError.value.error === "invalid_grant"
-            ? MCP_OAUTH_INVALID_GRANT_CODE
-            : "upstream_unavailable",
+        code: refreshFailureCode(cause, oauthError),
         message: "Failed to refresh MCP access token",
         cause: token.error,
       }),
@@ -975,6 +970,29 @@ export const refreshOAuthToken = async ({
   }
 
   return Result.ok(token.value);
+};
+
+/**
+ * A refused grant needs a new authorization and any other 4xx refusal new
+ * credentials or configuration, so neither is retried; only throttling, a
+ * server error or a transport failure is an upstream outage worth retrying.
+ */
+const refreshFailureCode = (
+  cause: unknown,
+  oauthError: Result<{ error: string }, unknown> | null,
+) => {
+  if (
+    oauthError !== null &&
+    Result.isOk(oauthError) &&
+    oauthError.value.error === "invalid_grant"
+  ) {
+    return MCP_OAUTH_INVALID_GRANT_CODE;
+  }
+  const status = cause instanceof FetchBoundaryError ? cause.status : undefined;
+  if (status !== undefined && status >= 400 && status < 500 && status !== 429) {
+    return MCP_OAUTH_REFRESH_REFUSED_CODE;
+  }
+  return "upstream_unavailable";
 };
 
 const revocationEndpointSchema = v.pipe(v.string(), v.url());
