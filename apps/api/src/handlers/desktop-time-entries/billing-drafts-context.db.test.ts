@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
 import { and, eq, isNull } from "drizzle-orm";
+import * as v from "valibot";
 
+import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -256,8 +258,8 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
-const load = async (
-  matterId = ids.wsA1,
+const loadBody = async (
+  body: unknown,
   allowedMatterIds = [ids.wsA1, ids.wsA2],
 ) =>
   await loadBillingDraftContext({
@@ -266,7 +268,15 @@ const load = async (
     ),
     organizationId: ids.orgA,
     userId: ids.userA1,
-    body: {
+    body: v.parse(desktopBillingDraftRequestSchema, body),
+  });
+
+const load = async (
+  matterId = ids.wsA1,
+  allowedMatterIds = [ids.wsA1, ids.wsA2],
+) =>
+  await loadBody(
+    {
       entries: [
         {
           matterId,
@@ -277,7 +287,8 @@ const load = async (
         },
       ],
     },
-  });
+    allowedMatterIds,
+  );
 
 test("context includes only the caller's selected matter history inside the bounded 90-day window", async () => {
   const result = await load();
@@ -290,6 +301,34 @@ test("context includes only the caller's selected matter history inside the boun
     context.earlierEntries.every(({ matterId }) => matterId === ids.wsA1),
   ).toBe(true);
   expect(context.preference).toBe("Use concise Czech narratives");
+});
+
+test("mixed-case duplicate matter UUIDs normalize before the scoped context query", async () => {
+  const uppercaseMatterId = ids.wsA1.toUpperCase();
+  const result = await loadBody({
+    entries: [
+      {
+        matterId: uppercaseMatterId,
+        date: today.toString(),
+        timezone: "Europe/Prague",
+        durationMinutes: 30,
+        appNames: ["Editor"],
+      },
+      {
+        matterId: ids.wsA1.toLowerCase(),
+        date: today.toString(),
+        timezone: "Europe/Prague",
+        durationMinutes: 30,
+        appNames: ["Editor"],
+      },
+    ],
+  });
+
+  expect(result.isOk()).toBe(true);
+  const context = result.unwrap();
+  expect(
+    context.matters.filter(({ matterId }) => matterId === ids.wsA1),
+  ).toHaveLength(1);
 });
 
 test("organization disablement prevents any AI continuation", async () => {

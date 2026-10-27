@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
 import {
@@ -8,6 +8,7 @@ import {
   agentSkills,
   billingGuidelineFiles,
   contacts,
+  featureEnrolments,
   organizationSettings,
 } from "@/api/db/schema";
 import {
@@ -89,6 +90,11 @@ const withBillingKnowledgeFixture = async <TResult>(
       role: "owner",
       createdAt: updatedAt,
     });
+    await db.insert(featureEnrolments).values({
+      organizationId,
+      userId,
+      featureId: "time-billing",
+    });
     await db.insert(contacts).values({
       id: clientId,
       organizationId,
@@ -169,6 +175,15 @@ const withBillingKnowledgeFixture = async <TResult>(
     await db
       .delete(organizationSettings)
       .where(inArray(organizationSettings.organizationId, organizations));
+    await db
+      .delete(featureEnrolments)
+      .where(
+        and(
+          eq(featureEnrolments.organizationId, organizationId),
+          eq(featureEnrolments.userId, userId),
+          eq(featureEnrolments.featureId, "time-billing"),
+        ),
+      );
     await db.delete(member).where(eq(member.id, membershipId));
     await db
       .delete(organization)

@@ -42,7 +42,7 @@ afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
 });
 
-const MATTER_ID = toSafeId<"workspace">("00000000-0000-4000-8000-000000000001");
+const MATTER_ID = toSafeId<"workspace">("abcdefab-cdef-4abc-8abc-abcdefabcdef");
 const EARLIER_ID = toSafeId<"timeEntry">(
   "00000000-0000-4000-8000-000000000002",
 );
@@ -152,6 +152,7 @@ const exercise = async ({
   draftContext = context,
 }: ExerciseOptions = {}) => {
   const calls: { prompt: string; schema: unknown; region: unknown }[] = [];
+  const receivedBodies: DesktopBillingDraftRequest[] = [];
   const { scopedDb } = createScopedDbMock(
     {},
     {
@@ -179,7 +180,9 @@ const exercise = async ({
         options.dataClass === "customer" ? options.managedAIResidency : null,
     });
     const refs = createBillingDraftReferenceMap([
-      "entry_1",
+      ...(receivedBodies
+        .at(0)
+        ?.entries.map((_, index) => `entry_${index + 1}`) ?? ["entry_1"]),
       ...draftContext.matters.map(({ matterId }) => matterId),
       EARLIER_ID,
       GUIDELINE_ID,
@@ -224,10 +227,15 @@ const exercise = async ({
         scopedDb,
       });
     },
-    loadContext: asTestRaw<typeof loadBillingDraftContext>(async () =>
-      refused
-        ? Result.err(new HandlerError({ status: 403, message: "Refused" }))
-        : Result.ok(draftContext),
+    loadContext: asTestRaw<typeof loadBillingDraftContext>(
+      async ({
+        body: requestBody,
+      }: Parameters<typeof loadBillingDraftContext>[0]) => {
+        receivedBodies.push(requestBody);
+        return refused
+          ? Result.err(new HandlerError({ status: 403, message: "Refused" }))
+          : Result.ok(draftContext);
+      },
     ),
     generateObjectForTask:
       asTestRaw<typeof generateTanStackObjectForTask>(generate),
@@ -254,7 +262,7 @@ const exercise = async ({
       body: JSON.stringify(input),
     }),
   );
-  return { response, calls };
+  return { response, calls, receivedBodies };
 };
 
 test("one structured request uses selected evidence, region and opaque references", async () => {
@@ -277,6 +285,47 @@ test("one structured request uses selected evidence, region and opaque reference
   expect(calls.at(0)?.prompt).toContain("Agreement");
   expect(calls.at(0)?.prompt).not.toContain(MATTER_ID);
   expect(calls.at(0)?.prompt).not.toContain("timeline");
+});
+
+test("billing draft endpoint canonicalizes uppercase matter UUIDs before loading context", async () => {
+  const uppercaseMatterId = MATTER_ID.toUpperCase();
+  expect(uppercaseMatterId).not.toBe(MATTER_ID);
+  const { response, receivedBodies } = await exercise({
+    input: {
+      entries: body.entries.map((entry) => ({
+        ...entry,
+        matterId: uppercaseMatterId,
+      })),
+    },
+  });
+
+  expect(response.status).toBe(200);
+  expect(receivedBodies.at(0)?.entries.at(0)?.matterId).toBe(MATTER_ID);
+});
+
+test("mixed-case duplicate matters reach context loading with one canonical identity", async () => {
+  const upperMatterId = MATTER_ID.toUpperCase();
+  const lowerMatterId = MATTER_ID.toLowerCase();
+  const input = {
+    entries: [
+      { ...body.entries[0], matterId: upperMatterId },
+      { ...body.entries[0], matterId: lowerMatterId },
+    ],
+  };
+  const output: DesktopBillingDraftResponse = {
+    ...fixture,
+    drafts: [
+      ...fixture.drafts.map((draft) => ({ ...draft, entryId: "entry_1" })),
+      ...fixture.drafts.map((draft) => ({ ...draft, entryId: "entry_2" })),
+    ],
+  };
+  const { response, receivedBodies } = await exercise({ input, output });
+  const canonicalMatterIds =
+    receivedBodies.at(0)?.entries.map(({ matterId }) => matterId) ?? [];
+
+  expect(response.status).toBe(200);
+  expect(canonicalMatterIds).toEqual([MATTER_ID, MATTER_ID]);
+  expect(new Set(canonicalMatterIds).size).toBe(1);
 });
 
 test("refused context and hidden feature never dispatch the model", async () => {
