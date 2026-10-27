@@ -151,7 +151,7 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "150c8cdf0aecb2f554acc69954b4731add918733069d71a1ab2e5297b110cb4b",
+    "fingerprint": "4520f47f0843baf6b7d849352ada98c187c2f93ae190d5a83a04d18efbdb332b",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -205,7 +205,7 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "42c4ec4b26e56ef8c424bb5f053a93e790862dd7a52816f41c3211c65fb3258b",
+    "fingerprint": "5abe04df0c869b1faa6517be46cf5595331cb2a0c86b64533c49b0987494b2cb",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -1542,6 +1542,12 @@
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
+    "file": "apps/api/src/handlers/memories/update.ts",
+    "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
+    "count": 1,
+    "reason": "builder-for in apps/api/src/handlers/memories/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
     "file": "apps/api/src/handlers/number-series/archive.ts",
     "fingerprint": "d786dd5c6c6ad332a4049be7fc81223d561d9a938b131cdad5c69793e98c5a8b",
     "count": 1,
@@ -2131,12 +2137,6 @@
   },
   {
     "file": "apps/api/src/lib/auth.ts",
-    "fingerprint": "38e1a023923ad43deb5b333910104f2ec77a4ff518ca75809ef3db696be6ec13",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/auth.ts",
     "fingerprint": "9a14b7509d10db09c76c4d2f8a82e9da70a9f37fc308a150e1503736badc561c",
     "count": 1,
     "reason": "for key share in apps/api/src/lib/auth.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2146,6 +2146,12 @@
     "fingerprint": "af292a4848b1eee87119c9cf70e1cb6110bb553c917485b12bb3f3c0af9ed6f2",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/src/lib/auth.ts",
+    "fingerprint": "d68156f694d31a8cc9e479924e72740eb410534a18d42d4be1b0a662525c9eb8",
+    "count": 1,
+    "reason": "The provider write transaction now also holds the account credential fence before inserting an OAuth token; the authorization-code client lock and the single in-transaction create are unchanged."
   },
   {
     "file": "apps/api/src/lib/auth/registration-adapter.ts",
@@ -3507,7 +3513,7 @@
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
     "fingerprint": "a7c827e34f756c889e227513cea958284558b2daddcb017314e6f47731d3222b",
     "count": 1,
-    "reason": "The personal key root transaction first holds the live session credential fence for issuance; the transaction boundary, organization lock and owner predicates are unchanged."
+    "reason": "The key root transaction first holds the live session credential fence for issuance and hands it to the issuer; the transaction boundary, organization lock and owner predicates are unchanged."
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
@@ -3730,6 +3736,12 @@
     "fingerprint": "39a4e8d62ba9d960e915a5aa143491be6b19f7b632fc7cf0ecf1975c8441aae4",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts",
+    "fingerprint": "2de3c463d153cae55427b4ff77b5b6c62900465dea74526235bd8ee180904f2d",
+    "count": 1,
+    "reason": "for update in apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",
@@ -4224,10 +4236,10 @@
     "reason": "transaction-boundary in apps/api/src/scripts/better-auth-microsoft-identity-map.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/better-auth-migration-audit.ts",
+    "file": "apps/api/src/scripts/better-auth-migration-audit-command.ts",
     "fingerprint": "fc0f0097cd1ab3f2ca6229c95a53ce6b468bb40137d87ce8a48882666d9c9f4a",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/better-auth-migration-audit.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/better-auth-migration-audit-command.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/case-law-source-total.ts",
@@ -4386,16 +4398,16 @@
     "reason": "transaction-boundary in apps/api/src/scripts/repair-publisher-absent-text.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/replay-tick.ts",
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "5d2ff5e173412a2f6563f61cbe7648607a2b8113a3077eee52c0fcea09278c0f",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/scripts/replay-tick.ts",
+    "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/seed-polarity-rules.ts",

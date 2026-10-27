@@ -37,7 +37,10 @@ export const useCreateExpense = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateExpense:failure",
+        scope: { type: "handler", handlerId: "useCreateExpense:failure" },
+      });
     },
   });
 };
@@ -77,7 +80,10 @@ export const useUpdateExpense = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateExpense:failure",
+        scope: { type: "handler", handlerId: "useUpdateExpense:failure" },
+      });
     },
   });
 };
@@ -101,7 +107,10 @@ export const useDeleteExpense = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteExpense:failure",
+        scope: { type: "handler", handlerId: "useDeleteExpense:failure" },
+      });
     },
   });
 };

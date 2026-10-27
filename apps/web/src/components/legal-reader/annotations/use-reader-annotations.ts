@@ -72,6 +72,36 @@ const uploadGuestAnnotation = async (
     unwrapApiResponse(response);
   });
 
+/** One failure per mark, grouped by the kind of document it was made on. */
+const captureGuestMigrationFailure = (
+  item: GuestAnnotation,
+  error: Error,
+): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "useReaderAnnotations.operation:failure",
+    scope: {
+      type: "handler",
+      handlerId: `reader-annotations.guest.${item.targetType}.migrate`,
+    },
+    context: {
+      operation: "legal-reader.guest-annotation.migrate",
+      type: "detached",
+    },
+  });
+};
+
+/** The tab could not claim the guest marks for the signed-in account. */
+const captureGuestClaimFailure = (error: Error): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "useReaderAnnotations.claim:failure",
+    scope: { type: "handler", handlerId: "reader-annotations.guest.claim" },
+    context: {
+      operation: "legal-reader.guest-annotation.migrate",
+      type: "detached",
+    },
+  });
+};
+
 type ReaderAnnotations = {
   annotations: readonly ReaderAnnotation[];
   controller: ReaderAnnotationController;
@@ -106,10 +136,11 @@ export const useReaderAnnotations = (
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, `useReaderAnnotations.${target.type}:query`);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: `reader-annotations.${target.type}`,
     create: async (input: CreateAnnotationInput) => {
       const response = await api.reader.annotations.post({
         ...input,
@@ -152,10 +183,7 @@ export const useReaderAnnotations = (
     // rest waiting for its next sign-in in this tab.
     const claimed = claimGuestAnnotations(storage, migrationOwner);
     if (Result.isError(claimed)) {
-      getAnalytics().captureError(claimed.error, {
-        operation: "legal-reader.guest-annotation.migrate",
-        type: "detached",
-      });
+      captureGuestClaimFailure(claimed.error);
       notifyUserError(
         claimed.error,
         t("legalReader.annotations.guestMigrationFailed"),
@@ -176,12 +204,10 @@ export const useReaderAnnotations = (
           storage,
           upload: uploadGuestAnnotation,
         });
-        for (const result of results) {
-          if (Result.isError(result)) {
-            getAnalytics().captureError(result.error, {
-              operation: "legal-reader.guest-annotation.migrate",
-              type: "detached",
-            });
+        for (const [index, result] of results.entries()) {
+          const item = items[index];
+          if (Result.isError(result) && item !== undefined) {
+            captureGuestMigrationFailure(item, result.error);
           }
         }
         if (!isCurrentStorageOwner(migrationOwner)) {
@@ -222,6 +248,7 @@ export const useReaderAnnotations = (
       next,
       storage,
       unavailableMessage: t("legalReader.annotations.guestStorageUnavailable"),
+      targetType: target.type,
     });
     if (Result.isOk(persisted)) {
       setStore(next);
@@ -359,6 +386,7 @@ type GuestAnnotationAction = "create" | "delete" | "update";
 
 type PersistGuestAnnotationStoreOptions = {
   action: GuestAnnotationAction;
+  targetType: ReaderAnnotationTarget["type"];
   next: Parameters<typeof writeGuestAnnotationStore>[1];
   storage: Parameters<typeof writeGuestAnnotationStore>[0] | null;
   unavailableMessage: string;
@@ -367,6 +395,7 @@ type PersistGuestAnnotationStoreOptions = {
 /** Writes the tab's marks, telling the reader when the tab cannot keep them. */
 function persistGuestAnnotationStore({
   action,
+  targetType,
   next,
   storage,
   unavailableMessage,
@@ -383,8 +412,15 @@ function persistGuestAnnotationStore({
   const stored = writeGuestAnnotationStore(storage, next);
   if (Result.isError(stored)) {
     getAnalytics().captureError(stored.error, {
-      operation: `legal-reader.guest-annotation.${action}`,
-      type: "detached",
+      fingerprintKey: "useReaderAnnotations.commit:failure",
+      scope: {
+        type: "handler",
+        handlerId: `reader-annotations.guest.${targetType}.${action}`,
+      },
+      context: {
+        operation: `legal-reader.guest-annotation.${action}`,
+        type: "detached",
+      },
     });
     notifyUserError(stored.error, unavailableMessage);
     return Result.err(stored.error);

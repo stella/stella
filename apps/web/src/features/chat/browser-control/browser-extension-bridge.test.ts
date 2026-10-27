@@ -9,6 +9,7 @@ import {
   type BrowserControlResult,
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { buildSendRequestBody } from "@/features/chat/chat-runtime";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
@@ -92,7 +93,7 @@ beforeEach(() => {
 afterEach(() => {
   unmount?.();
   unmount = null;
-  jest.useRealTimers();
+  restoreRealTimers();
   if (previousWindow) {
     Object.defineProperty(globalThis, "window", previousWindow);
   } else {

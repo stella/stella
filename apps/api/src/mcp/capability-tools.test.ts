@@ -65,6 +65,11 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
+});
+
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -119,26 +124,26 @@ type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
-const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
-  const item = result.content.at(0);
-  if (!item || item.type !== "text") {
-    throw new Error("Expected a text MCP response");
-  }
-  const parsed: unknown = JSON.parse(item.text);
-  const envelope = result.structuredContent;
-  const isCapabilityEnvelope =
-    isRecord(envelope) &&
-    Object.keys(envelope).length === 1 &&
-    Object.hasOwn(envelope, "result");
-  return asTestRaw<T>(
-    isCapabilityEnvelope &&
+const parseToolPayload = asTestRaw<<T = unknown>(result: ToolCallResult) => T>(
+  (result: ToolCallResult) => {
+    const item = result.content.at(0);
+    if (!item || item.type !== "text") {
+      throw new Error("Expected a text MCP response");
+    }
+    const parsed: unknown = JSON.parse(item.text);
+    const envelope = result.structuredContent;
+    const isCapabilityEnvelope =
+      isRecord(envelope) &&
+      Object.keys(envelope).length === 1 &&
+      Object.hasOwn(envelope, "result");
+    return isCapabilityEnvelope &&
       typeof parsed === "object" &&
       parsed !== null &&
       "result" in parsed
       ? parsed.result
-      : parsed,
-  );
-};
+      : parsed;
+  },
+);
 
 type ErrorEnvelope = {
   code: string;
@@ -324,7 +329,7 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });

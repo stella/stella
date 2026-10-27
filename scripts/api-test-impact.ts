@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -13,6 +12,7 @@ import {
   API_TEST_DURATIONS_FILE_ENV,
   loadTestDurationWeights,
 } from "../apps/api/scripts/test-timings";
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
@@ -274,22 +274,29 @@ export const analyzeModule = (file: string, source: string) => {
   const shouldTransform = mentionsReads || mentionsScans || reachCandidate;
   const code = shouldTransform ? transpiler.transformSync(runnable) : "";
   let computedImports = false;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const specifier = node.arguments.at(0);
-      if (specifier === undefined || !ts.isStringLiteral(specifier)) {
-        computedImports = true;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
   if (LOADER_CALL_PATTERN.test(runnable) || mentionsReads || mentionsScans) {
-    visit(ts.createSourceFile(file, runnable, ts.ScriptTarget.Latest));
+    walk(parseSource(file, runnable).program, (node) => {
+      if (node.type === "ImportExpression") {
+        if (
+          node.source.type !== "Literal" ||
+          typeof node.source.value !== "string"
+        ) {
+          computedImports = true;
+        }
+      } else if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        const specifier = node.arguments.at(0);
+        if (
+          specifier?.type !== "Literal" ||
+          typeof specifier.value !== "string"
+        ) {
+          computedImports = true;
+        }
+      }
+    });
   }
   return {
     computedImports,
@@ -300,7 +307,11 @@ export const analyzeModule = (file: string, source: string) => {
   };
 };
 
-export const buildImportGraph = (root: string, starts: readonly string[]) => {
+export const buildImportGraph = (
+  repositoryRoot: string,
+  starts: readonly string[],
+) => {
+  const root = realpathSync(path.resolve(repositoryRoot));
   const packages = workspaceExports(root);
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();

@@ -2,6 +2,7 @@ import { expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import {
   handoffCommittedEntityDeletionCleanup,
@@ -32,9 +33,10 @@ test("preserves committed deletion success and captures a stalled delivery", asy
   expect(enqueueCleanup).toHaveBeenCalledWith(requestId);
   expect(captureDeliveryError).toHaveBeenCalledTimes(1);
   expect(capturedErrors.at(0)).toBeInstanceOf(TimeoutError);
-  expect(captureDeliveryError).toHaveBeenCalledWith(expect.any(TimeoutError), {
-    requestId,
-  });
+  expect(captureDeliveryError).toHaveBeenCalledWith(
+    expect.any(TimeoutError),
+    handlerErrorContext("entityDeletion.handoff", { requestId }),
+  );
 });
 
 // A deletion commits one cleanup request per bounded page, so a long-lived

@@ -8,6 +8,7 @@ import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -75,7 +76,7 @@ export const LeadingCitations = ({
 }: LeadingCitationsProps) => {
   const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
   const summaryView = useQueryView(summaryQuery);
-  useQueryViewError(summaryView);
+  useQueryViewError(summaryView, "LeadingCitations:query");
   const summary = summaryView.type === "items" ? summaryView.items : undefined;
   if (summary === undefined) {
     return <QueryViewFeedback view={summaryView} />;
@@ -157,7 +158,7 @@ const DirectionSection = ({
     decisionLeadingCitationsOptions(decisionId, direction),
   );
   const leadingView = useQueryView(leadingQuery);
-  useQueryViewError(leadingView);
+  useQueryViewError(leadingView, "DirectionSection:query");
   const leading = leadingView.type === "items" ? leadingView.items : undefined;
   const [showingAll, setShowingAll] = useState(false);
   const total = totalCitations(counts);
@@ -295,11 +296,13 @@ const LeadingRow = ({
           identity={decisionDocumentIdentity(row.decision)}
           title={`${row.decision.caseNumber} · ${row.decision.court}`}
         />
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "text-foreground-disabled mt-0.5 size-3 shrink-0 transition-transform",
             open && "rotate-90",
           )}
+          flip={!open}
+          icon={ChevronRightIcon}
         />
         <span className="flex min-w-0 flex-col">
           <BidiText

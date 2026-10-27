@@ -1,13 +1,15 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswer,
+  ReaderAnswerAnchor,
   ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
@@ -24,6 +26,8 @@ const { act, cleanup, fireEvent, render, renderHook, waitFor } =
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { IntlProvider: MessagesProvider } = await import("use-intl");
+const { default: csMessages } = await import("@/i18n/langs/cs.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useReaderAnswers } = await import("./use-reader-answers");
 const {
@@ -68,12 +72,13 @@ const user = {
   timezoneId: "UTC",
   wordEditShortcut: null,
 };
-const anchor = {
+const span = {
   paragraphId: "paragraph-1",
   quote: "Selected text",
   startOffset: 0,
   endOffset: 13,
 };
+const anchor: ReaderAnswerAnchor = { spans: [span] };
 const now = "2026-10-10T12:00:00.000Z";
 
 const setup = () => {
@@ -85,9 +90,11 @@ const setup = () => {
     <StrictMode>
       <QueryClientProvider client={client}>
         <AuthenticatedUserProvider user={user}>
-          <FormattingProvider locale="cs" timeZone="UTC">
-            {children}
-          </FormattingProvider>
+          <MessagesProvider locale="cs" messages={csMessages} timeZone="UTC">
+            <FormattingProvider locale="cs" timeZone="UTC">
+              {children}
+            </FormattingProvider>
+          </MessagesProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>
     </StrictMode>
@@ -458,7 +465,8 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
@@ -587,17 +595,17 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     return (
       <>
         <article ref={root} style={{ overflow: "visible" }}>
-          <p data-anchor={anchor.paragraphId}>{anchor.quote}</p>
+          <p data-anchor={span.paragraphId}>{span.quote}</p>
         </article>
         <AnnotationToolbar
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
           onClearActive={() => undefined}
@@ -616,13 +624,17 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             name: null,
           }}
           onExplain={(spans) => {
-            const span = spans.at(0);
-            if (span) {
+            const selected = spans.at(0);
+            if (selected) {
               void answers.createExplain({
-                paragraphId: span.blockAnchorId,
-                quote: span.quote,
-                startOffset: span.startOffset,
-                endOffset: span.endOffset,
+                spans: [
+                  {
+                    paragraphId: selected.blockAnchorId,
+                    quote: selected.quote,
+                    startOffset: selected.startOffset,
+                    endOffset: selected.endOffset,
+                  },
+                ],
               });
             }
           }}
@@ -648,7 +660,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}
@@ -689,7 +702,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               role: "member",
               ai: true,
               deepl: false,
-              ocr: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
               desktop: "none",
               settings: undefined,
             })}
@@ -724,7 +737,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "cs",
+      locale: "en",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();

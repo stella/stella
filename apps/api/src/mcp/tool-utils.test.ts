@@ -30,6 +30,7 @@ import {
   toolDataResult,
   toolNameDistance,
   toolNameKey,
+  toPlainCorpusText,
   toPlainTextSnippet,
   untypedToolDataResult,
   validationErrorResult,
@@ -886,5 +887,36 @@ describe("primary legal citation links", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("served corpus text", () => {
+  test("a paragraph the court numbered is served with its number", () => {
+    // The number is structure, not text: without it a paragraph can be
+    // quoted from the served text but not cited.
+    const text = toPlainCorpusText({
+      blocks: [
+        { type: "heading", plainText: "Costs" },
+        { type: "paragraph", plainText: "It follows that…", number: 134 },
+        { type: "paragraph", plainText: "1. A quoted provision." },
+        { type: "paragraph", plainText: "", number: 135 },
+      ],
+      fulltext: null,
+    });
+    expect(text).toBe(
+      "Costs\n\n¶ 134 It follows that…\n\n1. A quoted provision.",
+    );
+  });
+
+  test("a heading or a number that is no paragraph number adds nothing", () => {
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "heading", plainText: "I.", number: 1 },
+          { type: "paragraph", plainText: "Zero.", number: 0 },
+        ],
+        fulltext: null,
+      }),
+    ).toBe("I.\n\nZero.");
   });
 });

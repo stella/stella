@@ -86,6 +86,7 @@ const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
 );
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
+const observeTransportFailureMock = mock();
 const resolveMcpSessionContextMock = mock();
 const getMcpToolDefinitionMock = mock();
 const getMcpToolRequiredScopesHintMock = mock(
@@ -102,11 +103,37 @@ const listMcpToolsMock = mock(
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
+beforeEach(() => {
+  actionSizePolicyMock.mockReset();
+  actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
+  authenticateMcpRequestMock.mockReset();
+  captureErrorMock.mockReset();
+  observeTransportFailureMock.mockReset();
+  getMcpToolDefinitionMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockImplementation(
+    (_toolName: string): readonly ToolScope[] | undefined => undefined,
+  );
+  handleMcpToolCallMock.mockReset();
+  listMcpToolsMock.mockReset();
+  listMcpToolsMock.mockImplementation(async () => []);
+  listMcpResourcesMock.mockReset();
+  listMcpResourcesMock.mockImplementation(() => []);
+  readMcpResourceMock.mockReset();
+  readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
+  resolveMcpSessionContextMock.mockReset();
+  resetAnalyticsForTesting();
+  resetMetricLineSinkForTesting();
+});
+
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
-  captureError: (error, context) => {
+  captureError: (error, { context }) => {
     captureErrorMock(error, context);
+  },
+  observeTransportFailure: (error, context) => {
+    observeTransportFailureMock(error, context);
   },
   getMcpToolDefinition: getMcpToolDefinitionMock,
   getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
@@ -225,28 +252,6 @@ type McpJsonRpcFailure = {
 };
 
 describe("handleMcpHttpRequest", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    getMcpToolDefinitionMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockImplementation(
-      (_toolName: string): readonly ToolScope[] | undefined => undefined,
-    );
-    handleMcpToolCallMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    listMcpResourcesMock.mockReset();
-    listMcpResourcesMock.mockImplementation(() => []);
-    readMcpResourceMock.mockReset();
-    readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
-    resolveMcpSessionContextMock.mockReset();
-    resetAnalyticsForTesting();
-    resetMetricLineSinkForTesting();
-  });
-
   test("a real MCP transport request emits exactly one phase record", async () => {
     const toolProjectionDelayMs = 100;
     const lines: string[] = [];
@@ -819,6 +824,7 @@ describe("handleMcpHttpRequest", () => {
     for (const [refusal, resolveContext] of Object.entries(refusals)) {
       for (const protocol of ["legacy", "modern"] as const) {
         captureErrorMock.mockClear();
+        observeTransportFailureMock.mockClear();
         resolveMcpSessionContextMock.mockImplementation(resolveContext);
         const response = await handleMcpHttpRequest(
           protocol === "modern"
@@ -837,12 +843,14 @@ describe("handleMcpHttpRequest", () => {
           status: response.status,
           retryAfter: response.headers.get("Retry-After"),
           captured: captureErrorMock.mock.calls.length,
+          observed: observeTransportFailureMock.mock.calls.length,
         }).toEqual({
           refusal,
           protocol,
           status: 403,
           retryAfter: null,
           captured: 0,
+          observed: 0,
         });
         expect(response.headers.get("WWW-Authenticate")).not.toContain(
           "error=",
@@ -891,6 +899,7 @@ describe("handleMcpHttpRequest", () => {
     for (const [tag, refusal] of Object.entries(refusals)) {
       for (const protocol of ["legacy", "modern"] as const) {
         captureErrorMock.mockClear();
+        observeTransportFailureMock.mockClear();
         resolveMcpSessionContextMock.mockRejectedValue(refusal.error());
         const response = await handleMcpHttpRequest(
           protocol === "modern"
@@ -908,12 +917,14 @@ describe("handleMcpHttpRequest", () => {
           protocol,
           status: response.status,
           captured: captureErrorMock.mock.calls.length,
+          observed: observeTransportFailureMock.mock.calls.length,
           body: await readTestJson<McpJsonRpcFailure>(response),
         }).toEqual({
           tag,
           protocol,
           status: refusal.status,
           captured: 0,
+          observed: 0,
           body: {
             error: { code: -32_001, message: refusal.message },
             id: 3,
@@ -949,11 +960,11 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
     expect(response.headers.get("Retry-After")).toBe("2");
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("captures modern handler failures and preserves the retryable transport contract", async () => {
@@ -979,11 +990,11 @@ describe("handleMcpHttpRequest", () => {
       id: 1,
       jsonrpc: "2.0",
     });
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("a server fault answers with the request's JSON-RPC id on both transports", async () => {
@@ -1336,11 +1347,11 @@ describe("handleMcpHttpRequest", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("keeps the authenticated notification stream open until the client cancels", async () => {
@@ -2161,16 +2172,6 @@ describe("handleMcpHttpRequest", () => {
 });
 
 describe("MCP transport conformance", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    resolveMcpSessionContextMock.mockReset();
-  });
-
   const authenticateSession = () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({

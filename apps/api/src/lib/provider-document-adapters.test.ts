@@ -4,7 +4,7 @@ import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { describe, expect, test } from "bun:test";
 
-const PDF_BASE64 = Buffer.from("%PDF-1.4\nsynthetic").toString("base64");
+const PDF_BASE64 = Buffer.from("%PDF-1.4\nsynthetic").toBase64();
 const PDF_FILENAME = "contract.pdf";
 
 const messages = [

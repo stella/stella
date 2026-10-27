@@ -83,7 +83,7 @@ export const useOnboardingProgress = (
   const t = useTranslations();
   const dataQuery = useQuery(sessionOptions);
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useOnboardingProgress:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const stored = useMemo(

@@ -75,7 +75,10 @@ export const TwoFactorPanel = ({ className }: TwoFactorPanelProps) => {
       await invalidateSession.mutateAsync();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TwoFactorPanel:failure",
+        scope: { type: "handler", handlerId: "TwoFactorPanel:failure" },
+      });
     },
   });
 

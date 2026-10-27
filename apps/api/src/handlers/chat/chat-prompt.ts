@@ -156,6 +156,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,
@@ -844,19 +845,31 @@ const resolveActiveFilePromptContext = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    captureError(readResult.error, {
-      fieldId: fileFieldId,
-      workspaceId,
-    });
+    captureError(
+      readResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.readResult_error",
+        {
+          fieldId: fileFieldId,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
-    captureError(previewResult.error, {
-      fieldId: fileFieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      previewResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.previewResult_error",
+        {
+          fieldId: fileFieldId,
+          mimeType: emailMimeType,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
 
@@ -2178,10 +2191,13 @@ const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
       raised,
     );
   }
-  captureError(raised, {
-    decisionId: row.id,
-    step: ACTIVE_DECISION_AST_READ_STEP,
-  });
+  captureError(
+    raised,
+    handlerErrorContext("chat.readActiveDecisionAst.raised", {
+      decisionId: row.id,
+      step: ACTIVE_DECISION_AST_READ_STEP,
+    }),
+  );
   return null;
 };
 

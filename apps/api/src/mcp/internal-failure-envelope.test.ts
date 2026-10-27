@@ -30,6 +30,10 @@ import type {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  createTimeEntryHandlerMock.mockReset();
+});
+
 const createTimeEntryHandlerMock = mock();
 
 // Inject the backing time-entry create handler through the request context so
@@ -261,6 +265,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
   test("internalFailureResult never echoes the internal error text", () => {
     const result = internalFailureResult(
       new Error(`unhandled: ${DB_INTERNAL_LEAK_TOKEN}`),
+      "mcp.result.failure",
     );
 
     const serialized = serializeToolResult(result);
@@ -312,6 +317,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
             hint: "Correct the request and call the tool again.",
             retryable,
           }),
+          "mcp.result.failure",
         );
         expect(JSON.parse(envelopeText(result))).toEqual({
           error: {
@@ -336,6 +342,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
       const message = `curated business message for ${status}`;
       const result = internalFailureResult(
         new HandlerError({ status, message }),
+        "mcp.result.failure",
       );
 
       expectBusinessEnvelope(result, { code, message });
@@ -350,6 +357,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         status: 500,
         message: `internal boom ${DB_INTERNAL_LEAK_TOKEN}`,
       }),
+      "mcp.result.failure",
     );
 
     expectInternalErrorEnvelope(result);
@@ -366,6 +374,7 @@ describe("internalFailureResult preserves expected handler errors", () => {
         message: "ARES is temporarily unavailable",
         cause: new Error(DB_INTERNAL_LEAK_TOKEN),
       }),
+      "mcp.result.failure",
     );
 
     expect(JSON.parse(envelopeText(result))).toEqual({

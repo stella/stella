@@ -85,6 +85,22 @@ test("runtime imports select a handler test, a changed test itself and workspace
   });
 });
 
+test("import graph roots with and without a trailing separator are equivalent", () => {
+  withRepository((root) => {
+    const starts = ["apps/api/src/handler.test.ts"];
+    const plain = buildImportGraph(root, starts);
+    const trailing = buildImportGraph(`${root}${path.sep}`, starts);
+    expect([...trailing.closure(starts[0] ?? "")].toSorted()).toEqual(
+      [...plain.closure(starts[0] ?? "")].toSorted(),
+    );
+    for (const file of plain.closure(starts[0] ?? "")) {
+      expect(trailing.dependencies(file), file).toEqual(
+        plain.dependencies(file),
+      );
+    }
+  });
+});
+
 const ruleCases = {
   manifest: "packages/example/package.json",
   lockfile: "bun.lock",
@@ -538,8 +554,9 @@ test("computed template imports and require calls retain their test importers", 
 
 // timeout: Two walks over the real repository graph; the limit only catches a hang.
 // Their cost grows with the graph, the number of tests and the runner's load,
-// so it is not a performance budget (the scan test above uses the same limit).
-// Measured p95 is 18.6 s; this test must build the complete repository import graph.
+// so it is not a performance budget.
+// Measured p95 is 18.6 s and loaded runners have taken over 40 s; this test
+// must build the complete repository import graph.
 test("the repository graph reaches real handler tests and workspace consumers", () => {
   const listed = Bun.spawnSync(["git", "ls-files", "-z", "apps/api"], {
     cwd: path.resolve(import.meta.dir, ".."),
@@ -565,7 +582,7 @@ test("the repository graph reaches real handler tests and workspace consumers", 
   // A selector that returns every test must not pass as "selected".
   expect(handler.files.length).toBeLessThan(apiTestCount);
   expect(pkg.files.length).toBeLessThan(apiTestCount);
-}, 40_000);
+}, 120_000);
 
 test("a real web change selects only tests with a web-reaching reader", () => {
   const repositoryRoot = path.resolve(import.meta.dir, "..");

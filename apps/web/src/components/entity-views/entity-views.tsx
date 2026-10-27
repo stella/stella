@@ -31,6 +31,7 @@ import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import {
   GroupByControl,
   KanbanGroupingSettings,
@@ -89,7 +90,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const latestSave = useRef(0);
   useExternalSyncEffect(() => {
     if (saved.error) {
-      analytics.captureError(saved.error);
+      analytics.captureError(saved.error, {
+        fingerprintKey: "EntityViews:failure",
+        scope: { type: "handler", handlerId: "EntityViews:failure" },
+      });
     }
   }, [analytics, saved.error]);
   const defaults = useMemo(
@@ -126,7 +130,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       ? draft
       : (views.find((view) => view.id === selectedId) ?? views.at(0));
   const reportError = (error: unknown) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "EntityViews.reportError:failure",
+      scope: { type: "handler", handlerId: "EntityViews.reportError:failure" },
+    });
     notifyUserError(error, t("common.unexpectedError"));
   };
   const save = useMutation({
@@ -399,7 +406,11 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
               sorts={activeView.layout.sorts}
               properties={sortProperties}
               maxSorts={VIEW_SORTS_MAX}
-              labels={{ add: t("common.add"), remove: t("common.remove") }}
+              labels={{
+                add: t("common.add"),
+                remove: t("common.remove"),
+                directions: sortDirectionLabels((key) => t(key)),
+              }}
               onUpdate={(sorts) =>
                 onLayoutChange(mergeLayout(activeView.layout, { sorts }))
               }
@@ -527,7 +538,10 @@ const EntityViewContent = ({
   };
   useExternalSyncEffect(() => {
     if (records.error) {
-      analytics.captureError(records.error);
+      analytics.captureError(records.error, {
+        fingerprintKey: "EntityViewContent:failure",
+        scope: { type: "handler", handlerId: "EntityViewContent:failure" },
+      });
     }
   }, [analytics, records.error]);
   const loading = records.isPending;

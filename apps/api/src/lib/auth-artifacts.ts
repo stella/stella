@@ -581,6 +581,46 @@ type HoldLiveSessionCredentialFenceOptions = {
   sessionId: string | null;
 };
 
+type HoldGrantCredentialFenceOptions = HoldLiveSessionCredentialFenceOptions & {
+  /** The provider grant a token continues; its earlier tokens prove it. */
+  grantId: string | null;
+};
+
+const isSessionLive = async (
+  tx: Transaction,
+  { userId, sessionId }: { userId: SafeId<"user">; sessionId: string },
+) => {
+  const [live] = await tx
+    .select({ id: sessionTable.id })
+    .from(sessionTable)
+    .where(
+      and(
+        eq(sessionTable.id, sessionId),
+        eq(sessionTable.userId, userId),
+        sql`${sessionTable.expiresAt} > now()`,
+      ),
+    )
+    .limit(1);
+  return live !== undefined;
+};
+
+const hasGrantToken = async (
+  tx: Transaction,
+  { userId, grantId }: { userId: SafeId<"user">; grantId: string },
+) => {
+  const [earlier] = await tx
+    .select({ id: oauthRefreshToken.id })
+    .from(oauthRefreshToken)
+    .where(
+      and(
+        eq(oauthRefreshToken.userId, userId),
+        eq(oauthRefreshToken.authorizationCodeId, grantId),
+      ),
+    )
+    .limit(1);
+  return earlier !== undefined;
+};
+
 /**
  * Proof that a transaction holds the account's credential fence for a live
  * issuing session. Only `hold` creates one, so a credential can be written
@@ -604,18 +644,30 @@ export class CredentialIssuanceFence {
       return null;
     }
     await shareAccountRow(tx, userId);
-    const [live] = await tx
-      .select({ id: sessionTable.id })
-      .from(sessionTable)
-      .where(
-        and(
-          eq(sessionTable.id, sessionId),
-          eq(sessionTable.userId, userId),
-          sql`${sessionTable.expiresAt} > now()`,
-        ),
-      )
-      .limit(1);
-    return live === undefined ? null : new CredentialIssuanceFence(tx, userId);
+    return (await isSessionLive(tx, { userId, sessionId }))
+      ? new CredentialIssuanceFence(tx, userId)
+      : null;
+  }
+
+  /**
+   * The fence for a token a provider grant issues: the grant's session is
+   * live, or an earlier token of the same grant survives. Account-wide
+   * revocation deletes both under this fence, so a refresh that rotated before
+   * a reset cannot insert its successor after it.
+   */
+  static async holdForGrant(
+    tx: Transaction,
+    { userId, sessionId, grantId }: HoldGrantCredentialFenceOptions,
+  ): Promise<CredentialIssuanceFence | null> {
+    if (sessionId === null && grantId === null) {
+      return null;
+    }
+    await shareAccountRow(tx, userId);
+    const authorized =
+      (sessionId !== null &&
+        (await isSessionLive(tx, { userId, sessionId }))) ||
+      (grantId !== null && (await hasGrantToken(tx, { userId, grantId })));
+    return authorized ? new CredentialIssuanceFence(tx, userId) : null;
   }
 }
 

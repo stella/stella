@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 
-import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -25,7 +26,7 @@ export const InvoicePdfDownloadButton = ({
   invoiceId,
 }: InvoicePdfDownloadButtonProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const messageLocale = useMessageLocale();
   const formattingLocale = useFormattingLocale();
   const analytics = useAnalytics();
   const download = useMutation({
@@ -38,7 +39,7 @@ export const InvoicePdfDownloadButton = ({
           {},
           {
             headers: {
-              "Accept-Language": locale,
+              "Accept-Language": messageLocale,
               "x-stella-formatting-locale": formattingLocale,
             },
             fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
@@ -58,7 +59,13 @@ export const InvoicePdfDownloadButton = ({
       downloadFile(blob, fileName);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "InvoicePdfDownloadButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "InvoicePdfDownloadButton:failure",
+        },
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });
