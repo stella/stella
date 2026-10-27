@@ -303,6 +303,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
   ]),
+  fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
+    "no-hookless-use-function/no-hookless-use-function",
+  ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
@@ -1781,6 +1784,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
@@ -4175,6 +4179,25 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      // Sources the React Compiler compiles: the web and MCP app bundles
+      // with the workspace packages they import, and the Expo app. The
+      // compiler skips a `use*` function that calls no hook.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/*/src/**/*.{ts,tsx}",
+        "apps/mobile/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
+        "**/src/hooks/use-effect.ts",
+      ],
+      rules: {
+        "no-hookless-use-function/no-hookless-use-function": "error",
       },
     },
     {
