@@ -1,8 +1,12 @@
 import { panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
 import { runInLanes } from "./test-lanes";
+
+afterEach(() => {
+  mock.restore();
+});
 
 type FakeBatch = { kind: TestBatchKind; name: string };
 

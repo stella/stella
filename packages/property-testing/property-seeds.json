@@ -188,6 +188,14 @@
       "date": "2026-10-05"
     }
   ],
+  "packages/legal-atlas/src/provision-citation-resolve.property.test.ts::names a listed short title's act in every head form and enclosure": [
+    {
+      "seed": 20260901,
+      "path": "17:0:0:0:0",
+      "note": "Regression coverage",
+      "date": "2026-10-27"
+    }
+  ],
   "scripts/ci-checks-partition.test.ts::continued guard conditions preserve every previously runnable plan outcome": [
     {
       "seed": 20260901,

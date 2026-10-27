@@ -127,6 +127,13 @@ body:has(.clipboard-editor-window) .font-sans {
   backdrop-filter: none;
 }
 
+/* Native focus scrolling rounds fractional chip positions to scroll pixels.
+ * Leave one pixel at both ends so that rounding cannot clip the focused chip. */
+.clipboard-groups-rail [data-clipboard-groups-scroller] {
+  padding-inline: 1px;
+  scroll-padding-inline: 1px;
+}
+
 .clipboard-controls {
   background: transparent;
   box-shadow: none;

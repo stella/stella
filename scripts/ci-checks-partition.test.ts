@@ -13,6 +13,7 @@ import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  type CheckPoolJob,
   checkPoolRegistryPath,
   checkPoolStepRun,
   type ReadCheckPool,
@@ -248,6 +249,9 @@ const jobs = v.parse(
 // today's form, so its pooled checks still expand and compare. Matches only
 // the old form, so it is inert once the merge base carries the new one.
 const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// Pool steps then ran the pool without `exec`; that form reads as today's too.
+const preExecPoolRun = (job: CheckPoolJob) =>
+  checkPoolStepRun(job).replace(" exec bun ", " bun ");
 const withCurrentPoolSteps = (workflow: unknown): unknown => {
   const parsed = v.parse(
     v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
@@ -267,7 +271,8 @@ const withCurrentPoolSteps = (workflow: unknown): unknown => {
           }),
           step,
         ) ||
-        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+        (LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job &&
+          step.run !== preExecPoolRun(job))
       ) {
         return step;
       }
@@ -1265,6 +1270,8 @@ test("code-quality pool preserves every moved check exactly once", () => {
   ];
   const withoutPoolMetadata = (step: Record<string, unknown>) => {
     const normalized = { ...step };
+    // An expanded pooled check carries its generated budget as its timeout.
+    delete normalized["timeout-minutes"];
     // An ordinary step's implicit success() is `!cancelled()` in the pool.
     if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
       delete normalized["if"];
