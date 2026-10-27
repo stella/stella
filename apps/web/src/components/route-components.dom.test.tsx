@@ -103,13 +103,13 @@ for (const { locale, messages } of [
       container.innerHTML = markup;
       const ui = within(container);
       const message = ui.queryByRole("heading") ?? ui.getByRole("status");
-      expect((message.textContent ?? "").trim().length).toBeGreaterThan(0);
+      expect(message.textContent.trim().length).toBeGreaterThan(0);
       const actions = [
         ...ui.queryAllByRole("button"),
         ...ui.queryAllByRole("link"),
       ];
       expect(actions.length).toBeGreaterThan(0);
-      expect(actions.some((action) => action.textContent?.trim())).toBe(true);
+      expect(actions.some((action) => action.textContent.trim())).toBe(true);
       client.clear();
     });
   }
