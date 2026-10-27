@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# toiming} other {# toimingut}}",
       "activeVsLogged": "Tegevus {active} · Kirjendatud {logged}",
+      "alreadyCovered": "Juba kaetud salvestatud ajaga",
       "chatEvidence": "{count, plural, one {# sõnum} other {# sõnumit}} vestluses „{title}“",
+      "engagedTime": "{duration} aktiivset aega",
       "keyboardHint": "Enter võtab vastu, E muudab enne vastuvõtmist, Delete jätab kõrvale",
       "privacyNote": "Neid näete ainult teie. Midagi ei kirjendata enne, kui te ettepaneku vastu võtate.",
       "title": "Ettepanekud teie tegevuse põhjal",

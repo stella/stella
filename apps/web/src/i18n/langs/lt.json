@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# veiksmas} few {# veiksmai} many {# veiksmų} other {# veiksmo}}",
       "activeVsLogged": "Veikla: {active} · Užregistruota: {logged}",
+      "alreadyCovered": "Jau padengta užregistruotu laiku",
       "chatEvidence": "{count, plural, one {# žinutė} few {# žinutės} many {# žinučių} other {# žinutės}} pokalbyje „{title}“",
+      "engagedTime": "{duration} aktyvaus darbo",
       "keyboardHint": "Enter priima, E leidžia redaguoti prieš priimant, Delete atmeta",
       "privacyNote": "Šiuos pasiūlymus matote tik jūs. Niekas neįrašoma, kol pasiūlymo nepriimate.",
       "title": "Pasiūlymai pagal jūsų veiklą",
