@@ -12,8 +12,8 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  REMOVAL_RETRY_KIND_BY_TYPE,
   REMOVAL_RETRY_KINDS,
+  removalRetryKind,
   removalRetryPayloadSchema,
 } from "@/api/lib/legal-search/removal-reconciliation-state";
 import type {
@@ -55,7 +55,7 @@ export const selectDueRemovalRetries = async ({
 }: SelectRemovalRetriesOptions): Promise<RemovalRetryItem[]> => {
   const items: RemovalRetryItem[] = [];
   for (const kind of REMOVAL_RETRY_KINDS) {
-    // db-await-in-loop: two fixed kind ranges each have their own indexed limit.
+    // db-await-in-loop: fixed kind ranges each have their own indexed limit.
     const rows = await scopedDb(
       async (tx) =>
         await tx
@@ -84,10 +84,7 @@ export const selectDueRemovalRetries = async ({
     );
     for (const row of rows) {
       const parsed = v.safeParse(removalRetryPayloadSchema, row.payload);
-      if (
-        !parsed.success ||
-        REMOVAL_RETRY_KIND_BY_TYPE[parsed.output.type] !== kind
-      ) {
+      if (!parsed.success || removalRetryKind(parsed.output) !== kind) {
         return panic("Invalid publisher-removal retry item");
       }
       items.push({
@@ -107,6 +104,57 @@ type PersistRemovalOutcomeOptions = {
   outcome: RemovalStepOutcome;
   now: Date;
   origin: { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
+};
+
+type RemovalPayloadOptions = Pick<
+  PersistRemovalOutcomeOptions,
+  "decisionId" | "origin"
+> & {
+  outcome: Exclude<RemovalStepOutcome, { type: "settled" }>;
+};
+const removalOutcomePayload = ({
+  decisionId,
+  outcome,
+  origin,
+}: RemovalPayloadOptions) => {
+  switch (outcome.type) {
+    case "superseded":
+      return {
+        type: "superseded",
+        reason: outcome.reason,
+        evidence: outcome.evidence,
+        decisionId,
+        previousItemId:
+          origin.type === "retry"
+            ? origin.item.id
+            : panic("Only a retry can supersede an erasure"),
+      } as const satisfies RemovalRetryPayload;
+    case "unprobeable":
+      return {
+        type: outcome.type,
+        decisionId,
+        reason: outcome.reason,
+      } as const satisfies RemovalRetryPayload;
+    case "pending":
+      if (outcome.operation === "erase") {
+        return {
+          type: outcome.type,
+          operation: outcome.operation,
+          decisionId,
+          reason: outcome.reason,
+          evidence: outcome.evidence,
+        } as const satisfies RemovalRetryPayload;
+      }
+      return {
+        type: outcome.type,
+        operation: outcome.operation,
+        decisionId,
+        reason: outcome.reason,
+      } as const satisfies RemovalRetryPayload;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled removal retry payload");
+  }
 };
 
 /** The caller holds the source row; retry revisions prevent stale attempts recreating settled work. */
@@ -161,7 +209,7 @@ export const persistRemovalOutcomeTx = async (
     outcome.type === "pending" &&
     outcome.operation === "erase" &&
     origin.type === "retry" &&
-    (origin.item.payload.type === "unprobeable" ||
+    (origin.item.payload.type !== "pending" ||
       origin.item.payload.operation === "probe");
   const attempts = (previous?.attempts ?? 0) + (discoveryErasure ? 0 : 1);
   const delay =
@@ -169,16 +217,8 @@ export const persistRemovalOutcomeTx = async (
       Math.max(1, Math.min(attempts, RETRY_DELAYS_MS.length)) - 1,
     ) ?? panic("Missing removal retry delay");
   const pending = {
-    kind: REMOVAL_RETRY_KIND_BY_TYPE[outcome.type],
-    payload:
-      outcome.type === "unprobeable"
-        ? { type: outcome.type, decisionId, reason: outcome.reason }
-        : {
-            type: outcome.type,
-            operation: outcome.operation,
-            decisionId,
-            reason: outcome.reason,
-          },
+    kind: removalRetryKind(outcome),
+    payload: removalOutcomePayload({ decisionId, outcome, origin }),
     attempts,
     nextAttemptAt: new Date(
       now.getTime() + (discoveryErasure || newlyAuthorizedErasure ? 0 : delay),
@@ -186,6 +226,24 @@ export const persistRemovalOutcomeTx = async (
     lastAttemptAt: now,
     lastError: outcome.reason,
   };
+  if (outcome.type === "superseded") {
+    // Close the old authorization and create a separately identified current-identity probe.
+    await tx
+      .delete(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, identityKey),
+        ),
+      );
+    await tx.insert(caseLawReconciliationItems).values({
+      sourceId,
+      identityKey,
+      slice: REMOVAL_RETRY_SLICE,
+      ...pending,
+    });
+    return true;
+  }
   await tx
     .insert(caseLawReconciliationItems)
     .values({ sourceId, identityKey, slice: REMOVAL_RETRY_SLICE, ...pending })

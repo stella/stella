@@ -50,6 +50,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
 
 /** How long a run waits for a crawl to release the source's lease. */
 const HOLDER_LEASE_WAIT_MS = 2 * 60 * 1000;
@@ -72,6 +73,7 @@ export type RedactWithSupplementHoldersOutcome = {
 };
 
 type RedactWithSupplementHoldersOptions = {
+  evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   /** Test seam; production reads the documents bucket. */
@@ -296,14 +298,18 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   leaseWaitMs = HOLDER_LEASE_WAIT_MS,
   reparseStoredRaw,
   redactDecision = redactCaseLawDecision,
+  evidence,
 }: RedactWithSupplementHoldersOptions): Promise<
   Result<RedactWithSupplementHoldersOutcome, DatabaseError>
 > => {
-  const redaction = await redactDecision({ decisionId, scopedDb });
+  const redaction = await redactDecision({ decisionId, scopedDb, evidence });
   if (Result.isError(redaction)) {
     return redaction;
   }
-  if (redaction.value.type === "not-found") {
+  if (
+    redaction.value.type === "not-found" ||
+    redaction.value.type === "superseded"
+  ) {
     return Result.ok({ redaction: redaction.value, holders: [] });
   }
   // One at a time: each takes the citation graph lock and the source lease.

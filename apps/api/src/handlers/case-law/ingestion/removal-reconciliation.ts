@@ -28,6 +28,10 @@ import {
   DatabaseError,
 } from "@/api/lib/errors/tagged-errors";
 import {
+  REMOVAL_SUPERSEDED_REASON,
+  supersededRemovalEvidence,
+} from "@/api/lib/legal-search/removal-evidence";
+import {
   REMOVAL_PENDING_REASON,
   REMOVAL_UNPROBEABLE_REASON,
   removalCheckpointSchema,
@@ -52,6 +56,7 @@ export const REMOVAL_SWEEP_INTERVAL_MS = 7 * DAY_IN_MS;
 export const REMOVAL_SWEEP_REQUEST_BUDGET = 100;
 export const REMOVAL_SWEEP_TIME_BUDGET_MS = 60_000;
 export const REMOVAL_RETRY_PER_KIND_BUDGET = 10;
+export const REMOVAL_RETRY_TIME_BUDGET_MS = 30_000;
 const SOURCE_REFUSAL_MIN_HOLD_MS = 3_600_000;
 const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
 
@@ -75,6 +80,7 @@ type SweepOptions = {
   sourceId: SafeId<"caseLawSource">;
   signal: AbortSignal;
   now?: () => Date;
+  clock?: () => number;
   probe?: RemovalProbe;
   remove?: typeof removePublisherDecision;
 };
@@ -244,6 +250,39 @@ const initialRemovalCheckpoint = async ({
     : { status: "running", cursor: null, ceiling: last.id };
 };
 
+const publisherRemovalPause = (
+  error: unknown,
+  now: Date,
+): SourcePausedOutcome | null => {
+  if (
+    error instanceof AdapterFetchError &&
+    error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL
+  ) {
+    const epochMs = now.getTime();
+    const retryAfterMs =
+      parsePublisherRetryAfter(error.retryAfter ?? null, epochMs) ?? 0;
+    const sharedCooldown =
+      error instanceof PublisherRateLimitRefusalError
+        ? error.cooldownUntilEpochMs
+        : epochMs;
+    // Source refusals use at least an hourly hold and preserve longer publisher or gate deadlines.
+    return {
+      type: "source-paused",
+      resumeAt: new Date(
+        Math.min(
+          MAX_DATE_EPOCH_MS,
+          Math.max(
+            epochMs + SOURCE_REFUSAL_MIN_HOLD_MS,
+            epochMs + retryAfterMs,
+            sharedCooldown,
+          ),
+        ),
+      ).toISOString(),
+    };
+  }
+  return null;
+};
+
 type ProcessRemovalDecisionOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
@@ -267,18 +306,24 @@ const processRemovalDecision = async ({
 }: ProcessRemovalDecisionOptions): Promise<
   RemovalStepOutcome | SourcePausedOutcome
 > => {
-  let operation: "probe" | "erase" =
-    mode.type === "retry" && mode.item.payload.type === "pending"
-      ? mode.item.payload.operation
-      : "probe";
+  let evidence =
+    mode.type === "retry" &&
+    mode.item.payload.type === "pending" &&
+    mode.item.payload.operation === "erase"
+      ? mode.item.payload.evidence
+      : undefined;
   const result = await Result.tryPromise({
     try: async (): Promise<RemovalStepOutcome> => {
       const decision = await scopedDb(async (tx) =>
         (
           await tx
             .select({
+              id: caseLawDecisions.id,
+              sourceId: caseLawDecisions.sourceId,
               sourceDocumentId: caseLawDecisions.sourceDocumentId,
               redactedAt: caseLawDecisions.redactedAt,
+              sourceObservedAt: caseLawDecisions.sourceObservedAt,
+              sourceObservationOrder: caseLawDecisions.sourceObservationOrder,
             })
             .from(caseLawDecisions)
             .where(
@@ -293,19 +338,38 @@ const processRemovalDecision = async ({
       if (decision === undefined) {
         return { type: "settled" };
       }
-      const erasureAuthorized =
-        decision.redactedAt !== null || operation === "erase";
-      if (!erasureAuthorized) {
+      if (evidence !== undefined) {
+        const reason = supersededRemovalEvidence(evidence, decision);
+        if (reason !== null) {
+          return { type: "superseded", reason, evidence };
+        }
+      }
+      const revision = {
+        decisionId,
+        sourceId,
+        sourceObservationOrder:
+          decision.sourceObservationOrder?.toString() ?? null,
+        sourceObservedAt: decision.sourceObservedAt?.toISOString() ?? null,
+      };
+      const erasureRetry = evidence !== undefined;
+      if (decision.redactedAt === null) {
         if (decision.sourceDocumentId === null) {
           return {
             type: "unprobeable",
             reason: REMOVAL_UNPROBEABLE_REASON.MISSING_IDENTITY,
           };
         }
+        // A queued absence is rechecked before its first irreversible redaction.
         const observation = await reader(decision.sourceDocumentId, signal);
         switch (observation.type) {
           case "present":
-            return { type: "settled" };
+            return evidence === undefined
+              ? { type: "settled" }
+              : {
+                  type: "superseded",
+                  evidence,
+                  reason: REMOVAL_SUPERSEDED_REASON.RESTORED,
+                };
           case "unprobeable":
             return observation;
           case "unavailable":
@@ -329,24 +393,38 @@ const processRemovalDecision = async ({
               reason: REMOVAL_PENDING_REASON.PUBLISHER_REFUSED,
             };
           case "absent":
+            evidence = {
+              ...revision,
+              type: "publisher-absence",
+              sourceDocumentId: decision.sourceDocumentId,
+              observedAt: now().toISOString(),
+              absence: observation.evidence,
+            };
             break;
           default:
             observation satisfies never;
             return panic("Unhandled removal observation");
         }
+      } else {
+        evidence ??= {
+          ...revision,
+          type: "existing-redaction",
+          sourceDocumentId: decision.sourceDocumentId,
+          observedAt: now().toISOString(),
+        };
       }
-      operation = "erase";
-      if (mode.type === "discovery" || !erasureAuthorized) {
+      if (mode.type === "discovery" || !erasureRetry) {
         return {
           type: "pending",
           operation: "erase",
+          evidence,
           reason:
             decision.redactedAt === null
               ? REMOVAL_PENDING_REASON.PUBLISHER_ABSENT
               : REMOVAL_PENDING_REASON.STORES_PENDING,
         };
       }
-      const removed = await remove({ scopedDb, decisionId });
+      const removed = await remove({ scopedDb, decisionId, evidence });
       if (removed.isErr()) {
         captureError(
           removed.error,
@@ -357,56 +435,45 @@ const processRemovalDecision = async ({
         return {
           type: "pending",
           operation: "erase",
+          evidence,
           reason: REMOVAL_PENDING_REASON.OPERATION_FAILED,
         };
       }
-      return removed.value.type === "pending"
-        ? {
+      switch (removed.value.type) {
+        case "superseded":
+          return { type: "superseded", reason: removed.value.reason, evidence };
+        case "pending":
+          return {
             type: "pending",
             operation: "erase",
+            evidence,
             reason: REMOVAL_PENDING_REASON.STORES_PENDING,
-          }
-        : { type: "settled" };
+          };
+        case "removed":
+          return { type: "settled" };
+        default:
+          removed.value satisfies never;
+          return panic("Unhandled publisher removal outcome");
+      }
     },
     catch: (cause) => cause,
   });
   if (result.isOk()) {
     return result.value;
   }
-  if (
-    result.error instanceof AdapterFetchError &&
-    result.error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL
-  ) {
-    const epochMs = now().getTime();
-    const retryAfterMs =
-      parsePublisherRetryAfter(result.error.retryAfter ?? null, epochMs) ?? 0;
-    const sharedCooldown =
-      result.error instanceof PublisherRateLimitRefusalError
-        ? result.error.cooldownUntilEpochMs
-        : epochMs;
-    // Source refusals use at least an hourly hold and preserve longer publisher or gate deadlines.
-    return {
-      type: "source-paused",
-      resumeAt: new Date(
-        Math.min(
-          MAX_DATE_EPOCH_MS,
-          Math.max(
-            epochMs + SOURCE_REFUSAL_MIN_HOLD_MS,
-            epochMs + retryAfterMs,
-            sharedCooldown,
-          ),
-        ),
-      ).toISOString(),
-    };
+  const paused = publisherRemovalPause(result.error, now());
+  if (paused !== null) {
+    return paused;
   }
   captureError(
     result.error,
     handlerErrorContext("caseLaw.removal.operation_failed", { decisionId }),
   );
-  return operation === "erase"
+  return evidence !== undefined
     ? {
         type: "pending",
         operation: "erase",
+        evidence,
         reason: REMOVAL_PENDING_REASON.OPERATION_FAILED,
       }
     : {
@@ -418,7 +485,12 @@ const processRemovalDecision = async ({
 
 type DiscoveryOptions = Required<
   Pick<SweepOptions, "sourceId" | "signal" | "now" | "remove">
-> & { probe: RemovalProbe | undefined; scopedDb: ScopedDb; deadline: number };
+> & {
+  probe: RemovalProbe | undefined;
+  scopedDb: ScopedDb;
+  deadline: number;
+  clock: () => number;
+};
 const discoverPublisherRemovals = async ({
   scopedDb,
   sourceId,
@@ -427,12 +499,10 @@ const discoverPublisherRemovals = async ({
   probe,
   remove,
   deadline,
+  clock,
 }: DiscoveryOptions): Promise<DiscoveryOutcome> => {
   let checked = 0;
-  while (
-    checked < REMOVAL_SWEEP_REQUEST_BUDGET &&
-    performance.now() < deadline
-  ) {
+  while (checked < REMOVAL_SWEEP_REQUEST_BUDGET && clock() < deadline) {
     signal.throwIfAborted();
     // db-await-in-loop: source control and CAS state are read before each bounded discovery step.
     const source = await readSource(scopedDb, sourceId);
@@ -600,6 +670,7 @@ const retryPublisherRemovals = async ({
   probe,
   remove,
   deadline,
+  clock,
 }: RetryOptions): Promise<{ retried: number; pauseUntil: Date | null }> => {
   const items = await selectDueRemovalRetries({
     scopedDb,
@@ -609,7 +680,7 @@ const retryPublisherRemovals = async ({
   });
   let retried = 0;
   for (const item of items) {
-    if (performance.now() >= deadline) {
+    if (clock() >= deadline) {
       break;
     }
     signal.throwIfAborted();
@@ -676,18 +747,53 @@ const retryPublisherRemovals = async ({
   return { retried, pauseUntil: null };
 };
 
+/** An elapsed source hold resumes before the priority completion phase. */
+const prepareRemovalRun = async ({
+  scopedDb,
+  sourceId,
+  probe,
+  now,
+}: DiscoveryOptions): Promise<{ type: "ready" } | DiscoveryOutcome> => {
+  const source = await readSource(scopedDb, sourceId);
+  if (source === undefined || readerForSource(source, probe) === undefined) {
+    return { type: "disabled", checked: 0 };
+  }
+  const state = v.parse(
+    v.nullable(removalCheckpointSchema),
+    source.removalCheckpoint,
+  );
+  if (state?.status !== "paused") {
+    return { type: "ready" };
+  }
+  const resumeAt = new Date(state.resumeAt);
+  if (resumeAt.getTime() > now().getTime()) {
+    return { type: "paused", checked: 0, resumeAt };
+  }
+  const resumed = await commitRemovalProgress({
+    scopedDb,
+    sourceId,
+    source,
+    next: state.resume,
+    items: [],
+    now: now(),
+  });
+  return resumed ? { type: "ready" } : { type: "contended", checked: 0 };
+};
+
 /** Weekly discovery and bounded durable completion share source control, not a cursor. */
 export const reconcilePublisherRemovals = async ({
   scopedDb: database,
   sourceId,
   signal,
   now = () => new Date(),
+  clock = () => performance.now(),
   probe,
   remove = removePublisherDecision,
 }: SweepOptions): Promise<Result<SweepOutcome, DatabaseError>> =>
   await Result.tryPromise({
     try: async () => {
-      const deadline = performance.now() + REMOVAL_SWEEP_TIME_BUDGET_MS;
+      const wallDeadline = performance.now() + REMOVAL_SWEEP_TIME_BUDGET_MS;
+      const deadline = clock() + REMOVAL_SWEEP_TIME_BUDGET_MS;
       const runSignal = AbortSignal.any([
         signal,
         AbortSignal.timeout(REMOVAL_SWEEP_TIME_BUDGET_MS),
@@ -697,7 +803,7 @@ export const reconcilePublisherRemovals = async ({
           runSignal.throwIfAborted();
           const remainingMs = Math.max(
             1,
-            Math.ceil(deadline - performance.now()),
+            Math.ceil(wallDeadline - performance.now()),
           );
           await setSharedTransactionTimeouts(tx, {
             statementTimeoutMs: Math.min(30_000, remainingMs),
@@ -713,29 +819,65 @@ export const reconcilePublisherRemovals = async ({
         probe,
         remove,
         deadline,
+        clock,
       };
+      const prepared = await prepareRemovalRun(context);
+      if (prepared.type !== "ready") {
+        return {
+          ...prepared,
+          retried: 0,
+          nextRetryAt: prepared.type === "paused" ? prepared.resumeAt : null,
+        };
+      }
+      // Due erasures have their own first phase; enumeration cannot spend its reservation.
+      const first = await retryPublisherRemovals({
+        ...context,
+        deadline: Math.min(deadline, clock() + REMOVAL_RETRY_TIME_BUDGET_MS),
+      });
+      if (first.pauseUntil !== null) {
+        return {
+          type: "paused",
+          checked: 0,
+          retried: first.retried,
+          resumeAt: first.pauseUntil,
+          nextRetryAt: first.pauseUntil,
+        };
+      }
       const discovered = await discoverPublisherRemovals(context);
       if (discovered.type === "paused") {
-        return { ...discovered, retried: 0, nextRetryAt: discovered.resumeAt };
+        return {
+          ...discovered,
+          retried: first.retried,
+          nextRetryAt: discovered.resumeAt,
+        };
       }
-      if (discovered.type === "disabled" || performance.now() >= deadline) {
-        return { ...discovered, retried: 0, nextRetryAt: null };
+      if (discovered.type === "disabled" || clock() >= deadline) {
+        return {
+          ...discovered,
+          retried: first.retried,
+          nextRetryAt: discovered.type === "disabled" ? null : now(),
+        };
       }
-      const retry = await retryPublisherRemovals(context);
-      if (retry.pauseUntil !== null) {
+      // Fast discovery may also settle newly queued work, within the remaining run budget.
+      const last =
+        discovered.checked === 0
+          ? { retried: 0, pauseUntil: null }
+          : await retryPublisherRemovals(context);
+      const retried = first.retried + last.retried;
+      if (last.pauseUntil !== null) {
         return {
           type: "paused",
           checked: discovered.checked,
-          retried: retry.retried,
-          resumeAt: retry.pauseUntil,
-          nextRetryAt: retry.pauseUntil,
+          retried,
+          resumeAt: last.pauseUntil,
+          nextRetryAt: last.pauseUntil,
         };
       }
       return {
         ...discovered,
-        retried: retry.retried,
+        retried,
         nextRetryAt:
-          performance.now() >= deadline
+          clock() >= deadline
             ? now()
             : await nextRemovalRetryAt(scopedDb, sourceId),
       };

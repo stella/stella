@@ -195,7 +195,10 @@ if (!databaseUrl || !runPostgresTests) {
         checked: 2,
         retried: 1,
       });
-      expect(probes).toEqual(["uksc/2024/retry-present"]);
+      expect(probes).toEqual([
+        "uksc/2024/retry-present",
+        "uksc/2024/retry-present",
+      ]);
       expect(sweeps).toBe(1);
       expect(
         await db
@@ -246,7 +249,10 @@ if (!databaseUrl || !runPostgresTests) {
         checked: 0,
         retried: 1,
       });
-      expect(probes).toEqual(["uksc/2024/retry-present"]);
+      expect(probes).toEqual([
+        "uksc/2024/retry-present",
+        "uksc/2024/retry-present",
+      ]);
       const persisted = await db
         .select()
         .from(caseLawReconciliationItems)
@@ -329,7 +335,7 @@ if (!databaseUrl || !runPostgresTests) {
         checked: 2,
         retried: 2,
       });
-      expect(probes).toBe(2);
+      expect(probes).toBe(4);
       expect(sweeps).toBe(2);
 
       const identityKey = `removal:${firstDecisionId}`;
@@ -344,7 +350,7 @@ if (!databaseUrl || !runPostgresTests) {
         );
       expect(queued).toHaveLength(1);
       expect(queued.at(0)).toMatchObject({
-        kind: REMOVAL_RETRY_KIND.PENDING,
+        kind: REMOVAL_RETRY_KIND.ERASURE,
         status: RECONCILIATION_ITEM_STATUS.PARKED,
         attempts: 1,
         payload: {
@@ -412,7 +418,7 @@ if (!databaseUrl || !runPostgresTests) {
         checked: 0,
         retried: 1,
       });
-      expect(probes).toBe(2);
+      expect(probes).toBe(4);
       expect(sweeps).toBe(3);
       expect(
         await db
@@ -439,7 +445,7 @@ if (!databaseUrl || !runPostgresTests) {
         checked: 0,
         retried: 0,
       });
-      expect(probes).toBe(2);
+      expect(probes).toBe(4);
       expect(sweeps).toBe(3);
       expect(
         await db
@@ -585,7 +591,7 @@ if (!databaseUrl || !runPostgresTests) {
         nextRetryAt: null,
       });
       expect(erasures).toBe(1);
-      expect(probes).toBe(3);
+      expect(probes).toBe(4);
       expect(
         await db
           .select({ id: publishedCaseLawDecisions.id })

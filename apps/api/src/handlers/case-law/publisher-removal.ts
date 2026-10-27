@@ -17,10 +17,12 @@ import { invalidateCaseLawRemovalSnapshotsTx } from "@/api/lib/case-law/removal-
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import { corpusProjectionRemovalIsPendingTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { eraseDecisionReconciliationPayloadsTx } from "@/api/lib/legal-search/reconciliation-store";
+import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
 
 type PublisherRemovalOptions = {
   scopedDb: ScopedDb;
   decisionId: SafeId<"caseLawDecision">;
+  evidence: RemovalEvidence;
   redact?: typeof redactCaseLawDecisionWithSupplementHolders;
 };
 
@@ -28,11 +30,20 @@ type PublisherRemovalOptions = {
 export const removePublisherDecision = async ({
   scopedDb,
   decisionId,
+  evidence,
   redact = redactCaseLawDecisionWithSupplementHolders,
 }: PublisherRemovalOptions) => {
-  const redacted = await redact({ scopedDb, decisionId, leaseWaitMs: 0 });
+  const redacted = await redact({
+    scopedDb,
+    decisionId,
+    evidence,
+    leaseWaitMs: 0,
+  });
   if (redacted.isErr()) {
     return redacted;
+  }
+  if (redacted.value.redaction.type === "superseded") {
+    return Result.ok(redacted.value.redaction);
   }
   if (redacted.value.redaction.type === "not-found") {
     return Result.ok({ type: "removed" as const });
@@ -96,7 +107,7 @@ export const removePublisherDecision = async ({
           .set({
             analysis: null,
             metadata: {},
-            sourceHash: null,
+            // The ordered source fingerprint remains a tombstone, not a new source observation.
             parsedSourceHash: null,
             parsedSourceHashVersion: null,
             parsedSourceRawS3Key: null,

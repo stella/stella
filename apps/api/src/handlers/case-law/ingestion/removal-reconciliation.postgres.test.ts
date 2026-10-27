@@ -53,7 +53,6 @@ import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
 import { removePublisherDecision } from "@/api/handlers/case-law/publisher-removal";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import {
   corpusKeys,
@@ -157,10 +156,9 @@ if (!databaseUrl || !runPostgresTests) {
         ceiling: decisionId,
       });
 
-    const redactWithLocalRawSweep = async (options: {
-      scopedDb: ScopedDb;
-      decisionId: SafeId<"caseLawDecision">;
-    }) =>
+    const redactWithLocalRawSweep = async (
+      options: Parameters<typeof redactCaseLawDecisionWithSupplementHolders>[0],
+    ) =>
       await redactCaseLawDecisionWithSupplementHolders({
         ...options,
         redactDecision: async (redactOptions) =>
@@ -174,10 +172,9 @@ if (!databaseUrl || !runPostgresTests) {
           }),
       });
 
-    const removeWithLocalRawSweep = async (options: {
-      scopedDb: ScopedDb;
-      decisionId: SafeId<"caseLawDecision">;
-    }) =>
+    const removeWithLocalRawSweep = async (
+      options: Parameters<typeof removePublisherDecision>[0],
+    ) =>
       await removePublisherDecision({
         ...options,
         redact: redactWithLocalRawSweep,
@@ -624,7 +621,7 @@ if (!databaseUrl || !runPostgresTests) {
           ),
       ).toMatchObject([
         {
-          kind: "removal-pending",
+          kind: "removal-erasure",
           payload: {
             type: "pending",
             operation: "erase",
@@ -891,7 +888,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(removedDecision).toEqual({
         analysis: null,
         metadata: {},
-        sourceHash: null,
+        sourceHash: "a".repeat(64),
         sourceRaw: null,
         sourceRawS3Key: null,
       });
