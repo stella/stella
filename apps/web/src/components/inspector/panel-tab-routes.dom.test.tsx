@@ -19,6 +19,7 @@ Bun.plugin({
 
 const { act, cleanup, render, waitFor } =
   await import("@testing-library/react");
+const { getByRole } = await import("@testing-library/dom");
 const { QueryClient, QueryClientProvider, onlineManager } =
   await import("@tanstack/react-query");
 const {
@@ -191,7 +192,7 @@ const registrationSources = await Promise.all(
 await Promise.all(
   registrationSources
     .filter(({ source }) => /\bregisterInspectorView\s*(?:<|\()/u.test(source))
-    .map(({ path }) => import(new URL(path, sourceRoot).pathname)),
+    .map(async ({ path }) => import(new URL(path, sourceRoot).pathname)),
 );
 
 const panelFixtures = [
@@ -306,9 +307,8 @@ for (const family of families) {
           mounted.container.querySelectorAll('[data-slot="skeleton"]').length,
         ).toBeGreaterThan(0);
         expect(
-          mounted.getByRole("button", {
+          getByRole(mounted.container, "button", {
             name: bundledEnglishMessages.common.close,
-            exact: true,
           }),
         ).toBeDefined();
       }
