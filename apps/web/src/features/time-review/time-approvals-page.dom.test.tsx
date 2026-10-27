@@ -299,6 +299,36 @@ describe("approving time by person", () => {
     ).toBe(true);
   });
 
+  test("a filter that empties the page can still be cleared", async () => {
+    serveQueue([
+      submitted("adam-1"),
+      submitted("beata-1", {
+        userId: "user-beata",
+        timekeeperName: "Beata Kral",
+      }),
+    ]);
+    mount("user-adam");
+
+    const adam = await personSection("Adam Novak");
+    await act(async () => {
+      fireEvent.click(
+        within(adam).getByRole("button", { name: "Approve 1 entry" }),
+      );
+    });
+    expect(
+      await screen.findByText(messages.billing.approval.emptyWeek),
+    ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.billing.approval.everyone,
+        }),
+      );
+    });
+    expect(await personSection("Beata Kral")).toBeTruthy();
+  });
+
   test("returning an entry sends the reason and takes it off the page", async () => {
     const calls = serveQueue([submitted("adam-1"), submitted("adam-2")]);
     const client = mount();

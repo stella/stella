@@ -253,7 +253,11 @@ export const TimeApprovalsPage = ({
       </header>
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">
-          {rows.length > 0 && (
+          {/* An active filter keeps its controls even when nothing matches,
+              so it can always be cleared. */}
+          {(rows.length > 0 ||
+            filter.member !== undefined ||
+            filter.matter !== undefined) && (
             <div className="flex flex-col gap-2">
               <FilterChips
                 label={t("workspaces.properties.person")}
