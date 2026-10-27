@@ -45,7 +45,6 @@ const PURE_AUTOFIX = {
   // Static source analysis and pinned formatters render the catalog and CLI
   // contracts; setup-env supplies static validation defaults, never live data.
   "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
-  "ci-job-classification-digests": "scripts/check-ci-job-classification.ts",
   "cli-registry": "codegen",
   // Compiler input discovery and pinned bundlers consume repository sources.
   "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
@@ -89,6 +88,8 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "ci-job-classification-digests":
+    "Protected workflow metadata is refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
   "migration-lock-baseline": "Migration lock decisions require human review",
   "model-catalog-inputs": "Fetches upstream model catalogs",
