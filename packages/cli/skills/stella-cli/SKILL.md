@@ -383,7 +383,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella time-entry delete`
   - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
-  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
+  - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|submitted|approved|billed|written_off)
 - `stella time-entry save`
   - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
@@ -412,7 +412,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 434
+Beyond the curated commands above, the CLI generates 435
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
