@@ -137,8 +137,8 @@ test("local configuration arguments require static construction", () => {
 });
 
 test.each([
-  ["type alias", "type Policy = { retries: number };"],
-  ["interface", "interface Policy { retries: number }"],
+  ["type alias", "type Policy = { retries: number; eval: () => void };"],
+  ["interface", "interface Policy { retries: number; require(): void }"],
   ["exported type alias", "export type Policy = { retries: number };"],
   ["exported interface", "export interface Policy { retries: number }"],
   [
@@ -195,6 +195,39 @@ test("erased declarations preserve imported named configuration", () => {
     rmSync(root, { force: true, recursive: true });
   }
 });
+
+test.each([
+  "export type { Policy } from './types';",
+  "export { type Policy } from './types';",
+])(
+  "erased re-exports preserve configuration import isolation: %s",
+  (declaration) => {
+    const root = mkdtempSync(path.join(tmpdir(), "test-retries-type-exports-"));
+    const file = "apps/example/playwright.config.ts";
+    const policy = `import { defineConfig } from "@playwright/test";
+    const settings = { retries: 0 };
+    export default defineConfig(settings);`;
+    try {
+      mkdirSync(path.join(root, "apps/example"), { recursive: true });
+      writeFileSync(
+        path.join(root, "apps/example/types.ts"),
+        `export type Policy = { retries: number };
+        export const pending = import("./runtime-policy");`,
+      );
+      writeFileSync(
+        path.join(root, "apps/example/runtime-policy.ts"),
+        "export const retries = 2;",
+      );
+      const scan = (source: string) =>
+        findTestRetryViolations(new Map([[file, source]]), root);
+
+      expect(scan(`${declaration} ${policy}`)).toEqual([]);
+      expect(scan(`import './types'; ${policy}`)).toEqual([UNREADABLE_CONFIG]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  },
+);
 
 test("imported configuration composition requires static module construction", () => {
   const root = mkdtempSync(path.join(tmpdir(), "test-retries-construction-"));
