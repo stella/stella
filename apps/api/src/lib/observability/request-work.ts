@@ -17,6 +17,9 @@ export type QueryCounter = ReadWork & {
   fingerprints: Map<string, number>;
   detectRepeatedQueries: boolean;
   countTransactions: boolean;
+  diagnostics: boolean;
+  parent: QueryCounter | undefined;
+  onQuery?: (phase: "work" | "cleanup") => void;
 };
 
 export const emptyReadWork = (): ReadWork => ({
@@ -41,11 +44,11 @@ export const currentRequestWork = (): QueryCounter | undefined =>
 
 /** Record work at the owning I/O or transformation boundary, never at callers. */
 export const recordReadWork = (metric: keyof ReadWork, amount = 1): void => {
-  const counter = queryCounterStore.getStore();
-  if (counter === undefined) {
-    return;
+  let counter = queryCounterStore.getStore();
+  while (counter !== undefined) {
+    counter[metric] += amount;
+    counter = counter.parent;
   }
-  counter[metric] += amount;
 };
 
 /** Detached snapshot: later work cannot alter a captured page's measurements. */

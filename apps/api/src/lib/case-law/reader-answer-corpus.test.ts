@@ -153,6 +153,66 @@ describe("private reader answer corpus excerpts", () => {
     ]);
   });
 
+  test("leaves out what the reader hides: related proceedings and the docket header", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const read = source({ decisionId, texts: ["Civil liability"] });
+    const result = await readReaderAnswerDecision(decisionId, {
+      readDecision: async () => ({
+        ...read,
+        ast: {
+          ...read.ast,
+          blocks: [
+            {
+              type: "paragraph",
+              id: "block-docket",
+              anchorId: "docket-1",
+              role: "case-number",
+              plainText: "1 Test 2026",
+              inlines: [{ type: "text", text: "1 Test 2026" }],
+            },
+            ...read.ast.blocks,
+            {
+              type: "table",
+              id: "block-related",
+              anchorId: "related-1",
+              role: "related-proceedings",
+              plainText: "2 Co 3/2025",
+              rows: [
+                [
+                  {
+                    plainText: "2 Co 3/2025",
+                    inlines: [{ type: "text", text: "2 Co 3/2025" }],
+                  },
+                ],
+              ],
+            },
+            {
+              type: "table",
+              id: "block-table",
+              anchorId: "table-1",
+              plainText: "Claim",
+              rows: [
+                [
+                  {
+                    plainText: "Claim",
+                    inlines: [{ type: "text", text: "Claim" }],
+                  },
+                ],
+              ],
+            },
+          ],
+        },
+      }),
+    });
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value?.paragraphs).toEqual([
+      { paragraphId: "paragraph-0", text: "Civil liability" },
+      { paragraphId: "table:block-table:0:0", text: "Claim" },
+    ]);
+  });
+
   test("bounds candidates and returned excerpts while ranking relevant paragraphs first", async () => {
     const decisionId = createSafeId<"caseLawDecision">();
     const candidates = Array.from(

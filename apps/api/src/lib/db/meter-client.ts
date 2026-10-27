@@ -86,6 +86,15 @@ export const meterSqlClient = <T extends (...args: never[]) => unknown>(
       if (!isCallable(member)) {
         return member;
       }
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
+      if (
+        descriptor !== undefined &&
+        descriptor.configurable === false &&
+        "writable" in descriptor &&
+        descriptor.writable === false
+      ) {
+        return member;
+      }
       if (property === "unsafe") {
         return (...args: unknown[]) =>
           meterPendingQuery(Reflect.apply(member, target, args));

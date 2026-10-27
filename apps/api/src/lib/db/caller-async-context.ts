@@ -4,6 +4,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { meterSqlClient } from "@/api/lib/db/meter-client";
 
+const wrappedBegin = new WeakMap<SQL, unknown>();
+
 /**
  * Runs every transaction callback on `client` in the async context of the
  * code that opened the transaction, and meters the raw results returned by its queries.
@@ -19,6 +21,9 @@ import { meterSqlClient } from "@/api/lib/db/meter-client";
  * issued it. Savepoints run inside the callback, so they follow.
  */
 export const runTransactionsInCallerContext = (client: SQL): SQL => {
+  if (wrappedBegin.get(client) === client.begin) {
+    return client;
+  }
   const begin = client.begin.bind(client);
   const beginInCallerContext = async <const T>(
     optionsOrCallback: string | SQL.TransactionContextCallback<T>,
@@ -44,5 +49,6 @@ export const runTransactionsInCallerContext = (client: SQL): SQL => {
     configurable: true,
     value: beginInCallerContext,
   });
+  wrappedBegin.set(client, beginInCallerContext);
   return meterSqlClient(client);
 };

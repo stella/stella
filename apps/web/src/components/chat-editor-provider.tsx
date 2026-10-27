@@ -234,7 +234,13 @@ const readMentionSources = async (
         cause: result.error,
         retryable: true,
       });
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "readMentionSources:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-mention.${labelKey}.${read.operation}`,
+        },
+      });
       failures.push(error);
       continue;
     }
@@ -1072,7 +1078,10 @@ export const useChatEditor = ({
       // would fall back to LTR on the empty doc and strand the caret left.
       ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
       class:
-        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
+        // `overflow-y-auto` makes the x axis scrollable too, so nothing may
+        // be wider than the editor: long tokens break anywhere, and a
+        // reference chip clamps itself to the line (`InlinePill`).
+        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm wrap-anywhere focus-visible:outline-none",
     }),
     handlePaste: (_view, event) => {
       // Consume every paste before ProseMirror can parse clipboard HTML.

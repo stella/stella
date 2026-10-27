@@ -20,16 +20,23 @@ import { currentReadWork } from "@/api/lib/observability/request-work";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
 import { windowAnonymizationCache } from "@/api/mcp/window-anonymization-cache";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import {
   createRewritingAnonymizeDependencies,
   replaceFirstFieldDelimiterToken,
 } from "@/api/tests/helpers/anonymize-pipeline-fakes";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockReset();
+  loadAllowlistByWorkspaceMock.mockReset();
+  loadGazetteerByWorkspaceMock.mockReset();
+});
 
 const anonymizeTextFieldsMock = mock();
 const loadGazetteerByWorkspaceMock = mock();
@@ -112,9 +119,9 @@ const finalizeMcpEgress = async (
     }),
   );
 
-const createContext = (): McpRequestContext => {
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(mock());
-  return {
+const createContext = (): AuthorizedMcpRequestContext => {
+  const scopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(mock());
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     accessibleWorkspaceIdSet: new Set(["ws_1"]),
     accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
@@ -127,7 +134,7 @@ const createContext = (): McpRequestContext => {
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const parseText = (result: CallToolResult): unknown => {

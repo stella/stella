@@ -8,7 +8,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./pay-by-square": "./src/pay-by-square.ts"
+    "./pay-by-square": "./src/pay-by-square.ts",
+    "./ksef": "./src/ksef/client.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
@@ -22,9 +23,11 @@
     "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/money": "workspace:*",
+    "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",
-    "lzma1": "catalog:"
+    "lzma1": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

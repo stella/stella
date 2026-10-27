@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
 
@@ -9,7 +9,7 @@ import { resolveStoredGrantSubject } from "@/api/handlers/chat/tools/chat-tool-g
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,11 +19,10 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  body: t.Object({
-    scope: t.Union([t.Literal("conversation"), t.Literal("always")]),
-    /** The conversation the grant was given in. */
-    threadId: tSafeId("chatThread"),
-    toolName: t.String({ minLength: 1, maxLength: 128 }),
+  body: v.object({
+    scope: v.picklist(["conversation", "always"]),
+    threadId: resourceIdSchema("chatThread"),
+    toolName: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   }),
 } satisfies HandlerConfig;
 
@@ -141,7 +140,7 @@ const createChatToolGrant = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(createChatToolGrant.handler, {
+declareAggregateMutation(createChatToolGrant, {
   type: "aggregate",
   aggregates: ["chatThread", "chatToolGrants"],
 });

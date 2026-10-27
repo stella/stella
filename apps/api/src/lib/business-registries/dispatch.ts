@@ -146,6 +146,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { normalizeRegisteredCompanyName } from "@/api/lib/business-registries/company-name";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { searchWeb } from "@/api/lib/web-search/search";
 import type { WebSearchRequestObserver } from "@/api/lib/web-search/search";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
@@ -508,11 +509,14 @@ const ARES_HANDLER: RegistryHandler = {
     const company = await lookupByIco(input, {
       observer: options.observer,
       onVrError: (error) =>
-        captureError(error, {
-          operation: "vr-enrichment",
-          registry: "ares",
-          source: "business-registry",
-        }),
+        captureError(
+          error,
+          handlerErrorContext("businessregistries.company", {
+            operation: "vr-enrichment",
+            registry: "ares",
+            source: "business-registry",
+          }),
+        ),
     });
     return company ? aresCompanyToHit(company) : null;
   },

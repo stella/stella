@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 /**
  * Per-organization AES-256-GCM encryption for extracted
  * file content. Defense-in-depth: even if the DB is
@@ -11,7 +10,8 @@ import { Result } from "better-result";
  * requires the key unless local development access is open, so this
  * fallback only fires in local development and tests.
  */
-import { createHmac, hkdf } from "node:crypto";
+import { Result } from "better-result";
+import { hkdf } from "node:crypto";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
@@ -191,7 +191,7 @@ export const contentLookupKey = async (
     masterKey,
     `${LOOKUP_KEY_SCOPE}${organizationId}`,
   );
-  return createHmac("sha256", scopeKey).update(value).digest("hex");
+  return new Bun.CryptoHasher("sha256", scopeKey).update(value).digest("hex");
 };
 
 /** Keyed identifiers never fall back to a guessable plaintext digest. */

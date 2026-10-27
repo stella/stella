@@ -1,7 +1,6 @@
 import { panic, TaggedError } from "better-result";
 import type { SQL } from "bun";
 import type { Logger } from "drizzle-orm";
-
 // Per-request database query counter.
 //
 // An AsyncLocalStorage-backed counter that lets the HTTP layer report how many
@@ -9,12 +8,16 @@ import type { Logger } from "drizzle-orm";
 // route (an e2e guard asserts per-route budgets from the `x-db-queries`
 // response header this feeds).
 //
-// The shared request-work owner holds the ALS store; parsers and storage
-// adapters import its pure payload counters without SQL fingerprinting's
-// callsite paths. Nothing here reads env or opens a database. Callers decide
-// when to activate a store; the Drizzle logger is a no-op outside it (background
+// The module is deliberately side-effect free and framework-agnostic: it only
+// creates an ALS instance and pure helpers. Nothing here reads env or touches
+// the database, so it is safe to import from shared modules (see the
+// "Module Side Effects" rules in AGENTS.md). Callers decide when to activate a
+// store; the Drizzle logger is a no-op whenever no store is active (background
 // jobs, boot-time queries), so wiring it in costs nothing beyond an ALS lookup
 // on those paths. Deployed environments wire no logger at all.
+import { AsyncLocalStorage } from "node:async_hooks";
+import { getCallSites } from "node:util";
+
 import {
   currentRequestWork,
   emptyReadWork,
@@ -22,19 +25,24 @@ import {
 } from "@/api/lib/observability/request-work";
 import type { QueryCounter } from "@/api/lib/observability/request-work";
 
+export type { QueryCounter } from "@/api/lib/observability/request-work";
+
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
 export const DB_TRANSACTION_COUNT_HEADER = "x-db-transactions";
 
+const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
+const queryOriginStore = new AsyncLocalStorage<string | undefined>();
+
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
  * {@link queryCountLogger} while `fn` (and its awaited continuations) run
- * increments this store and no other, so interleaved async contexts count
- * independently.
+ * increments this store and its enclosing counters. Interleaved sibling
+ * contexts remain independent.
  *
  * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
  * would be the convenient alternative for a lifecycle split across separate
- * callbacks (Elysia's hooks), but it mutates the ambient async context frame
+ * callbacks (request hooks), but it mutates the ambient async context frame
  * without a restore point: the runtime leaves that frame current for callbacks
  * it dispatches afterwards, so a background timer or worker loop that resumes
  * while a request's frame is current adopts that request's store and bills its
@@ -58,9 +66,15 @@ export const runWithQueryCounter = <TResult>(
     fingerprints: new Map(),
     detectRepeatedQueries,
     countTransactions,
+    diagnostics: false,
+    parent: queryCounterStore.getStore(),
   };
-  return withRequestWork(counter, () => fn(counter));
+  return queryCounterStore.run(counter, () =>
+    withRequestWork(counter, () => fn(counter)),
+  );
 };
+
+export const currentQueryCounter = () => queryCounterStore.getStore();
 
 export class RepeatedQueryFingerprintError extends TaggedError(
   "RepeatedQueryFingerprintError",
@@ -101,10 +115,20 @@ export const currentQueryCount = (): number | undefined =>
 export const currentTransactionCount = (): number | undefined =>
   currentRequestWork()?.transactions;
 
-const recordTransactionRoundTrip = (): void => {
-  const counter = currentRequestWork();
-  if (counter?.countTransactions) {
-    counter.transactions += 1;
+const recordTransactionRoundTrip = (
+  phase: "work" | "cleanup" = "work",
+): void => {
+  let counter = queryCounterStore.getStore();
+  const updated: QueryCounter[] = [];
+  while (counter !== undefined) {
+    if (counter.countTransactions) {
+      counter.transactions += 1;
+      updated.push(counter);
+    }
+    counter = counter.parent;
+  }
+  for (const store of updated) {
+    store.onQuery?.(phase);
   }
 };
 
@@ -146,8 +170,8 @@ export const instrumentSqlTransactionCounts = (client: SQL): SQL => {
 };
 
 export const currentRepeatedQueryFingerprints = (): readonly string[] => {
-  const counter = currentRequestWork();
-  if (!counter) {
+  const counter = queryCounterStore.getStore();
+  if (!counter?.detectRepeatedQueries) {
     return [];
   }
   return [...counter.fingerprints]
@@ -164,20 +188,152 @@ const normalizeSql = (query: string): string =>
     .trim()
     .toLowerCase();
 
-const queryCallsite = (): string => {
-  const frame = new Error("SQL query fingerprint callsite capture").stack
-    ?.split("\n")
-    .find(
-      (line) =>
-        line.includes(" at ") &&
-        !line.includes("db-query-counter.ts") &&
-        !line.includes("/node_modules/"),
-    );
-  return frame?.trim().replaceAll(`${process.cwd()}/`, "") ?? "unknown";
+const CALLSITE_FRAME_LIMIT = 64;
+
+const queryCallsite = (): string | undefined => {
+  // Driver stacks can exhaust Error.stack's default depth before reaching the
+  // caller. Retain dependency chains when an async boundary removes app frames.
+  const frames = [];
+  for (const frame of getCallSites(CALLSITE_FRAME_LIMIT)) {
+    if (frame.scriptName.endsWith("/db-query-counter.ts")) {
+      if (frames.length > 0) {
+        break;
+      }
+      continue;
+    }
+    if (frame.lineNumber > 0 && !frame.scriptName.startsWith("node:")) {
+      frames.push(frame);
+    }
+  }
+  if (frames.length === 0) {
+    return undefined;
+  }
+  return frames
+    .map(
+      ({ functionName, scriptName, lineNumber, columnNumber }) =>
+        `at ${functionName} (${scriptName.replaceAll(`${process.cwd()}/`, "")}:${String(lineNumber)}:${String(columnNumber)})`,
+    )
+    .join(" <- ");
 };
 
 const isSessionConfigurationQuery = (query: string): boolean =>
   /^\s*select\s+set_config\s*\(/iu.test(query);
+
+const sqlControlType = (
+  query: string,
+): "savepoint" | "transaction" | undefined => {
+  if (
+    /^\s*(?:savepoint|release)\b|^\s*rollback\s+(?:(?:work|transaction)\s+)?to\b/iu.test(
+      query,
+    )
+  ) {
+    return "savepoint";
+  }
+  if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
+    return "transaction";
+  }
+  return undefined;
+};
+
+/**
+ * Preserve construction and enclosing auth entry sites across lazy Drizzle
+ * execution. Counters still belong to the scope active when SQL starts.
+ */
+export const instrumentQueryOrigins = <TTarget extends object>(
+  owner: TTarget,
+): TTarget => {
+  const instrumented = new WeakSet<object>();
+  const wrap = <TValue extends object>(
+    value: TValue,
+    origin?: string,
+  ): TValue => {
+    if (instrumented.has(value)) {
+      return value;
+    }
+    instrumented.add(value);
+    const properties = new Set<PropertyKey>();
+    let prototype: object | null = value;
+    while (prototype !== null && prototype !== Object.prototype) {
+      for (const property of Reflect.ownKeys(prototype)) {
+        properties.add(property);
+      }
+      prototype = Reflect.getPrototypeOf(prototype);
+    }
+    for (const property of properties) {
+      if (property === "constructor" || property === "$client") {
+        continue;
+      }
+      const member: unknown = Reflect.get(value, property, value);
+      if (typeof member !== "function") {
+        if (
+          member !== null &&
+          typeof member === "object" &&
+          (property === "query" || property === "api")
+        ) {
+          wrap(member, origin);
+          for (const nested of Object.values(member)) {
+            if (
+              nested !== null &&
+              typeof nested === "object" &&
+              ("findMany" in nested || "findFirst" in nested)
+            ) {
+              wrap(nested, origin);
+            }
+          }
+        }
+        continue;
+      }
+      // Keep the actual database/provider object, including native clients and
+      // ordinary method replacement. A function proxy retains endpoint metadata.
+      const wrapped = new Proxy(member, {
+        apply(method, _receiver, args: unknown[]) {
+          const source =
+            origin ??
+            ([queryOriginStore.getStore(), queryCallsite()]
+              .filter((part) => part !== undefined)
+              .join(" -> ") ||
+              undefined);
+          const parameters =
+            property === "transaction"
+              ? args.map((argument) =>
+                  typeof argument === "function"
+                    ? (transaction: object) => {
+                        const result: unknown = Reflect.apply(
+                          argument,
+                          undefined,
+                          [wrap(transaction)],
+                        );
+                        return result;
+                      }
+                    : argument,
+                )
+              : args;
+          const result: unknown = queryOriginStore.run(source, () => {
+            const returned: unknown = Reflect.apply(method, value, parameters);
+            return returned;
+          });
+          if (
+            result === null ||
+            typeof result !== "object" ||
+            result instanceof Promise
+          ) {
+            return result;
+          }
+          return wrap(result, source);
+        },
+      });
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, property);
+      Object.defineProperty(value, property, {
+        configurable: true,
+        enumerable: descriptor?.enumerable ?? false,
+        writable: true,
+        value: wrapped,
+      });
+    }
+    return value;
+  };
+  return wrap(owner);
+};
 
 /**
  * Drizzle-compatible logger that increments the active store's count per query.
@@ -185,25 +341,239 @@ const isSessionConfigurationQuery = (query: string): boolean =>
  * jobs and boot-time queries. Wire this into `drizzle({ logger })` outside
  * production only.
  */
-export const queryCountLogger: Logger = {
-  logQuery: (query): void => {
-    const counter = currentRequestWork();
-    if (!counter) {
-      return;
-    }
-    if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
-      return;
-    }
+type RecordSqlQueryOptions = {
+  phase: "work" | "cleanup";
+  origin?: string | undefined;
+};
+
+const recordSqlQuery = (
+  query: string,
+  { phase, origin }: RecordSqlQueryOptions,
+): void => {
+  let counter = queryCounterStore.getStore();
+  if (!counter) {
+    return;
+  }
+  if (sqlControlType(query) !== undefined) {
+    return;
+  }
+  // Reuse the repeated-query owner's normalization and callsite identity.
+  // Session setup contributes to the count, never to repeated-work findings.
+  let fingerprint: string | undefined;
+  const sessionConfiguration = isSessionConfigurationQuery(query);
+  const updated: QueryCounter[] = [];
+  while (counter !== undefined) {
     counter.count += 1;
-    // RLS installs session-local settings for every scoped transaction; their
-    // repetition is protocol setup, not per-row query work.
-    if (!counter.detectRepeatedQueries || isSessionConfigurationQuery(query)) {
-      return;
+    if (
+      !sessionConfiguration &&
+      (counter.detectRepeatedQueries || counter.diagnostics)
+    ) {
+      fingerprint ??= `${origin ?? queryOriginStore.getStore() ?? queryCallsite() ?? panic("SQL query diagnostics require a source callsite")} :: ${normalizeSql(query)}`;
+      counter.fingerprints.set(
+        fingerprint,
+        (counter.fingerprints.get(fingerprint) ?? 0) + 1,
+      );
     }
-    const fingerprint = `${queryCallsite()} :: ${normalizeSql(query)}`;
-    counter.fingerprints.set(
-      fingerprint,
-      (counter.fingerprints.get(fingerprint) ?? 0) + 1,
-    );
-  },
+    updated.push(counter);
+    counter = counter.parent;
+  }
+  for (const store of updated) {
+    store.onQuery?.(phase);
+  }
+};
+
+export const queryCountLogger: Logger = {
+  logQuery: (query) => recordSqlQuery(query, { phase: "work" }),
+};
+
+type NativeQueryState = { phase: "created" | "started" };
+const instrumentedSessions = new WeakSet<object>();
+const countedQueries = new WeakSet<object>();
+
+const isNativeQuery = (
+  value: unknown,
+): value is object & {
+  then: (...args: unknown[]) => unknown;
+  execute: () => unknown;
+} =>
+  value !== null &&
+  typeof value === "object" &&
+  "then" in value &&
+  typeof value.then === "function" &&
+  "execute" in value &&
+  typeof value.execute === "function";
+
+const isSqlSession = (value: unknown): value is object =>
+  value !== null &&
+  (typeof value === "object" || typeof value === "function") &&
+  "unsafe" in value &&
+  typeof value.unsafe === "function";
+
+const QUERY_START_METHODS = new Set([
+  "then",
+  "catch",
+  "finally",
+  "execute",
+  "run",
+  "readable",
+  "writable",
+]);
+const TRANSACTION_METHODS = new Set([
+  "begin",
+  "transaction",
+  "savepoint",
+  "beginDistributed",
+  "distributed",
+]);
+
+const instrumentNativeQuery = (
+  query: object,
+  statement: string,
+  phase: "work" | "cleanup",
+): object => {
+  if (countedQueries.has(query)) {
+    return query;
+  }
+  // Native Query.then starts after the originating stack is gone. Capture
+  // the source now, but charge the active store only when the query starts.
+  const origin = queryCallsite();
+  const state: NativeQueryState = { phase: "created" };
+  for (const method of QUERY_START_METHODS) {
+    const original: unknown = Reflect.get(query, method, query);
+    if (typeof original !== "function") {
+      continue;
+    }
+    // Keep Bun's actual Query object for SQL fragments, private methods and
+    // native Promise identity. Only the lazy start methods gain an observer.
+    Object.defineProperty(query, method, {
+      configurable: true,
+      writable: true,
+      value: (...args: unknown[]) => {
+        if (state.phase === "created") {
+          if (Reflect.get(query, "cancelled", query) !== true) {
+            const controlType = sqlControlType(statement);
+            if (controlType === "transaction") {
+              const controlPhase = /^\s*(commit|rollback)\b/iu.test(statement)
+                ? "cleanup"
+                : phase;
+              recordTransactionRoundTrip(controlPhase);
+            } else if (controlType === undefined) {
+              recordSqlQuery(statement, { phase, origin });
+            }
+          }
+          state.phase = "started";
+        }
+        const result: unknown = Reflect.apply(original, query, args);
+        return result;
+      },
+    });
+  }
+  countedQueries.add(query);
+  return query;
+};
+
+/**
+ * Instrument the dedicated transport once, below Drizzle and raw callers.
+ * Its lazy queries count only when started; modifiers share that one start.
+ * Do not also install queryCountLogger on a database over this transport.
+ */
+export const instrumentDedicatedSqlCounts = <TClient extends object>(
+  client: TClient,
+  phase: "work" | "cleanup" = "work",
+): TClient => {
+  if (instrumentedSessions.has(client)) {
+    return client;
+  }
+  const proxy = new Proxy(client, {
+    apply(target, _receiver, args: unknown[]) {
+      if (typeof target !== "function") {
+        return panic("Expected a callable SQL session");
+      }
+      const result: unknown = Reflect.apply(target, target, args);
+      if (!isNativeQuery(result)) {
+        return result;
+      }
+      const literals: unknown = args.at(0);
+      // SQL(name) creates a non-executable identifier Query; Bun must receive
+      // that actual object when the enclosing tagged statement is assembled.
+      if (typeof literals === "string") {
+        return result;
+      }
+      if (
+        !Array.isArray(literals) ||
+        !literals.every((part) => typeof part === "string")
+      ) {
+        return panic("Expected SQL template literals for a native query");
+      }
+      // Parameters never enter diagnostics; the existing fingerprint owner
+      // normalizes this statement exactly as it does Drizzle queries.
+      return instrumentNativeQuery(result, literals.join(" ? "), phase);
+    },
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (property === "bind" || property === "call" || property === "apply") {
+        // Function invocation must keep the instrumented callable receiver.
+        const bound: unknown = value.bind(proxy);
+        return bound;
+      }
+      if (property === "reserve" || property === "connect") {
+        return async (...args: unknown[]) => {
+          const reserved: unknown = await Reflect.apply(value, target, args);
+          if (!isSqlSession(reserved)) {
+            return panic("Expected a reserved SQL session");
+          }
+          return instrumentDedicatedSqlCounts(reserved, phase);
+        };
+      }
+      if (typeof property === "string" && TRANSACTION_METHODS.has(property)) {
+        return async (...args: unknown[]) => {
+          const callback: unknown = args.at(-1);
+          if (typeof callback !== "function") {
+            return panic("A SQL transaction needs a callback");
+          }
+          const runInCaller = AsyncLocalStorage.snapshot();
+          const wrapped = (session: unknown) => {
+            if (!isSqlSession(session)) {
+              return panic("Expected a SQL transaction session");
+            }
+            return runInCaller(() => {
+              const result: unknown = Reflect.apply(callback, undefined, [
+                instrumentDedicatedSqlCounts(session, phase),
+              ]);
+              return result;
+            });
+          };
+          const operation = async () => {
+            const result: unknown = await Reflect.apply(value, target, [
+              ...args.slice(0, -1),
+              wrapped,
+            ]);
+            return result;
+          };
+          return property === "savepoint"
+            ? await operation()
+            : await runCountedTransaction(operation);
+        };
+      }
+      return (...args: unknown[]) => {
+        const result: unknown = Reflect.apply(value, target, args);
+        if (!isNativeQuery(result)) {
+          return result;
+        }
+        const statement: unknown = args.at(0);
+        if (property === "file") {
+          return instrumentNativeQuery(result, "<SQL file>", phase);
+        }
+        if (typeof statement !== "string") {
+          return panic("Expected SQL text for a native query");
+        }
+        return instrumentNativeQuery(result, statement, phase);
+      };
+    },
+  });
+  instrumentedSessions.add(proxy);
+  return proxy;
 };

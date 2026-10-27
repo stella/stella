@@ -14,6 +14,7 @@ import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_KEY_SECONDS,
+  DESKTOP_REGISTRY_KEY_START_LENGTH,
   DESKTOP_REGISTRY_ROTATION_INTERVAL_SECONDS,
   parseDesktopRegistryMetadata,
 } from "@/api/lib/business-registries/desktop/config";
@@ -167,10 +168,7 @@ export const renewDesktopCredential = async ({
           .update(apikey)
           .set({
             key: successorHash,
-            start: successorKey.slice(
-              0,
-              DESKTOP_REGISTRY_KEY_PREFIX.length + 6,
-            ),
+            start: successorKey.slice(0, DESKTOP_REGISTRY_KEY_START_LENGTH),
             expiresAt: null,
             metadata: JSON.stringify({
               ...metadata.output,

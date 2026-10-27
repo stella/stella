@@ -55,6 +55,7 @@ import type {
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   deleteCorpusS3ObjectWithSignal,
@@ -124,7 +125,9 @@ export const parsePersistedCorpusAst = (
         message: "Stored document AST carries undeclared vocabulary",
         degradations,
       }),
-      { step: "corpus-storage.parsePersistedCorpusAst" },
+      handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
+        step: "corpus-storage.parsePersistedCorpusAst",
+      }),
     );
   }
   return parsed;
@@ -1000,7 +1003,13 @@ export const readCorpusPayloadOrFallback = async <T>({
         });
   }
 
-  captureError(payload.error, { documentId, step });
+  captureError(
+    payload.error,
+    handlerErrorContext(
+      "legalsearch.readCorpusPayloadOrFallback.payload_error",
+      { documentId, step },
+    ),
+  );
   return postgresCopy;
 };
 

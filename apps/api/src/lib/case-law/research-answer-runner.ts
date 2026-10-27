@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
-import { declareFailureClass } from "@stll/errors";
+import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -81,6 +81,7 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -123,6 +124,10 @@ export class ResearchPassageRetrievalError extends TaggedError(
   reason: ResearchPassageRetrievalReason;
   cause: unknown;
 }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   static {
     declareFailureClass(
       this,
@@ -215,10 +220,13 @@ export const runResearchAnswers = async (
       if (failure === null) {
         continue;
       }
-      captureError(failure, {
-        source: "case-law-research-answers",
-        decisionId,
-      });
+      captureError(
+        failure,
+        handlerErrorContext("caselaw.worker.failure", {
+          source: "case-law-research-answers",
+          decisionId,
+        }),
+      );
       // Whatever this run still held for this decision is not coming: say so
       // rather than leave the cells to age out. Only the claimed columns, so a
       // cell that belongs to another run is untouched.
@@ -231,10 +239,13 @@ export const runResearchAnswers = async (
           outcome: { state: "failed", failureReason: "run_error" },
         })),
       ).catch((writeError: unknown) => {
-        captureError(writeError, {
-          source: "case-law-research-answers-cleanup",
-          decisionId,
-        });
+        captureError(
+          writeError,
+          handlerErrorContext("caselaw.worker.writeError", {
+            source: "case-law-research-answers-cleanup",
+            decisionId,
+          }),
+        );
       });
     }
   };

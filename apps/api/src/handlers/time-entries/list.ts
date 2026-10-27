@@ -1,6 +1,12 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, gte, isNotNull, lte, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
+import {
+  booleanFromString,
+  numberFromString,
+} from "@stll/api-contract/http-input";
 
 import {
   timeEntrySourceSchema,
@@ -19,9 +25,9 @@ import {
 } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
-  tUserId,
+  paginationCursorSchema,
+  resourceIdSchema,
+  userIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -82,52 +88,65 @@ true satisfies UnexpectedProjectedTimeEntryListColumn extends never
   ? true
   : never;
 
-const readTimeEntriesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.timeEntriesPageSizeMax,
-      description: "Max entries to return",
-    }),
+const readTimeEntriesQuerySchema = v.object({
+  limit: v.optional(
+    v.pipe(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.timeEntriesPageSizeMax),
+        ),
+      ),
+      v.description("Max entries to return"),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
-  userId: t.Optional(
-    withDescription(tUserId, "List only entries recorded by this user"),
+  cursor: v.optional(paginationCursorSchema()),
+  userId: v.optional(
+    withDescription(userIdSchema, "List only entries recorded by this user"),
   ),
-  scope: t.Optional(
-    t.Literal("me", {
-      description: "List only entries recorded by the signed-in user",
-    }),
+  scope: v.optional(
+    v.pipe(
+      v.literal("me"),
+      v.description("List only entries recorded by the signed-in user"),
+    ),
   ),
-  workItemId: t.Optional(
-    tSafeId("entity", {
+  workItemId: v.optional(
+    resourceIdSchema("entity", {
       description:
         "List only entries carrying this optional document, folder, or task context",
     }),
   ),
-  dateFrom: t.Optional(
-    t.String({
-      format: "date",
-      description:
+  dateFrom: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description(
         "List only entries worked on or after this ISO date (YYYY-MM-DD)",
-    }),
+      ),
+    ),
   ),
-  dateTo: t.Optional(
-    t.String({
-      format: "date",
-      description:
+  dateTo: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description(
         "List only entries worked on or before this ISO date (YYYY-MM-DD)",
-    }),
+      ),
+    ),
   ),
-  status: t.Optional(
+  status: v.optional(
     withDescription(
       timeEntryStatusSchema,
       "List only entries with this status",
     ),
   ),
-  source: t.Optional(timeEntrySourceSchema),
-  billable: t.Optional(t.BooleanString()),
-  hasActiveTimer: t.Optional(t.BooleanString()),
+  source: v.optional(timeEntrySourceSchema),
+  billable: v.optional(booleanFromString()),
+  hasActiveTimer: v.optional(booleanFromString()),
 });
 
 type TimeEntryCursor = {

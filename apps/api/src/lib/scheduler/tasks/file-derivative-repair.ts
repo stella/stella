@@ -28,6 +28,7 @@ import {
 import type { FileDerivativeKind } from "@/api/lib/file-derivative-queue";
 import { shouldGenerateImageThumbnail } from "@/api/lib/files/image-derivative";
 import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   brandPersistedFieldId,
   brandPersistedUserId,
@@ -302,7 +303,11 @@ const requeueRow = async (
       new UnrecognizedDerivativeStateError({
         message: `Persisted ${kind} derivative state is unreadable to this build`,
       }),
-      { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+      handlerErrorContext("tasks.requeueRow", {
+        fieldId: row.fieldId,
+        kind,
+        workspaceId: row.workspaceId,
+      }),
     );
   }
   let requeued = 0;

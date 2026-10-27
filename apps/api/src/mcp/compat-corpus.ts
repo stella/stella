@@ -30,7 +30,7 @@ import {
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   defaultReadGatedDecisionWithDocument,
   defaultReadPublicLegislationHandler,
@@ -156,7 +156,7 @@ export const rankCorpusCountries = <TCountry extends string>(
  * select.
  */
 export const resolveCompatCorpusCountries = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
 ): Promise<CompatCorpusCountries> => {
   const practised = (await loadPracticeJurisdictions(context)).flatMap(
     ({ countryCode, isPrimary }) => {
@@ -284,7 +284,7 @@ const searchDecisions = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   countries: readonly PublicCaseLawCountry[];
   cursors: CorpusSubCursors;
   query: string;
@@ -398,7 +398,7 @@ const searchStatutes = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   countries: readonly PublicLegislationCountry[];
   cursors: CorpusSubCursors;
   query: string;
@@ -528,7 +528,7 @@ export const searchCompatCorpus = async ({
   cursors,
   query,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   countries: CompatCorpusCountries;
   cursors: CompatCorpusCursors;
   query: string;
@@ -596,7 +596,7 @@ export const readCompatDecision = async ({
   context,
   decisionId,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   decisionId: string;
 }): Promise<CompatCorpusRead> => {
   const read =
@@ -664,7 +664,7 @@ export const readCompatStatute = async ({
   context,
   eli,
 }: {
-  context: McpRequestContext;
+  context: McpRequestResources;
   eli: string;
 }): Promise<CompatCorpusRead> => {
   const resolved = await (

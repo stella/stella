@@ -27,6 +27,7 @@ export const SHARED_LEDGER_PATHS = [
   "scripts/suppression-waivers.json",
   "scripts/swallowed-item-error-ledger.json",
   "scripts/test-source-write-exceptions.json",
+  "scripts/test-timing-ledger.json",
 ] as const;
 
 export const ORDER_MEANINGFUL_JSON = {

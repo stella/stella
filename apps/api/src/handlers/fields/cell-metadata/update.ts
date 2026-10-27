@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { REVIEW_FLAGS, REVIEW_FLAGS_MAX_ITEMS } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
@@ -14,14 +14,15 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { acquireCellLock } from "@/api/lib/cell-lock";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // The wire vocabulary is the column's vocabulary: a flag the cell control
 // cannot render is one this endpoint refuses rather than stores.
-const manualFlagsSchema = t.Array(t.UnionEnum([...REVIEW_FLAGS]), {
-  maxItems: REVIEW_FLAGS_MAX_ITEMS,
-});
+const manualFlagsSchema = v.pipe(
+  v.array(v.picklist([...REVIEW_FLAGS])),
+  v.maxLength(REVIEW_FLAGS_MAX_ITEMS),
+);
 
 const config = {
   contract: "patch",
@@ -43,12 +44,12 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  body: t.Object({
-    propertyId: tSafeId("property"),
-    entityId: tSafeId("entity"),
-    baseManualFlags: t.Optional(manualFlagsSchema),
+  body: v.object({
+    propertyId: resourceIdSchema("property"),
+    entityId: resourceIdSchema("entity"),
+    baseManualFlags: v.exactOptional(manualFlagsSchema),
     manualFlags: manualFlagsSchema,
-    locked: t.Optional(t.Boolean()),
+    locked: v.exactOptional(v.boolean()),
   }),
 } satisfies WorkspaceHandlerConfig;
 

@@ -10,7 +10,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import type { GatewayDispatchDependencies } from "@/api/mcp/gateway/dispatch-call";
@@ -21,6 +20,7 @@ import {
   resolveSkillTool,
 } from "@/api/mcp/gateway/skills";
 import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -84,16 +84,16 @@ const createContext = ({
   dbError?: DatabaseError;
   grantedScopes?: readonly string[];
   rows?: readonly SkillRow[];
-} = {}): McpRequestContext => {
+} = {}): AuthorizedMcpRequestContext => {
   const tx = { select: () => createSelectBuilder(rows) };
-  const safeDb: McpRequestContext["safeDb"] = async (run) => {
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (run) => {
     if (dbError) {
       return Result.err(dbError);
     }
     return Result.ok(await run(asTestRaw<Transaction>(tx)));
   };
 
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes,
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),

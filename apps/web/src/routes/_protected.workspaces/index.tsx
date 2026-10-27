@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -37,7 +37,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
@@ -53,8 +53,9 @@ import type {
   WorkspaceGroup,
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
+import { routeSearchSchema } from "@/route-search-params";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
-import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
+import { ClientGroupSection } from "@/routes/_protected.workspaces/-components/client-group-section";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
 import { MattersTable } from "@/routes/_protected.workspaces/-components/matters-table";
 import { MattersToolbar } from "@/routes/_protected.workspaces/-components/matters-toolbar";
@@ -62,6 +63,7 @@ import { ActiveFilterChips } from "@/routes/_protected.workspaces/-filters/activ
 import { applyMattersFilters } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
 import { filterWorkspacesBySearch } from "@/routes/_protected.workspaces/-filters/matters-search.logic";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
+import { useMatterClientDrop } from "@/routes/_protected.workspaces/-hooks/use-matter-client-drop";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
 import {
   compareWorkspacesByKey,
@@ -69,7 +71,7 @@ import {
 } from "@/routes/_protected.workspaces/-utils";
 import { useConfigStore } from "@/stores/config-store";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   // Client id to scroll into view and flash on arrival (set by the matter
   // breadcrumb's company link). Cleared by the route once consumed.
   focusClient: v.optional(v.string()),
@@ -126,7 +128,7 @@ const MattersContent = ({
   resetExternalState: boolean;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { data, isFetching } = useSuspenseQuery(
     workspacesRouteOptions(activeOrganizationId),
@@ -620,6 +622,8 @@ const MattersContentView = ({
     useShallow((s) => s.matters.collapsedGroups),
   );
   const toggleGroupCollapsed = useConfigStore((s) => s.toggleGroupCollapsed);
+  const canReassignClient = usePermissions({ workspace: ["update"] });
+  const matterClientDrop = useMatterClientDrop();
   return (
     <div className="p-2">
       {(() => {
@@ -637,35 +641,42 @@ const MattersContentView = ({
         }
         if (groups && groups.length > 0) {
           return (
-            <div
-              className="grid auto-rows-min gap-3 md:grid-cols-3"
-              ref={gridRef}
-            >
-              {groups.map((group) => {
-                const collapsed = collapsedGroups.includes(group.groupId);
-                const firstWs = group.workspaces.at(0);
-                const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
-                return (
-                  <Fragment key={group.groupId}>
-                    <ClientGroupHeader
+            <>
+              <div
+                className="grid auto-rows-min gap-3 md:grid-cols-3"
+                ref={gridRef}
+              >
+                {groups.map((group) => {
+                  const collapsed = collapsedGroups.includes(group.groupId);
+                  const firstWs = group.workspaces.at(0);
+                  const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
+                  return (
+                    <ClientGroupSection
                       collapsed={collapsed}
                       group={group}
+                      key={group.groupId}
+                      onMatterDrop={
+                        canReassignClient ? matterClientDrop.onMatterDrop : null
+                      }
                       onToggle={() => toggleGroupCollapsed(group.groupId)}
                       personalLabel={t("workspaces.parties.personalLabel")}
-                    />
-                    {!collapsed &&
-                      group.workspaces.map((workspace, i) => (
-                        <MatterCard
-                          focused={focusIndex === baseIndex + i}
-                          hideClientName
-                          key={workspace.id}
-                          workspace={workspace}
-                        />
-                      ))}
-                  </Fragment>
-                );
-              })}
-            </div>
+                    >
+                      {!collapsed &&
+                        group.workspaces.map((workspace, i) => (
+                          <MatterCard
+                            drag={canReassignClient ? "client-group" : "none"}
+                            focused={focusIndex === baseIndex + i}
+                            hideClientName
+                            key={workspace.id}
+                            workspace={workspace}
+                          />
+                        ))}
+                    </ClientGroupSection>
+                  );
+                })}
+              </div>
+              {matterClientDrop.promotionDialog}
+            </>
           );
         }
         return (
@@ -675,6 +686,7 @@ const MattersContentView = ({
           >
             {displayed.map((workspace, i) => (
               <MatterCard
+                drag="none"
                 focused={focusIndex === i}
                 key={workspace.id}
                 workspace={workspace}

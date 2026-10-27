@@ -1,20 +1,14 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
 } from "@stll/api-contract/search";
 
-export const searchPaginationOutcomeSchema = t.Union([
-  t.Object(
-    { type: t.Literal(SEARCH_PAGINATION_COMPLETE.type) },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      type: t.Literal(SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET.type),
-      reason: t.Literal(SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET.reason),
-    },
-    { additionalProperties: false },
-  ),
+export const searchPaginationOutcomeSchema = v.union([
+  v.object({ type: v.literal(SEARCH_PAGINATION_COMPLETE.type) }),
+  v.object({
+    type: v.literal(SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET.type),
+    reason: v.literal(SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET.reason),
+  }),
 ]);

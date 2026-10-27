@@ -24,13 +24,11 @@ import {
   SEARCH_HISTORY_IMPORT_MAX,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
+  TIME_ENTRIES_APPROVAL_BATCH_MAX,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import {
-  CHAT_CONTEXT_FILE_MAX_BYTES,
-  CHAT_CONTEXT_FILE_MAX_MEGABYTES,
-} from "@stll/chat-limits";
+import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
@@ -330,7 +328,7 @@ export const LIMITS = {
   internalTimeEntriesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
-  timeEntriesApprovalBatchMax: 200,
+  timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -830,6 +828,10 @@ export const LIMITS = {
    * message. Keeps one generated media payload valid while bounding JSONB
    * row size and repeated history transfer cost. */
   chatRichPartsTotalMaxBytes: 5 * 1024 * 1024,
+  /** Blocks one chat turn may send of the open Word document it edits. */
+  chatDocxSnapshotBlocksMax: 20_000,
+  /** Characters of one such block; a paragraph, not a document. */
+  chatDocxSnapshotBlockTextMaxChars: 100_000,
   /** Max text or base64 payload stored for one sandboxed MCP App resource. */
   chatUiResourceContentMaxChars:
     CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars,
@@ -880,28 +882,11 @@ export const LIMITS = {
   newDeviceLoginSessionScanLimit: 10,
 } as const;
 
-/**
- * File upload size limits.
- * Values use Elysia's human-readable format (e.g. "50m" = 50 MB).
- */
-export const FILE_SIZE_LIMITS = {
-  /** General document uploads (entities, templates). */
-  document: "50m",
-  /** Structured data imports (clause JSON). */
-  dataImport: "10m",
-  /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: "2m",
-  /** Chat context file attachments. */
-  chatContextFile: `${CHAT_CONTEXT_FILE_MAX_MEGABYTES}m`,
-} as const;
-
-/**
- * File upload size limits in bytes for code paths that need to
- * validate before a framework-level t.File() parser runs.
- */
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
   document: 50 * 1024 * 1024,
+  /** Structured data imports (clause JSON, contact sheets). */
+  dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */

@@ -473,8 +473,8 @@ export const uploadFailureDisposition = (
 
 /**
  * Extract `Retry-After` header value from an error that
- * carries a `headers` property (e.g., Eden treaty error
- * responses include a `response: Response` field).
+ * carries a `headers` property (e.g., an API client result
+ * includes a `response: Response` field).
  */
 const getRetryAfterSeconds = (error: unknown): number | null => {
   if (
