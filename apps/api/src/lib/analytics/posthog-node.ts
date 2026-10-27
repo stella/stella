@@ -2,13 +2,13 @@ import { PostHog } from "posthog-node";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
 
-import { envBase } from "@/api/env-base";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import type {
   ServerAnalytics,
   ServerAnalyticsCaptureParams,
 } from "@/api/lib/analytics/server-analytics";
 import {
+  type DeployEnvironment,
   RELEASE_ENVIRONMENT_PROPERTY,
   RELEASE_VERSION_PROPERTY,
 } from "@/api/lib/observability/release-failure-contract";
@@ -18,10 +18,17 @@ const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
 );
 
-export const createPostHogNodeAnalytics = (
-  key: string,
-  host: string,
-): ServerAnalytics => {
+type PostHogNodeAnalyticsOptions = {
+  key: string;
+  host: string;
+  deployEnvironment: DeployEnvironment | undefined;
+};
+
+export const createPostHogNodeAnalytics = ({
+  key,
+  host,
+  deployEnvironment,
+}: PostHogNodeAnalyticsOptions): ServerAnalytics => {
   const client = new PostHog(key, { host });
 
   return {
@@ -37,7 +44,9 @@ export const createPostHogNodeAnalytics = (
           ...properties,
           app_commit: APP_COMMIT_SHA,
           [RELEASE_VERSION_PROPERTY]: APP_VERSION,
-          [RELEASE_ENVIRONMENT_PROPERTY]: envBase.DEPLOY_ENVIRONMENT,
+          ...(deployEnvironment === undefined
+            ? {}
+            : { [RELEASE_ENVIRONMENT_PROPERTY]: deployEnvironment }),
         },
         // Mark `$exception` events as originating from a deliberate capture
         // path so posthog-node skips its built-in warning about

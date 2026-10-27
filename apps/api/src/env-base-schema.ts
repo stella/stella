@@ -125,7 +125,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
-  DEPLOY_ENVIRONMENT: v.picklist(DEPLOY_ENVIRONMENTS),
+  DEPLOY_ENVIRONMENT: v.optional(v.picklist(DEPLOY_ENVIRONMENTS)),
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   KILL_SWITCHES: killSwitchesEnvSchema,
   STELLA_VERSION: v.optional(v.string()),

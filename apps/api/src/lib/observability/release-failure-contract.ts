@@ -19,6 +19,8 @@ export const DEPLOY_ENVIRONMENTS = [
   "development",
 ] as const;
 
+export type DeployEnvironment = (typeof DEPLOY_ENVIRONMENTS)[number];
+
 /** A failure's identity across releases: where it failed and what failed. */
 export const RELEASE_FAILURE_FINGERPRINT_KEYS = [
   "handler",

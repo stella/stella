@@ -390,7 +390,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
   DEPLOY_ENVIRONMENT:
-    "Runtime deployment environment: production, staging, or development. Required independently of NODE_ENV.",
+    "Runtime deployment environment: production, staging, or development. Independent of NODE_ENV; unset events are excluded from production release health.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -1525,6 +1525,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_DEPLOYMENT_ATTEMPTS",
   "API_DEPLOYMENT_DELAY_MS",
   "API_DEPLOYMENT_EXPECTED_COMMIT",
+  "API_DEPLOYMENT_EXPECTED_ENVIRONMENT",
   "API_DEPLOYMENT_PROBE_PATH",
   "API_DEPLOYMENT_STABLE_PROBES",
   "API_DEPLOYMENT_URL",
@@ -1677,10 +1678,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_PRODUCTION_READY_URL",
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
+  "PRODUCTION_WEB_IMAGE_DIGEST",
   "PROOF_MAIN_BASE",
   "RELEASE_CANDIDATE_CHECKER",
   "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
+  "RELEASE_HEALTH_TOKEN",
   // Release pull request refresh: open release numbers, the release to update,
   // its branch, whether main merges in, and the versioned staging tip.
   "RELEASE_NUMBERS",
@@ -1714,6 +1717,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // The source-fingerprint baseline generator reads the guard test's census.
   "SOURCE_FINGERPRINT_CENSUS_OUT",
   "STAGING_STATE",
+  "STAGING_STATUS_WRITER",
   // CI names the target-branch revision the statute recall floor compares to.
   "STATUTE_RECALL_BASE_REF",
   "STELLA_AGENT_CAPTURE_LOG",

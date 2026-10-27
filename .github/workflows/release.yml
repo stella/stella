@@ -1387,13 +1387,18 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/check-api-deployment.ts
+            scripts/api-health.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
 
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
@@ -1434,21 +1439,24 @@ jobs:
           no-cache: true
 
       - name: Verify production serves the release commit
+        timeout-minutes: 10
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: production
           API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
-        run: bun scripts/check-api-deployment.ts
+        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
 
       # Same commit gate as the staging web smoke: the web origin's
       # version marker must stably report the released commit. Read-only
       # GET probes against the production frontend.
       - name: Verify production web serves the release commit
+        timeout-minutes: 10
         env:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_PROBE_PATH: version.json
           API_DEPLOYMENT_URL: https://my.stll.app
-        run: bun scripts/check-api-deployment.ts
+        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
 
   publish-release:
     runs-on: ubuntu-24.04

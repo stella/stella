@@ -653,6 +653,8 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/post-staging-verification.sh
+            scripts/check-api-deployment.ts
+            scripts/api-health.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -661,6 +663,8 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/post-staging-verification.sh" "$RUNNER_TEMP/post-staging-verification.sh"
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
 
       - name: Checkout workflow actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -771,6 +775,17 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Verify staging serves the release commit and environment
+        timeout-minutes: 10
+        env:
+          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
+          API_DEPLOYMENT_EXPECTED_ENVIRONMENT: staging
+          API_DEPLOYMENT_PROBE_PATH: ready
+          API_DEPLOYMENT_URL: https://api-staging.stll.app
+          EDGE_HEADER_NAME: x-stella-edge-token
+          EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
 
       - name: Install dependencies
         timeout-minutes: 5

@@ -26,6 +26,37 @@ const { createPostHogNodeAnalytics } = await import("./posthog-node");
 const EXPECTED_ORGANIZATION_GROUP_TYPE = "organization";
 
 describe("PostHog server analytics adapter", () => {
+  test.each([undefined, "production", "staging", "development"] as const)(
+    "stamps the configured deployment environment %p without inventing an absent marker",
+    (deployEnvironment) => {
+      const analytics = createPostHogNodeAnalytics({
+        key: "phc_test",
+        host: "https://posthog.test",
+        deployEnvironment,
+      });
+      analytics.capture({
+        distinctId: "server",
+        event: SERVER_ANALYTICS_EVENTS.releaseFailureWindow,
+        properties: { kind: "overflow", occurrences: 1 },
+      });
+      const properties = {
+        kind: "overflow",
+        occurrences: 1,
+        app_commit: "dev",
+        app_version: "dev",
+        ...(deployEnvironment === undefined
+          ? {}
+          : { deploy_environment: deployEnvironment }),
+      };
+      expect(clientCaptureMock).toHaveBeenCalledTimes(1);
+      expect(clientCaptureMock.mock.calls.at(0)?.at(0)).toStrictEqual({
+        distinctId: "server",
+        event: SERVER_ANALYTICS_EVENTS.releaseFailureWindow,
+        properties,
+      });
+    },
+  );
+
   beforeEach(() => {
     clientCaptureMock.mockClear();
     clientGroupIdentifyMock.mockClear();
@@ -33,10 +64,11 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("upserts the organization group under the shared group type", () => {
-    const analytics = createPostHogNodeAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const analytics = createPostHogNodeAnalytics({
+      key: "phc_test",
+      host: "https://posthog.test",
+      deployEnvironment: "development",
+    });
     const organizationId = toSafeId<"organization">(
       "3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41",
     );
@@ -54,10 +86,11 @@ describe("PostHog server analytics adapter", () => {
   });
 
   test("captures only explicitly allowed server telemetry events", () => {
-    const analytics = createPostHogNodeAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const analytics = createPostHogNodeAnalytics({
+      key: "phc_test",
+      host: "https://posthog.test",
+      deployEnvironment: "development",
+    });
 
     const exceptionListEntry = {
       mechanism: { handled: true, synthetic: false, type: "generic" },

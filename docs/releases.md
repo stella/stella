@@ -92,6 +92,16 @@ incomplete smokes record `failure`. Before each write, the workflow rechecks the
 newest run and status owner, so a superseded proof cannot overwrite its
 replacement's status. The API model-turn smoke remains report-only.
 
+Hosted deployment configuration must set `DEPLOY_ENVIRONMENT=staging` on the
+staging API and `DEPLOY_ENVIRONMENT=production` on the production API. The marker
+is independent of the image's build mode. It is optional at API startup: when
+absent, `/ready` returns `deployEnvironment: null` and server analytics omit
+`deploy_environment`. A configured value is returned by `/ready` and stamped on
+server analytics events. Hosted deployment verification requires the expected
+marker as well as the exact commit SHA; an unset or mismatched marker blocks
+verification. Configure it in the hosted deployment before promoting these
+images. Self-hosted and local runtimes can leave it unset.
+
 The repository variable `STAGING_STATE` declares environment prerequisites as
 JSON. Missing keys (or an unset variable) mean on: every check gates. The allowed
 keys are `corpus_index` (`on` or `off`) and `rollout` (`on` or
@@ -169,7 +179,8 @@ by the RC run.
    or production already serving its SHA, before considering another dispatch.
    Production migrations run inside the infra promotion; rollout waits for
    them to finish. Both API `/ready` and web `version.json` must report the
-   release SHA.
+   release SHA, and API `/ready` must report `deployEnvironment: production`.
+   Staging proof verification requires `deployEnvironment: staging`.
 8. After production verification, separate idempotent jobs publish the GitHub
    release with `--latest=false`, advance image `:latest` aliases to the proved
    digests, and start release health if that ref has no health run. Rerunning a
@@ -217,7 +228,9 @@ the changelog note; see `docs/changelog/README.md`.
 
 After stable publication, `release-health.yml` waits until 60 minutes after
 publication, then compares production-only `release_failure_window` events with
-the previous stable release. Staging RC events never count. An `unclassified`
+the previous stable release. Only events stamped with
+`deploy_environment=production` count; staging and unstamped events are
+excluded. An `unclassified`
 failure, or a new handler/error-class/code fingerprint occurring at least three
 times, makes the release unhealthy; an unavailable query makes it inconclusive.
 The workflow uploads `release-health.json` and alerts on a non-healthy verdict.
