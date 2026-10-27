@@ -5,7 +5,7 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import { renderReaderFixture } from "./decision-text.test";
 import {
@@ -74,10 +74,10 @@ describe("running text alignment", () => {
     );
   });
 
-  /** Each reader, with the list scheme a statute reader draws its lists by. */
+  /** Each reader, with the anchor scheme a statute reader reads its paths by. */
   const READER_CORPORA = {
     "case-law": { variant: "case-law" },
-    statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+    statute: { statuteAnchors: E_SBIRKA_ANCHORS, variant: "statute" },
   } as const;
 
   test("every paragraph takes its alignment from exactly one source", () => {
