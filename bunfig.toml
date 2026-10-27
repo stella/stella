@@ -29,7 +29,6 @@ minimumReleaseAgeExcludes = [
   # quarantined optional bindings otherwise leave the executable unavailable.
   # bun-types ships only declarations and must match the pinned Bun runtime.
   # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
-  "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
   # happy-dom 21.0.4 carries the patched DOMStringMap override forward.
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
