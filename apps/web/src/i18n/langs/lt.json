@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Pažymėti kaip neapmokestinamus",
     "matterRequired": "Pasirinkite bylą",
     "minutes": "Minutės",
+    "moveEntryHint": "Išsaugojus įrašas perkeliamas į šią bylą ir įkainojamas pagal jos tarifus.",
     "narrative": "Aprašas",
     "narrativePlaceholder": "Aprašykite atliktą darbą...",
     "noActiveTimer": "Nėra aktyvaus laikmačio",

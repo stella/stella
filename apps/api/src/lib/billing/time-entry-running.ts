@@ -48,6 +48,8 @@ type OtherRunningGuardOptions = RunningGuardBase &
   (
     | {
         workspaceId: SafeId<"workspace">;
+        /** Other matters the write touches, such as the one an entry moves to. */
+        additionalWorkspaceIds?: readonly SafeId<"workspace">[];
         selection:
           { type: "entries"; ids: SafeId<"timeEntry">[] } | { type: "none" };
       }
@@ -59,6 +61,35 @@ type OtherRunningGuardOptions = RunningGuardBase &
   );
 type GuardRunningTimeEntriesOptions =
   InvoiceRunningGuardOptions | OtherRunningGuardOptions;
+
+type MatterScopedGuardOptions = Extract<
+  OtherRunningGuardOptions,
+  { workspaceId: SafeId<"workspace"> }
+>;
+
+/**
+ * Every matter a matter-scoped write touches, in the shared sorted key order,
+ * so a move between two matters cannot deadlock with one the other way.
+ */
+const lockSelectedMatters = async (
+  tx: RunningGuardBase["tx"],
+  { workspaceId, additionalWorkspaceIds }: MatterScopedGuardOptions,
+) => {
+  const workspaceIds =
+    additionalWorkspaceIds === undefined
+      ? [workspaceId]
+      : [workspaceId, ...additionalWorkspaceIds];
+  await withBillingMatterAdvisoryLocks(
+    tx,
+    sql`
+      SELECT DISTINCT hashtext(matter_id::text) AS lock_key
+      FROM unnest(ARRAY[${sql.join(
+        workspaceIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}]) AS matter_id
+    `,
+  );
+};
 
 export function guardRunningTimeEntries(
   options: InvoiceRunningGuardOptions,
@@ -206,9 +237,7 @@ export async function guardRunningTimeEntries(
       );
     }
   } else {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
-    );
+    await lockSelectedMatters(tx, options);
   }
   const lockedRead = await lockBillingTimeEntrySources(tx, condition);
   if (lockedRead.type === "overflow") {

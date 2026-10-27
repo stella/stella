@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Mark non-billable",
     "matterRequired": "Please select a matter",
     "minutes": "Minutes",
+    "moveEntryHint": "Saving moves the entry to this matter and prices it with this matter's rates.",
     "narrative": "Narrative",
     "narrativePlaceholder": "Describe the work performed...",
     "noActiveTimer": "No active timer",

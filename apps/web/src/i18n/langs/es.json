@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
+    "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",

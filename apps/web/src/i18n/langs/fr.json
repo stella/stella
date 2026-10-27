@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Marquer non facturable",
     "matterRequired": "Veuillez sélectionner un dossier",
     "minutes": "min",
+    "moveEntryHint": "L’enregistrement déplace la saisie vers ce dossier et la valorise selon ses taux.",
     "narrative": "Description",
     "narrativePlaceholder": "Décrivez le travail effectué...",
     "noActiveTimer": "Aucun chronomètre actif",

@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Märgi mittearveldatavaks",
     "matterRequired": "Palun valige toimik",
     "minutes": "Minutid",
+    "moveEntryHint": "Salvestamisel liigub kanne sellesse toimikusse ja seda hinnatakse toimiku määrade järgi.",
     "narrative": "Selgitus",
     "narrativePlaceholder": "Kirjeldage tehtud tööd...",
     "noActiveTimer": "Aktiivset taimerit pole",

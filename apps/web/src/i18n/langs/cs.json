@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Označit jako nefakturovatelné",
     "matterRequired": "Vyberte prosím spis",
     "minutes": "Minuty",
+    "moveEntryHint": "Uložením se záznam přesune do tohoto spisu a ocení se podle jeho sazeb.",
     "narrative": "Popis",
     "narrativePlaceholder": "Popište provedenou práci...",
     "noActiveTimer": "Žádný aktivní časovač",

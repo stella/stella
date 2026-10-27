@@ -17,6 +17,8 @@ import {
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
 import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
+import type { MatterOption } from "@/components/workspaces/matter-combobox";
+import { MoveEntryField } from "@/features/my-week/move-entry-field";
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
 import {
@@ -52,7 +54,12 @@ type MyWeekProps = {
 
 type WeekDialog =
   | { type: "closed" }
-  | { type: "edit"; entry: MyTimeEntry }
+  | {
+      type: "edit";
+      entry: MyTimeEntry;
+      /** Where a draft goes on save; null when the entry cannot move. */
+      matter: MatterOption | null;
+    }
   | { type: "accept"; target: SuggestionTarget; narrative: string };
 
 /** The queries behind one week, shared by the route loader and the page. */
@@ -99,6 +106,19 @@ const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
       return panic("Unhandled week dialog state");
   }
 };
+
+/** A draft in a matter can move to another; reviewed or internal time stays. */
+const movableMatterOf = (entry: MyTimeEntry): MatterOption | null =>
+  entry.status === "draft" &&
+  entry.workspaceId !== null &&
+  entry.workspaceName !== null
+    ? {
+        id: entry.workspaceId,
+        name: entry.workspaceName,
+        clientName: null,
+        color: null,
+      }
+    : null;
 
 const dialogMatterId = (dialog: WeekDialog) => {
   switch (dialog.type) {
@@ -172,7 +192,7 @@ export const MyWeek = ({
           if (dialog.type === "accept") {
             await actions.accept(dialog.target, values);
           } else if (dialog.type === "edit") {
-            await actions.editEntry(dialog.entry, values);
+            await actions.editEntry(dialog.entry, values, dialog.matter?.id);
           }
         },
         catch: (cause: unknown): unknown => cause,
@@ -258,7 +278,9 @@ export const MyWeek = ({
               narrative,
             })
           }
-          onEditEntry={(entry) => setDialog({ type: "edit", entry })}
+          onEditEntry={(entry) =>
+            setDialog({ type: "edit", entry, matter: movableMatterOf(entry) })
+          }
           suggestions={suggestions}
         />
         {entriesQuery.hasNextPage && (
@@ -305,6 +327,17 @@ export const MyWeek = ({
               <ManualTimeEntryForm
                 dateLocked={dialog.type === "accept"}
                 defaultValues={dialogDefaults(dialog)}
+                leading={
+                  dialog.type === "edit" && dialog.matter !== null ? (
+                    <MoveEntryField
+                      currentMatterId={matterId}
+                      onChange={(matter) => setDialog({ ...dialog, matter })}
+                      organizationId={organizationId}
+                      userId={userId}
+                      value={dialog.matter}
+                    />
+                  ) : undefined
+                }
                 onCancel={() => setDialog({ type: "closed" })}
                 onSubmit={submitDialog}
                 pending={actions.pending || submitGuard.pending}

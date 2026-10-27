@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Atzīmēt kā neapmaksājamus",
     "matterRequired": "Lūdzu, izvēlieties lietu",
     "minutes": "Minūtes",
+    "moveEntryHint": "Saglabājot ieraksts tiek pārvietots uz šo lietu un novērtēts pēc tās likmēm.",
     "narrative": "Apraksts",
     "narrativePlaceholder": "Aprakstiet veikto darbu...",
     "noActiveTimer": "Nav aktīva taimeris",

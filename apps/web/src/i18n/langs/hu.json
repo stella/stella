@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Nem számlázhatónak jelöl",
     "matterRequired": "Kérjük, válasszon ügyet",
     "minutes": "Perc",
+    "moveEntryHint": "Mentéskor a bejegyzés ebbe az ügybe kerül, és ennek díjtételei szerint árazódik.",
     "narrative": "Szöveges leírás",
     "narrativePlaceholder": "Írja le az elvégzett munkát...",
     "noActiveTimer": "Nincs aktív időmérő",

@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Oznacz jako nierozliczalne",
     "matterRequired": "Wybierz sprawę",
     "minutes": "Minuty",
+    "moveEntryHint": "Zapisanie przeniesie wpis do tej sprawy i wyceni go według jej stawek.",
     "narrative": "Opis",
     "narrativePlaceholder": "Opisz wykonaną pracę...",
     "noActiveTimer": "Brak aktywnego timera",

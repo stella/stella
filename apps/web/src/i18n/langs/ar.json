@@ -720,6 +720,7 @@
     "markNonBillableSelected": "وضع علامة غير قابل للفوترة",
     "matterRequired": "يرجى اختيار ملف قانوني",
     "minutes": "الدقائق",
+    "moveEntryHint": "عند الحفظ، يُنقل القيد إلى هذا الملف القانوني ويُسعَّر وفق أسعاره.",
     "narrative": "البيان",
     "narrativePlaceholder": "صِف العمل المُنجز...",
     "noActiveTimer": "لا يوجد مؤقّت نشط",

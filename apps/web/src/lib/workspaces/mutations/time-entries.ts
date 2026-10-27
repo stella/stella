@@ -144,6 +144,8 @@ export const useCreateTimeEntry = () => {
 type UpdateTimeEntryVars = {
   workspaceId: string;
   id: string;
+  /** Another matter a draft moves to; the API re-prices it there. */
+  moveTo?: string;
 } & NonEmptyPatch<{
   dateWorked: string;
   timezoneId: string;
@@ -163,7 +165,7 @@ export const useUpdateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
-      const { id, workItemId, ...restBody } = body;
+      const { id, workItemId, moveTo, ...restBody } = body;
       await sendTimeEntryMutation({
         workspaceId,
         mutation: {
@@ -173,6 +175,7 @@ export const useUpdateTimeEntry = () => {
             ...restBody,
             id,
             ...(workItemId !== undefined && { workItemId }),
+            ...(moveTo !== undefined && { moveToWorkspaceId: moveTo }),
           },
         },
       });

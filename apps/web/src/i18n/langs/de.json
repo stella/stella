@@ -720,6 +720,7 @@
     "markNonBillableSelected": "Als nicht abrechenbar markieren",
     "matterRequired": "Bitte wählen Sie eine Akte aus",
     "minutes": "Minuten",
+    "moveEntryHint": "Beim Speichern wird der Eintrag in diese Akte verschoben und mit deren Sätzen bewertet.",
     "narrative": "Beschreibungstext",
     "narrativePlaceholder": "Beschreiben Sie die durchgeführte Arbeit...",
     "noActiveTimer": "Kein aktiver Timer",

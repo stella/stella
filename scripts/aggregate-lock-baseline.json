@@ -2190,12 +2190,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "f9516d9c578f8199357badb9ece69d53392631b50201d0fcc28893dec4c0be2f",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/billing/time-timers.ts",
     "fingerprint": "04a4541da5c2ce0425b9a8ae11b4f38034c69d0e0e9682bfa6d0f26b93b568b5",
     "count": 1,
