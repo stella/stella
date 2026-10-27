@@ -39,6 +39,12 @@ const cases = [
     lines: [],
   },
   {
+    title:
+      "allows a fallback that draws content whose lazy tools sit in a nested boundary",
+    source: `${HEADER}${LAZY}const Page = ({ decision }) => (\n<Suspense fallback={<Reader decision={decision} />}>\n<Reader decision={decision} />\n<Suspense fallback={null}>\n<LazyChat decisionId={decision.id} />\n</Suspense>\n</Suspense>\n);`,
+    lines: [],
+  },
+  {
     title: "allows a placeholder that shares only presentation",
     source: `${HEADER}${LAZY}const Page = ({ decision, onOpen }) => (\n<Suspense fallback={<Skeleton className="h-4" label={t("loading")} onOpen={() => onOpen()} rows={3} value={undefined} />}>\n<LazyChat className="h-4" decision={decision} label={t("loading")} />\n</Suspense>\n);`,
     lines: [],

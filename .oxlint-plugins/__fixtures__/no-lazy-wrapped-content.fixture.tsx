@@ -84,6 +84,23 @@ export const _toolsBesideTheReader = ({ decision }: { decision: Decision }) => (
   </>
 );
 
+// Tools behind their own boundary never take the place of the outer fallback.
+export const _toolsInANestedBoundary = ({
+  decision,
+}: {
+  decision: Decision;
+}) => (
+  <Suspense
+    // expect-clean: no-lazy-wrapped-content/no-lazy-wrapped-content
+    fallback={<Reader decision={decision} />}
+  >
+    <Reader decision={decision} />
+    <Suspense fallback={null}>
+      <LazyMemberTools decisionId={decision.id} />
+    </Suspense>
+  </Suspense>
+);
+
 export const _placeholderSharesNoData = ({
   decision,
 }: {

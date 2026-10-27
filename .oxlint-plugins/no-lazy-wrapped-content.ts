@@ -39,7 +39,9 @@
 // spreads are not compared, so a skeleton or a disabled button standing in for
 // the lazy one stays allowed. A boundary whose content suspends on data rather
 // than on a lazy chunk is out of scope: its fallback is a lookalike shell, not
-// the content.
+// the content. A fallback is compared only with the lazy elements its own
+// boundary catches: a lazy element behind a nested boundary swaps that
+// boundary's fallback, and a synchronous sibling is not the chunk.
 //
 // Analysis boundary: only `lazy` and `Suspense` imported from `react` (named,
 // default or namespace) count, and only a lazy component bound to a `const` in
@@ -256,6 +258,28 @@ const attributeOf = (element: AstNode, name: string): AstNode | null => {
 const contains = (outer: AstNode, inner: AstNode): boolean =>
   outer.range[0] <= inner.range[0] && inner.range[1] <= outer.range[1];
 
+// The boundary that shows its fallback while `node` suspends: the nearest
+// enclosing Suspense element, passing over one whose fallback holds `node`
+// (a fallback suspends to the boundary above its own).
+const catchingBoundary = (
+  node: AstNode,
+  react: ReactBindings,
+): AstNode | null => {
+  let current = isAstNode(node.parent) ? node.parent : null;
+  while (current !== null) {
+    if (
+      current.type === "JSXElement" &&
+      isAstNode(current.openingElement) &&
+      isSuspenseName(current.openingElement.name, react) &&
+      !contains(current.openingElement, node)
+    ) {
+      return current;
+    }
+    current = isAstNode(current.parent) ? current.parent : null;
+  }
+  return null;
+};
+
 const enclosingFunction = (node: AstNode): AstNode | null => {
   let current = isAstNode(node.parent) ? node.parent : null;
   while (current !== null && !FUNCTION_TYPES.has(current.type)) {
@@ -403,23 +427,28 @@ export default eslintCompatPlugin({
                 continue;
               }
               const fallback = attributeOf(element, "fallback");
+              // Only the lazy elements this boundary catches replace its
+              // fallback: one under a nested boundary swaps that boundary's
+              // fallback instead, and a synchronous sibling is not the chunk.
+              const suspended = elements.filter(
+                (inner) =>
+                  isLazyElement(inner) &&
+                  catchingBoundary(inner, react) === element,
+              );
               if (
                 fallback === null ||
                 !isAstNode(fallback.value) ||
                 fallback.value.type !== "JSXExpressionContainer" ||
-                !elements.some(
-                  (inner) =>
-                    contains(element, inner) &&
-                    !contains(opening, inner) &&
-                    isLazyElement(inner),
-                )
+                suspended.length === 0
               ) {
                 continue;
               }
               const shown = emptyCollected();
               collectValue(fallback.value.expression, sourceCode, shown, true);
               const content = emptyCollected();
-              collectChildren(element, sourceCode, content);
+              for (const lazyElement of suspended) {
+                collectMarkup(lazyElement, sourceCode, content);
+              }
               if ([...shown.values].some((v) => content.values.has(v))) {
                 context.report({
                   node: fallback,
