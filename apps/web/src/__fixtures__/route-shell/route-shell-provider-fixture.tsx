@@ -27,7 +27,7 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
-import type { api } from "@/lib/api";
+import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
@@ -40,6 +40,7 @@ type RouteShellProviderFixtureOptions = {
     | "law-hosts"
     | "professional-use"
     | "route-search"
+    | "chat-composer"
     | "case-search";
   /** The router's reading of a URL, which the route-search suite checks with. */
   parseSearch?: (searchStr: string) => Record<string, unknown>;
@@ -362,7 +363,54 @@ const installFixtureNetwork = () => {
         >);
       }
       if (/^\/v1\/chat\/threads\/[0-9a-f-]{36}\/messages$/u.test(pathname)) {
+        if (new URL(url).searchParams.get("allowMissingThread") === "true") {
+          return Response.json({
+            activeSkill: null,
+            activeTurnId: null,
+            attachedFiles: { fileCount: 0, files: [] },
+            context: {
+              estimatedTokens: 0,
+              triggerTokens: 0,
+              cacheStableTokens: 0,
+              summarizedMessageCount: 0,
+              breakdown: {
+                promptTokens: 0,
+                toolTokens: 0,
+                summaryTokens: 0,
+                attachmentTokens: 0,
+                conversationTokens: 0,
+              },
+            },
+            contextMatterIds: [],
+            forkProvenance: { type: "none" },
+            lastActivityAt: null,
+            messages: [],
+            model: null,
+            olderCursor: null,
+            reasoningEffort: null,
+            threadExists: false,
+            threadRevision: null,
+            usedAnonymization: false,
+            webSearchAvailable: false,
+            webSearchEnabled: false,
+          } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]);
+        }
         return Response.json({ message: "Not found" }, { status: 404 });
+      }
+      if (pathname === "/v1/skills") {
+        return Response.json({
+          builtIn: [],
+          installed: [],
+          canManageTeam: false,
+          limit: 100,
+          nextCursor: null,
+        } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/skill-availability") {
+        return Response.json({
+          unavailable: [],
+          unavailableHere: [],
+        } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
@@ -1495,4 +1543,5 @@ export const declareRouteShellProviderFixture = async (
       );
     }
   });
+  return fixture;
 };
