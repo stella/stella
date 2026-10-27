@@ -154,6 +154,13 @@ const helperSteps = [
     ].join("\n"),
   },
 ];
+// The helper checkout's `with:` inputs, for mutating in place.
+const checkoutInputs = (jobSteps: Record<string, unknown>[]) => {
+  const checkout = jobSteps.at(0) ?? panic("Missing helper checkout");
+  const inputs = v.parse(v.record(v.string(), v.unknown()), checkout["with"]);
+  checkout["with"] = inputs;
+  return inputs;
+};
 const assertDispatch = (
   workflow: v.InferOutput<typeof schema>,
   job: string,
@@ -332,16 +339,15 @@ test("both workflows check release candidates first only for explicit opt-in pin
         jobSteps.splice(1, 1);
       },
       (jobSteps) => {
-        const checkout = jobSteps.at(0) as { with: Record<string, unknown> };
-        checkout.with["ref"] = `\${{ inputs.sha }}`;
+        checkoutInputs(jobSteps)["ref"] = `\${{ inputs.sha }}`;
       },
       (jobSteps) => {
-        const checkout = jobSteps.at(0) as { with: Record<string, unknown> };
-        checkout.with["sparse-checkout"] = "scripts/";
+        checkoutInputs(jobSteps)["sparse-checkout"] = "scripts/";
       },
       (jobSteps) => {
-        const stage = jobSteps.at(1) as { run: string };
-        stage.run += "bash scripts/check-release-candidate.sh\n";
+        const stage = jobSteps.at(1) ?? panic("Missing stage step");
+        stage["run"] =
+          `${v.parse(v.string(), stage["run"])}bash scripts/check-release-candidate.sh\n`;
       },
     ];
     for (const mutate of helperMutants) {
