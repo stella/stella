@@ -2,18 +2,89 @@
 // the production implementation to exercise its private window-configuration seam.
 #[cfg(target_os = "macos")]
 include!("../src/park.rs");
+#[cfg(target_os = "macos")]
+#[path = "../src/activation.rs"]
+mod activation;
+
+/// Dispatches AppKit events until `condition` holds: activation changes reach
+/// the process as events, and the harness has no running event loop. False
+/// when it still does not hold after a bounded number of event waits.
+#[cfg(target_os = "macos")]
+fn pump_until(application: &NSApplication, condition: impl Fn() -> bool) -> bool {
+  use objc2_app_kit::NSEventMask;
+  use objc2_foundation::{NSDate, NSDefaultRunLoopMode};
+
+  const EVENT_WAITS: usize = 200;
+  const EVENT_WAIT_SECONDS: f64 = 0.05;
+
+  for _ in 0..EVENT_WAITS {
+    if condition() {
+      return true;
+    }
+    let until = NSDate::dateWithTimeIntervalSinceNow(EVENT_WAIT_SECONDS);
+    // SAFETY: NSDefaultRunLoopMode is an immutable Foundation constant.
+    let mode = unsafe { NSDefaultRunLoopMode };
+    if let Some(event) = application.nextEventMatchingMask_untilDate_inMode_dequeue(
+      NSEventMask::Any,
+      Some(&until),
+      mode,
+      true,
+    ) {
+      application.sendEvent(&event);
+    }
+  }
+  condition()
+}
+
+/// Requests activation for `editor` and reports whether the system granted it.
+/// From macOS 14 activation is cooperative and a request made without the
+/// user's own action may be declined, which this harness cannot supply, so a
+/// decline there is reported and the caller skips what depends on it. Below
+/// macOS 14 activation ignores other apps and must succeed.
+#[cfg(target_os = "macos")]
+fn activated(application: &NSApplication, editor: &NSWindow) -> bool {
+  activation::activate_with_key_window(application, editor);
+  if pump_until(application, || {
+    application.isActive() && editor.isKeyWindow()
+  }) {
+    return true;
+  }
+  assert!(
+    objc2::available!(macos = 14.0),
+    "below macOS 14 the editor must be the key window of the active app"
+  );
+  eprintln!(
+    "the system declined activation without a user action; activation is not observed"
+  );
+  false
+}
 
 #[cfg(target_os = "macos")]
 fn main() {
+  use activation::{ActivationReturn, return_activation};
   use objc2::rc::{Retained, autoreleasepool};
-  use objc2::runtime::{AnyObject, ClassBuilder};
-  use objc2_app_kit::NSBackingStoreType;
+  use objc2::runtime::{AnyClass, AnyObject, ClassBuilder};
+  use objc2_app_kit::{
+    NSApplicationActivationPolicy, NSBackingStoreType, NSRunningApplication,
+    NSWorkspace,
+  };
   use objc2_foundation::{NSPoint, NSRect, NSSize};
   use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
 
   autoreleasepool(|_| {
     let main_thread = MainThreadMarker::new().expect("AppKit requires the main thread");
-    let _application = NSApplication::sharedApplication(main_thread);
+    let application = NSApplication::sharedApplication(main_thread);
+    assert!(application.setActivationPolicy(NSApplicationActivationPolicy::Regular));
+    let own_process_id = NSRunningApplication::currentApplication().processIdentifier();
+    // The app the user was in before stella's editor opened. Production
+    // records it the same way, before activating; the harness can observe a
+    // hand-back only when another app is frontmost as it starts.
+    let previous_app = NSWorkspace::sharedWorkspace()
+      .frontmostApplication()
+      .filter(|app| app.processIdentifier() != own_process_id);
+    // This harness pumps events itself instead of calling run(), which
+    // normally completes AppKit's launch before starting its event loop.
+    application.finishLaunching();
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(100.0, 100.0));
     for _ in 0..3 {
       // SAFETY: initialized on the main thread and retained until after close;
@@ -158,6 +229,110 @@ fn main() {
         &***webview,
       ));
     }
+
+    // The editor is an ordinary window that activates the app: WebKit draws
+    // the caret and focus ring only in the active app's key window, and a
+    // non-activating panel would leave the app inactive while it is key.
+    // SAFETY: initialized on the main thread and retained until after close;
+    // disabling release-on-close prevents AppKit consuming that ownership.
+    let editor = unsafe {
+      let editor = NSWindow::initWithContentRect_styleMask_backing_defer(
+        NSWindow::alloc(main_thread),
+        frame,
+        NSWindowStyleMask::Titled
+          | NSWindowStyleMask::Closable
+          | NSWindowStyleMask::Resizable,
+        NSBackingStoreType::Buffered,
+        false,
+      );
+      editor.setReleasedWhenClosed(false);
+      editor
+    };
+    let editor_class = editor.class();
+    let mut activation_observed = true;
+    for _ in 0..3 {
+      // Production opens the editor while another app is active.
+      application.deactivate();
+      assert!(
+        pump_until(&application, || !application.isActive()),
+        "the editor must open with the app inactive"
+      );
+
+      if !activated(&application, &editor) {
+        activation_observed = false;
+        editor.orderOut(None);
+        break;
+      }
+      assert!(std::ptr::eq::<NSWindow>(
+        application.keyWindow().as_deref().unwrap(),
+        &*editor,
+      ));
+      // Presenting keeps the runtime class WebKit registers its observers
+      // against, unlike the clipboard panel's conversion.
+      assert_eq!(editor.class(), editor_class);
+
+      match &previous_app {
+        Some(previous) => {
+          assert_eq!(
+            return_activation(previous.processIdentifier()),
+            ActivationReturn::Requested
+          );
+          editor.orderOut(None);
+          assert!(
+            pump_until(&application, || previous.isActive()
+              && !application.isActive()),
+            "closing the editor must reactivate the app frontmost before it opened"
+          );
+        }
+        None => {
+          eprintln!(
+            "no other app was frontmost; the activation hand-back is not observed"
+          );
+          editor.orderOut(None);
+        }
+      }
+    }
+
+    // The hand-back never takes activation from wherever the user went.
+    application.deactivate();
+    assert!(pump_until(&application, || !application.isActive()));
+    assert_eq!(
+      return_activation(own_process_id),
+      ActivationReturn::NotActive
+    );
+
+    // An app that is no longer running cannot be reactivated, and stella
+    // stays active. macOS process identifiers stay far below i32::MAX, so
+    // it names no running app.
+    if activation_observed && activated(&application, &editor) {
+      assert_eq!(
+        return_activation(i32::MAX),
+        ActivationReturn::PreviousAppGone
+      );
+      assert!(application.isActive());
+    }
+    editor.orderOut(None);
+    editor.close();
+
+    // Activating the app for the editor leaves the clipboard panel's
+    // non-activating presentation as it was. AppKit may start observing the
+    // panel by then; key-value observing swaps its runtime class for an
+    // `NSKVONotifying_` subclass and answers `-class` with the class it was,
+    // so the panel's own answer is what still has to be the clipboard panel.
+    // SAFETY: `-class` takes no arguments and returns the receiver's class;
+    // the panel is retained and used on the main thread.
+    let reported_panel_class: &AnyClass = unsafe { msg_send![&*panel, class] };
+    assert_eq!(reported_panel_class, ClipboardPanel::class());
+    assert!(
+      panel
+        .styleMask()
+        .contains(NSWindowStyleMask::NonactivatingPanel)
+    );
+    assert!(panel.collectionBehavior().contains(
+      NSWindowCollectionBehavior::FullScreenAuxiliary
+        | NSWindowCollectionBehavior::CanJoinAllSpaces
+    ));
+    assert!(!panel.hidesOnDeactivate());
 
     panel.close();
     // The production panel lives as long as the process. Deallocating a

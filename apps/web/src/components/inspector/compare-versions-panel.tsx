@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -32,7 +32,10 @@ import {
   type EntityVersion,
   entityVersionsKeys,
 } from "@/lib/workspaces/queries/entity-versions";
-import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
+import {
+  getCurrentWorkspaceDocument,
+  useWorkspaceViewParams,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 import {
   COMPARE_CHANGE_KIND_LABEL_KEYS,
@@ -120,9 +123,7 @@ export const CompareVersionsPanel = ({
 }: CompareVersionsPanelProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
@@ -202,10 +203,9 @@ export const CompareVersionsPanel = ({
       facet: "preview",
     });
 
-    const onDocumentRoute = new RegExp(
-      `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
-      "u",
-    ).test(pathname);
+    const onDocumentRoute =
+      getCurrentWorkspaceDocument(router.state.matches)?.workspaceId ===
+      workspaceId;
     if (!onDocumentRoute) {
       return;
     }
