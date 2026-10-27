@@ -20,6 +20,12 @@ const TEXT_VARIANTS = {
   headline: "text-lg",
   title: "text-2xl",
   largeTitle: "text-3xl tracking-tight",
+  /** The sign-in's heading: the web auth panel's light 2rem title. */
+  display: "text-[32px] leading-[37px] tracking-tight",
+  /** A small bordered tag in capitals, as the web marks the beta. */
+  badge: "text-[10px] uppercase tracking-[1px] text-muted-foreground",
+  /** An inline link in a caption, underlined as the web's legal links are. */
+  link: "text-sm text-muted-foreground underline",
   /**
    * A decision's text, in the reader's serif at its 1.65 leading
    * (packages/decision-reader reader.css). Its emphases nest inside it and
@@ -46,6 +52,9 @@ const FACES = {
   headline: "DMSans-SemiBold",
   title: "DMSans-SemiBold",
   largeTitle: "DMSans-Bold",
+  display: "DMSans-Light",
+  badge: "DMSans-Medium",
+  link: "DMSans-Regular",
   // The web reader sets Source Serif 4, which ships only as web fonts; iOS's
   // own Georgia is the serif the phone has.
   reading: "Georgia",

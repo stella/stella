@@ -156,6 +156,7 @@ const appConfigBase = ({
       "expo-font",
       {
         fonts: [
+          "@expo-google-fonts/dm-sans/300Light/DMSans_300Light.ttf",
           "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
           "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
           "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf",

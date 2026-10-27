@@ -82,11 +82,18 @@
     "loadFailed": "Cet élément n’a pas pu être chargé."
   },
   "signIn": {
-    "title": "Se connecter à stella",
-    "description": "Saisissez l’adresse de votre serveur stella. Vous validerez la connexion dans votre navigateur.",
+    "beta": "Bêta",
+    "headline": "La clarté pour chaque affaire.",
+    "subtitle": "Documents, jurisprudence et revue sous contrôle. Avec l'aide de l'IA.",
+    "submit": "Se connecter",
+    "terms": "En continuant, vous acceptez nos <terms>conditions d’utilisation</terms>.",
+    "options": "Options de connexion",
+    "serverTitle": "Serveur",
+    "serverDescription": "L’application se connecte à stella. N’indiquez un autre serveur que si votre organisation exploite le sien.",
+    "useStella": "Utiliser stella",
+    "done": "Terminé",
     "serverLabel": "Adresse du serveur",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuer",
     "sessionEnded": "Votre session a expiré. Reconnectez-vous.",
     "errors": {
       "address": "Saisissez une adresse https, par exemple stella.example.com.",

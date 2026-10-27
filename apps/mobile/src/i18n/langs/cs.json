@@ -82,11 +82,18 @@
     "loadFailed": "Položku se nepodařilo načíst."
   },
   "signIn": {
-    "title": "Přihlaste se do aplikace stella",
-    "description": "Zadejte adresu svého serveru stella. Přihlášení potvrdíte v prohlížeči.",
+    "beta": "Beta",
+    "headline": "Jasno v každém případě.",
+    "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
+    "submit": "Přihlásit se",
+    "terms": "Pokračováním souhlasíte s našimi <terms>smluvními podmínkami</terms>.",
+    "options": "Možnosti přihlášení",
+    "serverTitle": "Server",
+    "serverDescription": "Aplikace se přihlašuje ke stella. Jiný server zadejte, jen pokud vaše organizace provozuje vlastní.",
+    "useStella": "Použít stella",
+    "done": "Hotovo",
     "serverLabel": "Adresa serveru",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Pokračovat",
     "sessionEnded": "Vaše relace skončila. Přihlaste se znovu.",
     "errors": {
       "address": "Zadejte adresu https, například stella.example.com.",

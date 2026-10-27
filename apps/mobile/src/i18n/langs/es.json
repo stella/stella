@@ -82,11 +82,18 @@
     "loadFailed": "No se pudo cargar este elemento."
   },
   "signIn": {
-    "title": "Inicia sesión en stella",
-    "description": "Introduce la dirección de tu servidor stella. Aprobarás el inicio de sesión en el navegador.",
+    "beta": "Beta",
+    "headline": "Claridad en cada caso.",
+    "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
+    "submit": "Iniciar sesión",
+    "terms": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>.",
+    "options": "Opciones de inicio de sesión",
+    "serverTitle": "Servidor",
+    "serverDescription": "La aplicación inicia sesión en stella. Indica otro servidor solo si tu organización tiene uno propio.",
+    "useStella": "Usar stella",
+    "done": "Listo",
     "serverLabel": "Dirección del servidor",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuar",
     "sessionEnded": "Tu sesión ha terminado. Vuelve a iniciar sesión.",
     "errors": {
       "address": "Introduce una dirección https, por ejemplo stella.example.com.",

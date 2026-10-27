@@ -82,11 +82,18 @@
     "loadFailed": "Nie udało się wczytać tej pozycji."
   },
   "signIn": {
-    "title": "Zaloguj się do stella",
-    "description": "Wpisz adres swojego serwera stella. Logowanie potwierdzisz w przeglądarce.",
+    "beta": "Beta",
+    "headline": "Jasność w każdej sprawie.",
+    "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
+    "submit": "Zaloguj się",
+    "terms": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
+    "options": "Opcje logowania",
+    "serverTitle": "Serwer",
+    "serverDescription": "Aplikacja loguje się do stella. Podaj inny serwer tylko wtedy, gdy Twoja organizacja prowadzi własny.",
+    "useStella": "Użyj stella",
+    "done": "Gotowe",
     "serverLabel": "Adres serwera",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Kontynuuj",
     "sessionEnded": "Twoja sesja wygasła. Zaloguj się ponownie.",
     "errors": {
       "address": "Wpisz adres https, na przykład stella.example.com.",

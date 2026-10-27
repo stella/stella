@@ -82,11 +82,18 @@
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden."
   },
   "signIn": {
-    "title": "Bei stella anmelden",
-    "description": "Geben Sie die Adresse Ihres stella-Servers ein. Die Anmeldung bestätigen Sie im Browser.",
+    "beta": "Beta",
+    "headline": "Klarheit für jeden Fall.",
+    "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
+    "submit": "Anmelden",
+    "terms": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu.",
+    "options": "Anmeldeoptionen",
+    "serverTitle": "Server",
+    "serverDescription": "Die App meldet sich bei stella an. Geben Sie nur dann einen anderen Server an, wenn Ihre Organisation einen eigenen betreibt.",
+    "useStella": "stella verwenden",
+    "done": "Fertig",
     "serverLabel": "Serveradresse",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Weiter",
     "sessionEnded": "Ihre Sitzung ist abgelaufen. Melden Sie sich erneut an.",
     "errors": {
       "address": "Geben Sie eine https-Adresse ein, etwa stella.example.com.",

@@ -82,11 +82,18 @@
     "loadFailed": "Não foi possível carregar este item."
   },
   "signIn": {
-    "title": "Entre no stella",
-    "description": "Informe o endereço do seu servidor stella. Você aprova o login no navegador.",
+    "beta": "Beta",
+    "headline": "Clareza para cada caso.",
+    "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
+    "submit": "Faça login",
+    "terms": "Ao continuar, você concorda com nossos <terms>Termos de Serviço</terms>.",
+    "options": "Opções de login",
+    "serverTitle": "Servidor",
+    "serverDescription": "O app entra no stella. Informe outro servidor apenas se sua organização mantiver um próprio.",
+    "useStella": "Usar o stella",
+    "done": "Concluído",
     "serverLabel": "Endereço do servidor",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continuar",
     "sessionEnded": "Sua sessão terminou. Entre novamente.",
     "errors": {
       "address": "Informe um endereço https, como stella.example.com.",

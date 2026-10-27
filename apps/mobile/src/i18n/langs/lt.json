@@ -82,11 +82,18 @@
     "loadFailed": "Nepavyko įkelti šio įrašo."
   },
   "signIn": {
-    "title": "Prisijunkite prie stella",
-    "description": "Įveskite savo stella serverio adresą. Prisijungimą patvirtinsite naršyklėje.",
+    "beta": "Beta",
+    "headline": "Aiškumas kiekvienai bylai.",
+    "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su DI pagalba.",
+    "submit": "Prisijungti",
+    "terms": "Tęsdami sutinkate su mūsų <terms>paslaugų teikimo sąlygomis</terms>.",
+    "options": "Prisijungimo parinktys",
+    "serverTitle": "Serveris",
+    "serverDescription": "Programa jungiasi prie stella. Kitą serverį nurodykite tik tada, jei jūsų organizacija turi savo.",
+    "useStella": "Naudoti stella",
+    "done": "Atlikta",
     "serverLabel": "Serverio adresas",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Tęsti",
     "sessionEnded": "Jūsų sesija baigėsi. Prisijunkite dar kartą.",
     "errors": {
       "address": "Įveskite https adresą, pavyzdžiui, stella.example.com.",

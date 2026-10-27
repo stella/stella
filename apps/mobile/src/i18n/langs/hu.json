@@ -82,11 +82,18 @@
     "loadFailed": "Az elemet nem sikerült betölteni."
   },
   "signIn": {
-    "title": "Bejelentkezés a stella szolgáltatásba",
-    "description": "Adja meg a stella szerver címét. A bejelentkezést a böngészőben hagyja jóvá.",
+    "beta": "Béta",
+    "headline": "Tisztán látás minden ügyben.",
+    "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
+    "submit": "Bejelentkezés",
+    "terms": "A folytatással elfogadja a <terms>felhasználási feltételeket</terms>.",
+    "options": "Bejelentkezési beállítások",
+    "serverTitle": "Szerver",
+    "serverDescription": "Az alkalmazás a stellába jelentkezik be. Másik szervert csak akkor adjon meg, ha a szervezete sajátot üzemeltet.",
+    "useStella": "A stella használata",
+    "done": "Kész",
     "serverLabel": "Szervercím",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Tovább",
     "sessionEnded": "A munkamenete lejárt. Jelentkezzen be újra.",
     "errors": {
       "address": "Adjon meg egy https-címet, például: stella.example.com.",

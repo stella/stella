@@ -1,25 +1,48 @@
 import { useState, useTransition } from "react";
+import type { ReactNode } from "react";
 
 import { panic, Result } from "better-result";
-import { KeyboardAvoidingView, Platform, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
-import { ScreenHeading } from "@/components/empty-state-screen";
+import { TERMS_URL } from "@/components/auth-backdrop";
+import { AuthBackdrop } from "@/components/auth-backdrop-view";
 import { Button } from "@/components/ui/button";
-import { SafeAreaView } from "@/components/ui/safe-area-view";
+import { StellaWordmark } from "@/components/ui/stella-wordmark";
 import { Text, TextInput } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 import type { SignInError } from "@/connection/sign-in";
-import { PREFILLED_SERVER_URL } from "@/env";
+import { DEFAULT_SERVER_URL } from "@/env";
+import { MoreHorizontalIcon } from "@/icons.gen";
+import { useUiColors } from "@/theme";
 
+/**
+ * The web sign-in, on the phone: its backdrop, wordmark and beta mark, its
+ * headline, and one way in. The web page itself takes the sign-in in the
+ * browser sheet, so every method it offers is offered here too. The server
+ * is stella's own; another one hides behind the options button, where the
+ * web keeps its pickers.
+ */
 const SignInScreen = () => {
   const t = useTranslations("signIn");
+  const ui = useUiColors();
+  const insets = useSafeAreaInsets();
   const { signIn, state } = useSession();
-  const [serverUrl, setServerUrl] = useState(PREFILLED_SERVER_URL);
+  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [failure, setFailure] = useState<SignInFailure | null>(null);
   const [pending, startTransition] = useTransition();
 
   const submit = () => {
+    setOptionsOpen(false);
     startTransition(async () => {
       const result = await signIn(serverUrl);
       setFailure(Result.isError(result) ? failureOf(result.error) : null);
@@ -35,44 +58,123 @@ const SignInScreen = () => {
   }
 
   return (
-    <SafeAreaView>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 justify-center gap-3 px-4"
+    <View className="flex-1">
+      <AuthBackdrop />
+      <View
+        className="flex-1 px-8"
+        style={{
+          paddingBottom: insets.bottom + 24,
+          paddingTop: insets.top + 24,
+        }}
       >
-        <ScreenHeading description={t("description")} title={t("title")} />
-        <View className="mt-4">
-          <Text variant="label">{t("serverLabel")}</Text>
+        <View className="flex-row items-center justify-between">
+          <View className="flex-row items-center gap-3">
+            <StellaWordmark height={24} />
+            <View className="border-border rounded-sm border px-1.5 py-0.5">
+              <Text variant="badge">{t("beta")}</Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityLabel={t("options")}
+            accessibilityRole="button"
+            className="size-11 items-center justify-center rounded-full active:opacity-60"
+            hitSlop={8}
+            onPress={() => {
+              setOptionsOpen(true);
+            }}
+          >
+            <MoreHorizontalIcon color={ui.mutedForeground} size={20} />
+          </Pressable>
         </View>
-        <TextInput
-          accessibilityLabel={t("serverLabel")}
-          autoCapitalize="none"
-          autoComplete="url"
-          autoCorrect={false}
-          editable={!pending}
-          inputMode="url"
-          onChangeText={setServerUrl}
-          onSubmitEditing={submit}
-          placeholder={t("serverPlaceholder")}
-          returnKeyType="go"
-          textContentType="URL"
-          value={serverUrl}
-        />
-        {notice === null ? null : (
-          <Text accessibilityLiveRegion="polite" variant="error">
-            {notice}
+        <View className="flex-1 justify-center gap-5">
+          <Text accessibilityRole="header" variant="display">
+            {t("headline")}
           </Text>
-        )}
-        <Button
-          className="mt-2"
-          disabled={pending || serverUrl.trim() === ""}
-          label={t("submit")}
-          loading={pending}
-          onPress={submit}
-          size="lg"
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <Text variant="caption">{t("subtitle")}</Text>
+        </View>
+        <View className="gap-4">
+          {notice === null ? null : (
+            <Text accessibilityLiveRegion="polite" variant="error">
+              {notice}
+            </Text>
+          )}
+          <Button
+            disabled={pending || serverUrl.trim() === ""}
+            label={t("submit")}
+            loading={pending}
+            onPress={submit}
+            size="lg"
+          />
+          <Text variant="caption">
+            {t.rich("terms", {
+              terms: (chunks: ReactNode) => (
+                <Text
+                  accessibilityRole="link"
+                  onPress={() => {
+                    void WebBrowser.openBrowserAsync(TERMS_URL);
+                  }}
+                  variant="link"
+                >
+                  {chunks}
+                </Text>
+              ),
+            })}
+          </Text>
+        </View>
+      </View>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          setOptionsOpen(false);
+        }}
+        presentationStyle="pageSheet"
+        visible={optionsOpen}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="bg-background flex-1 gap-4 px-5 pt-5"
+        >
+          <View className="flex-row items-center justify-between">
+            <Text variant="headline">{t("options")}</Text>
+            <Button
+              label={t("done")}
+              onPress={() => {
+                setOptionsOpen(false);
+              }}
+              size="sm"
+              variant="ghost"
+            />
+          </View>
+          <View className="gap-2">
+            <Text variant="label">{t("serverTitle")}</Text>
+            <Text variant="caption">{t("serverDescription")}</Text>
+          </View>
+          <TextInput
+            accessibilityLabel={t("serverLabel")}
+            autoCapitalize="none"
+            autoComplete="url"
+            autoCorrect={false}
+            editable={!pending}
+            inputMode="url"
+            onChangeText={setServerUrl}
+            onSubmitEditing={submit}
+            placeholder={t("serverPlaceholder")}
+            returnKeyType="go"
+            textContentType="URL"
+            value={serverUrl}
+          />
+          {serverUrl === DEFAULT_SERVER_URL ? null : (
+            <Button
+              label={t("useStella")}
+              onPress={() => {
+                setServerUrl(DEFAULT_SERVER_URL);
+              }}
+              variant="outline"
+            />
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 };
 

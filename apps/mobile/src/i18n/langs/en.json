@@ -82,11 +82,18 @@
     "loadFailed": "This item could not be loaded."
   },
   "signIn": {
-    "title": "Sign in to stella",
-    "description": "Enter the address of your stella server. You approve the sign-in in your browser.",
+    "beta": "Beta",
+    "headline": "Clarity for every case.",
+    "subtitle": "Documents, case law, and review under control. Powered by AI.",
+    "submit": "Sign in",
+    "terms": "By continuing, you agree to our <terms>Terms of Service</terms>.",
+    "options": "Sign-in options",
+    "serverTitle": "Server",
+    "serverDescription": "The app signs in to stella. Name another server only if your organisation runs its own.",
+    "useStella": "Use stella",
+    "done": "Done",
     "serverLabel": "Server address",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Continue",
     "sessionEnded": "Your session ended. Sign in again.",
     "errors": {
       "address": "Enter an https address, such as stella.example.com.",

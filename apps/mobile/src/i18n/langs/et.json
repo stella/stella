@@ -82,11 +82,18 @@
     "loadFailed": "Kirjet ei õnnestunud laadida."
   },
   "signIn": {
-    "title": "Logige sisse rakendusse stella",
-    "description": "Sisestage oma stella serveri aadress. Sisselogimise kinnitate brauseris.",
+    "beta": "Beeta",
+    "headline": "Selgus igas asjas.",
+    "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
+    "submit": "Logi sisse",
+    "terms": "Jätkates nõustud meie <terms>kasutustingimustega</terms>.",
+    "options": "Sisselogimise valikud",
+    "serverTitle": "Server",
+    "serverDescription": "Rakendus logib sisse stellasse. Sisestage muu server ainult siis, kui teie organisatsioonil on oma.",
+    "useStella": "Kasuta stellat",
+    "done": "Valmis",
     "serverLabel": "Serveri aadress",
     "serverPlaceholder": "stella.example.com",
-    "submit": "Jätka",
     "sessionEnded": "Teie seanss lõppes. Logige uuesti sisse.",
     "errors": {
       "address": "Sisestage https-aadress, näiteks stella.example.com.",
