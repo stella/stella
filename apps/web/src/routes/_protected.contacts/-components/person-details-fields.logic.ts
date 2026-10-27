@@ -25,7 +25,7 @@ export const normalizeBirthDateDigits = (value: string): string =>
 export const birthDateDraft = (
   value: PersonDateOfBirth | null | undefined,
 ): BirthDateDraft => ({
-  precision: value?.precision ?? "year",
+  precision: value?.precision ?? "day",
   year: value ? String(value.year) : "",
   month: value && value.precision !== "year" ? String(value.month) : "",
   day: value?.precision === "day" ? String(value.day) : "",

@@ -1752,10 +1752,6 @@
     "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:2::2",
-    "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
-  },
-  {
     "id": "apps/web/src/routes/_protected.contacts/-components/person-details-fields.tsx::PersonDetailsFields::maxLength:4::1",
     "reason": "Existing PersonDetailsFields UI validation or presentation bound; contract migration pending."
   },

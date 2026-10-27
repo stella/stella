@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
+import { Temporal } from "@stll/time";
 import {
   Combobox,
   ComboboxChip,
@@ -18,6 +19,7 @@ import {
 import { Field, FieldLabel } from "@stll/ui/field";
 import { SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+
 import {
   Select,
   SelectItem,
@@ -26,11 +28,13 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
 import {
   filterNationalityOptions,
   normalizeBirthDateDigits,
+  parseBirthDateDraft,
 } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 
@@ -48,6 +52,12 @@ export const PersonDetailsFields = ({
   onNationalityCodesChange,
 }: PersonDetailsFieldsProps) => {
   const t = useTranslations();
+  const birthDateLabelId = useId();
+  const parsedBirthDate = parseBirthDateDraft(birthDate);
+  const pickerValue =
+    parsedBirthDate?.precision === "day"
+      ? Temporal.PlainDate.from(parsedBirthDate).toString()
+      : null;
   const format = useFormatter();
   const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
@@ -67,8 +77,76 @@ export const PersonDetailsFields = ({
   return (
     <div className="flex flex-col gap-4">
       <Field>
-        <FieldLabel>{t("common.anonymizationLabels.dateOfBirth")}</FieldLabel>
-        <div className="flex flex-wrap gap-2" dir="ltr">
+        <FieldLabel id={birthDateLabelId}>
+          {t("common.anonymizationLabels.dateOfBirth")}
+        </FieldLabel>
+        <div className="flex flex-wrap items-center gap-2">
+          {birthDate.precision === "day" ? (
+            <DatePickerPopover
+              className="w-auto max-w-full"
+              dateInputLabel={t("common.anonymizationLabels.dateOfBirth")}
+              labelledBy={birthDateLabelId}
+              minDate="1000-01-01"
+              noFuture
+              onChange={(value) => {
+                if (value === null) {
+                  onBirthDateChange({
+                    precision: "day",
+                    year: "",
+                    month: "",
+                    day: "",
+                  });
+                  return;
+                }
+                const date = Temporal.PlainDate.from(value);
+                onBirthDateChange({
+                  precision: "day",
+                  year: String(date.year),
+                  month: String(date.month),
+                  day: String(date.day),
+                });
+              }}
+              value={pickerValue}
+              variant="field"
+            />
+          ) : (
+            <>
+              {birthDate.precision === "month" && (
+                <Input
+                  aria-label={t("contacts.fields.month")}
+                  className="w-24"
+                  dir="ltr"
+                  inputMode="numeric"
+                  nativeInput
+                  maxLength={2}
+                  onChange={(event) =>
+                    onBirthDateChange({
+                      ...birthDate,
+                      month: normalizeBirthDateDigits(event.target.value),
+                    })
+                  }
+                  placeholder={t("contacts.fields.month")}
+                  value={birthDate.month}
+                />
+              )}
+              <Input
+                aria-label={t("contacts.fields.year")}
+                className="w-28"
+                dir="ltr"
+                inputMode="numeric"
+                nativeInput
+                maxLength={4}
+                onChange={(event) =>
+                  onBirthDateChange({
+                    ...birthDate,
+                    year: normalizeBirthDateDigits(event.target.value),
+                  })
+                }
+                placeholder={t("contacts.fields.year")}
+                value={birthDate.year}
+              />
+            </>
+          )}
           <Select
             onValueChange={(precision) => {
               if (precision === null) {
@@ -99,55 +177,6 @@ export const PersonDetailsFields = ({
               <SelectItem value="day">{t("contacts.precision.day")}</SelectItem>
             </SelectPopup>
           </Select>
-          {birthDate.precision === "day" && (
-            <Input
-              aria-label={t("contacts.fields.day")}
-              className="w-20"
-              dir="ltr"
-              inputMode="numeric"
-              maxLength={2}
-              onChange={(event) =>
-                onBirthDateChange({
-                  ...birthDate,
-                  day: normalizeBirthDateDigits(event.target.value),
-                })
-              }
-              placeholder={t("contacts.fields.day")}
-              value={birthDate.day}
-            />
-          )}
-          {birthDate.precision !== "year" && (
-            <Input
-              aria-label={t("contacts.fields.month")}
-              className="w-24"
-              dir="ltr"
-              inputMode="numeric"
-              maxLength={2}
-              onChange={(event) =>
-                onBirthDateChange({
-                  ...birthDate,
-                  month: normalizeBirthDateDigits(event.target.value),
-                })
-              }
-              placeholder={t("contacts.fields.month")}
-              value={birthDate.month}
-            />
-          )}
-          <Input
-            aria-label={t("contacts.fields.year")}
-            className="w-28"
-            dir="ltr"
-            inputMode="numeric"
-            maxLength={4}
-            onChange={(event) =>
-              onBirthDateChange({
-                ...birthDate,
-                year: normalizeBirthDateDigits(event.target.value),
-              })
-            }
-            placeholder={t("contacts.fields.year")}
-            value={birthDate.year}
-          />
         </div>
       </Field>
       <Field>
