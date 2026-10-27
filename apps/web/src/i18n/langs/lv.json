@@ -1027,6 +1027,12 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "marginFilter": {
+      "label": "Citēto normu filtrs",
+      "paragraph": "{count, plural, =0 {¶{paragraph} nav citētu normu} one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
+      "selection": "{count, plural, =0 {Atlasē nav citētu normu} one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šajā rindkopā nav citētu normu} one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, zero {# nolēmumu jau bija saglabāti šeit} one {# nolēmums jau bija saglabāts šeit} other {# nolēmumi jau bija saglabāti šeit}}",
       "empty": "Šajā lietā vēl nav saglabāta tiesu prakse.",
@@ -1051,6 +1057,7 @@
       "human": "Cilvēku",
       "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
     },
+    "oldestDecisions": "Vecākie nolēmumi",
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
@@ -1112,8 +1119,7 @@
       "runEstimate": "{rows, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}} × {columns, plural, zero {# jautājumu} one {# jautājums} other {# jautājumi}} šajā lapā: {cells, plural, zero {tiks izveidotas # atbilžu} one {tiks izveidota # atbilde} other {tiks izveidotas # atbildes}}.",
       "runTitle": "Atbildēt šajā lapā",
       "savedQuestions": "Saglabātie jautājumi",
-      "title": "Pētījumu tabulas",
-      "updated": "Pēdējo reizi labota {date}"
+      "title": "Pētījumu tabulas"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1163,8 @@
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
+      "oldest": "Vecākie",
+      "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
       "relevance": "Atbilstošākie"
     },
     "viewer": {
@@ -1724,21 +1732,8 @@
       "describe-stella-function": "Datu meklēšanas sagatavošana",
       "describe_template": "Veidnes lauku lasīšana",
       "discover_tools": "Datu meklēšanas sagatavošana",
-      "docxCommentSummary": "Pievienot komentāru pie {blockId}",
-      "docxDeleteSummary": "Dzēst {blockId}",
-      "docxDeleteTableColumnSummary": "Dzēst tabulas kolonnu pie {blockId}",
-      "docxDeleteTableRowSummary": "Dzēst tabulas rindu pie {blockId}",
       "docxEditMore": "{count, plural, zero {vēl # labojumu} one {vēl # labojums} other {vēl # labojumi}}",
       "docxEditSummary": "{count, plural, zero {# ierosinātu labojumu} one {# ierosināts labojums} other {# ierosināti labojumi}}",
-      "docxInsertAfterSummary": "Ievietot tekstu aiz {blockId}",
-      "docxInsertBeforeSummary": "Ievietot tekstu pirms {blockId}",
-      "docxInsertTableColumnSummary": "Ievietot tabulas kolonnu pie {blockId}",
-      "docxInsertTableRowSummary": "Ievietot tabulas rindu pie {blockId}",
-      "docxMergeTableCellsSummary": "Apvienot tabulas šūnas pie {blockId}",
-      "docxReplaceBlockSummary": "Aizstāt {blockId}",
-      "docxReplaceSummary": "Aizstāt „{find}” ar „{replace}”",
-      "docxSignatureTableSummary": "Ievietot parakstu tabulu pie {blockId}",
-      "docxSplitTableCellSummary": "Sadalīt tabulas šūnu pie {blockId}",
       "execute-typescript": "Lietas datu lasīšana",
       "execute_typescript": "Lietas datu lasīšana",
       "expand-chat-history": "Lasa tērzēšanas vēsturi",
@@ -4313,7 +4308,8 @@
       "styleHighlight": "Izcēlums",
       "styleSquiggly": "Viļņota līnija",
       "styleStrikethrough": "Pārsvītrojums",
-      "visibilityShared": "Kopīgots ar organizāciju"
+      "visibilityShared": "Kopīgots ar organizāciju",
+      "visibilitySharedWithMatter": "Kopīgots ar lietu"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -4790,10 +4786,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atbilžu budžets ir izsmelts.",
-    "citation": "¶{paragraph}",
     "expand": "Izvērst atbildi",
     "explain": "Izskaidrot",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Uzdot papildjautājumu",
     "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
     "loading": "Tiek ģenerēta atbilde…",
@@ -6479,6 +6473,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",
+      "annotations": {
+        "commentedBy": "Komentārs: {name}",
+        "detachedHeading": "Nav šajā versijā",
+        "detachedOtherVersion": "Izveidots {version}. versijā; lapas teksts kopš tā laika ir mainījies.",
+        "detachedTextChanged": "Šo vārdu {page}. lapā vairs nav.",
+        "empty": "Atlasiet dokumenta vārdus un izvēlieties Komentārs.",
+        "highlightedBy": "Iezīmēja: {name}",
+        "refusedNoText": "Šajā lapā nav teksta, ko iezīmēt. Vispirms palaidiet dokumenta teksta atpazīšanu.",
+        "refusedNotFound": "Šie vārdi lapas tekstā netika atrasti. Atlasiet tos vēlreiz.",
+        "refusedTooLong": "Šis fragments ir pārāk garš, lai to iezīmētu. Atlasiet īsāku."
+      },
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",
       "evidence": "Pierādījums",
@@ -6663,10 +6668,12 @@
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
-      "sortAscending": "Kārtot augošā secībā",
       "sortAscendingDate": "Vecākie vispirms",
-      "sortDescending": "Kārtot dilstošā secībā",
+      "sortAscendingNumber": "Mazākie vispirms",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Jaunākie vispirms",
+      "sortDescendingNumber": "Lielākie vispirms",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "text": "Teksts",

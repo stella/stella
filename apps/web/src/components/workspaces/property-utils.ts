@@ -1,3 +1,4 @@
+import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import {
   emptyColor,
   optionColors,
@@ -5,7 +6,6 @@ import {
 } from "@stll/ui/option-color";
 
 import type { CreatableContentType } from "@/components/workspaces/properties/composer-primitives";
-import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -29,17 +29,24 @@ export const isCreatableContentType = (t: string): t is CreatableContentType =>
   t === "date" ||
   t === "int";
 
-/** Map a property content type to a sort hint. */
-export const toSortHint = (contentType: string): SortHint => {
-  switch (contentType) {
-    case "date":
-      return "date";
-    case "int":
-      return "number";
-    default:
-      return "text";
-  }
-};
+/**
+ * What a property's column orders by. Total over the content types, so a new
+ * type does not compile until it says how its header labels its order. A
+ * select, a person and a file order by the name they show; money by amount.
+ */
+export const PROPERTY_SORT_KINDS = {
+  file: "text",
+  text: "text",
+  "single-select": "text",
+  "multi-select": "text",
+  date: "date",
+  int: "number",
+  money: "number",
+  person: "text",
+} as const satisfies Record<
+  WorkspaceProperty["content"]["type"],
+  ColumnSortKind
+>;
 
 export type { ColorVariants } from "@stll/ui/option-color";
 export { emptyColor, optionColors, resolveOptionColor };

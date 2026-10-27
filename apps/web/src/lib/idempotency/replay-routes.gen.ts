@@ -5,6 +5,10 @@ export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/case/matter-links/:workspaceId" },
   { method: "POST", path: "/v1/case/matter-links/:workspaceId/batch" },
   { method: "POST", path: "/v1/document-types" },
+  {
+    method: "POST",
+    path: "/v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations",
+  },
   { method: "POST", path: "/v1/entities/:workspaceId/folder-from-selection" },
   { method: "POST", path: "/v1/invoices/:workspaceId/:invoiceId/lines" },
   { method: "POST", path: "/v1/lists/:workspaceId/claim-comments" },

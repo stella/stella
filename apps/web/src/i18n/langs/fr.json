@@ -1027,6 +1027,12 @@
       "matchedIn": "Correspondance en {language}"
     },
     "loadingMore": "Chargement en cours…",
+    "marginFilter": {
+      "label": "Filtre des dispositions citées",
+      "paragraph": "{count, plural, =0 {Aucune disposition citée au ¶{paragraph}} one {# disposition citée au ¶{paragraph}} many {# de dispositions citées au ¶{paragraph}} other {# dispositions citées au ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Aucune disposition citée dans la sélection} one {# disposition citée dans la sélection} many {# de dispositions citées dans la sélection} other {# dispositions citées dans la sélection}}",
+      "unnumberedParagraph": "{count, plural, =0 {Aucune disposition citée dans ce paragraphe} one {# disposition citée dans ce paragraphe} many {# de dispositions citées dans ce paragraphe} other {# dispositions citées dans ce paragraphe}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# décision était déjà enregistrée ici} other {# décisions étaient déjà enregistrées ici}}",
       "empty": "Aucune jurisprudence n’est encore conservée dans ce dossier.",
@@ -1051,6 +1057,7 @@
       "human": "Humaines",
       "toggleState": "{label} : {state, select, on {activé} other {désactivé}}"
     },
+    "oldestDecisions": "Décisions les plus anciennes",
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
@@ -1112,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# décision} other {# décisions}} × {columns, plural, one {# question} other {# questions}} sur cette page : {cells, plural, one {# réponse sera produite} other {# réponses seront produites}}.",
       "runTitle": "Répondre pour cette page",
       "savedQuestions": "Questions enregistrées",
-      "title": "Tableaux de recherche",
-      "updated": "Dernière modification le {date}"
+      "title": "Tableaux de recherche"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1163,8 @@
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
+      "oldest": "Les plus anciennes",
+      "oldestUnavailable": "Une recherche est triée par pertinence ou de la plus récente à la plus ancienne. Effacez la recherche pour afficher d'abord les décisions les plus anciennes.",
       "relevance": "Les plus pertinentes"
     },
     "viewer": {
@@ -1724,21 +1732,8 @@
       "describe-stella-function": "Préparation de la recherche de données",
       "describe_template": "Lecture des champs du modèle",
       "discover_tools": "Préparation de la recherche de données",
-      "docxCommentSummary": "Ajouter un commentaire à {blockId}",
-      "docxDeleteSummary": "Supprimer {blockId}",
-      "docxDeleteTableColumnSummary": "Supprimer la colonne de tableau à {blockId}",
-      "docxDeleteTableRowSummary": "Supprimer la ligne de tableau à {blockId}",
       "docxEditMore": "{count, plural, one {# modification de plus} many {# modifications de plus} other {# modifications de plus}}",
       "docxEditSummary": "{count, plural, one {# modification proposée} many {# modifications proposées} other {# modifications proposées}}",
-      "docxInsertAfterSummary": "Insérer du texte après {blockId}",
-      "docxInsertBeforeSummary": "Insérer du texte avant {blockId}",
-      "docxInsertTableColumnSummary": "Insérer une colonne de tableau près de {blockId}",
-      "docxInsertTableRowSummary": "Insérer une ligne de tableau près de {blockId}",
-      "docxMergeTableCellsSummary": "Fusionner les cellules de tableau à {blockId}",
-      "docxReplaceBlockSummary": "Remplacer {blockId}",
-      "docxReplaceSummary": "Remplacer « {find} » par « {replace} »",
-      "docxSignatureTableSummary": "Insérer un bloc de signature près de {blockId}",
-      "docxSplitTableCellSummary": "Fractionner la cellule de tableau à {blockId}",
       "execute-typescript": "Lecture des données du dossier",
       "execute_typescript": "Lecture des données du dossier",
       "expand-chat-history": "Lecture de l’historique des conversations",
@@ -4313,7 +4308,8 @@
       "styleHighlight": "Surlignage",
       "styleSquiggly": "Ondulé",
       "styleStrikethrough": "Barré",
-      "visibilityShared": "Partagé avec l’organisation"
+      "visibilityShared": "Partagé avec l’organisation",
+      "visibilitySharedWithMatter": "Partagé avec le dossier"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -4790,10 +4786,8 @@
   },
   "readerAnswers": {
     "budgetError": "Le budget consacré aux réponses est épuisé.",
-    "citation": "¶{paragraph}",
     "expand": "Développer la réponse",
     "explain": "Expliquer",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Poser une question complémentaire",
     "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
     "loading": "Génération de la réponse…",
@@ -6479,6 +6473,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adapter les pages au mode sombre",
+      "annotations": {
+        "commentedBy": "Commentaire de {name}",
+        "detachedHeading": "Hors de cette version",
+        "detachedOtherVersion": "Créé dans la version {version} ; la page se lit désormais autrement.",
+        "detachedTextChanged": "Ces mots ne figurent plus à la page {page}.",
+        "empty": "Sélectionnez des mots du document, puis choisissez Commenter.",
+        "highlightedBy": "Surligné par {name}",
+        "refusedNoText": "Cette page ne contient aucun texte à marquer. Lancez d’abord la reconnaissance de texte sur le document.",
+        "refusedNotFound": "Ces mots sont introuvables dans le texte de la page. Sélectionnez-les à nouveau.",
+        "refusedTooLong": "Ce passage est trop long pour être marqué. Sélectionnez-en un plus court."
+      },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
       "evidence": "Pièce à conviction",
@@ -6663,10 +6668,12 @@
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
-      "sortAscending": "Tri croissant",
       "sortAscendingDate": "Plus anciens en premier",
-      "sortDescending": "Tri décroissant",
+      "sortAscendingNumber": "Plus petits en premier",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Plus récents en premier",
+      "sortDescendingNumber": "Plus grands en premier",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",

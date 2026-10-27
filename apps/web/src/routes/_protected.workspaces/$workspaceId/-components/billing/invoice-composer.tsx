@@ -48,7 +48,8 @@ import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -829,7 +830,7 @@ const DetailsStep = ({
 }: DetailsStepProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const messageLocale = useMessageLocale();
   const dueChoices = [
     ...new Set([...INVOICE_DUE_DAY_PRESETS, prefill.dueDays]),
   ].toSorted((left, right) => left - right);
@@ -966,7 +967,9 @@ const DetailsStep = ({
               <SelectPopup>
                 {INVOICE_LANGUAGES.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {displayLanguageName(value, { displayLocale: locale })}
+                    {displayLanguageName(value, {
+                      displayLocale: messageLocale,
+                    })}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -1150,7 +1153,7 @@ const BilledHoursInput = ({
 }: BilledHoursInputProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const shown = editableHoursText(minutes, useLocale());
+  const shown = editableHoursText(minutes, useFormattingLocale());
   const [text, setText] = useState(shown);
   return (
     <span className="flex flex-col items-end gap-0.5">

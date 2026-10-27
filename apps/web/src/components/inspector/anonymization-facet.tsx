@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
@@ -54,7 +55,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -202,7 +203,7 @@ export const AnonymizationFacet = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
@@ -803,6 +804,7 @@ export const AnonymizationFacet = ({
           <Combobox<LabelOption>
             autoHighlight
             disabled={createMutation.isPending}
+            filter={matchesComboboxItem}
             items={[...LABEL_OPTIONS]}
             itemToStringLabel={formatLabel}
             onValueChange={(next) => {

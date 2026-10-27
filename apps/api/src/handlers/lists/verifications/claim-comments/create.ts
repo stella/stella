@@ -106,10 +106,10 @@ const createClaimComment = createSafeHandler(
         ...(body.requestId === undefined ? {} : { requestId: body.requestId }),
       },
       organizationId: session.activeOrganizationId,
+      placement: { type: "verification-claim", claimId, runId, workspaceId },
       recordAuditEvent,
       safeDb,
       userId: user.id,
-      verificationClaim: { claimId, runId, workspaceId },
     });
   },
 );

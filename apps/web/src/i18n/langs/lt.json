@@ -1027,6 +1027,12 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "marginFilter": {
+      "label": "Cituojamų nuostatų filtras",
+      "paragraph": "{count, plural, =0 {¶{paragraph} necituojama jokių nuostatų} one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, =0 {Pažymėtame tekste necituojama jokių nuostatų} one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šioje pastraipoje necituojama jokių nuostatų} one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
       "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
@@ -1051,6 +1057,7 @@
       "human": "Žmonių",
       "toggleState": "{label}: {state, select, on {įjungta} other {išjungta}}"
     },
+    "oldestDecisions": "Seniausi sprendimai",
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
@@ -1112,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
       "runTitle": "Atsakyti šiame puslapyje",
       "savedQuestions": "Išsaugoti klausimai",
-      "title": "Tyrimo lentelės",
-      "updated": "Paskutinį kartą redaguota {date}"
+      "title": "Tyrimo lentelės"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1163,8 @@
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",
+      "oldest": "Seniausi",
+      "oldestUnavailable": "Paieškos rezultatai rikiuojami pagal aktualumą arba nuo naujausių. Norėdami pirmiausia matyti seniausius sprendimus, išvalykite paiešką.",
       "relevance": "Tinkamiausi"
     },
     "viewer": {
@@ -1724,21 +1732,8 @@
       "describe-stella-function": "Ruošiama duomenų paieška",
       "describe_template": "Skaitomi šablono laukai",
       "discover_tools": "Ruošiama duomenų paieška",
-      "docxCommentSummary": "Pridėti komentarą prie {blockId}",
-      "docxDeleteSummary": "Ištrinti {blockId}",
-      "docxDeleteTableColumnSummary": "Ištrinti lentelės stulpelį ties {blockId}",
-      "docxDeleteTableRowSummary": "Ištrinti lentelės eilutę ties {blockId}",
       "docxEditMore": "{count, plural, one {dar # redagavimas} few {dar # redagavimai} many {dar # redagavimo} other {dar # redagavimų}}",
       "docxEditSummary": "{count, plural, one {# siūlomas redagavimas} few {# siūlomi redagavimai} many {# siūlomo redagavimo} other {# siūlomų redagavimų}}",
-      "docxInsertAfterSummary": "Įterpti tekstą po {blockId}",
-      "docxInsertBeforeSummary": "Įterpti tekstą prieš {blockId}",
-      "docxInsertTableColumnSummary": "Įterpti lentelės stulpelį prie {blockId}",
-      "docxInsertTableRowSummary": "Įterpti lentelės eilutę prie {blockId}",
-      "docxMergeTableCellsSummary": "Sujungti lentelės langelius ties {blockId}",
-      "docxReplaceBlockSummary": "Pakeisti {blockId}",
-      "docxReplaceSummary": "Pakeisti „{find}“ į „{replace}“",
-      "docxSignatureTableSummary": "Įterpti parašų lentelę prie {blockId}",
-      "docxSplitTableCellSummary": "Padalyti lentelės langelį ties {blockId}",
       "execute-typescript": "Skaitomi bylos duomenys",
       "execute_typescript": "Skaitomi bylos duomenys",
       "expand-chat-history": "Skaitoma pokalbio istorija",
@@ -4313,7 +4308,8 @@
       "styleHighlight": "Paryškinimas",
       "styleSquiggly": "Banguota linija",
       "styleStrikethrough": "Perbraukimas",
-      "visibilityShared": "Bendrinama su organizacija"
+      "visibilityShared": "Bendrinama su organizacija",
+      "visibilitySharedWithMatter": "Bendrinama su byla"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
@@ -4790,10 +4786,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
-    "citation": "¶{paragraph}",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Užduoti papildomą klausimą",
     "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
     "loading": "Generuojamas atsakymas…",
@@ -6479,6 +6473,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
+      "annotations": {
+        "commentedBy": "Komentaras: {name}",
+        "detachedHeading": "Ne šioje versijoje",
+        "detachedOtherVersion": "Sukurta {version} versijoje; puslapio tekstas nuo tada pasikeitė.",
+        "detachedTextChanged": "Šių žodžių {page} puslapyje nebėra.",
+        "empty": "Pažymėkite dokumento žodžius ir pasirinkite Komentaras.",
+        "highlightedBy": "Paryškino: {name}",
+        "refusedNoText": "Šiame puslapyje nėra teksto, kurį būtų galima pažymėti. Pirmiausia paleiskite dokumento teksto atpažinimą.",
+        "refusedNotFound": "Šių žodžių puslapio tekste nerasta. Pažymėkite juos dar kartą.",
+        "refusedTooLong": "Ši ištrauka per ilga pažymėti. Pasirinkite trumpesnę."
+      },
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",
@@ -6663,10 +6668,12 @@
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
-      "sortAscending": "Rūšiuoti didėjimo tvarka",
       "sortAscendingDate": "Seniausi pirmi",
-      "sortDescending": "Rūšiuoti mažėjimo tvarka",
+      "sortAscendingNumber": "Mažiausi pirmi",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Naujausi pirmi",
+      "sortDescendingNumber": "Didžiausi pirmi",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
       "suggestWithAI": "Pasiūlyti su DI",
       "text": "Tekstas",

@@ -66,6 +66,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -1057,6 +1058,7 @@ const ClauseLanguageField = ({
       </label>
       <Combobox<LanguagePick>
         autoHighlight
+        filter={matchesComboboxItem}
         isItemEqualToValue={(a, b) => a.code === b.code}
         items={options}
         itemToStringLabel={(item) => item.label}

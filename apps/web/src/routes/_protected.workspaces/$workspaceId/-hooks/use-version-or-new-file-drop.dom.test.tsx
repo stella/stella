@@ -1,5 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
@@ -42,89 +52,88 @@ const readBody = async (request: Request): Promise<unknown> => {
 // The network is the only boundary: every drop below runs the real Files
 // rows, drop zone and upload paths up to the request that names where the
 // bytes go. That request is refused, so nothing continues past it.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      requests.push({
-        method: request.method,
-        pathname,
-        body: await readBody(request),
-        replayKey: request.headers.get("Idempotency-Key"),
-      });
+let fetchBoundary: Mock<typeof globalThis.fetch>;
+const fetchImplementation = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/api/auth/")) {
+      return Response.json(null);
+    }
+    requests.push({
+      method: request.method,
+      pathname,
+      body: await readBody(request),
+      replayKey: request.headers.get("Idempotency-Key"),
+    });
+    if (
+      successfulUpload &&
+      new URL(request.url).hostname === "upload.example.test"
+    ) {
+      return new Response(null, { status: 200 });
+    }
+    // The matter has no file column yet; the upload path creates it first.
+    if (request.method === "PUT" && pathname.startsWith("/v1/properties/")) {
+      return Response.json({ id: filePropertyId });
+    }
+    if (
+      successfulUpload &&
+      request.method === "POST" &&
+      pathname.endsWith("/entity-create/tree")
+    ) {
+      const body = requests.at(-1)?.body;
       if (
-        successfulUpload &&
-        new URL(request.url).hostname === "upload.example.test"
+        typeof body !== "object" ||
+        body === null ||
+        !("files" in body) ||
+        !Array.isArray(body.files)
       ) {
-        return new Response(null, { status: 200 });
+        throw new Error("expected a tree upload request body");
       }
-      // The matter has no file column yet; the upload path creates it first.
-      if (request.method === "PUT" && pathname.startsWith("/v1/properties/")) {
-        return Response.json({ id: filePropertyId });
-      }
+      const file = body.files.at(0);
       if (
-        successfulUpload &&
-        request.method === "POST" &&
-        pathname.endsWith("/entity-create/tree")
+        typeof file !== "object" ||
+        file === null ||
+        !("key" in file) ||
+        typeof file.key !== "string"
       ) {
-        const body = requests.at(-1)?.body;
-        if (
-          typeof body !== "object" ||
-          body === null ||
-          !("files" in body) ||
-          !Array.isArray(body.files)
-        ) {
-          throw new Error("expected a tree upload request body");
-        }
-        const file = body.files.at(0);
-        if (
-          typeof file !== "object" ||
-          file === null ||
-          !("key" in file) ||
-          typeof file.key !== "string"
-        ) {
-          throw new Error("expected a reserved upload file");
-        }
-        return Response.json({
-          directories: [],
-          files: [
-            {
-              key: file.key,
-              uploadId: "019a0000-0000-7000-8000-000000000107",
-              parentId: currentFolderId,
-              url: "https://upload.example.test/file",
-              expiresAt: "2026-10-27T00:00:00.000Z",
-              headers: {},
-            },
-          ],
-        });
+        throw new Error("expected a reserved upload file");
       }
-      if (
-        successfulUpload &&
-        request.method === "POST" &&
-        pathname.endsWith("/finalize")
-      ) {
-        return Response.json({
-          finalizedResult: {
-            type: "entity_create",
-            entityId: "019a0000-0000-7000-8000-000000000108",
-            fileId: "019a0000-0000-7000-8000-000000000109",
-            fileName: "brief.txt",
-            renamed: false,
+      return Response.json({
+        directories: [],
+        files: [
+          {
+            key: file.key,
+            uploadId: "019a0000-0000-7000-8000-000000000107",
+            parentId: currentFolderId,
+            url: "https://upload.example.test/file",
+            expiresAt: "2026-10-27T00:00:00.000Z",
+            headers: {},
           },
-        });
-      }
-      return Response.json(
-        { error: { code: "test_refused", message: "refused by test" } },
-        { status: 422 },
-      );
-    },
-    { preconnect: () => undefined },
-  ),
+        ],
+      });
+    }
+    if (
+      successfulUpload &&
+      request.method === "POST" &&
+      pathname.endsWith("/finalize")
+    ) {
+      return Response.json({
+        finalizedResult: {
+          type: "entity_create",
+          entityId: "019a0000-0000-7000-8000-000000000108",
+          fileId: "019a0000-0000-7000-8000-000000000109",
+          fileName: "brief.txt",
+          renamed: false,
+        },
+      });
+    }
+    return Response.json(
+      { error: { code: "test_refused", message: "refused by test" } },
+      { status: 422 },
+    );
+  },
+  { preconnect: () => undefined },
 );
 
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -415,7 +424,14 @@ const uploadParentIds = () =>
         : undefined,
     );
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    fetchImplementation,
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
   await act(async () => stellaToast.dismiss());
   successfulUpload = false;
