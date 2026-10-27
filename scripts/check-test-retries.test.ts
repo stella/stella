@@ -367,42 +367,102 @@ test("resolves literal array/object spreads and inspects their retry policies", 
 const NOT_INSPECTABLE =
   "Playwright project/use configuration is not statically inspectable";
 
+const inspectHelper = (source: string) => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-helper-"));
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    writeFileSync(path.join(root, "apps/example/shared-config.ts"), source);
+    return findTestRetryViolations(
+      new Map([
+        [
+          "apps/example/playwright.config.ts",
+          'import { sharedConfig } from "./shared-config"; export default sharedConfig();',
+        ],
+      ]),
+      root,
+    );
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+};
+
+const UNREADABLE_HELPER = {
+  file: "apps/example/playwright.config.ts",
+  message: "Playwright config must explicitly set top-level retries: 0",
+};
+
 test.each([
   "if (alternate) { return defineConfig({ retries: 2 }); }",
   'switch (mode) { case "alternate": return defineConfig({ retries: 2 }); }',
   "for (const mode of modes) { return defineConfig({ retries: 2 }); }",
   "try { if (alternate) { return defineConfig({ retries: 2 }); } } finally {}",
 ])("config helpers must have one return path: %s", (branch) => {
-  const root = mkdtempSync(path.join(tmpdir(), "test-retries-return-"));
-  try {
-    mkdirSync(path.join(root, "apps/example"), { recursive: true });
-    writeFileSync(
-      path.join(root, "apps/example/shared-config.ts"),
-      `import { defineConfig } from "@playwright/test";
+  expect(
+    inspectHelper(`import { defineConfig } from "@playwright/test";
       export function sharedConfig() {
         ${branch}
         return defineConfig({ retries: 0 });
-      }`,
-    );
-    expect(
-      findTestRetryViolations(
-        new Map([
-          [
-            "apps/example/playwright.config.ts",
-            'import { sharedConfig } from "./shared-config"; export default sharedConfig();',
-          ],
-        ]),
-        root,
-      ),
-    ).toEqual([
-      {
-        file: "apps/example/playwright.config.ts",
-        message: "Playwright config must explicitly set top-level retries: 0",
-      },
-    ]);
-  } finally {
-    rmSync(root, { force: true, recursive: true });
-  }
+      }`),
+  ).toEqual([UNREADABLE_HELPER]);
+});
+
+const RETRY_WRAPPER =
+  "const enableRetries = config => ({ ...config, retries: 2 });";
+
+test.each([
+  [
+    "transforming wrapper",
+    `${RETRY_WRAPPER}
+     export function sharedConfig() { return enableRetries({ retries: 0 }); }`,
+  ],
+  [
+    "shadowed named parameter",
+    `import { defineConfig } from "@playwright/test";
+     ${RETRY_WRAPPER}
+     export function sharedConfig(defineConfig = enableRetries) {
+       return defineConfig({ retries: 0 });
+     }`,
+  ],
+  [
+    "shadowed local binding",
+    `import { defineConfig } from "@playwright/test";
+     ${RETRY_WRAPPER}
+     export function sharedConfig() {
+       const defineConfig = enableRetries;
+       return defineConfig({ retries: 0 });
+     }`,
+  ],
+  [
+    "shadowed namespace parameter",
+    `import * as playwright from "@playwright/test";
+     ${RETRY_WRAPPER}
+     export function sharedConfig(playwright = { defineConfig: enableRetries }) {
+       return playwright.defineConfig({ retries: 0 });
+     }`,
+  ],
+])("config helper factories must be verified: %s", (_name, source) => {
+  expect(inspectHelper(source)).toEqual([UNREADABLE_HELPER]);
+});
+
+test.each([
+  ["plain object", "export function sharedConfig() { return { retries: 0 }; }"],
+  [
+    "named alias",
+    `import { defineConfig as build } from "@playwright/test";
+     export function sharedConfig() { return build({ retries: 0 }); }`,
+  ],
+  [
+    "namespace",
+    `import * as playwright from "@playwright/test";
+     export function sharedConfig() { return playwright.defineConfig({ retries: 0 }); }`,
+  ],
+  [
+    "computed namespace member",
+    `import * as playwright from "@playwright/test";
+     export function sharedConfig() { return playwright["defineConfig"]({ retries: 0 }); }`,
+  ],
+])("config helpers retain supported factory forms: %s", (_name, source) => {
+  expect(inspectHelper(source)).toEqual([]);
 });
 
 test("reads device presets from the @playwright/test devices export", () => {
