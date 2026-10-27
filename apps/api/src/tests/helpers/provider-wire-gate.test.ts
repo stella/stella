@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createReplayGate } from "@/api/tests/helpers/provider-wire-gate";
@@ -42,32 +43,46 @@ const post = async (signal?: AbortSignal) =>
     signal: signal ?? null,
   });
 
+type PendingRead = ReturnType<AnswerReader["read"]>;
+
 /**
- * Reads what `reader` has until it would make the caller wait; a read still
- * waiting is handed back as `pending`, to be awaited by the next call.
+ * Reads `length` characters from `reader`; the read after them is handed back
+ * as `pending`, to be awaited by the next call.
  */
-const readAvailable = async (
-  reader: AnswerReader,
-  carried?: ReturnType<AnswerReader["read"]>,
-) => {
+const readText = async (reader: AnswerReader, length: number) => {
   const decoder = new TextDecoder();
   let text = "";
-  let pending = carried ?? reader.read();
-  while (true) {
-    const next = await Promise.race([
-      pending,
-      Bun.sleep(20).then(() => "waiting" as const),
-    ]);
-    if (next === "waiting") {
-      return { done: false, pending, text };
-    }
+  let pending = reader.read();
+  while (text.length < length) {
+    const next = await pending;
     if (next.done) {
-      return { done: true, pending: undefined, text };
+      return panic(`The answer ended after ${String(text.length)} characters`);
     }
     text += decoder.decode(next.value);
     pending = reader.read();
   }
+  return { pending, text };
 };
+
+/** Reads `reader` to its end, starting with the read `carried` over. */
+const readToEnd = async (reader: AnswerReader, carried: PendingRead) => {
+  const decoder = new TextDecoder();
+  let text = "";
+  let next = await carried;
+  while (!next.done) {
+    text += decoder.decode(next.value);
+    next = await reader.read();
+  }
+  return text;
+};
+
+/** Whether `read` is still waiting once every queued task has run. The
+ *  replay enqueues bytes as they are pulled, so only a held stream waits. */
+const isHeld = async (read: PendingRead) =>
+  await Promise.race([
+    read.then(() => false),
+    nextMacrotask().then(() => true),
+  ]);
 
 /** The answer's reader; the caller releases it. */
 const readerOf = (response: Response) => {
@@ -92,21 +107,18 @@ describe("a pause point in a replayed answer", () => {
     replay.play("fixture", [step(gate)]);
     const reader = readerOf(await post());
     try {
-      const before = await readAvailable(reader);
+      const before = await readText(reader, PAUSE_AT);
       // The fixture must reach the fault: the pause is inside the body.
       expect(PAUSE_AT).toBeLessThan(BODY.length);
-      expect(before).toMatchObject({
-        done: false,
-        text: BODY.slice(0, PAUSE_AT),
-      });
+      expect(before.text).toBe(BODY.slice(0, PAUSE_AT));
       await gate.reached("held");
       expect(gate.unfinished()).toEqual(["held: reached"]);
+      expect(await isHeld(before.pending)).toBe(true);
 
       gate.release("held");
-      expect(await readAvailable(reader, before.pending)).toMatchObject({
-        done: true,
-        text: BODY.slice(PAUSE_AT),
-      });
+      expect(await readToEnd(reader, before.pending)).toBe(
+        BODY.slice(PAUSE_AT),
+      );
       expect(gate.unfinished()).toEqual([]);
       expect(replay.takeTranscriptRemainder()).toEqual([]);
     } finally {
@@ -121,13 +133,11 @@ describe("a pause point in a replayed answer", () => {
     const controller = new AbortController();
     const reader = readerOf(await post(controller.signal));
     try {
-      const before = await readAvailable(reader);
+      const before = await readText(reader, PAUSE_AT);
       await gate.reached("held");
 
       controller.abort();
-      expect(
-        String(await rejectionOf(before.pending ?? reader.read())),
-      ).toContain("aborted");
+      expect(String(await rejectionOf(before.pending))).toContain("aborted");
     } finally {
       reader.releaseLock();
     }

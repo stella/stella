@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   organizationSettingsKeys,
@@ -35,7 +35,7 @@ const useToggleSection = (section: ToggleSection) => {
     userId: id,
   });
   const settingsView = useQueryView(useQuery(options));
-  useQueryViewError(settingsView);
+  useQueryViewError(settingsView, "useToggleSection:query");
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
   const [value, setValue] = useState<boolean | null>(null);
@@ -45,23 +45,27 @@ const useToggleSection = (section: ToggleSection) => {
       ? settings?.documentProcessingMode === SEARCHABLE_TEXT
       : settings?.[TOGGLE_SECTION[section]];
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: `settings.toggle.${section}`,
+    },
     invalidate: organizationSettingsKeys.all,
     mutationFn: async (next: boolean) => {
       switch (section) {
         case "promptCaching":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               promptCachingEnabled: next,
             }),
           );
         case "documentProcessing":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               documentProcessingMode: next ? SEARCHABLE_TEXT : PROCESSING_OFF,
             }),
           );
         case "memoryExtraction":
-          return unwrapEden(
+          return unwrapApiResponse(
             await api["organization-settings"].post({
               memoryExtractionEnabled: next,
             }),

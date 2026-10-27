@@ -247,9 +247,11 @@ const fieldFindTextFunctionSql = (): string =>
     "CREATE OR REPLACE FUNCTION field_find_text",
   );
 
-const READER_ANNOTATION_CLAIM_FUNCTIONS = [
+const READER_ANNOTATION_MATTER_ROW_FUNCTIONS = [
   "legal_reader_annotation_claim_visible",
   "legal_reader_annotation_claim_held",
+  "legal_reader_annotation_document_visible",
+  "legal_reader_annotation_document_held",
 ] as const;
 
 export const installPgliteSchemaPrerequisites = async (
@@ -267,11 +269,11 @@ export const installPgliteSchemaPrerequisites = async (
       ),
     ),
   );
-  // The reader-annotation policies call these claim checks, so they must exist
-  // before the push creates the policies; their bodies name the claims table,
-  // which the push creates afterwards, so body validation waits for first use.
+  // The reader-annotation policies call these claim and document checks, so
+  // they must exist before the push creates the policies; their bodies name
+  // tables the push creates afterwards, so body validation waits for first use.
   await db.execute(sql.raw("SET check_function_bodies = off"));
-  for (const name of READER_ANNOTATION_CLAIM_FUNCTIONS) {
+  for (const name of READER_ANNOTATION_MATTER_ROW_FUNCTIONS) {
     await db.execute(
       sql.raw(
         latestMigrationStatementContaining(
@@ -582,34 +584,48 @@ export const installPgliteChatRunLogRls = async (
   await db.execute(sql.raw(entriesStatement));
 };
 
-/** Apply the committed setting omitted by schema push. */
-const READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES = [
-  'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
-  'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
-  'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
-  'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
+/** Apply the committed settings omitted by schema push. */
+const READER_ANNOTATION_MATTER_ROW_STATEMENTS = [
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    prefixes: [
+      'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
+      'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
+      'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
+      'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
+    ],
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    prefixes: [
+      'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_document_marks"',
+      'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_document_marks"',
+      'CREATE TRIGGER "entities_drop_reader_annotations"',
+    ],
+  },
 ] as const;
 
-// The push creates the claim-comment columns and policies; the forced RLS and
-// the claim cleanup trigger exist only in the migration.
-export const installPgliteReaderAnnotationClaimComments = async (
+// The push creates the matter-note columns and policies; the forced RLS and
+// the claim and document cleanup triggers exist only in the migrations.
+export const installPgliteReaderAnnotationMatterRows = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261021080000_reader_annotation_verification_claims",
-      "migration.sql",
-    ),
-  );
-  for (const prefix of READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES) {
-    const statement = statements.find((candidate) =>
-      executableSql(candidate).startsWith(prefix),
+  for (const {
+    migration,
+    prefixes,
+  } of READER_ANNOTATION_MATTER_ROW_STATEMENTS) {
+    const statements = readMigrationStatements(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     );
-    if (statement === undefined) {
-      panic(`Reader annotation claim comment statement is missing: ${prefix}`);
+    for (const prefix of prefixes) {
+      const statement = statements.find((candidate) =>
+        executableSql(candidate).startsWith(prefix),
+      );
+      if (statement === undefined) {
+        panic(`Reader annotation matter statement is missing: ${prefix}`);
+      }
+      await db.execute(sql.raw(statement));
     }
-    await db.execute(sql.raw(statement));
   }
 };
 
@@ -757,6 +773,39 @@ const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
 ] as const;
 
 /** Install the count state and trigger invariants omitted by schema push. */
+const STATUTE_CITATION_PROJECTION_MIGRATIONS = [
+  "20261010212100_case_law_publication_filter",
+  "20261022230000_provision_citation_anchor_lineage",
+] as const;
+
+const definedFunctionsOf = (migration: string): string[] =>
+  Array.from(
+    readFileSync(
+      nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      "utf-8",
+    ).matchAll(/CREATE OR REPLACE FUNCTION "([^"]+)"/gu),
+    ([, name]) => name ?? "",
+  );
+
+/**
+ * The projection's migrations, then every later one that redefines a
+ * function they install, oldest first: the schema runs the newest definition
+ * of each, and no redefinition can be left out of the replay.
+ */
+const statuteCitationProjectionMigrations = (): string[] => {
+  const installed = new Set(
+    STATUTE_CITATION_PROJECTION_MIGRATIONS.flatMap(definedFunctionsOf),
+  );
+  const last = STATUTE_CITATION_PROJECTION_MIGRATIONS.at(-1) ?? "";
+  const later = readdirSync(DRIZZLE_DIR)
+    .filter((name) => /^\d{14}_/u.test(name) && name > last)
+    .toSorted()
+    .filter((name) =>
+      definedFunctionsOf(name).some((defined) => installed.has(defined)),
+    );
+  return [...STATUTE_CITATION_PROJECTION_MIGRATIONS, ...later];
+};
+
 export const installPgliteStatuteCitationCounts = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -779,10 +828,7 @@ export const installPgliteStatuteCitationCounts = async (
   ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
     await db.execute(sql.raw(statement));
   }
-  for (const migration of [
-    "20261010212100_case_law_publication_filter",
-    "20261022230000_provision_citation_anchor_lineage",
-  ]) {
+  for (const migration of statuteCitationProjectionMigrations()) {
     for (const statement of readMigrationStatements(
       nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
     ).filter((candidate) => !executableSql(candidate).startsWith("SET "))) {
@@ -979,6 +1025,33 @@ export const installPgliteCaseLawObservationFence = async (
   }
 };
 
+/** Install parsed-input invalidation from the production migration after schema push. */
+export const installPgliteCaseLawParsedSourceInvalidation = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261022120000_case_law_batch_slots",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION invalidate_case_law_parsed_source") ||
+      source.startsWith(
+        "CREATE TRIGGER case_law_decisions_parsed_source_invalidation",
+      )
+    );
+  });
+  if (statements.length !== 2) {
+    panic("Expected the parsed-source invalidation function and trigger");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120100_organization_member_capacity",
@@ -1038,6 +1111,28 @@ export const installPgliteOrganizationMemberCapacity = async (
       nodePath.join(
         DRIZZLE_DIR,
         "20261005090300_organization_effective_policy",
+        "migration.sql",
+      ),
+    ),
+    // A missing access state admits only the creation membership.
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261023160000_organization_access_state_origin",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261025104500_per_seat_member_capacity",
+        "migration.sql",
+      ),
+    ),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261025120000_manual_entitlement_period_bound",
         "migration.sql",
       ),
     ),

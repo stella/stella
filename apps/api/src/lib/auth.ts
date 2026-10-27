@@ -2,14 +2,18 @@ import { apiKey } from "@better-auth/api-key";
 import { createCimdClientDiscovery } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { tryGetCurrentAuthEndpointContext } from "@better-auth/core/context";
-import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
+import type {
+  AuthContext,
+  BetterAuthPlugin,
+  HookEndpointContext,
+} from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
-  getAuthoritativeSessionFromCtx,
+  getAuthoritativeSessionFromCtx as resolveAuthoritativeSessionFromCtx,
   getOAuthState,
   isAPIError,
 } from "better-auth/api";
@@ -21,19 +25,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import {
-  and,
-  count,
-  eq,
-  exists,
-  gt,
-  inArray,
-  isNotNull,
-  or,
-  sql,
-} from "drizzle-orm";
-import type { Context } from "elysia";
-import Elysia, { t } from "elysia";
+import { and, count, eq, gt, inArray, sql } from "drizzle-orm";
 
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
@@ -42,13 +34,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
-import {
-  ac,
-  assignableRoles,
-  CLIENT_MATTER_ADMIN_ROLES,
-  roles,
-} from "@stll/permissions";
-import type { PermissionInput } from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -60,13 +46,13 @@ import {
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
+  isPartnerOAuthClient,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
-  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import {
@@ -75,6 +61,10 @@ import {
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { appendSetCookieHeaders } from "@/api/http/context";
+import type { RequestContext, ResponseHeaders } from "@/api/http/context";
+import { status } from "@/api/http/status";
+import type { HttpStatusResponse } from "@/api/http/status";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -88,12 +78,16 @@ import {
   AUTH_SESSION_STORAGE_OPTIONS,
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
+import {
+  CredentialIssuanceFence,
+  isPendingTwoFactorSignIn,
+} from "@/api/lib/auth-artifacts";
+import { revokeCredentialsForAccessReset } from "@/api/lib/auth/access-reset-revocation";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
-import type { AccountAccess } from "@/api/lib/auth/account-access";
-import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
+  AUTH_API_PATH,
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
@@ -104,7 +98,6 @@ import {
   createAuthRefusalLogPlugin,
   markAuthRequestRoute,
 } from "@/api/lib/auth/auth-request-observability";
-import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
   recordClientMetadataValidated,
@@ -126,14 +119,14 @@ import {
 } from "@/api/lib/auth/demo-account-policy";
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
+  emailOtpPromotionEmail,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
 import {
-  createHandoffStepUpGuard,
-  HANDOFF_ACCESS_DETAIL,
+  handoffStepUpRefusal,
   requiresHandoffStepUpForAuthPath,
-  requiresHandoffStepUpForRequest,
 } from "@/api/lib/auth/handoff-step-up-policy";
+import type { HandoffAccessMetadata } from "@/api/lib/auth/handoff-step-up-policy";
 import {
   type createWebHandoffService,
   webHandoffFailure,
@@ -144,6 +137,11 @@ import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
 } from "@/api/lib/auth/member-authorization";
+import type {
+  MemberCaller,
+  SessionMemberCaller,
+  WorkspaceCaller,
+} from "@/api/lib/auth/member-caller";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
@@ -188,6 +186,10 @@ import {
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import {
+  carriesSessionCredential,
+  skippableSessionCookieOf,
+} from "@/api/lib/auth/session-credential";
 import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
@@ -201,6 +203,13 @@ import {
 } from "@/api/lib/auth/session-path-classification";
 import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
+  DISCONNECTED_SIGN_IN_MESSAGE,
+  endSessionWithoutLinkedAccount,
+  firstFactorRequirement,
+  recordSecondFactorRequirement,
+  sessionLinkedAccountRequirement,
+} from "@/api/lib/auth/sign-in-account-provider";
+import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
   SOCIAL_ACCOUNT_LINKING_OPTIONS,
@@ -212,6 +221,7 @@ import {
   socialSignInProvider,
 } from "@/api/lib/auth/social-sign-in-outcome";
 import { readCurrentLiveSseSessions } from "@/api/lib/auth/sse-session-liveness-reader";
+import { withoutTrustedDeviceBypass } from "@/api/lib/auth/two-factor-trusted-device";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth/user-additional-fields";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -225,9 +235,17 @@ import type {
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
-import { tUuid } from "@/api/lib/custom-schema";
-import { findAccountIdByEmail } from "@/api/lib/db/account-row";
+import { instrumentQueryOrigins } from "@/api/lib/db-query-counter";
+import {
+  findAccountIdByEmail,
+  hasAccountForProvider,
+  hasCredentialAccount,
+} from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  resolveWorkspaceMemberAccess,
+  resolveWorkspaceMemberAuthority,
+} from "@/api/lib/db/member-authority";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { getDemoAccountOtpOverride } from "@/api/lib/demo-account-otp";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
@@ -261,6 +279,7 @@ import {
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -274,11 +293,7 @@ import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import {
-  hasMemberPermission,
-  readAuthorizedMemberRole,
-  sessionMemberRole,
-} from "@/api/lib/permission-authorization";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   AUTH_FRAMEWORK_BUDGET_RULES,
   observeFrameworkAuthStorage,
@@ -294,7 +309,6 @@ import {
   createOtpAccountLimitPlugin,
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
-import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
@@ -325,21 +339,32 @@ import {
   checkMemberAdmission,
   MEMBER_CAPACITY_REACHED_ERROR_CODE,
 } from "@/api/lib/usage/member-capacity";
-import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import { recordNewOrganizationAccessStateOnOwner } from "@/api/lib/usage/organization-access-state-owner";
 import {
   hasRenewingHostedSubscription,
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
-import type { authenticateAccountExportRequest } from "@/api/mcp/auth";
 import {
+  memberReachesMatterSql,
+  readAuthorizedWorkspaces,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
+import {
+  getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
-import { McpTokenVerificationError } from "@/api/mcp/errors";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+
+export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
+
+const authoritativeSessionReader = {
+  getAuthoritativeSessionFromCtx: resolveAuthoritativeSessionFromCtx,
+};
+const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
+  ? instrumentQueryOrigins(authoritativeSessionReader)
+  : authoritativeSessionReader;
 
 /** Access token lifetime in seconds (15 minutes). */
 const syntheticSessionAuthorityReader =
@@ -522,7 +547,7 @@ export const getNewAccountEmailOtpAction = async (
   }
 
   const clientIp = ctx.request
-    ? (getRequestContext(ctx.request)?.signupRateLimitIp ?? null)
+    ? (getRequestContext()?.signupRateLimitIp ?? null)
     : null;
   const result = await evaluateNewAccountOtpPolicy({
     accountExists,
@@ -822,13 +847,12 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
  * `before` hook, ahead of each endpoint's own session middleware) and refuses
  * a request whose session storage no longer holds, such as a revoked one.
  *
- * One deployment shape is exempt: transactional email is optional, and an
- * instance without a transport cannot deliver a manage code at all, so
- * requiring one would leave first-time enrollment unreachable there. Those
- * users enroll on the two-factor plugin's own password check, which for a
- * credential account is the same factor their sign-in uses. An account that
- * already carries a second factor still needs the code for every transition,
- * on every deployment.
+ * One deployment shape uses the account password instead: transactional email
+ * is optional, so a credential account on an instance without a transport
+ * cannot receive a manage code. Passwordless accounts have no independent
+ * step-up in that shape and must fail closed instead of authorizing enrollment
+ * from the active session alone. An account that already carries a second
+ * factor still needs the code for every transition, on every deployment.
  */
 const requireTwoFactorManageOtp = async ({
   body,
@@ -847,7 +871,15 @@ const requireTwoFactorManageOtp = async ({
     session.user["twoFactorEnabled"] !== true &&
     !isTransactionalEmailConfigured()
   ) {
-    return Result.ok(undefined);
+    if (await hasCredentialAccount(toSafeId<"user">(session.user.id))) {
+      return Result.ok(undefined);
+    }
+    return Result.err(
+      new APIError("FORBIDDEN", {
+        message:
+          "Two-factor enrollment requires transactional email or a password account",
+      }),
+    );
   }
 
   if (!isSixDigitOtpBody(body)) {
@@ -895,14 +927,38 @@ const MEMBERSHIP_REMOVAL_FAILED = failureSink({
   event: "auth.membership_removal_failed",
   expected: [],
 });
-const ACCOUNT_EXPORT_VERIFICATION_FAILED = failureSink({
-  event: "auth.account_export_verification_failed",
+const EMAIL_OTP_ACCESS_RESET_REVOCATION_FAILED = failureSink({
+  event: "auth.email_otp_access_reset_revocation_failed",
   expected: [],
 });
-const ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED = failureSink({
-  event: "auth.account_export_membership_read_failed",
-  expected: [],
-});
+
+/**
+ * Ends every durable credential of an account an email code just proved,
+ * while Better Auth promotes it: after its linked providers and sessions are
+ * gone and before the new session exists. A failure aborts the sign-in.
+ */
+const revokeUnprovenCredentials = async (
+  internalAdapter: Pick<AuthContext["internalAdapter"], "findUserByEmail">,
+  email: string,
+): Promise<void> => {
+  const found = await internalAdapter.findUserByEmail(email);
+  if (!found) {
+    return;
+  }
+  const revoked = await Result.tryPromise(
+    async () =>
+      await revokeCredentialsForAccessReset(toSafeId<"user">(found.user.id)),
+  );
+  if (Result.isError(revoked)) {
+    observeFailure(revoked.error, {
+      sink: EMAIL_OTP_ACCESS_RESET_REVOCATION_FAILED,
+      ctx: { source: "email-otp-access-reset" },
+    });
+    throw new APIError("INTERNAL_SERVER_ERROR", {
+      message: "Could not reset account access.",
+    });
+  }
+};
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -1163,9 +1219,9 @@ const socialSignInTwoFactorRedirectPlugin = {
       {
         matcher: (ctx: HookEndpointContext) =>
           isSocialSignInCallbackPath(ctx.path),
-        // oxlint-disable-next-line typescript/require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
         handler: createAuthMiddleware(async (ctx) => {
-          if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
+          const returned = await Promise.resolve(ctx.context.returned);
+          if (!isTwoFactorRedirectResponse(returned)) {
             return;
           }
           throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
@@ -1382,10 +1438,15 @@ export const createAuth = (
     // enable/disable/verify never require a password fallback.
     allowPasswordless: true,
     issuer: TWO_FACTOR_ISSUER,
+    // Better Auth 1.7.6 binds trusted-device grants only to a user and expiry.
+    // It does not revoke every browser's grant when MFA is disabled or replaced,
+    // so an old grant can bypass the new factor. Keep the feature disabled until
+    // grants are bound to an enrollment generation.
+    trustDeviceMaxAge: 0,
   });
 
   const twoFactorWithSignInGate = withStellaTwoFactorSignInGate(
-    twoFactorPlugin,
+    withoutTrustedDeviceBypass(twoFactorPlugin),
   ) satisfies BetterAuthPlugin;
 
   const refuseBeyondMemberCapacity = async (
@@ -1400,7 +1461,7 @@ export const createAuth = (
     // APIError it throws.
     if (Result.isError(admission)) {
       throw new APIError("FORBIDDEN", {
-        error: MEMBER_CAPACITY_REACHED_ERROR_CODE,
+        error: admission.error.code ?? MEMBER_CAPACITY_REACHED_ERROR_CODE,
         message: admission.error.message,
       });
     }
@@ -1480,6 +1541,29 @@ export const createAuth = (
   };
 
   const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
+  /**
+   * The account and grant a provider token is issued under. Tokens without a
+   * user (client credentials) carry no account credential.
+   */
+  const providerGrantTokenAuthority = (
+    model: string,
+    data: Record<string, unknown>,
+  ) => {
+    if (model !== "oauthAccessToken" && model !== "oauthRefreshToken") {
+      return undefined;
+    }
+    const { userId, sessionId, authorizationCodeId } = data;
+    if (typeof userId !== "string") {
+      return undefined;
+    }
+    return {
+      userId: brandPersistedUserId(userId),
+      sessionId: typeof sessionId === "string" ? sessionId : null,
+      grantId:
+        typeof authorizationCodeId === "string" ? authorizationCodeId : null,
+    };
+  };
+
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
       adapter: rawAuthAdapter(options),
@@ -1508,21 +1592,35 @@ export const createAuth = (
       },
       protectCreate: (raw) => async (args) => {
         const table = requireAuthRetention({ model: args.model });
+        const grant = providerGrantTokenAuthority(args.model, args.data);
         const clientId =
           table === "verification"
             ? authorizationClientId(args.data)
             : undefined;
-        if (!clientId) {
+        if (!clientId && grant === undefined) {
           return await raw.create(args);
         }
         return await rootDb.transaction(async (tx) => {
-          const clients = await tx.execute(
-            sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
-          );
-          if (clients.length === 0) {
+          // The provider writes each token on its own; the fence makes an
+          // account reset either delete the token or refuse it.
+          if (
+            grant !== undefined &&
+            (await CredentialIssuanceFence.holdForGrant(tx, grant)) === null
+          ) {
             throw new APIError("BAD_REQUEST", {
-              message: "Authorization client is unavailable.",
+              error: "invalid_grant",
+              error_description: "The authorization is no longer valid.",
             });
+          }
+          if (clientId) {
+            const clients = await tx.execute(
+              sql`select client_id from oauth_client where client_id = ${clientId} for key share`,
+            );
+            if (clients.length === 0) {
+              throw new APIError("BAD_REQUEST", {
+                message: "Authorization client is unavailable.",
+              });
+            }
           }
           return await drizzleAdapter(
             tx,
@@ -1560,11 +1658,7 @@ export const createAuth = (
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
-    recordAccessState: async (organizationId: SafeId<"organization">) =>
-      await recordNewOrganizationAccessState(rootDb, {
-        organizationId,
-        now: new Date(),
-      }),
+    recordAccessState: recordNewOrganizationAccessStateOnOwner,
     // Insert-once on the owner connection, audited in the same transaction.
     // A creator who has not accepted yet records nothing here; the
     // organization is recorded when an owner accepts.
@@ -1658,7 +1752,12 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(teardown.error, { organizationId });
+          captureError(
+            teardown.error,
+            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
+              organizationId,
+            }),
+          );
           throw teardown.error instanceof OrganizationStorageTeardownBoundError
             ? new APIError("BAD_REQUEST", {
                 error: "organization_storage_too_large",
@@ -1763,6 +1862,13 @@ export const createAuth = (
               message: "Select one product membership role.",
             });
           }
+          // Better Auth creates the owner membership before its
+          // afterCreateOrganization hook. Initialize the fail-closed access
+          // row before capacity admission; the lifecycle hook repeats this
+          // insert after creation and the owner is idempotent.
+          await recordNewOrganizationAccessStateOnOwner(
+            brandPersistedOrganizationId(org.id),
+          );
         } else {
           await requireAssignableMemberRole(
             brandPersistedOrganizationId(org.id),
@@ -1919,6 +2025,8 @@ export const createAuth = (
   });
 
   const auth = betterAuth({
+    // The route table mounts the handler at this path; one constant for both.
+    basePath: AUTH_API_PATH,
     logger: errorOutputLogger,
     trustedOrigins: [
       ...frontendOrigins({
@@ -2038,6 +2146,36 @@ export const createAuth = (
       invitation: {
         create: { before: reviewDatabaseHooks.invitationCreateBefore },
       },
+      verification: {
+        create: {
+          // A first-factor sign-in that leaves its second factor pending
+          // writes that grant in place of a session; it is held to the same
+          // linked-account check, after the insert, and records the account
+          // so completing the second factor is held to it too.
+          after: async (row, ctx) => {
+            if (!ctx || !isPendingTwoFactorSignIn(row.identifier)) {
+              return;
+            }
+            const requirement = firstFactorRequirement(ctx);
+            const ended = await endSessionWithoutLinkedAccount({
+              requirement,
+              userId: toSafeId<"user">(row.value),
+              hasAccount: hasAccountForProvider,
+              endSession: async () => {
+                await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+                  row.identifier,
+                );
+              },
+            });
+            if (ended) {
+              throw new APIError("UNAUTHORIZED", {
+                message: DISCONNECTED_SIGN_IN_MESSAGE,
+              });
+            }
+            await recordSecondFactorRequirement(ctx, { row, requirement });
+          },
+        },
+      },
       session: {
         create: {
           before: async (session) => {
@@ -2050,6 +2188,23 @@ export const createAuth = (
             return accountPolicy || lifetime
               ? { data: { ...data, ...lifetime } }
               : undefined;
+          },
+          // Aborting here, before Better Auth sets any cookie, issues neither
+          // a session token nor a cached session snapshot for the session.
+          after: async (session, ctx) => {
+            const ended = await endSessionWithoutLinkedAccount({
+              requirement: await sessionLinkedAccountRequirement(ctx),
+              userId: toSafeId<"user">(session.userId),
+              hasAccount: hasAccountForProvider,
+              endSession: async () => {
+                await ctx?.context.internalAdapter.deleteSession(session.token);
+              },
+            });
+            if (ended) {
+              throw new APIError("UNAUTHORIZED", {
+                message: DISCONNECTED_SIGN_IN_MESSAGE,
+              });
+            }
           },
         },
       },
@@ -2099,14 +2254,21 @@ export const createAuth = (
           },
         },
         update: {
-          before: async (user) => {
+          before: async (user, ctx) => {
             const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
               normalizeUserPreferences(ensureDisplayName(user)),
             );
             if (Result.isError(data)) {
               throw data.error;
             }
-            return await Promise.resolve({ data: data.value });
+            const promotedEmail = emailOtpPromotionEmail(user, ctx);
+            if (ctx && promotedEmail !== undefined) {
+              await revokeUnprovenCredentials(
+                ctx.context.internalAdapter,
+                promotedEmail,
+              );
+            }
+            return { data: data.value };
           },
         },
       },
@@ -2309,6 +2471,14 @@ export const createAuth = (
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
             getSessionActiveOrganizationId(session),
+          // `prompt=select_account` opens the organization step, which names
+          // the signed-in account, offers to switch it and lists the
+          // memberships to pick from; its continue step clears the prompt.
+          // Without the prompt, account selection is never forced.
+          selectAccount: {
+            page: OAUTH_UI_ORGANIZATION_PATH,
+            shouldRedirect: () => false,
+          },
           postLogin: {
             page: OAUTH_UI_ORGANIZATION_PATH,
             shouldRedirect: async ({
@@ -2419,6 +2589,10 @@ export const createAuth = (
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
           ]),
+          partnerResource: {
+            url: getMcpResourceUrl(),
+            isPartnerClient: isPartnerOAuthClient,
+          },
         },
       ),
       oauthUiFragmentBridgePlugin,
@@ -2505,8 +2679,8 @@ export const createAuth = (
           async () =>
             await resolveAuthoritativeSessionForSensitiveAuthPath({
               ctx,
-              resolveSession: async ({ path }) =>
-                await getAuthoritativeSessionFromCtx({ ...ctx, path }),
+              resolveSession: async ({ path, request }) =>
+                await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
             }),
         );
         // Better Auth rejects a request from a `before` hook by the APIError
@@ -2559,7 +2733,12 @@ export const createAuth = (
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,
                 }).catch((error: unknown) => {
-                  captureError(error, { source: "new-device-login-email" });
+                  captureError(
+                    error,
+                    handlerErrorContext("lib.notified", {
+                      source: "new-device-login-email",
+                    }),
+                  );
                   throw error;
                 }),
               );
@@ -2567,13 +2746,18 @@ export const createAuth = (
             isTransactionalEmailConfigured,
             isLocalDev: isLocalDevOpen,
             onError: (error) =>
-              captureError(error, { source: "new-device-login-hook" }),
+              captureError(
+                error,
+                handlerErrorContext("lib.auth.notified_error", {
+                  source: "new-device-login-hook",
+                }),
+              ),
           },
         });
       }),
     },
   });
-  return auth;
+  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;
@@ -2599,16 +2783,34 @@ export type { MemberRole } from "@/api/lib/member-roles";
 
 type AuthSessionReadOptions = {
   headers: Headers | Record<string, string>;
+  query?: {
+    disableCookieCache: true;
+    disableRefresh: true;
+  };
   returnHeaders: true;
 };
-const readAuthSession = async (options: AuthSessionReadOptions) =>
-  await getAuth().api.getSession(options);
+/** The caller's session; a request without a session credential skips the lookup. */
+const readAuthSession = async (options: AuthSessionReadOptions) => {
+  const auth = getAuth();
+  const headers =
+    options.headers instanceof Headers
+      ? options.headers
+      : new Headers(options.headers);
+  const sessionCookie = await skippableSessionCookieOf(auth);
+  if (
+    sessionCookie !== null &&
+    !carriesSessionCredential(headers, sessionCookie)
+  ) {
+    return { headers: new Headers(), response: null };
+  }
+  return await auth.api.getSession(options);
+};
 type AuthSessionReader = typeof readAuthSession;
 
 type GetSessionAndMemberAuthorizationOptions = {
   getSession?: AuthSessionReader | undefined;
   headers: Headers | Record<string, string>;
-  responseHeaders: Context["set"]["headers"];
+  responseHeaders: ResponseHeaders;
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
@@ -2623,7 +2825,7 @@ const getSessionAndMemberAuthorization = async ({
       headers,
       returnHeaders: true,
     });
-    forwardAuthResponseCookies(responseHeaders, resolved.headers);
+    appendSetCookieHeaders(responseHeaders, resolved.headers);
     return resolved.response;
   });
 
@@ -2669,8 +2871,8 @@ const getSessionAndMemberAuthorization = async ({
 
 type AuthRejectionStatus = 401 | 403 | 404 | 500;
 
-// Every auth-macro rejection carries the shared JSON error body: a bare
-// `status(n)` reaches clients as an empty `application/octet-stream` response.
+// Every access rejection carries the shared JSON error body, so a client can
+// tell why it was refused and what to do next.
 export const AUTH_REJECTION_BODY = {
   401: { code: "permission_denied", message: "Sign in to continue." },
   403: {
@@ -2705,10 +2907,6 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
-type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set"> & {
-  getSession?: AuthSessionReader | undefined;
-};
-
 /**
  * Account routes confirm the session still exists in storage. Organization
  * routes may serve the cached cookie snapshot because their member lookup runs
@@ -2717,29 +2915,42 @@ type ResolveSessionAuthOptions = Pick<Context, "status" | "request" | "set"> & {
  * The snapshot still supplies the session itself; one indexed read checks it
  * is live, instead of a full uncached session load.
  */
-const resolveSessionAuth = async ({
-  status,
-  request,
-  set,
-  getSession = readAuthSession,
-}: ResolveSessionAuthOptions) => {
+/** A caller an access step admitted, or the answer refusing it. */
+export type CallerOutcome<TCaller> =
+  | { readonly ok: true; readonly caller: TCaller }
+  | {
+      readonly ok: false;
+      readonly answer: HttpStatusResponse<
+        number,
+        { readonly code: string; readonly message: string }
+      >;
+    };
+
+export type SessionCaller = {
+  readonly user: { readonly id: SafeId<"user">; readonly email: string };
+};
+
+export const authenticateSession = async (
+  { request, set }: Pick<RequestContext, "request" | "set">,
+  access: HandoffAccessMetadata,
+): Promise<CallerOutcome<SessionCaller>> => {
   const sessionResult = await Result.tryPromise(async () => {
-    const resolved = await getSession({
+    const resolved = await getAuth().api.getSession({
       headers: request.headers,
       returnHeaders: true,
     });
-    forwardAuthResponseCookies(set.headers, resolved.headers);
+    appendSetCookieHeaders(set.headers, resolved.headers);
     return resolved.response;
   });
 
   if (Result.isError(sessionResult)) {
-    return status(500, AUTH_REJECTION_BODY[500]);
+    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
   }
 
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
   if (!session || !user) {
-    return status(401, AUTH_REJECTION_BODY[401]);
+    return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
 
   // The signed snapshot may outlive its stored session for its cache
@@ -2760,160 +2971,36 @@ const resolveSessionAuth = async ({
     });
   });
   if (Result.isError(liveResult)) {
-    return status(500, AUTH_REJECTION_BODY[500]);
+    return { ok: false, answer: status(500, AUTH_REJECTION_BODY[500]) };
   }
   if (liveResult.value === null) {
-    return status(401, AUTH_REJECTION_BODY[401]);
+    return { ok: false, answer: status(401, AUTH_REJECTION_BODY[401]) };
   }
 
-  if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
-    return status(403, {
-      code: MCP_HANDOFF_STEP_UP_REQUIRED,
-      message: "Sign in again to continue.",
-    });
+  const stepUp = handoffStepUpRefusal({
+    originConsentId: session.originConsentId ?? null,
+    request,
+    access,
+  });
+  if (stepUp !== undefined) {
+    return { ok: false, answer: stepUp };
   }
 
   const userId = toSafeId<"user">(user.id);
-  enrichRequestContext(request, {
+  enrichRequestContext({
     posthogDistinctId: userId,
   });
 
   return {
-    handoffOriginConsentId: session.originConsentId ?? null,
-    user: {
-      id: userId,
-      email: user.email,
+    ok: true,
+    caller: {
+      user: {
+        id: userId,
+        email: user.email,
+      },
     },
   };
 };
-
-// Guards and accountAccess may expand the same resolver more than once.
-const sessionAuthResolutionCache = new WeakMap<
-  Request,
-  ReturnType<typeof resolveSessionAuth>
->();
-
-export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
-  .macro({
-    validateSession: {
-      async resolve(context) {
-        return await memoizePerRequest(
-          sessionAuthResolutionCache,
-          context.request,
-          async () => await resolveSessionAuth(context),
-        );
-      },
-    },
-  })
-  .macro("accountAccess", (accountAccess: AccountAccess) => ({
-    validateSession: true as const,
-    detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
-    beforeHandle: createHandoffStepUpGuard({ accountAccess }),
-  }));
-
-type AccountExportAuthDependencies = {
-  authenticate?: typeof authenticateAccountExportRequest;
-  resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
-  getSession?: AuthSessionReader;
-};
-
-/** Export OAuth grants are accepted only on this account-specific surface. */
-export const createAccountExportAuthMacro = ({
-  authenticate,
-  resolveAuthorization,
-  getSession,
-}: AccountExportAuthDependencies = {}) =>
-  new Elysia({
-    name: "accountExportAuthMacro",
-  })
-    .macro({
-      validateAccountExport: (access: "read" | "write") => ({
-        async resolve({ status, request, set }) {
-          const authorizationHeader = request.headers.get("authorization");
-          if (authorizationHeader !== null) {
-            const match = /^Bearer ([^\s]+)$/iu.exec(authorizationHeader);
-            const token = match?.at(1);
-            if (token === undefined) {
-              return status(401, AUTH_REJECTION_BODY[401]);
-            }
-            // Load the OAuth verifier at the request boundary; it imports this
-            // owner's authorization reader and must not initialize during auth setup.
-            const authenticateToken =
-              authenticate ??
-              (await import("@/api/mcp/auth")).authenticateAccountExportRequest;
-            const authenticated = await authenticateToken(token);
-            if (Result.isError(authenticated)) {
-              if (McpTokenVerificationError.is(authenticated.error)) {
-                observeFailure(authenticated.error, {
-                  sink: ACCOUNT_EXPORT_VERIFICATION_FAILED,
-                  request,
-                });
-                return status(500, AUTH_REJECTION_BODY[500]);
-              }
-              return status(401, AUTH_REJECTION_BODY[401]);
-            }
-            const session = authenticated.value;
-            if (
-              !hasAccountExportAuthority(
-                {
-                  credential: session.credential,
-                  grantedScopes: session.scopes,
-                },
-                access,
-              )
-            ) {
-              return status(403, AUTH_REJECTION_BODY[403]);
-            }
-            const userId = toSafeId<"user">(session.userId);
-            const memberResult = await Result.tryPromise(
-              async () =>
-                await (
-                  resolveAuthorization ?? resolveCredentialMemberAuthorization
-                )({
-                  organizationId: brandPersistedOrganizationId(
-                    session.organizationId,
-                  ),
-                  userId,
-                }),
-            );
-            if (Result.isError(memberResult)) {
-              observeFailure(memberResult.error, {
-                sink: ACCOUNT_EXPORT_MEMBERSHIP_READ_FAILED,
-                request,
-              });
-              return status(500, AUTH_REJECTION_BODY[500]);
-            }
-            const memberAuthorization = memberResult.value;
-            if (
-              memberAuthorization === null ||
-              memberAuthorization.userDeleted ||
-              (session.memberId !== undefined &&
-                session.memberId !== memberAuthorization.memberId)
-            ) {
-              return status(401, AUTH_REJECTION_BODY[401]);
-            }
-            enrichRequestContext(request, { posthogDistinctId: userId });
-            return {
-              handoffOriginConsentId: null,
-              user: { id: userId, email: memberAuthorization.email },
-            };
-          }
-
-          return await resolveSessionAuth({
-            getSession,
-            status,
-            request,
-            set,
-          });
-        },
-      }),
-    })
-    .macro("accountAccess", (accountAccess: AccountAccess) => ({
-      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
-      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
-    }));
-
-export const accountExportAuthMacro = createAccountExportAuthMacro();
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
@@ -2937,58 +3024,6 @@ const featureAccessColumns = (organizationId: SafeId<"organization">) => {
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
-
-const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
-  const membershipExists = exists(
-    db
-      .select({ id: workspaceMembers.id })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaces.id),
-          eq(workspaceMembers.userId, member.userId),
-        ),
-      ),
-  );
-  // sql-perf-allow: bounded by one target workspace and organization membership keys
-  return or(
-    membershipExists,
-    and(
-      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-      isNotNull(workspaces.clientId),
-    ),
-  );
-};
-
-type WorkspaceMemberLookup = {
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-};
-
-/** Recheck a worker's matter membership inside its RLS transaction. */
-export const resolveWorkspaceMemberAccess = async (
-  { organizationId, userId, workspaceId }: WorkspaceMemberLookup,
-  db: MemberAuthorizationDb,
-): Promise<AccessibleWorkspace | null> => {
-  const row = await db
-    .select({ id: workspaces.id, status: workspaces.status })
-    .from(member)
-    .innerJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, workspaceId),
-        eq(workspaces.organizationId, member.organizationId),
-        memberWorkspaceAccess(db),
-      ),
-    )
-    .where(
-      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
-    )
-    .limit(1)
-    .then((rows) => rows.at(0));
-  return row ?? null;
-};
 
 export const resolveMemberAuthorization = async (
   { organizationId, userId, workspaceId }: MemberAuthorizationLookup,
@@ -3053,7 +3088,10 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
-        memberWorkspaceAccess(db),
+        memberReachesMatterSql(
+          { organizationId: member.organizationId, userId: member.userId },
+          workspaces.id,
+        ),
       ),
     )
     .where(
@@ -3124,14 +3162,14 @@ export const isActiveOrganizationMember = async ({
   userId,
 }: {
   headers: Headers;
-  responseHeaders: Context["set"]["headers"];
+  responseHeaders: ResponseHeaders;
   userId: SafeId<"user">;
 }): Promise<boolean> => {
   const resolved = await getAuth().api.getSession({
     headers,
     returnHeaders: true,
   });
-  forwardAuthResponseCookies(responseHeaders, resolved.headers);
+  appendSetCookieHeaders(responseHeaders, resolved.headers);
   const activeOrganizationId = getSessionActiveOrganizationId(
     resolved.response?.session,
   );
@@ -3228,7 +3266,10 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
-        memberWorkspaceAccess(db),
+        memberReachesMatterSql(
+          { organizationId: member.organizationId, userId: member.userId },
+          workspaces.id,
+        ),
       ),
     )
     .limit(uniqueSessionIds.length);
@@ -3250,24 +3291,12 @@ export const realtimeAuthorizers = {
 };
 
 /**
- * Per-request memoization of validateAuth's resolution.
+ * Per-request memoization of the member resolution.
  *
- * Elysia expands a macro property (here `validateAuth`, directly or
- * transitively through `permissions` / `validateWorkspaceAccess`) into an
- * independent `resolve` hook every time it appears at a distinct
- * `.guard()` / `.group()` / route-level call site — see `applyMacro` in
- * elysia's compose step, which only dedupes repeats *within* a single
- * call's hook object, not across separate call sites. A route that
- * stacks e.g. a top-level `.guard({ validateAuth: true })` with a
- * per-route `permissions: {...}` therefore runs this resolve twice (three
- * times when a `.group()` also carries `validateWorkspaceAccess: true`)
- * for the exact same request, each time re-running the session, member-role,
- * and org-settings lookups.
- *
- * Rather than rely on route wiring alone to avoid every such stack (some
- * duplication is structural — a workspace-scoped group and its
- * permission-checked routes legitimately need both macros), memoize the
- * resolved value per request here. The cache is a `WeakMap` keyed on the
+ * Gates that run ahead of a route (feature access, capability requests) and
+ * the route's own access step read the same caller; memoizing per request
+ * makes that one session, member-role and org-settings lookup however many
+ * of them ask. The cache is a `WeakMap` keyed on the
  * raw `Request` object: it never survives past the request that created
  * it (no explicit eviction needed) and never leaks across requests, so a
  * revoked session is still re-checked in full on the very next request.
@@ -3288,7 +3317,7 @@ type ResolveValidateAuthOptions = {
   request: Request;
   server: Parameters<typeof createAuditRecorder>[0]["server"];
   initialWorkspaceId: SafeId<"workspace"> | null;
-  responseHeaders: Context["set"]["headers"];
+  responseHeaders: ResponseHeaders;
 };
 
 type FeatureAccessFacts = Pick<
@@ -3329,7 +3358,7 @@ export const featureAccessSnapshotFromAuthorization = ({
   });
 
 // Keep the concrete transaction in named declarations without expanding the
-// full database schema into every auth macro.
+// full database schema into every caller type.
 type AuthScopedDb = ReturnType<
   typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
 >;
@@ -3482,7 +3511,7 @@ const resolveValidateAuth = async ({
     authorization,
   });
 
-  enrichRequestContext(request, {
+  enrichRequestContext({
     posthogDistinctId: userId,
     organizationId: activeOrganizationId,
   });
@@ -3596,72 +3625,42 @@ const resolveValidateAuth = async ({
     server,
   };
 
-  return {
-    ok: true as const,
-    value: {
-      handoffOriginConsentId: session.originConsentId ?? null,
-      user: {
-        id: toSafeId<"user">(user.id),
-        email: user.email,
-      },
-      session: {
-        id: session.id,
-        activeOrganizationId,
-        originConsentId: session.originConsentId ?? null,
-      },
-      getActiveWorkspaceIds,
-      getAccessibleWorkspaces,
-      getWorkspaceAccess,
-      /**
-       * Preserve one workspace in later request transactions only when an
-       * earlier server-side lookup in this request already proved access.
-       */
-      pinServerValidatedWorkspaceId,
-      scopedDb,
-      safeDb,
-      memberRole,
-      featureAccessSnapshot,
-      orgAIConfig,
-      orgAIConfigStatus,
-      promptCachingEnabled,
-      managedAIResidency,
-      /**
-       * Records audit rows in the supplied tx. Identity fields
-       * (org/user/IP/UA) are bound from the request context;
-       * workspaceId defaults to null for root handlers and is
-       * overridden by workspaceAccessMacro to the validated
-       * workspaceId for workspace handlers. Individual events
-       * can still override workspaceId for cross-workspace ops.
-       */
-      recordAuditEvent: createAuditRecorder(recorderBindings),
-      /**
-       * Builds a recorder with an overridden default workspaceId.
-       * Use when threading audit recording through helpers that
-       * don't receive the handler ctx (cross-workspace operations,
-       * shared copy/move utilities).
-       */
-      createAuditRecorder: (opts?: {
-        execution?: AuditExecutionContext;
-        workspaceId?: SafeId<"workspace"> | null;
-      }) =>
-        createAuditRecorder({
-          ...recorderBindings,
-          ...(opts?.execution ? { execution: opts.execution } : {}),
-          workspaceId:
-            opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
-        }),
+  const caller: SessionMemberCaller = {
+    user: {
+      id: toSafeId<"user">(user.id),
+      email: user.email,
     },
+    session: {
+      id: session.id,
+      activeOrganizationId,
+      originConsentId: session.originConsentId ?? null,
+    },
+    getActiveWorkspaceIds,
+    getAccessibleWorkspaces,
+    getWorkspaceAccess,
+    pinServerValidatedWorkspaceId,
+    scopedDb,
+    safeDb,
+    memberRole,
+    featureAccessSnapshot,
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+    recordAuditEvent: createAuditRecorder(recorderBindings),
+    createAuditRecorder: (opts) =>
+      createAuditRecorder({
+        ...recorderBindings,
+        ...(opts?.execution ? { execution: opts.execution } : {}),
+        workspaceId:
+          opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
+      }),
   };
+  return { ok: true as const, value: caller };
 };
 
-/**
- * Named alias for `resolveValidateAuth`'s resolved value, derived from the
- * implementation rather than hand-written — see the inference note above.
- */
-export type ValidateAuthValue = Extract<
-  Awaited<ReturnType<typeof resolveValidateAuth>>,
-  { ok: true }
->["value"];
+/** The member a browser session proved for this request. */
+export type ValidateAuthValue = SessionMemberCaller;
 
 type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
 
@@ -3677,7 +3676,7 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
     request,
     server,
     set,
-  }: Pick<Context, "request" | "server" | "set"> & {
+  }: Pick<RequestContext, "request" | "server" | "set"> & {
     // Read only as workspace-id sources, so a pre-validation transform context fits too.
     params: unknown;
     query: unknown;
@@ -3698,83 +3697,6 @@ const createRequestAuthResolver = (getSession?: AuthSessionReader) => {
 
 /** Share the request's authorization with gates that must run before validation. */
 export const resolveRequestAuth = createRequestAuthResolver();
-
-export const createAuthMacro = ({
-  getSession,
-}: { getSession?: AuthSessionReader } = {}) => {
-  const resolveAuth = getSession
-    ? createRequestAuthResolver(getSession)
-    : resolveRequestAuth;
-
-  return new Elysia({ name: "authMacro" })
-    .macro({
-      validateAuth: {
-        detail: { [TENANT_ACTION_DETAIL]: true },
-        async resolve({ params, query, status, request, server, set }) {
-          const result = await resolveAuth({
-            params,
-            query,
-            request,
-            server,
-            set,
-          });
-
-          if (!result.ok) {
-            return status(
-              result.statusCode,
-              VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
-            );
-          }
-
-          if (
-            result.value.session.originConsentId &&
-            requiresHandoffStepUpForRequest(request)
-          ) {
-            return status(403, {
-              code: MCP_HANDOFF_STEP_UP_REQUIRED,
-              message: "Sign in again to continue.",
-            });
-          }
-          return result.value;
-        },
-      },
-    })
-    .macro("accountAccess", (accountAccess: AccountAccess) => ({
-      validateAuth: true,
-      detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
-      beforeHandle: createHandoffStepUpGuard({ accountAccess }),
-    }))
-    .macro("permissions", (permissions: PermissionInput) => ({
-      validateAuth: true,
-      detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
-      beforeHandle: createHandoffStepUpGuard({ permissions }),
-    }));
-};
-
-export const authMacro = createAuthMacro();
-
-export const permissionMacro = new Elysia({ name: "permissionMacro" })
-  .use(authMacro)
-  .macro("permissions", (permissions: PermissionInput) => ({
-    // Reuse authMacro's resolved member role instead of asking better-auth to
-    // perform the same permission check through a second session read.
-    validateAuth: true,
-    detail: { [HANDOFF_ACCESS_DETAIL.permissions]: permissions },
-    // Without this, when this macro is used with another macro that extends the body,
-    // the final merged body would not include the first macro's body extension.
-    body: t.Object({}),
-    beforeHandle: [
-      createHandoffStepUpGuard({ permissions }),
-      (ctx) => {
-        const memberRole = readAuthorizedMemberRole(ctx);
-        if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
-          return ctx.status(403, AUTH_REJECTION_BODY[403]);
-        }
-
-        return undefined;
-      },
-    ],
-  }));
 
 const bindWorkspaceRecorder = (
   ctx: {
@@ -3810,48 +3732,90 @@ const bindWorkspaceRecorder = (
   };
 };
 
-export const workspaceAccessMacro = new Elysia({
-  name: "workspaceAccessMacro",
-})
-  .use(authMacro)
-  .macro("validateWorkspaceAccess", {
-    validateAuth: true,
-    params: t.Object({ workspaceId: tUuid }),
-    // Without this, when this macro is used with another macro that extends the body,
-    // the final merged body would not include the first macro's body extension.
-    body: t.Object({}),
-    async resolve(ctx) {
-      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
-      const ws = await ctx.getWorkspaceAccess(workspaceId);
+/**
+ * Member access for a request: a signed-in member of the active organization,
+ * with the request-scoped databases and lookups every org handler uses.
+ */
+export const createMemberAuthenticator = ({
+  getSession,
+}: { getSession?: AuthSessionReader } = {}) => {
+  const resolveAuth = getSession
+    ? createRequestAuthResolver(getSession)
+    : resolveRequestAuth;
 
-      if (ws?.status !== "active") {
-        return ctx.status(404, AUTH_REJECTION_BODY[404]);
-      }
-
+  return async (
+    ctx: Pick<
+      RequestContext,
+      "request" | "server" | "set" | "params" | "query"
+    >,
+    access: HandoffAccessMetadata,
+  ): Promise<CallerOutcome<ValidateAuthValue>> => {
+    const result = await resolveAuth(ctx);
+    if (!result.ok) {
       return {
-        workspaceId,
-        ...bindWorkspaceRecorder(ctx, workspaceId),
+        ok: false,
+        answer: status(
+          result.statusCode,
+          VALIDATE_AUTH_REJECTION_BODY[result.statusCode],
+        ),
       };
-    },
-  })
-  .macro("validateWorkspaceAccessIncludingArchived", {
-    validateAuth: true,
-    params: t.Object({ workspaceId: tUuid }),
-    body: t.Object({}),
-    async resolve(ctx) {
-      const workspaceId = toSafeId<"workspace">(ctx.params.workspaceId);
-      const ws = await ctx.getWorkspaceAccess(workspaceId);
+    }
+    const stepUp = handoffStepUpRefusal({
+      originConsentId: result.value.session.originConsentId,
+      request: ctx.request,
+      access,
+    });
+    return stepUp === undefined
+      ? { ok: true, caller: result.value }
+      : { ok: false, answer: stepUp };
+  };
+};
 
-      if (!ws || (ws.status !== "active" && ws.status !== "archived")) {
-        return ctx.status(404, AUTH_REJECTION_BODY[404]);
-      }
+export const authenticateMember = createMemberAuthenticator();
 
-      return {
+export type {
+  MemberCaller,
+  SessionMemberCaller,
+  WorkspaceCaller,
+} from "@/api/lib/auth/member-caller";
+
+/** Which matter statuses a workspace route admits; archived only where it says so. */
+export type WorkspaceStatusAccess = "active" | "active-or-archived";
+
+/**
+ * Matter access for a member: the matter the validated `:workspaceId` names
+ * must be one the member may use, in a status the route admits. Its audit
+ * recorder defaults to that matter.
+ */
+export const authorizeWorkspace = async (
+  memberCaller: MemberCaller,
+  { request, server }: Pick<RequestContext, "request" | "server">,
+  workspaceId: SafeId<"workspace">,
+  admitted: WorkspaceStatusAccess,
+): Promise<CallerOutcome<WorkspaceCaller>> => {
+  const workspace = await memberCaller.getWorkspaceAccess(workspaceId);
+  const admittedStatus =
+    workspace?.status === "active" ||
+    (admitted === "active-or-archived" && workspace?.status === "archived");
+  if (!admittedStatus) {
+    return { ok: false, answer: status(404, AUTH_REJECTION_BODY[404]) };
+  }
+  return {
+    ok: true,
+    caller: {
+      workspaceId,
+      ...bindWorkspaceRecorder(
+        {
+          session: memberCaller.session,
+          user: memberCaller.user,
+          request,
+          server,
+        },
         workspaceId,
-        ...bindWorkspaceRecorder(ctx, workspaceId),
-      };
+      ),
     },
-  });
+  };
+};
 
 export const issueDesktopAccountGrant = async (
   options: Omit<CreateDesktopLinkGrantOptions, "db">,

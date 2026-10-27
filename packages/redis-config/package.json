@@ -18,6 +18,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/redis-config"
   },
   "dependencies": {
+    "@stll/errors": "workspace:*",
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "valibot": "catalog:"

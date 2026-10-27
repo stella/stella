@@ -4,8 +4,8 @@ import { describe, expect, it } from "bun:test";
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import {
-  getSandboxAdmissionSnapshot,
   type SandboxNameGuide,
+  whenSandboxAdmissionQueued,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import { buildScriptCallGuide } from "@/api/handlers/chat/tools/execute/script-call-guide";
@@ -29,21 +29,6 @@ const createDeferred = (): Deferred => {
     deferredResolve = resolve;
   });
   return { promise, resolve: deferredResolve };
-};
-
-// Poll a condition that is GUARANTEED to become true under correct behaviour
-// (e.g. "the second run is parked in the admission queue"). The timeout is a
-// generous bug guard, never an observation window tuned to expected wall-clock
-// progress; a fixed "long enough" sleep is exactly what flakes on a loaded
-// CI runner.
-const waitForCondition = async (condition: () => boolean): Promise<void> => {
-  const deadline = Date.now() + 12_000;
-  while (!condition()) {
-    if (Date.now() > deadline) {
-      throw new Error("Condition was not met before timeout.");
-    }
-    await Bun.sleep(5);
-  }
 };
 
 type BindingImpl = (args: unknown) => Promise<unknown>;
@@ -261,9 +246,7 @@ describe("createStellaIsolateDriver", () => {
 
     // Once the second run is visibly parked in the admission queue, it was
     // definitively denied the single per-key slot the first still holds.
-    await waitForCondition(
-      () => getSandboxAdmissionSnapshot().queuedWaiters === 1,
-    );
+    await whenSandboxAdmissionQueued(key);
     expect(started).toEqual(["first"]);
 
     gateOf(releaseGates, "first").resolve();

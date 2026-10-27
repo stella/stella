@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract";
 
 import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import {
@@ -36,7 +37,9 @@ describe("concise consent permissions", () => {
     (scope) => {
       const markup = renderToStaticMarkup(
         <IntlProvider locale="en" messages={en} timeZone="UTC">
-          <ScopeSummary scopes={[scope]} />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <ScopeSummary scopes={[scope]} />
+          </FormattingProvider>
         </IntlProvider>,
       );
       expect(markup).toContain("<details");
@@ -66,7 +69,9 @@ describe("concise consent permissions", () => {
       ];
       const markup = renderToStaticMarkup(
         <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-          <ScopeSummary scopes={scopes} />
+          <FormattingProvider locale={locale} timeZone="UTC">
+            <ScopeSummary scopes={scopes} />
+          </FormattingProvider>
         </IntlProvider>,
       );
       expect(markup.match(/data-slot="consent-summary-line"/gu)).toHaveLength(
@@ -96,7 +101,9 @@ describe("concise consent permissions", () => {
   test("read-only and unknown grants show no destructive warning", () => {
     const markup = renderToStaticMarkup(
       <IntlProvider locale="en" messages={en} timeZone="UTC">
-        <ScopeSummary scopes={["stella:read", "vendor:custom"]} />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <ScopeSummary scopes={["stella:read", "vendor:custom"]} />
+        </FormattingProvider>
       </IntlProvider>,
     );
     expect(markup).not.toContain('data-slot="consent-sensitive-access"');

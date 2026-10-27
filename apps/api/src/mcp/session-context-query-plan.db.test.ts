@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -40,6 +44,12 @@ import {
   grantOAuthClient,
   registerOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+const routeServer = serveRoutesForTest(apiKeysRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 /**
  * Every MCP HTTP request authenticates its bearer credential and then builds
@@ -124,7 +134,8 @@ let signingKeyFetches = 0;
 // The verifier loads the signing keys over HTTP; serve that one address from
 // the real auth handler so the token path runs unchanged, and count it.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 /** Count every transaction one database boundary opens. */
 const countTransactions = (
@@ -146,21 +157,19 @@ beforeAll(async () => {
   countTransactions(rootDb, rootDb.transaction.bind(rootDb));
   countTransactions(rlsDb, rlsDb.transaction.bind(rlsDb));
   const jwksUrl = getAuthEndpointUrl("jwks");
-  fetchSpy.mockImplementation(
-    Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? new Request(input, init)
-            : new Request(String(input), init);
-        if (request.url === jwksUrl) {
-          signingKeyFetches += 1;
-          return await getAuth().handler(request);
-        }
-        return await passThroughFetch(input, init);
-      },
-      { preconnect: passThroughFetch.preconnect },
-    ),
+  serveJwks = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      if (request.url === jwksUrl) {
+        signingKeyFetches += 1;
+        return await getAuth().handler(request);
+      }
+      return await passThroughFetch(input, init);
+    },
+    { preconnect: passThroughFetch.preconnect },
   );
 });
 
@@ -176,7 +185,7 @@ const postJson = async (
   browser: HumanBrowser,
   body: Record<string, unknown>,
 ) => {
-  const response = await apiKeysRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}${path}`, {
       method: "POST",
       headers: {
@@ -287,6 +296,14 @@ const credentialTypeOf = async (credential: string) => {
     ? (authenticated.value satisfies McpSession).credential?.type
     : undefined;
 };
+
+beforeEach(() => {
+  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveJwks);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("MCP request authentication and session context run a fixed query plan", () => {
   test("each credential type issues its pinned statements on every request", async () => {

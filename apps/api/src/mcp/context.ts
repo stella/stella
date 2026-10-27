@@ -75,7 +75,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -125,7 +128,7 @@ import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
-import type { McpSession } from "@/api/mcp/auth";
+import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
@@ -151,6 +154,11 @@ export type McpOperationDatabaseScope = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
 };
+
+export type McpRequestDataAccess = Pick<
+  McpOperationDatabaseScope,
+  "safeDb" | "scopedDb"
+>;
 
 export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
@@ -185,6 +193,10 @@ export type McpRequestContext = {
     readCaseLawProvisionScope?: (
       scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
@@ -246,8 +258,8 @@ export type McpRequestContext = {
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
-   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
-   * "active".
+   * core's `authorizeWorkspace`, which 404s a workspace whose status the route
+   * does not admit ("active" unless it admits archived matters).
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
@@ -262,6 +274,8 @@ export type McpRequestContext = {
   clientIp?: string | null;
   credentialType?: "oauth" | "api-key" | "anonymous";
   clientId?: string | null;
+  /** Credential classification copied from the authenticated MCP session. */
+  sessionCredentialType?: McpCredentialType | undefined;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -338,10 +352,14 @@ export type McpRequestContext = {
    * declared with `withThirdPartyOutbound`.
    */
   thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
-  safeDb: SafeDb;
-  scopedDb: ScopedDb;
   userId: SafeId<"user">;
   userEmail: string;
+};
+
+/** Resources built with the caller context but kept outside its authority. */
+export type McpRequestResources = McpRequestContext & {
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
 };
 
 /**
@@ -349,9 +367,9 @@ export type McpRequestContext = {
  * contexts carry the request needed to rebuild the recorder; chat contexts
  * already receive a recorder whose approval was resolved by the chat gate.
  */
-export const bindApprovedMcpAuditContext = (
-  context: McpRequestContext,
-): McpRequestContext => {
+export const bindApprovedMcpAuditContext = <TContext extends McpRequestContext>(
+  context: TContext,
+): TContext => {
   if (context.request === undefined) {
     return context;
   }
@@ -571,7 +589,7 @@ export const resolveMcpSessionContext = async (
     checkAccountOperation?: typeof checkDemoAccountOperation;
     checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
     userId: session.userId,
@@ -722,6 +740,9 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
+    ...(session.credential === undefined
+      ? {}
+      : { sessionCredentialType: session.credential.type }),
     createOperationDatabaseScope,
     featureAccessSnapshot,
     ...credentialPermissionContext(session),

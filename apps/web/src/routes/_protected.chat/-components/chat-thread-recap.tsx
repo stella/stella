@@ -83,7 +83,7 @@ export const ChatThreadRecap = ({
   );
   const { isFetching } = dataQuery;
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "ChatThreadRecap:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   if (!eligible) {

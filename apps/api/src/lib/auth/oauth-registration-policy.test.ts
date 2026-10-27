@@ -1,15 +1,22 @@
 import type { TokenEndpointAuthMethod } from "@better-auth/oauth-provider";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 
 import { getVerifiedOAuthOrigins } from "@/api/lib/auth/oauth-consent-info";
 import {
   grantableScopes,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-  OPEN_REGISTRATION_SCOPES,
+  inferredApplicationType,
+  NATIVE_REDIRECT_URI_EXCEPTIONS,
+  registrableScope,
   requiresNativeClientConsent,
 } from "@/api/lib/auth/oauth-registration-policy";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
+import { OAUTH_CLIENT_REGISTRATION_FIXTURES } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 
 const AUTHENTICATION_CONSENT_CASES = {
   none: true,
@@ -92,12 +99,18 @@ describe("grantableScopes", () => {
         policy,
       ),
     ).toEqual(["openid", "stella:read"]);
-    expect(grantableScopes(registered(ALL_SCOPES), [], policy)).toEqual([]);
+    // An empty list names nothing, so the client's own (open) list applies.
+    expect(grantableScopes(registered(ALL_SCOPES), [], policy)).toEqual(
+      OPEN_REGISTRATION_SCOPES,
+    );
   });
 
   test("only documented or first-party metadata documents keep every scope", () => {
     for (const [clientId, keeps] of [
       ["https://claude.ai/oauth/claude-code-client-metadata", true],
+      // Verified for the consent screen, but granted what Claude is granted
+      // when it registers its hosted callback.
+      ["https://claude.ai/oauth/mcp-oauth-client-metadata", false],
       ["https://chatgpt.com/oauth/client.json", true],
       ["https://chatgpt.com/oauth/codex/client.json", true],
       ["https://stella.example/oauth/client.json", true],
@@ -150,5 +163,99 @@ describe("grantableScopes", () => {
         policy,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("unoffered scopes", () => {
+  test("registration drops scopes the server does not offer", () => {
+    expect(registrableScope("mcp:tools")).toBe("");
+    expect(
+      registrableScope("openid profile email name picture offline_access"),
+    ).toBe("openid profile email offline_access");
+    expect(registrableScope(ELEVATED.join(" "))).toBe("");
+    expect(registrableScope(OPEN_REGISTRATION_SCOPES.join(" "))).toBe(
+      OPEN_REGISTRATION_SCOPES.join(" "),
+    );
+  });
+
+  test("authorization drops scopes the client was not offered", () => {
+    expect(
+      grantableScopes(
+        registered(["openid", "stella:read"]),
+        ["stella:read", "stella:search", "mcp:tools", "picture"],
+        policy,
+      ),
+    ).toEqual(["stella:read"]);
+    expect(
+      grantableScopes(registered(ALL_SCOPES), ["mcp:tools"], policy),
+    ).toEqual(OPEN_REGISTRATION_SCOPES);
+    expect(
+      grantableScopes(
+        registered(["openid", "stella:read"]),
+        ["mcp:tools", "picture"],
+        policy,
+      ),
+    ).toEqual(["openid", "stella:read"]);
+  });
+});
+
+const CURSOR_BODY = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorDesktop.body;
+
+describe("inferred application type", () => {
+  test("a public client listing a private-use redirect is native", () => {
+    expect(inferredApplicationType({ ...CURSOR_BODY })).toBe("native");
+    expect(
+      inferredApplicationType({
+        ...CURSOR_BODY,
+        redirect_uris: ["com.example.app:/oauth/callback"],
+      }),
+    ).toBe("native");
+  });
+
+  test.each([
+    ["a stated web type", { ...CURSOR_BODY, application_type: "web" }],
+    ["a stated native type", { ...CURSOR_BODY, application_type: "native" }],
+    [
+      "a confidential client",
+      { ...CURSOR_BODY, token_endpoint_auth_method: "client_secret_post" },
+    ],
+    [
+      "an unstated auth method",
+      { ...CURSOR_BODY, token_endpoint_auth_method: undefined },
+    ],
+    [
+      "https-only redirects",
+      {
+        ...CURSOR_BODY,
+        redirect_uris: ["https://assistant.example.com/oauth/callback"],
+      },
+    ],
+    [
+      "loopback-only redirects",
+      { ...CURSOR_BODY, redirect_uris: ["http://localhost:8787/callback"] },
+    ],
+    ["no redirects", { ...CURSOR_BODY, redirect_uris: undefined }],
+    ["non-string redirects", { ...CURSOR_BODY, redirect_uris: [42] }],
+  ])("leaves %s to the provider", (_label, body) => {
+    expect(inferredApplicationType(body)).toBeUndefined();
+  });
+});
+
+describe("native redirect URI exceptions", () => {
+  test.each(
+    NATIVE_REDIRECT_URI_EXCEPTIONS.map(
+      (entry) => [entry.client, entry] as const,
+    ),
+  )("%s is pinned by its client's registration fixture", (_client, entry) => {
+    const pinned = Object.values(OAUTH_CLIENT_REGISTRATION_FIXTURES).some(
+      (fixture) =>
+        // Origin first: matching the client narrows the fixture union.
+        fixture.origin !== "synthetic" &&
+        fixture.client === entry.client &&
+        v
+          .parse(v.array(v.string()), fixture.body.redirect_uris)
+          .includes(entry.redirectUri),
+    );
+    expect(pinned).toBe(true);
   });
 });

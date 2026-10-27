@@ -6,7 +6,7 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   claimCommentSpan,
@@ -14,7 +14,7 @@ import {
 } from "@/api/handlers/lists/verifications/claim-comments/claim";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,16 +27,13 @@ import {
 } from "@/api/lib/legal-search/reader-annotations/schema";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
-const bodySchema = t.Object(
-  {
-    runId: tSafeId("legalListVerificationRun"),
-    claimId: tSafeId("legalListClaim"),
-    body: annotationCommentTextSchema,
-    visibility: t.Optional(annotationVisibilitySchema),
-    requestId: t.Optional(tSafeId("legalReaderAnnotation")),
-  },
-  { additionalProperties: false },
-);
+const bodySchema = v.strictObject({
+  runId: resourceIdSchema("legalListVerificationRun"),
+  claimId: resourceIdSchema("legalListClaim"),
+  body: annotationCommentTextSchema,
+  visibility: v.optional(annotationVisibilitySchema),
+  requestId: v.optional(resourceIdSchema("legalReaderAnnotation")),
+});
 
 const config = {
   contract: "patch",
@@ -108,15 +105,15 @@ const createClaimComment = createSafeHandler(
         ...(body.requestId === undefined ? {} : { requestId: body.requestId }),
       },
       organizationId: session.activeOrganizationId,
+      placement: { type: "verification-claim", claimId, runId, workspaceId },
       recordAuditEvent,
       safeDb,
       userId: user.id,
-      verificationClaim: { claimId, runId, workspaceId },
     });
   },
 );
 
-declareAggregateMutation(createClaimComment.handler, {
+declareAggregateMutation(createClaimComment, {
   type: "aggregate",
   aggregates: ["workspace"],
 });

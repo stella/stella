@@ -12,6 +12,7 @@ import {
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
@@ -45,6 +46,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
     if (Result.isError(queued)) {
       observeFailure(queued.error, {
         sink: ACCOUNT_EXPORT_ENQUEUE_FAILED,
+        scope: requireRequestExceptionScope(request),
         ctx: { jobId: row.id },
         request,
       });
@@ -59,7 +61,7 @@ const requestPersonalDataExport = createSafeSessionHandler(
   },
 );
 
-declareAggregateMutation(requestPersonalDataExport.handler, {
+declareAggregateMutation(requestPersonalDataExport, {
   type: "independent",
   reason:
     "The export store serializes the request under the account and export aggregate locks in one audited transaction.",

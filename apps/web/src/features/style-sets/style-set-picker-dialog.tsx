@@ -87,7 +87,13 @@ const StyleSetPickerDialogBody = ({
 
   const handleSubmit = () => {
     submit().catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "StyleSetPickerDialogBody.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "StyleSetPickerDialogBody.handleSubmit:failure",
+        },
+      });
       setCreating(false);
       notifyUserError(error, t("errors.actionFailed"));
     });

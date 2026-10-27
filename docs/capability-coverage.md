@@ -19,15 +19,6 @@ or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
-## account-exports
-
-| Capability | Access | Scope | Feature | Reachable via |
-| --- | --- | --- | --- | --- |
-| `account-exports.create` | write | stella:account_export_write | — | generic invoke → `stella capability account-exports create` |
-| `account-exports.download.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports download-get` |
-| `account-exports.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports get` |
-| `account-exports.status.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports status-get` |
-
 ## audit-logs
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -723,18 +714,18 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 33 |
+| auth_plumbing | 34 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 22 |
+| document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 9 |
+| public_indexing | 8 |
 | realtime_stream | 9 |
 | search_ui | 19 |
 | session_token_exchange | 21 |

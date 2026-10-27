@@ -27,7 +27,7 @@ export const caseLawCountryRegion = (country: string): string | null =>
   REGIONS[country.toUpperCase()] ?? null;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
-export const isCaseLawBrowserCountry = (
+const isCaseLawBrowserCountry = (
   country: string,
 ): country is CaseLawBrowserCountry =>
   Object.hasOwn(REGION_BY_COUNTRY, country);
@@ -77,6 +77,13 @@ export const toCaseLawCountryParam = (country: string): string =>
 
 export const fromCaseLawCountryParam = (param: string): string =>
   param.toUpperCase();
+
+/**
+ * The fragment of one country's section on the coverage page, owned here so
+ * the links into the page and the sections they land on cannot drift apart.
+ */
+export const caseLawCoverageAnchor = (country: string): string =>
+  `country-${toCaseLawCountryParam(country)}`;
 
 /**
  * The corpus country the pill names. A URL without a country is scoped by

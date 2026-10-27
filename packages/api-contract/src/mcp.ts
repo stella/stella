@@ -161,6 +161,19 @@ export const VERIFIED_OAUTH_CLIENT_BRANDS = [
 export type VerifiedOAuthClientBrand =
   (typeof VERIFIED_OAUTH_CLIENT_BRANDS)[number];
 
+/**
+ * What the consent screen may claim about the client asking. A `verified`
+ * client is named by its brand alone: its product name and mark come from
+ * stella, never from its registration. A `verified_unbranded` client's
+ * locations are all known but name no single product, such as a platform that
+ * serves connectors anyone can publish. Any other client is `unverified`.
+ * `name` is the client's registered name, shown only as its own claim.
+ */
+export type OAuthConsentClient =
+  | { type: "verified"; brand: VerifiedOAuthClientBrand }
+  | { type: "verified_unbranded"; name: string | null }
+  | { type: "unverified"; name: string | null };
+
 export type McpOAuthScope =
   | (typeof MCP_OAUTH_PROTOCOL_SCOPES)[number]
   | McpDefaultResourceScope
