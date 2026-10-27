@@ -1,0 +1,1 @@
+{"border-destructive/60":{"valid":true,"declarations":[["","border-color","color-mix(in oklab, var(--destructive) 60%, transparent)"]],"values":{"color-mix(in oklab, var(--destructive) 60%, transparent)":{"p":["--destructive"],"f":[],"u":false}}},"group-data-[variant=floating]:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}}}

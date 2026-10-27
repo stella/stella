@@ -1987,7 +1987,7 @@ jobs:
             status=$?
             set -e
             echo "$out"
-            if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
+            if ! grep -q 'Unknown adapter: __smoke__' <<<"$out"; then
               echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
               exit 1
             fi
@@ -2201,6 +2201,12 @@ jobs:
       - name: MCP kit published export map guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
+
+      - name: Fetch and scan engine published export map guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: |
+          bun scripts/check-published-exports.ts packages/fetch
+          bun scripts/check-published-exports.ts packages/scan-engine
 
       - name: Load merge base measurement
         timeout-minutes: 6
@@ -2459,7 +2465,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-policy
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-policy
 
       - name: Record static check receipts
         id: static_receipt_record
@@ -2658,6 +2664,8 @@ jobs:
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_008
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_008 != 'true') }}
+        # Also rejects pipes into readers that can exit early (`grep -q`,
+        # `head`), which pipefail can fail after the match was found.
         run: |
           bun test scripts/check-standalone-negated-shell.test.ts
           bun scripts/check-standalone-negated-shell.ts
@@ -2805,7 +2813,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-rest
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-rest
 
       - name: Record static check receipts
         id: static_receipt_record
@@ -3061,6 +3069,11 @@ jobs:
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
         run: |
+          # A changed test repeats in this shard, which never generates the API
+          # runtime; tests that bundle or import the API read it like their own
+          # jobs do.
+          bun --cwd=packages/cli run codegen:runtime
+          bun --cwd=apps/api run generate:capability-runtime
           cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
           ${{ needs.ci-plan.outputs.changed_files }}
           CHANGED_FILES_JSON
@@ -3700,7 +3713,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run code-quality-web-rest
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run code-quality-web-rest
 
       - *merge_group_cancel
 
@@ -3920,9 +3933,9 @@ jobs:
           POSTGRES_JUNIT_FILE: ${{ runner.temp }}/postgres-tests.xml
         run: |
           if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
-            git fetch --filter=blob:none --no-tags --unshallow origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --filter=blob:none --no-tags --unshallow origin main
           else
-            git fetch --filter=blob:none --no-tags origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --filter=blob:none --no-tags origin main
           fi
           bun scripts/ci-postgres-selector-miss.ts
 
@@ -4051,6 +4064,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Select statute recall base from the target branch
+        timeout-minutes: 5
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
           TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
@@ -4058,10 +4072,10 @@ jobs:
         run: |
           base="${TARGET_BASE_SHA:-$PUSH_BEFORE_SHA}"
           if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            git fetch --no-tags --depth=1 origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin main
             base="$(git rev-parse FETCH_HEAD)"
           else
-            git fetch --no-tags --depth=1 origin "$base"
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$base"
           fi
           git cat-file -e "$base^{commit}"
           echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
@@ -4142,6 +4156,7 @@ jobs:
         run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
+        timeout-minutes: 5
         env:
           BASE_REF: ${{ needs.ci-plan.outputs.target_base_sha || 'HEAD^' }}
         run: bash scripts/check-migrations.sh
@@ -4239,7 +4254,7 @@ jobs:
         run: |
           OUT=$(bun --bun drizzle-kit push --explain 2>&1)
           echo "$OUT"
-          echo "$OUT" | grep -q "No changes detected" || {
+          grep -q "No changes detected" <<<"$OUT" || {
             echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
             exit 1
           }
@@ -5042,6 +5057,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare merge-base network budget
+        timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -6039,7 +6055,7 @@ jobs:
           build_log="$RUNNER_TEMP/api-image-build.log"
           smoke_log="$RUNNER_TEMP/api-image-smoke.log"
           if [[ -f "$smoke_log" ]]; then
-            failures=$(grep -E '^FAIL' "$smoke_log" | head -n 5 || true)
+            failures=$(grep -m 5 -E '^FAIL' "$smoke_log" || true)
             if [[ -n "$failures" ]]; then
               while IFS= read -r line; do
                 annotate "API image smoke" "$line"
@@ -6051,7 +6067,7 @@ jobs:
           elif [[ -f "$build_log" ]]; then
             # Docker prefixes nested workflow commands with BuildKit progress.
             # Promote the install owner's fixed diagnostic to a runner annotation.
-            stall=$(grep -oE 'kind=infra class=install-stall .*' "$build_log" | head -n 1 || true)
+            stall=$(grep -m 1 -oE 'kind=infra class=install-stall .*' "$build_log" || true)
             if [[ -n "$stall" ]]; then
               printf '::error title=infra-stall::%s\n' "$stall"
               exit 0
@@ -6060,14 +6076,14 @@ jobs:
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error
             # words, then to the step's last line.
-            step=$(grep -oE '^#[0-9]+ ERROR' "$build_log" | head -n 1 | grep -oE '[0-9]+' || true)
+            step=$(grep -m 1 -oE '^#[0-9]+ ERROR' "$build_log" | grep -oE '[0-9]+' || true)
             if [[ -n "$step" ]]; then
               output=$(grep -E "^#$step [0-9.]+ " "$build_log" | sed -E 's/^#[0-9]+ [0-9.]+ //' || true)
               lines=$(awk 'prev ~ /^[[:space:]]*\^[[:space:]]*$/ || /FAIL|[Ee]rror|Panic/ { print } { prev = $0 }' <<< "$output" | tail -n 5)
               if [[ -z "$lines" ]]; then
                 lines=$(grep -vE '^[[:space:]]*$' <<< "$output" | tail -n 1 || true)
               fi
-              lines+=${lines:+$'\n'}$(grep -E "^#$step ERROR" "$build_log" | head -n 1 | sed -E 's/^#[0-9]+ //')
+              lines+=${lines:+$'\n'}$(grep -m 1 -E "^#$step ERROR" "$build_log" | sed -E 's/^#[0-9]+ //')
             else
               lines=$(grep -E '^ERROR' "$build_log" | tail -n 1 || true)
             fi

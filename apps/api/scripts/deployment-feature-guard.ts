@@ -97,10 +97,22 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "/v1/mcp/oauth/mobile-client-metadata.json",
+    "The mobile app's client identity is published by every deployment it can sign in to",
+  ],
+  [
     "/operator",
     "Operator HTTP access is deployment-owned and refuses access when its credential is unset",
   ],
   ["/v1/sanctions", "Public sanctions search is available on every deployment"],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
   [
     "/synthetic",
     "Dedicated session creation is deployment-owned and refuses access when its credential is unset",

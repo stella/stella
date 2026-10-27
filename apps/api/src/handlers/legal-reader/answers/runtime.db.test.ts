@@ -229,6 +229,7 @@ describe("reader answer turn lifecycle", () => {
             : Result.err(
                 new HandlerError({
                   status: 502,
+                  code: "internal_error",
                   message: "Provider unavailable",
                 }),
               ),
@@ -719,7 +720,11 @@ describe("reader answer turn lifecycle", () => {
     const { text } = await complete(prepared, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     expect(text).toContain('"type":"failed"');
@@ -830,7 +835,11 @@ describe("reader answer turn lifecycle", () => {
           `Related [[${relatedId}#p-7]]. Invented [[${relatedId}#p-99]].`,
         );
         return Result.err(
-          new HandlerError({ status: 502, message: "Provider interrupted" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider interrupted",
+          }),
         );
       },
     });
@@ -877,7 +886,11 @@ describe("reader answer turn lifecycle", () => {
     await complete(first, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     const regenerated = await prepare({
@@ -959,6 +972,7 @@ describe("reader answer turn lifecycle", () => {
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Expired fixture generation",
             }),
           );

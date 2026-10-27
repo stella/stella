@@ -52,7 +52,7 @@ import type { SkillEditAccess } from "@/components/inspector/skill-history/skill
 import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
@@ -111,7 +111,7 @@ type SkillEditorProps = {
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const openSkillResourceTab = useInspectorTabsStore(

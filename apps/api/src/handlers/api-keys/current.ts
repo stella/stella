@@ -35,6 +35,7 @@ const verifyMachineApiKeyCaller =
       catch: (cause) =>
         new HandlerError({
           status: cause instanceof McpAuthenticationError ? 401 : 503,
+          code: "internal_error",
           message: "Could not inspect API key expiry",
           cause,
         }),
