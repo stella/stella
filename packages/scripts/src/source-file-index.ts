@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type ParsedSource, parseSource } from "./syntax-tree";
 
 type SourceFileEntry = {
   filePath: string;
   relativePath: string;
   sourceText: string;
-  sourceFile: (setParentNodes?: boolean) => ts.SourceFile;
+  sourceFile: () => ParsedSource;
 };
 
 const indexes = new Map<string, readonly SourceFileEntry[]>();
@@ -28,32 +29,14 @@ export const sourceFileIndex = (sourceRoot: string) => {
     .map((relativePath) => {
       const filePath = path.join(root, relativePath);
       const sourceText = readFileSync(filePath, "utf-8");
-      let parsedWithParents: ts.SourceFile | undefined;
-      let parsedWithoutParents: ts.SourceFile | undefined;
+      let parsed: ParsedSource | undefined;
       return {
         filePath,
         relativePath,
         sourceText,
-        sourceFile: (setParentNodes = true) => {
-          const cachedSource = setParentNodes
-            ? parsedWithParents
-            : parsedWithoutParents;
-          if (cachedSource) {
-            return cachedSource;
-          }
-          const source = ts.createSourceFile(
-            filePath,
-            sourceText,
-            ts.ScriptTarget.Latest,
-            setParentNodes,
-            filePath.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-          );
-          if (setParentNodes) {
-            parsedWithParents = source;
-          } else {
-            parsedWithoutParents = source;
-          }
-          return source;
+        sourceFile: () => {
+          parsed ??= parseSource(filePath, sourceText);
+          return parsed;
         },
       };
     });

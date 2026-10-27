@@ -507,6 +507,24 @@
     "addEntry": "Lisa kanne",
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
+    "approval": {
+      "approveSelected": "Kinnita {count, plural, one {# valitud kanne} other {# valitud kannet}}",
+      "empty": "Selles toimikus ei oota midagi kinnitamist.",
+      "failed": "Muudatust ei salvestatud. Proovige uuesti.",
+      "myTime": "Minu aeg",
+      "refusals": {
+        "invalidEntry": "Lisage kirjeldus ja kontrollige töö kuupäeva, seejärel kinnitage kanne.",
+        "notApprover": "Seda kannet saab kinnitada ainult määratud kinnitaja või administraator.",
+        "notFound": "Seda kannet enam ei ole. Värskendage loendit.",
+        "runningTimer": "Peatage töötav taimer enne kande kinnitamist.",
+        "unpriced": "Sellel kandel pole määra. Seadistage selle toimiku määr ja kinnitage seejärel kanne.",
+        "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
+      },
+      "returnComment": "Tagastamise põhjus",
+      "selectEntry": "Vali kanne",
+      "timeEntries": "Ajakanded",
+      "title": "Kinnitamine"
+    },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
     "batchActions": "Partiiaktsioonid",
@@ -594,6 +612,7 @@
       "openInvoice": "Ava arve",
       "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
       "outsideScope": "Ei kuulu käibemaksu kohaldamisalasse, 0 %",
+      "pendingApprovals": "{count, plural, one {# kirje ootab} other {# kirjet ootab}} kinnitamist. Vaata kinnitamisi.",
       "rate": "Tunnihind",
       "readyDescription": "Väljastamisel saab arve teie numbriseeria järgmise numbri ja lukustatakse. Mustandit saab edasi muuta.",
       "readyTitle": "Valmis väljastamiseks",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
+      "goToMention": "Mine {number}. mainimise juurde",
+      "goToParagraph": "Mine punkti {paragraph} juurde",
       "lastNegative": "viimane negatiivne viide aastal {year}",
+      "mentionMark": "{number}. mainimine",
+      "mentionsInDecision": "{count, plural, one {Selles lahendis viidatud üks kord} other {Selles lahendis viidatud # korda}}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "none": "Viiteid pole veel salvestatud.",
+      "notInStella": "Veel pole stellas",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
       "paragraphLabel": "Punkt {paragraph}",
@@ -1024,8 +1048,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Inimeste"
+      "human": "Inimeste",
+      "toggleState": "{label}: {state, select, on {sees} other {väljas}}"
     },
+    "oldestDecisions": "Vanimad lahendid",
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
@@ -1087,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
       "runTitle": "Vasta sellel leheküljel",
       "savedQuestions": "Salvestatud küsimused",
-      "title": "Uurimistabelid",
-      "updated": "Viimati muudetud {date}"
+      "title": "Uurimistabelid"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1157,8 @@
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
+      "oldest": "Vanimad",
+      "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
       "relevance": "Asjakohaseimad"
     },
     "viewer": {
@@ -1147,6 +1174,7 @@
       "citedDecisionPassage": "Lõik lahendis",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Mine lõigu juurde} other {Mine lõikude juurde}}",
       "judgeRole": {
         "advocateGeneral": "Kohtujurist",
         "dissenting": "Eriarvamus",
@@ -1698,21 +1726,8 @@
       "describe-stella-function": "Andmepäringu ettevalmistamine",
       "describe_template": "Malli väljade lugemine",
       "discover_tools": "Andmepäringu ettevalmistamine",
-      "docxCommentSummary": "Lisa kommentaar plokile {blockId}",
-      "docxDeleteSummary": "Kustuta {blockId}",
-      "docxDeleteTableColumnSummary": "Kustuta tabeli veerg ploki {blockId} juures",
-      "docxDeleteTableRowSummary": "Kustuta tabeli rida ploki {blockId} juures",
       "docxEditMore": "{count, plural, one {veel # muudatus} other {veel # muudatust}}",
       "docxEditSummary": "{count, plural, one {# kavandatud muudatus} other {# kavandatud muudatust}}",
-      "docxInsertAfterSummary": "Lisa tekst ploki {blockId} järele",
-      "docxInsertBeforeSummary": "Lisa tekst ploki {blockId} ette",
-      "docxInsertTableColumnSummary": "Lisa tabeli veerg ploki {blockId} lähedale",
-      "docxInsertTableRowSummary": "Lisa tabeli rida ploki {blockId} lähedale",
-      "docxMergeTableCellsSummary": "Ühenda tabeli lahtrid ploki {blockId} juures",
-      "docxReplaceBlockSummary": "Asenda {blockId}",
-      "docxReplaceSummary": "Asenda „{find}“ sõnaga „{replace}“",
-      "docxSignatureTableSummary": "Lisa allkirjatabel ploki {blockId} lähedale",
-      "docxSplitTableCellSummary": "Tükelda tabeli lahter ploki {blockId} juures",
       "execute-typescript": "Toimiku andmete lugemine",
       "execute_typescript": "Toimiku andmete lugemine",
       "expand-chat-history": "Vestlusajaloo lugemine",
@@ -2056,7 +2071,6 @@
       "orLetUsKnowAt": "või andke meile teada aadressil",
       "viewDocumentation": "Vaata dokumentatsiooni"
     },
-    "enterKey": "↵",
     "error": "Viga",
     "expenses": "Kulud",
     "export": {
@@ -2205,10 +2219,12 @@
     "scrollToTop": "Keri üles",
     "search": "Otsi...",
     "searchIn": "Otsi",
+    "searchMembers": "Otsi liikmeid…",
     "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
     "selectAll": "Vali kõik",
     "selectDate": "Vali kuupäev…",
+    "selected": "Valitud",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
@@ -4253,6 +4269,8 @@
       "commentPlaceholder": "Kirjuta kommentaar…",
       "commentText": "Kommentaari tekst",
       "commentedPassage": "Kommenteeritud lõik",
+      "editComment": "Muuda kommentaari",
+      "editedAt": "Muudetud {time}",
       "guestAuthor": "Teie",
       "guestLimitReached": "See vahekaart mahutab kuni {count} esiletõstmist ja märkust. Rohkema salvestamiseks looge konto.",
       "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",
@@ -4759,10 +4777,8 @@
   },
   "readerAnswers": {
     "budgetError": "Vastuste eelarve on ammendatud.",
-    "citation": "¶{paragraph}",
     "expand": "Laienda vastust",
     "explain": "Selgita",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Esita täpsustav küsimus",
     "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
     "loading": "Vastuse loomine…",
@@ -6210,8 +6226,7 @@
         "lead": "Vastutav",
         "leadActive": "Vastutav",
         "leadInactive": "Määra vastutaja",
-        "noLead": "Vastutajat pole",
-        "searchMembers": "Otsi liikmeid…"
+        "noLead": "Vastutajat pole"
       },
       "to": "Kuni"
     },
@@ -6273,6 +6288,7 @@
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",
+      "moveFailed": "{failed, plural, one {{total} üksusest # ei õnnestunud teisaldada.} other {{total} üksusest # ei õnnestunud teisaldada.}}",
       "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
       "uploadDocument": "Laadi üles dokument",
@@ -6291,10 +6307,10 @@
       "addMember": "Lisa liige",
       "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
+      "alreadyOnMatter": "Juba selles toimikus",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",
-      "removeMemberConfirm": "Kas eemaldada see liige toimikust?",
-      "selectMember": "Vali liige"
+      "removeMemberConfirm": "Kas eemaldada see liige toimikust?"
     },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",
@@ -6332,7 +6348,6 @@
           "approvedBy": "Kinnitaja",
           "channel": "Kanal",
           "dateTime": "Kuupäev ja kellaaeg",
-          "eventId": "Sündmuse ID",
           "notAvailable": "Pole saadaval",
           "openTarget": "Ava üksus",
           "runId": "Käivituse ID",
@@ -6515,6 +6530,11 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
+      "selection": {
+        "explainPassagePrompt": "Selgita seda {citation} lõiku:\n\n„{quote}“",
+        "pageLocator": "lk {page}",
+        "pageRangeLocator": "lk {start}–{end}"
+      },
       "showOriginal": "Kuva originaalleheküljed",
       "unlock": "Ava lukk"
     },
@@ -6628,10 +6648,12 @@
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
-      "sortAscending": "Sorteeri kasvavalt",
       "sortAscendingDate": "Vanemad enne",
-      "sortDescending": "Sorteeri kahanevalt",
+      "sortAscendingNumber": "Väiksemad enne",
+      "sortAscendingText": "A → Ü",
       "sortDescendingDate": "Uuemad enne",
+      "sortDescendingNumber": "Suuremad enne",
+      "sortDescendingText": "Ü → A",
       "splitOptions": "{count, plural, one {Jaga # valikuks} other {Jaga # valikuks}}",
       "suggestWithAI": "Soovita AI-ga",
       "text": "Tekst",

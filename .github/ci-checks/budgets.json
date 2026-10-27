@@ -464,6 +464,10 @@
       "p95Seconds": 0,
       "p99Seconds": 0
     },
+    "Icon module imports": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Suppression waiver ledger": {
       "minutes": 5,
       "samples": 19,
