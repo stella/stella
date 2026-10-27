@@ -500,7 +500,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
-    "packages/scripts/src/process-memory.ts",
     "scripts/api-test-impact.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-checks-partition.test.ts",
