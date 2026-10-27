@@ -77,6 +77,8 @@ const draftEntry = (overrides: Partial<ClientEntry> = {}): ClientEntry =>
     ...overrides,
   }) satisfies ClientEntry;
 
+const THREAD_TITLE = "Indemnity cap";
+
 const suggestion = {
   fingerprint: "a".repeat(64),
   startedAt: `${MONDAY}T09:00:00.000Z`,
@@ -90,7 +92,7 @@ const suggestion = {
     {
       type: "chat_thread",
       id: "thread-1",
-      title: "Indemnity cap",
+      title: THREAD_TITLE,
       messageCount: 2,
       signals: [
         {
@@ -248,7 +250,8 @@ const serveWeek = ({
       workspaceReference: group.matter.reference,
       dateWorked: group.date,
       durationMinutes: Number(decision["durationMinutes"]),
-      narrative: String(decision["narrative"]),
+      narrative:
+        typeof decision["narrative"] === "string" ? decision["narrative"] : "",
       billable:
         typeof decision["billable"] === "boolean"
           ? decision["billable"]
@@ -276,7 +279,10 @@ const serveWeek = ({
       durationMinutes: Number(
         body["durationMinutes"] ?? current.durationMinutes,
       ),
-      narrative: String(body["narrative"] ?? current.narrative),
+      narrative:
+        typeof body["narrative"] === "string"
+          ? body["narrative"]
+          : current.narrative,
       billable:
         typeof body["billable"] === "boolean"
           ? body["billable"]
@@ -388,7 +394,7 @@ const weekTotalsText = (logged: string, billable: string) =>
     .replace("{logged}", () => logged)
     .replace("{billable}", () => billable);
 
-const acceptLabel = `${messages.common.accept}: ${suggestion.evidence[0]?.title}`;
+const acceptLabel = `${messages.common.accept}: ${THREAD_TITLE}`;
 
 describe("my week", () => {
   test("moves between weeks and loads each week's entries and suggestions", async () => {
