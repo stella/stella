@@ -29,12 +29,12 @@ import {
   memberAssignmentRequiredError,
   ownAIKeyRequiredError,
 } from "@/api/lib/ai-config-response";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   authorizeOperation,
   snapshotOperationInput,
@@ -42,6 +42,11 @@ import {
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
+
+const AI_SETTINGS_READ_FAILURE = failureSink({
+  event: "ai.settings_read.failed",
+  expected: [],
+});
 
 /** The one capability the loaders need: a single `organization_settings` select. */
 export type OrgSettingsReader = Pick<Transaction, "select">;
@@ -83,10 +88,10 @@ const selectAISettingsRow = async (
   if (Result.isOk(result)) {
     return { type: "ready", row: result.value } as const;
   }
-  captureError(
-    result.error,
-    handlerErrorContext("aiConfig.read", { organizationId }),
-  );
+  observeFailure(result.error, {
+    sink: AI_SETTINGS_READ_FAILURE,
+    ctx: { organizationId },
+  });
   return { type: "unavailable" } as const;
 };
 
