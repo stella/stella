@@ -29,6 +29,10 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   authorizeOAuthClient,
@@ -75,10 +79,26 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
       body: { name: "Reset race", slug: `reset-race-${Bun.randomUUIDv7()}` },
       headers: browser.headers(),
     });
+    const coOwnerId = mintAuthProviderId<"user">();
+    await rootDb.insert(user).values({
+      id: coOwnerId,
+      name: "Reset race co-owner",
+      email: `${coOwnerId.toLowerCase()}@example.test`,
+    });
+    cleanup.push(
+      async () => await rootDb.delete(user).where(eq(user.id, coOwnerId)),
+    );
     cleanup.push(
       async () =>
         await rootDb.delete(organization).where(eq(organization.id, firm.id)),
     );
+    await rootDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId: firm.id,
+      userId: coOwnerId,
+      role: "owner",
+      createdAt: new Date(),
+    });
     await browser.setActiveOrganization(firm.id);
     const client = await registerOAuthClient();
     const organizationId = brandPersistedOrganizationId(firm.id);
