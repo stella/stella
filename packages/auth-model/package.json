@@ -46,6 +46,7 @@
     "@stll/typescript-config": "workspace:*",
     "better-auth": "catalog:",
     "bun-types": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

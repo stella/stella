@@ -138,6 +138,27 @@ export const findPlaceholderMismatch = (
 };
 
 /** ICU parse error message, or null when the value is valid ICU MessageFormat. */
+/**
+ * An argument that names a storage handle (`blockId`, `paraId`, `commentIds`)
+ * rather than something the reader knows. A user-facing string that
+ * interpolates one shows a raw id ("Replace 707C9911"): say what the thing is
+ * or what changes instead, and pass that.
+ */
+const INTERNAL_ID_ARGUMENT = /(?:Id|ID|Ids|IDs)$/u;
+
+/** The internal-identifier arguments a message interpolates; empty when none. */
+export const findInternalIdArguments = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (ast === null) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names]
+    .filter((name) => INTERNAL_ID_ARGUMENT.test(name))
+    .toSorted();
+};
+
 export const findIcuError = (value: string): string | null => {
   const result = cachedParse(value);
   return result instanceof Error ? result.message : null;
@@ -875,6 +896,20 @@ if (import.meta.main) {
         console.log(`\n${path.resolve(langsDir, "en.json")}:`);
         for (const key of sourceErrors) {
           console.log(`  icu (source): ${key}`);
+        }
+      }
+      // Never grandfathered either: a raw id in front of a user is never right.
+      const idArguments = Object.entries(source)
+        .map(([key, value]) => [key, findInternalIdArguments(value)] as const)
+        .filter(([, names]) => names.length > 0)
+        .toSorted(([a], [b]) => a.localeCompare(b));
+      if (idArguments.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const [key, names] of idArguments) {
+          console.log(
+            `  internal id (source): ${key} interpolates ${names.join(", ")}; describe the thing instead`,
+          );
         }
       }
     }

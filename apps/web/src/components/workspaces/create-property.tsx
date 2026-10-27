@@ -2,7 +2,7 @@ import { Suspense, useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
@@ -58,6 +58,7 @@ import {
 } from "@/components/workspaces/table/group-columns";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSingleFlight } from "@/hooks/use-single-flight";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {

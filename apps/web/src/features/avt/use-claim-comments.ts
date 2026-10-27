@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
+
 import type {
   AnnotationVisibility,
   UpdateAnnotationInput,
@@ -40,7 +42,7 @@ export type ClaimComments = {
 const claimAnchorId = (anchor: VerificationClaim["anchor"]): string =>
   anchor.type === "docx-block"
     ? anchor.blockId
-    : `page-${String(anchor.pageNumber)}`;
+    : readerPdfPageAnchorId(anchor.pageNumber);
 
 /**
  * The comments on one verification claim, with the reader's ways to change

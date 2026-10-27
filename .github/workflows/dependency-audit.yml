@@ -189,6 +189,7 @@ jobs:
 
       - name: Prepare remediation
         id: remediation
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           FIX_BRANCH: automation/dependency-audit-fix

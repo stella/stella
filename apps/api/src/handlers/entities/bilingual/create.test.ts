@@ -10,6 +10,7 @@ import {
 import { readBilingualDocx } from "@stll/folio-core/server";
 
 import { entities, fields } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -24,6 +25,12 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  createEntityFromBufferMock.mockClear();
+  loadEntityVersionDocxBufferMock.mockClear();
+  scanFileMock.mockClear();
+});
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -170,7 +177,7 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
     managedAIResidency: "eu" as const,
     promptCachingEnabled: true,
     request: new Request("http://localhost/entities/test/bilingual"),
-    route: "/entities/:workspaceId/bilingual",
+    route: "/v1/entities/:workspaceId/bilingual" satisfies ApiRoutePath,
   });
 
 describe("createBilingualEntity", () => {

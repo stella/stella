@@ -777,6 +777,7 @@ export const findTestRetryViolations = (
 
 const trackedSources = (): Map<string, string> => {
   const files = execFileSync("git", ["ls-files", "-z"], {
+    maxBuffer: 2 ** 30,
     cwd: REPO_ROOT,
     encoding: "utf-8",
   })

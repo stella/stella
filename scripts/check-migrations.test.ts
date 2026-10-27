@@ -82,8 +82,10 @@ describe("migration source comparison", () => {
         'export const value = text("value").$type<{ nested: { value: string } }>().notNull().$type<string>();',
         'export const value = text("value").$type<"a" | "b">().notNull();',
         baseSource,
+        `/*! A preserved license comment is still unrelated to DDL. */\n${baseSource}`,
+        'export const value = text("value").$type</*! nested comment */ string>().notNull();',
       ]),
-    ).toEqual([1, 1, 1, 1, 1]);
+    ).toEqual([1, 1, 1, 1, 1, 1, 1]);
   });
 
   test("preserves runtime differences alongside type-only calls", () => {

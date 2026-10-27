@@ -913,9 +913,7 @@ describe("independent proposal file failures", () => {
       );
       files["nonmodule.txt"] = "export const value = (;";
       if (invalid.length === 0) {
-        expect(() => {
-          validateRemovalModules(files);
-        }).not.toThrow();
+        await validateRemovalModules(files);
         continue;
       }
       let githubCalls = 0;
