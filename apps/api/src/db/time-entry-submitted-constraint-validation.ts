@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The internal-entry shape check migration
- * 20261026150000_time_entry_submitted_status widens to accept `submitted`
+ * 20261026230000_time_entry_submitted_status widens to accept `submitted`
  * and re-adds NOT VALID.
  */
 const TIME_ENTRY_INTERNAL_SHAPE_CONSTRAINT = {
