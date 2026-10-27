@@ -984,6 +984,23 @@ describe("review organization seed and reset", () => {
       category: "filing_fee",
       description: "Reviewer expense",
     });
+    // A line that still bills an entry refuses the entry's deletion, so the
+    // reset must take the invoice and its lines first.
+    const billedEntryId = createSafeId<"timeEntry">();
+    await testDb.insert(timeEntries).values({
+      id: billedEntryId,
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      userId: fixture.reviewUserId,
+      dateWorked: "2026-08-30",
+      timezoneId: "Europe/Prague",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(100),
+      currency: "EUR",
+      narrative: "Billed reviewer work",
+      status: "billed",
+    });
     const reviewerInvoiceId = createSafeId<"invoice">();
     await testDb.insert(invoices).values({
       id: reviewerInvoiceId,
@@ -1009,7 +1026,8 @@ describe("review organization seed and reset", () => {
       netAmount: cents(100),
       vatAmount: cents(21),
       grossAmount: cents(121),
-      source: "manual",
+      source: "time_entry",
+      timeEntryId: billedEntryId,
     });
     const timeEntriesBefore = await testDb.$count(
       timeEntries,

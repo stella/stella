@@ -1,5 +1,6 @@
 import { TaggedError } from "better-result";
 import { and, asc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { member, organization } from "@/api/db/auth-schema";
@@ -143,6 +144,43 @@ export const WORKSPACE_DELETION_RETAINED_TABLES = [
   timeEntries,
   expenses,
 ] as const;
+
+type RetainedTable = (typeof WORKSPACE_DELETION_RETAINED_TABLES)[number];
+
+const cascadesFrom = (child: PgTable, parent: PgTable) =>
+  child !== parent &&
+  getTableConfig(child).foreignKeys.some(
+    (key) =>
+      key.onDelete === "cascade" && key.reference().foreignTable === parent,
+  );
+
+const retainedDocuments = WORKSPACE_DELETION_RETAINED_TABLES.filter((table) =>
+  WORKSPACE_DELETION_RETAINED_TABLES.some((other) =>
+    cascadesFrom(other, table),
+  ),
+);
+const retainedDocumentStage: readonly RetainedTable[] =
+  WORKSPACE_DELETION_RETAINED_TABLES.filter(
+    (table) =>
+      retainedDocuments.includes(table) ||
+      retainedDocuments.some((document) => cascadesFrom(table, document)),
+  );
+
+/**
+ * The order in which a deliberate removal (the review reset, test cleanup)
+ * deletes retained billing records: documents with their lines first, then
+ * the records the lines bill. A line that still bills
+ * an entry or expense refuses that record's deletion
+ * (`invoice_lines_source_reference_check`), so no stage may delete a billed
+ * record while its line remains.
+ */
+export const WORKSPACE_DELETION_RETAINED_STAGES: readonly (readonly RetainedTable[])[] =
+  [
+    retainedDocumentStage,
+    WORKSPACE_DELETION_RETAINED_TABLES.filter(
+      (table) => !retainedDocumentStage.includes(table),
+    ),
+  ];
 
 /**
  * The matter still has rows that outlive it. The deletion fence reads this

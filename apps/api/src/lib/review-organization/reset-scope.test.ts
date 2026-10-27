@@ -167,8 +167,8 @@ describe("review organization reset scope", () => {
     expect(
       REVIEW_RESET_BILLING_TABLES.filter((name) => !unforced.has(name)),
     ).toEqual([]);
-    // One statement deletes the roots: a RESTRICT among them would be checked
-    // before its row's own delete.
+    // A stage deletes its tables in one statement: a RESTRICT among them
+    // would be checked before its row's own delete.
     const billing = new Set<string>(retained);
     expect(
       edges
