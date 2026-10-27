@@ -37,7 +37,12 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { AiActionIcon, ChevronRightIcon, PanelRightIcon } from "@stll/ui/icons";
+import {
+  AiActionIcon,
+  ChevronRightIcon,
+  PanelRightIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -1753,9 +1758,14 @@ export const SearchDialog = ({
         }}
         open={open}
       >
+        {/* A phone gets the whole screen rather than the bottom sheet: search
+            needs the height for results, and a sheet starting below the top
+            edge left the page (and an open sidebar) showing above it while
+            its last rows ran under the browser toolbar. */}
         <CommandDialogPopup
+          bottomStickOnMobile={false}
           className={cn(
-            "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
+            "flex h-full w-full max-w-none flex-col overflow-clip max-sm:rounded-none max-sm:border-0 max-sm:ps-(--safe-area-inline-start) max-sm:pe-(--safe-area-inline-end) max-sm:pt-(--safe-area-top) max-sm:pb-(--safe-area-bottom) max-sm:before:hidden sm:h-[min(720px,calc(100dvh-96px))]",
             showPreview
               ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
               : "sm:w-[min(960px,calc(100vw-32px))]",
@@ -1763,6 +1773,7 @@ export const SearchDialog = ({
           layer="search"
           onKeyDownCapture={handleEscape}
           showCloseButton={false}
+          viewportClassName="max-sm:grid-rows-[0_1fr_0] max-sm:p-0"
         >
           <RenderStormRegion name="search-dialog">
             <Command
@@ -1921,6 +1932,17 @@ export const SearchDialog = ({
                     {t("common.reset")}
                   </Button>
                 )}
+                {/* Full screen on a phone leaves no backdrop to tap. */}
+                <Button
+                  aria-label={t("common.close")}
+                  className="-me-2 size-11 shrink-0 sm:hidden"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-sm"
+                  title={t("common.close")}
+                  variant="ghost"
+                >
+                  <XIcon className="size-4" />
+                </Button>
               </div>
 
               {/* Content area */}
