@@ -335,6 +335,7 @@ export const TAGGED_FAILURE_REASON = {
   PropertyTestConfigError: "tagged_failure",
   ProviderEventReplayError: "tagged_failure",
   ProvisionBackfillUnitError: "tagged_failure",
+  PublicLawStatementError: "tagged_failure",
   PublisherGateReplyError: "tagged_failure",
   PublisherPacingStopped: "tagged_failure",
   PublisherTargetError: "tagged_failure",
