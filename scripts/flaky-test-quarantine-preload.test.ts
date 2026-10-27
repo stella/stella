@@ -27,6 +27,30 @@ import {
 
 const PRELOAD = path.join(import.meta.dir, "flaky-test-quarantine-preload.ts");
 const FIXTURE = "pkg/flaky.test.ts";
+const RECEIVER_FIXTURE = "pkg/receivers.test.ts";
+const RECEIVER_SOURCE = `import { describe, expect, test } from "bun:test";
+
+test.skip("native skip", () => {
+  throw new Error("test.skip ran");
+});
+test.skip.if(true)("conditional native skip", () => {
+  throw new Error("test.skip.if ran");
+});
+test.if(false)("false native condition", () => {
+  throw new Error("test.if(false) ran");
+});
+test.each([[1], [2]])("test row %i", (value) => {
+  expect(value).toBeGreaterThan(0);
+});
+describe.each([["one"], ["two"]])("describe row %s", (value) => {
+  test("runs", () => {
+    expect(value.length).toBeGreaterThan(0);
+  });
+});
+test("quarantined pass", () => {
+  expect(true).toBe(true);
+});
+`;
 const SOURCE = `import { describe, expect, it, test } from "bun:test";
 import { existsSync } from "node:fs";
 
@@ -170,6 +194,50 @@ const run = ({
   };
 };
 
+const runReceiverFixture = (preload: boolean) => {
+  const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-receivers-"));
+  roots.push(root);
+  mkdirSync(path.join(root, "scripts"));
+  mkdirSync(path.join(root, "pkg"));
+  writeFileSync(path.join(root, RECEIVER_FIXTURE), RECEIVER_SOURCE);
+  writeFileSync(
+    path.join(root, "scripts/flaky-test-quarantine.json"),
+    serializeRegistry({
+      entries: [
+        {
+          ...entry("quarantined pass"),
+          id: `${RECEIVER_FIXTURE}::quarantined pass`,
+        },
+      ],
+    }),
+  );
+  const reports = path.join(root, "reports");
+  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const result = Bun.spawnSync({
+    cmd: [process.execPath, "test", `./${RECEIVER_FIXTURE}`],
+    cwd: root,
+    env: {
+      ...inherited,
+      ...(preload
+        ? {
+            BUN_OPTIONS: `--preload=${PRELOAD}`,
+            [QUARANTINE_REGISTRY_ENV]: path.join(
+              root,
+              "scripts/flaky-test-quarantine.json",
+            ),
+            [QUARANTINE_REPORT_DIR_ENV]: reports,
+          }
+        : {}),
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    exitCode: result.exitCode,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`,
+  };
+};
+
 const compareTuple = (
   left: readonly string[],
   right: readonly string[],
@@ -188,6 +256,22 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("preserves Bun receiver semantics for native test and describe forms", () => {
+    const native = runReceiverFixture(false);
+    const preloaded = runReceiverFixture(true);
+
+    expect(native.exitCode).toBe(0);
+    expect(preloaded.exitCode).toBe(0);
+    for (const result of [native, preloaded]) {
+      expect(result.output).toMatch(/5 pass/u);
+      expect(result.output).toMatch(/3 skip/u);
+      expect(result.output).toMatch(/0 fail/u);
+      expect(result.output).not.toContain("test.skip ran");
+      expect(result.output).not.toContain("test.skip.if ran");
+      expect(result.output).not.toContain("test.if(false) ran");
+    }
+  });
+
   test("its static import graph uses only builtins and relative scripts files", () => {
     const pending = [PRELOAD];
     const visited = new Set<string>();
