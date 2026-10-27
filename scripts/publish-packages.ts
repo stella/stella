@@ -23,6 +23,8 @@ export const LIBRARY_PACKAGE_ORDER = [
   "stable-stringify",
   "agent-input",
   "mcp-kit",
+  "fetch",
+  "scan-engine",
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;

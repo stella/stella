@@ -6,6 +6,7 @@ import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   createPostHogServerAnalytics,
@@ -133,7 +134,7 @@ const SERVER_STAMPS = {
 };
 
 describe("PostHog server analytics", () => {
-  test("posts allowed events to the batch API, gzip-compressed and stamped", async () => {
+  test("posts only explicitly allowed events to the batch API, gzip-compressed and stamped", async () => {
     const receiver = startReceiver();
     const analytics = analyticsFor(receiver.host);
     const exceptionListEntry = {
@@ -153,12 +154,13 @@ describe("PostHog server analytics", () => {
         organization_id: "org_123",
       },
     });
-    analytics.capture({
-      distinctId: "user_123",
-      event: "$autocapture",
-      properties: { clicked: "secret-button" },
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Deliberately bypasses the public type to exercise the runtime guard.
-    } as unknown as ServerAnalyticsCaptureParams);
+    analytics.capture(
+      asTestRaw<ServerAnalyticsCaptureParams>({
+        distinctId: "user_123",
+        event: "$autocapture",
+        properties: { clicked: "secret-button" },
+      }),
+    );
     await analytics.flush();
 
     expect(receiver.requests).toHaveLength(1);
@@ -389,5 +391,93 @@ describe("PostHog server analytics", () => {
         "error.type": expect.any(String),
       },
     ]);
+  });
+  test("a blocked failure burst coalesces into two drains and retains a bounded queue for a later flush", async () => {
+    const stalled = Promise.withResolvers<undefined>();
+    let healthy = false;
+    const receiver = startReceiver(async () => {
+      if (!healthy) {
+        await stalled.promise;
+      }
+      return Response.json({ status: "Ok" });
+    });
+    const analytics = analyticsFor(receiver.host, {
+      flushAt: 1,
+      maxBatchSize: 64,
+      maxQueueSize: 64,
+      requestTimeoutMs: 100,
+      retryCount: 0,
+    });
+    try {
+      const failures = await deliveryFailuresDuring(async () => {
+        analytics.capture(feedbackEvent("first"));
+        await receiver.received(1);
+        for (let index = 0; index < 4096; index += 1) {
+          analytics.capture(feedbackEvent(`burst-${index}`));
+        }
+        await analytics.flush();
+      });
+      expect(receiver.requests).toHaveLength(2);
+      expect(failures).toHaveLength(2);
+      healthy = true;
+      stalled.resolve(undefined);
+      await analytics.flush();
+      expect(receiver.requests).toHaveLength(3);
+      expect(receiver.requests.at(-1)?.body.batch).toHaveLength(64);
+      expect(receiver.requests.at(-1)?.body.batch.at(0)?.distinct_id).toBe(
+        "first",
+      );
+      await analytics.flush();
+      expect(receiver.requests).toHaveLength(3);
+    } finally {
+      stalled.resolve(undefined);
+    }
+  });
+
+  test("overlapping flushes settle before traffic queued during their pending drain", async () => {
+    const gates = Array.from({ length: 3 }, () =>
+      Promise.withResolvers<undefined>(),
+    );
+    const receiver = startReceiver(async (_request, index) => {
+      await gates.at(index)?.promise;
+      return Response.json({ status: "Ok" });
+    });
+    const analytics = analyticsFor(receiver.host, {
+      flushAt: 1,
+      retryCount: 0,
+    });
+    try {
+      analytics.capture(feedbackEvent("A"));
+      await receiver.received(1);
+      analytics.capture(feedbackEvent("B"));
+      const earlier = Promise.all([analytics.flush(), analytics.flush()]);
+      gates.at(0)?.resolve(undefined);
+      await receiver.received(2);
+      analytics.capture(feedbackEvent("C"));
+      const later = analytics.flush();
+      const first = Promise.race([
+        earlier.then(() => "earlier-flushes"),
+        receiver.received(3).then(() => "later-traffic"),
+      ]);
+      gates.at(1)?.resolve(undefined);
+      expect(await first).toBe("earlier-flushes");
+      await receiver.received(3);
+      gates.at(2)?.resolve(undefined);
+      await later;
+      await analytics.flush();
+      expect(
+        receiver.requests.map(({ body }) =>
+          body.batch.map(({ distinct_id }) => distinct_id),
+        ),
+      ).toEqual([["A"], ["B"], ["C"]]);
+      analytics.capture(feedbackEvent("D"));
+      await analytics.flush();
+      expect(receiver.requests.at(-1)?.body.batch.at(0)?.distinct_id).toBe("D");
+      expect(receiver.requests).toHaveLength(4);
+    } finally {
+      for (const gate of gates) {
+        gate.resolve(undefined);
+      }
+    }
   });
 });

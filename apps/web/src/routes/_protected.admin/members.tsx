@@ -36,7 +36,7 @@ import { cn } from "@stll/ui/utils";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -146,7 +146,7 @@ export const Route = createFileRoute("/_protected/admin/members")({
 
 function Members() {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });

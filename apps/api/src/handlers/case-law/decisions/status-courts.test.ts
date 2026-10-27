@@ -9,7 +9,7 @@ import { logger } from "@/api/lib/observability/logger";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
- * The breakdown is what the corpus-status popover lists. Apex courts stand by
+ * The breakdown is what the coverage page lists per country. Apex courts stand by
  * name because a reader recognises them; a jurisdiction's regional and
  * district courts run to dozens, so the tier is the fact and the row says how
  * many courts it stands for.

@@ -16,6 +16,7 @@
 import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { createCoalescedDrain } from "@stll/concurrency/coalesced-drain";
 import { Temporal } from "@stll/time";
 
 import { postToOperatorEndpoint } from "@/api/lib/observability/operator-endpoint-fetch";
@@ -205,8 +206,6 @@ export const createOtlpLogExporter = (
   let queue: QueuedRecord[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
   let queueFullReported = false;
-  // Exports run one at a time, in order; every flush chains onto this tail.
-  let exportTail: Promise<void> = Promise.resolve();
 
   // A failing reporter has nothing left to report through, so it is dropped
   // rather than turned into a caller error.
@@ -334,15 +333,14 @@ export const createOtlpLogExporter = (
       await exportBatch(batch);
     }
   };
+  const requestDrain = createCoalescedDrain(drain);
 
-  // `drain` settles every export itself, so the tail never rejects.
   const startExport = (): void => {
-    exportTail = exportTail.then(drain);
+    requestDrain();
   };
 
   const flush = async (): Promise<void> => {
-    startExport();
-    await exportTail;
+    await requestDrain().completion;
   };
 
   const schedule = () => {

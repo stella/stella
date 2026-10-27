@@ -276,6 +276,108 @@ describe("OTLP log export", () => {
     ).toEqual([2, 2, 1]);
   });
 
+  test("coalesces a burst behind a blocked export and keeps queue overflow reporting bounded", async () => {
+    const firstResponse = Promise.withResolvers<Response>();
+    const receiver = startReceiver(async (_request, index) =>
+      index === 0 ? await firstResponse.promise : new Response("{}"),
+    );
+    const { exporter, failures } = exporterFor(receiver.url, {
+      maxExportBatchSize: 64,
+      maxQueueSize: 64,
+    });
+
+    for (let index = 0; index < 64; index += 1) {
+      exporter.emit(info(`first.${index}`));
+    }
+    await receiver.received(1);
+
+    for (let index = 0; index < 65; index += 1) {
+      exporter.emit(info(`queued.${index}`));
+    }
+    const pendingFlushes = Array.from({ length: 32 }, () => exporter.flush());
+    firstResponse.resolve(new Response("rejected", { status: 400 }));
+    await Promise.all(pendingFlushes);
+
+    expect(receiver.requests).toHaveLength(2);
+    expect(recordsIn(receiver.requests[0]?.body)).toHaveLength(64);
+    expect(
+      recordsIn(receiver.requests[1]?.body).map(({ body }) => body),
+    ).toEqual(
+      Array.from({ length: 64 }, (_, index) => ({
+        stringValue: `queued.${index}`,
+      })),
+    );
+    expect(failures).toEqual([
+      { kind: "queue_full", maxQueueSize: 64 },
+      { kind: "http_status", attempts: 1, records: 64, status: 400 },
+    ]);
+  });
+
+  test("a flush waits for its own batch while later traffic starts another batch", async () => {
+    const responses = Array.from({ length: 3 }, () =>
+      Promise.withResolvers<Response>(),
+    );
+    const receiver = startReceiver(async (_request, index) => {
+      const response = responses[index];
+      if (response === undefined) {
+        return new Response(`Unexpected export request ${index + 1}`, {
+          status: 400,
+        });
+      }
+      return await response.promise;
+    });
+    const { exporter } = exporterFor(receiver.url);
+
+    exporter.emit(info("batch.A"));
+    const flushA = exporter.flush();
+    await receiver.received(1);
+
+    const flushB = exporter.flush();
+    const overlappingFlushB = exporter.flush();
+    exporter.emit(info("batch.B"));
+    responses[0]?.resolve(new Response("{}"));
+    await receiver.received(2);
+    let flushBSettled = false;
+    const observedFlushB = overlappingFlushB.then(() => {
+      flushBSettled = true;
+      return flushBSettled;
+    });
+
+    exporter.emit(info("batch.C"));
+    const flushC = exporter.flush();
+    responses[1]?.resolve(new Response("{}"));
+    await receiver.received(3);
+    expect(flushBSettled).toBe(true);
+    expect(receiver.requests).toHaveLength(3);
+
+    responses[2]?.resolve(new Response("{}"));
+    await Promise.all([flushA, flushB, observedFlushB, flushC]);
+    expect(
+      receiver.requests.map((request) =>
+        recordsIn(request.body).map(({ body }) => body),
+      ),
+    ).toEqual([
+      [{ stringValue: "batch.A" }],
+      [{ stringValue: "batch.B" }],
+      [{ stringValue: "batch.C" }],
+    ]);
+  });
+
+  test("overlapping empty flushes do not send a request or block later records", async () => {
+    const receiver = startReceiver();
+    const { exporter } = exporterFor(receiver.url);
+
+    await Promise.all(Array.from({ length: 32 }, () => exporter.flush()));
+    expect(receiver.requests).toHaveLength(0);
+
+    exporter.emit(info("after.empty.flushes"));
+    await exporter.flush();
+    expect(receiver.requests).toHaveLength(1);
+    expect(
+      recordsIn(receiver.requests[0]?.body).map(({ body }) => body),
+    ).toEqual([{ stringValue: "after.empty.flushes" }]);
+  });
+
   test("drops records past the queue bound and reports the overflow once", async () => {
     const receiver = startReceiver();
     const { exporter, failures } = exporterFor(receiver.url, {

@@ -500,7 +500,6 @@
         "@stll/portable-path": "workspace:*",
         "@stll/regex-set": "catalog:",
         "@stll/regex-set-wasm": "catalog:",
-        "@stll/scan-engine": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
@@ -652,6 +651,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/ai-catalog": {
@@ -671,6 +671,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/analytics-config": {
@@ -696,6 +697,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/api-client": {
@@ -744,6 +746,7 @@
         "better-auth": "catalog:",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/boe": {
@@ -788,6 +791,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/catalogue": {
@@ -832,6 +836,7 @@
         "fast-check": "catalog:",
         "react": "catalog:react19",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@base-ui/react": "^1.7.0",
@@ -856,7 +861,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.8.0",
+      "version": "6.0.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -923,6 +928,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/country-codes": {
@@ -990,6 +996,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/errors": {
@@ -1015,6 +1022,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/infosoud": {
@@ -1230,6 +1238,7 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "oxc-parser": "catalog:",
       },
     },
     "packages/redis-config": {
@@ -1293,12 +1302,13 @@
       "name": "@stll/scan-engine",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/fetch": "workspace:*",
+        "@stll/fetch": "workspace:^",
         "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/scripts": {
@@ -1325,7 +1335,6 @@
         "better-result": "catalog:",
         "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
-        "typescript6": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1379,6 +1388,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/stable-stringify": {
@@ -1401,6 +1411,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/template-conditions": {
@@ -1417,6 +1428,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/template-packs": {
@@ -1468,7 +1480,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.52.0",
+      "version": "0.52.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1484,6 +1496,7 @@
         "@base-ui/react": "catalog:",
         "@happy-dom/global-registrator": "21.0.4",
         "@playwright/test": "^1.63.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tanstack/react-virtual": "^3.14.21",
@@ -1496,6 +1509,7 @@
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
         "vite": "catalog:",
       },
       "peerDependencies": {
@@ -1577,6 +1591,7 @@
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",

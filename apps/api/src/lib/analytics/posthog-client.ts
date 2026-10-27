@@ -14,6 +14,7 @@
 import { Result } from "better-result";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+import { createCoalescedDrain } from "@stll/concurrency/coalesced-drain";
 import { Temporal } from "@stll/time";
 
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
@@ -130,10 +131,6 @@ export const createPostHogServerAnalytics = (
   );
   let queue: PostHogMessage[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
-  // Sends run one at a time, in order; every flush chains onto this tail.
-  // Each drain logs its own failure, so the tail never rejects and a
-  // failed drain cannot stall the flushes queued behind it.
-  let flushTail: Promise<void> = Promise.resolve();
 
   const sendOnce = async (body: Uint8Array): Promise<SendOutcome> => {
     const sent = await postToOperatorEndpoint({
@@ -234,14 +231,10 @@ export const createPostHogServerAnalytics = (
     });
   };
 
-  /** Queue a flush behind the ones already running; nothing awaits it. */
-  const flushInBackground = (): void => {
-    flushTail = flushTail.then(drainAndReport);
-  };
+  const requestDrain = createCoalescedDrain(drainAndReport);
 
   const flush = async (): Promise<void> => {
-    flushInBackground();
-    await flushTail;
+    await requestDrain().completion;
   };
 
   const enqueue = (message: Omit<PostHogMessage, "timestamp" | "uuid">) => {
@@ -254,13 +247,13 @@ export const createPostHogServerAnalytics = (
       uuid: Bun.randomUUIDv7(),
     });
     if (queue.length >= flushAt) {
-      flushInBackground();
+      requestDrain();
       return;
     }
     if (timer === undefined) {
       timer = setTimeout(() => {
         timer = undefined;
-        flushInBackground();
+        requestDrain();
       }, flushIntervalMs);
       // A pending flush must not keep the process alive on its own.
       timer.unref();
