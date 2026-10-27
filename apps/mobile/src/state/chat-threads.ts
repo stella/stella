@@ -59,7 +59,7 @@ export const flattenThreadsPage = (
         matterName: group.workspaceName,
       })),
     ),
-  ].toSorted(byNewest),
+  ].sort(byNewest),
 });
 
 const byNewest = (left: ChatThreadSummary, right: ChatThreadSummary) =>

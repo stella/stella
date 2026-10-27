@@ -204,7 +204,7 @@ const ThreadMessages = ({
     <View style={styles.fill}>
       <FlatList
         contentContainerStyle={styles.content}
-        data={shown.toReversed()}
+        data={[...shown].reverse()}
         inverted
         keyExtractor={(entry) => entry.id}
         keyboardDismissMode="interactive"
