@@ -4,6 +4,10 @@ import { panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
@@ -1644,6 +1648,9 @@ const createSafeScopedHandler = <
           const announcement = Result.try(() =>
             announce({
               realtime: config.realtime,
+              mutationId: parseResourceMutationId(
+                ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+              ),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,

@@ -5,6 +5,7 @@ import {
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,
+  parseResourceMutationId,
   parseUserRealtimeEvent,
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
@@ -61,6 +62,35 @@ const WORKSPACE_EVENT_FIXTURES = [
 ] satisfies WorkspaceRealtimeEvent[];
 
 describe("realtime event contracts", () => {
+  test("resource facts retain valid mutation correlation and reject malformed ids", () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const events = [
+      RESOURCE_UPDATED_EVENT,
+      RESOURCE_DELETED_EVENT,
+      RESOURCES_CHANGED_EVENT,
+      RESOURCE_SET_UPDATED_EVENT,
+    ];
+    for (const event of events) {
+      expect(parseWorkspaceRealtimeEvent({ ...event, mutationId })).toEqual({
+        ...event,
+        mutationId,
+      });
+      for (const invalid of ["", "unrelated", "x".repeat(1000)]) {
+        expect(
+          parseWorkspaceRealtimeEvent({ ...event, mutationId: invalid }),
+        ).toBeNull();
+        expect(parseResourceMutationId(invalid)).toBeUndefined();
+      }
+    }
+    expect(parseResourceMutationId(mutationId)).toBe(mutationId);
+    expect(parseResourceMutationId(null)).toBeUndefined();
+    expect(
+      parseOrganizationRealtimeEvent(
+        resourceSetUpdatedRealtimeEvent(RESOURCE_TYPE.ENTITY, mutationId),
+      ),
+    ).toEqual({ ...RESOURCE_SET_UPDATED_EVENT, mutationId });
+  });
+
   test("accepts every workspace event kind", () => {
     expect(
       WORKSPACE_EVENT_FIXTURES.map((event) =>

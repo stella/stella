@@ -462,6 +462,8 @@ export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
 export {
   MAX_RESOURCE_CHANGES_PER_EVENT,
+  RESOURCE_MUTATION_ID_HEADER,
+  parseResourceMutationId,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,

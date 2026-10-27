@@ -12,7 +12,9 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { handleWorkspaceMutationEvent } from "@/lib/workspace-mutation";
 import {
+  coalesceWorkspaceQueryActions,
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
   isWorkspaceQueryKey,
@@ -66,7 +68,7 @@ export const createWorkspaceQueryActionBatch = (
     if (actions.length === 0) {
       return;
     }
-    apply(actions);
+    apply(coalesceWorkspaceQueryActions(actions));
   };
 
   return {
@@ -233,7 +235,9 @@ export const useWorkspaceSSE = (
       onMessage: (data) => {
         const parsed = parseWorkspaceRealtimeMessage(data);
         if (parsed) {
-          actionBatch.add(handleParsedEvent(parsed));
+          handleWorkspaceMutationEvent(queryClient, parsed, () => {
+            actionBatch.add(handleParsedEvent(parsed));
+          });
         }
       },
       onOutage: captureConnectionOutage,
@@ -247,6 +251,7 @@ export const useWorkspaceSSE = (
       disconnect();
     };
   }, [
+    queryClient,
     workspaceId,
     applyBatchedQueryActions,
     captureConnectionOutage,

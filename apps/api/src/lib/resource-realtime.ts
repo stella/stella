@@ -38,21 +38,30 @@ export const broadcastWorkspaceResourceChanges = (
   broadcast(workspaceId, resourcesChangedRealtimeEvent(changes));
 };
 
+type ResourceSetBroadcastOptions = {
+  mutationId?: string;
+  broadcastEvent?: typeof broadcast;
+};
+
 export const broadcastWorkspaceResourceSetUpdated = (
   workspaceId: SafeId<"workspace">,
   resourceType: ResourceType,
-  broadcastEvent: typeof broadcast = broadcast,
+  { mutationId, broadcastEvent = broadcast }: ResourceSetBroadcastOptions = {},
 ): void => {
-  broadcastEvent(workspaceId, resourceSetUpdatedRealtimeEvent(resourceType));
+  broadcastEvent(
+    workspaceId,
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationId),
+  );
 };
 
 /** Organization fan-out carries a public resource type, never a resource ID. */
 export const broadcastOrganizationResourceSetUpdated = (
   organizationId: SafeId<"organization">,
   resourceType: ResourceType,
+  { mutationId }: Pick<ResourceSetBroadcastOptions, "mutationId"> = {},
 ): void => {
   broadcastToOrganization(
     organizationId,
-    resourceSetUpdatedRealtimeEvent(resourceType),
+    resourceSetUpdatedRealtimeEvent(resourceType, mutationId),
   );
 };

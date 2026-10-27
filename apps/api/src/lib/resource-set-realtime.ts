@@ -89,6 +89,7 @@ type AnnounceResourceSetUpdatesOptions = {
   /** The matter the request proved access to; absent for root handlers. */
   workspaceId: SafeId<"workspace"> | undefined;
   broadcasts?: ResourceSetBroadcasts;
+  mutationId?: string;
 };
 
 /**
@@ -101,6 +102,7 @@ export const announceResourceSetUpdates = ({
   organizationId,
   workspaceId,
   broadcasts = DEFAULT_BROADCASTS,
+  mutationId,
 }: AnnounceResourceSetUpdatesOptions): void => {
   if (
     realtime === undefined ||
@@ -117,11 +119,11 @@ export const announceResourceSetUpdates = ({
       return;
     }
     for (const resourceType of resourceTypes) {
-      broadcasts.workspace(workspaceId, resourceType);
+      broadcasts.workspace(workspaceId, resourceType, { mutationId });
     }
     return;
   }
   for (const resourceType of resourceTypes) {
-    broadcasts.organization(organizationId, resourceType);
+    broadcasts.organization(organizationId, resourceType, { mutationId });
   }
 };

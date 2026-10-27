@@ -1,7 +1,12 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { RESOURCE_TYPE, type ResourceType } from "@stll/api-contract";
+import {
+  REALTIME_EVENT_TYPE,
+  RESOURCE_MUTATION_ID_HEADER,
+  RESOURCE_TYPE,
+  type ResourceType,
+} from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { status } from "@/api/http/status";
@@ -17,6 +22,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import {
   announceResourceSetUpdates,
   noResourceSetUpdates,
@@ -44,9 +50,15 @@ const ORGANIZATION_ID = toSafeId<"organization">(
 const USER_ID = toSafeId<"user">("019e7000-0000-7000-8000-0000000000a3");
 
 type Announcement =
-  | { audience: "workspace"; id: SafeId<"workspace">; type: ResourceType }
+  | {
+      audience: "workspace";
+      id: SafeId<"workspace">;
+      type: ResourceType;
+      mutationId?: string;
+    }
   | {
       audience: "organization";
+      mutationId?: string;
       id: SafeId<"organization">;
       type: ResourceType;
     };
@@ -57,11 +69,25 @@ const recorder = () => {
     announceResourceSetUpdates({
       ...options,
       broadcasts: {
-        workspace: (id, type) => {
-          announcements.push({ audience: "workspace", id, type });
+        workspace: (id, type, broadcastOptions) => {
+          announcements.push({
+            audience: "workspace",
+            id,
+            type,
+            ...(broadcastOptions?.mutationId === undefined
+              ? {}
+              : { mutationId: broadcastOptions.mutationId }),
+          });
         },
-        organization: (id, type) => {
-          announcements.push({ audience: "organization", id, type });
+        organization: (id, type, broadcastOptions) => {
+          announcements.push({
+            audience: "organization",
+            id,
+            type,
+            ...(broadcastOptions?.mutationId === undefined
+              ? {}
+              : { mutationId: broadcastOptions.mutationId }),
+          });
         },
       },
     });
@@ -121,6 +147,56 @@ const baseConfig = {
 } satisfies WorkspaceHandlerConfig;
 
 describe("a matter handler's declared resource sets", () => {
+  test("the workspace broadcaster retains mutation correlation on the wire", () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    const emitted: unknown[] = [];
+    broadcastWorkspaceResourceSetUpdated(WORKSPACE_ID, RESOURCE_TYPE.ENTITY, {
+      mutationId,
+      broadcastEvent: (workspaceId, event) => {
+        expect(workspaceId).toBe(WORKSPACE_ID);
+        emitted.push(event);
+      },
+    });
+    expect(emitted).toEqual([
+      {
+        type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
+        resourceType: RESOURCE_TYPE.ENTITY,
+        mutationId,
+      },
+    ]);
+  });
+
+  test("committed resource sets share the request mutation id", async () => {
+    const mutationId = "019e7000-0000-7000-8000-0000000000b1";
+    for (const header of [mutationId, "invalid-id"]) {
+      const { announcements, announce } = recorder();
+      const endpoint = createSafeHandler(
+        {
+          ...baseConfig,
+          realtime: workspaceResourceSetUpdates([
+            RESOURCE_TYPE.ENTITY,
+            RESOURCE_TYPE.LEGAL_LIST,
+          ]),
+        },
+        async function* () {
+          return Result.ok({ ok: true });
+        },
+        { announce },
+      );
+      const ctx = requestContext();
+      ctx.request.headers.set(RESOURCE_MUTATION_ID_HEADER, header);
+      expect(await endpoint.handler(asTestRaw(ctx))).toEqual({ ok: true });
+      expect(announcements).toEqual(
+        [RESOURCE_TYPE.ENTITY, RESOURCE_TYPE.LEGAL_LIST].map((type) => ({
+          audience: "workspace",
+          id: WORKSPACE_ID,
+          type,
+          ...(header === mutationId ? { mutationId } : {}),
+        })),
+      );
+    }
+  });
+
   for (const realtime of [
     undefined,
     noResourceSetUpdates("Owned by the handler"),

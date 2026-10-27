@@ -34,12 +34,23 @@ const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
 
 const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
 
+export const RESOURCE_MUTATION_ID_HEADER = "x-stella-mutation-id";
+
+const resourceMutationIdSchema = v.pipe(v.string(), v.uuid());
+
+export const parseResourceMutationId = (value: unknown): string | undefined => {
+  const result = v.safeParse(resourceMutationIdSchema, value);
+  return result.success ? result.output : undefined;
+};
+
 const resourceUpdatedEventSchema = v.object({
+  mutationId: v.optional(resourceMutationIdSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_UPDATED),
   resource: resourceRefSchema,
 });
 
 const resourceDeletedEventSchema = v.object({
+  mutationId: v.optional(resourceMutationIdSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
   resource: resourceRefSchema,
 });
@@ -56,6 +67,7 @@ const resourceChangeSchema = v.variant("change", [
 ]);
 
 const resourcesChangedEventSchema = v.object({
+  mutationId: v.optional(resourceMutationIdSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCES_CHANGED),
   changes: v.pipe(
     v.array(resourceChangeSchema),
@@ -72,6 +84,7 @@ const resourceChangeCountSchema = v.pipe(
 );
 
 const resourceSetUpdatedEventSchema = v.object({
+  mutationId: v.optional(resourceMutationIdSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
 });
@@ -188,10 +201,14 @@ export const resourcesChangedRealtimeEvent = (
   };
 };
 
-export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
+export const resourceSetUpdatedRealtimeEvent = (
+  resourceType: ResourceType,
+  mutationId?: string,
+) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
     resourceType,
+    ...(mutationId === undefined ? {} : { mutationId }),
   }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({
