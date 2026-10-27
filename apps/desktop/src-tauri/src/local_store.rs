@@ -295,9 +295,11 @@ pub fn disable_autostart(app: &tauri::AppHandle) -> Result<(), String> {
 
 pub fn install_update(
   update: &tauri_plugin_updater::Update,
-  package: &[u8],
+  package: &crate::updater::VerifiedUpdatePackage,
 ) -> Result<(), String> {
-  update.install(package).map_err(|error| error.to_string())
+  update
+    .install(package.as_bytes())
+    .map_err(|error| error.to_string())
 }
 
 // Repository code generation writes a fixed source artifact, outside application data.
