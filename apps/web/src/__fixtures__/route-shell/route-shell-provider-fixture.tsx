@@ -40,7 +40,8 @@ type RouteShellProviderFixtureOptions = {
     | "law-hosts"
     | "professional-use"
     | "route-search"
-    | "chat-composer";
+    | "chat-composer"
+    | "case-search";
   /** The router's reading of a URL, which the route-search suite checks with. */
   parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
@@ -232,7 +233,13 @@ const installFixtureNetwork = () => {
   };
   const unexpectedRequests: string[] = [];
   const requests: string[] = [];
-  const state: { audience: FixtureAudience } = {
+  const state: {
+    audience: FixtureAudience;
+    response?: (request: Request) =>
+      | Response
+      | undefined
+      | Promise<Response | undefined>;
+  } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
   const professionalUseState: { status: "accepted" | "required" } = {
@@ -296,11 +303,15 @@ const installFixtureNetwork = () => {
     Awaited<ReturnType<ReturnType<typeof api.workspaces>["get"]>>["data"]
   >;
   globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
+    async (input: RequestInfo | URL, init?: RequestInit) => {
       await settleFixtureRequest();
       const url = input instanceof Request ? input.url : String(input);
       const pathname = new URL(url, window.location.origin).pathname;
       requests.push(pathname);
+      const customResponse = await state.response?.(new Request(input, init));
+      if (customResponse !== undefined) {
+        return customResponse;
+      }
       if (pathname === "/api/auth/get-session") {
         return Response.json(
           state.audience === "member" ? { session, user } : null,
@@ -709,7 +720,7 @@ const loadFixtureRuntime = async (
     ...network,
   };
 };
-type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
+export type FixtureRuntime = Awaited<ReturnType<typeof loadFixtureRuntime>>;
 const fixtureSearch = (routeId: string, email: string) => {
   switch (routeId) {
     case "/auth/otp":
@@ -1522,6 +1533,14 @@ export const declareRouteShellProviderFixture = async (
   await declareLawCases(fixture);
   declareProfessionalUseCases(fixture);
   declareChatComposerCases(fixture);
+  if (options.suite === "case-search") {
+    const { declareCaseSearchNavigationCases } =
+      await import("./case-search-navigation-fixture");
+    declareCaseSearchNavigationCases(fixture);
+    const { declareStatuteSearchNavigationCases } =
+      await import("./statute-search-navigation-fixture");
+    declareStatuteSearchNavigationCases(fixture);
+  }
   const {
     suite,
     selectedLeaves,
