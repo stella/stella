@@ -449,10 +449,9 @@ export default eslintCompatPlugin({
               const variable =
                 name === null ? null : resolveVariable(context, name);
               return (
-                variable !== null &&
-                variable.identifiers.some((identifier) =>
+                variable?.identifiers.some((identifier) =>
                   lazyDeclarations.has(identifier.range[0]),
-                )
+                ) ?? false
               );
             };
             const { sourceCode } = context;
