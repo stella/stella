@@ -27,6 +27,10 @@ import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import {
+  timeEntryActionLabel,
+  timeEntryNarrativeExcerpt,
+} from "@/components/billing/time-entry-copy.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
@@ -46,10 +50,6 @@ import {
   timeEntrySuggestionsOptions,
   timeEntrySummaryOptions,
 } from "@/lib/workspaces/queries/time-entries";
-import {
-  timeEntryActionLabel,
-  timeEntryNarrativeExcerpt,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import { TimeSuggestionsLane } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestions-lane";
 
 type PersonalTimesheetDayProps = {

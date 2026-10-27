@@ -86,22 +86,23 @@ export const useMyWeekActions = ({
   ) => {
     const { fingerprint } = suggestion;
     setBusyFingerprints((current) => new Set(current).add(fingerprint));
-    try {
-      await decideSuggestion.mutateAsync({
-        workspaceId: matter.id,
-        fingerprint,
-        date,
-        timezoneId,
-        decision,
-      });
-      await refreshWeek();
-    } finally {
+    const settle = () =>
       setBusyFingerprints((current) => {
         const next = new Set(current);
         next.delete(fingerprint);
         return next;
       });
-    }
+    // The row stays busy until the decision and the week refresh settle.
+    await decideSuggestion
+      .mutateAsync({
+        workspaceId: matter.id,
+        fingerprint,
+        date,
+        timezoneId,
+        decision,
+      })
+      .then(async () => await refreshWeek())
+      .finally(settle);
   };
 
   const accept = async (target: SuggestionTarget, values: AcceptValues) =>

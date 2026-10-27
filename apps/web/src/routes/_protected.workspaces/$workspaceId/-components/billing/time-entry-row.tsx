@@ -17,11 +17,11 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
 import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
-import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 
 type TimeEntry = {
   id: string;

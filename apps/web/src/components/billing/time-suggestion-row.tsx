@@ -5,13 +5,13 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 
-import { useFormatter } from "@/i18n/formatting-context";
-import { formatMinutes } from "@/lib/workspaces/format-duration";
-import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
+import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
 import {
   composeSuggestionNarrative,
   suggestionEvidenceLabels,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestion-copy.logic";
+} from "@/components/billing/time-suggestion-copy.logic";
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 
 const EVIDENCE_SEPARATOR = " · ";
 

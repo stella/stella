@@ -197,18 +197,19 @@ const serveWeek = ({
       if (!inRange(group.date, start, end) || group.items.length === 0) {
         continue;
       }
-      const earlier = byDate.get(group.date);
-      byDate.set(group.date, [
-        ...(earlier === undefined ? [] : earlier),
-        {
-          matter: group.matter,
-          activeMinutes: group.items.reduce(
-            (sum, item) => sum + item.durationMinutes,
-            0,
-          ),
-          items: group.items,
-        },
-      ]);
+      let day = byDate.get(group.date);
+      if (day === undefined) {
+        day = [];
+        byDate.set(group.date, day);
+      }
+      day.push({
+        matter: group.matter,
+        activeMinutes: group.items.reduce(
+          (sum, item) => sum + item.durationMinutes,
+          0,
+        ),
+        items: group.items,
+      });
     }
     return {
       startDate: start,

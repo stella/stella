@@ -6,16 +6,16 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PencilIcon } from "@stll/ui/icons";
 
+import { plainDateEpoch } from "@/components/billing/format-plain-date";
+import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
+import {
+  TimeSuggestionRow,
+  type TimeSuggestionRowActions,
+} from "@/components/billing/time-suggestion-row";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import type { MyTimeEntriesPage } from "@/lib/workspaces/queries/my-time-entries";
 import type { MyTimeSuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
-import { plainDateEpoch } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
-import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
-import {
-  TimeSuggestionRow,
-  type TimeSuggestionRowActions,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestion-row";
 
 export type MyTimeEntry = MyTimeEntriesPage["items"][number];
 export type MySuggestionMatter =

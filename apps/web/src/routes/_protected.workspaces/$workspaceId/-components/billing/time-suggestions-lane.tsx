@@ -2,11 +2,11 @@ import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 
-import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   TimeSuggestionRow,
   type TimeSuggestionRowActions,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-suggestion-row";
+} from "@/components/billing/time-suggestion-row";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 
 type TimeSuggestionsLaneProps = TimeSuggestionRowActions & {
   activeMinutes: number;
