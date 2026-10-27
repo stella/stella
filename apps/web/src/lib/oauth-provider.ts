@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
-import { VERIFIED_OAUTH_CLIENT_BRANDS } from "@stll/api-contract";
+import {
+  type OAuthConsentClient,
+  VERIFIED_OAUTH_CLIENT_BRANDS,
+} from "@stll/api-contract";
 
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
@@ -27,6 +30,36 @@ export const getSignedOauthQueryFromHash = (hash: string): string | null => {
 
   return query;
 };
+
+/** The signed OAuth request a page received, from the hash bridge or its query. */
+export const getSignedOauthQuery = ({
+  hash,
+  searchStr,
+}: {
+  hash: string;
+  searchStr: string;
+}): string | null => {
+  const bridgedQuery = getSignedOauthQueryFromHash(hash);
+  if (bridgedQuery) {
+    return bridgedQuery;
+  }
+
+  return hasSignedOauthQuery(searchStr) ? searchStr.replace(/^\?/u, "") : null;
+};
+
+/**
+ * Whether the client asked for this interaction with `prompt`: `login` for a
+ * fresh sign-in even with a session, `select_account` for the account and
+ * organization step even with a single membership.
+ */
+export const hasOauthPrompt = (
+  signedQuery: string | null,
+  prompt: "login" | "select_account",
+): boolean =>
+  signedQuery !== null &&
+  (new URLSearchParams(signedQuery).get("prompt") ?? "")
+    .split(" ")
+    .includes(prompt);
 
 export const getOauthHashFragment = (query: string): string => {
   const fragment = new URLSearchParams();
@@ -56,26 +89,6 @@ export const getOauthAccountSwitchHref = ({
   return `/auth?${new URLSearchParams({ redirectTo: pathname + search })}`;
 };
 
-export const getOauthClientDisplayName = (value: unknown): string | null => {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-
-  if (
-    "client_name" in value &&
-    typeof value.client_name === "string" &&
-    value.client_name.length > 0
-  ) {
-    return value.client_name;
-  }
-
-  if ("name" in value && typeof value.name === "string" && value.name.length) {
-    return value.name;
-  }
-
-  return null;
-};
-
 export const getOauthRedirectUrl = (value: unknown): string | null => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -96,16 +109,25 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
   return null;
 };
 
+const oauthConsentClientSchema = v.variant("type", [
+  v.object({
+    type: v.literal("verified"),
+    brand: v.picklist(VERIFIED_OAUTH_CLIENT_BRANDS),
+  }),
+  v.object({
+    type: v.literal("verified_unbranded"),
+    name: v.nullable(v.string()),
+  }),
+  v.object({
+    type: v.literal("unverified"),
+    name: v.nullable(v.string()),
+  }),
+]) satisfies v.GenericSchema<unknown, OAuthConsentClient>;
+
 export const oauthConsentInfoSchema = v.object({
-  client_name: v.nullable(v.string()),
+  client: oauthConsentClientSchema,
   redirectTargets: v.array(v.string()),
   clientIdHost: v.nullable(v.string()),
-  unverified: v.boolean(),
-  // An omitted brand reads as "no verified brand", never as an error.
-  verifiedBrand: v.optional(
-    v.nullable(v.picklist(VERIFIED_OAUTH_CLIENT_BRANDS)),
-    null,
-  ),
 });
 
 export type OAuthConsentInfo = v.InferOutput<typeof oauthConsentInfoSchema>;

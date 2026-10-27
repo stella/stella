@@ -244,9 +244,19 @@ const installNativeBoundary = async (
   });
 };
 
-const openClipboard = async (page: Page, language: "ar" | "en") => {
-  await installNativeBoundary(page, { language });
+const openClipboard = async (page: Page, options: NativeBoundaryOptions) => {
+  await installNativeBoundary(page, options);
   await page.goto("/");
+  const messages = options.language === "ar" ? arMessages : enMessages;
+  // Direction and card focus can settle before the async message catalog.
+  // Geometry needs both the requested language and its rendered labels.
+  await expect(page.locator("html")).toHaveAttribute("lang", options.language);
+  await expect(
+    page.locator(".clipboard-groups-rail").getByRole("button", {
+      name: messages.clipboard.allClips,
+      exact: true,
+    }),
+  ).toBeVisible();
   const cards = page.locator("[data-clipboard-card-trigger]");
   await expect(cards.first()).toBeFocused();
   return cards;
@@ -317,23 +327,19 @@ const lastInvocationArgs = async (page: Page, command: string) =>
  * conclusive after that window.
  */
 const waitForTooltip = async (page: Page) =>
-  page.evaluate(async () => {
-    const deadline = performance.now() + 800;
-    while (performance.now() < deadline) {
-      if (document.querySelector('[data-slot="tooltip-popup"]')) {
-        return true;
-      }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    return false;
-  });
+  await page
+    .locator('[data-slot="tooltip-popup"]')
+    .first()
+    .waitFor({ state: "attached", timeout: 800 })
+    .then(
+      () => true,
+      () => false,
+    );
 
 test("captures use a caller-scoped delta and recover a burst revision gap", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   const capture = async (texts: string[]) =>
     page.evaluate((values): unknown => {
       const emit: unknown = Reflect.get(
@@ -407,7 +413,7 @@ for (const {
         page,
       }) => {
         const messages = language === "ar" ? arMessages : enMessages;
-        await openClipboard(page, language);
+        await openClipboard(page, { language });
         await page.getByRole("searchbox").fill("Clipboard item 2");
         if (activation === "pointer") {
           await page.locator("[data-clipboard-scope]").click();
@@ -441,7 +447,7 @@ for (const {
     }) => {
       const messages = language === "ar" ? arMessages : enMessages;
       const query = "No local match";
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       await page.getByRole("searchbox").fill(query);
       const searchRegistries = page.getByRole("button", {
         name: messages.clipboard.noResultsDescription.replace(
@@ -468,7 +474,7 @@ for (const {
     test("search focus and card emphasis stay visually exclusive", async ({
       page,
     }) => {
-      const cards = await openClipboard(page, language);
+      const cards = await openClipboard(page, { language });
       const search = page.getByRole("searchbox");
       await page.keyboard.press(nextCardKey);
       await expect(cards.nth(1)).toBeFocused();
@@ -494,7 +500,7 @@ for (const {
     test("the forward arrow leaves search for the active clip group", async ({
       page,
     }) => {
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       const search = page.getByRole("searchbox");
       await search.fill("Clipboard");
       await search.evaluate((input, atEnd) => {
@@ -516,7 +522,7 @@ for (const {
     test("the switcher changes only the search source and preserves the group filter", async ({
       page,
     }) => {
-      const cards = await openClipboard(page, language);
+      const cards = await openClipboard(page, { language });
       const search = page.getByRole("searchbox");
       const switcher = page.locator("[data-clipboard-scope]");
       // The groups rail yields to the registry chooser in registry scope.
@@ -571,7 +577,7 @@ for (const {
       test(`prepares the first card before reopening after ${dismissal} dismissal`, async ({
         page,
       }) => {
-        await openClipboard(page, language);
+        await openClipboard(page, { language });
         for (let index = 0; index < 10; index += 1) {
           await page.keyboard.press(nextCardKey);
         }
@@ -627,7 +633,7 @@ for (const {
     test("a vertical wheel advances the timeline toward its end", async ({
       page,
     }) => {
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       const rail = page.getByRole("list");
       await rail.hover();
       for (let step = 0; step < 12; step += 1) {
@@ -643,7 +649,7 @@ for (const {
     test("pointer selection fully reveals a partially visible clip", async ({
       page,
     }) => {
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       const rail = page.getByRole("list");
       await rail.evaluate(
         (node, toward) =>
@@ -724,7 +730,7 @@ for (const {
     test("a scroll the rail never observed is reconciled by the next commit", async ({
       page,
     }) => {
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       const rail = page.getByRole("list");
       // Swallow the rail's scroll events, then scroll it: the card window is
       // now computed for the old offset, which is the blank rail a scroll the
@@ -763,7 +769,7 @@ for (const {
       page,
     }) => {
       const messages = language === "ar" ? arMessages : enMessages;
-      await openClipboard(page, language);
+      await openClipboard(page, { language });
       await page
         .getByRole("button", {
           name: messages.clipboard.createGroup,
@@ -788,7 +794,7 @@ for (const {
     }) => {
       const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
       const tabForward = browserName === "webkit" ? "Alt+Tab" : "Tab";
-      const cards = await openClipboard(page, language);
+      const cards = await openClipboard(page, { language });
       const selectedCard = page.locator('[data-clipboard-id="clip-2"]');
       const restingCard = page.locator('[data-clipboard-id="clip-1"]');
       const activeGroup = page.locator(
@@ -844,7 +850,7 @@ for (const {
     test("a queued card navigation cannot steal focus from the footer", async ({
       page,
     }) => {
-      const cards = await openClipboard(page, language);
+      const cards = await openClipboard(page, { language });
       const search = page.getByRole("searchbox");
       await cards.first().evaluate(
         (card, keys) => {
@@ -880,7 +886,7 @@ for (const {
 test("formatted clips expose copy variants and reversible app exclusions", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await cards.first().click({ button: "right" });
   await page.getByRole("menuitem", { name: "Paste text as" }).hover();
   await page.getByRole("menuitem", { name: "Plain text" }).click();
@@ -914,7 +920,7 @@ test("formatted clips expose copy variants and reversible app exclusions", async
 test("formatted clips advertise and execute both keyboard paste formats", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   const shortcuts = page.locator("[data-clipboard-format-shortcuts]");
   await expect(shortcuts).toContainText("Original formatting");
   await expect(shortcuts).toContainText("Plain text");
@@ -937,10 +943,177 @@ test("formatted clips advertise and execute both keyboard paste formats", async 
   await expect(shortcuts).toHaveCount(0);
 });
 
+const FORMATTED_CLIP = { id: "clip-1", plainText: "Clipboard item 1" } as const;
+
+const expectPastePreview = async (
+  page: Page,
+  format: "original" | "plainText",
+) => {
+  const card = page.locator(`[data-clipboard-id="${FORMATTED_CLIP.id}"]`);
+  const content = card.locator("[data-clipboard-card-trigger]");
+  const label = card.locator("[data-clipboard-paste-preview-label]");
+  await expect(card).toHaveAttribute("data-clipboard-render-format", format);
+  await expect(content).toContainText(FORMATTED_CLIP.plainText);
+  if (format === "plainText") {
+    await expect(label).toHaveText(enMessages.clipboard.plainTextPreview);
+    await expect(content.locator("strong")).toHaveCount(0);
+    return;
+  }
+  await expect(label).toHaveCount(0);
+  await expect(content.locator("strong")).toHaveText(FORMATTED_CLIP.plainText);
+};
+
+// Base UI ignores a WebKit mouse move that reports no movement (a pointer
+// resting while the list scrolls under it), and Playwright's WebKit reports
+// movementX/Y 0 for every synthetic move, `hover()` and stepped moves alike.
+// A real pointer arriving over an item moves, so the hover adds that move.
+const hoverMenuItem = async (item: Locator) => {
+  await item.hover();
+  await item.dispatchEvent("mousemove", {
+    bubbles: true,
+    movementX: 1,
+    movementY: 1,
+  });
+};
+
+test("hovering a plain-text paste option previews the clip without formatting", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  await expectPastePreview(page, "original");
+
+  await cards.first().click({ button: "right" });
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
+  const plainText = page.getByRole("menuitem", { name: "Plain text" });
+  const original = page.getByRole("menuitem", {
+    name: "Original formatting",
+  });
+  await hoverMenuItem(plainText);
+  await expectPastePreview(page, "plainText");
+  await hoverMenuItem(original);
+  await expectPastePreview(page, "original");
+  await hoverMenuItem(plainText);
+  await expectPastePreview(page, "plainText");
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Edit clip" }));
+  await expect(plainText).toBeHidden();
+  await expectPastePreview(page, "original");
+
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
+  await hoverMenuItem(plainText);
+  await expectPastePreview(page, "plainText");
+  // The first Escape closes only the submenu.
+  await page.keyboard.press("Escape");
+  await expect(plainText).toBeHidden();
+  await expectPastePreview(page, "original");
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
+  await hoverMenuItem(plainText);
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectPastePreview(page, "original");
+
+  // Reopening the menu starts without the preview it closed with.
+  await cards.first().click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible();
+  await expectPastePreview(page, "original");
+});
+
+// Quarantined: on WebKit the "Plain text" paste option is sometimes not yet in
+// the reopened menu when the arrow key moves focus, so the focus assertion
+// fails intermittently on unrelated changes (runs 40380441414 and 40353303055
+// attempt 1). The fix waits for the menu and its focus by state and removes
+// this skip.
+// test-quarantine-expires: 2026-11-02T00:00:00.000Z
+test.skip("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  await page
+    .locator(
+      `[data-clipboard-id="${FORMATTED_CLIP.id}"] [data-clipboard-more-trigger]`,
+    )
+    .focus();
+  await page.keyboard.press("Enter");
+  const pasteTextAs = page.getByRole("menuitem", { name: "Paste text as" });
+  await expect(pasteTextAs).toBeVisible();
+  // Engines differ in which item, if any, an Enter-opened menu highlights, so
+  // the walk starts from the submenu trigger.
+  await pasteTextAs.focus();
+  await expect(pasteTextAs).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  const original = page.getByRole("menuitem", {
+    name: "Original formatting",
+  });
+  const plainText = page.getByRole("menuitem", { name: "Plain text" });
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowUp");
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowLeft");
+  await expect(plainText).toBeHidden();
+  await expect(pasteTextAs).toBeFocused();
+  await expectPastePreview(page, "original");
+
+  // Reopening the submenu moves focus in asynchronously; ArrowDown before it
+  // lands stays on the closed trigger.
+  await page.keyboard.press("ArrowRight");
+  await expect(original).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectPastePreview(page, "original");
+});
+
+test("the plain-text format shortcut previews the clip until it is left", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, { language: "en" });
+  const shortcuts = page.locator("[data-clipboard-format-shortcuts]");
+  const plainText = shortcuts.getByRole("button", { name: "Plain text" });
+
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await shortcuts.getByRole("button", { name: "Original formatting" }).hover();
+  await expectPastePreview(page, "original");
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await page.mouse.move(0, 0);
+  await expectPastePreview(page, "original");
+
+  // The row unmounts under the pointer when the card stops being active; the
+  // preview must not come back with the row.
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await cards.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(cards.nth(1)).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.mouse.move(0, 0);
+  await page.keyboard.press("ArrowLeft");
+  await expect(cards.first()).toBeFocused();
+  await expect(shortcuts).toBeVisible();
+  await expectPastePreview(page, "original");
+
+  await plainText.focus();
+  await expectPastePreview(page, "plainText");
+  await cards.first().focus();
+  await expectPastePreview(page, "original");
+});
+
 test("source application names stay isolated inside RTL actions", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "ar");
+  const cards = await openClipboard(page, { language: "ar" });
   await cards.first().click({ button: "right" });
   const excludeLabel = arMessages.clipboard.excludeSourceApp.replace(
     "<bdi>{source}</bdi>",
@@ -970,7 +1143,7 @@ test("source application names stay isolated inside RTL actions", async ({
 });
 
 test("inline clip naming uses the full footer width", async ({ page }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   const card = page.locator('[data-clipboard-id="clip-1"]');
   await card.locator('button[title="Edit clip"]').click();
   const input = card.locator("[data-clipboard-name-input]");
@@ -987,7 +1160,7 @@ test("inline clip naming uses the full footer width", async ({ page }) => {
 test("keyboard navigation mounts and focuses virtualized cards", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   await expect(page.locator('[data-clipboard-id="clip-13"]')).toHaveCount(0);
 
   for (let index = 1; index < 13; index += 1) {
@@ -1004,7 +1177,7 @@ test("keyboard navigation mounts and focuses virtualized cards", async ({
 test("the selected group tints the whole clipboard window", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   const clipboardWindow = page.locator('[role="application"]');
   await expect(clipboardWindow).not.toHaveAttribute("data-active-group");
 
@@ -1020,7 +1193,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
   page,
 }) => {
   const tabBack = browserName === "webkit" ? "Alt+Shift+Tab" : "Shift+Tab";
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   const search = page.getByRole("searchbox");
   const activeGroup = page.locator(
     '[data-clipboard-group-id][aria-pressed="true"]',
@@ -1108,7 +1281,7 @@ test("restores footer arrow navigation after changing a menu setting", async ({
 test("Escape closes the active overlay before hiding the clipboard", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
 
   await page.getByRole("searchbox").fill("Clipboard");
   await page.keyboard.press("Escape");
@@ -1168,7 +1341,7 @@ test("Escape closes the active overlay before hiding the clipboard", async ({
 test("Escape closes a footer overlay whose trigger still holds focus", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
 
   const triggers = page.locator(".clipboard-controls [aria-haspopup]");
   const triggerCount = await triggers.count();
@@ -1203,7 +1376,7 @@ test("Escape closes a footer overlay whose trigger still holds focus", async ({
 test("creates a group from a clip with inline preset and custom colors", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
 
   await cards.first().click({ button: "right" });
   await page.getByRole("menuitem", { name: "Move to group" }).hover();
@@ -1340,7 +1513,7 @@ for (const language of ["en", "ar"] as const) {
   test(`clip more button reveals without shifting and shares the context menu (${language})`, async ({
     page,
   }) => {
-    const cards = await openClipboard(page, language);
+    const cards = await openClipboard(page, { language });
     expect(
       await page.evaluate(() => matchMedia("(pointer: fine)").matches),
     ).toBe(true);
@@ -1423,7 +1596,7 @@ for (const language of ["en", "ar"] as const) {
     browserName,
     page,
   }) => {
-    const cards = await openClipboard(page, language);
+    const cards = await openClipboard(page, { language });
     const more = page.locator(
       '[data-clipboard-id="clip-1"] [data-clipboard-more-trigger]',
     );
@@ -1462,7 +1635,7 @@ test.describe("clip more button on coarse pointers", () => {
     test(`inactive card shows its actions and opens the context menu (${language})`, async ({
       page,
     }) => {
-      const cards = await openClipboard(page, language);
+      const cards = await openClipboard(page, { language });
       expect(
         await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
       ).toBe(true);
@@ -1492,7 +1665,7 @@ test.describe("clip more button on coarse pointers", () => {
 test("Cmd-click toggles ordered selection and Escape clears it before hiding", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await cards.nth(2).click({ modifiers: ["Meta"] });
   await cards.nth(0).click({ modifiers: ["Meta"] });
   await cards.nth(1).click({ modifiers: ["Meta"] });
@@ -1523,7 +1696,7 @@ test("Cmd-click toggles ordered selection and Escape clears it before hiding", a
 test("click and Enter paste the selection in click order using either format", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await cards.nth(1).click({ modifiers: ["Meta"] });
   await cards.nth(0).click({ modifiers: ["Meta"] });
   await cards.nth(2).click({ modifiers: ["Meta"] });
@@ -1546,7 +1719,7 @@ test("click and Enter paste the selection in click order using either format", a
 test("paste footer options share hover and focus treatment and activate independently", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   const footer = page.locator("[data-clipboard-format-shortcuts]");
   const original = footer.getByRole("button", { name: "Original formatting" });
   const plain = footer.getByRole("button", { name: "Plain text" });
@@ -1580,7 +1753,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     page,
   }) => {
     await page.emulateMedia({ colorScheme });
-    await installNativeBoundary(page, {
+    await openClipboard(page, {
       language: "en",
       groups: [
         ...SNAPSHOT.groups,
@@ -1591,10 +1764,6 @@ for (const colorScheme of ["light", "dark"] as const) {
         })),
       ],
     });
-    await page.goto("/");
-    await expect(
-      page.locator("[data-clipboard-card-trigger]").first(),
-    ).toBeFocused();
     const rail = page.locator(".clipboard-groups-rail");
     expect(
       await rail
@@ -1729,7 +1898,7 @@ for (const language of ["en", "ar"] as const) {
       page,
     }) => {
       await page.emulateMedia({ colorScheme });
-      await installNativeBoundary(page, {
+      await openClipboard(page, {
         language,
         groups: [
           ...SNAPSHOT.groups,
@@ -1740,10 +1909,6 @@ for (const language of ["en", "ar"] as const) {
           })),
         ],
       });
-      await page.goto("/");
-      await expect(
-        page.locator("[data-clipboard-card-trigger]").first(),
-      ).toBeFocused();
       const rail = page.locator(".clipboard-groups-rail");
       const create = rail.locator("button").nth(1);
       const before = await create.boundingBox();
@@ -1785,7 +1950,7 @@ test("Control-click builds an ordered selection on Windows and Linux", async ({
     process.platform === "darwin",
     "macOS reserves Control-click for its native context menu",
   );
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await cards.nth(2).click({ modifiers: ["Control"] });
   await cards.first().click({ modifiers: ["Control"] });
   await expect(cards.nth(2)).toHaveAttribute("aria-pressed", "true");
@@ -1801,7 +1966,7 @@ test("Control-click builds an ordered selection on Windows and Linux", async ({
 test("Space toggles the focused card once per press without copying", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await page.keyboard.down("Space");
   await page.keyboard.down("Space");
   await page.keyboard.up("Space");
@@ -1823,7 +1988,7 @@ test("Space toggles the focused card once per press without copying", async ({
 test("deleting a selected clip removes it from the next ordered paste", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await cards.first().click({ modifiers: ["Meta"] });
   await cards.nth(2).click({ modifiers: ["Meta"] });
   await cards.first().focus();

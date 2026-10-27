@@ -5,8 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import { CASE_LAW_RESEARCH_ANSWER_STATES } from "@stll/api-contract";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { resolveActionCapabilities } from "@/lib/organization/feature-access/action-capabilities.logic";
@@ -22,7 +24,7 @@ import {
   AiColumnRunButton,
   AiColumnSelectionAction,
 } from "./ai-column-run-controls";
-import { aiColumnRunScope } from "./ai-column-run.logic";
+import { AI_COLUMN_RUN_REVEAL, aiColumnRunScope } from "./ai-column-run.logic";
 
 const states = {
   not_run: { type: "not_run" },
@@ -54,7 +56,7 @@ describe("every AI cell lifecycle state is visible", () => {
               role: "member",
               ai: true,
               deepl: true,
-              ocr: true,
+              ocr: DOCUMENT_OCR_AVAILABILITY.live,
               desktop: "current",
               settings: undefined,
             })}
@@ -85,7 +87,7 @@ describe("every AI cell lifecycle state is visible", () => {
               role: "member",
               ai: true,
               deepl: true,
-              ocr: true,
+              ocr: DOCUMENT_OCR_AVAILABILITY.live,
               desktop: "current",
               settings: undefined,
             })}
@@ -114,7 +116,7 @@ describe("every AI cell lifecycle state is visible", () => {
             role: "member",
             ai: true,
             deepl: true,
-            ocr: true,
+            ocr: DOCUMENT_OCR_AVAILABILITY.live,
             desktop: "current",
             settings: undefined,
           })}
@@ -185,7 +187,7 @@ describe("shared AI column controls", () => {
               role: "member",
               ai: true,
               deepl: true,
-              ocr: true,
+              ocr: DOCUMENT_OCR_AVAILABILITY.live,
               desktop: "current",
               settings: undefined,
             })}
@@ -193,7 +195,7 @@ describe("shared AI column controls", () => {
             <IntlProvider locale="en" messages={messages} timeZone="UTC">
               <AiColumnRunButton
                 scope={scope}
-                hasNotRun
+                reveal={AI_COLUMN_RUN_REVEAL.pinned}
                 disabled={false}
                 onRun={() => undefined}
               />
@@ -204,7 +206,6 @@ describe("shared AI column controls", () => {
       expect(html).toContain(`aria-label="${label}"`);
       expect(html).toContain("<svg");
       expect(html).toContain("data-base-ui-tooltip-trigger");
-      expect(html).toContain("bg-primary");
     }
   });
   test("the rendered selection bar states columns times rows and answer budget", () => {
@@ -215,18 +216,20 @@ describe("shared AI column controls", () => {
             role: "member",
             ai: true,
             deepl: true,
-            ocr: true,
+            ocr: DOCUMENT_OCR_AVAILABILITY.live,
             desktop: "current",
             settings: undefined,
           })}
         >
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <AiColumnSelectionAction
-              columns={3}
-              rows={5}
-              disabled={false}
-              onRun={() => undefined}
-            />
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AiColumnSelectionAction
+                columns={3}
+                rows={5}
+                disabled={false}
+                onRun={() => undefined}
+              />
+            </FormattingProvider>
           </IntlProvider>
         </ActionCapabilitiesProvider>
       </QueryClientProvider>,

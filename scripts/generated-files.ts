@@ -74,9 +74,6 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/**/*.css",
       "apps/web/**/*.{ts,tsx,js,jsx}",
       "apps/web/package.json",
-      "packages/mcp-apps/**/*.css",
-      "packages/mcp-apps/**/*.{ts,tsx,js,jsx}",
-      "packages/mcp-apps/package.json",
       "apps/desktop/**/*.css",
       "apps/desktop/**/*.{ts,tsx,js,jsx}",
       "apps/desktop/package.json",
@@ -595,7 +592,10 @@ const GENERATOR_DECLARATIONS = [
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
     id: "ci-job-classification-digests",
     outputKind: "committed",
-    outputs: [".github/ci-job-classification-decisions/**"],
+    outputs: [
+      ".github/ci-job-classification-decisions/**",
+      ".github/ci-job-classification-sources.json",
+    ],
     inputs: [
       ".github/workflows/**",
       ".github/actions/**",
@@ -613,7 +613,9 @@ const GENERATOR_DECLARATIONS = [
     // The check reads git history, so it cannot load the offline network
     // preload every `--check` command must use; it runs as the default mode.
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
-    autofix: true,
+    // Its outputs live under .github/, which the autofix action may not
+    // modify, so pull requests refresh them by hand.
+    autofix: false,
     after: [],
   },
   {

@@ -1,20 +1,13 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
-import { createPortal } from "react-dom";
 
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { READER_COPY_MODES } from "@stll/api-contract/legal-reader-annotations";
-import type { ReaderCopyMode } from "@stll/api-contract/legal-reader-annotations";
-import { copyRichToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { CopyFeedback, useCopiedFeedback } from "@stll/ui/copy-button";
 import {
   AddCommentIcon,
   Building2Icon,
-  ChevronDownIcon,
-  CopyFromMenuIcon,
   HighlighterIcon,
   LockIcon,
   SparklesIcon,
@@ -23,8 +16,6 @@ import {
   UnderlineIcon,
   WavesIcon,
 } from "@stll/ui/icons";
-import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
-import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -44,8 +35,6 @@ import {
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
-import { readerCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
-import type { ReaderCopyMenuBox } from "@/components/legal-reader/annotations/reader-copy-menu.logic";
 import {
   cleanSelectionText,
   copyTextFor,
@@ -60,16 +49,17 @@ import type { SelectionAnchor } from "@/components/legal-reader/annotations/sele
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useReaderAnnotationShortcuts } from "@/components/legal-reader/annotations/use-reader-annotation-shortcuts";
 import { SelectionToolbar } from "@/components/selection-toolbar";
+import {
+  SelectionAIActions,
+  SelectionCopyMenu,
+  useSelectionCopy,
+} from "@/components/selection-toolbar-actions";
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import {
-  CapabilityAction,
-  CapabilityActionChrome,
-} from "@/lib/organization/feature-access/capability-actions";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -86,6 +76,14 @@ type AnnotationToolbarProps = {
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
+  /** Why Explain cannot take these spans, or `undefined` when it can. */
+  explainRefusal?:
+    ((spans: SelectionAnchor[]) => string | undefined) | undefined;
+  /** The paragraphs the settled selection covers, on the same frame the bar
+   * reads them; empty once nothing is selected. Called again on scroll and
+   * resize with the same spans, so a consumer compares before it stores. */
+  onSelectedSpansChange?:
+    ((spans: readonly SelectionAnchor[]) => void) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -113,6 +111,8 @@ type ReaderSelectionSnapshot = {
   focusOffset: number;
 };
 
+const NO_SELECTED_SPANS: readonly SelectionAnchor[] = [];
+
 const STYLE_ICONS = {
   highlight: HighlighterIcon,
   underline: UnderlineIcon,
@@ -139,6 +139,8 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainRefusal,
+  onSelectedSpansChange,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
@@ -156,22 +158,7 @@ export const AnnotationToolbar = ({
   const [doc, setDoc] = useState<Document | null>(null);
   const [style, setStyle] = useState<AnnotationStyle>("highlight");
   const [copyOpen, setCopyOpen] = useState(false);
-  const [copyPreviewMode, setCopyPreviewMode] = useState<ReaderCopyMode | null>(
-    null,
-  );
-  // Preserve the text selection while positioning the portaled menu in the
-  // viewport; open upward when the space below the trigger cannot fit it.
-  const [copyMenuBox, setCopyMenuBox] = useState<ReaderCopyMenuBox | null>(
-    null,
-  );
-  const {
-    copied,
-    confirm: confirmCopied,
-    reset: resetCopied,
-  } = useCopiedFeedback();
-  // Counts selection changes, so a clipboard write that settles after the
-  // reader moved on to other words never confirms a copy of those words.
-  const selectionGenerationRef = useRef(0);
+  const selectionCopy = useSelectionCopy();
   // A new highlight is private; sharing is a deliberate second step on the mark.
   const visibility: AnnotationVisibility = "private";
 
@@ -190,6 +177,9 @@ export const AnnotationToolbar = ({
   );
   const activateAnnotation = useLatestCallback(onActivateAnnotation);
   const clearActive = useLatestCallback(onClearActive);
+  const reportSelectedSpans = useLatestCallback(
+    (spans: readonly SelectionAnchor[]) => onSelectedSpansChange?.(spans),
+  );
 
   useReaderAnnotationShortcuts({
     onRedo: controller.redo,
@@ -298,23 +288,28 @@ export const AnnotationToolbar = ({
           barRef.current?.contains(selection.anchorNode) === true
         ) {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         const text = selection.toString().replace(/\s+/gu, " ").trim();
         if (text === "") {
           setSelected(null);
+          reportSelectedSpans(NO_SELECTED_SPANS);
           return;
         }
         // A fresh selection must not inherit the previous one's open menu.
         setCopyOpen(false);
         const range = selection.getRangeAt(0);
+        const spans = selectionAnchorsFrom(selection, root);
+        // Reported before the bar's geometry: words scrolled out of view are
+        // still selected, though the bar has nowhere to float.
+        reportSelectedSpans(spans);
         const geometry = selectionToolbarAnchor({ range, root });
         if (geometry === null) {
           setSelected(null);
           return;
         }
         const cleanText = cleanSelectionText(range);
-        const spans = selectionAnchorsFrom(selection, root);
         setSelected({
           cleanText: cleanText === "" ? text : cleanText,
           locator: locatorOf(range, root, spans),
@@ -402,9 +397,7 @@ export const AnnotationToolbar = ({
       readSelection();
     };
     const onSelectionChange = () => {
-      selectionGenerationRef.current += 1;
-      // A confirmation belongs to the words that were copied.
-      resetCopied();
+      selectionCopy.selectionChanged();
       readSelection();
     };
     const onCopy = () => {
@@ -416,7 +409,7 @@ export const AnnotationToolbar = ({
         root.contains(selection.anchorNode) &&
         root.contains(selection.focusNode)
       ) {
-        confirmCopied();
+        selectionCopy.confirmNativeCopy();
       }
     };
     const onViewportChange = () => readSelection();
@@ -709,176 +702,45 @@ export const AnnotationToolbar = ({
     const spans = selected.spans;
     content = (
       <div className="flex flex-wrap items-center gap-1">
-        <div className="relative">
-          <Button
-            aria-label={copied ? t("common.copied") : t("common.copy")}
-            data-copy-trigger=""
-            onClick={(event) => {
-              const MENU_ESTIMATED_HEIGHT_PX = 200;
-              // Room for the options and a readable preview beside them.
-              const MENU_MIN_WIDTH_PX = 416;
-              const barRect = barRef.current?.getBoundingClientRect();
-              const view = event.currentTarget.ownerDocument.defaultView;
-              if (barRect !== undefined && view !== null) {
-                setCopyMenuBox(
-                  readerCopyMenuBox({
-                    bar: barRect,
-                    menuHeight: MENU_ESTIMATED_HEIGHT_PX,
-                    menuWidth: MENU_MIN_WIDTH_PX,
-                    viewport: {
-                      height: view.innerHeight,
-                      width: view.innerWidth,
-                    },
-                  }),
-                );
-              }
-              setCopyPreviewMode(null);
-              setCopyOpen((open) => !open);
+        <SelectionCopyMenu
+          barRef={barRef}
+          copy={selectionCopy}
+          doc={doc}
+          menuRef={copyMenuRef}
+          onOpenChange={setCopyOpen}
+          open={copyOpen}
+          quote={selected.cleanText}
+          textFor={(copyMode, quote) =>
+            copyTextFor({
+              mode: copyMode,
+              selected: { cleanText: quote, locator: selected.locator },
+              target,
+            })
+          }
+        />
+        {/* AI actions take the document's own words only: a selection with no
+            anchored text (AI notes, reader chrome) is not offered to them,
+            and the passage sent is the anchored words, never the chrome or
+            generated text a drag also crossed. */}
+        {mode === "authenticated" && spans.length > 0 && (
+          <SelectionAIActions
+            explainRefusal={explainRefusal?.(spans)}
+            onAsk={() => {
+              askAboutPassage(
+                spans.map(({ quote }) => quote).join(" "),
+                selected.locator,
+              );
+              clearSelection();
             }}
-            onMouseDown={(event) => event.preventDefault()}
-            size="sm"
-            variant="ghost"
-          >
-            <CopyFeedback
-              copied={copied}
-              copiedLabel={t("common.copied")}
-              icon={CopyFromMenuIcon}
-              label={t("common.copy")}
-            />
-            <ChevronDownIcon className="size-3" />
-          </Button>
-          {copyOpen &&
-            doc !== null &&
-            createPortal(
-              <div
-                className={cn(
-                  "bg-popover text-popover-foreground fixed rounded-md border p-1 shadow-md",
-                  OVERLAY_LAYER_CLASS_NAMES.popup,
-                )}
-                ref={copyMenuRef}
-                style={copyMenuBox ?? undefined}
-              >
-                <MenuPreviewLayout
-                  preview={
-                    // The menu's width is set from the toolbar, so the pane
-                    // gets what the options leave.
-                    <PreviewPane className="w-full">
-                      {copyPreviewMode !== null && (
-                        <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
-                          {copyTextFor({
-                            mode: copyPreviewMode,
-                            selected: {
-                              cleanText:
-                                selected.cleanText.length > 220
-                                  ? `${selected.cleanText.slice(0, 220)}…`
-                                  : selected.cleanText,
-                              locator: selected.locator,
-                            },
-                            target,
-                          }).segments.map((segment) =>
-                            segment.emphasis ? (
-                              <em key={`emphasis:${segment.text}`}>
-                                {segment.text}
-                              </em>
-                            ) : (
-                              <span key={`plain:${segment.text}`}>
-                                {segment.text}
-                              </span>
-                            ),
-                          )}
-                        </p>
-                      )}
-                    </PreviewPane>
-                  }
-                  previewWidth="remaining"
-                >
-                  {READER_COPY_MODES.map((copyMode) => (
-                    <button
-                      className="hover:bg-accent block w-full rounded-sm px-2 py-1.5 text-start text-xs whitespace-nowrap"
-                      key={copyMode}
-                      onClick={() => {
-                        const text = copyTextFor({
-                          mode: copyMode,
-                          selected,
-                          target,
-                        });
-                        const generation = selectionGenerationRef.current;
-                        detached(
-                          (async () => {
-                            const copyResult = await copyRichToClipboard(text);
-                            if (Result.isError(copyResult)) {
-                              notifyUserError(
-                                copyResult.error,
-                                t("errors.actionFailed"),
-                              );
-                              return;
-                            }
-                            if (generation === selectionGenerationRef.current) {
-                              confirmCopied();
-                            }
-                          })(),
-                          "legal-reader.selection-copy",
-                        );
-                        setCopyOpen(false);
-                        // The option unmounts with the menu; keep keyboard
-                        // focus on the trigger that now shows the confirmation.
-                        barRef.current
-                          ?.querySelector<HTMLElement>("[data-copy-trigger]")
-                          ?.focus();
-                      }}
-                      onFocus={() => setCopyPreviewMode(copyMode)}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onMouseEnter={() => setCopyPreviewMode(copyMode)}
-                      type="button"
-                    >
-                      {t(`legalReader.copyMenu.${copyMode}`)}
-                    </button>
-                  ))}
-                </MenuPreviewLayout>
-              </div>,
-              doc.body,
-            )}
-        </div>
-        {mode === "authenticated" && (
-          <>
-            <CapabilityActionChrome action={{ capability: "ai" }}>
-              <span className="bg-border mx-1 h-4 w-px" />
-            </CapabilityActionChrome>
-            <CapabilityAction action={{ capability: "ai" }} surface="control">
-              {(capabilityProps) => (
-                <Button
-                  onClick={() => {
-                    askAboutPassage(selected.text, selected.locator);
+            onExplain={
+              onExplain === undefined
+                ? undefined
+                : () => {
+                    onExplain(spans);
                     clearSelection();
-                  }}
-                  size="sm"
-                  variant="ghost"
-                  {...capabilityProps}
-                >
-                  <SparklesIcon className="size-3.5" />
-                  {t("common.askAI")}
-                </Button>
-              )}
-            </CapabilityAction>
-            {onExplain !== undefined && (
-              <CapabilityAction action={{ capability: "ai" }} surface="control">
-                {(capabilityProps) => (
-                  <Button
-                    onClick={() => {
-                      onExplain(spans);
-                      clearSelection();
-                    }}
-                    size="sm"
-                    variant="ghost"
-                    {...capabilityProps}
-                  >
-                    <SparklesIcon className="size-3.5" />
-                    {t("readerAnswers.explain")}
-                  </Button>
-                )}
-              </CapabilityAction>
-            )}
-          </>
+                  }
+            }
+          />
         )}
         {spans.length > 0 && (
           <>

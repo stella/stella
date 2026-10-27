@@ -44,7 +44,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # `process.env.NODE_ENV` reads (dependencies included) at bundle time, and
 # inlines "development" when it is unset. Every bundle is also built with
 # `--define __STELLA_RELEASE__=true`, so a published artifact refuses local
-# development access whatever its runtime environment says.
+# development access whatever its runtime environment says. Every bundle is
+# minified with --keep-names: error tags and logs read class and function
+# names, which plain --minify renames.
 FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
@@ -66,6 +68,8 @@ RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/
 # mapping never reads.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --sourcemap=linked \
     --target bun \
     --outdir /app/bundles \
@@ -78,6 +82,8 @@ RUN bun build \
 # apps/api/docker/collab launcher.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles \
     --public-path /app/ \
@@ -111,6 +117,15 @@ RUN bun build \
 #   `set-password` reads the password from standard input.
 #     ["bun", "/app/review-account.js", "provision"]
 #     ["bun", "/app/review-account.js", "set-password"]
+# - partner-oauth-client.js: partner OAuth client commands (a hosted assistant
+#   without dynamic client registration). The secret is minted on the
+#   operator's machine (`bun run oauth:partner-client-secret`); only its digest
+#   comes here.
+#     ["bun", "/app/partner-oauth-client.js", "create", "--name", "...",
+#      "--redirect-uri", "https://...", "--secret-sha256", "..."]
+#     ["bun", "/app/partner-oauth-client.js", "rotate", "--client-id", "...",
+#      "--secret-sha256", "..."]
+#     ["bun", "/app/partner-oauth-client.js", "disable", "--client-id", "..."]
 # - replay-tick.js: one bounded, load-aware background replay tick; enrolment
 #   is reviewed in code.
 # - import-cz-us-roster.js: weekly Czech Constitutional Court roster import
@@ -185,6 +200,8 @@ RUN bun build \
 # image-smoke-model-ingress.js exercises the model guard.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --splitting \
     --outdir /app/bundles \
@@ -201,6 +218,7 @@ RUN bun build \
     apps/api/src/scripts/better-auth-sign-in-replay.ts \
     apps/api/src/scripts/replay-case-law-source.ts \
     apps/api/src/scripts/review-account.ts \
+    apps/api/src/scripts/partner-oauth-client.ts \
     apps/api/src/scripts/replay-tick.ts \
     apps/api/src/scripts/import-cz-us-roster.ts \
     apps/api/src/scripts/eu-completion-tick.ts \
@@ -224,6 +242,8 @@ RUN bun build \
 # in-image through the isolated local ONNX worker.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --sourcemap=linked \
     --outdir /app/bundles \
@@ -237,6 +257,8 @@ RUN bun build \
 # to /app/apps/api/drizzle after the tree is copied to /app.
 RUN bun build \
     --define __STELLA_RELEASE__=true \
+    --minify \
+    --keep-names \
     --target bun \
     --outdir /app/bundles/apps/api/src/db \
     --public-path /app/apps/api/src/db/ \
@@ -250,6 +272,8 @@ RUN bun build \
 RUN mkdir -p /app/bundles/runtime/workers && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -257,6 +281,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -264,6 +290,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -273,6 +301,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/search/extraction-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -280,6 +310,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/ocr-searchable-pdf-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \
@@ -287,6 +319,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       apps/api/src/lib/files/office-evidence-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
+      --minify \
+      --keep-names \
       --target bun \
       --outdir /app/bundles/runtime/workers \
       --public-path /app/runtime/workers/ \

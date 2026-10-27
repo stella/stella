@@ -1,10 +1,11 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswer,
@@ -460,7 +461,8 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
@@ -595,11 +597,11 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
           onClearActive={() => undefined}
@@ -654,7 +656,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}
@@ -695,7 +698,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               role: "member",
               ai: true,
               deepl: false,
-              ocr: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
               desktop: "none",
               settings: undefined,
             })}
