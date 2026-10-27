@@ -4,6 +4,7 @@ import { Result } from "better-result";
 
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
+  type DecisionListSort,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -38,7 +39,26 @@ type CaseLawQueryAlternatives = NonNullable<
   Parameters<typeof api.case.decisions.search.post>[0]["alternatives"]
 >;
 
-export type DecisionListFilters = {
+/**
+ * One result set: a search of some words, in one of the search's orders, or
+ * the browse listing, in one of the listing's. A union so an order can only
+ * travel with the request that serves it.
+ */
+export type DecisionListFilters = DecisionListScope &
+  (
+    | {
+        search: string;
+        /** How the search orders its hits; absent for the default. */
+        sort?: SearchSort;
+      }
+    | {
+        search?: undefined;
+        /** Which way the listing walks the decision dates. */
+        sort: DecisionListSort;
+      }
+  );
+
+type DecisionListScope = {
   /**
    * Words ORed in beside the reader's own. Present only when there are some,
    * so a search without them keeps the key the route loader primed.
@@ -56,9 +76,6 @@ export type DecisionListFilters = {
    */
   excerpt: SearchExcerpt;
   language?: string;
-  search?: string;
-  /** How a search orders its hits; absent while there is nothing to rank. */
-  sort?: SearchSort;
   sourceId?: SafeId<"caseLawSource">;
   /**
    * Require every word the query carries, function words included. Present
@@ -250,10 +267,10 @@ export const decisionsPageOptions = ({
   queryOptions({
     queryKey: caseLawDecisionKeys.page({ ...filters, page, pageSize }),
     queryFn: async ({ signal }) => {
-      const { search, ...listFilters } = filters;
       const offset = (page - 1) * pageSize;
 
-      if (search) {
+      if (filters.search !== undefined) {
+        const { search, ...listFilters } = filters;
         const response = await api.case.decisions.search.post(
           {
             query: search,
@@ -339,24 +356,25 @@ export const decisionsPageOptions = ({
         query: {
           limit: pageSize,
           ...(offset > 0 && { offset }),
-          ...(listFilters.court !== undefined && {
-            court: listFilters.court,
+          sort: filters.sort,
+          ...(filters.court !== undefined && {
+            court: filters.court,
           }),
-          country: listFilters.country,
-          ...(listFilters.sourceId !== undefined && {
-            sourceId: listFilters.sourceId,
+          country: filters.country,
+          ...(filters.sourceId !== undefined && {
+            sourceId: filters.sourceId,
           }),
-          ...(listFilters.dateFrom !== undefined && {
-            dateFrom: listFilters.dateFrom,
+          ...(filters.dateFrom !== undefined && {
+            dateFrom: filters.dateFrom,
           }),
-          ...(listFilters.dateTo !== undefined && {
-            dateTo: listFilters.dateTo,
+          ...(filters.dateTo !== undefined && {
+            dateTo: filters.dateTo,
           }),
-          ...(listFilters.decisionType !== undefined && {
-            decisionType: listFilters.decisionType,
+          ...(filters.decisionType !== undefined && {
+            decisionType: filters.decisionType,
           }),
-          ...(listFilters.language !== undefined && {
-            language: listFilters.language,
+          ...(filters.language !== undefined && {
+            language: filters.language,
           }),
         },
         fetch: { signal },

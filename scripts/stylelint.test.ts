@@ -48,6 +48,15 @@ describe("CSS correctness guard", () => {
       "rule-selector-property-disallowed-list",
       "@keyframes grow { from { height: 0; } to { height: 100%; } }",
     ],
+    // conventions-ux: touch reveals use `pointer: coarse`, never `hover: none`.
+    [
+      "media-feature-name-value-allowed-list",
+      "@media (hover: none) { .sample { opacity: 1; } }",
+    ],
+    [
+      "media-feature-name-value-allowed-list",
+      "@media (any-hover: none) { .sample { opacity: 1; } }",
+    ],
     // conventions-ux: dynamic viewport units, never the largest viewport.
     ["unit-disallowed-list", ".sample { max-height: calc(100vh - 3rem); }"],
     [

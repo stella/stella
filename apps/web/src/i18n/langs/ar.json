@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
       "dateUnavailable": "التاريخ غير متاح",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
+      "goToMention": "الانتقال إلى الإشارة {number}",
+      "goToParagraph": "الانتقال إلى الفقرة {paragraph}",
       "lastNegative": "آخر استشهاد سلبي في {year}",
+      "mentionMark": "الإشارة {number}",
+      "mentionsInDecision": "{count, plural, zero {لم يُستشهد به في هذا الحكم} one {استُشهد به مرة واحدة في هذا الحكم} two {استُشهد به مرتين في هذا الحكم} few {استُشهد به # مرات في هذا الحكم} many {استُشهد به # مرة في هذا الحكم} other {استُشهد به # مرة في هذا الحكم}}",
       "negativeCount": "{count, plural, zero {لا سلبية} one {سلبي واحد} two {سلبيان} few {# سلبية} many {# سلبيًا} other {# سلبي}}",
       "none": "لم تُسجَّل أي استشهادات بعد.",
+      "notInStella": "غير متوفر في stella بعد",
       "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
       "paragraphLabel": "الفقرة {paragraph}",
@@ -1043,8 +1048,10 @@
     },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
-      "human": "بشرية"
+      "human": "بشرية",
+      "toggleState": "{label}: {state, select, on {تشغيل} other {إيقاف}}"
     },
+    "oldestDecisions": "أقدم الأحكام",
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
@@ -1106,8 +1113,7 @@
       "runEstimate": "{rows, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}} × {columns, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}} في هذه الصفحة: ستُنتَج {cells, plural, zero {لا إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}.",
       "runTitle": "الإجابة عن هذه الصفحة",
       "savedQuestions": "الأسئلة المحفوظة",
-      "title": "جداول البحث",
-      "updated": "آخر تعديل {date}"
+      "title": "جداول البحث"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1157,8 @@
     "showWholeHeadnote": "عرض خلاصة الحكم كاملة",
     "sort": {
       "newest": "الأحدث",
+      "oldest": "الأقدم",
+      "oldestUnavailable": "تُرتَّب نتائج البحث حسب الصلة أو الأحدث أولًا. امسح البحث لعرض أقدم الأحكام أولًا.",
       "relevance": "الأكثر صلة"
     },
     "viewer": {
@@ -1166,6 +1174,7 @@
       "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {الانتقال إلى الفقرات} one {الانتقال إلى الفقرة} two {الانتقال إلى الفقرتين} few {الانتقال إلى الفقرات} many {الانتقال إلى الفقرات} other {الانتقال إلى الفقرات}}",
       "judgeRole": {
         "advocateGeneral": "المحامي العام",
         "dissenting": "رأي مخالف",
@@ -2228,6 +2237,7 @@
     "selectARole": "اختر دورًا",
     "selectAll": "تحديد الكل",
     "selectDate": "اختر تاريخًا…",
+    "selected": "محدد",
     "sessions": "الجلسات",
     "settings": "الإعدادات",
     "showAll": "عرض الكل",
@@ -4272,6 +4282,8 @@
       "commentPlaceholder": "اكتب تعليقًا…",
       "commentText": "نص التعليق",
       "commentedPassage": "المقطع المعلَّق عليه",
+      "editComment": "تعديل التعليق",
+      "editedAt": "عُدِّل {time}",
       "guestAuthor": "أنت",
       "guestLimitReached": "يمكن أن يحتوي هذا التبويب على ما يصل إلى {count} من التمييزات والملاحظات. أنشئ حسابًا لحفظ المزيد.",
       "guestMigrationComplete": "تم حفظ التمييزات والملاحظات.",
@@ -6297,6 +6309,7 @@
       "deleteAll": "حذف الكل",
       "deleteAllConfirm": "هل تريد حذف جميع العناصر البالغ عددها {count} في «{column}»؟",
       "hideColumn": "إخفاء العمود",
+      "moveFailed": "{failed, plural, zero {تعذّر نقل # من أصل {total} عنصر.} one {تعذّر نقل عنصر واحد من أصل {total}.} two {تعذّر نقل عنصرين من أصل {total}.} few {تعذّر نقل # عناصر من أصل {total}.} many {تعذّر نقل # عنصرًا من أصل {total}.} other {تعذّر نقل # عنصر من أصل {total}.}}",
       "readOnlyGrouping": "هذا التجميع للقراءة فقط",
       "selectPropertyHint": "اختر خاصية للتجميع بحسبها من شريط الأدوات",
       "uploadDocument": "رفع مستند",
@@ -6356,7 +6369,6 @@
           "approvedBy": "وافق عليها",
           "channel": "القناة",
           "dateTime": "التاريخ والوقت",
-          "eventId": "معرّف الحدث",
           "notAvailable": "غير متاح",
           "openTarget": "فتح العنصر",
           "runId": "معرّف التشغيل",
@@ -6539,6 +6551,11 @@
       },
       "passwordLabel": "أدخل كلمة مرور ملف PDF",
       "previousPage": "الصفحة السابقة",
+      "selection": {
+        "explainPassagePrompt": "اشرح هذا المقطع من {citation}:\n\n«{quote}»",
+        "pageLocator": "ص. {page}",
+        "pageRangeLocator": "ص. {start}–{end}"
+      },
       "showOriginal": "عرض الصفحات الأصلية",
       "unlock": "إلغاء القفل"
     },
@@ -6652,10 +6669,12 @@
       "selectOperator": "اختر المُعامِل",
       "setPromptPlaceholder": "اضبط موجِّهًا لاستخراج المعلومات",
       "singleSelect": "اختيار مفرد",
-      "sortAscending": "ترتيب تصاعدي",
       "sortAscendingDate": "الأقدم أولًا",
-      "sortDescending": "ترتيب تنازلي",
+      "sortAscendingNumber": "الأدنى أولًا",
+      "sortAscendingText": "من أ إلى ي",
       "sortDescendingDate": "الأحدث أولًا",
+      "sortDescendingNumber": "الأعلى أولًا",
+      "sortDescendingText": "من ي إلى أ",
       "splitOptions": "{count, plural, zero {التقسيم إلى خيارات} one {التقسيم إلى خيار واحد} two {التقسيم إلى خيارين} few {التقسيم إلى # خيارات} many {التقسيم إلى # خيارًا} other {التقسيم إلى # خيار}}",
       "suggestWithAI": "اقترح بالذكاء الاصطناعي",
       "text": "نص",
