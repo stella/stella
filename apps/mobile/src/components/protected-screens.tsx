@@ -1,6 +1,5 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import type { NativeStackHeaderItem } from "expo-router/native-stack";
-import { useWindowDimensions, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import {
@@ -9,7 +8,6 @@ import {
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
-import { StellaWordmark } from "@/components/ui/stella-wordmark";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
@@ -32,10 +30,10 @@ export const ProtectedScreens = () => {
 /**
  * The app's screens. The tabs share one header, the platform's own bar with
  * glass where the system has it, laid out as GitHub's app lays its out: the
- * person's button leading, to the settings, then the stella wordmark; the
- * tab's own action and search trailing, together. The action is the tab's
- * "+", a new conversation over the chats, and how to group the matters over
- * theirs. Search is the system's field, which the list under it filters by;
+ * person's button leading, to the settings; no title, as the tab bar already
+ * says where one is; the tab's own action and search trailing, together. The
+ * action is the tab's "+", a new conversation over the chats, and how to
+ * group the matters over theirs. Search is the system's field, which the list under it filters by;
  * More has nothing to search.
  */
 const Screens = () => {
@@ -45,7 +43,6 @@ const Screens = () => {
   const header = useTranslations("header");
   const signedIn = state.status === "signed-in";
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
   const accountGlyph = useGlyphImage("circle-user-round");
   const tabItems = useTabHeaderItems(tab);
@@ -59,12 +56,6 @@ const Screens = () => {
             headerShadowVisible: false,
             headerShown: true,
             headerTintColor: colors.text,
-            // The wordmark leads, as a title the width of the bar would not.
-            headerTitle: () => (
-              <View style={{ width: Math.max(0, width - 200) }}>
-                <StellaWordmark height={20} />
-              </View>
-            ),
             headerTransparent: true,
             // The system's own search button, which opens straight into the
             // field, as t3code's search does; the bar's trailing edge holds it.
@@ -88,7 +79,7 @@ const Screens = () => {
                     placement: "integratedButton",
                     ref: searchBar,
                   },
-            title: "stella",
+            title: "",
             unstable_headerLeftItems: () =>
               accountGlyph === null
                 ? []
