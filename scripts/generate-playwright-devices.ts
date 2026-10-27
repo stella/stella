@@ -26,7 +26,7 @@ export const usedPlaywrightDevices = (root = ROOT) => {
       "packages/**/playwright*.config.*",
       "packages/playwright-tools/src/marketing-config.ts",
     ],
-    { cwd: root, encoding: "utf-8" },
+    { cwd: root, encoding: "utf-8", maxBuffer: 2 ** 20 },
   )
     .split("\0")
     .filter(Boolean);
