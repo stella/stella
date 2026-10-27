@@ -20,6 +20,7 @@ import {
   queryCountLogger,
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
@@ -308,6 +309,76 @@ describe("my suggestion range", () => {
         response: { code: "invalid_date_range" },
       });
     }
+  });
+
+  test("offers a busy day the same suggestions in a week read as in its one-day decision read", async () => {
+    // A separate week: the day's first source cap of signals forms a morning
+    // cluster and one more signal an evening cluster beyond the cap.
+    const busyMonday = "2019-04-01";
+    const morningResourceIds = Array.from(
+      { length: LIMITS.timeSuggestionSignalsPerSourceMax },
+      () => createSafeId<"entity">(),
+    );
+    const record = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    await testDb.transaction(async (tx) => {
+      await record(
+        asTestRaw<Transaction>(tx),
+        morningResourceIds.map((resourceId) => ({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId,
+        })),
+      );
+    });
+    const morning = await testDb
+      .update(auditLogs)
+      .set({ createdAt: at(busyMonday, "08:00:00") })
+      .where(
+        and(
+          eq(auditLogs.workspaceId, ids.wsA1),
+          inArray(auditLogs.resourceId, morningResourceIds),
+        ),
+      )
+      .returning({ id: auditLogs.id });
+    auditIds.push(...morning.map(({ id }) => id));
+    expect(morning).toHaveLength(LIMITS.timeSuggestionSignalsPerSourceMax);
+    await seedAuditRow({
+      workspaceId: ids.wsA1,
+      createdAt: at(busyMonday, "20:00:00"),
+    });
+
+    const suggestionsOn = (response: RangeResponse) =>
+      response.days
+        .filter(({ date }) => date === busyMonday)
+        .flatMap(({ matters }) => matters)
+        .filter(({ matter }) => matter.id === ids.wsA1)
+        .flatMap(({ items }) =>
+          items.map(({ fingerprint, durationMinutes }) => ({
+            fingerprint,
+            durationMinutes,
+          })),
+        );
+    const week = await expectRange({
+      startDate: busyMonday,
+      endDate: "2019-04-07",
+      matters: [ids.wsA1],
+    });
+    const day = await expectRange({
+      startDate: busyMonday,
+      endDate: busyMonday,
+      matters: [ids.wsA1],
+    });
+
+    expect(suggestionsOn(day)).toHaveLength(1);
+    expect(suggestionsOn(week)).toEqual(suggestionsOn(day));
   });
 
   test("issues the same statements for two matters as for twelve", async () => {

@@ -66,6 +66,7 @@ const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
     durationMinutes: 30,
     billedMinutes: 30,
     narrative: "Review lease schedule",
+    narrativeLanguage: null,
     billable: true,
     status: "draft",
     source: "manual",
@@ -459,7 +460,10 @@ describe("my week", () => {
   });
 
   test("editing a draft entry saves it in its matter and updates the totals", async () => {
-    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const calls = serveWeek({
+      entries: [draftEntry({ narrativeLanguage: "cs" })],
+      suggestions: [],
+    });
     mount();
 
     const edit = await screen.findByRole("button", {
@@ -490,7 +494,12 @@ describe("my week", () => {
     expect(patch?.path).toMatch(
       new RegExp(`^/time-entries/${LEASE_MATTER.id}/?$`, "u"),
     );
-    expect(patch?.body).toMatchObject({ id: "entry-1", durationMinutes: 45 });
+    // Changing only the duration keeps the narrative's stored language.
+    expect(patch?.body).toMatchObject({
+      id: "entry-1",
+      durationMinutes: 45,
+      narrativeLanguage: "cs",
+    });
   });
 
   test("only drafts are editable from the week", async () => {
