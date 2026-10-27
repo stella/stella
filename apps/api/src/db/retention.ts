@@ -83,6 +83,10 @@ export const TABLE_RETENTION = {
     ttlColumn: "created_at",
     sweeper: "audit.purgeSystemRuns",
   },
+  billing_draft_user_settings: {
+    boundedBy:
+      "One consent and preference row per organization and user, deleted on organization offboarding or with its organization or user.",
+  },
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
   },
@@ -140,6 +144,14 @@ export const TABLE_RETENTION = {
   },
   usage_allocations: {
     boundedBy: "Organization-owned usage accounting and deletion.",
+  },
+  usage_events: {
+    boundedBy:
+      "Organization-owned immutable usage accounting, retained across member removal and deleted with the organization.",
+  },
+  usage_lane_counters: {
+    boundedBy:
+      "One accounting accumulator per organization, user, lane kind and time bucket; historical buckets remain for accounting and are deleted with the organization or user.",
   },
   usage_entitlements: {
     boundedBy: "Organization-owned usage configuration and deletion.",

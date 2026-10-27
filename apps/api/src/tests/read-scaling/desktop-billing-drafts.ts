@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
@@ -144,7 +145,23 @@ export const measureDesktopBillingDraftSettings = async (
     // The registry retains the canonical mounted definition. Its measurement
     // uses this same production factory with only credential verification supplied.
     const endpoint = createDesktopBillingDraftSettingsReadEndpoint(
-      async () => await Promise.resolve(Result.ok(account)),
+      async () =>
+        await Promise.resolve(
+          Result.ok({
+            ...account,
+            featureAccessSnapshot: buildFeatureAccessSnapshot({
+              organizationId,
+              userId,
+              identity: {
+                email: `${userId}@example.test`,
+                emailVerified: true,
+              },
+              enrolments: [
+                { featureId: "time-billing", organizationId, userId },
+              ],
+            }),
+          }),
+        ),
     );
     return await runWithMeasuredQueryCounter(async (counter) => {
       const response = await endpoint.handler(

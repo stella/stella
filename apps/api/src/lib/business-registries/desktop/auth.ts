@@ -8,7 +8,11 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createAuditRecorder } from "@/api/lib/audit-log";
-import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import {
+  featureAccessSnapshotFromAuthorization,
+  getAuth,
+  resolveCredentialMemberAuthorization,
+} from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
@@ -76,6 +80,9 @@ type DesktopRegistryAuthorization = {
   consumedProof: ConsumedDesktopDeviceProof;
   scopedDb: ScopedDb;
   memberRole: ReturnType<typeof sessionMemberRole>;
+  featureAccessSnapshot: ReturnType<
+    typeof featureAccessSnapshotFromAuthorization
+  >;
 };
 
 // The credential stores take the owner connection as an optional `db` and
@@ -222,6 +229,9 @@ export const createDesktopCredentialAuthorizers = ({
     if (member.isErr()) {
       return Result.err(member.error);
     }
+    if (member.value === null) {
+      return Result.err(rejected());
+    }
     const memberRole = authorizeDesktopMember(member.value, permission);
     if (memberRole.isErr()) {
       return Result.err(memberRole.error);
@@ -230,6 +240,10 @@ export const createDesktopCredentialAuthorizers = ({
       ...identity,
       keyId: key.id,
       memberRole: memberRole.value,
+      featureAccessSnapshot: featureAccessSnapshotFromAuthorization({
+        ...identity,
+        authorization: member.value,
+      }),
       consumedProof: consumed.value,
       scopedDb: createMembershipScopedDb(membershipDb, {
         ...identity,

@@ -20,6 +20,7 @@ import { routes } from "@/api/http/route";
 import type { RouteTable } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { LIMITS } from "@/api/lib/limits";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -170,6 +171,18 @@ const createBatchHarness = (existingEntries = 0) => {
   const authorizeAccount = async (request: Request) => {
     const device = await deviceSigner;
     return Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">("org_test"),
+        userId: "user_test",
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments: [
+          {
+            featureId: "time-billing",
+            organizationId: "org_test",
+            userId: "user_test",
+          },
+        ],
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,

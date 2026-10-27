@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateSchema } from "./api-date";
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries";
 
@@ -61,7 +62,7 @@ export const desktopBillingDraftEvidenceSchema = v.strictObject({
 
 export const desktopBillingDraftEntrySchema = v.strictObject({
   matterId: matterIdSchema,
-  date: v.pipe(v.string(), v.isoDate()),
+  date: apiDateSchema,
   timezone: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: durationSchema,
   appNames: v.pipe(v.array(nameSchema), v.maxLength(20)),
@@ -217,7 +218,7 @@ export const desktopBillingDraftModelResponseSchema =
  * what "consistent with" refers to without a second request. */
 export const desktopBillingDraftEarlierEntrySchema = v.strictObject({
   id: identifierSchema,
-  dateWorked: v.pipe(v.string(), v.isoDate()),
+  dateWorked: apiDateSchema,
   durationMinutes: durationSchema,
   narrative: v.pipe(
     v.string(),

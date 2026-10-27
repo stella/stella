@@ -247,6 +247,30 @@ test("selected entry inputs and guideline citations have finite validated bounds
   }
 });
 
+test("billing draft request and review dates are real calendar days in CE years", () => {
+  for (const date of ["2026-02-30", "0000-01-01"]) {
+    expect(
+      v.safeParse(desktopBillingDraftRequestSchema, {
+        entries: [{ ...entry, date }],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      v.safeParse(desktopBillingDraftReviewSchema, {
+        result: response,
+        earlierEntries: [
+          {
+            id: "earlier-entry",
+            dateWorked: date,
+            durationMinutes: 30,
+            narrative: "Reviewed agreement",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  }
+});
+
 test("draft operations carry reviewable payloads and classification branches remain exclusive", () => {
   const classification = {
     type: "activity_group",

@@ -9,6 +9,7 @@ import {
 
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -121,7 +122,15 @@ test("each supported handoff records an account refusal with the existing accoun
 
 test("supported protocols retain the authenticated account identity without a failure write", async () => {
   const device = await createDesktopDeviceSigner();
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
   const identity = {
+    featureAccessSnapshot: buildFeatureAccessSnapshot({
+      organizationId,
+      userId,
+      identity: { email: `${userId}@example.test`, emailVerified: true },
+      enrolments: [],
+    }),
     consumedProof: await claimFixtureDeviceProof({
       request: await device.signRequest({
         request: requestWithProtocol(String(DESKTOP_HANDOFF_PROTOCOL_VERSION)),
@@ -133,8 +142,8 @@ test("supported protocols retain the authenticated account identity without a fa
     }),
     keyId: "desktop-account-key",
     memberRole: sessionMemberRole("member"),
-    organizationId: mintAuthProviderId<"organization">(),
-    userId: mintAuthProviderId<"user">(),
+    organizationId,
+    userId,
     scopedDb: async () =>
       panic("authorization must not access document content"),
   };

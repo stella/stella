@@ -3,14 +3,12 @@ import * as v from "valibot";
 
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import type { PublicHandlerConfig } from "@/api/lib/api-handlers";
-import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 
@@ -55,15 +53,8 @@ export const createDesktopFeatureAccessReadEndpoint = (
   const authorizeAccount =
     dependencies?.authorizeAccount ?? authorizeDesktopAccount;
   return createSafeBoundedPublicHandler(config, async function* ({ request }) {
-    const { scopedDb, userId, organizationId } = yield* Result.await(
+    const { featureAccessSnapshot: snapshot } = yield* Result.await(
       authorizeAccount(request),
-    );
-    const snapshot = yield* Result.await(
-      loadFeatureAccessSnapshot({
-        safeDb: safeDbFromScoped(scopedDb),
-        organizationId,
-        userId,
-      }),
     );
     return Result.ok({
       features: {

@@ -15,6 +15,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
@@ -193,6 +194,20 @@ const exercise = async ({
     authorizeAccount: async (request) => {
       const device = await createDesktopDeviceSigner();
       return Result.ok({
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+          identity: { email: "billing@example.test", emailVerified: true },
+          enrolments: hiddenFeature
+            ? []
+            : [
+                {
+                  featureId: "time-billing",
+                  organizationId: ORGANIZATION_ID,
+                  userId: USER_ID,
+                },
+              ],
+        }),
         consumedProof: await claimFixtureDeviceProof({
           request: await device.signRequest({
             request,

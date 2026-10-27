@@ -8,6 +8,7 @@ import { routes } from "@/api/http/route";
 import type { RouteEntry } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   authorizedMemberRole,
@@ -168,6 +169,21 @@ const exercise = async ({
   const device = await createDesktopDeviceSigner();
   const authorizeAccount = async (request: Request) =>
     Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        userId: USER_ID,
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments:
+          hidden === "time-billing"
+            ? []
+            : [
+                {
+                  featureId: "time-billing",
+                  organizationId: ORGANIZATION_ID,
+                  userId: USER_ID,
+                },
+              ],
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,
