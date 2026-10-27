@@ -10,7 +10,6 @@
       "typescript": { "config": ["tsconfig*.json", "package.json"] },
       "entry": [
         "scripts/*.ts",
-        "oxlint.config.ts",
         "oxlint.design.config.ts",
         "oxlint.tailwind.config.ts"
       ],
@@ -302,7 +301,7 @@
     "packages/infosoud/src/constants.ts": ["duplicates"]
   },
   "exclude": ["exports", "types"],
-  "ignoreBinaries": ["docker", "tsc", "bun", "tail", "fmt"],
+  "ignoreBinaries": ["docker"],
   "ignoreDependencies": [
     "@stll/typescript-config",
     // Declared ahead of the text-search engine migration so its PRs share one
