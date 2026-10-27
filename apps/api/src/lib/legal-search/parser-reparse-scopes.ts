@@ -109,54 +109,6 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.CZ_US]: {
-    version: 29,
-    scope: {
-      type: "all",
-      reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
-    },
-  },
-  [ADAPTER_KEYS.SK_US]: {
-    version: 13,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.PL_COURTS]: {
     version: 15,
     scope: {
       type: "all",
@@ -164,8 +116,56 @@ export const PARSER_VERSION_SCOPES = {
         "Revalidate document AST identities across the complete parser output.",
     },
   },
+  [ADAPTER_KEYS.CZ_NS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_NSS]: {
+    version: 22,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.CZ_US]: {
+    version: 30,
+    scope: {
+      type: "all",
+      reason:
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.SK_COURTS]: {
+    version: 20,
+    scope: {
+      type: "all",
+      reason:
+        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+    },
+  },
+  [ADAPTER_KEYS.SK_US]: {
+    version: 14,
+    scope: {
+      type: "all",
+      reason:
+        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_COURTS]: {
+    version: 16,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -173,7 +173,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -181,7 +181,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
@@ -197,7 +197,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
@@ -282,46 +282,6 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.AT_FINDOK]: {
-    version: 10,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.EU_ECJ]: {
-    version: 17,
-    scope: {
-      type: "all",
-      reason:
-        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
-    },
-  },
-  [ADAPTER_KEYS.HU_BHGY]: {
-    version: 21,
-    scope: {
-      type: "all",
-      reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
-    },
-  },
-  [ADAPTER_KEYS.PL_KIS]: {
-    version: 10,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_UODO]: {
-    version: 14,
-    scope: {
-      type: "all",
-      reason:
-        "Revalidate document AST identities across the complete parser output.",
-    },
-  },
-  [ADAPTER_KEYS.PL_UOKIK]: {
     version: 11,
     scope: {
       type: "all",
@@ -329,8 +289,48 @@ export const PARSER_VERSION_SCOPES = {
         "Revalidate document AST identities across the complete parser output.",
     },
   },
+  [ADAPTER_KEYS.EU_ECJ]: {
+    version: 18,
+    scope: {
+      type: "all",
+      reason:
+        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+    },
+  },
+  [ADAPTER_KEYS.HU_BHGY]: {
+    version: 22,
+    scope: {
+      type: "all",
+      reason:
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+    },
+  },
+  [ADAPTER_KEYS.PL_KIS]: {
+    version: 11,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UODO]: {
+    version: 15,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.PL_UOKIK]: {
+    version: 12,
+    scope: {
+      type: "all",
+      reason:
+        "Revalidate document AST identities across the complete parser output.",
+    },
+  },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
