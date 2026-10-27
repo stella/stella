@@ -10,7 +10,7 @@ const { render, cleanup, fireEvent, waitFor } =
 const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
-const { useQueryView } = await import("@/lib/use-query-view");
+const { queryView } = await import("@/lib/query-view.logic");
 const { ProvisionLeadingDecisions } =
   await import("./provision-leading-decisions");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -34,7 +34,7 @@ test("clicking retry recovers a selected read and replaces the error with conten
     return [];
   };
   const Read = () => {
-    const view = useQueryView(
+    const view = queryView(
       useQuery({
         queryKey: ["provision-leading-decisions", "retry"],
         queryFn: read,

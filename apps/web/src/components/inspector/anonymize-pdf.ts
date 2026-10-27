@@ -25,7 +25,8 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -100,13 +101,13 @@ export const useFileAnonymizationPipeline = ({
     ...anonymizationTermsOptions(workspaceId),
     enabled,
   });
-  const vocabularyQueryView = useQueryView(vocabularyQuery);
+  const vocabularyQueryView = queryView(vocabularyQuery);
   useQueryViewError(vocabularyQueryView, "useFileAnonymizationPipeline:query");
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
+  const allowlistQueryView = queryView(allowlistQuery);
   useQueryViewError(allowlistQueryView, "useFileAnonymizationPipeline:query-2");
   useQuery({
     enabled:

@@ -55,8 +55,9 @@ import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status"
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -81,7 +82,7 @@ export const ProvisionInspectorView = ({
   const navigate = useNavigate();
   const search = useRouterState({ select: (state) => state.location.search });
   const citingFilters = readProvisionCitingSearch(search);
-  const countsView = useQueryView(
+  const countsView = queryView(
     useQuery(
       statuteCitationCountsOptions({
         eli: payload.eli,
@@ -98,7 +99,7 @@ export const ProvisionInspectorView = ({
   const textScale = useReaderTextScale("provision");
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
+  const versionsView = queryView(versionsQuery);
   useQueryViewError(versionsView, "ProvisionInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
@@ -139,7 +140,7 @@ export const ProvisionInspectorView = ({
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
-  const leadingView = useQueryView(
+  const leadingView = queryView(
     useQuery(
       topCitingDecisionsOptions({
         anchor: payload.anchorId,

@@ -30,8 +30,12 @@ import {
   correspondenceAllowedSenders,
   entities,
   entityDeletionCleanupRequests,
+  expenses,
   featureEnrolments,
   fileComparisonUploads,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
   organizationSettings,
   playbookDefinitions,
   rateEntries,
@@ -51,6 +55,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
@@ -74,7 +79,6 @@ import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import {
   createResetReviewOrganizationTask,
   RESET_REVIEW_ORGANIZATION_TASK,
-  resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
 import type {
   SchedulerDb,
@@ -957,6 +961,78 @@ describe("review organization seed and reset", () => {
       .insert(organizationSettings)
       .values({ organizationId: fixture.reviewOrgId })
       .onConflictDoNothing();
+    // Billing records a matter deletion refuses: the reset clears them before
+    // the matters, so they never hold one back.
+    const [workItem] = await testDb
+      .select({ id: entities.id, workspaceId: entities.workspaceId })
+      .from(entities)
+      .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
+      .where(eq(workspaces.organizationId, fixture.reviewOrgId))
+      .limit(1);
+    if (workItem === undefined) {
+      panic("The seeded review organization has a matter document");
+    }
+    await testDb.insert(expenses).values({
+      id: createSafeId<"expense">(),
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      userId: fixture.reviewUserId,
+      matterId: workItem.id,
+      dateIncurred: "2026-08-30",
+      amount: cents(2500),
+      currency: "EUR",
+      category: "filing_fee",
+      description: "Reviewer expense",
+    });
+    // A line that still bills an entry refuses the entry's deletion, so the
+    // reset must take the invoice and its lines first.
+    const billedEntryId = createSafeId<"timeEntry">();
+    await testDb.insert(timeEntries).values({
+      id: billedEntryId,
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      userId: fixture.reviewUserId,
+      dateWorked: "2026-08-30",
+      timezoneId: "Europe/Prague",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(100),
+      currency: "EUR",
+      narrative: "Billed reviewer work",
+      status: "billed",
+    });
+    const reviewerInvoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: reviewerInvoiceId,
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      invoiceNumber: `REVIEW-${reviewerInvoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      invoiceId: reviewerInvoiceId,
+      position: 0,
+      description: "Reviewer services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "time_entry",
+      timeEntryId: billedEntryId,
+    });
+    const timeEntriesBefore = await testDb.$count(
+      timeEntries,
+      eq(timeEntries.organizationId, fixture.reviewOrgId),
+    );
 
     const outcome = await resetReviewOrganization({
       config: config(fixture.reviewOrgId),
@@ -977,6 +1053,30 @@ describe("review organization seed and reset", () => {
     });
     expect(report.swept.get("chat_threads")).toBe(1);
     expect(report.swept.get("saved_searches")).toBe(1);
+    // The invoice's lines go with it.
+    expect(Object.fromEntries(report.billing)).toEqual({
+      invoices: 1,
+      expenses: 1,
+      time_entries: timeEntriesBefore,
+    });
+    expect(
+      await testDb.$count(
+        invoices,
+        eq(invoices.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        expenses,
+        eq(expenses.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        invoiceLines,
+        eq(invoiceLines.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
     expect(
       await testDb.$count(chatThreads, eq(chatThreads.id, extraThreadId)),
     ).toBe(0);
@@ -1091,18 +1191,11 @@ describe("review organization reset task", () => {
   });
 
   test("is registered ungated and, without time billing, seeds everything else", async () => {
-    // The registry runs the task itself, with no feature gate in front of it.
-    expect(
-      createSchedulerTaskRegistry(async () => {}).get(
-        RESET_REVIEW_ORGANIZATION_TASK,
-      ),
-    ).toBe(resetReviewOrganizationTask);
-
     // Enrolments survive resets (they are the account's preferences).
     await testDb
       .delete(featureEnrolments)
       .where(eq(featureEnrolments.organizationId, fixture.reviewOrgId));
-    const task = createResetReviewOrganizationTask({
+    const reset = createResetReviewOrganizationTask({
       readConfig: () => config(fixture.reviewOrgId),
       dependencies: {
         ...resetDependencies,
@@ -1113,9 +1206,19 @@ describe("review organization reset task", () => {
       },
       rlsDatabase: rlsDatabase(),
     });
-    (await task(contextFor(Bun.randomUUIDv7()))).unwrap(
-      "Expected the reset run to succeed without time billing",
-    );
+    // Exercise the registered counting wrapper without a feature gate.
+    const task = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: reset,
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (task === undefined) {
+      panic("The reset task must be registered without a feature gate");
+    }
+    const runId = Bun.randomUUIDv7();
+    const outcome = await task(contextFor(runId));
+    if (outcome === undefined) {
+      panic("The registered reset task must return its Result");
+    }
+    outcome.unwrap("Expected the reset run to succeed without time billing");
     expect(await countRows(fixture.reviewOrgId)).toEqual({
       ...SAMPLE_COUNTS,
       timeEntries: 0,
@@ -1132,15 +1235,34 @@ describe("review organization reset task", () => {
       ),
     ).toBe(0);
 
-    // With time billing back, the next run completes the sample data.
-    const restored = createResetReviewOrganizationTask({
-      readConfig: () => config(fixture.reviewOrgId),
-      dependencies: resetDependencies,
-      rlsDatabase: rlsDatabase(),
+    const audit = await testDb
+      .select({ counts: systemAuditRuns.counts })
+      .from(systemAuditRuns)
+      .where(eq(systemAuditRuns.subject, runId));
+    expect(audit).toHaveLength(1);
+    expect(audit.at(0)?.counts).toMatchObject({
+      failedDeletes: 0,
+      seedFailed: 0,
+      seededDocuments: SAMPLE_COUNTS.documents,
+      seededTimeEntries: 0,
     });
-    (await restored(contextFor(Bun.randomUUIDv7()))).unwrap(
-      "Expected the reset run to succeed",
-    );
+
+    // With time billing back, the registered task completes the sample data.
+    const restored = createSchedulerTaskRegistry(async () => {}, {
+      resetReviewOrganization: createResetReviewOrganizationTask({
+        readConfig: () => config(fixture.reviewOrgId),
+        dependencies: resetDependencies,
+        rlsDatabase: rlsDatabase(),
+      }),
+    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    if (restored === undefined) {
+      panic("The restored reset task must remain registered");
+    }
+    const restoredOutcome = await restored(contextFor(Bun.randomUUIDv7()));
+    if (restoredOutcome === undefined) {
+      panic("The restored reset task must return its Result");
+    }
+    restoredOutcome.unwrap("Expected the reset run to succeed");
     expect(await countRows(fixture.reviewOrgId)).toEqual({ ...SAMPLE_COUNTS });
   });
 });
