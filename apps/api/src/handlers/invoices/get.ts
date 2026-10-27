@@ -73,6 +73,7 @@ const readInvoiceById = createSafeHandler(
         totalAmount: invoice.totalAmount,
         paidAmount: paidAmountOf(invoice.payments),
       }),
+      sentAt: invoice.sentAt?.toISOString() ?? null,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),

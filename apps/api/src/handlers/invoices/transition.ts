@@ -598,6 +598,41 @@ const unconvertedVatError = async (
       });
 };
 
+/**
+ * Voiding or reverting an issued invoice waits until nothing still depends on
+ * it: no unvoided credit note against it and no unvoided payment on it.
+ */
+const linkedRecordsRefusal = async (
+  tx: Transaction,
+  {
+    action,
+    invoiceId,
+    workspaceId,
+  }: {
+    action: "void" | "revert_to_draft";
+    invoiceId: SafeId<"invoice">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<HandlerError | null> => {
+  if (await hasActiveInvoiceCredit(tx, { invoiceId, workspaceId })) {
+    return new HandlerError({
+      status: 409,
+      message:
+        "Void linked credit notes before changing their original invoice",
+    });
+  }
+  if (await hasActiveInvoicePayments(tx, invoiceId)) {
+    return new HandlerError({
+      status: 409,
+      message:
+        action === "void"
+          ? "Void the invoice's payments before voiding the invoice"
+          : "Void the invoice's payments before reverting it to draft",
+    });
+  }
+  return null;
+};
+
 type ApplyTransitionOptions = {
   action: TransitionAction;
   actorUserId: SafeId<"user">;
@@ -643,35 +678,22 @@ const applyTransition = async (
     );
   }
   if (options.action === "void" || options.action === "revert_to_draft") {
-    const hasCredit = await hasActiveInvoiceCredit(tx, {
+    const linked = await linkedRecordsRefusal(tx, {
+      action: options.action,
       invoiceId: existing.id,
       workspaceId: options.workspaceId,
     });
-    if (hasCredit) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message:
-            "Void linked credit notes before changing their original invoice",
-        }),
-      );
+    if (linked !== null) {
+      return Result.err(linked);
     }
-  }
-  if (
-    options.action === "void" &&
-    (await hasActiveInvoicePayments(tx, existing.id))
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        message: "Void the invoice's payments before voiding the invoice",
-      }),
-    );
   }
   const set: Partial<typeof invoices.$inferInsert> = {
     status: options.transition.to,
     updatedAt: options.now,
   };
+  if (options.action === "send") {
+    set.sentAt = options.now;
+  }
   if (options.action === "void") {
     set.paidAt = null;
   }
@@ -816,7 +838,7 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
         "using the issue date; configure a default number series first. Manual numbers " +
         "and numbers kept after reverting to draft are preserved. A credit note must " +
         "reference an eligible original and cannot exceed its total. Voiding releases " +
-        "attached entries and is refused while unvoided payments remain. Finalizing a VAT invoice in a " +
+        "attached entries; it and reverting are refused while unvoided payments remain. Finalizing a VAT invoice in a " +
         "currency other than its seller country's VAT currency (EUR for Slovakia, CZK " +
         "for Czechia, PLN for Poland) records the official exchange rate for its tax " +
         "point and states the VAT in that currency; it is refused when the rate cannot " +

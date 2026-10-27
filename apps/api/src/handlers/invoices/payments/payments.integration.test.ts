@@ -89,6 +89,12 @@ const PAID_ON = Temporal.Now.plainDateISO("UTC")
   .subtract({ days: 1 })
   .toString();
 
+// A seeded sent (or paid) invoice was marked sent, as the send transition does.
+const sentAtFor = (status: InvoiceStatus) =>
+  status === INVOICE_STATUS.SENT || status === INVOICE_STATUS.PAID
+    ? new Date("2026-06-24T09:00:00Z")
+    : null;
+
 const seedInvoice = async ({
   status,
   totalAmount = 10_000,
@@ -115,6 +121,7 @@ const seedInvoice = async ({
       invoiceDate: "2026-06-23",
       currency: "USD",
       status,
+      sentAt: sentAtFor(status),
       totalAmount: cents(totalAmount),
     });
     return invoiceId;
@@ -127,6 +134,7 @@ const seedInvoice = async ({
     invoiceDate: "2026-06-23",
     currency: "USD",
     status,
+    sentAt: sentAtFor(status),
     totalAmount: cents(totalAmount),
   });
   return invoiceId;
@@ -310,10 +318,6 @@ describe("invoice payments", () => {
 
   test.each([
     [INVOICE_STATUS.DRAFT, "A draft invoice cannot take payments"],
-    [
-      INVOICE_STATUS.FINALIZED,
-      "Mark the invoice sent before recording a payment",
-    ],
     [INVOICE_STATUS.VOID, "A void invoice cannot take payments"],
   ])("a %s invoice takes no payment", async (status, message) => {
     const invoiceId = await seedInvoice({ status });
@@ -369,6 +373,70 @@ describe("invoice payments", () => {
     // The voided payment no longer counts: the full amount can be paid again.
     await record(invoiceId, { amount: 10_000 });
     expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.PAID);
+  });
+
+  test("a finalized invoice takes payments, is paid when settled and returns to finalized", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    await record(invoiceId, { amount: 4000 });
+    expect(await readDetail(invoiceId)).toMatchObject({
+      status: INVOICE_STATUS.FINALIZED,
+      sentAt: null,
+      paidAmount: 4000,
+      outstandingAmount: 6000,
+    });
+    const paymentId = paymentIdOf(await record(invoiceId, { amount: 6000 }));
+    const paid = await readStored(invoiceId);
+    expect(paid?.status).toBe(INVOICE_STATUS.PAID);
+    expect(paid?.paidAt).toBeInstanceOf(Date);
+
+    await voidPayment(invoiceId, paymentId);
+    // Never marked sent, so it goes back to finalized, not sent.
+    expect(await readStored(invoiceId)).toMatchObject({
+      status: INVOICE_STATUS.FINALIZED,
+      paidAt: null,
+    });
+  });
+
+  test("an invoice sent by the transition returns to sent when its payment is voided", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    expect(
+      await run(transitionInvoice, {
+        params: { invoiceId },
+        body: { action: "send" },
+        route: "/v1/invoices/:workspaceId/:invoiceId/transition",
+      }),
+    ).toEqual({ id: invoiceId });
+    const sent = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+      columns: { sentAt: true },
+    });
+    expect(sent?.sentAt).toBeInstanceOf(Date);
+    const paymentId = paymentIdOf(await record(invoiceId, { amount: 10_000 }));
+    expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.PAID);
+    await voidPayment(invoiceId, paymentId);
+    expect((await readStored(invoiceId))?.status).toBe(INVOICE_STATUS.SENT);
+  });
+
+  test("a finalized invoice with unvoided payments cannot be reverted to draft", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+    const paymentId = paymentIdOf(await record(invoiceId, { amount: 2500 }));
+    const revert = async () =>
+      await run(transitionInvoice, {
+        params: { invoiceId },
+        body: { action: "revert_to_draft" },
+        route: "/v1/invoices/:workspaceId/:invoiceId/transition",
+      });
+    expect(await revert()).toMatchObject({
+      code: 409,
+      response: {
+        message: "Void the invoice's payments before reverting it to draft",
+      },
+    });
+    expect((await readStored(invoiceId))?.status).toBe(
+      INVOICE_STATUS.FINALIZED,
+    );
+    await voidPayment(invoiceId, paymentId);
+    expect(await revert()).toEqual({ id: invoiceId });
   });
 
   test("an invoice with unvoided payments cannot be voided", async () => {

@@ -66,6 +66,10 @@ import {
   InvoicePaymentsSection,
   RecordPaymentDialog,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments";
+import {
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -341,11 +345,12 @@ const InvoiceDetail = ({
               {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
             </h2>
             <InvoiceStatusBadge
-              partiallyPaid={invoiceStatus === "sent" && invoice.paidAmount > 0}
+              partiallyPaid={isPartiallyPaid(invoice)}
               status={invoiceStatus}
             />
           </div>
-          {(invoiceStatus === "sent" || invoiceStatus === "paid") && (
+          {(invoiceTakesPayments(invoiceStatus) ||
+            invoiceStatus === "paid") && (
             <p className="text-muted-foreground text-sm tabular-nums">
               {t("billing.invoices.payments.outstandingAmount", {
                 amount: formatCurrencyAmount(
@@ -410,7 +415,7 @@ const InvoiceDetail = ({
         )}
       </div>
 
-      {(invoiceStatus === "sent" ||
+      {(invoiceTakesPayments(invoiceStatus) ||
         invoiceStatus === "paid" ||
         invoice.payments.length > 0) && (
         <InvoicePaymentsSection

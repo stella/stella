@@ -2,10 +2,16 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- When an invoice was marked sent, so a paid invoice whose payments are
+-- voided returns to the status it had. Nullable and default-free: a catalog
+-- change that leaves every existing invoice row as it was.
+ALTER TABLE "invoices" ADD COLUMN IF NOT EXISTS "sent_at" timestamptz;--> statement-breakpoint
+
 -- Payments a client made towards an issued invoice. Additive: a new, empty
 -- table; no existing invoice row or total is read or changed. A payment hangs
--- off its invoice (which outlives its matters), is reversed by voiding rather
--- than deleted, and goes only with its organization.
+-- off its invoice (which outlives its matters) and is reversed by voiding;
+-- the application never deletes an issued invoice, so the cascade serves only
+-- deliberate removals (organization deletion, the review reset).
 CREATE TABLE "invoice_payments" (
   "id" uuid PRIMARY KEY NOT NULL,
   "organization_id" varchar(128) NOT NULL,
@@ -20,7 +26,7 @@ CREATE TABLE "invoice_payments" (
   "voided_at" timestamptz,
   "voided_by" text,
   CONSTRAINT "invoice_payments_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
-  CONSTRAINT "invoice_payments_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE NO ACTION,
+  CONSTRAINT "invoice_payments_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "invoices"("id") ON DELETE CASCADE,
   CONSTRAINT "invoice_payments_amount_check" CHECK ("amount" > 0),
   CONSTRAINT "invoice_payments_method_check" CHECK ("method" in ('bank_transfer', 'card', 'cash', 'other')),
   CONSTRAINT "invoice_payments_void_check" CHECK (("voided_at" IS NULL) = ("voided_by" IS NULL))

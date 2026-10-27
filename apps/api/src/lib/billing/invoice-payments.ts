@@ -29,10 +29,11 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
  * The owner of invoice payments: every payment write, and the rule that an
  * invoice is paid exactly when its non-voided payments reach its total.
  *
- * Payments are recorded on a sent invoice only. Paid therefore always follows
- * sent, and voiding a payment that takes a paid invoice back below its total
- * returns it to sent. A draft has no issued total, a finalized invoice has not
- * reached the client yet, and a void one is no longer owed.
+ * Payments are recorded on an issued invoice, finalized or sent: firms often
+ * send invoices outside stella. Reaching the total marks it paid from either;
+ * voiding a payment that takes a paid invoice back below its total returns it
+ * to sent when it was ever marked sent (`invoices.sentAt`), else to finalized.
+ * A draft has no issued total, and a void invoice is no longer owed.
  *
  * Every write takes the invoice aggregate lock (`lockInvoiceInStatus`) before
  * it reads the paid sum, so two concurrent payments are serialized and the
@@ -197,19 +198,14 @@ const refusedStatus = (status: InvoiceStatus): HandlerError | null => {
       return new HandlerError({
         status: 409,
         message: "A draft invoice cannot take payments",
-        hint: "Finalize and send the invoice, then record the payment.",
-      });
-    case INVOICE_STATUS.FINALIZED:
-      return new HandlerError({
-        status: 409,
-        message: "Mark the invoice sent before recording a payment",
-        hint: "Send the invoice, then record the payment.",
+        hint: "Finalize the invoice, then record the payment.",
       });
     case INVOICE_STATUS.VOID:
       return new HandlerError({
         status: 409,
         message: "A void invoice cannot take payments",
       });
+    case INVOICE_STATUS.FINALIZED:
     case INVOICE_STATUS.SENT:
     case INVOICE_STATUS.PAID:
       return null;
@@ -250,72 +246,128 @@ const lockInvoice = async (tx: Transaction, scope: InvoicePaymentScope) =>
     matterLocks: { type: "acquire" },
   });
 
-/** The status an invoice's paid sum decides, from the status it holds. */
-const settledStatus = ({
-  status,
-  paidAmount,
-  totalAmount,
-}: {
+type LockedInvoice = {
   status: InvoiceStatus;
-  paidAmount: number;
+  sentAt: Date | null;
   totalAmount: number;
-}): InvoiceStatus => {
-  const settled = paidAmount >= payableAmount(totalAmount);
-  if (status === INVOICE_STATUS.SENT && settled) {
+};
+
+/**
+ * The status an invoice's paid sum decides, from the status it holds: paid
+ * once settled, and back to the issued status it had (sent if it was ever
+ * marked sent, else finalized) once no longer settled.
+ */
+const settledStatus = (
+  invoice: LockedInvoice,
+  paidAmount: number,
+): InvoiceStatus => {
+  const settled = paidAmount >= payableAmount(invoice.totalAmount);
+  const issued =
+    invoice.status === INVOICE_STATUS.FINALIZED ||
+    invoice.status === INVOICE_STATUS.SENT;
+  if (issued && settled) {
     return INVOICE_STATUS.PAID;
   }
-  if (status === INVOICE_STATUS.PAID && !settled) {
-    return INVOICE_STATUS.SENT;
+  if (invoice.status === INVOICE_STATUS.PAID && !settled) {
+    return invoice.sentAt === null
+      ? INVOICE_STATUS.FINALIZED
+      : INVOICE_STATUS.SENT;
   }
-  return status;
+  return invoice.status;
 };
 
 /**
  * Moves the locked invoice between sent and paid when its paid sum crossed
  * the total, recording the status change with the payment that caused it.
  */
+const recordSettlement =
+  (scope: InvoicePaymentScope, previous: InvoiceStatus) =>
+  async (tx: Transaction, row: { status: InvoiceStatus }) => {
+    await scope.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: scope.invoiceId,
+      changes: { status: { old: previous, new: row.status } },
+    });
+  };
+
+/** The one write that moves an invoice into or out of paid. */
+const moveInvoiceStatus = async (
+  tx: Transaction,
+  {
+    scope,
+    to,
+    recordTransitionAuditEvent,
+  }: {
+    scope: InvoicePaymentScope;
+    to: InvoiceStatus;
+    recordTransitionAuditEvent: ReturnType<typeof recordSettlement>;
+  },
+) => {
+  if (to === INVOICE_STATUS.PAID) {
+    return await transition({
+      tx,
+      spec: TRANSITIONS.invoices,
+      id: scope.invoiceId,
+      options: {
+        from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT],
+        to: INVOICE_STATUS.PAID,
+        set: { paidAt: scope.now, updatedAt: scope.now },
+      },
+      recordTransitionAuditEvent,
+    });
+  }
+  if (to === INVOICE_STATUS.SENT) {
+    return await transition({
+      tx,
+      spec: TRANSITIONS.invoices,
+      id: scope.invoiceId,
+      options: {
+        from: [INVOICE_STATUS.PAID],
+        to: INVOICE_STATUS.SENT,
+        set: { paidAt: null, updatedAt: scope.now },
+      },
+      recordTransitionAuditEvent,
+    });
+  }
+  if (to === INVOICE_STATUS.FINALIZED) {
+    return await transition({
+      tx,
+      spec: TRANSITIONS.invoices,
+      id: scope.invoiceId,
+      options: {
+        from: [INVOICE_STATUS.PAID],
+        to: INVOICE_STATUS.FINALIZED,
+        set: { paidAt: null, updatedAt: scope.now },
+      },
+      recordTransitionAuditEvent,
+    });
+  }
+  return panic("Payments move an invoice only into or out of paid");
+};
+
 const settleStatus = async (
   tx: Transaction,
   {
     scope,
-    status,
+    invoice,
     paidAmount,
-    totalAmount,
   }: {
     scope: InvoicePaymentScope;
-    status: InvoiceStatus;
+    invoice: LockedInvoice;
     paidAmount: number;
-    totalAmount: number;
   },
 ): Promise<Result<InvoiceStatus, HandlerError>> => {
-  const next = settledStatus({ status, paidAmount, totalAmount });
+  const { status } = invoice;
+  const next = settledStatus(invoice, paidAmount);
   if (next === status) {
     return Result.ok(status);
   }
-  const moved =
-    next === INVOICE_STATUS.PAID
-      ? await transition({
-          tx,
-          spec: TRANSITIONS.invoices,
-          id: scope.invoiceId,
-          options: {
-            from: [INVOICE_STATUS.SENT],
-            to: INVOICE_STATUS.PAID,
-            set: { paidAt: scope.now, updatedAt: scope.now },
-          },
-          recordTransitionAuditEvent: recordSettlement(scope, status),
-        })
-      : await transition({
-          tx,
-          spec: TRANSITIONS.invoices,
-          id: scope.invoiceId,
-          options: {
-            from: [INVOICE_STATUS.PAID],
-            to: INVOICE_STATUS.SENT,
-            set: { paidAt: null, updatedAt: scope.now },
-          },
-          recordTransitionAuditEvent: recordSettlement(scope, status),
-        });
+  const moved = await moveInvoiceStatus(tx, {
+    scope,
+    to: next,
+    recordTransitionAuditEvent: recordSettlement(scope, status),
+  });
   // The invoice row is locked, so its status cannot have moved meanwhile.
   return moved.type === "transitioned"
     ? Result.ok(moved.row.status)
@@ -328,20 +380,9 @@ const settleStatus = async (
       );
 };
 
-const recordSettlement =
-  (scope: InvoicePaymentScope, previous: InvoiceStatus) =>
-  async (tx: Transaction, row: { status: InvoiceStatus }) => {
-    await scope.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-      resourceId: scope.invoiceId,
-      changes: { status: { old: previous, new: row.status } },
-    });
-  };
-
 /**
- * Records one payment on a sent invoice and marks it paid when the payment
- * settles it. Refuses a draft, finalized or void invoice, a payment dated after
+ * Records one payment on a finalized or sent invoice and marks it paid when
+ * the payment settles it. Refuses a draft or void invoice, a payment dated after
  * today in the organization's time zone, and any payment above what is still
  * outstanding.
  */
@@ -429,16 +470,15 @@ export const recordInvoicePayment = async (
   });
   const settled = await settleStatus(tx, {
     scope,
-    status: invoice.status,
+    invoice,
     paidAmount: paidAfter,
-    totalAmount: invoice.totalAmount,
   });
   return settled.isErr() ? Result.err(settled.error) : Result.ok(payment);
 };
 
 /**
  * Voids one payment, keeping its row as the record, and returns a paid
- * invoice that is no longer covered to sent.
+ * invoice that is no longer covered to the issued status it had.
  */
 export const voidInvoicePayment = async (
   tx: Transaction,
@@ -481,9 +521,8 @@ export const voidInvoicePayment = async (
   });
   const settled = await settleStatus(tx, {
     scope,
-    status: invoice.status,
+    invoice,
     paidAmount: paidAfter,
-    totalAmount: invoice.totalAmount,
   });
   return settled.isErr() ? Result.err(settled.error) : Result.ok(payment);
 };

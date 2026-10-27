@@ -2520,6 +2520,7 @@ export const lockInvoiceInStatus = async (
       invoiceNumber: invoices.invoiceNumber,
       notes: invoices.notes,
       reference: invoices.reference,
+      sentAt: invoices.sentAt,
       sellerProfileId: invoices.sellerProfileId,
       taxableSupplyDate: invoices.taxableSupplyDate,
       totalAmount: invoices.totalAmount,

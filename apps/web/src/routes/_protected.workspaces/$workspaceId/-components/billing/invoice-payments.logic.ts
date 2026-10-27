@@ -1,4 +1,18 @@
+import type { InvoiceStatus } from "@stll/api-contract";
 import { tryToMinorUnits } from "@stll/money";
+
+/**
+ * An issued invoice takes payments while it is finalized or sent (firms often
+ * send invoices outside stella); paid follows from the payments.
+ */
+export const invoiceTakesPayments = (status: InvoiceStatus) =>
+  status === "finalized" || status === "sent";
+
+/** An issued invoice with payments that do not yet settle it. */
+export const isPartiallyPaid = (invoice: {
+  status: InvoiceStatus;
+  paidAmount: number;
+}) => invoiceTakesPayments(invoice.status) && invoice.paidAmount > 0;
 
 type PaymentAmountCheck =
   | { type: "ok"; amount: number }

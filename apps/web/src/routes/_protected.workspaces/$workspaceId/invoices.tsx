@@ -23,6 +23,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
+import { isPartiallyPaid } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -130,7 +131,7 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
       header: () => t("common.status"),
       cell: (invoice) => (
         <InvoiceStatusBadge
-          partiallyPaid={invoice.status === "sent" && invoice.paidAmount > 0}
+          partiallyPaid={isPartiallyPaid(invoice)}
           status={invoice.status}
         />
       ),

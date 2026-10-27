@@ -1050,6 +1050,9 @@ export const invoices = p.pgTable(
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
+    // When the invoice was marked sent. Kept once set, so a paid invoice
+    // whose payments are voided returns to sent rather than finalized.
+    sentAt: timestamptz("sent_at"),
     paidAt: timestamptz("paid_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -1321,11 +1324,12 @@ export const invoicePayments = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    // NO ACTION: an invoice that carries payments is never deleted (only
-    // never-issued drafts are, and they take no payments).
+    // Payments exist only on issued invoices, which the application never
+    // deletes; the cascade serves the deliberate removals (organization
+    // deletion, the review reset's billing stage, test cleanup).
     invoiceId: safeUuid<"invoice">("invoice_id")
       .notNull()
-      .references(() => invoices.id, { onDelete: "no action" }),
+      .references(() => invoices.id, { onDelete: "cascade" }),
     amount: centsColumn("amount").notNull(),
     paidOn: p.date("paid_on").notNull(),
     method: p.text("method", { enum: INVOICE_PAYMENT_METHODS }).notNull(),

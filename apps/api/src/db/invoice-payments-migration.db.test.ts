@@ -2,8 +2,6 @@ import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
-
 const MIGRATION = "20261027210000_invoice_payments";
 
 const migrationSql = async () =>
@@ -48,37 +46,50 @@ test("the payments migration is additive: existing invoices and totals are uncha
   await database.exec(`BEGIN; ${await migrationSql()} COMMIT;`);
 
   expect(await readInvoices(database)).toEqual(before);
+  // The new sent marker is empty on every existing invoice.
+  expect(
+    (
+      await database.query(
+        "SELECT count(*)::int AS n FROM invoices WHERE sent_at IS NOT NULL",
+      )
+    ).rows,
+  ).toEqual([{ n: 0 }]);
   expect(
     (await database.query("SELECT count(*)::int AS n FROM invoice_payments"))
       .rows,
   ).toEqual([{ n: 0 }]);
 });
 
-test("a payment keeps its invoice and leaves only with its organization", async () => {
+test("payments are checked, go with their invoice and with their organization", async () => {
   await using database = new PGlite();
   await seedDatabase(database);
   await database.exec(`BEGIN; ${await migrationSql()} COMMIT;`);
-  await database.exec(`
-    INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by)
-    VALUES ('01a17ebc-0000-7000-8000-0000000000a1', '${ORGANIZATION}', '${SENT}', 2100, '2026-10-20', 'bank_transfer', 'user-1');
-  `);
+  const insertPayment = async (id: string, invoiceId: string) =>
+    await database.exec(`
+      INSERT INTO invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by)
+      VALUES ('${id}', '${ORGANIZATION}', '${invoiceId}', 2100, '2026-10-20', 'bank_transfer', 'user-1');
+    `);
+  await insertPayment("01a17ebc-0000-7000-8000-0000000000a1", SENT);
+  await insertPayment("01a17ebc-0000-7000-8000-0000000000a2", PAID);
 
-  const removal = await Result.tryPromise(
-    async () =>
-      await database.exec(`DELETE FROM invoices WHERE id = '${SENT}'`),
-  );
-  expect(removal.isErr()).toBe(true);
-  if (removal.isErr()) {
-    expect(getPgErrorCode(removal.error)).toBe(PG_ERROR.FOREIGN_KEY_VIOLATION);
-  }
+  // A deliberate removal of an invoice (review reset, test cleanup) takes
+  // its payments in the same statement.
+  await database.exec(`DELETE FROM invoices WHERE id = '${SENT}'`);
+  expect(
+    (
+      await database.query<{ invoice_id: string }>(
+        "SELECT invoice_id FROM invoice_payments",
+      )
+    ).rows,
+  ).toEqual([{ invoice_id: PAID }]);
 
   for (const invalid of [
     // Not positive.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${SENT}', 0, '2026-10-20', 'cash', 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 0, '2026-10-20', 'cash', 'user-1', NULL, NULL)`,
     // Unknown method.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${SENT}', 10, '2026-10-20', 'cheque', 'user-1', NULL, NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cheque', 'user-1', NULL, NULL)`,
     // Voided without who voided it.
-    `(gen_random_uuid(), '${ORGANIZATION}', '${SENT}', 10, '2026-10-20', 'cash', 'user-1', now(), NULL)`,
+    `(gen_random_uuid(), '${ORGANIZATION}', '${PAID}', 10, '2026-10-20', 'cash', 'user-1', now(), NULL)`,
     // An invoice that does not exist.
     `(gen_random_uuid(), '${ORGANIZATION}', gen_random_uuid(), 10, '2026-10-20', 'cash', 'user-1', NULL, NULL)`,
   ]) {

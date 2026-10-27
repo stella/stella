@@ -1,6 +1,28 @@
 import { describe, expect, test } from "bun:test";
 
-import { checkPaymentAmount } from "./invoice-payments.logic";
+import { INVOICE_STATUS, INVOICE_STATUSES } from "@stll/api-contract";
+
+import {
+  checkPaymentAmount,
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "./invoice-payments.logic";
+
+describe("invoiceTakesPayments", () => {
+  test("an issued invoice takes payments while finalized or sent", () => {
+    expect(INVOICE_STATUSES.filter(invoiceTakesPayments)).toEqual([
+      INVOICE_STATUS.FINALIZED,
+      INVOICE_STATUS.SENT,
+    ]);
+  });
+
+  test("a finalized or sent invoice with payments is partially paid", () => {
+    expect(isPartiallyPaid({ status: "finalized", paidAmount: 1 })).toBe(true);
+    expect(isPartiallyPaid({ status: "sent", paidAmount: 1 })).toBe(true);
+    expect(isPartiallyPaid({ status: "sent", paidAmount: 0 })).toBe(false);
+    expect(isPartiallyPaid({ status: "paid", paidAmount: 100 })).toBe(false);
+  });
+});
 
 describe("checkPaymentAmount", () => {
   test("accepts up to the outstanding amount, in the invoice's minor units", () => {

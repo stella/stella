@@ -19,7 +19,7 @@ const voidInvoicePaymentHandler = createSafeHandler(
     contract: "patch",
     description:
       "Void a mistaken invoice payment. The payment stays on record as " +
-      "voided; a paid invoice it no longer covers returns to sent.",
+      "voided; a paid invoice it no longer covers returns to its prior status.",
     permissions: { invoice: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

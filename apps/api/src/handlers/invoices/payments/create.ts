@@ -50,7 +50,7 @@ const recordInvoicePaymentHandler = createSafeHandler(
   {
     contract: "patch",
     description:
-      "Record a payment on a sent invoice: amount in minor units of the " +
+      "Record a payment on a finalized or sent invoice: amount in minor units of the " +
       "invoice currency, paidOn no later than today. Reaching the total marks " +
       "it paid; more than the outstanding amount is refused.",
     permissions: { invoice: ["update"] },

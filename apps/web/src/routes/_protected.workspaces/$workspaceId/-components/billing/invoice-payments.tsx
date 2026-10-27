@@ -45,7 +45,10 @@ import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import type { invoiceByIdOptions } from "@/lib/workspaces/queries/invoices";
 import { ConfirmAction } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/confirm-action";
-import { checkPaymentAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
+import {
+  checkPaymentAmount,
+  invoiceTakesPayments,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 
 type InvoiceDetail = Awaited<
   ReturnType<NonNullable<ReturnType<typeof invoiceByIdOptions>["queryFn"]>>
@@ -53,11 +56,11 @@ type InvoiceDetail = Awaited<
 
 const DEFAULT_PAYMENT_METHOD: InvoicePaymentMethod = "bank_transfer";
 
-/** Payments can be recorded on a sent invoice only; paid follows from them. */
+/** Payments are recorded on a finalized or sent invoice that still owes. */
 const canRecordInvoicePayment = (invoice: {
   status: InvoiceDetail["status"];
   outstandingAmount: number;
-}) => invoice.status === "sent" && invoice.outstandingAmount > 0;
+}) => invoiceTakesPayments(invoice.status) && invoice.outstandingAmount > 0;
 
 const useInvalidateInvoices = () => {
   const queryClient = useQueryClient();
