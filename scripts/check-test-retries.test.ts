@@ -440,6 +440,30 @@ test.each([
        return playwright.defineConfig({ retries: 0 });
      }`,
   ],
+  [
+    "later local argument",
+    `import { defineConfig } from "@playwright/test";
+     export function sharedConfig() {
+       const overrides = { retries: 2 };
+       return defineConfig({ retries: 0 }, overrides);
+     }`,
+  ],
+  [
+    "later module argument",
+    `import { defineConfig } from "@playwright/test";
+     const overrides = { retries: 2 };
+     export function sharedConfig() {
+       return defineConfig({ retries: 0 }, overrides);
+     }`,
+  ],
+  [
+    "unreadable earlier argument",
+    `import { defineConfig } from "@playwright/test";
+     const projects = () => ({ projects: [{ name: "browser", retries: 2 }] });
+     export function sharedConfig() {
+       return defineConfig(projects(), { retries: 0 });
+     }`,
+  ],
 ])("config helper factories must be verified: %s", (_name, source) => {
   expect(inspectHelper(source)).toEqual([UNREADABLE_HELPER]);
 });
@@ -460,6 +484,21 @@ test.each([
     "computed namespace member",
     `import * as playwright from "@playwright/test";
      export function sharedConfig() { return playwright["defineConfig"]({ retries: 0 }); }`,
+  ],
+  [
+    "ordered literal arguments",
+    `import { defineConfig } from "@playwright/test";
+     export function sharedConfig() {
+       return defineConfig({ retries: 2 }, { retries: 0 });
+     }`,
+  ],
+  [
+    "later named zero argument",
+    `import { defineConfig } from "@playwright/test";
+     const overrides = { retries: 0 };
+     export function sharedConfig() {
+       return defineConfig({ retries: 2 }, overrides);
+     }`,
   ],
 ])("config helpers retain supported factory forms: %s", (_name, source) => {
   expect(inspectHelper(source)).toEqual([]);
