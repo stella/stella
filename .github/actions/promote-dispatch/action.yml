@@ -59,6 +59,18 @@ inputs:
       main-<sha> refs; for tagged releases the tag is the checkout target.
     required: false
     default: ""
+  staging-lease-before-hours:
+    description: Power lease requested before a release-candidate staging promotion
+    required: false
+    default: ""
+  staging-lease-after-hours:
+    description: Power lease renewed after a release-candidate staging promotion
+    required: false
+    default: ""
+  staging-lease-sha:
+    description: Commit whose staging proof owns the power lease
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -78,6 +90,9 @@ runs:
         WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
         EXPECTED_SHA: ${{ inputs.expected-sha }}
+        STAGING_LEASE_BEFORE_HOURS: ${{ inputs.staging-lease-before-hours }}
+        STAGING_LEASE_AFTER_HOURS: ${{ inputs.staging-lease-after-hours }}
+        STAGING_LEASE_SHA: ${{ inputs.staging-lease-sha }}
       run: |
         set -euo pipefail
 
@@ -162,6 +177,19 @@ runs:
         trap revoke_app_token EXIT
         refresh_app_token
 
+        request_staging_lease() {
+          local hours="$1"
+          [[ -n "$hours" ]] || return 0
+          STAGING_POWER_TOKEN="$current_app_token" \
+            STAGING_LEASE_ONLY=true \
+            STAGING_LEASE_HOURS="$hours" \
+            DEPLOY_SHA="$STAGING_LEASE_SHA" \
+            INFRA_REPO="$INFRA_REPO" \
+            GH_RETRY_SCRIPT="$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" \
+            bash "$GITHUB_ACTION_PATH/../../../scripts/staging-wake.sh"
+        }
+
+        request_staging_lease "${STAGING_LEASE_BEFORE_HOURS:-}"
         dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         # Must match the `run-name:` template in
         # stella-infra/.github/workflows/promote-release.yml. That template is
@@ -294,6 +322,7 @@ runs:
 
         if [[ "$conclusion" == "success" ]]; then
           echo "Promote run completed successfully: ${run_url}"
+          request_staging_lease "${STAGING_LEASE_AFTER_HOURS:-}"
           exit 0
         fi
 

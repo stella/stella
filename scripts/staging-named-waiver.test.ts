@@ -349,6 +349,7 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
 });
+// timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {
   const unused = record({ CORPUS_PREFLIGHT: "success", MCP_SMOKE: "success" });
   expect(statuses(unused).at(0)).toMatchObject({
@@ -385,7 +386,7 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
       JSON.stringify(overrides),
     ).toBe(true);
   }
-});
+}, 15_000);
 test("waiver scope, required reason and manual-only boundary mutations are rejected", () => {
   const widened = structuredClone(workflow);
   findStep("Run staging web smoke", widened)["continue-on-error"] =
@@ -445,7 +446,7 @@ test("both application journey outcomes belong to the serialized staging promoti
   const promotion =
     workflow.jobs["promote-staging"] ?? panic("Missing promotion owner");
   expect(promotion["concurrency"]).toEqual({
-    group: "deploy-staging",
+    group: `\${{ inputs.release_ref != '' && 'deploy-staging-candidate' || 'deploy-staging-ordinary' }}`,
     "cancel-in-progress": false,
   });
   const steps = promotion.steps ?? panic("Missing promotion steps");
