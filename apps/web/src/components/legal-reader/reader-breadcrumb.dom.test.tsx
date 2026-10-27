@@ -4,6 +4,11 @@ import { afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 
 import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
 
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
+
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
