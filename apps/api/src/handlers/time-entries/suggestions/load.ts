@@ -415,6 +415,7 @@ const readDecidedEvidence = async (
       workspaceId: timeEntrySuggestions.workspaceId,
       dateWorked: timeEntrySuggestions.dateWorked,
       fingerprint: timeEntrySuggestions.fingerprint,
+      status: timeEntrySuggestions.status,
       evidence: timeEntrySuggestions.evidence,
     })
     .from(timeEntrySuggestions)
@@ -488,9 +489,10 @@ const loggedMinutesOn = (date: string, recorded: readonly RecordedRow[]) => {
   return minutes;
 };
 
-// An accepted suggestion's entry paid for exactly the signals its decision
-// covers, which are already excluded before clustering; counting its minutes
-// again would mark unrelated activity as covered.
+// An accepted suggestion's entry paid for the signals its decision covers,
+// which are excluded before clustering, and for its clock window, which is
+// subtracted from new clusters; counting its minutes again as duration-only
+// time would mark unrelated activity as covered.
 const recordedOutsideSuggestions = (recorded: readonly RecordedRow[]) =>
   recorded.filter(({ source }) => source !== TIME_ENTRY_SOURCE.SUGGESTED);
 
@@ -581,11 +583,56 @@ const toActivitySignals = ({
   }),
 ];
 
+type AcceptedWindow = { durationMinutes: 0; startedAt: Date; endedAt: Date };
+
 type ScopeInputs = {
   workspaceId: SafeId<"workspace">;
   date: string;
   signals: ActivitySignal[];
   recorded: RecordedRow[];
+  /** Clock windows accepted suggestions already billed, tail included. */
+  accepted: AcceptedWindow[];
+};
+
+type DecidedRow = Awaited<ReturnType<typeof readDecidedEvidence>>[number];
+
+const MINUTE_MS = 60_000;
+
+/**
+ * The window an accepted suggestion billed: its first signal through its last
+ * plus the tail, as the cluster was sized. Activity inside it is paid for, so
+ * only what falls beyond it is suggested again. Stored evidence is untrusted
+ * JSON; a decision without readable signal times has no window.
+ */
+const acceptedWindow = (row: DecidedRow): AcceptedWindow | null => {
+  if (row.status !== "accepted" || !Array.isArray(row.evidence)) {
+    return null;
+  }
+  let first: number | null = null;
+  let last: number | null = null;
+  for (const item of row.evidence) {
+    const parsed = parseTimeEntrySuggestionEvidence(item);
+    if (parsed === null) {
+      continue;
+    }
+    for (const { timestamp } of parsed.signals) {
+      const instant = Result.try(() => Temporal.Instant.from(timestamp));
+      if (Result.isError(instant)) {
+        continue;
+      }
+      const at = instant.value.epochMilliseconds;
+      first = first === null ? at : Math.min(first, at);
+      last = last === null ? at : Math.max(last, at);
+    }
+  }
+  if (first === null || last === null) {
+    return null;
+  }
+  return {
+    durationMinutes: 0,
+    startedAt: new Date(first),
+    endedAt: new Date(last + LIMITS.timeSuggestionTailMinutes * MINUTE_MS),
+  };
 };
 
 const decidedFingerprintKey = (
@@ -606,12 +653,14 @@ const groupByMatterAndDay = ({
   dayBounds,
   signals,
   recordedRows,
+  decidedRows,
 }: {
   workspaceIds: readonly SafeId<"workspace">[];
   timezoneId: string;
   dayBounds: readonly DayBounds[];
   signals: readonly DatedSignal[];
   recordedRows: readonly RecordedRow[];
+  decidedRows: readonly DecidedRow[];
 }) => {
   const authorized = new Set<string>(workspaceIds);
   const scopes = new Map<string, ScopeInputs>();
@@ -632,6 +681,7 @@ const groupByMatterAndDay = ({
       date,
       signals: [],
       recorded: [],
+      accepted: [],
     };
     scopes.set(key, created);
     return created;
@@ -648,6 +698,14 @@ const groupByMatterAndDay = ({
       scopeFor(row.workspaceId, date).recorded.push(row);
     }
   }
+  // Only a day that has new activity needs its accepted windows.
+  for (const row of decidedRows) {
+    const window = acceptedWindow(row);
+    const scope = scopes.get(`${row.dateWorked}\n${row.workspaceId}`);
+    if (window !== null && scope !== undefined) {
+      scope.accepted.push(window);
+    }
+  }
   return [...scopes.values()];
 };
 
@@ -659,7 +717,7 @@ const groupByMatterAndDay = ({
  * when its decision's evidence names no signals to exclude.
  */
 const suggestScope = (
-  { workspaceId, date, signals, recorded }: ScopeInputs,
+  { workspaceId, date, signals, recorded, accepted }: ScopeInputs,
   decidedFingerprints: ReadonlySet<string>,
 ): LoadedSuggestionScope => {
   const clusters = clusterActivitySignals({
@@ -678,7 +736,7 @@ const suggestScope = (
             decidedFingerprintKey(workspaceId, date, fingerprint),
           ),
       ),
-      recordedOutsideSuggestions(recorded),
+      [...recordedOutsideSuggestions(recorded), ...accepted],
     ),
     loggedMinutes: loggedMinutesOn(date, recorded),
   };
@@ -759,6 +817,7 @@ export const loadTimeSuggestionRange = async function* ({
     dayBounds: range.dayBounds,
     signals: signals.filter(({ signal }) => undecidedSignals.has(signal)),
     recordedRows: inputs.recordedRows,
+    decidedRows: inputs.decidedRows,
   })
     .map((scopeInputs) => suggestScope(scopeInputs, decidedFingerprints))
     .toSorted(compareScopes);

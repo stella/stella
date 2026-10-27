@@ -434,7 +434,8 @@ describe("time entry suggestions integration", () => {
       content: toPersistedChatMessageContentV3({
         data: [{ type: "text", content: "follow-up" }],
       }),
-      createdAt: at("09:20:00"),
+      // Inside the accepted window, which ran through 09:15 plus the tail.
+      createdAt: at("09:16:00"),
     });
 
     const relisted = await listFor(ids.userA1);
@@ -444,8 +445,10 @@ describe("time entry suggestions integration", () => {
     expect(relisted.items.map((item) => item.fingerprint)).not.toContain(
       first.fingerprint,
     );
+    // Only the minute beyond the accepted window is new; the four inside it
+    // were billed with the accepted suggestion.
     expect(relisted.items.at(0)).toMatchObject({
-      engagedMinutes: 5,
+      engagedMinutes: 1,
       signalCount: 1,
       evidence: [
         {
