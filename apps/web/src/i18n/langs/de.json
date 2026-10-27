@@ -2095,7 +2095,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {
       "citations": "Zitate",
@@ -2169,6 +2168,7 @@
     "lastUpdated": "Zuletzt aktualisiert",
     "layoutResetAfterProblem": "Das Layout wurde nach einem Problem zurückgesetzt.",
     "legalDatabase": "Rechtsdatenbank",
+    "loadFailed": "Konnte nicht geladen werden.",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
@@ -2257,7 +2257,7 @@
     "showMore": "Mehr anzeigen",
     "showSecretValue": "Geheimen Wert anzeigen",
     "signOut": "Abmelden",
-    "somethingWentWrong": "Etwas ist schiefgelaufen",
+    "somethingWentWrong": "Etwas ist schiefgelaufen. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
@@ -2734,7 +2734,7 @@
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },
-    "actionFailed": "Aktion fehlgeschlagen",
+    "actionFailed": "Das hat nicht funktioniert. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
       "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
@@ -3285,7 +3285,7 @@
     "saveSerializeFailedTitle": "DOCX-Datei konnte nicht erstellt werden",
     "savingDocument": "Speichern...",
     "showDetails": "Details anzeigen",
-    "somethingWentWrong": "Etwas ist schiefgelaufen",
+    "somethingWentWrong": "Etwas ist schiefgelaufen. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "synced": "Synchronisiert",
     "syncing": "Wird synchronisiert",
     "tableBordersAll": "Alle Rahmenlinien",

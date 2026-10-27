@@ -2095,7 +2095,6 @@
       "orLetUsKnowAt": "vagy írjon nekünk ide:",
       "viewDocumentation": "Dokumentáció megtekintése"
     },
-    "error": "Hiba",
     "expenses": "Kiadások",
     "export": {
       "citations": "Hivatkozások",
@@ -2169,6 +2168,7 @@
     "lastUpdated": "Utoljára frissítve",
     "layoutResetAfterProblem": "Egy probléma miatt visszaállítottuk az alapértelmezett elrendezést.",
     "legalDatabase": "Jogi adatbázis",
+    "loadFailed": "Nem sikerült betölteni.",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
@@ -2257,7 +2257,7 @@
     "showMore": "Több megjelenítése",
     "showSecretValue": "Titkos érték megjelenítése",
     "signOut": "Kijelentkezés",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "sort": "Rendezés",
     "source": "Forrás",
     "stale": "Elavult",
@@ -2734,7 +2734,7 @@
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
       "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
     },
-    "actionFailed": "A művelet sikertelen",
+    "actionFailed": "Ez nem sikerült. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
       "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
@@ -3285,7 +3285,7 @@
     "saveSerializeFailedTitle": "A DOCX létrehozása nem sikerült",
     "savingDocument": "Mentés...",
     "showDetails": "Részletek megjelenítése",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "synced": "Szinkronizálva",
     "syncing": "Szinkronizálás",
     "tableBordersAll": "Minden szegély",

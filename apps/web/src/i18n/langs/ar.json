@@ -2095,7 +2095,6 @@
       "orLetUsKnowAt": "أو أخبرنا عبر",
       "viewDocumentation": "عرض التوثيق"
     },
-    "error": "خطأ",
     "expenses": "المصروفات",
     "export": {
       "citations": "الاستشهادات",
@@ -2169,6 +2168,7 @@
     "lastUpdated": "آخر تحديث",
     "layoutResetAfterProblem": "تمت إعادة ضبط التخطيط بعد حدوث مشكلة.",
     "legalDatabase": "قاعدة البيانات القانونية",
+    "loadFailed": "تعذّر التحميل.",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
@@ -2257,7 +2257,7 @@
     "showMore": "عرض المزيد",
     "showSecretValue": "إظهار القيمة السرية",
     "signOut": "تسجيل الخروج",
-    "somethingWentWrong": "حدث خطأ ما",
+    "somethingWentWrong": "حدث خطأ ما. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "sort": "فرز",
     "source": "المصدر",
     "stale": "قديم",
@@ -2734,7 +2734,7 @@
       "notEnabled": "هذا الإجراء غير مفعّل لمؤسستك.",
       "periodExhausted": "هذا الإجراء متوقف لمؤسستك."
     },
-    "actionFailed": "فشل الإجراء",
+    "actionFailed": "لم تنجح العملية. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "api": {
       "badRequest": "تعذر إكمال الطلب.",
       "caseLawCountryUnavailable": "الأحكام القضائية لهذا البلد غير متاحة. اختر بلدًا آخر.",
@@ -3285,7 +3285,7 @@
     "saveSerializeFailedTitle": "تعذّر إنشاء ملف DOCX",
     "savingDocument": "جارٍ الحفظ...",
     "showDetails": "إظهار التفاصيل",
-    "somethingWentWrong": "حدث خطأ ما",
+    "somethingWentWrong": "حدث خطأ ما. حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر ذلك.",
     "synced": "تمت المزامنة",
     "syncing": "جارٍ المزامنة",
     "tableBordersAll": "كل الحدود",

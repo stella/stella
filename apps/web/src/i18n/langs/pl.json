@@ -2095,7 +2095,6 @@
       "orLetUsKnowAt": "albo napisz do nas na",
       "viewDocumentation": "Zobacz dokumentację"
     },
-    "error": "Błąd",
     "expenses": "Wydatki",
     "export": {
       "citations": "Cytowania",
@@ -2169,6 +2168,7 @@
     "lastUpdated": "Ostatnia aktualizacja",
     "layoutResetAfterProblem": "Po wystąpieniu problemu przywrócono domyślny układ.",
     "legalDatabase": "Baza danych prawnych",
+    "loadFailed": "Nie udało się wczytać.",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
@@ -2257,7 +2257,7 @@
     "showMore": "Pokaż więcej",
     "showSecretValue": "Pokaż tajną wartość",
     "signOut": "Wyloguj się",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
@@ -2734,7 +2734,7 @@
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },
-    "actionFailed": "Akcja nie powiodła się",
+    "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
       "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
@@ -3285,7 +3285,7 @@
     "saveSerializeFailedTitle": "Nie udało się utworzyć pliku DOCX",
     "savingDocument": "Zapisywanie...",
     "showDetails": "Pokaż szczegóły",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "synced": "Zsynchronizowano",
     "syncing": "Synchronizowanie",
     "tableBordersAll": "Wszystkie krawędzie",
