@@ -64,8 +64,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # Bun runs the release queue history check that decides whether a
-      # merge-group receipt may stand in for the heavy statuses.
+      # Source gates use Bun; post-build workflow proofs run only in finalize.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -77,15 +76,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_SHA: ${{ inputs.sha }}
-        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --candidate-only >> "$GITHUB_OUTPUT"
+        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
         run: |
-          cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
           cp scripts/verify-release-candidate-tree.mjs "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
-          cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
-          cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
           cp scripts/release-gate.sh "$RUNNER_TEMP/release-gate.sh"
           cp scripts/release-rc-number.sh "$RUNNER_TEMP/release-rc-number.sh"
@@ -94,7 +90,7 @@ jobs:
 
       # Every gate below runs even when an earlier one fails; each records
       # its outcome and the verdict step lists all failures in one run.
-      - name: Require release evidence
+      - name: Require RC source identity and incident gates
         id: evidence
         continue-on-error: true
         env:

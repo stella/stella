@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -1285,6 +1285,7 @@ export type CutGateOutcome =
 
 export type CutGateContext = {
   readonly baseSha: string;
+  readonly previousFinalTag: string;
   readonly rootDir: string;
   readonly write: (text: string) => void;
 };
@@ -1296,23 +1297,41 @@ export type CutGateRunner = (
 ) => Promise<CutGateOutcome>;
 
 /**
- * Runs a gate the way release-tag.yml does: the same command on the base
- * tree with the caller's environment, so an explicit waiver
+ * Runs the tag's guards on the base tree. The cut checks npm at its resolved
+ * final tag; the RC checks the preceding final from its candidate. The caller's
+ * environment forwards an explicit waiver
  * (WAIVE_DEPENDENCY_AUDIT=true with WAIVER_REASON) reaches the dependency
  * audit exactly as the tag's waiver inputs do.
  */
 export const runCutGate: CutGateRunner = async (gate, context) => {
-  if (gate.check.kind === "main-statuses") {
-    // Refuses by throwing; the cut reads a thrown gate as a failed one.
-    await assertReleaseCutReady(
-      context.baseSha,
-      false,
-      readGitHubJson,
-      context.write,
-    );
-    return { passed: true };
+  let command: readonly string[];
+  switch (gate.check.kind) {
+    case "main-statuses":
+      // Refuses by throwing; the cut reads a thrown gate as a failed one.
+      await assertReleaseCutReady(
+        context.baseSha,
+        false,
+        readGitHubJson,
+        context.write,
+      );
+      return { passed: true };
+    case "command":
+      command = gate.check.command;
+      break;
+    case "npm-publish-lag":
+      // The cut has no candidate yet: check the final it will increment.
+      command = [
+        "bun",
+        "scripts/check-npm-publish-lag.ts",
+        "--ref",
+        context.previousFinalTag,
+      ];
+      break;
+    default:
+      gate.check satisfies never;
+      return panic("Unhandled maintenance release gate");
   }
-  const result = Bun.spawnSync([...gate.check.command], {
+  const result = Bun.spawnSync([...command], {
     cwd: context.rootDir,
     env: process.env,
     stderr: "pipe",
@@ -1433,19 +1452,23 @@ export const cutMaintenanceRelease = async (
   effects.assertCleanWorktree();
   effects.assertNoOpenRelease();
   const current = parseStableVersion(effects.latestFinalVersion());
+  const previousFinalTag = `v${current.value}`;
   const baseSha = effects.resolveHeadSha();
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
-    context: { baseSha, rootDir, write: effects.write },
+    context: {
+      baseSha,
+      previousFinalTag,
+      rootDir,
+      write: effects.write,
+    },
     runGate: effects.runGate,
   });
   const queueHistoryWarning = effects.queueHistoryWarning(baseSha);
   if (queueHistoryWarning !== null) {
     effects.write(`${queueHistoryWarning}\n`);
   }
-  const previousRelease = await effects.readPreviousRelease(
-    `v${current.value}`,
-  );
+  const previousRelease = await effects.readPreviousRelease(previousFinalTag);
   const next = nextPatchVersion(current);
   // Read before the preparation consumes them: the changelog and marketing
   // checks below run after it, and a failure there must restore the version

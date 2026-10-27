@@ -165,7 +165,7 @@ tree=$(git rev-parse --verify "$sha^{tree}")
 [[ "$tree" == "$(git rev-parse --verify "$proof^{tree}")" ]] || refuse 'trees differ'
 main=$(git rev-parse --verify 'origin/main^{commit}')
 history=$(git rev-list --first-parent "$main")
-if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
+if [[ "$allow_pr_head" == false && $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
   comparison=$(bash "$gh_retry_script" api "repos/$repo/compare/$sha...main")
   jq -e --arg sha "$sha" '(.status == "ahead" or .status == "identical") and .merge_base_commit.sha == $sha' <<< "$comparison" >/dev/null \
     || refuse 'RELEASE_HEAVY_NOT_GREEN: target is not on repository main'

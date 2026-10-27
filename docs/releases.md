@@ -143,6 +143,8 @@ by the RC run.
    `release/vX.Y.Z`, and opens `chore: release vX.Y.Z` into `main`. An earlier
    open release pull request blocks another cut. The command runs the existing
    pre-cut heavy, dependency-audit and npm-publish-lag gates before writing.
+   The npm gate checks that same newest final tag, regardless of main's
+   `VERSION`.
    `--allow-unproven-main` permits missing heavy evidence at the cut only;
    dependency waivers require `WAIVE_DEPENDENCY_AUDIT=true` and
    `WAIVER_REASON='<reason>'`. There is no `--refresh` path.

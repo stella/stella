@@ -78,6 +78,15 @@ test("RC selection verifies the open release relation and finalization uses exac
   const selection = runs(source, "tag");
   const finalize = runs(source, "finalize");
   expect(selection).toContain("scripts/prepare-release-tag.sh");
+  expect(selection).not.toContain("--candidate-only");
+  expect(selection).not.toContain("check-release-main-health.sh");
+  const selector = read("scripts/prepare-release-tag.sh");
+  expect(selector).toContain("check-release-candidate.sh");
+  expect(selector).toContain("release-rc-number.sh");
+  expect(selector).not.toMatch(/--candidate-only|--proof-sha/u);
+  expect(selector).not.toMatch(
+    /--find-proof|statuses\?|check-release-main-health|check-release-receipt-coverage/u,
+  );
   expect(selection).toContain("check-release-rc-source.sh");
   expect(selection).toContain("release-rc-number.sh");
   expect(finalize).toContain(
