@@ -12,6 +12,7 @@ import {
   chatMessages,
   chatThreadCompactions,
   chatThreads,
+  contacts,
   desktopEditSessions,
   docxSuggestions,
   entities,
@@ -20,6 +21,9 @@ import {
   expenses,
   fields,
   folioCollabRooms,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
   properties,
   timeEntries,
   userFiles,
@@ -40,7 +44,10 @@ import { createFileKey, createUserFileKey } from "@/api/lib/file-key";
 import type { FileKey } from "@/api/lib/file-key";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { cents } from "@/api/lib/money";
-import { completeOrganizationDeletion } from "@/api/lib/organization-storage-teardown";
+import {
+  completeOrganizationDeletion,
+  WorkspaceBillingHistoryError,
+} from "@/api/lib/organization-storage-teardown";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
@@ -800,5 +807,117 @@ describe("workspace deletion", () => {
         .from(bufferObjectCleanupIntents)
         .where(eq(bufferObjectCleanupIntents.id, writerIntentId)),
     ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING }]);
+  });
+  test("refuses a matter with invoice history and leaves it untouched", async () => {
+    const database: WorkspaceDeletionDatabase = {
+      transaction: async (callback) =>
+        await testDb.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        ),
+    };
+    const clientId = createSafeId<"contact">();
+    await testDb.insert(contacts).values({
+      id: clientId,
+      organizationId: fixture.organizationId,
+      type: "organization",
+      displayName: "Invoice client",
+    });
+    const seedMatter = async (reference: string) => {
+      const workspaceId = createSafeId<"workspace">();
+      await testDb.insert(workspaces).values({
+        id: workspaceId,
+        clientId,
+        organizationId: fixture.organizationId,
+        name: reference,
+        reference,
+        status: "active",
+      });
+      await testDb.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId,
+        userId: fixture.actorUserId,
+      });
+      return workspaceId;
+    };
+    const invoicedMatterId = await seedMatter("INVOICED-1");
+    const lineOnlyMatterId = await seedMatter("LINE-ONLY-1");
+    const invoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: invoiceId,
+      organizationId: fixture.organizationId,
+      workspaceId: invoicedMatterId,
+      invoiceNumber: `INV-RETAINED-${invoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    // A client invoice names no matter; it bills one only through its line.
+    const clientInvoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: clientInvoiceId,
+      organizationId: fixture.organizationId,
+      clientId,
+      workspaceId: null,
+      invoiceNumber: `INV-RETAINED-${clientInvoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: fixture.organizationId,
+      workspaceId: lineOnlyMatterId,
+      invoiceId: clientInvoiceId,
+      position: 0,
+      description: "Legal services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "manual",
+    });
+    const auditEvents: AuditEvent[] = [];
+
+    for (const workspaceId of [invoicedMatterId, lineOnlyMatterId]) {
+      const result = await executeAuthorizedWorkspaceDeletion(
+        {
+          actorUserId: fixture.actorUserId,
+          organizationId: fixture.organizationId,
+          recordAuditEvent: async (_tx, event) => {
+            auditEvents.push(...(Array.isArray(event) ? event : [event]));
+          },
+          workspaceId,
+        },
+        { database, enqueueCleanup: async () => {} },
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(WorkspaceBillingHistoryError);
+      }
+    }
+    expect(auditEvents).toEqual([]);
+    expect(
+      await testDb
+        .select({ id: workspaces.id, status: workspaces.status })
+        .from(workspaces)
+        .where(inArray(workspaces.id, [invoicedMatterId, lineOnlyMatterId])),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: invoicedMatterId, status: "active" },
+        { id: lineOnlyMatterId, status: "active" },
+      ]),
+    );
+    expect(
+      await testDb.$count(
+        invoiceLines,
+        eq(invoiceLines.invoiceId, clientInvoiceId),
+      ),
+    ).toBe(1);
+    expect(await testDb.$count(invoices, eq(invoices.id, invoiceId))).toBe(1);
   });
 });

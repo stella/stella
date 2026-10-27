@@ -5482,6 +5482,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -5729,7 +5730,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -12143,6 +12144,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -12390,7 +12392,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -15979,6 +15981,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -16060,7 +16063,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "List invoices is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
