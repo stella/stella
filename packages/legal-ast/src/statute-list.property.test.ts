@@ -196,75 +196,82 @@ describe("anchor paths a publisher mints", () => {
     );
   });
 
-  for (const grammar of GRAMMARS) {
-    test(`${grammar.name}: a path sits under each of its proper prefixes and under no other path`, () => {
-      assertProperty(
-        `statute-anchor-scheme.${grammar.name}.within`,
-        fc.property(pathIn(grammar), pathIn(grammar), (path, other) => {
-          const segments = path.anchorId.split(grammar.separator);
-          for (let length = 1; length <= segments.length; length += 1) {
-            expect(
-              anchorWithin(grammar.scheme, {
-                ancestor: segments.slice(0, length).join(grammar.separator),
-                anchor: path.anchorId,
-              }),
-            ).toBe(length < segments.length);
-          }
+  // Each property draws the publisher too, so its id is its test's title.
+  const pathPairs = fc
+    .constantFrom(...GRAMMARS)
+    .chain((grammar) =>
+      fc
+        .tuple(pathIn(grammar), pathIn(grammar))
+        .map(([path, other]) => ({ grammar, other, path })),
+    );
+  const pathSets = fc.constantFrom(...GRAMMARS).chain((grammar) =>
+    fc
+      .uniqueArray(pathIn(grammar), {
+        minLength: 1,
+        maxLength: 8,
+        selector: ({ anchorId }) => anchorId,
+      })
+      .map((paths) => ({ grammar, paths })),
+  );
+
+  test("a path sits under each of its proper prefixes and under no other path", () => {
+    assertProperty(
+      "a path sits under each of its proper prefixes and under no other path",
+      fc.property(pathPairs, ({ grammar, other, path }) => {
+        const segments = path.anchorId.split(grammar.separator);
+        for (let length = 1; length <= segments.length; length += 1) {
           expect(
             anchorWithin(grammar.scheme, {
-              ancestor: other.anchorId,
+              ancestor: segments.slice(0, length).join(grammar.separator),
               anchor: path.anchorId,
             }),
-          ).toBe(
-            segmentsExtend({
-              ancestor: other.anchorId,
-              anchor: path.anchorId,
+          ).toBe(length < segments.length);
+        }
+        expect(
+          anchorWithin(grammar.scheme, {
+            ancestor: other.anchorId,
+            anchor: path.anchorId,
+          }),
+        ).toBe(
+          segmentsExtend({
+            ancestor: other.anchorId,
+            anchor: path.anchorId,
+            separator: grammar.separator,
+          }),
+        );
+      }),
+      { numRuns: 300 * GRAMMARS.length },
+    );
+  });
+
+  test("a cited block's preview is itself and the run of blocks its path owns", () => {
+    assertProperty(
+      "a cited block's preview is itself and the run of blocks its path owns",
+      fc.property(pathSets, fc.nat(), ({ grammar, paths }, pick) => {
+        const blocks: Block[] = paths
+          .map(({ anchorId }) => anchorId)
+          .toSorted()
+          .map((anchorId) =>
+            paragraphFromPreview({ anchorId, id: anchorId, text: "x" }),
+          );
+        const start = pick % blocks.length;
+        const cited = blocks.at(start) ?? panic("The pick is inside the list");
+        const cut = blocks.findIndex(
+          (block, index) =>
+            index > start &&
+            !segmentsExtend({
+              ancestor: cited.anchorId,
+              anchor: block.anchorId,
               separator: grammar.separator,
             }),
-          );
-        }),
-        { numRuns: 300 },
-      );
-    });
-
-    test(`${grammar.name}: a cited block's preview is itself and the run of blocks its path owns`, () => {
-      assertProperty(
-        `statute-anchor-scheme.${grammar.name}.nested-under`,
-        fc.property(
-          fc.uniqueArray(pathIn(grammar), {
-            minLength: 1,
-            maxLength: 8,
-            selector: ({ anchorId }) => anchorId,
-          }),
-          fc.nat(),
-          (paths, pick) => {
-            const blocks: Block[] = paths
-              .map(({ anchorId }) => anchorId)
-              .toSorted()
-              .map((anchorId) =>
-                paragraphFromPreview({ anchorId, id: anchorId, text: "x" }),
-              );
-            const start = pick % blocks.length;
-            const cited =
-              blocks.at(start) ?? panic("The pick is inside the list");
-            const cut = blocks.findIndex(
-              (block, index) =>
-                index > start &&
-                !segmentsExtend({
-                  ancestor: cited.anchorId,
-                  anchor: block.anchorId,
-                  separator: grammar.separator,
-                }),
-            );
-            expect(
-              blocksNestedUnder({ blocks, scheme: grammar.scheme }, cited),
-            ).toEqual(blocks.slice(start, cut === -1 ? blocks.length : cut));
-          },
-        ),
-        { numRuns: 300 },
-      );
-    });
-  }
+        );
+        expect(
+          blocksNestedUnder({ blocks, scheme: grammar.scheme }, cited),
+        ).toEqual(blocks.slice(start, cut === -1 ? blocks.length : cut));
+      }),
+      { numRuns: 300 * GRAMMARS.length },
+    );
+  });
 
   test("no publisher's paths state a list in another publisher's grammar", () => {
     const minted = fc
