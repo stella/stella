@@ -64,16 +64,16 @@
     "version": 3
   },
   "cz-us": {
-    "version": 28,
-    "fingerprint": "4e55ef31785ecc33332f67072513e6f3eaf6ddf71e7d8751af1670f9584156f3"
+    "version": 29,
+    "fingerprint": "8a670d682d0837cc2501bc083e6031612a9a82e6ba9a92d327fc43f843ff754c"
   },
   "eu-ecj": {
     "fingerprint": "016cbb02c9e7637a6d896a7cf5144f2058030473436d4b6e363bd0d54a452a90",
     "version": 17
   },
   "hu-bhgy": {
-    "fingerprint": "1ca965752875d2fbb3d479df3901acb7becb60a90e1773ac83926cd35034bdfe",
-    "version": 20
+    "fingerprint": "3502b7843103d6271ede7faddc8c7192203560c51186f3415e65582b56b91e3a",
+    "version": 21
   },
   "pl-courts": {
     "fingerprint": "0b437b804baa7e146bb0107290f26508ecbe32cc9bfd116c12b8b1114554f26b",

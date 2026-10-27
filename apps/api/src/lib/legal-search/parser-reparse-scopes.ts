@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 28,
+    version: 29,
     scope: {
       type: "all",
       reason:
-        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -298,11 +298,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 20,
+    version: 21,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
