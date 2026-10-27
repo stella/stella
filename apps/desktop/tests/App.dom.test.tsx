@@ -110,16 +110,19 @@ const isPreferences = (
 const installBackend = (order: ResponseOrder) => {
   let snapshot: AppSnapshot = INITIAL_SNAPSHOT;
   const pushes: AppSnapshot[] = [];
+  const pushDeliveries: Promise<void>[] = [];
   const outcomes: SaveOutcome[] = [];
   const unexpected: string[] = [];
   const pushStateChanged = () => {
     pushes.push(snapshot);
-    void order
-      .hold(
-        "state-changed",
-        () => pushes.shift() ?? panic("state-changed delivered twice"),
-      )
-      .then(async (payload) => await emit("state-changed", payload));
+    pushDeliveries.push(
+      order
+        .hold(
+          "state-changed",
+          () => pushes.shift() ?? panic("state-changed delivered twice"),
+        )
+        .then(async (payload) => await emit("state-changed", payload)),
+    );
   };
   mockWindows("main");
   mockIPC(
@@ -157,6 +160,9 @@ const installBackend = (order: ResponseOrder) => {
     { shouldMockEvents: true },
   );
   return {
+    drainPushes: async () => {
+      await Promise.all(pushDeliveries);
+    },
     expectSave: (outcome: SaveOutcome) => {
       outcomes.push(outcome);
     },
@@ -222,6 +228,7 @@ test(
               }
             }
             await order.settle();
+            await flushAct(backend.drainPushes);
             const shown = Object.fromEntries(
               PREFERENCE_KEYS.map((key) => [
                 key,
@@ -232,6 +239,8 @@ test(
             expect(shown).toEqual(backend.preferences());
             expect(backend.unexpected).toEqual([]);
           } finally {
+            await order.settle();
+            await flushAct(backend.drainPushes);
             view.unmount();
             clearMocks();
           }
