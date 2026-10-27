@@ -923,7 +923,7 @@ export const refreshOAuthToken = async ({
   clientId: string;
   clientSecret: ClientSecret | null;
   refreshToken: RefreshToken;
-}): Promise<Result<TokenResponse, HandlerError<502>>> => {
+}): Promise<Result<TokenResponse, HandlerError<500 | 502>>> => {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     client_id: clientId,
