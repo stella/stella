@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -8,6 +9,7 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
+import { getByRole } from "@testing-library/dom";
 import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -20,6 +22,7 @@ import type {
   CaseLawCoverageCountry,
   CaseLawCoverageSource,
 } from "@/routes/law/-law-coverage/coverage.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const rootRoute = createRootRoute();
 
@@ -373,6 +376,27 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain("Other courts");
     expect(markup).toContain(">480<");
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
+  });
+
+  test("court toggles have distinct accessible names containing their source names", async () => {
+    GlobalRegistrator.register();
+    const { document: testDocument } = globalThis;
+    try {
+      // safe-html: React renderToStaticMarkup escapes the coverage fixture values.
+      testDocument.body.innerHTML = render(
+        <CaseLawCoveragePage coverage={COVERAGE} />,
+      );
+
+      const first = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEARLY_COMPLETE.name}`,
+      });
+      const second = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEVER_MEASURED.name}`,
+      });
+      expect(first).not.toBe(second);
+    } finally {
+      await unregisterDomEnvironment();
+    }
   });
 
   test("an unavailable country court breakdown leaves no separate section", () => {

@@ -155,6 +155,12 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         await db.execute(sql`ANALYZE case_law_sources`);
 
         await refreshPgFtsBrowseFacets(db);
+        await db.execute(sql`INSERT INTO case_law_browse_facet_counts
+          (kind, country, source_id, value, total)
+          SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
+          FROM case_law_sources sources
+          CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+        await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
@@ -176,6 +182,21 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           null,
           2,
         );
+        const facetProbes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_browse_facet_counts" &&
+            node["Actual Loops"] !== 0,
+        );
+        expect(facetProbes, planEvidence).toHaveLength(2);
+        for (const probe of facetProbes) {
+          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
+            String(probe["Node Type"]),
+          );
+          expect(probe["Index Cond"], planEvidence).toContain("source_id");
+          expect(probe["Index Cond"], planEvidence).toContain("court");
+          expect(probe["Actual Rows"], planEvidence).toBe(1);
+          expect(probe["Actual Loops"], planEvidence).toBe(SOURCES);
+        }
         const probes = planNodes(root).filter(
           (node) =>
             node["Relation Name"] === "case_law_decisions" &&

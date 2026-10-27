@@ -309,7 +309,12 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
             SELECT d.court, 1 AS decisions
             FROM ${publishedCaseLawDecisions} AS d
             WHERE d.source_id = case_law_sources.id
-              AND NOT EXISTS (SELECT 1 FROM ${caseLawBrowseFacetCounts} LIMIT 1)
+              AND NOT EXISTS (
+                SELECT 1 FROM ${caseLawBrowseFacetCounts} AS source_facets
+                WHERE source_facets.kind = 'court'
+                  AND source_facets.source_id = case_law_sources.id
+                LIMIT 1
+              )
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
           ), grouped AS (

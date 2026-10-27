@@ -614,6 +614,8 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
   const relativeTime = useRelativeTime();
   const [expanded, setExpanded] = useState(false);
   const courtsId = useId();
+  const toggleId = useId();
+  const sourceNameId = useId();
 
   return (
     <>
@@ -627,6 +629,8 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
               aria-expanded={expanded}
               aria-controls={courtsId}
               aria-label={t("common.court")}
+              aria-labelledby={`${toggleId} ${sourceNameId}`}
+              id={toggleId}
               className="me-1"
               onClick={() => setExpanded((value) => !value)}
               size="icon-sm"
@@ -637,6 +641,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             <a
               className="decoration-border underline underline-offset-2 hover:decoration-current"
               href={sanitizeHref(source.publicHomeUrl)}
+              id={sourceNameId}
               rel="noreferrer"
             >
               <bdi>{source.name}</bdi>

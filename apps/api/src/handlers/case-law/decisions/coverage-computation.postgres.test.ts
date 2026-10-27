@@ -6,6 +6,7 @@ import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import { CZ_ECLI_COURT_REGISTRY } from "@stll/api-contract/case-law-courts";
 
 import {
+  caseLawBrowseFacetCounts,
   caseLawCourtWeights,
   caseLawDecisions,
   caseLawSources,
@@ -205,6 +206,13 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               fulltext: "Rozhodnutí v občanskoprávní věci.",
             })),
           ]);
+          await tx.insert(caseLawBrowseFacetCounts).values({
+            kind: "court",
+            country: "CZE",
+            sourceId,
+            value: "Nejvyšší soud",
+            total: 1,
+          });
           const result = await computeCaseLawCoverageAnswer(
             async (read) => await read(tx),
             [],
