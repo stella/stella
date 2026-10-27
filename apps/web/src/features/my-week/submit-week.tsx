@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
@@ -52,36 +53,41 @@ export const SubmitWeekActions = ({
 }: SubmitWeekActionsProps) => {
   const t = useTranslations();
   const run = async (approve: boolean) => {
-    try {
-      const { results } = await submit({
-        startDate: week.start,
-        endDate: week.end,
-        approve,
-      });
-      const refusals = new Map<string, TimeSubmitRefusal>();
-      let submitted = 0;
-      let approved = 0;
-      for (const result of results) {
-        if (result.status === "refused") {
-          refusals.set(result.id, result.reason);
-        } else if (result.status === "approved") {
-          approved += 1;
-        } else {
-          submitted += 1;
-        }
-      }
-      onRefusals(refusals);
-      stellaToast.add({
-        title: t("timesheets.week.submitResult", {
-          submitted,
-          approved,
-          refused: refusals.size,
+    const response = await Result.tryPromise({
+      try: async () =>
+        await submit({
+          startDate: week.start,
+          endDate: week.end,
+          approve,
         }),
-        type: refusals.size > 0 ? "warning" : "success",
-      });
-    } catch (error) {
-      notifyUserError(error, t("errors.actionFailed"));
+      catch: (cause: unknown): unknown => cause,
+    });
+    if (Result.isError(response)) {
+      notifyUserError(response.error, t("errors.actionFailed"));
+      return;
     }
+    const { results } = response.value;
+    const refusals = new Map<string, TimeSubmitRefusal>();
+    let submitted = 0;
+    let approved = 0;
+    for (const result of results) {
+      if (result.status === "refused") {
+        refusals.set(result.id, result.reason);
+      } else if (result.status === "approved") {
+        approved += 1;
+      } else {
+        submitted += 1;
+      }
+    }
+    onRefusals(refusals);
+    stellaToast.add({
+      title: t("timesheets.week.submitResult", {
+        submitted,
+        approved,
+        refused: refusals.size,
+      }),
+      type: refusals.size > 0 ? "warning" : "success",
+    });
   };
 
   return (

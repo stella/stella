@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
@@ -171,17 +172,21 @@ export const useTimeReview = () => {
     },
     returnToDraft: ({ id, workspaceId }: ReviewTarget, comment: string) => {
       const request = async () => {
-        try {
-          await returnEntry.mutateAsync({
-            workspaceId,
-            id,
-            comment: comment.trim(),
-          });
-          itemErrors.show([id], {});
-          uncheck([id]);
-        } catch (error) {
-          itemErrors.show([id], { [id]: itemErrors.errorText(error) });
+        const returned = await Result.tryPromise({
+          try: async () =>
+            await returnEntry.mutateAsync({
+              workspaceId,
+              id,
+              comment: comment.trim(),
+            }),
+          catch: (cause: unknown): unknown => cause,
+        });
+        if (Result.isError(returned)) {
+          itemErrors.show([id], { [id]: itemErrors.errorText(returned.error) });
+          return;
         }
+        itemErrors.show([id], {});
+        uncheck([id]);
       };
       detached(pending.track([id], request()), "time-review.return");
     },
