@@ -1,15 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
-// Other test files share Bun's module registry and the event SDK imports core.
-const actualCore = { ...(await import("@tauri-apps/api/core")) };
+const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
 const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = [];
-await mock.module("@tauri-apps/api/core", () => ({
-  ...actualCore,
-  invoke: async (command: string) => {
+beforeEach(() => {
+  mockIPC(async (command) => {
     if (command === "desktop_report_error") {
       return undefined;
     }
@@ -19,8 +17,8 @@ await mock.module("@tauri-apps/api/core", () => ({
     const request = Promise.withResolvers<unknown>();
     pending.push(request);
     return await request.promise;
-  },
-}));
+  });
+});
 
 const sdkEvent = await import("@tauri-apps/api/event");
 
@@ -43,20 +41,28 @@ const settingsResponse = (preference: string | null) => ({
 
 afterEach(() => {
   cleanup();
+  clearMocks();
   pending.length = 0;
 });
 afterAll(async () => {
-  mock.restore();
   await GlobalRegistrator.unregister();
 });
 
-test("the native command mock preserves exports required by the event SDK", async () => {
-  const mockedCore = await import("@tauri-apps/api/core");
-  expect(Object.keys(mockedCore).toSorted()).toEqual(
-    Object.keys(actualCore).toSorted(),
-  );
-  expect(mockedCore.transformCallback).toBe(actualCore.transformCallback);
-  expect(sdkEvent.listen).toBeFunction();
+test("the native transport can be replaced without replacing SDK modules", async () => {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const settings = invoke("billing_draft_get_settings");
+  takeRequest().resolve(settingsResponse("First transport"));
+  expect(await settings).toEqual(settingsResponse("First transport"));
+  clearMocks();
+  mockIPC(() => "Next transport", { shouldMockEvents: true });
+  expect(await invoke("next_fixture_command")).toBe("Next transport");
+  const received: unknown[] = [];
+  const unlisten = await sdkEvent.listen("next-fixture-event", (event) => {
+    received.push(event.payload);
+  });
+  await sdkEvent.emit("next-fixture-event", { revision: 1 });
+  expect(received).toEqual([{ revision: 1 }]);
+  unlisten();
 });
 
 test("a settings validation continuation cannot restore a disabled account's response", async () => {

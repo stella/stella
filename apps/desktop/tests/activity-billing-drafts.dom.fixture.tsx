@@ -6,7 +6,10 @@ import type {
   DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
 } from "@stll/api-contract/desktop-billing-drafts";
-import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopTimeEntryClassification,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
 
 import type { ActivityDaySnapshot } from "../src/activity/activity-types";
 
@@ -27,6 +30,21 @@ const CLIENT_CLASSIFICATION = {
   type: "activity_group",
   activityGroup: "client",
 } as const;
+const BASE_LEDGER_CLASSIFICATION = {
+  type: "ledes",
+  taskCode: "BASE-TASK",
+  activityCode: "BASE-ACTIVITY",
+} as const satisfies DesktopTimeEntryClassification;
+const FIRST_OPERATION_CLASSIFICATION = {
+  type: "ledes",
+  taskCode: "TASK-101",
+  activityCode: "ACT-201",
+} as const satisfies DesktopTimeEntryClassification;
+const SECOND_OPERATION_CLASSIFICATION = {
+  type: "ledes",
+  taskCode: "TASK-102",
+  activityCode: "ACT-202",
+} as const satisfies DesktopTimeEntryClassification;
 
 const candidates = [
   {
@@ -172,10 +190,11 @@ const draft = (
   entryId: string,
   narrative: string,
   operations: DesktopBillingDraftResponse["drafts"][number]["operations"] = [],
+  classification: DesktopTimeEntryClassification = CLIENT_CLASSIFICATION,
 ) => ({
   entryId,
   narrative,
-  classification: CLIENT_CLASSIFICATION,
+  classification,
   flags: [],
   matchedEarlierEntryIds: [],
   operations,
@@ -190,6 +209,11 @@ const review = (
 
 const firstDraftRequest = (requests: readonly DeferredReview[]) =>
   requests.at(0) ?? panic("Expected billing draft request");
+
+const visibleReviewCodes = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll('[id^="review-item-"]'), (item) =>
+    Array.from(item.querySelectorAll("code"), (code) => code.textContent),
+  );
 
 const resolveDraft = async (request: DeferredReview, value: unknown) => {
   await act(async () => {
@@ -227,31 +251,40 @@ test("accepted split content can be edited and the confirmed payload uses those 
   await resolveDraft(
     request,
     review([
-      draft("entry_1", "Draft narrative", [
-        {
-          type: "split",
-          parts: [
-            {
-              durationMinutes: 30,
-              narrative: "First part",
-              classification: CLIENT_CLASSIFICATION,
-              billable: true,
-            },
-            {
-              durationMinutes: 30,
-              narrative: "Second part",
-              classification: CLIENT_CLASSIFICATION,
-              billable: false,
-            },
-          ],
-        },
-      ]),
+      draft(
+        "entry_1",
+        "Draft narrative",
+        [
+          {
+            type: "split",
+            parts: [
+              {
+                durationMinutes: 30,
+                narrative: "First part",
+                classification: FIRST_OPERATION_CLASSIFICATION,
+                billable: true,
+              },
+              {
+                durationMinutes: 30,
+                narrative: "Second part",
+                classification: SECOND_OPERATION_CLASSIFICATION,
+                billable: false,
+              },
+            ],
+          },
+        ],
+        BASE_LEDGER_CLASSIFICATION,
+      ),
     ]),
   );
 
   fireEvent.click(
     view.getByRole("button", { name: messages.activity.aiApply }),
   );
+  expect(visibleReviewCodes(view.container)).toEqual([
+    ["TASK-101", "ACT-201"],
+    ["TASK-102", "ACT-202"],
+  ]);
   const narratives = view.getAllByRole("textbox", {
     name: messages.activity.entryNarrative,
   });
@@ -271,6 +304,7 @@ test("accepted split content can be edited and the confirmed payload uses those 
           durationMinutes: 30,
           narrative: "First part",
           billable: true,
+          classification: FIRST_OPERATION_CLASSIFICATION,
         },
       },
       {
@@ -279,6 +313,45 @@ test("accepted split content can be edited and the confirmed payload uses those 
           durationMinutes: 30,
           narrative: "Edited second part",
           billable: false,
+          classification: SECOND_OPERATION_CLASSIFICATION,
+        },
+      },
+    ],
+  });
+});
+
+test("classification changes are shown and submitted from the operation", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft(
+        "entry_1",
+        "Classified work",
+        [
+          {
+            type: "change_classification",
+            classification: FIRST_OPERATION_CLASSIFICATION,
+          },
+        ],
+        BASE_LEDGER_CLASSIFICATION,
+      ),
+    ]),
+  );
+
+  expect(visibleReviewCodes(view.container)).toEqual([["TASK-101", "ACT-201"]]);
+  fireEvent.click(view.getByRole("button", { name: "Create 1 draft" }));
+
+  await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+  expect(boundary.submissions.at(0)).toMatchObject({
+    items: [
+      {
+        entry: {
+          matterId: FIRST_MATTER_ID,
+          narrative: "Classified work",
+          classification: FIRST_OPERATION_CLASSIFICATION,
         },
       },
     ],

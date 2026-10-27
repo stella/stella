@@ -250,7 +250,7 @@ test("partial and overlapping structural acceptance is rejected", () => {
   ).toBe(merged);
 });
 
-test("late offers preserve live edits and every apply snapshots the current content", () => {
+test("late offers snapshot live edits only at the first actual application", () => {
   let state = reviewReducer(new Map(), {
     type: "set-narrative",
     ...target,
@@ -274,10 +274,9 @@ test("late offers preserve live edits and every apply snapshots the current cont
     itemKey: "first",
     narrative: "New undo baseline",
   });
-  const latest = entry(state).content;
   state = reviewReducer(state, { type: "use-draft", ...target });
   state = reviewReducer(state, { type: "use-original", ...target });
-  expect(entry(state).content).toBe(latest);
+  expect(entry(state).content).toBe(edited);
 });
 
 test("unchanged offers apply atomically but accepted or absorbed groups only get proposals", () => {
@@ -401,35 +400,61 @@ test("scalar proposals never flatten accepted geometry or release its participan
   ).toBe(merged);
 });
 
-test("steering acceptance captures edits made after its request for Undo", () => {
-  let state = reviewReducer(new Map(), {
-    type: "offer-results",
-    mode: "initial",
-    offers: [
-      { ...target, expectedRevision: 0, result: result("First AI draft") },
-    ],
-  });
-  const requestedRevision = entry(state).revision;
-  state = reviewReducer(state, {
-    type: "set-narrative",
-    ...target,
-    itemKey: "first",
-    narrative: "Typed after steering request",
-  });
-  const baseline = entry(state).content;
-  state = reviewReducer(state, {
-    type: "offer-results",
-    mode: "steer",
-    offers: [
-      {
-        ...target,
-        expectedRevision: requestedRevision,
-        result: result("Steered proposal"),
-      },
-    ],
-  });
-  state = reviewReducer(state, { type: "apply-proposal", ...target });
-  expect(entry(state).content).toMatchObject({ narrative: "Steered proposal" });
-  state = reviewReducer(state, { type: "use-original", ...target });
-  expect(entry(state).content).toBe(baseline);
-});
+test.each(["use-original", "undo-all"] as const)(
+  "%s after refinements restores the first pre-AI narrative and billable baseline",
+  (undoType) => {
+    let state = reviewReducer(new Map(), {
+      type: "set-billable",
+      ...target,
+      itemKey: "first",
+      billable: false,
+    });
+    const baseline = entry(state).content;
+    state = reviewReducer(state, {
+      type: "offer-results",
+      mode: "initial",
+      offers: [
+        {
+          ...target,
+          expectedRevision: entry(state).revision,
+          result: result("First AI draft"),
+        },
+      ],
+    });
+    const requestedRevision = entry(state).revision;
+    state = reviewReducer(state, {
+      type: "set-narrative",
+      ...target,
+      itemKey: "first",
+      narrative: "Typed after steering request",
+    });
+    state = reviewReducer(state, {
+      type: "set-billable",
+      ...target,
+      itemKey: "first",
+      billable: true,
+    });
+    state = reviewReducer(state, {
+      type: "offer-results",
+      mode: "steer",
+      offers: [
+        {
+          ...target,
+          expectedRevision: requestedRevision,
+          result: result("Steered proposal"),
+        },
+      ],
+    });
+    state = reviewReducer(state, { type: "apply-proposal", ...target });
+    expect(entry(state).content).toMatchObject({
+      narrative: "Steered proposal",
+      billable: true,
+    });
+    state = reviewReducer(state, { type: undoType, ...target });
+    expect(entry(state).content).toBe(baseline);
+    expect(entry(state).content).toMatchObject({
+      narrative: "My original",
+      billable: false,
+    });
+  },
+);

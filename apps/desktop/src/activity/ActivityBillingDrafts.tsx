@@ -581,7 +581,6 @@ export const BillingDraftEntryReview = ({
           <AiActionIcon aria-hidden="true" className="size-3" />
           {t("aiRefine")}
         </Button>
-        <ClassificationCodes classification={draft.classification} />
       </div>
       {draft.flags.map((flag) => (
         <div
@@ -650,7 +649,7 @@ export const BillingDraftEntryReview = ({
   );
 };
 
-const ClassificationCodes = ({
+export const BillingClassificationCodes = ({
   classification,
 }: {
   classification: DesktopTimeEntryClassification;

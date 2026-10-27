@@ -38,6 +38,7 @@ import { Textarea } from "@stll/ui/textarea";
 import type { DesktopMessages } from "../i18n/index";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
+import { BillingClassificationCodes } from "./ActivityBillingDrafts";
 import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
@@ -835,6 +836,11 @@ const ReviewItemFields = ({
             }),
           })}
         </p>
+      ) : null}
+      {item.classification !== null ? (
+        <div className="flex items-center justify-end">
+          <BillingClassificationCodes classification={item.classification} />
+        </div>
       ) : null}
       <Textarea
         className="hover:border-input focus-visible:border-ring min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"

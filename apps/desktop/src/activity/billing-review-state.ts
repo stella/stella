@@ -25,20 +25,23 @@ export type AcceptedReviewContent = {
   undoContent: SingleReviewContent;
 };
 export type ReviewContent = SingleReviewContent | AcceptedReviewContent;
+type AppliedDraftState = {
+  using: "draft" | "original";
+  result: DraftResult;
+  readonly originalContent: SingleReviewContent;
+  proposal: DraftResult | null;
+};
 export type DraftEntryState =
-  | { using: "proposal"; result: DraftResult }
-  | {
-      using: "draft";
-      result: DraftResult;
-      originalContent: SingleReviewContent;
-      proposal: DraftResult | null;
-    }
-  | {
-      using: "original";
-      result: DraftResult;
-      originalContent: SingleReviewContent;
-      proposal: DraftResult | null;
-    };
+  { using: "proposal"; result: DraftResult } | AppliedDraftState;
+const transitionAppliedDraft = (
+  current: AppliedDraftState,
+  next: Omit<AppliedDraftState, "originalContent">,
+): AppliedDraftState => ({
+  using: next.using,
+  result: next.result,
+  originalContent: current.originalContent,
+  proposal: next.proposal,
+});
 export type EntryEdit = {
   selected: boolean;
   revision: number;
@@ -187,12 +190,19 @@ const applyResult = (
     current,
     change: {
       content: appliedContent(current.content, result),
-      draft: {
-        using: "draft",
-        result,
-        originalContent: current.content,
-        proposal: null,
-      },
+      draft:
+        current.draft === null || current.draft.using === "proposal"
+          ? {
+              using: "draft",
+              result,
+              originalContent: current.content,
+              proposal: null,
+            }
+          : transitionAppliedDraft(current.draft, {
+              using: "draft",
+              result,
+              proposal: null,
+            }),
     },
   });
 };
@@ -216,12 +226,11 @@ const offerResults = (
     const draft: DraftEntryState =
       current.draft === null || current.draft.using === "proposal"
         ? { using: "proposal", result: offer.result }
-        : {
+        : transitionAppliedDraft(current.draft, {
             using: current.draft.using,
             result: current.draft.result,
-            originalContent: current.draft.originalContent,
             proposal: offer.result,
-          };
+          });
     const updated = new Map(next);
     updated.set(offer.groupId, {
       selected: current.selected,
@@ -454,12 +463,11 @@ export const reviewReducer = (
         current: own,
         change: {
           content: own.draft.originalContent,
-          draft: {
+          draft: transitionAppliedDraft(own.draft, {
             using: "original",
             result: own.draft.result,
-            originalContent: own.draft.originalContent,
             proposal: own.draft.proposal,
-          },
+          }),
         },
       });
     case "use-draft":
@@ -480,12 +488,11 @@ export const reviewReducer = (
       const draft: DraftEntryState | null =
         own.draft.using === "proposal"
           ? null
-          : {
+          : transitionAppliedDraft(own.draft, {
               using: own.draft.using,
               result: own.draft.result,
-              originalContent: own.draft.originalContent,
               proposal: null,
-            };
+            });
       return commitChange({
         state,
         groupId: action.groupId,
