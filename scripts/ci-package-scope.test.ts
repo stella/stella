@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
@@ -1167,8 +1169,14 @@ test("every owner-named input declaration enters the census even through a deleg
       expect(census.has(file), file).toBe(true);
     }
     expect(
-      markdownChecks({ root, changed: ["docs/owned.md"] }).toSorted(),
-    ).toEqual(declared.map((file) => ["bun", file]).toSorted());
+      markdownChecks({ root, changed: ["docs/owned.md"] })
+        .map((command) => JSON.stringify(command))
+        .toSorted(compareCodeUnit),
+    ).toEqual(
+      declared
+        .map((file) => JSON.stringify(["bun", file]))
+        .toSorted(compareCodeUnit),
+    );
   });
 });
 
