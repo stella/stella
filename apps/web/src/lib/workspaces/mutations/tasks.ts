@@ -37,25 +37,15 @@ export const useCreateTask = () => {
             );
           return unwrapApiResponse(response);
         },
-        refresh: async () => {
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: taskKeys.all(workspaceId),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: workspacesKeys.overview(workspaceId),
-            }),
-            queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
-            queryClient.invalidateQueries({
-              queryKey: legalListsQueryRoot(workspaceId),
-            }),
-          ]);
-        },
+        queryKeys: [
+          entitiesKeys.all(workspaceId),
+          taskKeys.all(workspaceId),
+          workspacesKeys.overview(workspaceId),
+          myWorkKeys.all,
+          legalListsQueryRoot(workspaceId),
+        ],
       }),
-    onSuccess: async (data, workspaceId) => {
+    onSuccess: (data, workspaceId) => {
       stellaToast.add({
         title: t("success.taskCreated"),
         type: "success",

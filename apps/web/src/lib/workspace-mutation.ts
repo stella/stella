@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
 import type { WorkspaceRealtimeEvent } from "@stll/api-contract";
@@ -50,33 +50,47 @@ export const handleWorkspaceMutationEvent = (
 type RunWorkspaceMutationOptions<T> = {
   client: QueryClient;
   request: (mutationId: string) => Promise<T>;
-  refresh: (data: T) => Promise<void>;
+  queryKeys: readonly QueryKey[];
 };
 
 /** Registers before the request: an event may arrive before its HTTP response. */
 export const runWorkspaceMutation = async <T>({
   client,
   request,
-  refresh,
+  queryKeys,
 }: RunWorkspaceMutationOptions<T>): Promise<T> => {
   const entries = clientMutations(client);
   const mutationId = createUuid();
   const pending: MutationState = { status: "pending", onFailure: [] };
   entries.set(mutationId, pending);
   const result = await Result.tryPromise({
-    try: async () => {
-      const data = await request(mutationId);
-      await refresh(data);
-      return data;
-    },
+    try: async () => await request(mutationId),
     catch: (cause) => cause,
   });
-  if (Result.isError(result)) {
+  const releaseEvents = () => {
     entries.delete(mutationId);
     for (const apply of pending.onFailure) {
       apply();
     }
+  };
+  if (Result.isError(result)) {
+    releaseEvents();
     throw result.error;
+  }
+  const refresh = await Result.tryPromise({
+    try: async () => {
+      await Promise.all(
+        queryKeys.map(async (queryKey) =>
+          client.invalidateQueries({ queryKey }, { throwOnError: true }),
+        ),
+      );
+    },
+    catch: (cause) => cause,
+  });
+  if (Result.isError(refresh)) {
+    releaseEvents();
+    // The write succeeded; query error state and released echoes own recovery.
+    return result.value;
   }
   entries.set(mutationId, { status: "acknowledged" });
   let acknowledged = 0;

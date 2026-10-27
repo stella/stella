@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
 
 import {
@@ -19,16 +19,27 @@ const controlledMutation = (client: QueryClient) => {
   const response = Promise.withResolvers<string>();
   const refreshStarted = Promise.withResolvers<string>();
   const refreshFinished = Promise.withResolvers<undefined>();
+  const queryKey = ["projection", createUuid()];
+  const fetchProjection = async () => {
+    refreshStarted.resolve("created");
+    await refreshFinished.promise;
+    return "refreshed";
+  };
+  const observer = new QueryObserver(client, {
+    queryKey,
+    initialData: "initial",
+    staleTime: Infinity,
+    retry: false,
+    queryFn: fetchProjection,
+  });
+  observer.subscribe(() => undefined);
   const completion = runWorkspaceMutation({
     client,
     request: async (mutationId) => {
       registered.resolve(mutationId);
       return await response.promise;
     },
-    refresh: async (data) => {
-      refreshStarted.resolve(data);
-      await refreshFinished.promise;
-    },
+    queryKeys: [queryKey],
   });
   return { registered, response, refreshStarted, refreshFinished, completion };
 };
@@ -60,7 +71,7 @@ test("events arriving before the response or refresh defer to the successful mut
   client.clear();
 });
 
-const verifyFailureReplay = async (failureAt: "request" | "refresh") => {
+test("a request failure releases deferred events and preserves the error", async () => {
   const client = new QueryClient();
   const mutation = controlledMutation(client);
   const mutationId = await mutation.registered.promise;
@@ -71,15 +82,9 @@ const verifyFailureReplay = async (failureAt: "request" | "refresh") => {
     });
   }
   expect(applied).toEqual([]);
-  const error = new TypeError(`${failureAt} failed`);
+  const error = new TypeError("request failed");
   const rejection = rejectionOf(mutation.completion);
-  if (failureAt === "request") {
-    mutation.response.reject(error);
-  } else {
-    mutation.response.resolve("created");
-    await mutation.refreshStarted.promise;
-    mutation.refreshFinished.reject(error);
-  }
+  mutation.response.reject(error);
   expect(await rejection).toBe(error);
   expect(applied).toEqual([1, 2]);
   handleWorkspaceMutationEvent(client, matchingEvent(mutationId), () => {
@@ -87,12 +92,68 @@ const verifyFailureReplay = async (failureAt: "request" | "refresh") => {
   });
   expect(applied).toEqual([1, 2, 3]);
   client.clear();
-};
-test("a request failure releases deferred events and preserves the error", async () => {
-  await verifyFailureReplay("request");
 });
-test("a refresh failure releases deferred events and preserves the error", async () => {
-  await verifyFailureReplay("refresh");
+
+test("a failed active refresh preserves the write and releases deferred and later echoes", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const queryKey = ["projection"];
+  let fetches = 0;
+  const refreshStarted = Promise.withResolvers<undefined>();
+  const refreshFinished = Promise.withResolvers<string>();
+  const fetchProjection = async () => {
+    fetches += 1;
+    if (fetches === 1) {
+      refreshStarted.resolve(undefined);
+      return await refreshFinished.promise;
+    }
+    return "recovered";
+  };
+  const observer = new QueryObserver(client, {
+    queryKey,
+    initialData: "initial",
+    queryFn: fetchProjection,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  try {
+    const response = Promise.withResolvers<string>();
+    let mutationId = "";
+    const completion = runWorkspaceMutation({
+      client,
+      request: async (id) => {
+        mutationId = id;
+        return await response.promise;
+      },
+      queryKeys: [queryKey],
+    });
+    const refreshes: Promise<void>[] = [];
+    const apply = () => {
+      refreshes.push(client.invalidateQueries({ queryKey }));
+    };
+    handleWorkspaceMutationEvent(client, matchingEvent(mutationId), apply);
+    expect(fetches).toBe(0);
+    response.resolve("created");
+    await refreshStarted.promise;
+    handleWorkspaceMutationEvent(client, matchingEvent(mutationId), apply);
+    expect(fetches).toBe(1);
+    refreshFinished.reject(new TypeError("refresh failed"));
+    expect(await completion).toBe("created");
+    expect(refreshes).toHaveLength(2);
+    await Promise.all(refreshes);
+    expect(fetches).toBeGreaterThan(1);
+    expect(observer.getCurrentResult().data).toBe("recovered");
+    const beforeLaterEcho = fetches;
+    handleWorkspaceMutationEvent(client, matchingEvent(mutationId), apply);
+    await Promise.all(refreshes);
+    expect(fetches).toBe(beforeLaterEcho + 1);
+    handleWorkspaceMutationEvent(client, matchingEvent(createUuid()), apply);
+    await Promise.all(refreshes);
+    expect(fetches).toBe(beforeLaterEcho + 2);
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
 });
 
 test("only the initiating query client consumes an acknowledged echo", async () => {
@@ -105,7 +166,7 @@ test("only the initiating query client consumes an acknowledged echo", async () 
       mutationId = id;
       return "created";
     },
-    refresh: async () => undefined,
+    queryKeys: [],
   });
   const applied: string[] = [];
   handleWorkspaceMutationEvent(initiator, matchingEvent(mutationId), () => {
@@ -141,7 +202,7 @@ test("a pending mutation remains registered while old acknowledgements are evict
         acknowledged.push(id);
         return "created";
       },
-      refresh: async () => undefined,
+      queryKeys: [],
     });
   }
   const oldest = acknowledged.at(0);
