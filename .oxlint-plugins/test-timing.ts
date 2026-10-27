@@ -1049,7 +1049,10 @@ const literalWaitTimeout = (
     return literalTimeoutOption(args.at(1), "expect.poll", "bare-number");
   }
   if (playwrightExpect && RETRYING_MATCHERS.has(method)) {
-    return literalTimeoutOption(args.at(-1), method, "bare-number");
+    // toHaveJSProperty compares any value, objects included, so only a third
+    // argument is its options; the other matchers take options last.
+    const options = method === "toHaveJSProperty" ? args.at(2) : args.at(-1);
+    return literalTimeoutOption(options, method, "bare-number");
   }
   return null;
 };

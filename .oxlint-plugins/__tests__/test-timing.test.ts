@@ -461,6 +461,18 @@ describe("no-literal-wait-timeout", () => {
     ).toEqual([5]);
   });
 
+  test("reads toHaveJSProperty options from its third argument only", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "await expect(locator).toHaveJSProperty('config', { timeout: 1000 });",
+          "await expect(locator).toHaveJSProperty('config', 1, { timeout: 2000 });",
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+
   test("follows an aliased Playwright expect import", async () => {
     expect(
       await lintLiteralWaitTimeouts(
