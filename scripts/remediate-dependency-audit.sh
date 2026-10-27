@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 
 fix_branch="${FIX_BRANCH:-automation/dependency-audit-fix}"
 
@@ -22,9 +27,9 @@ if ! git diff --quiet -- bun.lock scripts/dependency-audit-baseline.json ':(glob
   # A source-only checkout has no tracking ref for an abandoned fix branch.
   # Lease the fetched tip explicitly, or require absence when creating it.
   fix_ref="refs/heads/$fix_branch"
-  observed_sha="$(git -c credential.helper= -c credential.helper='!gh auth git-credential' ls-remote --heads origin "$fix_ref" | cut -f1)"
+  observed_sha="$("$BASH" "$retry_script" git -c credential.helper= -c credential.helper='!gh auth git-credential' ls-remote --heads origin "$fix_ref" | cut -f1)"
   if [[ -n "$observed_sha" ]]; then
-    git -c credential.helper= -c credential.helper='!gh auth git-credential' fetch --no-tags origin "$fix_ref"
+    "$BASH" "$retry_script" git -c credential.helper= -c credential.helper='!gh auth git-credential' fetch --no-tags origin "$fix_ref"
     observed_sha="$(git rev-parse FETCH_HEAD)"
   fi
   git config user.name "stella-dependency-audit[bot]"

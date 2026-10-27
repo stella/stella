@@ -8,5 +8,10 @@
     "capability": "fetch",
     "file": "packages/scripts/src/model-catalog-snapshot.ts",
     "reason": "The snapshot module owns scheduled refresh transport; check mode reads committed inputs and the preload denies runtime transport."
+  },
+  {
+    "capability": "dynamic-module",
+    "file": "scripts/codemod-icons.ts",
+    "reason": "The codemod imports lucide-react as packages/ui resolves it, a local module path that carries no network transport."
   }
 ]

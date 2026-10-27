@@ -109,6 +109,7 @@ jobs:
           expected-sha: ${{ github.sha }}
 
       - name: Seed write mode from the latest published recording
+        timeout-minutes: 5
         if: (inputs.mode || 'write') == 'write'
         uses: ./.github/actions/prepare-network-baseline
         with:

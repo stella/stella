@@ -1390,6 +1390,13 @@ test("cloud setup has one generator owner and checks shared policy output", () =
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      "packages/portable-path/src/index.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
     autofix: true,
@@ -1405,6 +1412,7 @@ test("cloud setup has one generator owner and checks shared policy output", () =
 // A plan runs from a clean checkout, where no derived output exists: every
 // derived output a planned generator reads must come from a generator planned
 // before it, whichever file started the plan.
+// timeout: exhaustively checking every declared transitive input is CPU-bound.
 test("every plan builds the derived outputs its generators read before running them", () => {
   const witness = (glob: string) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
@@ -1431,7 +1439,7 @@ test("every plan builds the derived outputs its generators read before running t
     }
   }
   expect([...new Set(problems)]).toEqual([]);
-});
+}, 10_000);
 
 // Building a prerequisite first is useless if the run then skips it: a derived
 // generator's check guards tracking, so it passes on a clean checkout that
