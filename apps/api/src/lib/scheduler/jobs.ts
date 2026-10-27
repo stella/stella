@@ -539,10 +539,11 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description: "Build one pending online database work unit",
-    id: "onlineWork.runPending.minutely",
+    id: `${ONLINE_WORK_RUNNER_TASK}.minutely`,
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: ONLINE_WORK_RUNNER_TASK,
+    reads: "load-governed",
   },
   {
     description: "Check data-correctness invariants over pipeline outputs",

@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { ONLINE_WORK_RUNNER_TASK } from "@/api/lib/scheduler/tasks/online-work-runner";
 import { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-names";
 import {
   SCHEDULED_JOB_MEASUREMENTS,
@@ -35,7 +36,10 @@ const unmeasured = new Set(
  */
 describe("read budget declarations", () => {
   test("every scheduled job declares its reads", () => {
-    const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
+    const governed = new Set<string>([
+      ...Object.values(SCHEDULER_BACKFILL_IDS),
+      `${ONLINE_WORK_RUNNER_TASK}.minutely`,
+    ]);
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
       if (job.reads === "unmeasured") {
@@ -52,7 +56,7 @@ describe("read budget declarations", () => {
         return governed.has(job.id)
           ? []
           : [
-              `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
+              `${job.id}: only jobs using the shared maintenance governor are load-governed`,
             ];
       }
       // Widened: the check holds for every budget a job may declare later.
