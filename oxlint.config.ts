@@ -1942,6 +1942,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
+    "./.oxlint-plugins/no-case-folded-search-match.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-stable-editor-options.ts",
@@ -6350,6 +6351,30 @@ const config = defineConfig({
             allowedFiles: ["packages/collation/src/collation.ts"],
           },
         ],
+      },
+    },
+    {
+      // Client-side "does this text match what the user typed" goes through
+      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize,
+      // which fold case, accents and ß/ł/ø alike in every UI locale; a
+      // lowercase-only compare misses "Dvořák" for "dvorak". The table find
+      // highlighter is exempt: it marks what the server's accent-sensitive
+      // ILIKE matched, and marking more would claim matches the server never
+      // made. Tests compute expected values independently of the owner, and
+      // the design system's browser fixtures render primitives bare.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-case-folded-search-match.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
+        "packages/ui/src/components/fixtures/**",
+      ],
+      rules: {
+        "no-case-folded-search-match/no-case-folded-search-match": "error",
       },
     },
     {
