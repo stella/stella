@@ -291,7 +291,11 @@ const createDocumentDigest = ({
   return documentDigest;
 };
 
-export type DerivedJob = { digest: string; privileged: boolean };
+export type DerivedJob = {
+  digest: string;
+  privileged: boolean;
+  writesRepository: boolean;
+};
 type ReviewJobsOptions = DocumentDigestOptions & {
   decisions: v.InferOutput<typeof DECISIONS>;
   documentDigest: (id: string) => string;
@@ -336,7 +340,6 @@ const reviewJobs = ({
 }: ReviewJobsOptions) => {
   const entries: Record<string, unknown> = {};
   const privilegedJobs: string[] = [];
-  const misclassifiedWriters: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
   for (const node of nodes.values()) {
@@ -383,17 +386,14 @@ const reviewJobs = ({
         shape: job.shape,
         reachableDocuments: reachable,
       });
-      if (
-        decision !== undefined &&
-        decision.kind !== "priority" &&
-        isRepositoryWritingJob({
+      derivedJobs.set(key, {
+        digest,
+        privileged,
+        writesRepository: isRepositoryWritingJob({
           shape: job.shape,
           reachableDocuments: reachable,
-        })
-      ) {
-        misclassifiedWriters.push(key);
-      }
-      derivedJobs.set(key, { digest, privileged });
+        }),
+      });
       if (!decision || decision.reviewedDigest !== digest) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
@@ -424,11 +424,6 @@ const reviewJobs = ({
   if (removed.length) {
     throw new AdmissionError({
       message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these files:\n${removed.map(decisionPathForKey).join("\n")}`,
-    });
-  }
-  if (misclassifiedWriters.length) {
-    throw new AdmissionError({
-      message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${misclassifiedWriters.map(decisionPathForKey).join("\n")}`,
     });
   }
   if (Object.keys(entries).length) {
