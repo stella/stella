@@ -36,6 +36,10 @@ import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import { MCP_DISCOVERY_PATH } from "@/api/mcp/resource-policy-contract";
 import { MCP_NOTIFICATION_KEEP_ALIVE_MS } from "@/api/mcp/transport-contract";
 
+import {
+  type CallCaseLawTool,
+  sampleCaseLawIdentities,
+} from "./mcp-canary-case-law-identity";
 import { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
 
 export { MCP_CANARY_JOURNEY_CREDENTIALS } from "./mcp-canary-credentials";
@@ -794,6 +798,53 @@ export const AUTHENTICATED_PROBES = [
       ),
   },
 ] as const satisfies readonly AuthenticatedProbe[];
+
+const CASE_LAW_IDENTITY_PROBE_ID = 4;
+
+/** A case-law tool call's JSON payload, or the line saying why there is none. */
+const caseLawToolCaller =
+  (
+    { baseUrl, token }: CanaryTarget,
+    fetcher: CanaryFetcher = deploymentFetcher,
+  ): CallCaseLawTool =>
+  async (name, args) => {
+    const response = await postJsonRpc(
+      {
+        baseUrl,
+        token,
+        era: "modern",
+        id: CASE_LAW_IDENTITY_PROBE_ID,
+        method: "tools/call",
+        params: { name, arguments: args },
+      },
+      fetcher,
+    );
+    const result = jsonRpcResult(response.body);
+    const text =
+      response.status === 200 && result && result["isError"] !== true
+        ? firstContentText(result)
+        : undefined;
+    if (text === undefined) {
+      return { type: "error", detail: describeToolCallFailure(response) };
+    }
+    const payload = Result.try((): unknown => JSON.parse(text));
+    return payload.isOk()
+      ? { type: "ok", payload: payload.value }
+      : { type: "error", detail: "tool content is not JSON" };
+  };
+
+/** One result per probed country: a sampled decision resolves to itself. */
+const runCaseLawIdentityProbes = async (
+  target: CanaryTarget,
+  fetcher: CanaryFetcher = deploymentFetcher,
+): Promise<ProbeResult[]> =>
+  (await sampleCaseLawIdentities(caseLawToolCaller(target, fetcher))).map(
+    ({ country, outcome: { status, detail } }) => ({
+      name: `case-law identity (${country})`,
+      status: status === "not_applicable" ? PROBE_STATUS.notApplicable : status,
+      detail,
+    }),
+  );
 
 // Concurrent because both eras are stateless: neither the legacy initialize
 // nor the modern per-request envelope establishes state for another probe.
@@ -2818,6 +2869,23 @@ const run = async () => {
     );
     if (token) {
       results.push(...(await runAuthenticatedProbes({ baseUrl, token })));
+      // Daily: it samples every court, a few hundred tool calls.
+      if (mode === "full") {
+        const identity = await Result.tryPromise({
+          try: async () => await runCaseLawIdentityProbes({ baseUrl, token }),
+          catch: (error) => error,
+        });
+        results.push(
+          ...(identity.isOk()
+            ? identity.value
+            : [
+                failed(
+                  "case-law identity",
+                  describeProbeFailure(identity.error),
+                ),
+              ]),
+        );
+      }
       results.push(
         await runNamedProbe(
           "canary bearer expiry",

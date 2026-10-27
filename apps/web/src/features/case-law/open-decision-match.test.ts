@@ -26,7 +26,7 @@ describe("decisionMatchToOpen", () => {
   test("one decision found in a file that may hold more opens with the note", () => {
     expect(
       decisionMatchToOpen<Hit>({
-        candidates: [first],
+        decision: first,
         missing: ["sheet"],
         status: "incomplete_identifier",
       }),
@@ -36,12 +36,6 @@ describe("decisionMatchToOpen", () => {
   test("several candidates, or a selector nobody carries, stay with the list", () => {
     const stays: DecisionIdentityResolution<Hit>[] = [
       { status: "none" },
-      {
-        candidates: [first, second],
-        missing: ["sheet"],
-        status: "incomplete_identifier",
-      },
-      { candidates: [], missing: ["sheet"], status: "incomplete_identifier" },
       { candidates: [first, second], reason: "several", status: "ambiguous" },
       { candidates: [first], reason: "several", status: "ambiguous" },
       {
