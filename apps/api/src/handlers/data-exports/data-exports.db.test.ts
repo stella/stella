@@ -66,6 +66,7 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -456,6 +457,11 @@ describe("data export maintenance", () => {
         asTestRaw<SchedulerTaskContext>({
           db: testDb,
           dueAt: DueSlot.of({ nextRunAt }),
+          job: createLeasedSchedulerJobFixture({
+            id: "data-export-maintenance-test",
+            task: "dataExports.maintain",
+            nextRunAt,
+          }),
           logger: { info: () => {}, warn: () => {}, error: () => {} },
           scheduleContinuation: (continuationAt: Date) =>
             continuations.push(continuationAt),
@@ -530,6 +536,11 @@ describe("data export maintenance", () => {
       asTestRaw<SchedulerTaskContext>({
         db: testDb,
         dueAt: DueSlot.of({ nextRunAt: now }),
+        job: createLeasedSchedulerJobFixture({
+          id: "data-export-maintenance-test",
+          task: "dataExports.maintain",
+          nextRunAt: now,
+        }),
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         signal: new AbortController().signal,
       }),
@@ -591,6 +602,11 @@ describe("data export maintenance", () => {
         asTestRaw<SchedulerTaskContext>({
           db: testDb,
           dueAt: DueSlot.of({ nextRunAt: now }),
+          job: createLeasedSchedulerJobFixture({
+            id: "data-export-maintenance-test",
+            task: "dataExports.maintain",
+            nextRunAt: now,
+          }),
           logger: { info: () => {}, warn: () => {}, error: () => {} },
           signal: new AbortController().signal,
         }),
@@ -636,6 +652,11 @@ describe("data export maintenance", () => {
       asTestRaw<SchedulerTaskContext>({
         db: testDb,
         dueAt: DueSlot.of({ nextRunAt: now }),
+        job: createLeasedSchedulerJobFixture({
+          id: "data-export-maintenance-test",
+          task: "dataExports.maintain",
+          nextRunAt: now,
+        }),
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         signal: new AbortController().signal,
       }),

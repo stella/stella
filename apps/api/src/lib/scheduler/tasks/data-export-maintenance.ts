@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 
-import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
@@ -21,6 +20,12 @@ import {
   DATA_EXPORT_HEARTBEAT_STALE_MS,
   enqueueDataExport,
 } from "@/api/lib/data-export/queue";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
 import {
   lockStaleDataExportRun,
   withAggregateTransaction,
@@ -83,7 +88,24 @@ const atOrBefore = (column: AnyColumn, cutoff: Date) =>
 const before = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} < ${cutoff.toISOString()}::timestamptz`;
 
-type QueuedCursor = { createdAt: Date; id: string };
+type DatabasePrecisionTimestamp = ParsedPgTimestampCursor & {
+  precision: "microseconds";
+};
+type QueuedCursor = { createdAt: DatabasePrecisionTimestamp; id: string };
+
+const databasePrecisionTimestamp = (
+  value: unknown,
+): DatabasePrecisionTimestamp => {
+  const timestamp = parsePgTimestampCursorValue(value);
+  if (timestamp?.precision !== "microseconds") {
+    return panic("Data-export maintenance cursor timestamp is invalid");
+  }
+  return {
+    type: "pgTimestampCursor",
+    value: timestamp.value,
+    precision: "microseconds",
+  };
+};
 
 const queuedCursor = (
   payload: Record<string, unknown> | null,
@@ -96,30 +118,22 @@ const queuedCursor = (
     return panic("Data-export maintenance cursor must be an object");
   }
   const cursorCreatedAt = "createdAt" in cursor ? cursor.createdAt : undefined;
-  const createdAt =
-    typeof cursorCreatedAt === "string"
-      ? Result.try(() => Temporal.Instant.from(cursorCreatedAt))
-      : null;
+  const createdAt = databasePrecisionTimestamp(cursorCreatedAt);
   if (
-    createdAt === null ||
-    Result.isError(createdAt) ||
     !("id" in cursor) ||
     typeof cursor.id !== "string" ||
     !isUuid(cursor.id)
   ) {
     return panic("Data-export maintenance cursor is invalid");
   }
-  return {
-    createdAt: new Date(createdAt.value.epochMilliseconds),
-    id: cursor.id,
-  };
+  return { createdAt, id: cursor.id };
 };
 
 // Keyset position after `cursor` in (createdAt, id) order.
 const afterQueued = (cursor: QueuedCursor | null) =>
   cursor === null
     ? undefined
-    : sql<boolean>`(${organizationDataExports.createdAt}, ${organizationDataExports.id}) > (${cursor.createdAt.toISOString()}::timestamptz, ${cursor.id})`;
+    : sql<boolean>`(${organizationDataExports.createdAt}, ${organizationDataExports.id}) > (${pgTimestampCursorBoundary(cursor.createdAt)}, ${cursor.id})`;
 
 type SweepRow = {
   id: SafeId<"dataExport">;
@@ -347,7 +361,9 @@ const readQueuedPage = async ({
         organizationId: organizationDataExports.organizationId,
         requestedBy: organizationDataExports.requestedBy,
         attempt: organizationDataExports.attempt,
-        createdAt: organizationDataExports.createdAt,
+        createdAt: pgTimestampCursorValue(organizationDataExports.createdAt).as(
+          "created_at_cursor",
+        ),
       })
       .from(organizationDataExports)
       .where(
@@ -448,7 +464,10 @@ const requeueQueued = async (
     if (queuedPage.nextCursor === null || last === undefined) {
       return null;
     }
-    cursor = { createdAt: last.createdAt, id: String(last.id) };
+    cursor = {
+      createdAt: databasePrecisionTimestamp(last.createdAt),
+      id: String(last.id),
+    };
   }
   summary.hasMore = true;
   return cursor;
@@ -493,7 +512,7 @@ export const createMaintainDataExportsTask =
             nextQueuedCursor === null
               ? null
               : {
-                  createdAt: nextQueuedCursor.createdAt.toISOString(),
+                  createdAt: nextQueuedCursor.createdAt.value,
                   id: nextQueuedCursor.id,
                 },
         },

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { asc, sql } from "drizzle-orm";
 
 import { organizationDataExports } from "@/api/db/schema";
 import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
@@ -268,6 +268,17 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           }
           const generation = describeScheduledScenario(scenario);
           let enqueued = 0;
+          const exportLifecycle = async () =>
+            await db
+              .select({
+                id: organizationDataExports.id,
+                status: organizationDataExports.status,
+              })
+              .from(organizationDataExports)
+              .orderBy(asc(organizationDataExports.id));
+          const originalExportLifecycle =
+            scenario.type === "data-exports" ? await exportLifecycle() : null;
+          let lifecycleChanged = false;
           const run = await measureScheduledJobRun({
             database: db,
             openClient,
@@ -275,8 +286,12 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             task,
             ...(scenario.type === "data-exports"
               ? {
-                  resetAfterCapture: async () =>
-                    await seedDataExportScenario(db, scenario),
+                  resetAfterCapture: async () => {
+                    lifecycleChanged =
+                      JSON.stringify(await exportLifecycle()) !==
+                      JSON.stringify(originalExportLifecycle);
+                    await seedDataExportScenario(db, scenario);
+                  },
                   dataExportMaintenance: {
                     handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
                     enqueue: async () => {
@@ -295,10 +310,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                 expected: scenario.rows,
               });
             }
-            const changed = run.statements.some(({ statement }) =>
-              /^update\s/iu.test(statement),
-            );
-            if (changed !== (scenario.cohort === "transitions")) {
+            if (lifecycleChanged !== (scenario.cohort === "transitions")) {
               panic("Export measurement missed its transition path", scenario);
             }
             if (enqueued > 0 !== (scenario.cohort !== "quiet")) {

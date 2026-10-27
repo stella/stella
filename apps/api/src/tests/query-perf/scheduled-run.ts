@@ -18,6 +18,7 @@ import type {
   GatedTestClientScope,
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -101,7 +102,7 @@ export const captureScheduledJobRun = async ({
     DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
     panic(`No declared scheduler job ${jobId}`);
   if (job.task !== taskName) {
-    return panic(`${jobId} runs ${job.task}, not ${taskName}`);
+    panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
   const task =
     createSchedulerTaskRegistry(
@@ -114,7 +115,12 @@ export const captureScheduledJobRun = async ({
         asTestRaw<SchedulerTaskContext>({
           db: database,
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
-          job: { id: job.id, task: job.task },
+          job: createLeasedSchedulerJobFixture({
+            id: job.id,
+            task: job.task,
+            nextRunAt: now,
+            payload: "payload" in job ? job.payload : null,
+          }),
           payload: "payload" in job ? job.payload : null,
           signal: new AbortController().signal,
           scheduleContinuation: noopTask,
@@ -132,9 +138,7 @@ export const captureScheduledJobRun = async ({
     ["insert", "update", "delete"].includes(leadingKeyword(text)),
   );
   if (wrote && resetAfterCapture === undefined) {
-    return panic(
-      `${jobId} writes require an explicit fixture reset before replay`,
-    );
+    panic(`${jobId} writes require an explicit fixture reset before replay`);
   }
   const unsupportedScope =
     resetAfterCapture !== undefined &&
@@ -146,16 +150,16 @@ export const captureScheduledJobRun = async ({
     );
   await resetAfterCapture?.();
   if (unsupportedScope) {
-    return panic(
+    panic(
       `${jobId} writing captures support only global-owner scope without session or role changes`,
     );
   }
   if (outcome.isErr()) {
-    return panic(`${jobId} failed on the fixture`, outcome.error);
+    panic(`${jobId} failed on the fixture`, outcome.error);
   }
   const result = outcome.value;
   if (result !== undefined && !Result.isOk(result)) {
-    return panic(`${jobId} failed on the fixture: ${result.error.message}`);
+    panic(`${jobId} failed on the fixture: ${result.error.message}`);
   }
 };
 

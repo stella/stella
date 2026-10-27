@@ -20,6 +20,7 @@ import {
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -113,13 +114,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 return "requeued";
               },
             });
-            await sweep.db.insert(schedulerJobs).values({
-              id: jobId,
-              task: "dataExports.maintain",
-              schedule: { type: "interval", everyMs: 60_000 },
-              nextRunAt: now,
-              lockedBy: "heartbeat-test",
-            });
+            await sweep.db.insert(schedulerJobs).values(
+              createLeasedSchedulerJobFixture({
+                id: jobId,
+                task: "dataExports.maintain",
+                nextRunAt: now,
+                lockedBy: "heartbeat-test",
+              }),
+            );
             const [job] = await sweep.db
               .select()
               .from(schedulerJobs)
@@ -183,7 +185,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const client = openClient();
-        const now = new Date("2026-10-24T12:00:00Z");
+        const now = new Date("2026-10-24T13:00:00Z");
         const userId = mintAuthProviderId<"user">();
         const jobId = `data-export-maintenance-${Bun.randomUUIDv7()}`;
         const organizations = Array.from({ length: 513 }, (_, index) => ({
@@ -209,16 +211,21 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               requestedBy: userId,
               versionScope: "all" as const,
               status: "queued" as const,
-              createdAt: new Date(now.getTime() - 10 * 60_000 + index),
+              createdAt: new Date(now.getTime() - 10 * 60_000),
             })),
           );
-          await client.db.insert(schedulerJobs).values({
-            id: jobId,
-            task: "dataExports.maintain",
-            schedule: { type: "interval", everyMs: 60_000 },
-            nextRunAt: now,
-            lockedBy: "continuation-test",
-          });
+          await client.db
+            .update(organizationDataExports)
+            .set({ createdAt: sql`'2026-10-24T12:00:00.123456Z'::timestamptz` })
+            .where(inArray(organizationDataExports.id, exportIds));
+          await client.db.insert(schedulerJobs).values(
+            createLeasedSchedulerJobFixture({
+              id: jobId,
+              task: "dataExports.maintain",
+              nextRunAt: now,
+              lockedBy: "continuation-test",
+            }),
+          );
 
           const enqueued: string[] = [];
           const continuations: Date[] = [];
