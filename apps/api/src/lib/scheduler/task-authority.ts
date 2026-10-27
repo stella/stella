@@ -93,6 +93,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
   ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
+  ),
   "caseLaw.reportFreshness": platform(
     "case-law-freshness-report.ts",
     "Reports public legal corpus freshness metrics.",
@@ -196,6 +200,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "flows.reconcileOrphanRuns": platform(
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
+  ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
   ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",

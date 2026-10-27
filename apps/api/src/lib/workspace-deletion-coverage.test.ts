@@ -15,6 +15,7 @@ import * as schema from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import {
   WORKSPACE_DELETION_MANUAL_TABLES,
+  WORKSPACE_DELETION_RETAINED_TABLES,
   WORKSPACE_STORAGE_CLASS,
   WORKSPACE_STORAGE_DISPOSITION,
   WORKSPACE_STORAGE_REFERENCE_DISPOSITION,
@@ -70,6 +71,10 @@ const clearedBySiblingForeignKey = (
       }),
   );
 
+const retainedTables: ReadonlySet<PgTable> = new Set(
+  WORKSPACE_DELETION_RETAINED_TABLES,
+);
+
 const deletionClosure = (): Set<PgTable> => {
   const closure = new Set<PgTable>([
     workspaces,
@@ -107,7 +112,7 @@ describe("workspace deletion coverage", () => {
     expect(directChildren.has("notifications")).toBe(true);
   });
 
-  test("every restrictive edge into the deletion closure is manually or transitively covered", () => {
+  test("every restrictive edge into the deletion closure is removed or explicitly blocks deletion", () => {
     const closure = deletionClosure();
     const edges = foreignKeyEdges();
     const uncovered = edges.filter(
@@ -116,7 +121,10 @@ describe("workspace deletion coverage", () => {
         edge.onDelete !== "cascade" &&
         edge.onDelete !== "set null" &&
         !clearedBySiblingForeignKey(edge, edges) &&
-        !closure.has(edge.child),
+        !closure.has(edge.child) &&
+        // A retained row blocks the deletion: the fence refuses its own
+        // matter, and its restrictive references refuse any other.
+        !retainedTables.has(edge.child),
     );
     expect(
       uncovered.map(
@@ -124,6 +132,21 @@ describe("workspace deletion coverage", () => {
           `${getTableConfig(edge.child).name} -> ${getTableConfig(edge.parent).name}`,
       ),
     ).toEqual([]);
+  });
+
+  test("retained billing tables have restrictive matter references outside the deletion closure", () => {
+    const edges = foreignKeyEdges();
+    const closure = deletionClosure();
+    for (const table of retainedTables) {
+      expect(closure.has(table)).toBe(false);
+      const references = edges.filter(
+        (edge) => edge.child === table && edge.parent === workspaces,
+      );
+      expect(references.length).toBeGreaterThan(0);
+      expect(references.every((edge) => edge.onDelete === "no action")).toBe(
+        true,
+      );
+    }
   });
 
   test("manual tables still close a restrictive edge", () => {
@@ -159,9 +182,11 @@ describe("workspace deletion coverage", () => {
     );
   });
 
-  test("workspace feature-gate scopes belong to rows removed by the cascade", () => {
+  test("workspace feature-gate scopes are removed by the cascade or block deletion", () => {
     const cascadeClosure = new Set(
-      [...deletionClosure()].map((table) => getTableConfig(table).name),
+      [...deletionClosure(), ...retainedTables].map(
+        (table) => getTableConfig(table).name,
+      ),
     );
     const outsideCascade = entityFeatureGateMetadata(allTables)
       .filter(({ needsWorkspace }) => needsWorkspace)

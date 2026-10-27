@@ -28,6 +28,7 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteAiMemoryActiveUserGuard,
   installPgliteCaseLawCountryShape,
+  installPgliteCaseLawCoverageSummary,
   installPgliteCaseLawObservationFence,
   installPgliteCaseLawParsedSourceInvalidation,
   installPgliteChatMessageRevisionsRls,
@@ -41,6 +42,7 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFlowTransitions,
+  installPgliteInvoiceObjects,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
@@ -48,7 +50,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPglitePlaybookDocumentTypeKey,
   installPgliteProvisionExtractionState,
-  installPgliteReaderAnnotationClaimComments,
+  installPgliteReaderAnnotationMatterRows,
   installPgliteReaderAnswerRls,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteSchedulerJobPauseLog,
@@ -802,6 +804,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await installPgliteInvoiceObjects(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });
@@ -818,6 +821,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawCountryShape(db);
+  await installPgliteCaseLawCoverageSummary(db);
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPglitePdfSigningTokenScopes(db);
@@ -832,7 +836,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatSecretRls(db);
   await installPgliteCitationDoctrineRls(db);
   await installPgliteReaderAnswerRls(db);
-  await installPgliteReaderAnnotationClaimComments(db);
+  await installPgliteReaderAnnotationMatterRows(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 

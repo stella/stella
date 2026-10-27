@@ -4,22 +4,19 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { cn } from "@stll/ui/utils";
 
+import {
+  MEMBER_CHOICE,
+  MemberCombobox,
+  workspaceMemberOptions,
+} from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { UserIdentity } from "@/components/user-avatar";
 import { leadSectionContent } from "@/components/workspaces/lead-section.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
@@ -31,10 +28,8 @@ type LeadSectionProps = {
 export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
   const t = useTranslations();
   const canUpdate = usePermissions({ workspace: ["update"] });
-  const workspaceView = useQueryView(useQuery(workspaceOptions(workspaceId)));
-  const membersView = useQueryView(
-    useQuery(workspaceMembersOptions(workspaceId)),
-  );
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
+  const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const content = leadSectionContent({
     workspace: workspaceView,
     members: membersView,
@@ -70,12 +65,14 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
       return panic("Unhandled matter lead read state");
   }
   const leadUserId = content.workspace.leadUserId;
-  const memberItems = content.members.map((m) => ({
-    email: m.user?.email ?? null,
-    image: m.user?.image ?? null,
-    name: m.user?.name ?? m.userId,
-    value: m.userId,
-  }));
+  const memberOptions = workspaceMemberOptions(content.members);
+  // A lead whose account is gone is not offered, but the field still shows
+  // that someone leads the matter, as the remove button beside it does.
+  const leadFallback =
+    leadUserId !== null &&
+    !memberOptions.some((member) => member.userId === leadUserId)
+      ? { userId: leadUserId, name: "", email: null, image: null }
+      : null;
 
   const handleSelect = (value: string | null) => {
     if (value === leadUserId) {
@@ -108,58 +105,19 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
         <QueryViewFeedback view={workspaceView} />
         <QueryViewFeedback view={membersView} />
         <div className="flex min-w-0 items-center gap-1">
-          <Select
-            disabled={!canUpdate || updateWorkspace.isPending}
-            onValueChange={(value) => {
-              if (typeof value !== "string") {
-                return;
-              }
-              handleSelect(value);
-            }}
-            value={leadUserId ?? ""}
-          >
-            <SelectTrigger className="min-w-0 flex-1 rounded-md shadow-none">
-              <SelectValue>
-                {(current) => {
-                  const found = memberItems.find((m) => m.value === current);
-                  if (!found) {
-                    return (
-                      <span className="text-muted-foreground">
-                        {t("workspaces.leadEmpty")}
-                      </span>
-                    );
-                  }
-                  return (
-                    <UserIdentity
-                      avatarClassName="size-5 shrink-0 text-[0.5625rem]"
-                      className="min-w-0"
-                      image={found.image}
-                      name={found.name}
-                      nameClassName="text-sm"
-                    />
-                  );
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {memberItems.length === 0 && (
-                <div className="text-muted-foreground px-2 py-1.5 text-sm">
-                  {t("workspaces.leadPicker.noMatchingMembers")}
-                </div>
-              )}
-              {memberItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  <UserIdentity
-                    avatarClassName="size-6 shrink-0 text-3xs"
-                    className="min-w-0"
-                    image={item.image}
-                    name={item.name}
-                    secondaryText={item.email ?? null}
-                  />
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          <div className="min-w-0 flex-1">
+            <MemberCombobox
+              choice={{ type: MEMBER_CHOICE.member }}
+              disabled={!canUpdate || updateWorkspace.isPending}
+              emptyLabel={t("workspaces.leadPicker.noMatchingMembers")}
+              label={t("workspaces.lead")}
+              members={memberOptions}
+              onValueChange={handleSelect}
+              placeholder={t("workspaces.leadEmpty")}
+              selectedFallback={leadFallback}
+              value={leadUserId}
+            />
+          </div>
           {canUpdate && leadUserId && (
             <Button
               aria-label={t("common.remove")}

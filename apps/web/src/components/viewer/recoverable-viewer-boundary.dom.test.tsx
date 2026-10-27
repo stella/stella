@@ -2,7 +2,15 @@ import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  jest,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 
@@ -29,7 +37,26 @@ const { RecoverableViewerBoundary } =
 const RELOAD_GUARD_KEY = "stella:preload-reload-at";
 const NO_BACKOFF = [0, 0] as const;
 const RENDERED = "rendered file";
+/**
+ * React holds each Suspense reveal until this long after the last fallback
+ * (`FALLBACK_THROTTLE_MS`), and every attempt the boundary mounts reveals
+ * once. On the real clock three attempts spent the whole second a `findBy`
+ * waits, so the tests drive a fake clock one reveal at a time.
+ */
+const SUSPENSE_REVEAL_THROTTLE_MS = 300;
 
+/** Lets `attempts` mounts of the file load, fail or render. */
+const settleAttempts = async (attempts: number) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await act(async () => {
+      jest.advanceTimersByTime(SUSPENSE_REVEAL_THROTTLE_MS);
+    });
+  }
+};
+
+beforeEach(() => {
+  jest.useFakeTimers();
+});
 afterEach(async () => {
   await act(async () => {
     cleanup();
@@ -116,7 +143,9 @@ describe("RecoverableViewerBoundary", () => {
       },
     });
 
-    expect(await screen.findByText(RENDERED)).toBeDefined();
+    // Two failed attempts, then the one that renders.
+    await settleAttempts(3);
+    expect(screen.getByText(RENDERED)).toBeDefined();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(errors).toEqual([]);
   });
@@ -135,7 +164,8 @@ describe("RecoverableViewerBoundary", () => {
       },
     });
 
-    const alert = await screen.findByRole("alert");
+    await settleAttempts(NO_BACKOFF.length + 1);
+    const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain(messages.fileDetail.displayFailed);
     expect(errors).toHaveLength(1);
 
@@ -147,7 +177,8 @@ describe("RecoverableViewerBoundary", () => {
     fireEvent.click(
       screen.getByRole("button", { name: messages.common.tryAgain }),
     );
-    expect(await screen.findByText(RENDERED)).toBeDefined();
+    await settleAttempts(1);
+    expect(screen.getByText(RENDERED)).toBeDefined();
   });
 
   test("a final failure shows the caller's answer at once, without retrying", async () => {
@@ -163,7 +194,8 @@ describe("RecoverableViewerBoundary", () => {
         ) : undefined,
     });
 
-    expect(await screen.findByTestId("side-panel")).toBeDefined();
+    await settleAttempts(1);
+    expect(screen.getByTestId("side-panel")).toBeDefined();
     expect(screen.queryByText(RENDERED)).toBeNull();
   });
 
@@ -176,7 +208,8 @@ describe("RecoverableViewerBoundary", () => {
       finalFallback: () => undefined,
     });
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
+    await settleAttempts(1);
+    expect(screen.getByRole("alert").textContent).toContain(
       messages.fileDetail.displayFailed,
     );
   });
@@ -194,7 +227,8 @@ describe("RecoverableViewerBoundary", () => {
       ),
     });
 
-    expect((await screen.findByRole("alert")).textContent).toContain(
+    await settleAttempts(1);
+    expect(screen.getByRole("alert").textContent).toContain(
       messages.fileDetail.displayFailed,
     );
   });

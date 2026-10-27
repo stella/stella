@@ -24,7 +24,8 @@ import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -66,7 +67,7 @@ function AgentClaimPage() {
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationsView = useQueryView(
+  const organizationsView = queryView(
     useQuery(organizationListOptions(userId)),
   );
   useQueryViewError(organizationsView, "AgentClaimPage:query");

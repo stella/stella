@@ -1,3 +1,4 @@
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
   SWEEP_ACTION_COSTS_TASK,
@@ -27,6 +28,7 @@ import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
@@ -96,6 +98,10 @@ import {
   RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
   reconcileDocumentReviewRuns,
 } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
+import {
+  RECEIVE_EMAIL_DELIVERABILITY_TASK,
+  receiveEmailDeliverability,
+} from "@/api/lib/scheduler/tasks/email-deliverability-receive";
 import {
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
   sweepFileComparisonUploads,
@@ -218,6 +224,7 @@ import {
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
+  SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -236,6 +243,7 @@ const SCHEDULER_TASKS = {
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
   [BACKFILL_SANCTIONS_MONITORING_TASK]: backfillSanctionsMonitoringTask,
   [DRAIN_SANCTIONS_MONITORING_TASK]: drainSanctionsMonitoringTask,
+  [RECEIVE_EMAIL_DELIVERABILITY_TASK]: receiveEmailDeliverability,
   [RECEIVE_INBOUND_MAIL_TASK]: receiveInboundMail,
   [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
@@ -296,9 +304,17 @@ const SCHEDULER_TASKS = {
   SchedulerTask | { featureId: string; task: SchedulerTask }
 >;
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+type SchedulerTaskRegistryOptions = {
+  resetReviewOrganization?: SchedulerTask;
+};
+
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+  [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -310,17 +326,37 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
-      ([name, entry]) => [
+    Object.entries(
+      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
+    ).map(([name, registered]) => {
+      const entry =
+        name === RESET_REVIEW_ORGANIZATION_TASK
+          ? (options.resetReviewOrganization ?? registered)
+          : registered;
+      return [
         name,
-        typeof entry === "function" ? entry : entry.task,
-      ],
-    ),
+        async (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: async () => {
+              const task = typeof entry === "function" ? entry : entry.task;
+              const outcome = await task(context);
+              if (outcome === undefined) {
+                return undefined;
+              }
+              return outcome;
+            },
+          }),
+      ];
+    }),
   );
