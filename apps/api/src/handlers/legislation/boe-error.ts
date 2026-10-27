@@ -15,6 +15,15 @@ export const mapBoeError = (error: unknown): HandlerError => {
     return new HandlerError({ status: 404, message: error.message });
   }
   if (error instanceof BoeAPIError) {
+    // Rate limiting refuses a valid request: retry later, not change it.
+    if (error.httpStatus === 429) {
+      return new HandlerError({
+        code: "upstream_unavailable",
+        status: 502,
+        message: "BOE is limiting requests; retry later",
+        cause: error,
+      });
+    }
     if (error.httpStatus >= 400 && error.httpStatus < 500) {
       return new HandlerError({
         status: 400,

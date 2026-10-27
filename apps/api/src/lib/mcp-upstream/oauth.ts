@@ -960,11 +960,14 @@ export const refreshOAuthToken = async ({
     return Result.err(
       new HandlerError({
         status: 502,
-        ...(oauthError !== null &&
-        Result.isOk(oauthError) &&
-        oauthError.value.error === "invalid_grant"
-          ? { code: MCP_OAUTH_INVALID_GRANT_CODE }
-          : {}),
+        // A refused grant needs a new authorization; anything else is the
+        // upstream server failing to answer the refresh.
+        code:
+          oauthError !== null &&
+          Result.isOk(oauthError) &&
+          oauthError.value.error === "invalid_grant"
+            ? MCP_OAUTH_INVALID_GRANT_CODE
+            : "upstream_unavailable",
         message: "Failed to refresh MCP access token",
         cause: token.error,
       }),

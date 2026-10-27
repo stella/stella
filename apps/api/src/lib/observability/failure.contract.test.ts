@@ -1101,7 +1101,12 @@ const LEGACY_ROWS: readonly LegacyRow[] = [
   {
     name: "a RUN_ERROR numeric-string code",
     error: () =>
-      new HandlerError({ status: 502, message: "run", cause: { code: "503" } }),
+      new HandlerError({
+        status: 502,
+        code: "provider_error",
+        message: "run",
+        cause: { code: "503" },
+      }),
   },
   {
     name: "a numeric errno and a syscall",
@@ -1509,6 +1514,7 @@ describe("privileged content never leaves the process", () => {
       () =>
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message: SENTINEL,
           cause: {
             error: {

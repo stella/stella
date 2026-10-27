@@ -26,18 +26,29 @@ describe("mapBoeError", () => {
     );
   });
 
-  it("BOE 4xx failures ask the caller to correct the request", () => {
+  it("BOE rate limiting stays a retryable upstream state", () => {
+    const cause = new BoeAPIError({ message: "Too many", httpStatus: 429 });
+    const mapped = mapBoeError(cause);
+    expect(mapped.status).toBe(502);
+    expect(mapped.code).toBe("upstream_unavailable");
+    expect(mapped.cause).toBe(cause);
+  });
+
+  it("BOE 4xx failures other than rate limiting ask the caller to correct the request", () => {
     assertProperty(
-      "BOE 4xx failures ask the caller to correct the request",
-      fc.property(fc.integer({ min: 400, max: 499 }), (httpStatus) => {
-        const cause = new BoeAPIError({ message: "Rejected", httpStatus });
-        const mapped = mapBoeError(cause);
-        expect(mapped.status).toBe(400);
-        expect(mapped.code).toBeUndefined();
-        expect(mapped.message).toContain("Check the identifier and filters");
-        expect(mapped.cause).toBe(cause);
-        expect(cause.httpStatus).toBe(httpStatus);
-      }),
+      "BOE 4xx failures other than rate limiting ask the caller to correct the request",
+      fc.property(
+        fc.integer({ min: 400, max: 499 }).filter((status) => status !== 429),
+        (httpStatus) => {
+          const cause = new BoeAPIError({ message: "Rejected", httpStatus });
+          const mapped = mapBoeError(cause);
+          expect(mapped.status).toBe(400);
+          expect(mapped.code).toBeUndefined();
+          expect(mapped.message).toContain("Check the identifier and filters");
+          expect(mapped.cause).toBe(cause);
+          expect(cause.httpStatus).toBe(httpStatus);
+        },
+      ),
     );
   });
 
