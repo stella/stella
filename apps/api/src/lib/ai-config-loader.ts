@@ -10,10 +10,13 @@
  * decrypted BYOK material.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import { resolveAIProviderSettings } from "@stll/api-contract/organization-ai-availability";
+import {
+  AI_PROVIDER_CONFIGURATION,
+  resolveAIProviderSettings,
+} from "@stll/api-contract/organization-ai-availability";
 
 import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
@@ -126,12 +129,27 @@ const readProviderConfig = async ({
   });
   const resolution = resolveAIProviderSettings({
     orgConfigured: decrypted.status === "ok" && decrypted.config !== null,
-    providerConfiguration: "allowed",
-    readStatus: "ready",
+    providerConfiguration: AI_PROVIDER_CONFIGURATION.allowed,
+    readStatus: decrypted.status === "ok" ? "ready" : "unavailable",
   });
-  return resolution.type === "orgSettings" && decrypted.status === "ok"
-    ? decrypted.config
-    : null;
+  switch (resolution.type) {
+    case "unavailable":
+      return Result.err(
+        storedAIConfigUnreadableError(
+          decrypted.status === "corrupt" ? decrypted.error : undefined,
+        ),
+      );
+    case "orgSettings":
+    case "defaultProvider":
+      // A configured or absent provider requires a successful decryption read.
+      if (decrypted.status === "corrupt") {
+        return Result.err(storedAIConfigUnreadableError(decrypted.error));
+      }
+      return Result.ok(decrypted.config);
+    default:
+      resolution satisfies never;
+      return panic("Unhandled AI provider settings resolution");
+  }
 };
 
 /**
@@ -211,8 +229,8 @@ const readAIConfiguration = async <Settings>({
 
 /**
  * For callers that are about to use the config for an AI call. Uses the
- * instance-provider fallback only when privacy preferences were read. Failed
- * settings reads refuse AI work rather than guessing caching or residency.
+ * instance-provider fallback only for confirmed absent provider settings.
+ * Failed reads or decryption refuse AI work rather than changing processors.
  */
 export const loadOrgAIConfig = async (
   db: RecoverableOrgSettingsReader,
@@ -224,7 +242,11 @@ export const loadOrgAIConfig = async (
   if (settings.type === "unavailable") {
     return Result.err(storedAIConfigUnreadableError(undefined));
   }
-  const orgAIConfig = await readProviderConfig({ organizationId, settings });
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return Result.err(configResult.error);
+  }
+  const orgAIConfig = configResult.value;
   return await readAIConfiguration({
     db,
     reader: checkedReader,
@@ -267,7 +289,11 @@ export const loadOrgAISettings = async (
     return Result.err(storedAIConfigUnreadableError(undefined));
   }
   const { row } = settings;
-  const orgAIConfig = await readProviderConfig({ organizationId, settings });
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return Result.err(configResult.error);
+  }
+  const orgAIConfig = configResult.value;
   return await readAIConfiguration({
     db,
     reader: checkedReader,
@@ -317,7 +343,16 @@ export const loadOrgSettingsForAuth = async (
     };
   }
   const { row } = settings;
-  const orgAIConfig = await readProviderConfig({ organizationId, settings });
+  const configResult = await readProviderConfig({ organizationId, settings });
+  if (Result.isError(configResult)) {
+    return {
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      promptCachingEnabled: null,
+      managedAIResidency: null,
+    };
+  }
+  const orgAIConfig = configResult.value;
   const promptCachingEnabled = resolvePromptCachingPreference(row);
   const managedAIResidency =
     row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY;

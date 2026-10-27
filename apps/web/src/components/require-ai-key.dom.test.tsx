@@ -3,6 +3,8 @@ import type { PropsWithChildren, ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { AI_PROVIDER_CONFIGURATION } from "@stll/api-contract/organization-ai-availability";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 import { isOrganizationManagementRole, roles } from "@stll/permissions";
 
 import {
@@ -16,10 +18,11 @@ GlobalRegistrator.register({ url: "http://localhost:3000/law/cz/cases/1" });
 const originalFetch = globalThis.fetch;
 let configStatus = 200;
 let availabilityStatus = 200;
+let availabilityHold: Promise<void> | null = null;
 let instanceProvisioned = false;
 let unreadable = false;
-let providerConfiguration:
-  "allowed" | "permission_required" | "account_restricted" = "allowed";
+let providerConfiguration: OrganizationAIAvailability["providerConfiguration"] =
+  "allowed";
 let aiConfigRequests = 0;
 globalThis.fetch = Object.assign(
   async (input: RequestInfo | URL) => {
@@ -28,6 +31,9 @@ globalThis.fetch = Object.assign(
       return Response.json(null);
     }
     if (url.pathname.endsWith("/organization-settings/ai-availability")) {
+      if (availabilityHold !== null) {
+        await availabilityHold;
+      }
       if (availabilityStatus !== 200) {
         return Response.json(
           { error: "Unavailable" },
@@ -116,6 +122,7 @@ afterEach(() => {
   cleanup();
   providerConfiguration = "allowed";
   availabilityStatus = 200;
+  availabilityHold = null;
   instanceProvisioned = false;
   unreadable = false;
   aiConfigRequests = 0;
@@ -544,5 +551,84 @@ test("a failed availability refresh cannot reuse a cached successful provider re
   });
   expect(proceeded).toBe(false);
   expect(aiConfigRequests).toBe(0);
+  queryClient.clear();
+});
+
+test("settings admission shows loading feedback before mounting permitted controls", async () => {
+  const admission = Promise.withResolvers<undefined>();
+  availabilityHold = admission.promise;
+  const { queryClient } = renderSurface(AIProviderSettingsBoundary);
+  expect(screen.getByRole("status").textContent).toContain(
+    messages.common.loading,
+  );
+  expect(
+    screen.queryByRole("button", { name: messages.common.cancel }),
+  ).toBeNull();
+  expect(aiConfigRequests).toBe(0);
+  await act(async () => {
+    admission.resolve(undefined);
+  });
+  expect(
+    await screen.findByRole("button", { name: messages.common.cancel }),
+  ).toBeDefined();
+  queryClient.clear();
+});
+
+const settingsReadFailures = [403, 500].flatMap((status) =>
+  Object.values(AI_PROVIDER_CONFIGURATION).map((capability) => ({
+    status,
+    capability,
+  })),
+);
+
+test.each(settingsReadFailures)(
+  "settings admission read $status shows retry feedback and recovers to $capability",
+  async ({ status, capability }) => {
+    availabilityStatus = status;
+    const { queryClient } = renderSurface(AIProviderSettingsBoundary);
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.getByText(messages.common.somethingWentWrong)).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: messages.common.cancel }),
+    ).toBeNull();
+    expect(aiConfigRequests).toBe(0);
+    availabilityStatus = 200;
+    providerConfiguration = capability;
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.retry }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("status")).toBeNull();
+    });
+    expect(
+      screen.queryByRole("button", { name: messages.common.cancel }) !== null,
+    ).toBe(capability === "allowed");
+    queryClient.clear();
+  },
+);
+
+test("settings admission reports failed refreshes instead of retaining cached management permission", async () => {
+  const { queryClient } = renderSurface(AIProviderSettingsBoundary);
+  expect(
+    await screen.findByRole("button", { name: messages.common.cancel }),
+  ).toBeDefined();
+  availabilityStatus = 500;
+  await act(async () => {
+    await queryClient.invalidateQueries();
+  });
+  expect(await screen.findByRole("alert")).toBeDefined();
+  expect(
+    screen.queryByRole("button", { name: messages.common.cancel }),
+  ).toBeNull();
+  availabilityStatus = 200;
+  providerConfiguration = "permission_required";
+  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  await waitFor(() => {
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+  expect(
+    screen.queryByRole("button", { name: messages.common.cancel }),
+  ).toBeNull();
   queryClient.clear();
 });

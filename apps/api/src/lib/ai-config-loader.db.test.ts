@@ -30,7 +30,10 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
+import {
+  AI_CONFIG_UNREADABLE_ERROR_CODE,
+  AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+} from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -419,7 +422,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({ searchApiKey: null, fetchApiKey: null });
   });
 
-  test("the auth read uses the default provider for unreadable settings", async () => {
+  test("the auth read keeps an unreadable provider unavailable", async () => {
     const scope = requestScope(corruptOrgId, ids.userA1);
 
     expect(
@@ -432,39 +435,26 @@ describe("absent and unreadable settings", () => {
       ),
     ).toEqual({
       orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-      managedAIResidency: "us",
-      promptCachingEnabled: false,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      managedAIResidency: null,
+      promptCachingEnabled: null,
     });
   });
 
-  test("AI-call reads use defaults for unreadable settings", async () => {
+  test.each(
+    Object.entries({ config: loadOrgAIConfig, settings: loadOrgAISettings }),
+  )("%s reads refuse unreadable provider settings", async (_name, load) => {
     const scope = requestScope(corruptOrgId, ids.userA1);
-    expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAIConfig(tx, {
-              organizationId: corruptOrgId,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toBeNull();
-    expect(
-      (
-        await scope(
-          async (tx) =>
-            await loadOrgAISettings(tx, {
-              organizationId: corruptOrgId,
-              userId: ids.userA1,
-            }),
-        )
-      ).unwrap(),
-    ).toEqual({
-      orgAIConfig: null,
-      promptCachingEnabled: false,
-      managedAIResidency: "us",
+    const outcome = await scope(
+      async (tx) =>
+        await load(tx, {
+          organizationId: corruptOrgId,
+          userId: ids.userA1,
+        }),
+    );
+    expect(outcome).toMatchObject({
+      status: "error",
+      error: { status: 503, code: AI_CONFIG_UNREADABLE_ERROR_CODE },
     });
   });
 });

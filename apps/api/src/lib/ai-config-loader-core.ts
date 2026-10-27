@@ -30,9 +30,9 @@ const decodeNullableByteaText = (value: string | null | undefined) => {
 
 /**
  * Decryption reports corruption separately from an absent configuration.
- * Runtime provider resolution may use the instance fallback; settings editing
- * refuses the corrupt outcome so stored configuration cannot be overwritten.
- * Both paths capture the failure once here.
+ * Runtime calls and settings editing refuse corruption: switching processors
+ * or overwriting stored configuration requires a readable configuration.
+ * The failure is captured once here.
  */
 export type DecryptOrgAIConfigRowResult =
   | { status: "ok"; config: OrgAIConfig | null }

@@ -1,3 +1,9 @@
+export const AI_PROVIDER_CONFIGURATION = {
+  allowed: "allowed",
+  permissionRequired: "permission_required",
+  accountRestricted: "account_restricted",
+} as const;
+
 /** Member-visible AI availability, without provider credentials or configuration. */
 export type OrganizationAIAvailability = {
   available: boolean;
@@ -9,8 +15,7 @@ export type OrganizationAIAvailability = {
     | "member_assignment_required"
     | "unreadable"
     | null;
-  providerConfiguration:
-    "allowed" | "permission_required" | "account_restricted";
+  providerConfiguration: (typeof AI_PROVIDER_CONFIGURATION)[keyof typeof AI_PROVIDER_CONFIGURATION];
   deferredServiceTierAvailable: boolean;
   mockAnswers: boolean;
 };
@@ -44,6 +49,8 @@ export const resolveAIProviderSettings = ({
   return {
     type: "defaultProvider",
     reason:
-      providerConfiguration === "allowed" ? "notConfigured" : "notPermitted",
+      providerConfiguration === AI_PROVIDER_CONFIGURATION.allowed
+        ? "notConfigured"
+        : "notPermitted",
   };
 };
