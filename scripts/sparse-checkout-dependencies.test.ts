@@ -24,9 +24,10 @@ const siblingReferences = (file: string, source: string): string[] =>
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 
 // Runtime imports only: Bun erases type-only imports, so they need no file.
+// The scanner rejects a shebang, which executable scripts start with.
 const relativeImports = (file: string, source: string): string[] =>
   transpiler
-    .scanImports(source)
+    .scanImports(source.replace(/^#!.*/u, ""))
     .map(({ path: specifier }) => specifier)
     .filter(
       (specifier) => specifier.startsWith("./") || specifier.startsWith("../"),
@@ -106,6 +107,7 @@ test("relative runtime imports resolve relative to the importing script", () => 
     relativeImports(
       "scripts/a.ts",
       [
+        "#!/usr/bin/env bun",
         'import { b } from "./b";',
         'import type { C } from "./c";',
         'import data from "../lib/d.json" with { type: "json" };',

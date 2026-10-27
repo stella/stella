@@ -86,14 +86,26 @@ const MAX_RELEASE_PAGES = 10;
 
 // GitHub publishes stable releases after promotion and verification. The checked-in
 // changelog dates are updated only at the next release cut and can be stale here.
-const readPromotion = async (fetchImpl: RegistryFetch, timeoutMs: number) => {
+// An authenticated read avoids the shared unauthenticated rate limit of hosted
+// runners; local runs without a token stay anonymous.
+const readPromotion = async (
+  fetchImpl: RegistryFetch,
+  timeoutMs: number,
+  githubToken: string | undefined,
+) => {
   const manifest = new Map<string, string>();
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+  };
+  if (githubToken !== undefined && githubToken !== "") {
+    headers["Authorization"] = `Bearer ${githubToken}`;
+  }
   try {
     for (let page = 1; page <= MAX_RELEASE_PAGES; page += 1) {
       // Pagination depends on the previous response; bound pages and requests.
       const response = await fetchImpl(
         `https://api.github.com/repos/stella/stella/releases?per_page=${RELEASE_PAGE_SIZE}&page=${page}`,
-        { signal: AbortSignal.timeout(timeoutMs) },
+        { signal: AbortSignal.timeout(timeoutMs), headers },
       );
       if (!response.ok) {
         return {
@@ -167,6 +179,7 @@ type PublishedVersionsOptions = {
   directories?: readonly (typeof ALL_PACKAGE_ORDER)[number][];
   gitRunner?: GitRunner;
   promotionFetch?: RegistryFetch;
+  githubToken?: string;
   registryFetch?: RegistryFetch;
   log?: (line: string) => void;
 };
@@ -179,6 +192,7 @@ export const checkPublishedVersions = async ({
   directories = ALL_PACKAGE_ORDER,
   gitRunner = git,
   promotionFetch = fetch,
+  githubToken,
   registryFetch = fetch,
   log = console.log,
 }: PublishedVersionsOptions): Promise<boolean> => {
@@ -212,7 +226,11 @@ export const checkPublishedVersions = async ({
             fetchImpl: registryFetch,
           };
           if (directory === "cli") {
-            const promotion = await readPromotion(promotionFetch, timeoutMs);
+            const promotion = await readPromotion(
+              promotionFetch,
+              timeoutMs,
+              githubToken,
+            );
             if (promotion.status !== "resolved") {
               if (promotion.status === "unavailable") {
                 result = { status: "failed", reason: "promotion_unavailable" };
@@ -223,6 +241,11 @@ export const checkPublishedVersions = async ({
               log(`journey-detail registry-@stll/cli ${promotion.message}`);
             } else {
               const promoted = gitRunner(["show", `${promotion.ref}:${path}`]);
+              if (promoted.exitCode !== 0) {
+                log(
+                  `journey-detail registry-@stll/cli ${promotion.ref} has no readable CLI manifest; fetch its tag before checking publication`,
+                );
+              }
               const target = readPackageManifest({
                 directory,
                 text: promoted.exitCode === 0 ? promoted.stdout : undefined,
@@ -270,6 +293,10 @@ export const checkPublishedVersions = async ({
                 });
                 log(
                   `journey-detail registry-@stll/cli target ${target.version} from ${promotion.ref}; publication deadline ${new Date((promotedAt + DAY_SECONDS) * 1000).toISOString()}; publish using publish-npm.yml`,
+                );
+              } else if (promotion.promotedAt > now) {
+                log(
+                  `journey-detail registry-@stll/cli ${promotion.ref} is published after the check time; check the runner clock and the release metadata`,
                 );
               }
             }
@@ -332,6 +359,7 @@ if (import.meta.main) {
       process.env["JOURNEY_NPM_REGISTRY_URL"] ?? "https://registry.npmjs.org",
     timeoutMs: Number(process.env["JOURNEY_REGISTRY_TIMEOUT_MS"] ?? "10000"),
     now: Math.floor(Date.now() / 1000),
+    githubToken: process.env["GITHUB_TOKEN"],
   });
   process.exitCode = failed ? 1 : 0;
 }

@@ -217,8 +217,36 @@ describe("promoted CLI publication", () => {
     );
   });
 
+  test("authenticates the release listing only when a token is given", async () => {
+    const authorizations: (string | null)[] = [];
+    for (const githubToken of ["token-value", undefined]) {
+      await checkPublishedVersions({
+        ref: "main",
+        registry: "https://registry.invalid",
+        timeoutMs: 50,
+        now: NOW,
+        directories: ["cli"],
+        gitRunner: () => ({
+          exitCode: 0,
+          stdout: JSON.stringify({ name: "@stll/cli", version: "1.2.3" }),
+        }),
+        githubToken,
+        promotionFetch: async (_url, init) => {
+          authorizations.push(new Headers(init?.headers).get("Authorization"));
+          return Response.json([]);
+        },
+        log: () => {},
+      });
+    }
+    expect(authorizations).toEqual(["Bearer token-value", null]);
+  });
+
   test("fails closed when promotion metadata or its tag is unavailable", async () => {
-    expect((await runJourney({ missingTag: true })).failed).toBe(true);
+    const missingTag = await runJourney({ missingTag: true });
+    expect(missingTag.failed).toBe(true);
+    expect(missingTag.lines).toContain(
+      "journey-detail registry-@stll/cli v1.0.0 has no readable CLI manifest; fetch its tag before checking publication",
+    );
     const unavailable = await runJourney({
       promotionFetch: async () => new Response(null, { status: 503 }),
     });
