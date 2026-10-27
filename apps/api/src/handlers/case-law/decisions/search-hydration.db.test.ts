@@ -461,6 +461,207 @@ afterAll(async () => {
   await client.close();
 });
 
+test.each([
+  { selection: "count only", facets: [] },
+  { selection: "court only", facets: ["court"] },
+  { selection: "matrix only", facets: ["courtYear"] },
+] as const)(
+  "indexed search requests $selection while preserving its decision total",
+  async ({ selection, facets }) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const projection = heldProjection({
+      entityId: czechId,
+      generation: manifest.generation,
+      indexId,
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    });
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db.insert(corpusIndexProjectionIntents).values(projection.intent);
+    await db.insert(corpusIndexProjectionStates).values(projection.state);
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    const engine = getCorpusIndexClient(manifest.cluster);
+    const requestedAggregations: string[] = [];
+    const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+      async () =>
+        Result.ok({
+          numHits: 1,
+          hits: [
+            {
+              fields: {
+                document_id: czechId,
+                projection_revision: projection.intent.id,
+                anchor_id: "facet-selection-passage",
+              },
+              score: 1,
+            },
+          ],
+        }),
+    );
+    const searchSpy = spyOn(engine, "search").mockImplementation(async () =>
+      Result.ok({
+        numHits: 1,
+        hits: [
+          {
+            document_id: czechId,
+            projection_revision: projection.intent.id,
+            anchor_id: "facet-selection-passage",
+          },
+        ],
+        snippets: [{ text: ["<b>Facet</b> selection"] }],
+      }),
+    );
+    const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+      async ({ aggs }) => {
+        requestedAggregations.push(...Object.keys(aggs));
+        const answered: Record<string, unknown> = {};
+        for (const name of Object.keys(aggs)) {
+          switch (name) {
+            case "total":
+              answered[name] = { value: 412 };
+              break;
+            case "courtYear":
+              answered[name] = {
+                sum_other_doc_count: 0,
+                doc_count_error_upper_bound: 0,
+                buckets: [
+                  {
+                    key: "Nejvyšší soud",
+                    years: {
+                      buckets: [
+                        {
+                          key: "2024",
+                          doc_count: 40,
+                          decisions: { value: 3 },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              };
+              break;
+            default:
+              answered[name] = {
+                buckets: [
+                  {
+                    key: "Nejvyšší soud",
+                    doc_count: 40,
+                    decisions: { value: 3 },
+                  },
+                ],
+              };
+          }
+        }
+        return Result.ok(answered);
+      },
+    );
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: {
+          country: "CZE",
+          query: `facet selection ${selection}`,
+          facets: [...facets],
+          strict: true,
+          limit: 1,
+        },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant: "off",
+          loadCourtWeights: async () => courtWeights,
+          readSourceRegistry: async () =>
+            Result.ok({
+              excludedSourceIds: [],
+              nameById: new Map(),
+            }),
+          readServingTarget: async () =>
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      expect(result.hits.map(({ decisionId }) => decisionId)).toEqual([
+        czechId,
+      ]);
+      expect(result.total).toEqual({ type: "estimate", count: 412 });
+      expect(requestedAggregations.toSorted()).toEqual(
+        [...facets, "total"].toSorted(),
+      );
+      if (selection === "count only") {
+        expect(result.facets).toBeNull();
+        return;
+      }
+      expect(result.facets).not.toBeNull();
+      expect(result.facets?.courtYear).toEqual(
+        selection === "matrix only"
+          ? {
+              buckets: [
+                {
+                  court: "Nejvyšší soud",
+                  courtName: "Nejvyšší soud",
+                  courtAbbreviation: "NS",
+                  tier: "supreme",
+                  year: 2024,
+                  count: 3,
+                  citationSum: null,
+                  treatment: null,
+                },
+              ],
+              truncated: false,
+            }
+          : null,
+      );
+      expect(result.facets?.court.flatMap(({ courts }) => courts).length).toBe(
+        selection === "court only" ? 1 : 0,
+      );
+    } finally {
+      aggregateSpy.mockRestore();
+      scoredSpy.mockRestore();
+      searchSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.entityId, czechId),
+            eq(corpusIndexProjectionStates.generation, manifest.generation),
+          ),
+        );
+      await db
+        .delete(corpusIndexProjectionIntents)
+        .where(eq(corpusIndexProjectionIntents.id, projection.intent.id));
+    }
+  },
+);
+
 test("the blend read carries what ranking and the fold need, and nothing a card shows", async () => {
   const hydrated: HydratedRows = new Map();
   const ranking = await rehydrateCaseLawCandidates({

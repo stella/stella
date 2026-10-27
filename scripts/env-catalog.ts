@@ -1322,6 +1322,8 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "DB_STATEMENT_TIMEOUT_MS",
   "DB_TRANSACTION_TIMEOUT_MS",
   "DISABLED_ADAPTERS",
+  // Expo inlines it into the mobile bundle; apps/mobile/src/env.ts reads it.
+  "EXPO_PUBLIC_STELLA_SERVER_URL",
   "HOME",
   "MAX_CONCURRENT_ADAPTER_CYCLES",
   "MAX_CONCURRENT_DB_WRITES",
@@ -1410,6 +1412,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 export const TOOLING_ENV_KEYS = new Set([
   // Dated guard-rollout healing requests full scope before removing the temporary scope.
   "STELLA_GUARD_SCOPE",
+  // The mobile app's Expo config reads its variant and signing from the build.
+  "APP_VARIANT",
+  "APPLE_TEAM_ID",
+  "MOBILE_BUILD_NUMBER",
+  "MOBILE_PROFILE_UUID",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1729,6 +1736,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
+  // Development render census: verify React Refresh with isolated temporary modules.
+  "STELLA_RENDER_CENSUS_HMR",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",

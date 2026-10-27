@@ -67,6 +67,10 @@ import { getEntityFileDownloadRenditions } from "@/components/inspector/file-dow
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  PdfSignDialogs,
+  usePdfSignFlow,
+} from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
@@ -853,6 +857,9 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  // Signing from the page editor outlives it: saving first replaces the
+  // version, which remounts the editor, and the stamp dialog must stay.
+  const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -981,9 +988,14 @@ function RouteComponentInner({
     );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
+  const editorPdfSignTarget = editorPdfSignFlow.preparedTarget ?? pdfSignTarget;
+
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
+      {editorPdfSignTarget !== null && (
+        <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
+      )}
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
           entityId={entityId}
@@ -1232,6 +1244,14 @@ function RouteComponentInner({
                           fieldId={fieldId}
                           fileName={activeFileLabel}
                           onClose={() => setIsPDFPageOrganizerOpen(false)}
+                          pdfSign={
+                            pdfSignTarget === null
+                              ? null
+                              : {
+                                  flow: editorPdfSignFlow,
+                                  target: pdfSignTarget,
+                                }
+                          }
                           workspaceId={workspaceId}
                         />
                       </Suspense>

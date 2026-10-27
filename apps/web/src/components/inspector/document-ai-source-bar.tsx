@@ -28,9 +28,10 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
+import { queryView } from "@/lib/query-view.logic";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
@@ -57,11 +58,11 @@ export const DocumentAiSourceBar = ({
   const openFile = useInspectorTabsStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesQueryView = useQueryView(propertiesQuery);
+  const propertiesQueryView = queryView(propertiesQuery);
   useQueryViewError(propertiesQueryView, "DocumentAiSourceBar:query");
   const properties = propertiesQuery.data;
   const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
-  const entityQueryView = useQueryView(entityQuery);
+  const entityQueryView = queryView(entityQuery);
   useQueryViewError(entityQueryView, "DocumentAiSourceBar:query-2");
   const entity = entityQuery.data;
   useSyncJustifications({

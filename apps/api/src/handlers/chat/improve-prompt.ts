@@ -135,7 +135,11 @@ const improvePrompt = createSafeRootHandler(
     )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
-        new HandlerError({ status: 502, message: "Empty improved prompt" }),
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Empty improved prompt",
+        }),
       );
     }
 
