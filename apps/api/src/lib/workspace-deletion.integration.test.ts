@@ -284,33 +284,6 @@ beforeAll(async () => {
       thumbnailFileId,
     },
   });
-  await testDb.insert(timeEntries).values({
-    id: createSafeId<"timeEntry">(),
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    userId: actorUserId,
-    workItemId: targetDocument.entityId,
-    dateWorked: "2026-08-30",
-    timezoneId: "Europe/Prague",
-    durationMinutes: 30,
-    billedMinutes: 30,
-    rateAtEntry: cents(100),
-    currency: "EUR",
-    narrative: "Ordinary matter work",
-  });
-  await testDb.insert(expenses).values({
-    id: createSafeId<"expense">(),
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    userId: actorUserId,
-    matterId: targetDocument.entityId,
-    dateIncurred: "2026-08-30",
-    amount: cents(100),
-    currency: "EUR",
-    category: "filing_fee",
-    description: "Ordinary matter expense",
-  });
-
   const checkpointFileId = createSafeId<"userFile">();
   await testDb.insert(desktopEditSessions).values({
     id: createSafeId<"desktopEditSession">(),
@@ -808,7 +781,7 @@ describe("workspace deletion", () => {
         .where(eq(bufferObjectCleanupIntents.id, writerIntentId)),
     ).toEqual([{ status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.WRITING }]);
   });
-  test("refuses a matter with invoice history and leaves it untouched", async () => {
+  test("refuses a matter with billing records and leaves it untouched", async () => {
     const database: WorkspaceDeletionDatabase = {
       transaction: async (callback) =>
         await testDb.transaction(
@@ -841,6 +814,45 @@ describe("workspace deletion", () => {
     };
     const invoicedMatterId = await seedMatter("INVOICED-1");
     const lineOnlyMatterId = await seedMatter("LINE-ONLY-1");
+    const timeOnlyMatterId = await seedMatter("TIME-ONLY-1");
+    const expenseOnlyMatterId = await seedMatter("EXPENSE-ONLY-1");
+    // Unbilled work in progress: a draft entry and an expense on no invoice.
+    const timeWorkItem = await seedDocument(timeOnlyMatterId);
+    const timeEntryId = createSafeId<"timeEntry">();
+    await testDb.insert(timeEntries).values({
+      id: timeEntryId,
+      organizationId: fixture.organizationId,
+      workspaceId: timeOnlyMatterId,
+      userId: fixture.actorUserId,
+      workItemId: timeWorkItem.entityId,
+      dateWorked: "2026-08-30",
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      rateAtEntry: cents(100),
+      currency: "EUR",
+      narrative: "Unbilled matter work",
+    });
+    const expenseItem = await seedDocument(expenseOnlyMatterId);
+    const expenseId = createSafeId<"expense">();
+    await testDb.insert(expenses).values({
+      id: expenseId,
+      organizationId: fixture.organizationId,
+      workspaceId: expenseOnlyMatterId,
+      userId: fixture.actorUserId,
+      matterId: expenseItem.entityId,
+      dateIncurred: "2026-08-30",
+      amount: cents(100),
+      currency: "EUR",
+      category: "filing_fee",
+      description: "Unbilled matter expense",
+    });
+    const refusedMatterIds = [
+      invoicedMatterId,
+      lineOnlyMatterId,
+      timeOnlyMatterId,
+      expenseOnlyMatterId,
+    ];
     const invoiceId = createSafeId<"invoice">();
     await testDb.insert(invoices).values({
       id: invoiceId,
@@ -882,7 +894,7 @@ describe("workspace deletion", () => {
     });
     const auditEvents: AuditEvent[] = [];
 
-    for (const workspaceId of [invoicedMatterId, lineOnlyMatterId]) {
+    for (const workspaceId of refusedMatterIds) {
       const result = await executeAuthorizedWorkspaceDeletion(
         {
           actorUserId: fixture.actorUserId,
@@ -898,6 +910,9 @@ describe("workspace deletion", () => {
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
         expect(result.error).toBeInstanceOf(WorkspaceBillingHistoryError);
+        expect(result.error.message).toBe(
+          "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+        );
       }
     }
     expect(auditEvents).toEqual([]);
@@ -905,12 +920,11 @@ describe("workspace deletion", () => {
       await testDb
         .select({ id: workspaces.id, status: workspaces.status })
         .from(workspaces)
-        .where(inArray(workspaces.id, [invoicedMatterId, lineOnlyMatterId])),
+        .where(inArray(workspaces.id, refusedMatterIds)),
     ).toEqual(
-      expect.arrayContaining([
-        { id: invoicedMatterId, status: "active" },
-        { id: lineOnlyMatterId, status: "active" },
-      ]),
+      expect.arrayContaining(
+        refusedMatterIds.map((id) => ({ id, status: "active" })),
+      ),
     );
     expect(
       await testDb.$count(
@@ -919,5 +933,39 @@ describe("workspace deletion", () => {
       ),
     ).toBe(1);
     expect(await testDb.$count(invoices, eq(invoices.id, invoiceId))).toBe(1);
+    expect(
+      await testDb
+        .select({
+          workspaceId: timeEntries.workspaceId,
+          workItemId: timeEntries.workItemId,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+        })
+        .from(timeEntries)
+        .where(eq(timeEntries.id, timeEntryId)),
+    ).toEqual([
+      {
+        workspaceId: timeOnlyMatterId,
+        workItemId: timeWorkItem.entityId,
+        billedMinutes: 30,
+        rateAtEntry: cents(100),
+      },
+    ]);
+    expect(
+      await testDb
+        .select({
+          workspaceId: expenses.workspaceId,
+          matterId: expenses.matterId,
+          amount: expenses.amount,
+        })
+        .from(expenses)
+        .where(eq(expenses.id, expenseId)),
+    ).toEqual([
+      {
+        workspaceId: expenseOnlyMatterId,
+        matterId: expenseItem.entityId,
+        amount: cents(100),
+      },
+    ]);
   });
 });

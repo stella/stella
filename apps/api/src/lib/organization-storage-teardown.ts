@@ -13,6 +13,7 @@ import {
   documentProcessingRuns,
   docxSuggestions,
   entityDeletionCleanupRequests,
+  expenses,
   fields,
   fileComparisonUploads,
   folioCollabRooms,
@@ -23,6 +24,7 @@ import {
   styleSets,
   templates,
   templateVersions,
+  timeEntries,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -131,11 +133,15 @@ export class WorkspaceBillingHistoryError extends TaggedError(
   workspaceId: SafeId<"workspace">;
 }> {}
 
-// These rows retain their matter identity and billing snapshots. The same
-// policy drives the deletion fence and the foreign-key coverage census.
+// Billing records that outlive a matter deletion request: issued documents
+// with their snapshots, and the unbilled time and expenses not yet on one.
+// The same policy drives the deletion fence and the foreign-key coverage
+// census.
 export const WORKSPACE_DELETION_RETAINED_TABLES = [
   invoices,
   invoiceLines,
+  timeEntries,
+  expenses,
 ] as const;
 
 /**
@@ -208,7 +214,6 @@ export const WORKSPACE_STORAGE_REFERENCE_DISPOSITION = {
   "document_processing_runs.id": "derived-key-cleanup-request",
   "document_processing_runs.source_file_id": "field-file-alias",
   "document_translation_runs.source_file_id": "field-file-alias",
-  "expenses.receipt_file_id": "reserved-no-writer",
   "extracted_content.source_file_id": "field-file-alias",
   "fields.content": "cleanup-request",
   "fields.file_id": "reserved-no-writer",
