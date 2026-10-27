@@ -33,8 +33,6 @@
     ".": "./src/index.ts",
     "./postgres-search-fold": "./src/postgres-search-fold.ts",
     "./search-match-key": "./src/search-match-key.ts",
-    "./postgres-search-fold": "./src/postgres-search-fold.ts",
-    "./search-match-key": "./src/search-match-key.ts",
     "./search-query-matcher": "./src/search-query-matcher.ts",
     "./unaccent-rules": "./src/unaccent-rules.ts"
   },
