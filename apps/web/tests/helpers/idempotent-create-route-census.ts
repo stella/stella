@@ -25,7 +25,7 @@ export const createRouteInventory = (
 });
 
 /** Read the API's mounted definitions rather than reconstructing its router. */
-export const liveCreateRoutes = () => {
+export const liveCreateRouteRows = () => {
   const result = Bun.spawnSync([
     "bun",
     "--preload",
@@ -45,9 +45,7 @@ export const liveCreateRoutes = () => {
   if (output === undefined) {
     panic("API mounted create route projection is missing");
   }
-  return createRouteInventory(
-    parseIdempotentCreateRoutes(
-      JSON.parse(output.slice(CREATE_ROUTES_MARKER.length)),
-    ),
+  return parseIdempotentCreateRoutes(
+    JSON.parse(output.slice(CREATE_ROUTES_MARKER.length)),
   );
 };

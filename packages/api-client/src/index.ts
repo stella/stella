@@ -164,7 +164,14 @@ export type ApiClient<TNode> = {
 
 type MaybePromise<TValue> = TValue | Promise<TValue>;
 
+export type RequestReplayRoute = {
+  readonly method: string;
+  readonly path: string;
+};
+
 export type ApiClientOptions = {
+  /** When supplied, only these method/template pairs may carry an Idempotency-Key. */
+  readonly requestReplayRoutes?: readonly RequestReplayRoute[];
   /** Observes the same unread response with its declared route, before decoding. */
   readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
@@ -189,6 +196,7 @@ export type ApiClientOptions = {
 type ClientConfig = {
   readonly origin: string;
   readonly options: ApiClientOptions;
+  readonly requestReplayRoutes: ReadonlySet<string> | undefined;
 };
 
 type ClientPath = {
@@ -254,6 +262,25 @@ const queryString = (query: unknown): string => {
 };
 
 const setHeaders = (target: Headers, values: unknown): void => {
+  if (values instanceof Headers) {
+    for (const [name, value] of values) {
+      target.set(name, value);
+    }
+    return;
+  }
+  if (Array.isArray(values)) {
+    for (const entry of values) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "string"
+      ) {
+        target.set(entry[0], entry[1]);
+      }
+    }
+    return;
+  }
   if (typeof values !== "object" || values === null) {
     return;
   }
@@ -425,6 +452,16 @@ const send = async (
   }
 
   await config.options.onRequest?.(path, init);
+  const routeTemplate = `/${clientPath.template.join("/")}`;
+  if (
+    config.requestReplayRoutes !== undefined &&
+    !config.requestReplayRoutes.has(`${method.toUpperCase()} ${routeTemplate}`)
+  ) {
+    const outgoingHeaders = new Headers(init.headers);
+    outgoingHeaders.delete("Idempotency-Key");
+    init.headers = outgoingHeaders;
+  }
+
   const url = `${config.origin}${path}${queryString(options.query)}`;
   const response = await (config.options.fetcher === undefined
     ? globalThis.fetch(url, init)
@@ -434,7 +471,7 @@ const send = async (
     scope: {
       type: "request",
       method: method.toUpperCase(),
-      routeTemplate: `/${clientPath.template.join("/")}`,
+      routeTemplate,
     },
   });
   await config.options.onResponse?.(response);
@@ -522,7 +559,18 @@ export function createApiClient(
   options: ApiClientOptions = {},
 ): unknown {
   return node(
-    { origin: withoutTrailingSlashes(origin), options },
+    {
+      origin: withoutTrailingSlashes(origin),
+      options,
+      requestReplayRoutes:
+        options.requestReplayRoutes === undefined
+          ? undefined
+          : new Set(
+              options.requestReplayRoutes.map(
+                ({ method, path }) => `${method.toUpperCase()} ${path}`,
+              ),
+            ),
+    },
     { segments: [], template: [] },
   );
 }

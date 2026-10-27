@@ -16,6 +16,7 @@ import {
   notifyUserError,
   reportUserVisibleError,
 } from "@/lib/errors/user-toast";
+import { REPLAY_CAPABLE_ROUTES } from "@/lib/idempotency/replay-routes.gen";
 
 export type WebApiRoutes = WebRoutes["v1"];
 
@@ -46,6 +47,7 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
+  requestReplayRoutes: REPLAY_CAPABLE_ROUTES,
   async onRequest() {
     await waitForSimulatedApiDelay();
   },

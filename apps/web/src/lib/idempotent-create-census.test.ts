@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
+import { compareCodeUnit } from "@stll/collation";
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+
+import { REPLAY_CAPABLE_ROUTES } from "@/lib/idempotency/replay-routes.gen";
 
 import {
   createRouteInventory,
-  liveCreateRoutes,
+  liveCreateRouteRows,
 } from "../../tests/helpers/idempotent-create-route-census";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
@@ -600,7 +603,37 @@ const createMutationViolations = ({
 
 // timeout: Parsing the full server and browser source inventories is CPU-bound.
 test("every web call to a registered JSON create route carries submit-intent headers", () => {
-  const { all, replay: creates, excluded } = liveCreateRoutes();
+  const liveRoutes = liveCreateRouteRows();
+  const { all, replay: creates, excluded } = createRouteInventory(liveRoutes);
+  const replayRoutes = liveRoutes
+    .filter(({ replay }) => replay)
+    .map(({ method, path: routePath }) => ({ method, path: routePath }));
+  const routeIdentity = ({
+    method,
+    path: routePath,
+  }: {
+    method: string;
+    path: string;
+  }) => `${method} ${routePath}`;
+  expect(replayRoutes.length).toBeGreaterThan(0);
+  expect(
+    replayRoutes.toSorted((left, right) =>
+      compareCodeUnit(routeIdentity(left), routeIdentity(right)),
+    ),
+  ).toEqual(
+    REPLAY_CAPABLE_ROUTES.toSorted((left, right) =>
+      compareCodeUnit(routeIdentity(left), routeIdentity(right)),
+    ),
+  );
+  expect(new Set(REPLAY_CAPABLE_ROUTES.map(routeIdentity)).size).toBe(
+    REPLAY_CAPABLE_ROUTES.length,
+  );
+  const replayIdentities = new Set(REPLAY_CAPABLE_ROUTES.map(routeIdentity));
+  expect(
+    liveRoutes
+      .filter(({ replay }) => !replay)
+      .filter((route) => replayIdentities.has(routeIdentity(route))),
+  ).toEqual([]);
   expect(all.size).toBeGreaterThan(75);
   expect(creates.size + excluded.size).toBe(all.size);
   expect([...creates].filter((route) => excluded.has(route))).toEqual([]);
@@ -886,4 +919,113 @@ test("create census projects mounted native routes into browser paths and replay
   ]);
   expect([...inventory.replay]).toEqual(["post:things/*/items"]);
   expect([...inventory.excluded]).toEqual(["put:upload/*"]);
+});
+
+const usesGeneratedReplayPolicy = (text: string): boolean => {
+  const tree = parse({ file: "api.ts", text });
+  const imports = tree.statements.filter(ts.isImportDeclaration);
+  const generated = imports.find(
+    (statement) =>
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === "@/lib/idempotency/replay-routes.gen",
+  );
+  const bindings = generated?.importClause?.namedBindings;
+  const replayImport =
+    bindings && ts.isNamedImports(bindings)
+      ? bindings.elements.find(
+          (binding) =>
+            (binding.propertyName ?? binding.name).text ===
+            "REPLAY_CAPABLE_ROUTES",
+        )?.name.text
+      : undefined;
+  if (replayImport === undefined) {
+    return false;
+  }
+  const declarations = tree.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations]);
+  const options = declarations.find(
+    (declaration) =>
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === "webApiClientOptions",
+  );
+  let value = options?.initializer;
+  while (
+    value &&
+    (ts.isSatisfiesExpression(value) ||
+      ts.isAsExpression(value) ||
+      ts.isParenthesizedExpression(value))
+  ) {
+    value = value.expression;
+  }
+  if (
+    !value ||
+    !ts.isObjectLiteralExpression(value) ||
+    value.properties.some(ts.isSpreadAssignment)
+  ) {
+    return false;
+  }
+  const policies = value.properties.filter(
+    (property) =>
+      ts.isPropertyAssignment(property) &&
+      property.name.getText(tree) === "requestReplayRoutes",
+  );
+  const policy = policies.at(0);
+  if (
+    policies.length !== 1 ||
+    !policy ||
+    !ts.isPropertyAssignment(policy) ||
+    !ts.isIdentifier(policy.initializer) ||
+    policy.initializer.text !== replayImport
+  ) {
+    return false;
+  }
+  const client = declarations.find(
+    (declaration) =>
+      ts.isIdentifier(declaration.name) &&
+      declaration.name.text === "apiClient",
+  )?.initializer;
+  return (
+    client !== undefined &&
+    ts.isCallExpression(client) &&
+    ts.isIdentifier(client.expression) &&
+    client.expression.text === "createApiClient" &&
+    client.arguments.at(1)?.getText(tree) === "webApiClientOptions"
+  );
+};
+
+test("the central browser client installs the generated mounted replay policy", () => {
+  expect(
+    usesGeneratedReplayPolicy(
+      readFileSync(path.join(sourceRoot, "lib/api.ts"), "utf-8"),
+    ),
+  ).toBe(true);
+});
+
+test("replay policy census rejects missing, unrelated, overridden and uninstalled browser policies", () => {
+  const source = `
+    import { REPLAY_CAPABLE_ROUTES as replayRoutes } from "@/lib/idempotency/replay-routes.gen";
+    export const webApiClientOptions = { requestReplayRoutes: replayRoutes } satisfies ApiClientOptions;
+    export const apiClient = createApiClient<WebRoutes>(baseUrl, webApiClientOptions);
+  `;
+  expect(usesGeneratedReplayPolicy(source)).toBe(true);
+  for (const mutation of [
+    source.replace("requestReplayRoutes: replayRoutes", ""),
+    source.replace(
+      "requestReplayRoutes: replayRoutes",
+      "requestReplayRoutes: unrelated",
+    ),
+    source.replace(
+      "requestReplayRoutes: replayRoutes",
+      "requestReplayRoutes: []",
+    ),
+    source.replace(
+      "requestReplayRoutes: replayRoutes",
+      "requestReplayRoutes: replayRoutes, ...unrelated",
+    ),
+    source.replace("baseUrl, webApiClientOptions", "baseUrl, unrelated"),
+    source.replace("@/lib/idempotency/replay-routes.gen", "@/unrelated"),
+  ]) {
+    expect(usesGeneratedReplayPolicy(mutation)).toBe(false);
+  }
 });
