@@ -187,11 +187,14 @@ export const answerEntry = (
  * phone redacts nothing itself, so the text goes as written.
  */
 export const chatSendBody = ({
+  matterId,
   messageId,
   runId,
   text,
   threadId,
 }: {
+  /** The thread's matter; the server refuses a matter's thread sent to as global. */
+  readonly matterId: string | undefined;
   readonly messageId: string;
   readonly runId: string;
   readonly text: string;
@@ -200,6 +203,7 @@ export const chatSendBody = ({
   const forwarded = {
     threadId,
     runId,
+    ...(matterId === undefined ? {} : { workspaceId: matterId }),
     sendMode: "rawOverride",
     message: {
       id: messageId,
@@ -356,9 +360,14 @@ const readChatStream = async ({
 const turnPath = (threadId: string, turnId: string) =>
   `/v1/chat/threads/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}`;
 
+/** A matter's thread names its matter, or the server refuses it as out of scope. */
+const scopeQuery = (matterId: string | undefined) =>
+  matterId === undefined ? "" : `?workspaceId=${encodeURIComponent(matterId)}`;
+
 /** Sends one message and streams the answer to it. */
 export const sendChatMessage = async ({
   fetch,
+  matterId,
   messageId,
   onEvent,
   onTurn,
@@ -369,6 +378,7 @@ export const sendChatMessage = async ({
   threadId,
 }: {
   readonly fetch: StreamFetch;
+  readonly matterId: string | undefined;
   readonly messageId: string;
   readonly onEvent: (event: ChatEvent) => void;
   readonly onTurn: (turnId: string) => void;
@@ -379,7 +389,9 @@ export const sendChatMessage = async ({
   readonly threadId: string;
 }): Promise<Result<StreamEnd, ApiError>> =>
   await readChatStream({
-    body: JSON.stringify(chatSendBody({ messageId, runId, text, threadId })),
+    body: JSON.stringify(
+      chatSendBody({ matterId, messageId, runId, text, threadId }),
+    ),
     fetch,
     method: "POST",
     onEvent,
@@ -396,6 +408,7 @@ export const sendChatMessage = async ({
 export const joinChatTurn = async ({
   fetch,
   lastEventId,
+  matterId,
   onEvent,
   signal,
   source,
@@ -404,6 +417,7 @@ export const joinChatTurn = async ({
 }: {
   readonly fetch: StreamFetch;
   readonly lastEventId: string | undefined;
+  readonly matterId: string | undefined;
   readonly onEvent: (event: ChatEvent) => void;
   readonly signal: AbortSignal;
   readonly source: AccessTokenSource;
@@ -415,7 +429,7 @@ export const joinChatTurn = async ({
     lastEventId: lastEventId ?? "-1",
     method: "GET",
     onEvent,
-    path: `${turnPath(threadId, turnId)}/join`,
+    path: `${turnPath(threadId, turnId)}/join${scopeQuery(matterId)}`,
     signal,
     source,
   });
@@ -434,11 +448,13 @@ type TurnProbe = v.InferOutput<typeof turnProbeSchema>["type"];
 
 export const probeChatTurn = async ({
   fetch,
+  matterId,
   source,
   threadId,
   turnId,
 }: {
   readonly fetch: Fetch;
+  readonly matterId: string | undefined;
   readonly source: AccessTokenSource;
   readonly threadId: string;
   readonly turnId: string;
@@ -447,7 +463,7 @@ export const probeChatTurn = async ({
     const probe = yield* Result.await(
       requestApi({
         fetch,
-        path: `${turnPath(threadId, turnId)}/resume`,
+        path: `${turnPath(threadId, turnId)}/resume${scopeQuery(matterId)}`,
         schema: turnProbeSchema,
         source,
       }),

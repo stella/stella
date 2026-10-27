@@ -64,16 +64,20 @@ const newConnection = (turnId: string | undefined): Connection => ({
  */
 export const useChatTurn = ({
   activeTurnId,
+  matterId,
   onSettled,
   source,
   threadId,
 }: {
   activeTurnId: string | null;
+  matterId: string | undefined;
   onSettled: () => Promise<boolean>;
   source: AccessTokenSource;
   threadId: string;
 }) => {
   const { end } = useSession();
+  // What every request about this thread names.
+  const thread = { matterId, source, threadId };
   const turn = useLiveTurn(activeTurnId);
   const { connection } = turn;
   const [sendFailed, setSendFailed] = useState(false);
@@ -130,9 +134,8 @@ export const useChatTurn = ({
     }
     opened.dropped = false;
     const probe = await probeChatTurn({
+      ...thread,
       fetch,
-      source,
-      threadId,
       turnId: known,
     });
     if (!current(opened)) {
@@ -156,12 +159,11 @@ export const useChatTurn = ({
       }
       case "running": {
         const read = await joinChatTurn({
+          ...thread,
           fetch: streamingFetch,
           lastEventId: opened.lastEventId,
           onEvent: turn.applyEvent,
           signal: opened.controller.signal,
-          source,
-          threadId,
           turnId: known,
         });
         await settle(opened, read);
@@ -189,6 +191,7 @@ export const useChatTurn = ({
     });
     void (async () => {
       const read = await sendChatMessage({
+        ...thread,
         fetch: streamingFetch,
         messageId,
         onEvent: turn.applyEvent,
@@ -197,9 +200,7 @@ export const useChatTurn = ({
         },
         runId: randomUUID(),
         signal: opened.controller.signal,
-        source,
         text,
-        threadId,
       });
       if (
         Result.isError(read) &&
@@ -227,9 +228,8 @@ export const useChatTurn = ({
     }
     void (async () => {
       const stopped = await cancelChatTurn({
+        ...thread,
         fetch,
-        source,
-        threadId,
         turnId,
       });
       // Any other failure leaves the answer streaming, so Stop stays offered.

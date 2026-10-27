@@ -182,8 +182,34 @@ describe("drawing an answer from its events", () => {
 });
 
 describe("the send envelope", () => {
+  test("names a matter's thread's matter in the forwarded input", () => {
+    const body = chatSendBody({
+      matterId: "matter-1",
+      messageId: MESSAGE_ID,
+      runId: "run-1",
+      text: "Check the register",
+      threadId: THREAD_ID,
+    });
+    expect(body.forwardedProps).toMatchObject({
+      threadId: THREAD_ID,
+      workspaceId: "matter-1",
+    });
+    expect(body.data).toEqual(body.forwardedProps);
+    expect(body).not.toHaveProperty("workspaceId");
+    expect(
+      chatSendBody({
+        matterId: undefined,
+        messageId: MESSAGE_ID,
+        runId: "run-1",
+        text: "Check the register",
+        threadId: THREAD_ID,
+      }).forwardedProps,
+    ).not.toHaveProperty("workspaceId");
+  });
+
   test("repeats the forwarded input as data and names the message", () => {
     const body = chatSendBody({
+      matterId: undefined,
       messageId: MESSAGE_ID,
       runId: "run-1",
       text: "Check the register",
@@ -245,6 +271,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       fetch,
+      matterId: undefined,
       messageId: MESSAGE_ID,
       onEvent: (event) => {
         order.push("event");
@@ -274,6 +301,7 @@ describe("sending a message", () => {
     expect(calls[0]?.headers["Authorization"]).toBe("Bearer access-0");
     expect(JSON.parse(calls[0]?.body ?? "")).toEqual(
       chatSendBody({
+        matterId: undefined,
         messageId: MESSAGE_ID,
         runId: "run-1",
         text: "Check the register",
@@ -290,6 +318,7 @@ describe("sending a message", () => {
     );
     const sent = await sendChatMessage({
       fetch,
+      matterId: undefined,
       messageId: MESSAGE_ID,
       onEvent: () => {},
       onTurn: () => {},
@@ -310,6 +339,7 @@ describe("sending a message", () => {
     const { fetch } = streamingFetch(() => new Response("{}", { status: 409 }));
     const sent = await sendChatMessage({
       fetch,
+      matterId: undefined,
       messageId: MESSAGE_ID,
       onEvent: () => {},
       onTurn: () => {},
@@ -343,6 +373,7 @@ describe("sending a message", () => {
       );
     const sent = await sendChatMessage({
       fetch,
+      matterId: undefined,
       messageId: MESSAGE_ID,
       onEvent: (event) => {
         if (event.type === "TEXT_MESSAGE_CONTENT") {
@@ -371,6 +402,7 @@ describe("rejoining a turn", () => {
     const joined = await joinChatTurn({
       fetch,
       lastEventId: "4",
+      matterId: "matter-1",
       onEvent: (event) => {
         events.push(event);
       },
@@ -383,7 +415,7 @@ describe("rejoining a turn", () => {
       lastEventId: String(RUN_EVENTS.length),
     });
     expect(calls[0]?.url).toBe(
-      `https://stella.example.com/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/join`,
+      `https://stella.example.com/v1/chat/threads/${THREAD_ID}/turns/${TURN_ID}/join?workspaceId=matter-1`,
     );
     expect(calls[0]?.method).toBe("GET");
     expect(calls[0]?.headers["Last-Event-ID"]).toBe("4");
@@ -397,6 +429,7 @@ describe("rejoining a turn", () => {
     await joinChatTurn({
       fetch,
       lastEventId: undefined,
+      matterId: undefined,
       onEvent: () => {},
       signal: new AbortController().signal,
       source: sourceFor(),
@@ -414,6 +447,7 @@ describe("rejoining a turn", () => {
     };
     const probe = await probeChatTurn({
       fetch,
+      matterId: undefined,
       source: sourceFor(),
       threadId: THREAD_ID,
       turnId: TURN_ID,
