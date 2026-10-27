@@ -595,14 +595,6 @@ test.each([
      }`,
   ],
   [
-    "later module argument",
-    `import { defineConfig } from "@playwright/test";
-     const overrides = { retries: 2 };
-     export function sharedConfig() {
-       return defineConfig({ retries: 0 }, overrides);
-     }`,
-  ],
-  [
     "unreadable earlier argument",
     `import { defineConfig } from "@playwright/test";
      const projects = () => ({ projects: [{ name: "browser", retries: 2 }] });
@@ -612,6 +604,22 @@ test.each([
   ],
 ])("config helper factories must be verified: %s", (_name, source) => {
   expect(inspectHelper(source)).toEqual([UNREADABLE_HELPER]);
+});
+
+test("a resolved helper override is rejected as a nonzero retry policy", () => {
+  expect(
+    inspectHelper(`import { defineConfig } from "@playwright/test";
+      const overrides = { retries: 2 };
+      export function sharedConfig() {
+        return defineConfig({ retries: 0 }, overrides);
+      }`),
+  ).toEqual([
+    {
+      file: "apps/example/playwright.config.ts",
+      message:
+        "Playwright config must explicitly set top-level retries: 0 as its effective value",
+    },
+  ]);
 });
 
 test.each([
