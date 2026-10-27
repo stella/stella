@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import canonicalLogoPath from "@stll/api-contract/stella-logo-512.png" with { type: "file" };
+
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
@@ -251,6 +253,15 @@ describe("MCP logo", () => {
     expect(bytes.subarray(12, 16).toString("ascii")).toBe("IHDR");
     expect(bytes.readUInt32BE(16)).toBe(512);
     expect(bytes.readUInt32BE(20)).toBe(512);
+  });
+
+  test("the web app publishes the canonical logo bytes", () => {
+    // The API serves the canonical file as its favicon; the advertised logo
+    // URL resolves to the web app's public copy, so the two must match.
+    const webCopy = readFileSync(
+      path.resolve(import.meta.dir, "../../../web/public/stella-logo-512.png"),
+    );
+    expect(webCopy.equals(readFileSync(canonicalLogoPath))).toBe(true);
   });
 
   test("PRM and serverInfo icons advertise the same PNG", () => {

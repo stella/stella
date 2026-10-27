@@ -12,14 +12,14 @@
  * on this host without following a cross-origin redirect.
  */
 
+// The canonical stella logo: the bytes the web app publishes at
+// `MCP_LOGO_PATH`, embedded into the API bundle as an asset.
+import stellaIconPath from "@stll/api-contract/stella-logo-512.png" with { type: "file" };
+
 import { env } from "@/api/env";
 import { routes } from "@/api/http/route";
 import { status } from "@/api/http/status";
 import { defineEndpoint } from "@/api/lib/endpoints";
-
-// The web app's published logo: the same file the MCP metadata advertises
-// (`MCP_LOGO_PATH`), embedded into the API bundle as an asset.
-import stellaIconPath from "../../../../web/public/stella-logo-512.png" with { type: "file" };
 
 const openAiAppsChallenge = defineEndpoint.public({}, () => {
   const token = env.OPENAI_APPS_CHALLENGE_TOKEN;
