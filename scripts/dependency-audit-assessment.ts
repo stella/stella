@@ -278,6 +278,12 @@ export const assessAdvisories = ({
     }
     const pins = new Set<string>();
     const blockers: string[] = [];
+    const overridden = sources.some(({ manifest: source }) =>
+      MANIFEST_REQUIREMENT_FIELDS.some((field) => {
+        const entries = source[field];
+        return record(entries) && typeof entries[advisory.package] === "string";
+      }),
+    );
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
       for (const pin of manifestPins({
@@ -286,6 +292,16 @@ export const assessAdvisories = ({
         forwardPatches: nodePatches,
       })) {
         pins.add(pin);
+      }
+      // An override replaces every declared range, so it alone decides this
+      // copy: a pin above, or no forward patch at all.
+      if (overridden) {
+        if (nodePatches.length === 0) {
+          blockers.push(
+            `${node.key}@${node.version}: no forward patched release`,
+          );
+        }
+        continue;
       }
       const parents: string[] = [];
       for (const parent of owners) {

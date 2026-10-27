@@ -374,6 +374,25 @@ test("an override that blocks one copy's only forward patch is a pin", () => {
   });
 });
 
+test("an override replaces the parent range it widens", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<2.0.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        app: ["app@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        example: ["example@1.0.0", "", {}],
+      },
+    }),
+    manifest: { overrides: { example: ">=1.0.0" } },
+    versions: new Map([["example", ["1.0.0", "1.9.9", "2.0.0"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "fix_available",
+    patchedVersions: ["2.0.0"],
+  });
+});
+
 test("a root requirement never hides a locked copy without a forward patch", () => {
   const [result] = assessAdvisories({
     advisories: [
