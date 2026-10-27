@@ -36,7 +36,7 @@ import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useRelativeTime,
 } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
@@ -140,7 +140,7 @@ export const CaseLawCoveragePage = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   // Not a discriminated union: the endpoint answers either the figures or a
   // message saying it cannot state them.

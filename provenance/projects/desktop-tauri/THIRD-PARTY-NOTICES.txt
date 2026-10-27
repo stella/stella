@@ -412,7 +412,7 @@ Project: desktop-tauri
 - regex-syntax 0.8.11 — Apache-2.0 OR MIT
 - reqwest 0.13.5 — Apache-2.0 OR MIT
 - ring 0.17.14 — Apache-2.0 AND ISC
-- rust-ini 0.21.3 — MIT
+- rust-ini 0.21.1 — MIT
 - rustc-demangle 0.1.28 — MIT/Apache-2.0
 - rustc-hash 1.1.0 — Apache-2.0/MIT
 - rustc-hash 2.1.3 — Apache-2.0 OR MIT
@@ -552,6 +552,7 @@ Project: desktop-tauri
 - tracing-subscriber 0.3.23 — MIT
 - tray-icon 0.25.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
+- trim-in-place 0.1.8 — MIT
 - try-lock 0.2.5 — MIT
 - ts-rs 12.0.1 — MIT
 - ts-rs-macros 12.0.1 — MIT

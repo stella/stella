@@ -1750,6 +1750,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
+  // The job's start (epoch ms) when a caller knows it; else the pool reads
+  // the runner's worker process.
+  "CI_CHECK_POOL_JOB_STARTED_AT",
   // Comparison base supplied to every command launched by a CI check pool.
   "CI_COMPARISON_BASE",
   // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
