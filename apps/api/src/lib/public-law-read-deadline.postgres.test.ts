@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { readFailureBrand } from "@stll/errors";
 
+import { envBase } from "@/api/env-base";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
@@ -11,6 +12,7 @@ import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-bu
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 import { isRecord } from "@/api/lib/type-guards";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -38,6 +40,69 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("public-law reads under a request budget (postgres)", () => {
+    test("pool acquisition expires without starting work after a slot is released", async () => {
+      const poolSize =
+        envBase.PUBLIC_LAW_DATABASE_URL === undefined
+          ? envBase.DATABASE_ROOT_POOL_MAX
+          : envBase.PUBLIC_LAW_DATABASE_POOL_MAX;
+      const occupied = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+      let started = 0;
+      let workCalls = 0;
+      const blockers = Array.from(
+        { length: poolSize },
+        async () =>
+          await publicLawReadDb(async () => {
+            started += 1;
+            if (started === poolSize) {
+              occupied.resolve(undefined);
+            }
+            await release.promise;
+          }),
+      );
+      try {
+        await withTimeout(async () => await occupied.promise, {
+          label: "occupy_public_read_pool",
+          timeoutMs: 5000,
+        });
+        const pending = runWithinRequestLatencyBudget(
+          { label: "read_statute", budgetMs: 200 },
+          async () =>
+            await publicLawReadDb(async () => {
+              workCalls += 1;
+              return "answered late";
+            }),
+        );
+        const outcome = await Result.tryPromise({
+          try: async () =>
+            await withTimeout(async () => await pending, {
+              label: "observe_public_read_pool_deadline",
+              timeoutMs: 200 + DEADLINE_SLACK_MS,
+            }),
+          catch: (cause) => cause,
+        });
+        const error = Result.isError(outcome) ? outcome.error : undefined;
+        expect(error).toBeInstanceOf(TimeoutError);
+        expect(error instanceof TimeoutError ? error.label : undefined).toBe(
+          "read_statute",
+        );
+        expect(readFailureBrand(error)).toEqual({
+          reason: "timeout_budgeted",
+          source: "instance",
+        });
+      } finally {
+        release.resolve(undefined);
+        await Promise.all(blockers);
+      }
+      // The expired waiter must leave the queue rather than run later.
+      expect(
+        await publicLawReadDb(async (tx) =>
+          executedRows(await tx.execute(sql`SELECT 1 AS one`)),
+        ),
+      ).toEqual([{ one: 1 }]);
+      expect(workCalls).toBe(0);
+    });
+
     test("successive statements cannot outlast the request together", async () => {
       // real-time: the deadline under test is the server's wall clock.
       const startedAt = performance.now();
