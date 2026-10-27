@@ -37,7 +37,7 @@ import {
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { filterOnboardingCatalogueEntries } from "@/routes/onboarding/-components/steps/catalogue-search.logic";
@@ -82,7 +82,7 @@ export const CatalogueStep = ({
   unavailableNativeToolBackendSlugs,
 }: CatalogueStepProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
   // Multi-select jurisdiction chips. Pre-populated from the user's

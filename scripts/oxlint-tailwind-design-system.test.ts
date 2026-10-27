@@ -41,6 +41,173 @@ const report = v.object({
   ),
 });
 
+test("snapshot names track workspace CSS and published package versions", async () => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  try {
+    const entry = path.join(fixture, "entry.css");
+    const workspace = path.join(fixture, "packages", "theme");
+    const workspaceLink = path.join(
+      fixture,
+      "node_modules",
+      "@fixture",
+      "theme",
+    );
+    const published = path.join(fixture, "node_modules", "published-theme");
+    await mkdir(path.join(workspace, "src"), { recursive: true });
+    await mkdir(path.dirname(workspaceLink), { recursive: true });
+    await mkdir(published, { recursive: true });
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "1.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: red; }\n",
+    );
+    await writeFile(
+      path.join(workspace, "src", "default.css"),
+      "@theme { --color-default: red; }\n",
+    );
+    await symlink(workspace, workspaceLink, "dir");
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "1.0.0" }),
+    );
+    await writeFile(
+      path.join(published, "styles.css"),
+      "@theme { --color-published: red; }\n",
+    );
+    await writeFile(
+      entry,
+      '@import "@fixture/theme/styles.css";\n@import "published-theme/styles.css";\n',
+    );
+
+    const snapshotName = () => path.basename(cacheArtifactPaths(entry).json);
+    const original = snapshotName();
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "2.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    expect(snapshotName()).toBe(original);
+
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: blue; }\n",
+    );
+    const afterWorkspaceCssChange = snapshotName();
+    expect(afterWorkspaceCssChange).not.toBe(original);
+
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "2.0.0" }),
+    );
+    expect(snapshotName()).not.toBe(afterWorkspaceCssChange);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+const workspaceThemeFixture = async (
+  manifest: Readonly<Record<string, unknown>>,
+  importSpecifier: string,
+) => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  const workspace = path.join(fixture, "packages", "theme");
+  const workspaceLink = path.join(fixture, "node_modules", "@fixture", "theme");
+  await mkdir(path.join(workspace, "src"), { recursive: true });
+  await mkdir(path.dirname(workspaceLink), { recursive: true });
+  await symlink(workspace, workspaceLink, "dir");
+  const writeManifest = async (version: string) =>
+    writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({ name: "@fixture/theme", version, ...manifest }),
+    );
+  await writeManifest("1.0.0");
+  const palette = path.join(workspace, "src", "palette.css");
+  await writeFile(palette, "@theme { --color-palette: red; }\n");
+  const entry = path.join(fixture, "entry.css");
+  await writeFile(entry, `@import "${importSpecifier}";\n`);
+  return {
+    fixture,
+    palette,
+    writeManifest,
+    snapshotName: () => path.basename(cacheArtifactPaths(entry).json),
+  };
+};
+
+test("snapshot names track workspace CSS reached through a wildcard export", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./styles/*": "./src/*.css" } },
+    "@fixture/theme/styles/palette",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
+test("overlapping wildcard exports resolve to the most specific pattern", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./*": "./generic/*", "./*.css": "./src/*.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    await mkdir(path.join(theme.fixture, "packages", "theme", "generic"));
+    await writeFile(
+      path.join(theme.fixture, "packages", "theme", "generic", "palette.css"),
+      "@theme { --color-generic: red; }\n",
+    );
+    const original = theme.snapshotName();
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
+test("an unresolvable workspace CSS import keys on the package's stylesheets", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./other.css": "./src/other.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
 const lintFixture = async ({
   cache,
   source,
@@ -487,7 +654,7 @@ test.each([
     // stylesheet itself and what it imports; otherwise an edited shared theme
     // keeps the old snapshot name and the cache check passes on stale data.
     const workspace = await mkdtemp(
-      path.join(tmpdir(), "stella-tailwind-workspace-key-"),
+      path.join(repositoryRoot, ".tailwind-workspace-key-"),
     );
     try {
       const ui = path.join(workspace, "packages/ui");

@@ -73,6 +73,7 @@ const fixture = (script = subject) => {
     "verify-release-tree-proof.sh",
     "verify-release-candidate-tree.mjs",
     "gh-retry.sh",
+    "retry.sh",
   ]) {
     writeFileSync(
       path.join(repo, "scripts", name),
@@ -129,6 +130,37 @@ const assertIdentity = (script = subject) => {
     rmSync(directory, { recursive: true, force: true });
   }
 };
+const helperSteps = [
+  {
+    name: "Checkout network retry helper",
+    "timeout-minutes": 2,
+    uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    with: {
+      repository: `\${{ github.repository }}`,
+      ref: `\${{ github.workflow_sha }}`,
+      path: ".network-retry",
+      "persist-credentials": false,
+      "sparse-checkout": "scripts/retry.sh",
+      "sparse-checkout-cone-mode": false,
+    },
+  },
+  {
+    name: "Stage network retry helper",
+    run: [
+      'mkdir -p "$RUNNER_TEMP/network-retry"',
+      'cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"',
+      'echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"',
+      "",
+    ].join("\n"),
+  },
+];
+// The helper checkout's `with:` inputs, for mutating in place.
+const checkoutInputs = (jobSteps: Record<string, unknown>[]) => {
+  const checkout = jobSteps.at(0) ?? panic("Missing helper checkout");
+  const inputs = v.parse(v.record(v.string(), v.unknown()), checkout["with"]);
+  checkout["with"] = inputs;
+  return inputs;
+};
 const assertDispatch = (
   workflow: v.InferOutput<typeof schema>,
   job: string,
@@ -138,9 +170,15 @@ const assertDispatch = (
     workflow.on.workflow_dispatch.inputs["release_candidate"],
   );
   expect(input.default).toBe(false);
+  // Only workflow-revision tooling runs before the preflight: no candidate
+  // code runs first.
+  const steps = workflow.jobs[job]?.steps ?? panic("Missing release steps");
+  expect(
+    steps.slice(0, helperSteps.length),
+    "only the network retry helper may run before the release preflight",
+  ).toEqual(helperSteps);
   const first =
-    workflow.jobs[job]?.steps?.at(0) ??
-    panic("Missing first release preflight");
+    steps.at(helperSteps.length) ?? panic("Missing first release preflight");
   expect(first.name, "release preflight must run first").toBe(
     "Check release candidate",
   );
@@ -272,7 +310,8 @@ test("both workflows check release candidates first only for explicit opt-in pin
     ]) {
       const mutant = structuredClone(workflow);
       const first =
-        mutant.jobs[job]?.steps?.at(0) ?? panic("Missing mutation target");
+        mutant.jobs[job]?.steps?.at(helperSteps.length) ??
+        panic("Missing mutation target");
       const original = first.if ?? panic("Missing condition");
       first.if = original.replace(remove, "");
       expect(first.if).not.toBe(original);
@@ -281,13 +320,46 @@ test("both workflows check release candidates first only for explicit opt-in pin
       );
     }
     const reordered = structuredClone(workflow);
-    reordered.jobs[job]?.steps?.reverse();
+    const reorderedSteps =
+      reordered.jobs[job]?.steps ?? panic("Missing reorder target");
+    const [preflight] = reorderedSteps.splice(helperSteps.length, 1);
+    reorderedSteps.splice(
+      helperSteps.length + 1,
+      0,
+      preflight ?? panic("Missing preflight"),
+    );
     expect(() => assertDispatch(reordered, job)).toThrow(
       "release preflight must run first",
     );
+    const helperMutants: ((jobSteps: Record<string, unknown>[]) => void)[] = [
+      (jobSteps) => {
+        jobSteps.splice(0, 0, { name: "Candidate step", run: "true" });
+      },
+      (jobSteps) => {
+        jobSteps.splice(1, 1);
+      },
+      (jobSteps) => {
+        checkoutInputs(jobSteps)["ref"] = `\${{ inputs.sha }}`;
+      },
+      (jobSteps) => {
+        checkoutInputs(jobSteps)["sparse-checkout"] = "scripts/";
+      },
+      (jobSteps) => {
+        const stage = jobSteps.at(1) ?? panic("Missing stage step");
+        stage["run"] =
+          `${v.parse(v.string(), stage["run"])}bash scripts/check-release-candidate.sh\n`;
+      },
+    ];
+    for (const mutate of helperMutants) {
+      const mutant = structuredClone(workflow);
+      mutate(mutant.jobs[job]?.steps ?? panic("Missing helper mutation"));
+      expect(() => assertDispatch(mutant, job)).toThrow(
+        "only the network retry helper may run before the release preflight",
+      );
+    }
     const nonblocking = structuredClone(workflow);
     const first =
-      nonblocking.jobs[job]?.steps?.at(0) ??
+      nonblocking.jobs[job]?.steps?.at(helperSteps.length) ??
       panic("Missing preflight mutation");
     first["continue-on-error"] = true;
     expect(() => assertDispatch(nonblocking, job)).toThrow(
@@ -312,6 +384,8 @@ const assertBootstrap = (preflight: string) => {
         env: {
           PATH: process.env["PATH"] ?? "",
           RUNNER_TEMP: runner,
+          NETWORK_RETRY_SCRIPT: path.join(repo, "scripts/retry.sh"),
+          RETRY_DELAYS_SECONDS: "0",
           GH_TOKEN: "fixture",
           REPOSITORY: "fixture",
           SERVER_URL: server,

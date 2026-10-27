@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
@@ -210,6 +218,11 @@ const failureOf = (result: Result<string, { cause: unknown }>) => {
     finish: error instanceof ModelRunError ? error.finish : undefined,
   };
 };
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("an answer cut at its output ceiling", () => {
   // The provider labels the stop `length`, with a reason no table lists, or

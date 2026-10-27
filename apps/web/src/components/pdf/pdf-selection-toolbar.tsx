@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { composerText } from "@/components/chat-editor-source";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -26,6 +26,7 @@ import {
 import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useMessageLocale } from "@/i18n/message-locale";
 
 /**
  * Whether the viewer floats the document's chat composer, the only place a
@@ -76,7 +77,7 @@ export const PdfSelectionToolbar = ({
   rootRef,
 }: PdfSelectionToolbarProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {

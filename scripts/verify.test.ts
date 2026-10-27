@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  CHECK_BUDGETS_PATH,
   CHECK_POOL_JOBS,
   checkPoolRegistryPath,
 } from "./ci-check-pool-registry";
@@ -778,6 +779,10 @@ exit 0
                   path.join(fixture, checkPoolRegistryPath(job)),
                 );
               }
+              copyFileSync(
+                path.join(root, CHECK_BUDGETS_PATH),
+                path.join(fixture, CHECK_BUDGETS_PATH),
+              );
               continue;
             }
             writeFileSync(
