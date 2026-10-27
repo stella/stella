@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
+import { parseChangesetEntry } from "./changeset-entry";
 import {
   checkPromotedRegistry,
   checkRegistry,
   DAY_SECONDS,
+  type FirstPublishResult,
   readPackageManifest,
   type RegistryFetch,
   type RegistryResult,
@@ -33,6 +35,51 @@ const git: GitRunner = (args) => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Packages are enrolled at this version and keep it on main until the release
+// that carries their first publish bumps it.
+const ENROLLMENT_VERSION = "0.0.0";
+const CHANGESET_README = ".changeset/README.md";
+
+// The pending changesets on `ref` are the next release's manifest: a package
+// they name is published by that release, so its absence from npm is expected.
+// Returns undefined when the changeset tree cannot be read.
+const readFirstPublish = ({
+  gitRunner,
+  ref,
+  name,
+}: {
+  gitRunner: GitRunner;
+  ref: string;
+  name: string;
+}): { result: FirstPublishResult; changeset?: string } | undefined => {
+  const listing = gitRunner([
+    "ls-tree",
+    "--name-only",
+    ref,
+    "--",
+    ".changeset/",
+  ]);
+  if (listing.exitCode !== 0) {
+    return undefined;
+  }
+  for (const file of listing.stdout.split("\n")) {
+    if (!file.endsWith(".md") || file === CHANGESET_README) {
+      continue;
+    }
+    const entry = gitRunner(["show", `${ref}:${file}`]);
+    if (entry.exitCode !== 0) {
+      return undefined;
+    }
+    if (parseChangesetEntry(entry.stdout).packages.includes(name)) {
+      return {
+        result: { status: "skipped", reason: "pending_first_publish" },
+        changeset: file,
+      };
+    }
+  }
+  return { result: { status: "failed", reason: "first_publish_unplanned" } };
+};
 
 const RELEASE_PAGE_SIZE = 100;
 const MAX_RELEASE_PAGES = 10;
@@ -225,6 +272,20 @@ export const checkPublishedVersions = async ({
                   `journey-detail registry-@stll/cli target ${target.version} from ${promotion.ref}; publication deadline ${new Date((promotedAt + DAY_SECONDS) * 1000).toISOString()}; publish using publish-npm.yml`,
                 );
               }
+            }
+          } else if (manifest.version === ENROLLMENT_VERSION) {
+            const firstPublish = readFirstPublish({
+              gitRunner,
+              ref,
+              name: manifest.name,
+            });
+            if (firstPublish !== undefined) {
+              result = firstPublish.result;
+              log(
+                firstPublish.changeset === undefined
+                  ? `journey-detail registry-@stll/${directory} is enrolled at ${ENROLLMENT_VERSION} with no pending changeset; add one so the next release publishes it`
+                  : `journey-detail registry-@stll/${directory} first publish expected in the release that consumes ${firstPublish.changeset}`,
+              );
             }
           } else {
             const history = gitRunner([

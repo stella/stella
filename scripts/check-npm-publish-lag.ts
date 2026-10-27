@@ -457,7 +457,15 @@ type PromotedPackage = {
 export type RegistryResult =
   | RegistryCheckResult
   | PromotedRegistryResult
+  | FirstPublishResult
   | { status: "failed"; reason: "promotion_unavailable" };
+
+// A package still at the enrollment version on main has never been released.
+// Only a pending changeset naming it makes that expected; the release that
+// consumes the changeset bumps the version and ends the pending state.
+export type FirstPublishResult =
+  | { status: "skipped"; reason: "pending_first_publish" }
+  | { status: "failed"; reason: "first_publish_unplanned" };
 
 type PromotedRegistryResult =
   | { status: "passed"; reason: "published" }

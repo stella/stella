@@ -1026,3 +1026,161 @@ describe("release CLI output contract", () => {
     );
   });
 });
+
+const FIRST_RELEASE_CHANGESET =
+  '---\n"@stll/fetch": minor\n---\n\nFirst release.\n';
+const OTHER_CHANGESET = '---\n"@stll/ui": patch\n---\n\nOther.\n';
+
+// Pending changeset files on main by path; null when the tree is unreadable.
+type Changesets = Readonly<Record<string, string>> | null;
+type ChangesetCase = { label: string; changesets: Changesets };
+
+const runFirstPublish = async ({
+  version,
+  changesets,
+  bumpedAt = NOW - 2 * 86_400,
+}: {
+  version: string;
+  changesets: Changesets;
+  bumpedAt?: number;
+}) => {
+  const lines: string[] = [];
+  let registryReads = 0;
+  const failed = await checkPublishedVersions({
+    ref: "main",
+    registry: "https://registry.invalid",
+    timeoutMs: 50,
+    now: NOW,
+    directories: ["fetch"],
+    gitRunner: (args) => {
+      if (args.at(0) === "ls-tree") {
+        return changesets === null
+          ? { exitCode: 128, stdout: "" }
+          : {
+              exitCode: 0,
+              stdout: [
+                ".changeset/README.md",
+                ...Object.keys(changesets),
+                "",
+              ].join("\n"),
+            };
+      }
+      if (args.at(0) === "log") {
+        return {
+          exitCode: 0,
+          stdout: `journey-commit ${bumpedAt}\n- "version": "0.0.0"\n+ "version": "${version}"`,
+        };
+      }
+      const file = args.at(1)?.split(":").slice(1).join(":") ?? "";
+      if (file === "packages/fetch/package.json") {
+        return {
+          exitCode: 0,
+          stdout: JSON.stringify({ name: "@stll/fetch", version }),
+        };
+      }
+      const entry = changesets?.[file];
+      return entry === undefined
+        ? { exitCode: 1, stdout: "" }
+        : { exitCode: 0, stdout: entry };
+    },
+    registryFetch: async () => {
+      registryReads += 1;
+      return Response.json({ version: "0.0.1-placeholder.0" });
+    },
+    log: (line) => {
+      lines.push(line);
+    },
+  });
+  return { failed, lines, registryReads };
+};
+
+describe("first publish of an enrolled package", () => {
+  test("is pending while main holds the enrollment version and a changeset names the package", async () => {
+    const { failed, lines, registryReads } = await runFirstPublish({
+      version: "0.0.0",
+      changesets: {
+        ".changeset/other.md": OTHER_CHANGESET,
+        ".changeset/fetch-first-release.md": FIRST_RELEASE_CHANGESET,
+      },
+    });
+    expect(failed).toBe(false);
+    expect(registryReads).toBe(0);
+    expect(lines).toEqual([
+      "journey-detail registry-@stll/fetch first publish expected in the release that consumes .changeset/fetch-first-release.md",
+      "journey registry-@stll/fetch skipped pending_first_publish",
+    ]);
+  });
+
+  const unplannedCases: readonly ChangesetCase[] = [
+    { label: "no pending changeset", changesets: {} },
+    {
+      label: "changesets for other packages only",
+      changesets: { ".changeset/other.md": OTHER_CHANGESET },
+    },
+  ];
+  test.each(unplannedCases)(
+    "fails at the enrollment version with $label",
+    async ({ changesets }) => {
+      const { failed, lines, registryReads } = await runFirstPublish({
+        version: "0.0.0",
+        changesets,
+      });
+      expect(failed).toBe(true);
+      expect(registryReads).toBe(0);
+      expect(lines.at(-1)).toBe(
+        "journey registry-@stll/fetch failed first_publish_unplanned",
+      );
+    },
+  );
+
+  test("is red again once the release that carries the first publish bumped main", async () => {
+    // A later changeset for the same package must not reopen the pending state.
+    const releasedCases: readonly Changesets[] = [
+      {},
+      { ".changeset/fetch-next.md": FIRST_RELEASE_CHANGESET },
+    ];
+    for (const changesets of releasedCases) {
+      const { failed, lines } = await runFirstPublish({
+        version: "0.1.0",
+        changesets,
+      });
+      expect(failed).toBe(true);
+      expect(lines).toEqual([
+        "journey registry-@stll/fetch failed version_mismatch",
+      ]);
+    }
+  });
+
+  test("keeps only the ordinary bump grace after the release", async () => {
+    const { failed, lines } = await runFirstPublish({
+      version: "0.1.0",
+      changesets: { ".changeset/fetch-next.md": FIRST_RELEASE_CHANGESET },
+      bumpedAt: NOW - 60,
+    });
+    expect(failed).toBe(false);
+    expect(lines).toEqual([
+      "journey registry-@stll/fetch skipped publish_pending",
+    ]);
+  });
+
+  const contractCases: readonly ChangesetCase[] = [
+    { label: "an unreadable changeset tree", changesets: null },
+    {
+      label: "unterminated changeset frontmatter",
+      changesets: { ".changeset/broken.md": '---\n"@stll/fetch": minor\n' },
+    },
+  ];
+  test.each(contractCases)(
+    "reports a contract error for $label",
+    async ({ changesets }) => {
+      const { failed, lines } = await runFirstPublish({
+        version: "0.0.0",
+        changesets,
+      });
+      expect(failed).toBe(true);
+      expect(lines).toEqual([
+        "journey registry-@stll/fetch failed contract_error",
+      ]);
+    },
+  );
+});
