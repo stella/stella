@@ -74,12 +74,14 @@ export const OAuthAccountRow = ({
       <dt className="text-muted-foreground self-start sm:self-center">
         {tAccount("title")}
       </dt>
-      <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
-        <bdi className="min-w-0 break-all">{email}</bdi>
+      <dd className="flex min-w-0 flex-col items-start gap-x-3">
+        <bdi className="max-w-full min-w-0 truncate" title={email}>
+          {email}
+        </bdi>
         <Button
           variant="link"
           size="xs"
-          className="-ms-2 min-h-11 self-start sm:ms-0 sm:self-auto"
+          className="-ms-2 min-h-11 self-start"
           disabled={disabled}
           onClick={onAccountSwitch}
         >
