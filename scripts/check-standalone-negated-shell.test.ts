@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { findStandaloneNegatedShellStatements } from "./check-standalone-negated-shell";
+import {
+  findEarlyExitPipelines,
+  findStandaloneNegatedShellStatements,
+} from "./check-standalone-negated-shell";
 
 const check = (file: string, source: string) =>
   findStandaloneNegatedShellStatements(new Map([[file, source]]));
@@ -555,4 +558,150 @@ test("escaped newlines in quotes and substitutions advance the line count", () =
       'out="$(\n  run \\\n    --flag \\\n    "$x \\\n y"\n)"\n! true\necho continued',
     ),
   ).toEqual([{ file: "scripts/continued.sh", line: 7, source: "! true" }]);
+});
+
+const earlyExit = (file: string, source: string) =>
+  findEarlyExitPipelines(new Map([[file, source]]));
+
+test("pipefail fails a pipeline whose reader exits before its writer", () => {
+  const run = (script: string) =>
+    Bun.spawnSync(["bash", "-c", `set -o pipefail\n${script}`]).exitCode;
+  // seq writes far more than one pipe buffer, so it outlives grep and is
+  // killed by SIGPIPE although grep found the match.
+  expect(run("seq 100000 | grep -qx 1")).not.toBe(0);
+  expect(run('lines="$(seq 100000)"\ngrep -qx 1 <<<"$lines"')).toBe(0);
+});
+
+test("rejects pipes into readers that can exit early", () => {
+  for (const pipeline of [
+    "producer | grep -q x",
+    "producer | grep -Fqx x",
+    "producer | grep -m1 x",
+    "producer | grep -m 1 x",
+    "producer | grep --quiet x",
+    "producer | grep --silent x",
+    "producer | grep --max-count=1 x",
+    "producer | grep -l x",
+    "producer | egrep -q x",
+    "producer | rg -q x",
+    "producer | head -n 1",
+    "producer | head",
+    "producer |& head -n 1",
+    "producer | LC_ALL=C grep -Eq x",
+    'producer | LC_ALL="C" grep -Eq x',
+    "producer | grep -iq x || true",
+    "producer | sort | head -n 1",
+    "producer | grep -e x -q",
+  ]) {
+    expect(
+      earlyExit("scripts/planted.sh", pipeline).violations,
+      pipeline,
+    ).toEqual([{ file: "scripts/planted.sh", line: 1, source: pipeline }]);
+  }
+});
+
+test("rejects the pipelines this guard replaced", () => {
+  const manifestCheck = `if ! printf '%s' "$comment" | tr '\\t' '\\n' | grep -qxF "version:\${APP_VERSION}"; then
+  exit 1
+fi`;
+  expect(
+    earlyExit("scripts/build-updater-manifest.sh", manifestCheck).violations,
+  ).toHaveLength(1);
+  const assetLookup = `while IFS= read -r tag; do
+  if bash "$gh_retry_script" release view "$tag" --json assets --jq '.assets[].name' \\
+    | grep -qx 'latest.json'; then
+    break
+  fi
+done < <(git tag --list 'v*')`;
+  expect(
+    earlyExit("scripts/detect-desktop-release-changes.sh", assetLookup)
+      .violations,
+  ).toEqual([
+    {
+      file: "scripts/detect-desktop-release-changes.sh",
+      line: 3,
+      source: "| grep -qx 'latest.json'; then",
+    },
+  ]);
+});
+
+test("follows pipes across lines and into command substitutions", () => {
+  expect(
+    earlyExit("scripts/split.sh", "producer |\n  # first match\n  head -n 1")
+      .violations,
+  ).toEqual([{ file: "scripts/split.sh", line: 3, source: "head -n 1" }]);
+  for (const assignment of [
+    'first="$(producer | head -n 1)"',
+    "first=$(producer | head -n 1)",
+    "first=`producer | head -n 1`",
+    'echo "first: $(producer | head -n 1)"',
+    'echo "$(printf "%s" "$(producer | head -n 1)")"',
+  ]) {
+    expect(
+      earlyExit("scripts/sub.sh", assignment).violations,
+      assignment,
+    ).toEqual([{ file: "scripts/sub.sh", line: 1, source: assignment }]);
+  }
+  // Escaped newlines inside a substitution still advance the line count.
+  const continued = `out="$(
+  cd dir \\
+    && run \\
+    "$x"
+)"
+got="$(printf '%s\\n' "$out" | grep '^a=' | head -n1)"`;
+  expect(earlyExit("scripts/continued.sh", continued).violations).toEqual([
+    {
+      file: "scripts/continued.sh",
+      line: 6,
+      source: `got="$(printf '%s\\n' "$out" | grep '^a=' | head -n1)"`,
+    },
+  ]);
+  expect(
+    earlyExit(
+      ".github/workflows/planted.yml",
+      'jobs:\n  planted:\n    steps:\n      - run: |\n          set -e\n          id="$(\n            gh run list \\\n              | head -n 1\n          )"',
+    ).violations,
+  ).toEqual([
+    {
+      file: ".github/workflows/planted.yml",
+      line: 8,
+      source: "| head -n 1",
+    },
+  ]);
+});
+
+test("accepts readers that see the whole input", () => {
+  for (const source of [
+    'grep -q x <<<"$lines"',
+    "grep -Fqx x file",
+    "grep -m 1 x file",
+    "head -n 1 file",
+    "producer | grep x",
+    "producer | grep -v x | sort",
+    "producer | grep -e -q x",
+    "producer | grep -- -q",
+    "producer | grep '-q'",
+    "lookup || grep -q x file",
+    "producer | tail -n 1",
+    "printf '%s\\n' 'a | head -n 1'",
+    'echo "a | grep -q x"',
+    "# producer | head -n 1",
+    "cat <<'EOF'\nproducer | head -n 1\nEOF",
+    "if [[ $a == x || $b == y ]]; then :; fi",
+    `echo "\${value:-a}"`,
+  ]) {
+    expect(earlyExit("scripts/passing.sh", source).violations, source).toEqual(
+      [],
+    );
+  }
+});
+
+test("reports an exemption whose file no longer needs it", () => {
+  expect(earlyExit(".agents/cloud-setup.sh", "producer | grep -q x")).toEqual({
+    violations: [],
+    staleExemptions: [],
+  });
+  expect(
+    earlyExit(".agents/cloud-setup.sh", 'grep -q x <<<"$(producer)"'),
+  ).toEqual({ violations: [], staleExemptions: [".agents/cloud-setup.sh"] });
 });
