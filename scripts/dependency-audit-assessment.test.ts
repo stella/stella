@@ -343,6 +343,37 @@ test("each workspace requirement is judged against the copy it resolves to", () 
   });
 });
 
+test("an override that blocks one copy's only forward patch is a pin", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      workspaces: {
+        "": { name: "root" },
+        "apps/one": { name: "one", dependencies: { example: "^1.0.0" } },
+        "apps/two": { name: "two", dependencies: { example: "^2.0.0" } },
+      },
+      packages: {
+        example: ["example@1.2.2", "", {}],
+        "two/example": ["example@2.1.0", "", {}],
+      },
+    }),
+    manifest: { overrides: { example: "<=2.1.0" } },
+    versions: new Map([["example", ["1.2.2", "1.2.3", "2.1.0", "2.1.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["package.json overrides.example=<=2.1.0"],
+    patchedVersions: ["1.2.3", "2.1.1"],
+  });
+});
+
 test("a root requirement never hides a locked copy without a forward patch", () => {
   const [result] = assessAdvisories({
     advisories: [

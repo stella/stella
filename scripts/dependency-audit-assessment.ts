@@ -157,14 +157,19 @@ const MANIFEST_REQUIREMENT_FIELDS = ["resolutions", "overrides"] as const;
 type ManifestPinsOptions = {
   sources: readonly ManifestSource[];
   packageName: string;
-  patchedVersions: readonly string[];
+  forwardPatches: readonly string[];
 };
+// Judged per locked copy: an override that excludes every forward patch of
+// one copy pins it, even when it admits another copy's patch.
 const manifestPins = ({
   sources,
   packageName,
-  patchedVersions,
+  forwardPatches,
 }: ManifestPinsOptions): string[] => {
   const pins: string[] = [];
+  if (forwardPatches.length === 0) {
+    return pins;
+  }
   for (const { label, manifest } of sources) {
     for (const field of MANIFEST_REQUIREMENT_FIELDS) {
       const entries = manifest[field];
@@ -173,7 +178,7 @@ const manifestPins = ({
         continue;
       }
       if (
-        !patchedVersions.some((version) =>
+        !forwardPatches.some((version) =>
           Bun.semver.satisfies(version, requirement),
         )
       ) {
@@ -271,14 +276,17 @@ export const assessAdvisories = ({
         );
       }
     }
-    const pins = manifestPins({
-      sources,
-      packageName: advisory.package,
-      patchedVersions,
-    });
+    const pins = new Set<string>();
     const blockers: string[] = [];
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
+      for (const pin of manifestPins({
+        sources,
+        packageName: advisory.package,
+        forwardPatches: nodePatches,
+      })) {
+        pins.add(pin);
+      }
       const parents: string[] = [];
       for (const parent of owners) {
         for (const field of parent.fields) {
@@ -307,7 +315,7 @@ export const assessAdvisories = ({
             continue;
           }
           if (parent.manifest && nodePatches.length > 0) {
-            pins.push(
+            pins.add(
               `${parent.label} ${field}.${advisory.package}=${requirement}`,
             );
           } else {
@@ -331,10 +339,10 @@ export const assessAdvisories = ({
       }
     }
     let disposition: AuditDisposition;
-    if (pins.length > 0 && patchedVersions.length > 0) {
+    if (pins.size > 0 && patchedVersions.length > 0) {
       disposition = {
         status: "pinned_resolution_blocked",
-        pins,
+        pins: [...pins],
         patchedVersions,
       };
     } else if (blockers.length > 0 || patchedVersions.length === 0) {
