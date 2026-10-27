@@ -4,9 +4,9 @@ import { invalidInput, type InvoicingResult } from "../errors";
 import {
   amountText,
   invoiceDescriptionOf,
-  quantityText,
   type InvoiceExportLine,
   type InvoiceExportRecord,
+  quantityText,
 } from "./record";
 
 // LEDES 1998B: one pipe-delimited record per invoice line, each closed by

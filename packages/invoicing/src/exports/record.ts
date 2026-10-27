@@ -1,7 +1,7 @@
 import {
+  type CentsAmount,
   currencyMinorUnitDigits,
   toMajorUnits,
-  type CentsAmount,
 } from "@stll/money";
 
 import type {
@@ -30,6 +30,8 @@ export type InvoiceExportLine = {
   grossAmountMinor: CentsAmount;
   vatRateBps: number;
   vatTreatment: VatTreatment;
+  /** The statutory basis stored for an exempt supply. */
+  exemptionReason: string | null;
   source: InvoiceExportLineSource;
   /** The day the work was done or the expense incurred, `YYYY-MM-DD`. */
   date: string | null;
@@ -53,6 +55,7 @@ export type InvoiceExportRecord = {
   number: string;
   documentType: InvoiceDocumentType;
   originalNumber: string | null;
+  originalIssueDate: string | null;
   status: "finalized" | "sent" | "paid" | "void";
   issueDate: string;
   taxableSupplyDate: string | null;
@@ -183,4 +186,22 @@ export const czechVatBandOf = (vatRateBps: number): CzechVatBand => {
     return "secondReduced";
   }
   return "reduced";
+};
+
+/**
+ * A file name per invoice number, unique within one export. Numbers that
+ * sanitise to the same name (FV/1 and FV_1), or differ only in case, get a
+ * numeric suffix instead of overwriting each other in the archive.
+ */
+export const exportFileNamer = (extension: string) => {
+  const taken = new Set<string>();
+  return (number: string): string => {
+    const base = number.replace(/[^\w.-]/gu, "_");
+    let name = `${base}.${extension}`;
+    for (let suffix = 2; taken.has(name.toLowerCase()); suffix += 1) {
+      name = `${base}-${String(suffix)}.${extension}`;
+    }
+    taken.add(name.toLowerCase());
+    return name;
+  };
 };

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "packages/collation declares fast-check as a dev dependency because its property tests build generators with fc directly, as every other package with property tests does; @stll/property-testing supplies the run configuration, not the generator API."
+}

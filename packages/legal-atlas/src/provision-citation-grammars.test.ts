@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
 
 import {
   createProvisionCitationGrammar,
-  PROVISION_CITATION_GRAMMARS,
   locateGazetteCitations,
+  PROVISION_CITATION_GRAMMARS,
 } from "./provision-citation-grammars";
 
 type GrammarFixture = {
@@ -32,10 +33,15 @@ const FIXTURES = {
     gazette: [],
     text: "Article 6(1)(a) GDPR",
   },
+  GBR: null,
   HUN: null,
   POL: null,
   SVK: null,
-  USA: null,
+  USA: {
+    anchors: ["s1983", "s1026.18/c/1/i", "s1.401(k)-1/a/4"],
+    gazette: [],
+    text: "The claim arises under 42 U.S.C. § 1983; the disclosure rule is 12 C.F.R. § 1026.18(c)(1)(i), and the plan relied on Treas. Reg. § 1.401(k)-1(a)(4).",
+  },
 } as const satisfies Record<CaseLawJurisdiction, GrammarFixture | null>;
 
 const czech = PROVISION_CITATION_GRAMMARS.CZE;
@@ -140,14 +146,19 @@ describe("provision citation grammars", () => {
     },
   );
 
-  test("a grammar links hosted legislation or the EU publisher", () => {
+  test("a decision readers can open links only to legislation they can open", () => {
     for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
-      if (grammar.status === "supported") {
-        expect(
-          grammar.target === "publisher" ||
-            isPublicLegislationCountry(grammar.jurisdiction),
-        ).toBe(true);
+      if (grammar.status !== "supported" || grammar.target === "publisher") {
+        continue;
       }
+      // Hosted links point into the corpus: wherever the citing decisions
+      // are admitted, the statutes they link to have to be as well.
+      expect({
+        jurisdiction: grammar.jurisdiction,
+        linksReadable:
+          !isPublicCaseLawCountry(grammar.jurisdiction) ||
+          isPublicLegislationCountry(grammar.jurisdiction),
+      }).toEqual({ jurisdiction: grammar.jurisdiction, linksReadable: true });
     }
   });
 

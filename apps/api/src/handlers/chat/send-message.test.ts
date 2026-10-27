@@ -13,8 +13,8 @@ import {
   chatRunLogEntries,
   chatRunLogs,
   chatThreadNames,
-  chatToolGrants,
   chatThreads,
+  chatToolGrants,
   chatTurns,
 } from "@/api/db/schema";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
@@ -29,16 +29,17 @@ import { compactMessagesForContext } from "@/api/handlers/chat/send-message-comp
 import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
-import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  actionAdmissionRefusal,
   type ActionAdmissionError,
+  actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
@@ -255,7 +256,7 @@ const createContext = ({
     role: "user",
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
-  request = new Request("http://localhost/v1/chat/send"),
+  request = new Request("http://localhost/v1/chat"),
   onSafeDbTransaction,
   runMode,
   truncateAfterMessageId,
@@ -327,7 +328,7 @@ const createContext = ({
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
     request,
-    route: "/v1/chat/send",
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb: observedSafeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },
@@ -526,7 +527,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: { insert },
@@ -557,7 +558,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -594,7 +595,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -631,7 +632,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -662,7 +663,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -697,7 +698,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -736,7 +737,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -798,7 +799,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [activeWorkspaceId],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -885,7 +886,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -1009,7 +1010,7 @@ describe("send message disconnect handling", () => {
         onSafeDbTransaction: () => {
           safeDbTransaction += 1;
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -1167,7 +1168,7 @@ describe("send message disconnect handling", () => {
       {
         "error.cause.class": "Error",
         "error.class": "HandlerError",
-        route: "/v1/chat/send",
+        route: "/v1/chat" satisfies ApiRoutePath,
       },
     ]);
   });
@@ -1279,6 +1280,7 @@ describe("send message disconnect handling", () => {
     not_enabled: "not_enabled",
     not_on_plan: "not_on_plan",
     unavailable: "unavailable",
+    feature_disabled: "feature_disabled",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
@@ -1514,7 +1516,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {

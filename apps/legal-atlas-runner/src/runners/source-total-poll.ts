@@ -32,11 +32,11 @@ import type {
 
 import { DRAIN_CHECK_SLICE_MS } from "./sk-document-drain";
 import {
+  selectDueCountingAdapters,
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
   type SourceTotalPollOutcome,
   type SourceTotalPollTally,
-  selectDueCountingAdapters,
   tallySourceTotalPollOutcomes,
 } from "./source-total-outcomes";
 

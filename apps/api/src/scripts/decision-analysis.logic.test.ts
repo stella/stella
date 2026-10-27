@@ -17,6 +17,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   ANALYSIS_REJECTION,
   courtFilter,
+  type DecisionAnalysisRow,
   describeUpdateOutcome,
   flagValue,
   hasFlag,
@@ -28,7 +29,6 @@ import {
   readAnalysisDatabaseUrl,
   resolveRowAnalysisInput,
   summariseOutcomes,
-  type DecisionAnalysisRow,
 } from "./decision-analysis.logic";
 
 const DECISION_ID = toSafeId<"caseLawDecision">(
@@ -86,11 +86,13 @@ const VALID_OUTPUT = {
       annotations: [],
     },
   ],
-  holding: {
-    text: "A limitation period runs from the day the claim could first be brought.",
-    anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
-  },
-  abstract: "The court dismissed the appeal.",
+  holding: [
+    {
+      text: "A limitation period runs from the day the claim could first be brought.",
+      anchors: [{ startAnchorId: "b2", endAnchorId: "b2" }],
+    },
+  ],
+  abstract: [{ text: "The court dismissed the appeal.", anchors: [] }],
   topics: ["promlčení"],
 };
 
@@ -293,7 +295,7 @@ describe("parseSubmissionRecord", () => {
       ...VALID_RECORD,
       output: {
         ...VALID_OUTPUT,
-        holding: { ...VALID_OUTPUT.holding, text: "x".repeat(401) },
+        holding: [{ text: "x".repeat(401), anchors: [] }],
       },
     });
 

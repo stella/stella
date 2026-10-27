@@ -10,9 +10,9 @@ import {
 } from "./fields.js";
 import { EntityCheckCancelledError, unavailable } from "./result.js";
 import type {
+  CheckedEntityCheckSubject,
   EntityCheckSource,
   EntityCheckSourceError,
-  CheckedEntityCheckSubject,
   EntityCheckUnavailableError,
   SourceAnswer,
 } from "./result.js";

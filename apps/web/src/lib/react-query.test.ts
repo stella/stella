@@ -5,11 +5,11 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import {
   CriticalQueryTimeoutError,
-  ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
   ensureRouteInfiniteQueryData,
   prefetchNonCriticalInfiniteQuery,
   prefetchNonCriticalQuery,
+  ROUTE_QUERY_STALE_TIME_MS,
   routeQueryOptions,
 } from "@/lib/react-query";
 

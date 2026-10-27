@@ -1,8 +1,7 @@
-import { Result, panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { panic, Result } from "better-result";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -13,6 +12,7 @@ import {
   API_TEST_DURATIONS_FILE_ENV,
   loadTestDurationWeights,
 } from "../apps/api/scripts/test-timings";
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import { API_TEST_SHARD_IDS } from "./api-test-shard-plan";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
@@ -152,6 +152,104 @@ const SCANNER_PATTERN =
 // spell either keyword. Other modules skip the syntax tree.
 const LOADER_CALL_PATTERN = /\b(?:import|require)\s*(?:\(|\/[*/])|\\u/u;
 
+type ModuleReach = "all" | ReadonlySet<string>;
+
+const TEXT_REACH_PREFILTER =
+  /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b|process\s*\.\s*cwd|apps\/(?!api\/)|["'`]apps\/?["'`]|\.\.\/|["'`]\.\.["'`]/u;
+
+// Module specifiers are not paths a test reads; strip them cheaply before
+// the prefilter so only modules with other path text are parsed.
+const withoutModuleSpecifiers = (source: string): string =>
+  source
+    .replaceAll(/\b(?:from|import)\s*["'`][^"'`\n]*["'`]/gu, "")
+    .replaceAll(/\b(?:import|require)\s*\(\s*["'`][^"'`\n]*["'`]\s*\)/gu, "");
+
+const mayHaveTextReach = (source: string): boolean =>
+  TEXT_REACH_PREFILTER.test(withoutModuleSpecifiers(source));
+
+// App names are recorded as written; selection compares them with the apps a
+// change touches, so a name that is not an app never selects anything.
+const textReach = (file: string, source: string): ModuleReach => {
+  if (!mayHaveTextReach(source)) {
+    return new Set();
+  }
+  // `source` is transpiled code: comments are gone and import syntax is
+  // normalized, so module specifiers can be removed without a parse.
+  const code = withoutModuleSpecifiers(source);
+  if (
+    /\b(?:REPOSITORY_ROOT|repoRoot|repositoryRoot|workspaceRoot)\b/u.test(
+      code,
+    ) ||
+    /process\s*\.\s*cwd\s*\(/u.test(code) ||
+    /apps\/(?:\*|\*\*|\{[^}/]+\}|\$\{)(?=\/|["'`]|$|[^/]*\})/u.test(code) ||
+    // A path assembled from segments (`path.join("apps", name)`) can name
+    // any app.
+    /["'`]apps\/?["'`]/u.test(code)
+  ) {
+    return "all";
+  }
+  // A climb leaves the module's own workspace only when it climbs past that
+  // workspace's root: `../../..` from `apps/api/src/lib/x/` stays in
+  // `apps/api`. Counted from `../` runs and from `".."` call arguments.
+  const climbs: string[][] = [
+    ...[...code.matchAll(/((?:\.\.\/)+)([^/'"`$}\s]*)/gu)].map((match) => [
+      ...Array.from({ length: (match[1] ?? "").length / 3 }, () => ".."),
+      match[2] ?? "",
+    ]),
+    // A `join`/`resolve` call's quoted segments, in order, from the module's
+    // directory; the arguments are read with balanced parentheses so a nested
+    // call (`join(dirname(x), "..", "web")`) keeps them.
+    ...[...code.matchAll(/\b(?:join|resolve)\s*\(/gu)].map((match) => {
+      const start = match.index + match[0].length;
+      let depth = 1;
+      let end = start;
+      while (end < code.length && depth > 0) {
+        if (code[end] === "(") {
+          depth += 1;
+        } else if (code[end] === ")") {
+          depth -= 1;
+        }
+        end += 1;
+      }
+      return [
+        ...code.slice(start, end - 1).matchAll(/["'`]([^"'`]*)["'`]/gu),
+      ].map((literal) => literal[1] ?? "");
+    }),
+  ].filter((segments) =>
+    segments.some((segment) => segment.split("/").includes("..")),
+  );
+  const workspace = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
+  const apps = new Set<string>();
+  for (const segments of climbs) {
+    const target = path.posix.join(path.posix.dirname(file), ...segments);
+    if (
+      workspace !== undefined &&
+      (target === workspace || target.startsWith(`${workspace}/`))
+    ) {
+      continue;
+    }
+    const app = /^apps\/([^/]+)/u.exec(target)?.[1];
+    if (app === undefined || app === "api") {
+      return "all";
+    }
+    apps.add(app);
+  }
+  for (const match of code.matchAll(
+    /(?:apps\/|\.\.\/)([^/'"`$}\s]+)(?=\/|["'`]|$)/gu,
+  )) {
+    const app = match[1];
+    // A glob character anywhere in the app segment (`apps/web*`) can match
+    // any app name.
+    if (app !== undefined && /[*?[{]/u.test(app)) {
+      return "all";
+    }
+    if (app !== undefined && app !== "api" && app !== "..") {
+      apps.add(app);
+    }
+  }
+  return apps;
+};
+
 /**
  * Reads a module for the import graph: its static imports and whether its
  * code (not its comments) reads files or scans directories, so prose that
@@ -172,30 +270,39 @@ export const analyzeModule = (file: string, source: string) => {
   const imports = transpiler.scanImports(runnable);
   const mentionsReads = READER_PATTERN.test(runnable);
   const mentionsScans = SCANNER_PATTERN.test(runnable);
-  const code =
-    mentionsReads || mentionsScans ? transpiler.transformSync(runnable) : "";
+  const reachCandidate = mayHaveTextReach(runnable);
+  const shouldTransform = mentionsReads || mentionsScans || reachCandidate;
+  const code = shouldTransform ? transpiler.transformSync(runnable) : "";
   let computedImports = false;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const specifier = node.arguments.at(0);
-      if (specifier === undefined || !ts.isStringLiteral(specifier)) {
-        computedImports = true;
+  if (LOADER_CALL_PATTERN.test(runnable) || mentionsReads || mentionsScans) {
+    walk(parseSource(file, runnable).program, (node) => {
+      if (node.type === "ImportExpression") {
+        if (
+          node.source.type !== "Literal" ||
+          typeof node.source.value !== "string"
+        ) {
+          computedImports = true;
+        }
+      } else if (
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      ) {
+        const specifier = node.arguments.at(0);
+        if (
+          specifier?.type !== "Literal" ||
+          typeof specifier.value !== "string"
+        ) {
+          computedImports = true;
+        }
       }
-    }
-    ts.forEachChild(node, visit);
-  };
-  if (LOADER_CALL_PATTERN.test(runnable)) {
-    visit(ts.createSourceFile(file, runnable, ts.ScriptTarget.Latest));
+    });
   }
   return {
     computedImports,
     imports,
     reads: mentionsReads && READER_PATTERN.test(code),
+    reach: reachCandidate ? textReach(file, code) : new Set<string>(),
     scans: mentionsScans && SCANNER_PATTERN.test(code),
   };
 };
@@ -205,6 +312,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
   const scanners = new Set<string>();
+  const reaches = new Map<string, ModuleReach>();
   const failed = new Set<string>();
   const computedImports = new Set<string>();
   const resolveWorkspace = (specifier: string): string | undefined => {
@@ -256,7 +364,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
     }
     const scanned = Result.try(() => {
       const analysis = analyzeModule(file, readFileSync(absolute, "utf-8"));
-      const { imports, reads, scans } = analysis;
+      const { imports, reach, reads, scans } = analysis;
       if (analysis.computedImports) {
         computedImports.add(file);
       }
@@ -266,6 +374,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       if (scans) {
         scanners.add(file);
       }
+      reaches.set(file, reach);
       return imports;
     });
     if (scanned.isErr()) {
@@ -329,7 +438,17 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
     }
     return seen;
   };
-  return { closure, failed, readers, scanners, computedImports };
+  const dependencies = (file: string): readonly string[] =>
+    edges.get(file) ?? [];
+  return {
+    closure,
+    dependencies,
+    failed,
+    readers,
+    reaches,
+    scanners,
+    computedImports,
+  };
 };
 
 type SelectApiTestImpactOptions = {
@@ -384,20 +503,68 @@ export const selectApiTestImpact = ({
     ) {
       return allApiTests();
     }
-    const touchesSource = changed.some((file) =>
-      /^(apps|packages)\//u.test(file),
+    const touchesApiOrPackages = changed.some((file) =>
+      /^(?:apps\/api|packages)\//u.test(file),
+    );
+    const changedApps = new Set(
+      changed.flatMap((file) => {
+        const match = /^apps\/([^/]+)\//u.exec(file);
+        return match?.[1] === undefined || match[1] === "api" ? [] : [match[1]];
+      }),
     );
     const changedSet = new Set(changed);
+    const isFileReader = (file: string) =>
+      graph.readers.has(file) || graph.scanners.has(file);
+    // Readers and scanners that import each module directly, built once so
+    // the per-test check is a set lookup instead of a closure scan.
+    const importingReaders = new Map<string, string[]>();
+    if (changedApps.size > 0) {
+      for (const reader of graph.reaches.keys()) {
+        if (!isFileReader(reader)) {
+          continue;
+        }
+        for (const dependency of graph.dependencies(reader)) {
+          importingReaders.set(dependency, [
+            ...(importingReaders.get(dependency) ?? []),
+            reader,
+          ]);
+        }
+      }
+    }
     const files = tests
       .filter((test) => {
         const closure = graph.closure(test);
         return (
           [...closure].some((file) => changedSet.has(file)) ||
-          (touchesSource &&
-            (graph.readers.has(test) ||
-              [...closure].some(
-                (file) => graph.scanners.has(file) || graph.failed.has(file),
-              )))
+          (touchesApiOrPackages &&
+            [...closure].some(
+              (file) =>
+                graph.readers.has(file) ||
+                graph.scanners.has(file) ||
+                graph.failed.has(file),
+            )) ||
+          (changedApps.size > 0 &&
+            [...closure].some(
+              (file) => graph.readers.has(file) || graph.scanners.has(file),
+            ) &&
+            ([...closure].some((file) => graph.failed.has(file)) ||
+              [...closure].some((file) => {
+                const reach = graph.reaches.get(file);
+                // A root path can be built in one module and read in the
+                // module that imports it: "all" counts in a reader or
+                // scanner and in what one of them imports directly. App
+                // names count anywhere in the closure.
+                return (
+                  (reach === "all" &&
+                    (isFileReader(file) ||
+                      (importingReaders.get(file) ?? []).some((reader) =>
+                        closure.has(reader),
+                      ))) ||
+                  (reach !== undefined &&
+                    reach !== "all" &&
+                    [...changedApps].some((app) => reach.has(app)))
+                );
+              })))
         );
       })
       .map((file) => file.slice("apps/api/".length));

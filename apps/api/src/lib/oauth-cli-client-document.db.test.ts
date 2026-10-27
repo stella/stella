@@ -22,7 +22,8 @@ process.env["PUBLIC_URL"] = PUBLIC_URL;
 
 const { env } = await import("@/api/env");
 const { getAuth } = await import("@/api/lib/auth");
-const { default: api } = await import("@/api/server");
+const { apiApp } = await import("@/api/server");
+const { serveForTest } = await import("@/api/tests/helpers/test-server");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
 const { signInHuman } = await import("@/api/tests/helpers/human-session");
@@ -32,6 +33,8 @@ const { CLI_DEFAULT_RESOURCE_SCOPES, CLI_KNOWN_SCOPES, CLI_REQUIRED_SCOPES } =
   await import("../../../../packages/cli/src/auth/constants.ts");
 const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
+
+const api = serveForTest(apiApp);
 
 const CLI_CLIENT_ID = `${PUBLIC_URL}${CLI_CLIENT_METADATA_PATH}`;
 /** Where the CLI is pointed: the deployment's public address. */
@@ -60,7 +63,7 @@ const serveInProcess = async (
   );
   const response = url.pathname.startsWith("/api/auth/")
     ? await getAuth().handler(local)
-    : await api.handle(local);
+    : await api.fetch(local);
   if (
     !hideDocumentSupport ||
     !url.pathname.endsWith("/.well-known/oauth-authorization-server")
@@ -170,6 +173,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   fetchSpy.mockRestore();
+  await api.stop();
   await Promise.all(
     configDirs.map(async (dir) => {
       await rm(dir, { force: true, recursive: true });
@@ -206,8 +210,7 @@ describe("stella CLI client document", () => {
     expect(details.status).toBe(200);
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      unverified: false,
-      verifiedBrand: "stella",
+      client: { type: "verified", brand: "stella" },
     });
   });
 

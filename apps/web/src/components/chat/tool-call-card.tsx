@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -417,7 +417,7 @@ export const toolFailureLabelKey = (
   return state === "error" ? "chat.toolCall.interrupted" : undefined;
 };
 
-export const ToolCallCard = ({
+const ToolCallCardComponent = ({
   action,
   activeOrganizationId,
   durationMs,
@@ -443,7 +443,7 @@ export const ToolCallCard = ({
     enabled: mcpToolInfo !== null,
   });
   const catalogDataView = useQueryView(catalogDataQuery);
-  useQueryViewError(catalogDataView);
+  useQueryViewError(catalogDataView, "ToolCallCard:query");
   const catalogData =
     catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];
@@ -723,6 +723,10 @@ export const ToolCallCard = ({
     </div>
   );
 };
+
+// A response can stream many tool calls, and each new chunk re-renders the
+// message's part list: a card whose call did not change skips that render.
+export const ToolCallCard = memo(ToolCallCardComponent);
 
 /** The short human failure line, with the raw tool error (written for the
  *  model, not for people) behind a collapsed disclosure for debugging. */

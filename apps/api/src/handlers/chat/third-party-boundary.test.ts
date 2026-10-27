@@ -11,11 +11,11 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
-  toPersistedChatMessageContentV3,
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   isProviderVisibleChatPart,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
@@ -539,9 +539,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
-      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
-        "base64",
-      ),
+      Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toBase64(),
     );
   });
 

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
@@ -36,10 +37,13 @@ const hit = {
   workspaceName: null,
 } as const satisfies GlobalSearchHit;
 
+const searchRequestBodies: unknown[] = [];
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(new Request(input, init).url);
+    const request = new Request(input, init);
+    const url = new URL(request.url);
     if (url.pathname.endsWith("/search")) {
+      searchRequestBodies.push(await request.json());
       return Response.json({
         hits: [hit],
         nextCursor: null,
@@ -70,6 +74,7 @@ const { ActionCapabilitiesProvider } =
   await import("@/lib/organization/feature-access/capability-actions");
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
+const { useDevStore } = await import("@/lib/dev-store");
 const { SearchDialog } = await import("./search-dialog");
 
 const SearchDialogHarness = () => {
@@ -89,6 +94,8 @@ afterEach(() => {
     client.clear();
   }
   clients.length = 0;
+  searchRequestBodies.length = 0;
+  useDevStore.setState({ publicLawPreview: false });
   jest.useRealTimers();
 });
 afterAll(async () => {
@@ -134,7 +141,7 @@ const mount = async () => {
                   ai: false,
                   deepl: false,
                   desktop: "none",
-                  ocr: false,
+                  ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                   role: "member",
                   settings: undefined,
                 })}
@@ -167,6 +174,40 @@ const typeQuery = async () => {
   );
   return input;
 };
+
+test("actions stay on the blank screen and never sit above results", async () => {
+  await mount();
+  expect(testing.screen.getByText(messages.common.actions)).toBeTruthy();
+
+  await typeQuery();
+  expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
+});
+
+test("Case law scope searches only case law and drops matter recents and actions", async () => {
+  useDevStore.setState({ publicLawPreview: true });
+  await mount();
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      testing.screen.getByRole("button", { name: messages.search.scopeFilter }),
+    );
+  });
+  await testing.act(async () => {
+    testing.fireEvent.click(
+      await testing.screen.findByRole("button", {
+        name: messages.common.caseLaw,
+      }),
+    );
+  });
+
+  expect(
+    testing.screen.getByText(messages.search.caseLawEmptyState),
+  ).toBeTruthy();
+  expect(testing.screen.queryByText(messages.search.emptyState)).toBeNull();
+  expect(testing.screen.queryByText(messages.common.actions)).toBeNull();
+
+  await typeQuery();
+  expect(searchRequestBodies.at(-1)).toMatchObject({ types: ["case-law"] });
+});
 
 test.each([
   { focusResult: false, label: "input" },

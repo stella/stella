@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import {
-  PRUNABLE_BASELINES,
   PRUNABLE_BASELINE_WRITERS,
+  PRUNABLE_BASELINES,
   pruneViolations,
 } from "./autofix-baseline-prune";
 import { isAutofixProtectedPath } from "./autofix-protected-paths";

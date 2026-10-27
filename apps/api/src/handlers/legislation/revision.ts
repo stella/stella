@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
+import { compareCodeUnit } from "@stll/collation";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { corpusStorageMode } from "@/api/env-base";
@@ -49,6 +50,7 @@ const sanitizeInput = (
       ? undefined
       : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
+  identifiers: input.identifiers?.map(stripDangerousChars),
   amendments,
   expression:
     input.expression === undefined
@@ -103,6 +105,9 @@ export const legislationSourceHash = (
       input.metadata ?? {},
       input.rawHash,
       input.sourceRawContentType ?? null,
+      ...(input.identifiers === undefined
+        ? []
+        : [[...new Set(input.identifiers)].toSorted(compareCodeUnit)]),
       ...(input.amendments === undefined
         ? []
         : [[input.amendments.relations, input.amendments.coverage]]),

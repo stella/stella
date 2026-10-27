@@ -25,6 +25,7 @@ import {
   encodePlNsaCursor,
   normalizePlNsaRow,
   parsePlNsaCursor,
+  PL_NSA_UNSTATED_COURT,
   plNsaAdapter,
   plNsaCourt,
   plNsaDecisionKind,
@@ -32,7 +33,6 @@ import {
   plNsaDocketRangeMembers,
   plNsaIdentityOf,
   plNsaQuarantineId,
-  PL_NSA_UNSTATED_COURT,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import type { PlNsaDecisionKind } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import {

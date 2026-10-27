@@ -22,6 +22,7 @@ import { FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
@@ -109,11 +110,7 @@ const getInitialTab = (): PreferencesTab => {
   return isPreferencesTab(tab) ? tab : "general";
 };
 
-const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
-  if (!linkedAccount) {
-    return "S";
-  }
-
+const getAccountInitials = (linkedAccount: LinkedAccountSnapshot) => {
   if (linkedAccount.name?.trim()) {
     return linkedAccount.name
       .split(" ")
@@ -340,7 +337,13 @@ const GeneralPane = ({
       <PanelGroup>
         <div className="flex items-center gap-3 px-4 py-4">
           <Avatar className="size-10 border">
-            <AvatarFallback>{getAccountInitials(linkedAccount)}</AvatarFallback>
+            <AvatarFallback>
+              {linkedAccount ? (
+                getAccountInitials(linkedAccount)
+              ) : (
+                <StellaMark className="size-5" />
+              )}
+            </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">
@@ -465,6 +468,52 @@ const GeneralPane = ({
           </Combobox>
         </div>
       </PanelGroup>
+      <PanelGroup>
+        <SetupGuideSetting />
+      </PanelGroup>
+    </div>
+  );
+};
+
+/** Starts the setup tour again in its own window. */
+const SetupGuideSetting = () => {
+  const t = useTranslations("settings");
+  const [failed, setFailed] = useState(false);
+  const restart = async () => {
+    const result = await Result.tryPromise(async () =>
+      invoke("onboarding_restart"),
+    );
+    if (Result.isError(result)) {
+      reportDesktopError({
+        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+        operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+        window: DESKTOP_TELEMETRY_WINDOWS.main,
+      });
+    }
+    setFailed(Result.isError(result));
+  };
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{t("setupGuide")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("setupGuideDescription")}
+        </p>
+        {failed ? (
+          <p className="text-destructive-foreground mt-1 text-sm" role="alert">
+            {t("errorSetupGuide")}
+          </p>
+        ) : null}
+      </div>
+      <Button
+        onClick={() => {
+          void restart();
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("setupGuideAction")}
+      </Button>
     </div>
   );
 };
@@ -581,6 +630,15 @@ const App = () => {
   const locale = useLocale();
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<AppSnapshot | null>(null);
+  // Bumped by every pushed snapshot and every preference edit. The backend
+  // pushes `state-changed` after each change, so a command reply applies only
+  // while its revision is current: a reply that lost the race to a newer push
+  // or edit would revert it.
+  const snapshotRevision = useRef(0);
+  // Only the newest edit reports a failure: a newer one carries its value too.
+  const latestEdit = useRef(0);
+  // The backend's latest snapshot, restored when the newest edit fails.
+  const confirmedSnapshot = useRef<AppSnapshot | null>(null);
   const [accountState, setAccountState] = useState<DesktopAccountState>({
     status: "loading",
   });
@@ -632,6 +690,8 @@ const App = () => {
           return;
         }
 
+        snapshotRevision.current += 1;
+        confirmedSnapshot.current = detail;
         startTransition(() => {
           setError(null);
           setState(detail);
@@ -641,18 +701,20 @@ const App = () => {
     });
 
     const syncState = async () => {
+      const revision = snapshotRevision.current;
       try {
         const nextState = await invoke<AppSnapshot>("get_state");
-        if (disposed) {
+        if (disposed || revision !== snapshotRevision.current) {
           return;
         }
 
+        confirmedSnapshot.current = nextState;
         startTransition(() => {
           setError(null);
           setState(nextState);
         });
       } catch (fetchError) {
-        if (disposed) {
+        if (disposed || revision !== snapshotRevision.current) {
           return;
         }
 
@@ -729,11 +791,14 @@ const App = () => {
       return;
     }
 
-    const previousPreferences = state.notificationPreferences;
     const nextPreferences = {
-      ...previousPreferences,
+      ...state.notificationPreferences,
       [preferenceKey]: checked,
     };
+    snapshotRevision.current += 1;
+    latestEdit.current += 1;
+    const revision = snapshotRevision.current;
+    const edit = latestEdit.current;
 
     startTransition(() => {
       setState((currentState) =>
@@ -751,21 +816,22 @@ const App = () => {
         "update_notification_preferences",
         { prefs: nextPreferences },
       );
+      if (revision !== snapshotRevision.current) {
+        return;
+      }
 
+      confirmedSnapshot.current = nextState;
       startTransition(() => {
         setError(null);
         setState(nextState);
       });
     } catch (updateError) {
+      if (edit !== latestEdit.current) {
+        return;
+      }
+      const confirmed = confirmedSnapshot.current;
       startTransition(() => {
-        setState((currentState) =>
-          currentState
-            ? {
-                ...currentState,
-                notificationPreferences: previousPreferences,
-              }
-            : currentState,
-        );
+        setState(confirmed);
         setError(commandErrorMessage(updateError, t("errorUpdatePreferences")));
       });
     }

@@ -1,4 +1,4 @@
-import { panic, Panic } from "better-result";
+import { Panic, panic } from "better-result";
 import {
   afterEach,
   beforeEach,
@@ -22,8 +22,8 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
-  corpusIndexLexicalScore,
   CORPUS_INDEX_OFFSET_PAGE_MAX_ROUNDS,
+  corpusIndexLexicalScore,
   emptyCorpusIndexScan,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
@@ -66,8 +66,7 @@ let responseBody: unknown;
  * single-window cases.
  */
 let engineHits:
-  | { document_id: string; anchor_id?: string; chunk_id?: string }[]
-  | null;
+  { document_id: string; anchor_id?: string; chunk_id?: string }[] | null;
 let requestBodies: Record<string, unknown>[];
 /**
  * Wall time the fake engine spends on every request. Zero by default, so only

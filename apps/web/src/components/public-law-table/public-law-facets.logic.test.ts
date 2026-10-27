@@ -7,8 +7,8 @@ import type { FacetCountType } from "@stll/api-contract/search";
 
 import {
   facetSectionView,
-  formatFacetCount,
   type FacetSourceBucket,
+  formatFacetCount,
 } from "@/components/public-law-table/public-law-facets.logic";
 
 const buckets = (count: number): FacetSourceBucket[] =>

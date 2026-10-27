@@ -1,5 +1,5 @@
 {
-  "reviewOnlyRules": 156,
+  "reviewOnlyRules": 171,
   "excludedSources": [
     {
       "file": ".ai/local-skills/dev/SKILL.md",
@@ -20,10 +20,6 @@
     {
       "file": ".ai/local/case-law-agents.md",
       "reason": "Its rules are numbered headings with prose bodies (\"### 3. Always save sourceRaw\"); its list items are examples and checklists under them. Tagging it needs a heading-level rule grammar."
-    },
-    {
-      "file": ".ai/shared/modules/backend-elysia.md",
-      "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
     },
     {
       "file": ".ai/shared/modules/database.md",
@@ -60,6 +56,14 @@
     {
       "file": ".ai/shared/modules/typescript.md",
       "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
+    },
+    {
+      "file": ".ai/local-skills/finish-pr/SKILL.md",
+      "reason": "A pull-request maintenance workflow; its lists are convergence conditions and reporting steps, not standing source-code rules."
+    },
+    {
+      "file": ".ai/local-skills/rabbit-round/SKILL.md",
+      "reason": "A review-processing workflow; its lists classify findings, disposition records and terminal states, not standing source-code rules."
     }
   ],
   "excludedSections": [

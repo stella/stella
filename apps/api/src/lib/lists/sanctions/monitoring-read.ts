@@ -8,9 +8,9 @@ import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   organizationSettings,
+  sanctionsContactMarks,
   sanctionsContactMatches,
   sanctionsContactScreenings,
-  sanctionsContactMarks,
   sanctionsScreeningEvents,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";

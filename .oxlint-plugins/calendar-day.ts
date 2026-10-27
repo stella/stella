@@ -30,13 +30,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import ledger from "../scripts/calendar-day-ledger.json" with { type: "json" };
 import { createBudgetLedger } from "./budget-ledger.ts";
 import {
+  type AstNode,
   filenameForContext,
   isAstNode,
   isIdentifier,
   memberPropertyName,
   staticStringValue,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 const USER_DAY_RULE = "no-utc-user-day";

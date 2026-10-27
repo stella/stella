@@ -1,8 +1,15 @@
+// parser-output-unchanged: records declared request scopes for exception capture only; parser inputs and outputs are unchanged.
+import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type { FailureGrade, FailureReason } from "@stll/errors";
+import type {
+  FailureGrade,
+  FailureReason,
+  HandlerExceptionScope,
+  RequestExceptionScope,
+} from "@stll/errors";
 
-import type { ClientAddressSource } from "@/api/lib/client-ip";
+import type { ClientAddress, ClientAddressSource } from "@/api/lib/client-ip";
 
 type RequestContext = {
   startTime: number;
@@ -14,6 +21,8 @@ type RequestContext = {
   organizationId?: string;
   sessionId?: string;
   failureObservation?: RequestFailureObservation;
+  /** Whether the request's one log record and duration metric were written. */
+  recorded?: boolean;
 };
 
 /**
@@ -26,57 +35,74 @@ type RequestFailureObservation = {
   readonly sink: string;
 };
 
-const requestContextStore = new WeakMap<Request, RequestContext>();
+type RequestCaptureScope = RequestExceptionScope | HandlerExceptionScope;
+const requestCaptureScopes = new WeakMap<Request, RequestCaptureScope>();
+
+/** Bound only from declared framework routes or canonical capability identities. */
+export const recordRequestExceptionScope = (
+  request: Request,
+  scope: RequestCaptureScope,
+): void => {
+  requestCaptureScopes.set(request, scope);
+};
+
+/** A request-bearing observer must cross its framework boundary first. */
+export const requireRequestExceptionScope = (
+  request: Request,
+): RequestCaptureScope =>
+  requestCaptureScopes.get(request) ??
+  panic("Request exception scope was not bound");
 
 /**
- * Ambient current-request id, so code that has no `Request` in hand — the MCP
- * tool-error envelope, the generic-invoke success payload — can still stamp the
- * receipt without threading the id through every call. The lookup is a no-op
- * when no request is active (background jobs, boot-time work, tests that never
- * open a request scope), so those paths simply carry no receipt.
+ * Everything the server knows about the request in flight, held in the async
+ * scope the HTTP layer opens around it (see `runWithRequestScope`). Code that
+ * runs for the request reads it without a `Request` handle, and a stage that
+ * passes inner stages a derived request (a size-bounded copy) keeps it.
  *
- * The store holds a mutable slot rather than the id itself because the scope is
- * opened at the fetch boundary (see `server.ts`) while the id is generated
- * later, in {@link initRequestContext}. That split is deliberate:
- * `AsyncLocalStorage.enterWith` would let the hook open the scope itself, but it
- * mutates the ambient async context frame with no restore point, so a
- * background timer or worker loop resuming while a request's frame is current
- * adopts that request's id and stamps it on unrelated work from then on. `run`
- * at the boundary confines the scope to the request's own callback tree.
+ * The scope is opened with `run` at the fetch boundary, never `enterWith`:
+ * `enterWith` mutates the ambient async context frame with no restore point,
+ * so a background timer or worker loop resuming while a request's frame is
+ * current would adopt that request from then on. `run` confines the scope to
+ * the request's own callback tree.
  */
 type AmbientRequestState = {
-  current: string | null;
+  context: RequestContext | undefined;
   mountedRoute?: string;
   /**
    * Whether this request committed to synchronous AI inference. Read at
    * request completion to tag the latency metric `class=ai`, so inherently
-   * multi-second model calls stay out of the CRUD p95 SLO. Ambient rather
-   * than a `RequestContext` field so the dynamic AI paths (usage preflight
-   * deep inside fill/suggest helpers, MCP tools) can set it without
-   * threading a `Request` handle through every layer.
+   * multi-second model calls stay out of the CRUD p95 SLO. Set from the
+   * model-resolution seam, so the dynamic AI paths (usage preflight deep
+   * inside fill/suggest helpers, MCP tools) need no extra threading.
    */
   isAiRequest: boolean;
+  /**
+   * The address the request arrived from, resolved once while its edge
+   * headers were still present. A stage that hands inner stages a derived
+   * request keeps it, because it lives in the scope, not on the request.
+   */
+  clientAddress?: ClientAddress | null;
 };
 
-const requestIdStore = new AsyncLocalStorage<AmbientRequestState>();
+const requestStore = new AsyncLocalStorage<AmbientRequestState>();
 
 /**
- * Open an empty request-id scope for `fn` and its continuations. The HTTP layer
- * calls this around the composed request handler; {@link initRequestContext}
- * fills in the id once it has generated one.
+ * Open an empty request scope for `fn` and its continuations. The HTTP layer
+ * calls this around the whole pipeline; {@link openRequestContext} fills it
+ * in once the request's id exists.
  */
 export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
-  requestIdStore.run({ current: null, isAiRequest: false }, fn);
+  requestStore.run({ context: undefined, isAiRequest: false }, fn);
 
 /**
  * Tag the active request as AI-classed for the split latency SLO. Called
  * from the model-resolution seam (`resolveTanStackTextModel`), which every
  * inference path passes through, so classification cannot be forgotten at
  * a call site. No-op outside a request scope (background workers), whose
- * durations never reach the completion hooks.
+ * durations never reach the completion record.
  */
 export const markAiRequest = (): void => {
-  const ambient = requestIdStore.getStore();
+  const ambient = requestStore.getStore();
   if (ambient) {
     ambient.isAiRequest = true;
   }
@@ -84,19 +110,33 @@ export const markAiRequest = (): void => {
 
 /** Whether the active request was tagged AI-classed; `false` outside a scope. */
 export const isAiRequest = (): boolean =>
-  requestIdStore.getStore()?.isAiRequest ?? false;
+  requestStore.getStore()?.isAiRequest ?? false;
 
 /** The outer endpoint owns the route even when nested auth calls share its scope.
  * Only registered templates belong here; never a request pathname. */
 export const markMountedRequestRoute = (template: string): void => {
-  const ambient = requestIdStore.getStore();
+  const ambient = requestStore.getStore();
   if (ambient) {
     ambient.mountedRoute ??= template;
   }
 };
 
 export const getMountedRequestRoute = (): string | undefined =>
-  requestIdStore.getStore()?.mountedRoute;
+  requestStore.getStore()?.mountedRoute;
+
+/** Record the request's client address for every later reader in its scope. */
+export const sealRequestClientAddress = (
+  clientAddress: ClientAddress | null,
+): void => {
+  const ambient = requestStore.getStore();
+  if (ambient) {
+    ambient.clientAddress = clientAddress;
+  }
+};
+
+/** The sealed client address; `undefined` outside a request or before sealing. */
+export const sealedRequestClientAddress = ():
+  ClientAddress | null | undefined => requestStore.getStore()?.clientAddress;
 
 /**
  * A per-request correlation id: `req_` + 128 bits of Bun-native randomness
@@ -108,84 +148,86 @@ export const getMountedRequestRoute = (): string | undefined =>
 const generateRequestId = (): string =>
   `req_${Bun.randomUUIDv7().replaceAll("-", "")}`;
 
-export const initRequestContext = (
-  request: Request,
-  sessionId?: string,
-): void => {
-  const requestId = generateRequestId();
-  const context: RequestContext = {
+/**
+ * Start the active request's context with a fresh id. No-op outside a request
+ * scope: programmatic callers that open none carry no context.
+ */
+export const openRequestContext = (sessionId?: string): void => {
+  const ambient = requestStore.getStore();
+  if (!ambient) {
+    return;
+  }
+  ambient.context = {
     startTime: performance.now(),
-    requestId,
+    requestId: generateRequestId(),
+    ...(sessionId === undefined ? {} : { sessionId }),
   };
-
-  if (sessionId) {
-    context.sessionId = sessionId;
-  }
-
-  requestContextStore.set(request, context);
-  // Bind the id to the scope the fetch boundary opened for this request, so
-  // ambient readers (`getCurrentRequestId`) resolve it without a `Request`
-  // handle. Callers outside the HTTP layer (tests, programmatic entry points)
-  // open no scope and simply carry no ambient id.
-  const ambient = requestIdStore.getStore();
-  if (ambient) {
-    ambient.current = requestId;
-  }
 };
 
 export const enrichRequestContext = (
-  request: Request,
   update: Partial<
-    Omit<RequestContext, "failureObservation" | "requestId" | "startTime">
+    Omit<
+      RequestContext,
+      "failureObservation" | "recorded" | "requestId" | "startTime"
+    >
   >,
 ): void => {
-  const current = requestContextStore.get(request);
-  if (!current) {
-    return;
+  const current = requestStore.getStore()?.context;
+  if (current) {
+    Object.assign(current, update);
   }
-
-  Object.assign(current, update);
 };
 
 /**
- * Record the failure a request observed. The last observation wins: the one
- * nearest the answer (the request pipeline's own) is the one the answer was
- * chosen from.
+ * Record the failure the active request observed. The last observation wins:
+ * the one nearest the answer (the request pipeline's own) is the one the
+ * answer was chosen from.
  */
 export const recordRequestFailure = (
-  request: Request,
   observation: RequestFailureObservation,
 ): void => {
-  const current = requestContextStore.get(request);
+  const current = requestStore.getStore()?.context;
   if (current) {
     current.failureObservation = observation;
   }
 };
 
-export const getRequestFailure = (
-  request: Request,
-): RequestFailureObservation | undefined =>
-  requestContextStore.get(request)?.failureObservation;
+/**
+ * Claim the active request's log record. True for the first caller only, so a
+ * request answered by the error boundary is not recorded again on completion.
+ */
+export const claimRequestRecord = (): boolean => {
+  const current = requestStore.getStore()?.context;
+  if (current === undefined || current.recorded === true) {
+    return false;
+  }
+  current.recorded = true;
+  return true;
+};
 
-export const getRequestContext = (
-  request: Request,
-): RequestContext | undefined => requestContextStore.get(request);
+export const getRequestFailure = (): RequestFailureObservation | undefined =>
+  requestStore.getStore()?.context?.failureObservation;
 
-/** The receipt id bound to `request`, or `undefined` if it was never scoped. */
-export const getRequestId = (request: Request): string | undefined =>
-  requestContextStore.get(request)?.requestId;
+export const getRequestContext = (): RequestContext | undefined =>
+  requestStore.getStore()?.context;
 
-/** The receipt id of the active request async context, if any. */
-export const getCurrentRequestId = (): string | undefined =>
-  requestIdStore.getStore()?.current ?? undefined;
+/** The receipt id of the active request, if one is open. */
+export const getRequestId = (): string | undefined =>
+  requestStore.getStore()?.context?.requestId;
 
 /**
- * Run `fn` with `requestId` bound as the ambient current-request id. Used by
- * tests (and any programmatic caller outside the HTTP layer) to exercise the
- * receipt-stamping paths that read {@link getCurrentRequestId}.
+ * Run `fn` inside a request scope carrying `requestId`. Used by tests (and any
+ * programmatic caller outside the HTTP layer) to exercise the receipt-stamping
+ * paths that read {@link getRequestId}.
  */
 export const runWithRequestId = <TResult>(
   requestId: string,
   fn: () => TResult,
 ): TResult =>
-  requestIdStore.run({ current: requestId, isAiRequest: false }, fn);
+  requestStore.run(
+    {
+      context: { startTime: performance.now(), requestId },
+      isAiRequest: false,
+    },
+    fn,
+  );

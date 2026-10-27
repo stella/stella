@@ -12,8 +12,8 @@ import {
 } from "bun:test";
 
 import {
-  CLAUSE_VERSION_LIMIT_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
 } from "@stll/api-contract";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";

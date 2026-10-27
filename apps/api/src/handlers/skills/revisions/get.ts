@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillRevisions } from "@/api/db/schema";
@@ -8,12 +8,12 @@ import { toAgentSkillRevisionResponse } from "@/api/handlers/skills/response";
 import { loadVisibleSkill } from "@/api/lib/agent-skills/access";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const getSkillRevisionParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
-  revisionId: tSafeId("agentSkillRevision"),
+const getSkillRevisionParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
+  revisionId: resourceIdSchema("agentSkillRevision"),
 });
 
 const config = {

@@ -4,8 +4,8 @@ import {
   chmodSync,
   existsSync,
   lstatSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -117,11 +117,7 @@ const runGit = (root: string, args: readonly string[]): string => {
 };
 
 type GitFixtureChange =
-  | "bump"
-  | "runtime-bump"
-  | "added"
-  | "deleted"
-  | "executable";
+  "bump" | "runtime-bump" | "added" | "deleted" | "executable";
 
 type GitFixture = {
   readonly root: string;

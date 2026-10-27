@@ -1,5 +1,4 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -11,7 +10,7 @@ import type {
   PrefillSuggestion,
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -21,7 +20,7 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { loadCurrentExtractedContents } from "@/api/lib/document-content-provenance";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
@@ -29,7 +28,7 @@ import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -49,23 +48,15 @@ const MAX_CHARS_PER_SOURCE = 30_000;
 const MAX_TOTAL_SOURCE_CHARS = 90_000;
 const PREFILL_TIMEOUT_MS = 60_000;
 
-const prefillParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const prefillParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
-const prefillBodySchema = t.Object({
-  /** One uploaded source document (DOCX or PDF); the server extracts the
-   *  text — clients never extract anything. */
-  file: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
-  /** Pasted source text. */
-  text: t.Optional(t.String({ maxLength: MAX_PASTED_TEXT_CHARS })),
-  /** JSON-encoded array of entity ids whose stored extracted text should be
-   *  used as sources (documents picked from a matter). String-encoded
-   *  because the body is multipart when a file is attached. */
-  entityIds: t.Optional(t.String({ maxLength: 2000 })),
-  /** Caller's IANA time zone, used to anchor "today" in the prompt to the
-   *  user's calendar day rather than the server's UTC day. */
-  timezone: t.Optional(t.String({ maxLength: 64 })),
+const prefillBodySchema = v.object({
+  file: v.optional(fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document })),
+  text: v.optional(v.pipe(v.string(), v.maxLength(MAX_PASTED_TEXT_CHARS))),
+  entityIds: v.optional(v.pipe(v.string(), v.maxLength(2000))),
+  timezone: v.optional(v.pipe(v.string(), v.maxLength(64))),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output

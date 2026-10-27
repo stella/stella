@@ -1,32 +1,28 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
-import {
-  chatMessageAcceptedEditSchema,
-  type ChatMessageAcceptedEdit,
-} from "@stll/api-contract/chat-message-revisions";
+import { chatMessageAcceptedEditSchema } from "@stll/api-contract/chat-message-revisions";
 
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { writeChatMessageRevisionOnTx } from "@/api/handlers/chat/messages/revisions/revision-on-tx";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
-export const revisionParams = t.Object({
-  threadId: tSafeId("chatThread"),
-  messageId: tSafeId("chatMessage"),
+export const revisionParams = v.object({
+  threadId: resourceIdSchema("chatThread"),
+  messageId: resourceIdSchema("chatMessage"),
 });
-export const revisionNumber = t.Integer({ minimum: 0, maximum: 2_147_483_646 });
-
-const acceptedEditSchema = Type.Unsafe<ChatMessageAcceptedEdit>(
-  jsonSchemaToTypeBox(toJsonSchema(chatMessageAcceptedEditSchema)),
+export const revisionNumber = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(2_147_483_646),
 );
 
 const config = {
@@ -42,15 +38,19 @@ const config = {
   access: "write",
   mcp: { type: "internal", reason: "chat_thread_ui" },
   params: revisionParams,
-  body: t.Object({
+  body: v.object({
     baseRevision: revisionNumber,
-    selectedTextHash: t.String({ pattern: "^[a-f0-9]{64}$", maxLength: 64 }),
-    content: t.Object({
-      version: t.Literal(3),
-      data: t.Array(t.Unknown(), { minItems: 1, maxItems: 1000 }),
-      metadata: t.Optional(t.Unknown()),
+    selectedTextHash: v.pipe(
+      v.string(),
+      v.regex(/^[a-f0-9]{64}$/u),
+      v.maxLength(64),
+    ),
+    content: v.object({
+      version: v.literal(3),
+      data: v.pipe(v.array(v.unknown()), v.minLength(1), v.maxLength(1000)),
+      metadata: v.optional(v.unknown()),
     }),
-    edit: acceptedEditSchema,
+    edit: chatMessageAcceptedEditSchema,
   }),
 } satisfies HandlerConfig;
 
@@ -140,13 +140,19 @@ const acceptMessageRevision = createSafeRootHandler(
       ),
     );
     if (result.type === "ok") {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      upsertChatThreadSearchDocument(threadId).catch(
+        createErrorCapture(
+          handlerErrorContext(
+            "acceptMessageRevision.upsertChatThreadSearchDocument",
+          ),
+        ),
+      );
     }
     return revisionResult(result);
   },
 );
 
-declareAggregateMutation(acceptMessageRevision.handler, {
+declareAggregateMutation(acceptMessageRevision, {
   type: "aggregate",
   aggregates: ["chatThread", "chatMessage"],
 });

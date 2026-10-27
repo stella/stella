@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtemp,
   chmod,
+  mkdir,
+  mkdtemp,
   readFile,
   rm,
   writeFile,
-  mkdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -316,7 +316,7 @@ test("explicit GET replays stdin byte-for-byte for every attempt", async () => {
     expect(result.exit).toBe(0);
     expect(result.calls).toHaveLength(2);
     for (const call of result.calls) {
-      expect(call).toContain(Buffer.from(input).toString("hex"));
+      expect(call).toContain(Buffer.from(input).toHex());
     }
   }
 });

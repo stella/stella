@@ -22,7 +22,13 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 setDefaultTimeout(120_000);
 
@@ -37,7 +43,7 @@ afterAll(async () => {
 });
 
 const requestAccountRoute = async (browser: HumanBrowser) =>
-  await meRoute.handle(
+  await routeServer.fetch(
     new Request("http://localhost/me/professional-use", {
       headers: { cookie: browser.cookieHeader() },
     }),

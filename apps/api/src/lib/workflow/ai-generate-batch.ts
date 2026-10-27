@@ -13,6 +13,7 @@ import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -80,8 +81,7 @@ type GenerateWorkflowDataProps = {
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
   onPartialAnswer?:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
   /** Injected by tests; the org's resolved decision model otherwise, null for none. */
   decisionModel?: DecisionModel | null | undefined;
   /** External model-resolution boundary, injected by focused integration tests. */
@@ -181,8 +181,7 @@ type SystemOnePhaseOptions = {
   textInputs: TextInput[];
   abortSignal: AbortSignal;
   onPartialAnswer:
-    | ((update: PartialAnswerUpdate) => Promise<void> | void)
-    | undefined;
+    ((update: PartialAnswerUpdate) => Promise<void> | void) | undefined;
 };
 
 type SystemOnePhaseResult = {
@@ -227,7 +226,12 @@ const askSystemOne = async ({
       }),
   });
   if (Result.isError(prepared)) {
-    captureError(prepared.error, { source: SYSTEM_ONE_ERROR_SOURCE });
+    captureError(
+      prepared.error,
+      handlerErrorContext("workflow.askSystemOne.prepared_error", {
+        source: SYSTEM_ONE_ERROR_SOURCE,
+      }),
+    );
     return Result.ok(fallbackAll);
   }
   const { sources, locators } = prepared.value;
@@ -324,8 +328,7 @@ export const generateWorkflowData = async ({
   });
 
   type WorkflowMessagePart =
-    | DocumentPart<AnthropicDocumentMetadata>
-    | TextPart<AnthropicTextMetadata>;
+    DocumentPart<AnthropicDocumentMetadata> | TextPart<AnthropicTextMetadata>;
 
   const messageContent: WorkflowMessagePart[] = [];
   const extractedTextFileCount = files.filter(
@@ -338,7 +341,7 @@ export const generateWorkflowData = async ({
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(file.content).toString("base64"),
+          value: Buffer.from(file.content).toBase64(),
           mimeType: file.mimeType,
         },
       });

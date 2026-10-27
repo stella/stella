@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -16,6 +16,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -81,7 +82,10 @@ export const MemoryRow = ({
       }
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow:failure",
+        scope: { type: "handler", handlerId: "MemoryRow:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });
@@ -93,7 +97,10 @@ export const MemoryRow = ({
       stellaToast.add({ title: t("deletedToast"), type: "success" });
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemoryRow.delete:failure",
+        scope: { type: "handler", handlerId: "MemoryRow.delete:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });

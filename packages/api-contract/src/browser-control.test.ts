@@ -11,8 +11,8 @@ import {
   isReadOnlyBrowserCommand,
   parseBrowserControlCommand,
   parseBrowserControlResult,
-  parseBrowserExtensionResponse,
   parseBrowserExtensionRequest,
+  parseBrowserExtensionResponse,
   parseElementReference,
 } from "./browser-control";
 

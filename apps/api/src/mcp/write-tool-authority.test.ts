@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { roles } from "@stll/permissions";
 
@@ -10,16 +11,22 @@ import { checkDemoAccountAccess } from "@/api/lib/auth/demo-account-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import {
+  queryCountLogger,
+  runWithQueryCounter,
+} from "@/api/lib/db-query-counter";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole, type MemberRole } from "@/api/lib/member-roles";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { MCP_MODES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
+  type AuthorizedMcpRequestContext,
+  authorizeMcpToolContext,
   isAccountAuthorizedForMcpTool,
   isMemberAuthorizedForMcpTool,
   type McpToolAuthorityDeclaration,
@@ -49,8 +56,8 @@ const writeDefinitions = (): McpToolDefinition[] => {
   );
 };
 
-const mcpContextFor = (role: MemberRole): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+const mcpContextFor = (role: MemberRole): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     featureAccessSnapshot: enrolledTimeBillingSnapshot({
       organizationId: "org_1",
       userId: "user_1",
@@ -62,6 +69,50 @@ const mcpContextFor = (role: MemberRole): McpRequestContext =>
     grantedScopes: [],
     memberRole: role,
   });
+
+const inaccessibleData = {
+  safeDb: async () => panic("safeDb must not run during authorization"),
+  scopedDb: async () => panic("scopedDb must not run during authorization"),
+};
+
+test("raw request resources require authorization before handler use", () => {
+  expectTypeOf<McpRequestResources>().not.toExtend<AuthorizedMcpRequestContext>();
+  expectTypeOf<AuthorizedMcpRequestContext>().toExtend<McpRequestResources>();
+});
+
+test("declared authorization issues no database statements before refusal or handler entry", async () => {
+  const definition: McpToolAuthorityDeclaration = {
+    access: "write",
+    accountAccess: "sandbox",
+    permissions: { type: "all", permissions: { workspace: ["update"] } },
+  };
+
+  await runWithQueryCounter(async (counter) => {
+    const refused = authorizeMcpToolContext({
+      context: mcpContextFor("intern"),
+      dataAccess: inaccessibleData,
+      definition,
+      input: {},
+      toolName: "authorization_probe",
+    });
+    expect(refused.authorized).toBeFalse();
+    expect(counter.count).toBe(0);
+  });
+
+  await runWithQueryCounter(async (counter) => {
+    const admitted = authorizeMcpToolContext({
+      context: mcpContextFor("owner"),
+      dataAccess: inaccessibleData,
+      definition,
+      input: {},
+      toolName: "authorization_probe",
+    });
+    expect(admitted.authorized).toBeTrue();
+    expect(counter.count).toBe(0);
+    queryCountLogger.logQuery("handler probe", []);
+    expect(counter.count).toBe(1);
+  });
+});
 
 /**
  * The guard: every tool a role is offered must be one its declared
@@ -216,11 +267,11 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("MCP discovery offers no role a write tool its permissions do not grant", () => {
+  test("MCP discovery offers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), mcpOffered)).toEqual([]);
   });
 
-  test("chat registers no role a write tool its permissions do not grant", () => {
+  test("chat registers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), chatOffered)).toEqual([]);
   });
 
@@ -248,7 +299,7 @@ describe("write tool permissions", () => {
     context,
     transport,
   }: {
-    context: McpRequestContext;
+    context: AuthorizedMcpRequestContext;
     transport: keyof typeof TRANSPORTS;
   }): Promise<unknown> => {
     const result = await TRANSPORTS[transport]({
@@ -284,7 +335,7 @@ describe("write tool permissions", () => {
     async (transport) => {
       expect(
         await refusalOver({
-          context: asTestRaw<McpRequestContext>({
+          context: asTestRaw<AuthorizedMcpRequestContext>({
             ...mcpContextFor("owner"),
             credentialPermissions: { workspace: ["read"] },
           }),
@@ -306,7 +357,7 @@ describe("write tool permissions", () => {
     { denial: "member-role", context: mcpContextFor("external") },
     {
       denial: "credential",
-      context: asTestRaw<McpRequestContext>({
+      context: asTestRaw<AuthorizedMcpRequestContext>({
         ...mcpContextFor("owner"),
         credentialPermissions: { workspace: ["read"] },
       }),
@@ -571,7 +622,7 @@ describe("write tools whose input selects the operation", () => {
   });
 
   test("dispatch refuses deleting a document to a credential that may only update it", async () => {
-    const updateOnly = asTestRaw<McpRequestContext>({
+    const updateOnly = asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIds: [],
       credentialPermissions: { entity: ["update"] },
       grantedScopes: [],
@@ -643,6 +694,7 @@ describe("write tool account access", () => {
     ).toEqual([
       "add_matter_member:standard",
       "fill_template:standard",
+      "mint_web_handoff:standard",
       "remove_matter_member:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",
@@ -674,7 +726,7 @@ describe("write tool account access", () => {
     const previousEmail = env.DEMO_ACCOUNT_EMAIL;
     env.DEMO_ACCOUNT_EMAIL = "limited@example.test";
     try {
-      const context = asTestRaw<McpRequestContext>({
+      const context = asTestRaw<AuthorizedMcpRequestContext>({
         grantedScopes: [],
         memberRole: "owner",
         userEmail: "limited@example.test",

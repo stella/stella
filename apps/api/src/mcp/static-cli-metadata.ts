@@ -15,6 +15,11 @@ import { defineMcpCliToolAnnotations } from "@/api/mcp/tool-types";
 export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
   DEFAULT_MCP_TOOL_DEFINITIONS,
   {
+    mint_web_handoff: {
+      command: ["web", "open"],
+      excluded: true,
+      scope: "read",
+    },
     open_case_law_decision: {
       command: ["case-law", "open"],
       scope: "read",

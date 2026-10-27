@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -73,11 +73,7 @@ test.each(cases)(
         );
       }
       mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-      for (const file of [
-        "tsc-native.ts",
-        "child-exit-status.ts",
-        "tsgo-compiler-options.ts",
-      ]) {
+      for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
         writeFileSync(
           path.join(root, "packages/scripts/src", file),
           readFileSync(path.join(repo, "packages/scripts/src", file)),
@@ -108,7 +104,6 @@ test.each(cases)(
         path.join(root, "oxlint.config.ts"),
         'export default { plugins: ["typescript"], categories: { correctness: "off" }, rules: { "typescript/dot-notation": "error" } };\n',
       );
-      writeFileSync(path.join(root, ".oxfmtrc.json"), "{}");
       writeFileSync(path.join(root, "generated.html.txt"), "fixture");
       // The fixer steps read the push scope; a run without a settled
       // commit scopes every changed path.
@@ -142,7 +137,6 @@ test.each(cases)(
         path.join(root, "bin/bun"),
         `#!/bin/bash
 if [[ "$1" == scripts/ci-generated-sources.ts && "$2" == prepare ]]; then touch prepared; exit "$PREPARE_EXIT"; fi
-if [[ "$1" == run && "$2" == format:guard ]]; then exit 0; fi
 if [[ "$1" == scripts/autofix-plan.ts && "$2" == run ]]; then cp changed.ts generated.html.txt; exit 0; fi
 if [[ "$2" == oxlint && ! -f prepared ]]; then exit 2; fi
 if [[ "$1" == scripts/typecheck-coverage.ts && "$2" == --autofix ]]; then touch compiler_checked; printf '%s\\n' "$@" > compiler_args; fi
@@ -341,11 +335,7 @@ test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
       readFileSync(new URL("typecheck-coverage.ts", import.meta.url)),
     );
     mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-    for (const file of [
-      "tsc-native.ts",
-      "child-exit-status.ts",
-      "tsgo-compiler-options.ts",
-    ]) {
+    for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
       writeFileSync(
         path.join(root, "packages/scripts/src", file),
         readFileSync(path.join(repo, "packages/scripts/src", file)),

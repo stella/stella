@@ -10,7 +10,7 @@ import {
   replaceCanonicalChatResourceHrefs,
   toChatResourceHref,
 } from "./resource-link";
-import { resourceRef, RESOURCE_TYPE } from "./resource-ref";
+import { RESOURCE_TYPE, resourceRef } from "./resource-ref";
 import { toSafeId } from "./safe-id";
 
 describe("chat resource links", () => {

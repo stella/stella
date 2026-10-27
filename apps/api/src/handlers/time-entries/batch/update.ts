@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -20,15 +20,19 @@ import {
   timeEntryIsRunning,
 } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
-const batchUpdateBodySchema = t.Object({
-  ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
-  action: t.UnionEnum([
+const batchUpdateBodySchema = v.object({
+  ids: v.pipe(
+    v.array(resourceIdSchema("timeEntry")),
+    v.minLength(1),
+    v.maxLength(200),
+  ),
+  action: v.picklist([
     "approve",
     "revert_to_draft",
     "mark_billable",
@@ -37,10 +41,7 @@ const batchUpdateBodySchema = t.Object({
 });
 
 type BatchAction =
-  | "approve"
-  | "revert_to_draft"
-  | "mark_billable"
-  | "mark_non_billable";
+  "approve" | "revert_to_draft" | "mark_billable" | "mark_non_billable";
 
 const buildBatchEvents = (
   rows: { id: SafeId<"timeEntry"> }[],

@@ -19,7 +19,7 @@ import {
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 import { LastUsedFieldBadge } from "./last-used-sign-in";
 import { SIGN_IN_METHOD, signInMethodVariant } from "./sign-in-panel.logic";
@@ -123,7 +123,13 @@ export const PasswordSignInForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "PasswordSignInForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "PasswordSignInForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -134,6 +140,7 @@ export const PasswordSignInForm = ({
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
+          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },

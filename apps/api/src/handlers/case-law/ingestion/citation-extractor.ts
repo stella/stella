@@ -7,10 +7,10 @@ import {
   PL_ADMINISTRATIVE_SEATED_DOCKET_SOURCE,
   PL_ADMINISTRATIVE_SEATLESS_DOCKET_SOURCE,
   PL_AUTHORITY_FILE_NUMBER_SOURCE,
-  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   PL_KIO_DOCKET_SOURCE,
   PL_TK_DISTINCTIVE_DOCKET_SOURCE,
   PL_TK_DOCKET_SOURCE,
+  PL_UOKIK_CITED_DECISION_NUMBER_SOURCE,
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
@@ -544,8 +544,7 @@ const hungarianConstitutionalDesignation = (value: string): string | null => {
  * opinion, a Constitutional Court decision). Null for text that is neither.
  */
 type HungarianCitationForm =
-  | { type: "docket"; registry: string }
-  | { type: "published" };
+  { type: "docket"; registry: string } | { type: "published" };
 
 export const hungarianCitationForm = (
   citationText: string,
@@ -588,11 +587,13 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
 // or a whitespace run this pattern still combines into one citation but
 // the lookbehind no longer recognizes lets the Tribunal symbol at the
-// tail phantom-duplicate as a second, separate citation. Group
+// tail phantom-duplicate as a second, separate citation. A division
+// code may carry a trailing dot ("IV P. 498/99", "VIII Kz. 123/15"); the
+// dedup key drops it. Group
 // `caseNumber` captures the bare case number to deduplicate against the
 // unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}\.?(?:[\s/]{1,3}[A-Za-z]{1,5}\.?)?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -2188,8 +2189,7 @@ export type DecisionCitationExtraction = {
 };
 
 export type DecisionCitationRejection =
-  | CitationScopesRejectedError
-  | UsCitationRejection;
+  CitationScopesRejectedError | UsCitationRejection;
 
 /** A cited decision as the citation graph's row source reads it. */
 const extractedCitationOf = ({

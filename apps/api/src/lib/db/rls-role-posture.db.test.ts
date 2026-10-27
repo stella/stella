@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -22,8 +23,8 @@ import {
 } from "@/api/lib/db/rls-role-posture";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
@@ -134,7 +135,6 @@ const withElevatedApplicationRole = async (
       default:
         fixture satisfies never;
     }
-    const deadline = Date.now() + 10_000;
     const readiness =
       fixture.type === "native"
         ? [
@@ -160,12 +160,12 @@ const withElevatedApplicationRole = async (
             "-d",
             "stella",
           ];
-    while (command(readiness).exitCode !== 0) {
-      if (Date.now() >= deadline) {
-        panic("Role fixture did not become ready");
-      }
-      await Bun.sleep(100);
-    }
+    await waitForExternalState({
+      description: "the role fixture accepts connections",
+      intervalMs: 100,
+      timeoutMs: 10_000,
+      read: () => command(readiness).exitCode === 0,
+    });
     const adminUrl = `postgres://fixture_admin:fixture@127.0.0.1:${port}/stella`;
     await withGatedTestClients(adminUrl, async ({ openClient }) => {
       const admin = openClient().sql;

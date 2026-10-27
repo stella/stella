@@ -118,5 +118,9 @@
   {
     "name": "Instruction references",
     "reason": "Replaced by Instruction policy, which retains the reference checks and adds enforcement-tag validation."
+  },
+  {
+    "name": "exactMirror route guard",
+    "reason": "Elysia's exactMirror response normalization is gone with Elysia; the HTTP core parses every response through its route schema, which the response schema tests cover."
   }
 ]

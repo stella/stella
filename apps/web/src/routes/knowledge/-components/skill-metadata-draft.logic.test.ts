@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   rebaseSkillMetadataDraft,
-  skillMetadataDraft,
   type SkillMetadataDraft,
+  skillMetadataDraft,
 } from "@/routes/knowledge/-components/skill-metadata-draft.logic";
 
 const SKILL_ID = "0199a1b2-0000-7000-8000-000000000001";
@@ -96,5 +96,28 @@ describe("rebasing the skill editor draft onto a new snapshot", () => {
       previous,
     });
     expect(rebased).toEqual(skillMetadataDraft(other));
+  });
+});
+
+describe("suggesting a command from the skill name", () => {
+  const suggested = (name: string) =>
+    skillMetadataDraft({ ...previous, command: null, name }).command;
+
+  test.each([
+    ["Clause review", "clause-review"],
+    ["Česká dovednost", "ceska-dovednost"],
+    ["Prüfung der Verträge", "prufung-der-vertrage"],
+    ["Révision des clauses", "revision-des-clauses"],
+    ["İstanbul Sözleşme İncelemesi", "istanbul-sozlesme-incelemesi"],
+    ["  --Rules!!  ", "rules"],
+    ["契約書", ""],
+  ])("%s becomes %s", (name, command) => {
+    expect(suggested(name)).toBe(command);
+  });
+
+  test("stays within the API's 49-character command limit", () => {
+    const command = suggested(`${"word ".repeat(30)}end`);
+    expect(command.length).toBeLessThanOrEqual(49);
+    expect(command).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u);
   });
 });

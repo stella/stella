@@ -16,8 +16,7 @@ export const UploadedSource = ({
   workspaceId,
 }: {
   uploader:
-    | { userName: string | null; userStatus: "active" | "deleted" }
-    | undefined;
+    { userName: string | null; userStatus: "active" | "deleted" } | undefined;
   signatureDomain: string | null;
   sourceEntityId: string;
   workspaceId: string;

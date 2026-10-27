@@ -10,6 +10,7 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { SOURCE_ARRIVALS_REFRESH_INTERVAL_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import {
@@ -50,8 +51,10 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
+import { RECEIVE_EMAIL_DELIVERABILITY_TASK } from "@/api/lib/scheduler/tasks/email-deliverability-receive";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
@@ -290,6 +293,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: DISPATCH_DOCUMENT_OCR_TASK,
   },
   {
+    description: "Release queued native extraction runs to their worker",
+    id: "documentProcessing.dispatchNativeExtraction.twoMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
+    task: DISPATCH_NATIVE_EXTRACTION_TASK,
+  },
+  {
     description: "Dispatch document deadline scouts nothing has picked up",
     id: "documentProcessing.recoverDeadlineScouts.fiveMinute",
     mode: "recurring",
@@ -323,6 +333,17 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: RECEIVE_INBOUND_MAIL_TASK,
   },
   {
+    description: "Mark account addresses the mail provider refuses",
+    enabled:
+      resolveEmailEvents(env).unwrap(
+        "Boot validates the email events configuration",
+      ).type === "enabled",
+    id: "emailDeliverability.receive.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECEIVE_EMAIL_DELIVERABILITY_TASK,
+  },
+  {
     description: "Delete expired comparison staging objects and their rows",
     id: "fileComparisons.sweepExpired.fiveMinute",
     mode: "recurring",
@@ -344,10 +365,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    // Hourly: nothing alarms on these gauges at a finer resolution, and a
+    // source falls behind by sync cycles, not minutes. The id is the row's
+    // key and outlives its old cadence: a new id would register a second
+    // job beside the existing row, which only retires by task name.
     description: "Report case-law projection backlog and source freshness",
     id: "caseLaw.reportFreshness.fiveMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
   },
   {

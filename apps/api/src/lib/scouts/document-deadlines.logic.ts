@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
 import { failureGradeOf } from "@stll/errors";
@@ -16,8 +17,7 @@ export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 
 /** Whether admission refused a scan for an exhausted period, and until when. */
 export type DeadlineScanAdmission =
-  | { type: "admitted" }
-  | { type: "period_exhausted"; skippedUntil: Date };
+  { type: "admitted" } | { type: "period_exhausted"; skippedUntil: Date };
 
 /**
  * A scan refused for an exhausted period skips until that period resets. The
@@ -67,7 +67,7 @@ export const deadlineExtractionSchema = v.object({
     v.array(
       v.object({
         label: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-        dueDate: v.pipe(v.string(), v.isoDate()),
+        dueDate: apiDateSchema,
         quote: v.pipe(
           v.string(),
           v.trim(),

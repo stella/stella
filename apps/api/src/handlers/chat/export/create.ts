@@ -17,7 +17,7 @@
  */
 
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -35,8 +35,8 @@ import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-exp
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
-  composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
+  composePersistedSearchSummaryMarkdown,
   extractPersistedSearchSummarySources,
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
@@ -46,11 +46,12 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -106,18 +107,12 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
-  body: t.Object({
-    messageId: tSafeId("chatMessage"),
-    // Discriminators are threaded through explicitly (no hidden default). DOCX
-    // is the only Phase 1 format; PDF is deferred.
-    format: t.Literal("docx"),
-    citationStyle: t.Union([
-      t.Literal("footnotes"),
-      t.Literal("inline"),
-      t.Literal("none"),
-    ]),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    messageId: resourceIdSchema("chatMessage"),
+    format: v.literal("docx"),
+    citationStyle: v.picklist(["footnotes", "inline", "none"]),
   }),
 } satisfies HandlerConfig;
 
@@ -290,7 +285,7 @@ const createMessageExport = createSafeRootHandler(
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
             userId: user.id,
-            source: { kind: "request", sessionId: session.id },
+            source: callerDownloadSource(session),
             s3Key: key,
             s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,

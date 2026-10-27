@@ -6,13 +6,14 @@ import path from "node:path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
+  actionlintWorkflowSource,
   checkWorkflowYaml,
   parseWorkflowYaml,
   validateActionMetadata,
-  actionlintWorkflowSource,
   validateLocalActionReferences,
   validateNoRubyProcessSpawns,
   validateNoRubyShell,
+  validateWorkflowJobTimeouts,
   validateWorkflowSize,
   WORKFLOW_SIZE_LIMIT_BYTES,
 } from "./check-workflow-yaml";
@@ -41,6 +42,42 @@ test("archive action lint rewrites are one-to-one and preserve workflow semantic
   expect(source.match(/uses: ['"]?\$\//gu)).toHaveLength(2);
   expect(normalized.match(/uses: ['"]?\.\//gu)).toHaveLength(2);
   expect(normalized).toContain("run: echo '$/.github/actions/ci-install'");
+});
+
+test("archive normalization preserves shared step aliases and repeated references", () => {
+  const source = `jobs:
+  first:
+    steps: &shared
+      - uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile"]'
+  second:
+    steps: *shared
+  third:
+    steps:
+      - uses: $/.github/actions/ci-install
+`;
+  const normalized = actionlintWorkflowSource({
+    source,
+    root: ROOT,
+    file: "fixture.yml",
+  });
+  expect(normalized).toBe(source.replaceAll("uses: $/", "uses: ./"));
+  const expected = Bun.YAML.parse(source.replaceAll("uses: $/", "uses: ./"));
+  expect(Bun.YAML.parse(normalized)).toEqual(expected);
+});
+
+test("archive normalization never rewrites text inside a script body", () => {
+  const source = `jobs:
+  check:
+    steps:
+      - uses: $/.github/actions/ci-install
+      - run: |
+          uses: $/.github/actions/ci-install
+`;
+  expect(() =>
+    actionlintWorkflowSource({ source, root: ROOT, file: "fixture.yml" }),
+  ).toThrow("normalization must be one-to-one");
 });
 
 test("archive normalization preserves scalar spelling, indentation and line endings", () => {
@@ -166,6 +203,14 @@ describe("workflow YAML validation", () => {
     expect(await rejectionOf(parseWorkflowYaml(file))).toHaveProperty(
       "message",
       `${file}: invalid YAML`,
+    );
+  });
+
+  test("a step-running job without a timeout names the workflow, job, and rule", async () => {
+    const file = path.join(FIXTURES, "missing-job-timeout.yml");
+    const workflow = await parseWorkflowYaml(file);
+    expect(() => validateWorkflowJobTimeouts(workflow, file)).toThrow(
+      `${file}: job missing-timeout runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
     );
   });
 

@@ -8,9 +8,9 @@ import {
   CATALOGUE_COST,
   CATALOGUE_LICENSES,
   CATALOGUE_SETUP,
-  PRACTICE_AREAS,
   type CatalogueCost,
   type CatalogueSetup,
+  PRACTICE_AREAS,
 } from "@stll/catalogue/schema";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -28,6 +28,7 @@ import {
 import { Textarea } from "@stll/ui/textarea";
 
 import {
+  type ContributeFormState,
   createLatestCommitLookupGuard,
   deriveSlug,
   evaluateManifest,
@@ -35,7 +36,6 @@ import {
   githubCommitsApiUrl,
   githubNewFileUrl,
   normalizeGithubRepo,
-  type ContributeFormState,
 } from "@/features/knowledge/public/tools/contribute.logic";
 import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
@@ -511,7 +511,10 @@ const AddSkillForm = () => {
           onRepoChange={setRepo}
           onResolveLatestCommit={() => {
             resolveLatestCommit().catch((error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "AddSkillForm:failure",
+                scope: { type: "handler", handlerId: "AddSkillForm:failure" },
+              });
             });
           }}
           setForm={setForm}

@@ -24,8 +24,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   getPropertyName,
   isAstNode,
   isIdentifier,

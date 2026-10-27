@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   and,
   eq,
@@ -176,6 +176,7 @@ const readWorkspaces = createSafeRootHandler(
           ? {
               id: client.id,
               displayName: client.displayName,
+              type: client.type,
               responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
             }
           : null,

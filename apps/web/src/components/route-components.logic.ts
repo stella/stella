@@ -19,8 +19,7 @@ const NETWORK_ERROR_MESSAGES = Object.freeze([
 ]);
 
 export type RouteErrorRecovery =
-  | { type: "reload-page" }
-  | { type: "retry-route" };
+  { type: "reload-page" } | { type: "retry-route" };
 
 export const resolveRouteErrorRecovery = (
   error: unknown,
@@ -63,9 +62,7 @@ export const recoverRouteError = async ({
 };
 
 export type RouteErrorSupport =
-  | { type: "report" }
-  | { type: "administrator" }
-  | { type: "none" };
+  { type: "report" } | { type: "administrator" } | { type: "none" };
 
 type ResolveRouteErrorSupportOptions = {
   deployment: "hosted" | "selfHosted";

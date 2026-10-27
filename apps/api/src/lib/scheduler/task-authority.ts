@@ -155,6 +155,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
   ),
+  "documentProcessing.dispatchNativeExtraction": platform(
+    "document-processing-native-extraction.ts",
+    "Hands queued native extraction runs to their queue.",
+  ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
     "Hands pending deadline scans to their queue.",
@@ -192,6 +196,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "flows.reconcileOrphanRuns": platform(
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
+  ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
   ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",

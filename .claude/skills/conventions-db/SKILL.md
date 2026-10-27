@@ -27,9 +27,21 @@ of its comment, so lead a column's comment with what the column means.
 
 ## Migrations
 
-`bun --filter @stll/api db:migrate` is the shipped migration path used by CI and
-deployment. `db:push` is a local declarative schema-diff tool; it does not
-replace committed migrations.
+### Expand-only pre-deploy phase
+
+SQL migrations are a blocking pre-deploy phase, so keep them expand-only: add
+tables or columns, add constraints as `NOT VALID`, and use only short-lock DDL.
+Never put data backfills, `CREATE [UNIQUE] INDEX CONCURRENTLY`, or
+`ALTER TABLE ... VALIDATE CONSTRAINT` in a migration. Governed, bounded
+backfills belong to `apps/api/src/db/backfill-runtime.ts` and registered online
+repairs and concurrent index builds (`ONLINE_MIGRATION_INDEXES`) in
+`apps/api/src/db/online-migrations.ts`.
+[check: scripts/check-migration-safety.ts, .github/workflows/ci.yml]
+
+- `bun --filter @stll/api db:migrate` is the shipped migration path used by CI
+  and deployment. `db:push` is a local declarative schema-diff tool; it does
+  not replace committed migrations and must not be described as the deployment
+  path. [check: .github/workflows/ci.yml]
 
 - Schema changes remain additive across a rollout: add, deploy compatible
   reads/writes, backfill in bounded batches, switch, then remove the old shape
@@ -38,18 +50,28 @@ replace committed migrations.
   compatible with the migrated schema, and a failed rollout must have a safe
   forward-fix path. [review]
 - Keep irreversible schema operations out of the same release as risky
-  application changes. [review]
-- For large live tables, follow the repository's guarded concurrent-index
-  protocol: either split and reopen the migrator transaction exactly as
-  enforced by `migration-concurrent-index.test.ts`, or put repairable work in
-  `online-migrations.ts`. Keep long backfills outside schema migrations and
-  checkpoint them durably.
-  [test: apps/api/src/db/migration-concurrent-index.test.ts]
+  application changes. Destructive and access-control SQL requires a
+  statement-scoped acknowledgement enforced by
+  `scripts/check-migration-safety.ts`, placed in the comment block directly
+  above the statement:
+  `-- stella-migration-safety: reviewed <rule-id> - <why this is safe>`.
+  An acknowledgement that clears nothing is an error. Every migration sets
+  `lock_timeout` and `statement_timeout` first.
+  [check: scripts/check-migration-safety.ts, scripts/check-migration-locks.ts]
+- Keep repairable work in `online-migrations.ts`. Long backfills stay outside
+  schema migrations and checkpoint durably.
+  [test: apps/api/src/db/online-migrations.test.ts]
+- A migration directory's name is its identity: the migrator applies every
+  directory whose name the database has not recorded, in name order. Never
+  rename or delete a merged migration; add a new one instead.
+  [check: scripts/check-migration-order.ts]
+- New timestamps sort after the newest migration on the base branch. [review]
+
 - Validate migration history two ways: apply every committed migration to a
   fresh database, then confirm
   `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
   repair drift by resetting a shared database.
-  [check: .github/workflows/db-migrations.yml]
+  [check: .github/workflows/ci.yml]
 
 ## Tenant Scope and Queries
 
@@ -69,9 +91,10 @@ aggregation, locking, unions, mutations).
 
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them. [review]
-- Close every read-decide-write race. Lock the decisive row with `SELECT ...
-  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
-  clause and check the affected-row count. [review]
+- Close every read-decide-write race. Lock the decisive row with
+  `SELECT ... FOR UPDATE`, or encode the expected state/version in the
+  mutation `WHERE` clause and check the affected-row count. [review]
+
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert
   checks. [review]

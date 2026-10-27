@@ -19,8 +19,8 @@ import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check
 import type { SanctionsCheckDependencies } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
-  screenSanctionsSubject,
   SanctionsScreening,
+  screenSanctionsSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";

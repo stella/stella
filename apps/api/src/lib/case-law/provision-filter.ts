@@ -1,14 +1,14 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
 
 import {
   caseLawProvisionCitations,
-  publishedCaseLawDecisions,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -25,20 +25,18 @@ import { LIMITS } from "@/api/lib/limits";
  * anchor prefix would need its wildcard characters escaped and would let
  * `par_31` reach `par_316`.
  */
-export const caseLawProvisionFilterSchema = t.Object({
-  /** EU targets are independent of the citing decision country. */
-  jurisdiction: t.Optional(t.Literal("EU")),
-  /** The work's display identity or EU CELEX as links record it. */
-  work: t.String({ minLength: 1, maxLength: 64 }),
-  unit: t.UnionEnum(SECTION_UNITS),
-  section: t.Integer({ minimum: 1, maximum: 99_999 }),
-  sectionSuffix: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  subsection: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  letter: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  point: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
+export const caseLawProvisionFilterSchema = v.object({
+  jurisdiction: v.optional(v.literal("EU")),
+  work: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  unit: v.picklist(SECTION_UNITS),
+  section: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(99_999)),
+  sectionSuffix: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(8))),
+  subsection: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(8))),
+  letter: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(8))),
+  point: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(8))),
 });
 
-export type CaseLawProvisionFilter = Static<
+export type CaseLawProvisionFilter = v.InferOutput<
   typeof caseLawProvisionFilterSchema
 >;
 

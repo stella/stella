@@ -8,8 +8,8 @@
  */
 
 import {
-  recordDocumentPacingOutcome,
   type OnDemandDocumentDeps,
+  recordDocumentPacingOutcome,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import { DEFERRED_DOCUMENT_PROCESSORS } from "@/api/handlers/case-law/ingestion/adapters/deferred-document-processors";
 import { withImmediatePublisherSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";

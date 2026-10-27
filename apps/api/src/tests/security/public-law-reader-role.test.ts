@@ -40,7 +40,10 @@ import {
   listSitemapShardsHandler,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
+import {
+  readCaseLawCorpusStatusQuery,
+  readCaseLawSourceHealthQuery,
+} from "@/api/handlers/case-law/decisions/status";
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
@@ -72,14 +75,14 @@ import type {
 } from "@/api/lib/legislation-public-read-db";
 import {
   assertPublicLawDatabaseRolePermissions,
-  publicLawDatabaseRolePermissionsSql,
   type PublicLawDatabaseRolePermissions,
+  publicLawDatabaseRolePermissionsSql,
 } from "@/api/lib/public-law-read-db";
 import {
-  CASE_LAW_DECISION_VIEWS,
   CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
-  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatements,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -1185,6 +1188,9 @@ describe("public-law reader role", () => {
 
         await readCaseLawCoverageSourcesQuery(tx);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
+
+        await readCaseLawSourceHealthQuery(tx);
+        exercised.add(readCaseLawSourceHealthQuery.publicLawSharedQuery);
 
         await readCaseLawArrivalsQuery(tx, {
           sourceIds: [sourceId],

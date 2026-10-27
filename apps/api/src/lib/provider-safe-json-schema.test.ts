@@ -9,9 +9,9 @@ import { propertyConfig } from "@stll/property-testing";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   ANNOTATION_JSON_SCHEMA_KEYWORDS,
-  providerSafeJsonSchemaOptionsForTanStackProvider,
   projectToProviderSafeJsonSchema,
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
+  providerSafeJsonSchemaOptionsForTanStackProvider,
   VALUE_CONSTRAINT_JSON_SCHEMA_KEYWORDS,
 } from "@/api/lib/provider-safe-json-schema";
 import {

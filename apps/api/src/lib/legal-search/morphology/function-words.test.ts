@@ -9,8 +9,8 @@ import {
   FUNCTION_WORD_LANGUAGES,
   FUNCTION_WORDS,
   functionWordKey,
-  functionWordsFor,
   type FunctionWordLanguage,
+  functionWordsFor,
 } from "@/api/lib/legal-search/morphology/function-words";
 
 /**

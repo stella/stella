@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { ensureActiveWorkspace } from "@/api/mcp/tool-utils";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -114,32 +115,34 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
           createMembershipScopedDb(rlsTx, databaseIdentity),
         );
         const authorizedChatWorkspaceIds = new Set([ids.wsA2]);
-        const context = buildMcpContextFromChat({
-          memberRole: authorizedMemberRole({
-            role: "owner",
-            credential: SESSION_CREDENTIAL,
+        const context = authorizedMcpContextForTest(
+          buildMcpContextFromChat({
+            memberRole: authorizedMemberRole({
+              role: "owner",
+              credential: SESSION_CREDENTIAL,
+            }),
+            organizationId: ids.orgA,
+            pinServerValidatedWorkspaceId: (workspaceId) => {
+              if (!authorizedChatWorkspaceIds.has(workspaceId)) {
+                return false;
+              }
+              if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
+                serverValidatedWorkspaceIds.push(workspaceId);
+              }
+              return true;
+            },
+            recordAuditEvent,
+            safeDb,
+            scopedDb,
+            toolWorkspaceIds: resolveToolWorkspaceIds({
+              accessibleWorkspaceIds: [ids.wsA2],
+              pinnedIds: [],
+            }),
+            userId: ids.userA1,
+            userEmail: "standard@example.test",
+            workspaceStatusById: new Map([[ids.wsA2, "active"]]),
           }),
-          organizationId: ids.orgA,
-          pinServerValidatedWorkspaceId: (workspaceId) => {
-            if (!authorizedChatWorkspaceIds.has(workspaceId)) {
-              return false;
-            }
-            if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
-              serverValidatedWorkspaceIds.push(workspaceId);
-            }
-            return true;
-          },
-          recordAuditEvent,
-          safeDb,
-          scopedDb,
-          toolWorkspaceIds: resolveToolWorkspaceIds({
-            accessibleWorkspaceIds: [ids.wsA2],
-            pinnedIds: [],
-          }),
-          userId: ids.userA1,
-          userEmail: "standard@example.test",
-          workspaceStatusById: new Map([[ids.wsA2, "active"]]),
-        });
+        );
         const workspaceId = ensureActiveWorkspace({
           context,
           workspaceId: ids.wsA2,

@@ -21,8 +21,8 @@ import {
 import { AIConfigModelRow } from "@/components/ai-config-model-row";
 import {
   createDecisionModelState,
-  decisionModelDraft,
   DECISION_PROVIDER_KEYS,
+  decisionModelDraft,
 } from "@/components/ai-config-role-models.logic";
 import type {
   DecisionModelState,

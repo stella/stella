@@ -282,9 +282,7 @@ export const useReviewActions = ({
   );
 
   type RejectStagedSuggestionResult =
-    | { status: "not-staged" }
-    | { status: "rejected" }
-    | { status: "failed" };
+    { status: "not-staged" } | { status: "rejected" } | { status: "failed" };
 
   const rejectStagedSuggestion = useLatestCallback(
     (item: ReviewSuggestion): RejectStagedSuggestionResult => {
@@ -427,6 +425,10 @@ export const useReviewActions = ({
   const captureResolveFailure = (context: PersistChangeOptions["context"]) => {
     getAnalytics().captureError(
       new Error(`DOCX suggestion ${context} failed to persist`),
+      {
+        fingerprintKey: "useReviewActions.captureResolveFailure:Error",
+        scope: { type: "handler", handlerId: `docx-suggestion.${context}` },
+      },
     );
   };
 

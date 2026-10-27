@@ -1,5 +1,3 @@
-import Elysia from "elysia";
-
 import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import createBlankDocument from "@/api/handlers/entities/blank-document/create";
 import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
@@ -14,6 +12,7 @@ import createDesktopEditHandoff, {
 import duplicateEntity from "@/api/handlers/entities/duplicate";
 import listFiles from "@/api/handlers/entities/files/list";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import createFolderFromSelection from "@/api/handlers/entities/folder-from-selection/create";
 import listFolders from "@/api/handlers/entities/folders/list";
 import createFromLegalSource from "@/api/handlers/entities/from-legal-source/create";
 import readEntityById from "@/api/handlers/entities/get";
@@ -53,284 +52,84 @@ import versionSummarize from "@/api/handlers/entities/versions/summarize";
 import uploadVersion from "@/api/handlers/entities/versions/upload";
 import readEntitiesWindow from "@/api/handlers/entities/window/list";
 import downloadZip from "@/api/handlers/entities/zip/download";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
-import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import { mount, routes } from "@/api/http/route";
 import {
-  ENTITY_UPLOAD_ROUTE_PATHS,
-  isTranslateRateLimitedPath,
-  isUploadRateLimitedPath,
-} from "@/api/lib/upload-rate-limit";
+  translateBudget,
+  uploadBudget,
+} from "@/api/lib/rate-limit/dedicated-budgets";
 
-export const entitiesRoute = new Elysia({
+const uploads = routes(
+  {
+    "/upload": { POST: uploadEntity },
+    "/upload-generated-document": { POST: uploadGeneratedDocument },
+    "/upload-version": { POST: uploadVersion },
+  },
+  { middleware: [uploadBudget] },
+);
+
+const bilingual = routes(
+  { "/bilingual": { POST: createBilingualEntity } },
+  { middleware: [translateBudget] },
+);
+
+const entities = routes({
+  "/": { PUT: createEntities, DELETE: deleteEntities },
+  "/blank-document": { PUT: createBlankDocument },
+  "/blank-document-from-style-set": { PUT: createDocumentFromStyleSet },
+  "/desktop-edit-sessions/open": { POST: openDesktopEditSession },
+  "/desktop-edit-sessions/release": { POST: releaseDesktopEditLock },
+  "/desktop-edit-sessions/request-takeover": {
+    POST: requestDesktopEditTakeover,
+  },
+  "/desktop-edit-handoffs": { POST: createDesktopEditHandoff },
+  "/desktop-edit-handoffs/:handoffId/status": {
+    GET: readDesktopEditHandoffStatus,
+  },
+  "/pdf-signing-handoffs": { POST: createPdfSigningHandoff },
+  "/pdf-signing-sessions/:sessionId": { GET: readPdfSigningSessionStatus },
+  "/pdf-signing-sessions/:sessionId/cancel": { POST: cancelPdfSigningSession },
+  "/folio-collab-rooms/join": { POST: joinFolioCollabRoom },
+  "/folio-collab-rooms/checkpoint": { POST: checkpointFolioCollabRoom },
+  "/folio-collab-rooms/publish-version": { POST: publishFolioCollabVersion },
+  "/clip": { POST: clipEndpoint },
+  "/create-from-legal-source": { POST: createFromLegalSource },
+  "/query": { POST: readEntities },
+  "/query-window": { POST: readEntitiesWindow },
+  "/filesystem-tree": { POST: readFilesystemTree },
+  "/kanban-group": { POST: readKanbanGroup },
+  "/group-counts": { POST: readGroupCounts },
+  "/property-facets": { POST: readPropertyFacets },
+  "/organize-suggestions": { POST: organizeSuggestions },
+  "/folders": { GET: listFolders },
+  "/files": { GET: listFiles },
+  "/move": { PATCH: moveEntity },
+  "/folder-from-selection": { POST: createFolderFromSelection },
+  "/rename": { PATCH: renameEntity },
+  "/duplicate": { POST: duplicateEntity },
+  "/copy-to-workspace": { POST: copyToWorkspace },
+  "/check-stamp": { POST: checkStamp },
+  "/summaries/count": { GET: readEntitySummariesCount },
+  "/summaries": { GET: readEntitySummaries },
+  "/zip/:entityId": { GET: downloadZip },
+  "/entity/:entityId": { GET: readEntityById },
+  "/entity/:entityId/versions": { GET: readVersions },
+  "/entity/:entityId/versions/:versionId": {
+    GET: readVersionById,
+    DELETE: deleteVersion,
+  },
+  "/entity/:entityId/field/:fieldId/file": { GET: readFieldFile },
+  "/entity/:entityId/ocr": { POST: requestOcr },
+  "/entity/:entityId/versions/:versionId/diff": { GET: versionDiff },
+  "/entity/:entityId/versions/:versionId/summarize": {
+    POST: versionSummarize,
+  },
+  "/entity/:entityId/versions/:versionId/label": { PATCH: updateVersionLabel },
+  "/entity/:entityId/versions/:versionId/description": {
+    PATCH: updateVersionDescription,
+  },
+  "/entity/:entityId/versions/:versionId/restore": { POST: restoreVersion },
+});
+
+export const entitiesRoute = mount([uploads, bilingual, entities], {
   prefix: "/entities/:workspaceId",
-})
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .use(
-    rateLimit({
-      duration: API_RATE_LIMITS.upload.duration,
-      max: API_RATE_LIMITS.upload.max,
-      budget: { name: "api.upload.address", keyKind: "address" },
-      ...createRedisRateLimit({
-        failurePolicy: "fail_open_local",
-        scope: "upload",
-      }),
-      skip: (req) => !isUploadRateLimitedPath(new URL(req.url).pathname),
-    }),
-  )
-  .use(
-    rateLimit({
-      duration: API_RATE_LIMITS.translate.duration,
-      max: API_RATE_LIMITS.translate.max,
-      budget: { name: "api.translate.address", keyKind: "address" },
-      ...createRedisRateLimit({
-        failurePolicy: "fail_open_local",
-        scope: "translate",
-      }),
-      skip: (req) => !isTranslateRateLimitedPath(new URL(req.url).pathname),
-    }),
-  )
-  .guard({
-    validateWorkspaceAccess: true,
-  })
-  .put("/", createEntities.handler, {
-    body: createEntities.config.body,
-    permissions: createEntities.config.permissions,
-  })
-  .put("/blank-document", createBlankDocument.handler, {
-    body: createBlankDocument.config.body,
-    permissions: createBlankDocument.config.permissions,
-  })
-  .put("/blank-document-from-style-set", createDocumentFromStyleSet.handler, {
-    body: createDocumentFromStyleSet.config.body,
-    permissions: createDocumentFromStyleSet.config.permissions,
-  })
-  .post(ENTITY_UPLOAD_ROUTE_PATHS.entity, uploadEntity.handler, {
-    body: uploadEntity.config.body,
-    permissions: uploadEntity.config.permissions,
-  })
-  .post(
-    ENTITY_UPLOAD_ROUTE_PATHS.generatedDocument,
-    uploadGeneratedDocument.handler,
-    {
-      body: uploadGeneratedDocument.config.body,
-      permissions: uploadGeneratedDocument.config.permissions,
-    },
-  )
-  .post("/desktop-edit-sessions/open", openDesktopEditSession.handler, {
-    body: openDesktopEditSession.config.body,
-    permissions: openDesktopEditSession.config.permissions,
-  })
-  .post("/desktop-edit-handoffs", createDesktopEditHandoff.handler, {
-    body: createDesktopEditHandoff.config.body,
-    permissions: createDesktopEditHandoff.config.permissions,
-  })
-  .get(
-    "/desktop-edit-handoffs/:handoffId/status",
-    readDesktopEditHandoffStatus.handler,
-    {
-      params: readDesktopEditHandoffStatus.config.params,
-      permissions: readDesktopEditHandoffStatus.config.permissions,
-    },
-  )
-  .post("/pdf-signing-handoffs", createPdfSigningHandoff.handler, {
-    body: createPdfSigningHandoff.config.body,
-    permissions: createPdfSigningHandoff.config.permissions,
-  })
-  .get(
-    "/pdf-signing-sessions/:sessionId",
-    readPdfSigningSessionStatus.handler,
-    {
-      params: readPdfSigningSessionStatus.config.params,
-      permissions: readPdfSigningSessionStatus.config.permissions,
-    },
-  )
-  .post(
-    "/pdf-signing-sessions/:sessionId/cancel",
-    cancelPdfSigningSession.handler,
-    {
-      params: cancelPdfSigningSession.config.params,
-      permissions: cancelPdfSigningSession.config.permissions,
-    },
-  )
-  .post("/folio-collab-rooms/join", joinFolioCollabRoom.handler, {
-    body: joinFolioCollabRoom.config.body,
-    permissions: joinFolioCollabRoom.config.permissions,
-  })
-  .post("/folio-collab-rooms/checkpoint", checkpointFolioCollabRoom.handler, {
-    body: checkpointFolioCollabRoom.config.body,
-    permissions: checkpointFolioCollabRoom.config.permissions,
-  })
-  .post(
-    "/folio-collab-rooms/publish-version",
-    publishFolioCollabVersion.handler,
-    {
-      body: publishFolioCollabVersion.config.body,
-      permissions: publishFolioCollabVersion.config.permissions,
-    },
-  )
-  .post("/desktop-edit-sessions/release", releaseDesktopEditLock.handler, {
-    body: releaseDesktopEditLock.config.body,
-    permissions: releaseDesktopEditLock.config.permissions,
-  })
-  .post(
-    "/desktop-edit-sessions/request-takeover",
-    requestDesktopEditTakeover.handler,
-    {
-      body: requestDesktopEditTakeover.config.body,
-      permissions: requestDesktopEditTakeover.config.permissions,
-    },
-  )
-  .post("/clip", clipEndpoint.handler, {
-    ...clipEndpoint.config,
-  })
-  .post("/create-from-legal-source", createFromLegalSource.handler, {
-    body: createFromLegalSource.config.body,
-    permissions: createFromLegalSource.config.permissions,
-  })
-  .post("/query", readEntities.handler, {
-    body: readEntities.config.body,
-    permissions: readEntities.config.permissions,
-  })
-  .post("/query-window", readEntitiesWindow.handler, {
-    body: readEntitiesWindow.config.body,
-    permissions: readEntitiesWindow.config.permissions,
-  })
-  .post("/filesystem-tree", readFilesystemTree.handler, {
-    body: readFilesystemTree.config.body,
-    permissions: readFilesystemTree.config.permissions,
-  })
-  .post("/kanban-group", readKanbanGroup.handler, {
-    body: readKanbanGroup.config.body,
-    permissions: readKanbanGroup.config.permissions,
-  })
-  .post("/group-counts", readGroupCounts.handler, {
-    body: readGroupCounts.config.body,
-    permissions: readGroupCounts.config.permissions,
-  })
-  .post("/property-facets", readPropertyFacets.handler, {
-    body: readPropertyFacets.config.body,
-    permissions: readPropertyFacets.config.permissions,
-  })
-  .post("/organize-suggestions", organizeSuggestions.handler, {
-    body: organizeSuggestions.config.body,
-    permissions: organizeSuggestions.config.permissions,
-  })
-  .get("/folders", listFolders.handler, {
-    query: listFolders.config.query,
-    permissions: listFolders.config.permissions,
-  })
-  .get("/files", listFiles.handler, {
-    query: listFiles.config.query,
-    permissions: listFiles.config.permissions,
-  })
-  .delete("/", deleteEntities.handler, {
-    body: deleteEntities.config.body,
-    permissions: deleteEntities.config.permissions,
-  })
-  .patch("/move", moveEntity.handler, {
-    body: moveEntity.config.body,
-    permissions: moveEntity.config.permissions,
-  })
-  .patch("/rename", renameEntity.handler, {
-    body: renameEntity.config.body,
-    permissions: renameEntity.config.permissions,
-  })
-  .post("/duplicate", duplicateEntity.handler, {
-    body: duplicateEntity.config.body,
-    permissions: duplicateEntity.config.permissions,
-  })
-  .post("/copy-to-workspace", copyToWorkspace.handler, {
-    body: copyToWorkspace.config.body,
-    permissions: copyToWorkspace.config.permissions,
-  })
-  .post("/check-stamp", checkStamp.handler, {
-    body: checkStamp.config.body,
-    permissions: checkStamp.config.permissions,
-  })
-  .get("/summaries/count", readEntitySummariesCount.handler, {
-    permissions: readEntitySummariesCount.config.permissions,
-    query: readEntitySummariesCount.config.query,
-  })
-  .get("/summaries", readEntitySummaries.handler, {
-    permissions: readEntitySummaries.config.permissions,
-    query: readEntitySummaries.config.query,
-  })
-  .get("/zip/:entityId", downloadZip.handler, {
-    params: downloadZip.config.params,
-    permissions: downloadZip.config.permissions,
-  })
-  .get("/entity/:entityId", readEntityById.handler, {
-    params: readEntityById.config.params,
-    permissions: readEntityById.config.permissions,
-  })
-  .get("/entity/:entityId/versions", readVersions.handler, {
-    params: readVersions.config.params,
-    query: readVersions.config.query,
-    permissions: readVersions.config.permissions,
-  })
-  .get("/entity/:entityId/versions/:versionId", readVersionById.handler, {
-    params: readVersionById.config.params,
-    permissions: readVersionById.config.permissions,
-  })
-  .get("/entity/:entityId/field/:fieldId/file", readFieldFile.handler, {
-    params: readFieldFile.config.params,
-    permissions: readFieldFile.config.permissions,
-  })
-  .post("/entity/:entityId/ocr", requestOcr.handler, {
-    body: requestOcr.config.body,
-    params: requestOcr.config.params,
-    permissions: requestOcr.config.permissions,
-  })
-  .get("/entity/:entityId/versions/:versionId/diff", versionDiff.handler, {
-    params: versionDiff.config.params,
-    permissions: versionDiff.config.permissions,
-  })
-  .post(
-    "/entity/:entityId/versions/:versionId/summarize",
-    versionSummarize.handler,
-    {
-      params: versionSummarize.config.params,
-      permissions: versionSummarize.config.permissions,
-    },
-  )
-  .patch(
-    "/entity/:entityId/versions/:versionId/label",
-    updateVersionLabel.handler,
-    {
-      body: updateVersionLabel.config.body,
-      params: updateVersionLabel.config.params,
-      permissions: updateVersionLabel.config.permissions,
-    },
-  )
-  .patch(
-    "/entity/:entityId/versions/:versionId/description",
-    updateVersionDescription.handler,
-    {
-      body: updateVersionDescription.config.body,
-      params: updateVersionDescription.config.params,
-      permissions: updateVersionDescription.config.permissions,
-    },
-  )
-  .post(
-    "/entity/:entityId/versions/:versionId/restore",
-    restoreVersion.handler,
-    {
-      params: restoreVersion.config.params,
-      permissions: restoreVersion.config.permissions,
-    },
-  )
-  .delete("/entity/:entityId/versions/:versionId", deleteVersion.handler, {
-    params: deleteVersion.config.params,
-    permissions: deleteVersion.config.permissions,
-  })
-  .post(ENTITY_UPLOAD_ROUTE_PATHS.version, uploadVersion.handler, {
-    body: uploadVersion.config.body,
-    permissions: uploadVersion.config.permissions,
-  })
-  .post("/bilingual", createBilingualEntity.handler, {
-    body: createBilingualEntity.config.body,
-    permissions: createBilingualEntity.config.permissions,
-  });
+});

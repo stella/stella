@@ -8,8 +8,8 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { resolveDecisionParagraphRange } from "@stll/legal-ast/paragraph-range";
 
 import {
-  APP_OPEN_DECISION_SCHEMA,
   APP_DECISION_BLOCKS_SCHEMA,
+  APP_OPEN_DECISION_SCHEMA,
   APP_PROVISION_PREVIEW_SCHEMA,
 } from "../shared/generated/contracts";
 

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { mcpUserConnections } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -9,7 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   DELETED_MCP_CONNECTION_CREDENTIAL_FIELDS,
@@ -20,8 +20,8 @@ import type { McpTokenRevocationOutcome } from "@/api/lib/mcp-upstream/revocatio
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 
-const routeParams = t.Object({
-  connectionId: tSafeId("mcpUserConnection"),
+const routeParams = v.object({
+  connectionId: resourceIdSchema("mcpUserConnection"),
 });
 
 const config = {

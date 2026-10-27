@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import {
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 
@@ -422,7 +423,7 @@ export const getIngestionStatus = async (
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-      "case_law.ingestion_status",
+      SOURCE_REPORT_FEATURE.ingestionStatus,
     );
 
     for (const source of sources) {
