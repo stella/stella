@@ -41,6 +41,54 @@ export const isPrivilegedJob = ({ kind, shape }: PrivilegedJobOptions) =>
   hasPrivilege(shape.document) ||
   hasPrivilege(shape.job);
 
+// Repository writes: contents write permission, an app token that requests
+// it, or the shared signed-commit action. Such a job publishes commits, tags
+// or pull-request branches, so it is classified `priority`, never a check.
+// Pull-request write alone (labels, comments, auto-merge) publishes nothing.
+const SIGNED_COMMIT_ACTION = /(?:^|\/)actions\/signed-commit@/u;
+const writesRepository = (value: unknown): boolean => {
+  if (Array.isArray(value)) {
+    return value.some(writesRepository);
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return Object.entries(value).some(([key, child]) => {
+    if (key === "permissions") {
+      return (
+        child === "write-all" ||
+        (typeof child === "object" &&
+          child !== null &&
+          "contents" in child &&
+          child.contents === "write")
+      );
+    }
+    if (key === "permission-contents" && child === "write") {
+      return true;
+    }
+    if (
+      key === "uses" &&
+      typeof child === "string" &&
+      SIGNED_COMMIT_ACTION.test(child)
+    ) {
+      return true;
+    }
+    return writesRepository(child);
+  });
+};
+
+type WritingJobOptions = {
+  shape: JobShape;
+  reachableDocuments: Iterable<ParsedDocument>;
+};
+export const isRepositoryWritingJob = ({
+  shape,
+  reachableDocuments,
+}: WritingJobOptions) =>
+  writesRepository(shape.document) ||
+  writesRepository(shape.job) ||
+  [...reachableDocuments].some(writesRepository);
+
 type PrivilegedJobClosureOptions = PrivilegedJobOptions & {
   reachableDocuments: Iterable<ParsedDocument>;
 };

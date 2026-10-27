@@ -15,7 +15,11 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import { isPrivilegedJobClosure, ReviewRequiredError } from "./review";
+import {
+  isPrivilegedJobClosure,
+  isRepositoryWritingJob,
+  ReviewRequiredError,
+} from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -332,6 +336,7 @@ const reviewJobs = ({
 }: ReviewJobsOptions) => {
   const entries: Record<string, unknown> = {};
   const privilegedJobs: string[] = [];
+  const misclassifiedWriters: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
   for (const node of nodes.values()) {
@@ -368,15 +373,26 @@ const reviewJobs = ({
         const target = node.edges[reference];
         return target ? [target] : [];
       });
+      const reachable = reachableDocuments({
+        initialTargets: targets,
+        nodes,
+        parsedDocuments,
+      });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
         shape: job.shape,
-        reachableDocuments: reachableDocuments({
-          initialTargets: targets,
-          nodes,
-          parsedDocuments,
-        }),
+        reachableDocuments: reachable,
       });
+      if (
+        decision !== undefined &&
+        decision.kind !== "priority" &&
+        isRepositoryWritingJob({
+          shape: job.shape,
+          reachableDocuments: reachable,
+        })
+      ) {
+        misclassifiedWriters.push(key);
+      }
       derivedJobs.set(key, { digest, privileged });
       if (!decision || decision.reviewedDigest !== digest) {
         entries[key] = {
@@ -408,6 +424,11 @@ const reviewJobs = ({
   if (removed.length) {
     throw new AdmissionError({
       message: `Decisions for removed jobs: ${removed.join(", ")}. Remove these files:\n${removed.map(decisionPathForKey).join("\n")}`,
+    });
+  }
+  if (misclassifiedWriters.length) {
+    throw new AdmissionError({
+      message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${misclassifiedWriters.map(decisionPathForKey).join("\n")}`,
     });
   }
   if (Object.keys(entries).length) {
