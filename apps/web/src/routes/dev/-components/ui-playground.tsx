@@ -4,6 +4,7 @@ import type * as React from "react";
 import { useTranslations } from "use-intl";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
   Accordion,
   AccordionItem,
@@ -320,11 +321,11 @@ export function UiPlayground() {
     "delete this workspace",
   );
 
-  const filteredComboboxOptions = COMBOBOX_OPTIONS.filter((option) =>
-    `${option.label} ${option.detail}`
-      .toLowerCase()
-      .includes(comboboxQuery.toLowerCase()),
-  );
+  const filteredComboboxOptions = filterBySearchQuery({
+    items: COMBOBOX_OPTIONS,
+    query: comboboxQuery,
+    fields: ({ detail, label }) => [`${label} ${detail}`],
+  });
 
   return (
     <div className="min-h-0 flex-1">

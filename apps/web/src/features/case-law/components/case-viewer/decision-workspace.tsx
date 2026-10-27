@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
@@ -85,11 +86,11 @@ import { decisionParagraphLanding } from "@/features/case-law/components/case-vi
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
-  READER_ASIDE_RESIZE_SLOT,
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
+import { READER_ASIDE_RESIZE_SLOT } from "@/features/case-law/components/case-viewer/reader-aside-slots";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -101,15 +102,22 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
+import { useUnresolvedCitationTelemetry } from "./paragraph-citation-telemetry";
+import {
+  citedDecisionRead,
+  resolveReaderAnswerCitation,
+} from "./reader-answer-citation.logic";
 import {
   attachReaderAnswerMarkers,
   jumpReaderAnswerCitation,
@@ -369,6 +377,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     citationSummary.type === "items" &&
     hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
+  const format = useFormatter();
   const ast = parseDocumentAst(decision.documentAst);
   const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
@@ -460,23 +469,47 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       onOpen: openAnswer,
     });
   }, [viewportElement, visibleAnswers, openAnswer, t]);
+  const answerCitations = visibleAnswers.flatMap((answer) =>
+    answer.messages.flatMap((message) => message.citations),
+  );
+  // These observers only watch the cache. A cited decision is fetched by the
+  // chip that shows it, and chips render only in an expanded card, which
+  // minimises once scrolled away: one read per distinct decision cited by the
+  // cards on screen, never one for every answer the filter keeps. The open
+  // action reads the same cache entries.
   const foreignDecisionIds = [
-    ...new Set(
-      answers.answers
-        .filter((answer) => answer.id === answers.activeAnswerId)
-        .flatMap((answer) =>
-          answer.messages.flatMap((message) =>
-            message.citations.map((citation) => citation.decisionId),
-          ),
-        ),
-    ),
+    ...new Set(answerCitations.map((citation) => citation.decisionId)),
   ].filter((id) => id !== decisionId);
   const foreignDecisions = useQueries({
-    queries: foreignDecisionIds.map((id) => decisionOptions(id)),
+    queries: foreignDecisionIds.map((id) => ({
+      ...decisionOptions(id),
+      enabled: false,
+    })),
   });
   const foreignDecisionError = foreignDecisions.find(
     (query) => query.error !== null,
   )?.error;
+  const citedDecisionReads = new Map(
+    foreignDecisionIds.map((id, index) => {
+      const query = foreignDecisions.at(index);
+      return [
+        id,
+        query === undefined
+          ? panic("Every cited decision must have a read")
+          : citedDecisionRead(queryView(query)),
+      ] as const;
+    }),
+  );
+  useUnresolvedCitationTelemetry({
+    blocks: astBlocks,
+    ranges: answerCitations
+      .filter((citation) => citation.decisionId === decisionId)
+      .map(({ paragraphId }) => ({
+        startAnchorId: paragraphId,
+        endAnchorId: paragraphId,
+      })),
+    source: decisionId,
+  });
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
@@ -502,29 +535,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         answers.setVisibility(answer.id, visibility),
         "reader-answer.visibility",
       ),
-    citationLabel: (citation) => {
-      const foreignIndex = foreignDecisionIds.indexOf(citation.decisionId);
-      const foreignRead =
-        foreignIndex !== -1 ? foreignDecisions.at(foreignIndex) : undefined;
-      const foreignCited =
-        foreignRead?.data ??
-        queryClient.getQueryData(decisionOptions(citation.decisionId).queryKey);
-      const cited =
-        citation.decisionId === decisionId ? decision : foreignCited;
-      const citedAst = parseDocumentAst(cited?.documentAst);
-      const paragraph = citedAst?.blocks.find(
-        (block) => block.anchorId === citation.paragraphId,
-      );
-      const number = paragraph?.type === "paragraph" ? paragraph.number : null;
-      return citation.decisionId === decisionId
-        ? t("readerAnswers.citation", {
-            paragraph: number?.toString() ?? citation.paragraphId,
-          })
-        : t("readerAnswers.externalCitation", {
-            decision: cited?.caseNumber ?? citation.decisionId,
-            paragraph: number?.toString() ?? citation.paragraphId,
-          });
-    },
+    citationTarget: (citation) =>
+      resolveReaderAnswerCitation({
+        citation,
+        decisionId,
+        blocks: astBlocks,
+        formatNumber: format.number,
+        readCitedDecision: (id) =>
+          citedDecisionReads.get(id) ??
+          panic("Every cited decision must have a read"),
+      }),
+    language: decision.language,
     onCitation: (citation) =>
       detachedUserAction(
         jumpReaderAnswerCitation({
@@ -860,11 +881,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
+      {/* At `lg` the notes column stands at the text's inline start, so the
+          layout's margin is that column's width and the controls bar and the
+          docked composer start past it; below `lg` the grid is one column
+          and the margin is zero. */}
       <div
         className={cn(
           LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1",
+          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
         )}
+        style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
           textScale={textScale}
@@ -896,22 +922,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             pressed={provisions.expandProvisions}
           />
         </div>
-        {/* The text column is the grid's inline-end column at every width, so
-            the bar's corner of this box is the text's corner, as in the
-            inspector's reader. */}
-
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        {/* The composer centres on the text column, not on the pane: at `lg`
-            the analysis column stands beside the text, so the docked
-            composer's start inset is that column's width; below `lg` the
-            grid is one column and the inset is zero. */}
-        <div
-          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
-          style={{ "--reader-aside-width": `${panelWidth}px` }}
-        >
+        {/* The composer centres on the text column, not on the pane. */}
+        <div className="h-full [--docked-composer-inset-start:var(--reader-margin-width)]">
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
             aiMode={props.aiMode}
@@ -986,7 +1002,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                  gridTemplateColumns:
+                    "var(--reader-aside-width) minmax(0, 1fr)",
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -1077,8 +1094,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         return;
                       }
 
+                      // The handle is on the column's inline end, which is
+                      // its left edge in a right-to-left layout.
+                      const bounds = aside.getBoundingClientRect();
                       const newWidth =
-                        event.clientX - aside.getBoundingClientRect().left;
+                        getComputedStyle(aside).direction === "rtl"
+                          ? bounds.right - event.clientX
+                          : event.clientX - bounds.left;
                       setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                     }}
                     onPointerUp={() => {
