@@ -22,25 +22,57 @@ cat > "$fixture_root/gh" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1 $2" == "pr list" ]]; then echo list >> "$CALLS"; printf '%s\n' "$PROPOSAL"; exit 0; fi
-if [[ "$1 $2" == "pr diff" ]]; then echo diff >> "$CALLS"; cat "$EXISTING_PATCH"; exit 0; fi
+if [[ "$1 $2" == "pr diff" ]]; then echo diff >> "$CALLS"; cat "$PATCH_RESPONSE"; exit 0; fi
+if [[ "$1" == "api" && "$*" == *"/pulls/42/files"* ]]; then echo files >> "$CALLS"; cat "$PR_FILES"; exit 0; fi
+if [[ "$1" == "api" && "$*" == *"/contents/"* ]]; then
+  for argument in "$@"; do
+    [[ "$argument" == *"/contents/"* ]] && path="${argument#*/contents/}"
+  done
+  echo "content:$path" >> "$CALLS"
+  printf '{"content":"%s","encoding":"base64"}\n' "$(base64 < "$PROPOSAL_ROOT/$path" | tr -d '\n')"
+  exit 0
+fi
 exit 99
 STUB
 chmod +x "$fixture_root/gh"
 export PATH="$fixture_root:$PATH" GITHUB_REPOSITORY=stella/stella PRUNE_BRANCH=chore/prune-quarantine-excludes
-export GITHUB_OUTPUT="$fixture_root/output" CALLS="$fixture_root/calls" EXISTING_PATCH="$fixture_root/existing.patch" PROPOSAL
-run_decision() { : > "$GITHUB_OUTPUT"; : > "$CALLS"; bash scripts/quarantine-prune-decision.sh; }
+export GITHUB_OUTPUT="$fixture_root/output" CALLS="$fixture_root/calls" PR_FILES="$fixture_root/files.json" PROPOSAL_ROOT="$fixture_root/proposal" PATCH_RESPONSE="$fixture_root/patch" PROPOSAL
+mkdir -p "$fixture_root/repo/apps/web" "$PROPOSAL_ROOT/apps/web"
+cp scripts/quarantine-prune-decision.sh "$fixture_root/repo/decision.sh"
+printf 'minimumReleaseAge = 3\n' > "$fixture_root/repo/bunfig.toml"
+printf 'minimumReleaseAge = 3\n' > "$fixture_root/repo/apps/web/bunfig.toml"
+git -C "$fixture_root/repo" init -q
+git -C "$fixture_root/repo" add bunfig.toml apps/web/bunfig.toml
+git -C "$fixture_root/repo" -c user.name=test -c user.email=test@example.com commit -qm fixture
+printf 'minimumReleaseAge = 4\n' > "$fixture_root/repo/bunfig.toml"
+printf 'minimumReleaseAge = 4\n' > "$fixture_root/repo/apps/web/bunfig.toml"
+{
+  printf 'From 0123456789abcdef0123456789abcdef01234567 Mon Sep 17 00:00:00 2001\n'
+  printf 'From: automation <automation@example.com>\nSubject: [PATCH] prune excludes\n---\n'
+  git -C "$fixture_root/repo" diff -- bunfig.toml apps/web/bunfig.toml
+} > "$PATCH_RESPONSE"
+cp "$fixture_root/repo/bunfig.toml" "$PROPOSAL_ROOT/bunfig.toml"
+cp "$fixture_root/repo/apps/web/bunfig.toml" "$PROPOSAL_ROOT/apps/web/bunfig.toml"
+printf '[[{"filename":"bunfig.toml"},{"filename":"apps/web/bunfig.toml"}]]\n' > "$PR_FILES"
+run_decision() { : > "$GITHUB_OUTPUT"; : > "$CALLS"; (cd "$fixture_root/repo" && bash decision.sh); }
 assert_output() { grep -Fxq "$1" "$GITHUB_OUTPUT" || { echo "Missing output '$1':" >&2; cat "$GITHUB_OUTPUT" >&2; exit 1; }; }
 # First run: no proposal exists, so the action must write one.
 PROPOSAL=''; run_decision; assert_output 'outcome=write'; [[ "$(cat "$CALLS")" == list ]]
 # Second run: the existing proposal is queued and must not be inspected or written.
 PROPOSAL=$'42\t0123456789abcdef0123456789abcdef01234567\ttrue'; run_decision
 assert_output 'outcome=queued'; assert_output 'pull-request-number=42'; [[ "$(cat "$CALLS")" == list ]]
-# An unqueued proposal with the identical removals is an idempotent no-op.
+# An unqueued proposal with identical file contents is an idempotent no-op. The
+# equivalent `gh pr diff --patch` includes commit metadata, so patch comparison
+# would incorrectly classify this proposal as stale.
 PROPOSAL=$'42\t0123456789abcdef0123456789abcdef01234567\tfalse'
-git diff --no-ext-diff -- bunfig.toml ':(glob)**/bunfig.toml' > "$EXISTING_PATCH"
-run_decision; assert_output 'outcome=unchanged'; assert_output 'head=0123456789abcdef0123456789abcdef01234567'
-[[ "$(cat "$CALLS")" == $'list\ndiff' ]]
+run_decision; assert_output 'outcome=current'; assert_output 'head=0123456789abcdef0123456789abcdef01234567'
+[[ "$(cat "$CALLS")" == $'list\nfiles\ncontent:apps/web/bunfig.toml\ncontent:bunfig.toml' ]]
 # A stale proposal is refreshed.
-printf 'stale patch\n' > "$EXISTING_PATCH"; run_decision; assert_output 'outcome=write'
-[[ "$(cat "$CALLS")" == $'list\ndiff' ]]
+printf 'minimumReleaseAge = 5\n' > "$PROPOSAL_ROOT/bunfig.toml"
+run_decision; assert_output 'outcome=write'
+[[ "$(cat "$CALLS")" == $'list\nfiles\ncontent:apps/web/bunfig.toml\ncontent:bunfig.toml' ]]
+# A proposal that changes an extra bunfig.toml is also stale.
+printf '[[{"filename":"bunfig.toml"},{"filename":"apps/web/bunfig.toml"},{"filename":"packages/extra/bunfig.toml"}]]\n' > "$PR_FILES"
+run_decision; assert_output 'outcome=write'
+[[ "$(cat "$CALLS")" == $'list\nfiles' ]]
 echo 'quarantine prune decision scenarios passed'

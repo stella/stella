@@ -23,10 +23,36 @@ if [[ "$queued" == "true" ]]; then
   exit 0
 fi
 
-desired="$(git diff --no-ext-diff -- bunfig.toml ':(glob)**/bunfig.toml')"
-existing="$(gh pr diff "$number" --repo "$GITHUB_REPOSITORY" --patch)"
-if [[ "$existing" == "$desired" ]]; then
-  echo "outcome=unchanged" >> "$GITHUB_OUTPUT"
+mapfile -t desired_files < <(git diff --name-only -- bunfig.toml ':(glob)**/bunfig.toml' | sort)
+mapfile -t existing_files < <(
+  gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$number/files" |
+    jq -r '.[][] | .filename | select(. == "bunfig.toml" or endswith("/bunfig.toml"))' |
+    sort
+)
+
+current=true
+if [[ "${#desired_files[@]}" -ne "${#existing_files[@]}" ]]; then
+  current=false
+else
+  for index in "${!desired_files[@]}"; do
+    path="${desired_files[$index]}"
+    if [[ "$path" != "${existing_files[$index]}" ]]; then
+      current=false
+      break
+    fi
+    if ! cmp --silent "$path" <(
+      gh api --method GET "repos/$GITHUB_REPOSITORY/contents/$path" -f ref="$head" |
+        jq -r '.content' |
+        base64 --decode
+    ); then
+      current=false
+      break
+    fi
+  done
+fi
+
+if [[ "$current" == "true" ]]; then
+  echo "outcome=current" >> "$GITHUB_OUTPUT"
   echo "Removal PR #$number already contains the current removals."
   exit 0
 fi
