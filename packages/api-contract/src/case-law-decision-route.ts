@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { stripDiacriticsForSlug } from "@stll/text-normalize";
+import { slugify, stripDiacriticsForSlug } from "@stll/text-normalize";
 import { decodeUuidSuffix, encodeCompactUuid, isUuid } from "@stll/uuid-codec";
 
 /**
@@ -56,13 +56,14 @@ export const fitCaseLawDecisionSlug = ({
  * were generated with, so they are reproduced byte-for-byte.
  */
 export const createCaseLawDecisionSlug = (value: string): string => {
-  const slug = trimSlugHyphens(
-    stripDiacriticsForSlug(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, "-"),
-  );
+  const slug = slugify(stripDiacriticsForSlug(value), {
+    charset: "ascii",
+    fallback: UNKNOWN_SLUG,
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  });
 
-  return fitCaseLawDecisionSlug({ baseSlug: slug || UNKNOWN_SLUG });
+  return fitCaseLawDecisionSlug({ baseSlug: slug });
 };
 
 const normalizeCaseLawStoredSlug = (

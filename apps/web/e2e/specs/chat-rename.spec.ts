@@ -72,11 +72,11 @@ test("breadcrumb rename with suggestion propagates to the chat history", async (
   // propagation assertions below cannot depend on mock-model output.
   const committedTitle = "Renamed by the e2e wand spec";
   await renameInput.fill(committedTitle);
+  // Tabbing onto the wand keeps the editor open; tabbing past it commits.
   await renameInput.press("Tab");
+  await expect(wand).toBeFocused();
+  await expect(renameInput).toHaveValue(committedTitle);
   await wand.press("Tab");
-  const done = breadcrumb.getByRole("button", { name: "Done" });
-  await expect(done).toBeFocused();
-  await done.press("Enter");
 
   // Breadcrumb reflects the committed title (the editor is gone).
   await expect(breadcrumb.getByRole("textbox")).toHaveCount(0);
