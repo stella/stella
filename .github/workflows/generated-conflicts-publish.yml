@@ -118,6 +118,7 @@ jobs:
       - name: Fetch the branch and main as objects
         if: steps.select.outputs.branch != ''
         id: fetch
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.select.outputs.head }}
@@ -127,7 +128,7 @@ jobs:
           git init -q --bare "$RUNNER_TEMP/repo.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$RUNNER_TEMP/repo.git" -c "http.extraheader=AUTHORIZATION: basic $auth" \
+          bash "$GITHUB_WORKSPACE/.trusted/scripts/retry.sh" git -C "$RUNNER_TEMP/repo.git" -c "http.extraheader=AUTHORIZATION: basic $auth" \
             fetch --no-tags -q "$SERVER_URL/$GITHUB_REPOSITORY.git" \
             "+$HEAD_SHA:refs/resolve/head" "+refs/heads/main:refs/resolve/main"
           echo "main=$(git -C "$RUNNER_TEMP/repo.git" rev-parse refs/resolve/main)" >> "$GITHUB_OUTPUT"

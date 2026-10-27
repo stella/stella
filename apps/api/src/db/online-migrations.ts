@@ -47,6 +47,10 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import {
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
+  EMAIL_UNDELIVERABLE_CONSTRAINTS,
+} from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
@@ -85,9 +89,9 @@ import {
   ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
 } from "./organization-access-state-constraint-validation";
 import {
-  READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
-  READER_ANNOTATION_CLAIM_CONSTRAINTS,
-} from "./reader-annotation-claim-constraint-validation";
+  READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
+  READER_ANNOTATION_CONSTRAINTS,
+} from "./reader-annotation-constraint-validation";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
@@ -262,6 +266,17 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       "ON public.legal_reader_annotations USING btree (workspace_id, verification_claim_id) WHERE (workspace_id IS NOT NULL)",
     isUnique: false,
     name: "legal_reader_annotations_verification_claim_idx",
+    tableName: "legal_reader_annotations",
+  },
+  {
+    // Lists a matter document's marks and serves the document cleanup
+    // trigger; both still work, by a scan, until it exists.
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legal_reader_annotations_matter_document_idx" ON public."legal_reader_annotations" (workspace_id, entity_id, created_at, id) WHERE entity_id IS NOT NULL',
+    definitionBody:
+      "ON public.legal_reader_annotations USING btree (workspace_id, entity_id, created_at, id) WHERE (entity_id IS NOT NULL)",
+    isUnique: false,
+    name: "legal_reader_annotations_matter_document_idx",
     tableName: "legal_reader_annotations",
   },
   ...MONITORING_SESSION_INDEXES,
@@ -841,8 +856,9 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
-  ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -869,8 +885,9 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
-    ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
+    ...READER_ANNOTATION_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

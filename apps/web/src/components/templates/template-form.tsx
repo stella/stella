@@ -90,7 +90,7 @@ import {
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -103,6 +103,8 @@ import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -687,7 +689,7 @@ const FieldRenderer = ({
    *  fields, never for array sub-item rows. */
   onEditField?: ((path: string) => void) | undefined;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;
@@ -2683,6 +2685,7 @@ export const useFillToMatterSaveTarget = (
 ): Extract<SaveTarget, { kind: "chooseMatter" }> => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
   return {
     kind: "chooseMatter",
     onCreated: (created) => {
@@ -2699,7 +2702,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
               search: { entity: entityId, field: created.fieldId },
             }),
             "template-form.navigate",
@@ -2709,7 +2712,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
             }),
             "template-form.navigate",
           );

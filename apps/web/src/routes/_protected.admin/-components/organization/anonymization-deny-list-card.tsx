@@ -22,6 +22,7 @@ import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -451,6 +452,7 @@ export const AnonymizationDenyListCard = () => {
               <Combobox<LabelOption>
                 autoHighlight
                 disabled={updateMutation.isPending}
+                filter={matchesComboboxItem}
                 items={[...LABEL_OPTIONS]}
                 itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
                 onValueChange={(next) => {
