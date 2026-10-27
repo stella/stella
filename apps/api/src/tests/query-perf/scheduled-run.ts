@@ -1,6 +1,14 @@
 import { panic, Result } from "better-result";
-import { type Logger, type SQL, sql } from "drizzle-orm";
+import {
+  type Logger,
+  type SQL,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
@@ -32,10 +40,18 @@ const leadingKeyword = (text: string) =>
     ?.toLowerCase() ?? "";
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
-const READ_KEYWORDS: ReadonlySet<string> = new Set([
+const TRANSACTION_KEYWORDS = new Set([
+  "begin",
+  "commit",
+  "rollback",
+  "savepoint",
+  "release",
+]);
+const MEASURED_KEYWORDS: ReadonlySet<string> = new Set([
   "select",
   "with",
   "values",
+  "delete",
 ]);
 
 /** A captured statement as a Drizzle query with the same bound parameters. */
@@ -55,6 +71,14 @@ const asQuery = ({ text, params }: CapturedStatement): SQL => {
   return sql.join(chunks, sql.raw(""));
 };
 
+/** Lend root-shaped transactions while preserving the aggregate savepoint owner. */
+export const scheduledMeasurementDatabase = (
+  tx: Pick<Transaction, "execute" | "transaction">,
+) => ({
+  transaction: async <T>(run: (child: Transaction) => Promise<T>) =>
+    await withAggregateSavepoint(tx, run),
+});
+
 const noopTask = () => undefined;
 
 /**
@@ -65,20 +89,21 @@ const noopTask = () => undefined;
  * rather than a hand-kept list of its statements means a statement added to
  * the job is measured without anyone registering it.
  *
- * Only reading jobs are measured this way: a write would change the fixture
- * the next scenario reads, so a job that writes fails here until its replay
- * runs inside a rolled-back transaction.
+ * Both the registered task and its analyzed replay roll back, so retention
+ * deletes are measured without consuming the fixture needed by later runs.
  */
 export const measureScheduledJobRun = async ({
   database,
   openClient,
   jobId,
   task: taskName,
+  now = new Date("2026-01-10T12:00:00Z"),
 }: {
   database: GatedTestDb;
   openClient: GatedTestClientScope["openClient"];
   jobId: string;
   task: string;
+  now?: Date;
 }) => {
   const job =
     DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
@@ -99,32 +124,43 @@ export const measureScheduledJobRun = async ({
     connection: QUERY_PERF_CONNECTION_SETTINGS,
     logger,
   });
-  const outcome = await task(
-    asTestRaw<SchedulerTaskContext>({
-      db,
-      job: { id: job.id, task: job.task },
-      payload: null,
-      signal: new AbortController().signal,
-      scheduleContinuation: noopTask,
-      logger: {
-        debug: noopTask,
-        error: noopTask,
-        info: noopTask,
-        warn: noopTask,
-      },
-    }),
-  );
-  if (outcome !== undefined && !Result.isOk(outcome)) {
-    return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
+  const outcome = await Result.tryPromise({
+    try: async () =>
+      await db.transaction(async (tx) => {
+        const result = await task(
+          asTestRaw<SchedulerTaskContext>({
+            db: scheduledMeasurementDatabase(tx),
+            dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
+            job: { id: job.id, task: job.task },
+            payload: "payload" in job ? job.payload : null,
+            signal: new AbortController().signal,
+            scheduleContinuation: noopTask,
+            logger: {
+              debug: noopTask,
+              error: noopTask,
+              info: noopTask,
+              warn: noopTask,
+            },
+          }),
+        );
+        if (result !== undefined && !Result.isOk(result)) {
+          panic(`${jobId} failed on the fixture: ${result.error.message}`);
+        }
+        tx.rollback();
+      }),
+    catch: (error: unknown) => error,
+  });
+  if (outcome.isOk() || !(outcome.error instanceof TransactionRollbackError)) {
+    return panic("Scheduled measurement task must roll back", outcome);
   }
   const reads = captured.filter(({ text }) => {
     const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword)) {
+    if (SESSION_KEYWORDS.has(keyword) || TRANSACTION_KEYWORDS.has(keyword)) {
       return false;
     }
-    if (!READ_KEYWORDS.has(keyword)) {
+    if (!MEASURED_KEYWORDS.has(keyword)) {
       return panic(
-        `${jobId} issued a ${keyword || "blank"} statement; a writing job needs a rolled-back replay before it can be measured`,
+        `${jobId} issued an unsupported ${keyword || "blank"} statement`,
       );
     }
     return true;
@@ -132,20 +168,27 @@ export const measureScheduledJobRun = async ({
   if (reads.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements = await database.transaction(async (tx) => {
-    await applyPlannerSettings(tx);
-    const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
-    for (const statement of reads) {
-      // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
-      const plan = await explainOwnerStatement(tx, asQuery(statement));
-      measured.push({
-        metrics: metricsFromPlan(plan),
-        statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
-      });
-    }
-    await assertPlannerSettings(tx, "owner");
-    return measured;
+  const statements: { metrics: QueryPerfMetrics; statement: string }[] = [];
+  const replay = await Result.tryPromise({
+    try: async () =>
+      await database.transaction(async (tx) => {
+        await applyPlannerSettings(tx);
+        for (const statement of reads) {
+          // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
+          const plan = await explainOwnerStatement(tx, asQuery(statement));
+          statements.push({
+            metrics: metricsFromPlan(plan),
+            statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
+          });
+        }
+        await assertPlannerSettings(tx, "owner");
+        tx.rollback();
+      }),
+    catch: (error: unknown) => error,
   });
+  if (replay.isOk() || !(replay.error instanceof TransactionRollbackError)) {
+    return panic("Scheduled measurement replay must roll back", replay);
+  }
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
     statements,

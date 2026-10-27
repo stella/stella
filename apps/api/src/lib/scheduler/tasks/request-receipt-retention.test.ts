@@ -17,8 +17,8 @@ test("receipt retention stops at the batch budget and schedules continuation", a
     now: () => 0,
     scheduleContinuation,
   });
-  expect(sweep).toHaveBeenCalledTimes(16);
-  expect(deleted).toBe(16 * REQUEST_RECEIPT_RETENTION_BATCH_SIZE);
+  expect(sweep).toHaveBeenCalledTimes(4);
+  expect(deleted).toBe(4 * REQUEST_RECEIPT_RETENTION_BATCH_SIZE);
   expect(scheduleContinuation).toHaveBeenCalledTimes(1);
 });
 

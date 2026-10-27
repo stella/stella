@@ -47,7 +47,9 @@ export const requestIdempotencyReceipts = p.pgTable.withRLS(
     p
       .uniqueIndex("request_idempotency_receipts_org_user_key_uidx")
       .on(table.organizationId, table.userId, table.idempotencyKey),
-    p.index("request_idempotency_receipts_claimed_at_idx").on(table.claimedAt),
+    p
+      .index("request_idempotency_receipts_state_claimed_at_idx")
+      .on(table.state, table.claimedAt),
     p.check(
       "request_idempotency_receipts_key_nonempty_check",
       sql`length(${table.idempotencyKey}) > 0`,

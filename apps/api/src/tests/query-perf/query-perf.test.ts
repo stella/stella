@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { requestIdempotencyReceipts } from "@/api/db/schema";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -16,7 +17,6 @@ import {
   describeServed,
   seedCorpusReadBudgets,
   serveCaseLaw,
-  type ServedCaseLaw,
 } from "./corpus-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
@@ -33,13 +33,19 @@ import {
   queryPerfRegistry,
   READ_BUDGET_PROFILES,
   SCHEDULED_JOB_MEASUREMENTS,
+  type ScheduledJobScenario,
 } from "./registry";
+import { seedRequestReceiptScenario } from "./request-receipt-seed";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
+  scenario.type === "case-law"
+    ? describeServed(scenario.served)
+    : `receipts:${scenario.cohort}:${scenario.rows}`;
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -251,16 +257,38 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const runMetrics = async (
           jobId: string,
           task: string,
-          served: ServedCaseLaw,
+          scenario: ScheduledJobScenario,
         ) => {
-          await serveCaseLaw(db, served);
-          const generation = describeServed(served);
+          if (scenario.type === "case-law") {
+            await serveCaseLaw(db, scenario.served);
+          } else {
+            await seedRequestReceiptScenario(db, scenario);
+          }
+          const generation = describeScheduledScenario(scenario);
           const run = await measureScheduledJobRun({
             database: db,
             openClient,
             jobId,
             task,
           });
+          if (scenario.type === "request-receipts") {
+            const retained = await db.$count(requestIdempotencyReceipts);
+            if (retained !== scenario.rows) {
+              panic("Scheduled measurement consumed its receipt fixture", {
+                retained,
+                expected: scenario.rows,
+              });
+            }
+            const deleted = run.statements.some(({ statement }) =>
+              /^delete\s/iu.test(statement),
+            );
+            if (deleted !== (scenario.cohort !== "quiet")) {
+              panic(
+                "Receipt task did not exercise the expected retention path",
+                scenario,
+              );
+            }
+          }
           log({
             event: "read_budget_job_run",
             jobId,
@@ -285,7 +313,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           }
           measured.add(budgetId);
           for (const scenario of measurement.scenarios) {
-            const label = describeServed(scenario.size);
+            const label = describeScheduledScenario(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
             const size = await deadline.run(
               `run ${jobId} on ${label}`,
@@ -299,7 +327,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             }
             // db-await-in-loop: the twin scenario moves the served generations after the first run finished.
             const double = await deadline.run(
-              `run ${jobId} on ${describeServed(twin)}`,
+              `run ${jobId} on ${describeScheduledScenario(twin)}`,
               async () => await runMetrics(jobId, measurement.task, twin),
             );
             note(budgetProblem(budgetId, double));

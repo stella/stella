@@ -35,8 +35,9 @@ ALTER TABLE "request_idempotency_receipts"
 CREATE UNIQUE INDEX "request_idempotency_receipts_org_user_key_uidx"
   ON "request_idempotency_receipts"
   ("organization_id", "user_id", "idempotency_key");--> statement-breakpoint
-CREATE INDEX "request_idempotency_receipts_claimed_at_idx"
-  ON "request_idempotency_receipts" ("claimed_at");--> statement-breakpoint
+-- Each expiry probe selects one state and walks only its oldest receipts.
+CREATE INDEX "request_idempotency_receipts_state_claimed_at_idx"
+  ON "request_idempotency_receipts" ("state", "claimed_at");--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE "request_idempotency_receipts" TO stella;--> statement-breakpoint
 ALTER TABLE "request_idempotency_receipts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

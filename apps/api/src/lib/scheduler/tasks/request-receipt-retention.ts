@@ -4,7 +4,7 @@ import { sweepExpiredRequestReceipts } from "@/api/lib/idempotency/request-recei
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const SWEEP_REQUEST_RECEIPTS_TASK = "requests.sweepReceipts" as const;
-const MAX_BATCHES_PER_RUN = 16;
+const MAX_BATCHES_PER_RUN = 4;
 const RUN_BUDGET_MS = 30_000;
 
 type DrainRequestReceiptsOptions = {

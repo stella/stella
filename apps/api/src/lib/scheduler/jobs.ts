@@ -293,6 +293,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payload: { paused: false },
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: SWEEP_REQUEST_RECEIPTS_TASK,
+    reads: { budget: "scheduled.requests.sweepReceipts" },
   },
   {
     description: "Report scheduler pauses older than 24 hours",

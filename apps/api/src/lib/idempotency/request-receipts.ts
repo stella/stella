@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import {
   and,
+  asc,
   eq,
   inArray,
   lt,
@@ -450,20 +451,43 @@ export const sweepExpiredRequestReceipts = async ({
   // requests cannot starve abandoned rows behind it. Each sweep handles one
   // principal's bounded set in one scoped delete; the scheduler bounds and
   // continues these rounds. Deletion locks again and rechecks eligibility.
-  const candidates = await withSkipLockedBatch({
-    database: db,
-    limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
-    select: (tx) =>
-      tx
-        .select({
-          id: receipts.id,
-          organizationId: receipts.organizationId,
-          userId: receipts.userId,
-        })
-        .from(receipts)
-        .where(expired),
-    run: (_tx, rows) => rows,
-  });
+  const readCandidates = async (
+    state: typeof receipts.$inferSelect.state,
+    before: Date,
+  ) =>
+    await withSkipLockedBatch({
+      database: db,
+      limit: REQUEST_RECEIPT_RETENTION_BATCH_SIZE,
+      select: (tx) =>
+        tx
+          .select({
+            id: receipts.id,
+            organizationId: receipts.organizationId,
+            userId: receipts.userId,
+            claimedAt: receipts.claimedAt,
+          })
+          .from(receipts)
+          .where(
+            and(
+              eq(receipts.state, state),
+              lt(receipts.claimedAt, sql`${before.toISOString()}::timestamptz`),
+            ),
+          )
+          .orderBy(asc(receipts.claimedAt))
+          .limit(REQUEST_RECEIPT_RETENTION_BATCH_SIZE)
+          .$dynamic(),
+      run: (_tx, rows) => rows,
+    });
+  const completed = await readCandidates("completed", completedBefore);
+  if (shouldStop()) {
+    return { deleted: 0, hasMore: true };
+  }
+  const pending = await readCandidates("pending", pendingBefore);
+  const candidates = [...completed, ...pending]
+    .toSorted(
+      (left, right) => left.claimedAt.getTime() - right.claimedAt.getTime(),
+    )
+    .slice(0, REQUEST_RECEIPT_RETENTION_BATCH_SIZE);
   const first = candidates.at(0);
   if (first === undefined) {
     return { deleted: 0, hasMore: false };
