@@ -6,6 +6,7 @@ import {
   UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
 } from "@stll/api-contract/chat";
 
+import { isTanStackStreamEventType } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
 /** The client sees where an unknown stored part sits, never its raw payload. */
@@ -55,6 +56,10 @@ const clientVisibleSnapshotMessage = (
 
 /** Last server boundary for AG-UI events carrying stored message parts. */
 export const clientVisibleStreamChunk = (chunk: StreamChunk): StreamChunk => {
+  // An event the engine emits beyond the SDK's types carries no stored part.
+  if (!isTanStackStreamEventType(chunk.type)) {
+    return chunk;
+  }
   switch (chunk.type) {
     case EventType.MESSAGES_SNAPSHOT: {
       const messages = chunk.messages.map(clientVisibleSnapshotMessage);

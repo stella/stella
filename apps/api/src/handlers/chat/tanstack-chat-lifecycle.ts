@@ -148,6 +148,10 @@ const TANSTACK_STREAM_EVENT_LIFECYCLE = {
   "content" | "failed" | "started" | "terminal"
 >;
 
+/** Whether the installed SDK names this event type; the engine may emit others. */
+export const isTanStackStreamEventType = (type: string): boolean =>
+  ownEntry(TANSTACK_STREAM_EVENT_LIFECYCLE, type) !== undefined;
+
 export const tanStackStreamEventLifecycle = (
   chunk: StreamChunk,
 ): "cancelled" | "completed" | "content" | "failed" | "started" | "waiting" => {
