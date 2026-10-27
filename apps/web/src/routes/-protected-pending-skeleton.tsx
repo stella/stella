@@ -162,8 +162,6 @@ function ExpandedSidebarSkeleton() {
         <span
           className={cn(
             "text-muted-foreground grid place-items-center",
-            resolveInspectorPaneWidth,
-            shouldForceSidebarCollapsed,
             SIDE_RAIL_ICON_BUTTON_SIZE,
           )}
         >
