@@ -245,8 +245,8 @@ type McpServerDependencies = {
   ) => Promise<McpTool[]>;
   listMcpResources: (
     mode: McpMode,
-    context?: McpRequestResources,
-  ) => Resource[];
+    options?: { context?: McpRequestResources | undefined },
+  ) => Promise<Resource[]>;
   readMcpResource: (
     uri: string,
     mode: McpMode,
@@ -1101,7 +1101,7 @@ export const createMcpHttpRequestHandler = ({
     return retryableToolErrorResult(mode, context);
   };
 
-  const createMcpServer = ({
+  const createMcpServer = async ({
     context,
     mode,
     session,
@@ -1122,7 +1122,7 @@ export const createMcpHttpRequestHandler = ({
       },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode, context),
+        instructions: await getMcpInstructions(mode, context),
       },
     );
 
@@ -1148,8 +1148,8 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode, context),
+    server.setRequestHandler("resources/list", async () => ({
+      resources: await listMcpResources(mode, { context }),
     }));
 
     server.setRequestHandler(
@@ -1232,7 +1232,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     const handler = createMcpHandler(
-      () => createMcpServer({ ...readFactoryState(), mode }),
+      async () => await createMcpServer({ ...readFactoryState(), mode }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1276,7 +1276,7 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = createMcpServer({ context, mode, session });
+    const server = await createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,

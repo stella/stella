@@ -25,7 +25,7 @@ const entry = (id: string, overrides: Partial<TimeEntry> = {}): TimeEntry =>
   ({
     id,
     source: "manual",
-    status: "draft",
+    status: "submitted",
     activityCode: null,
     billable: true,
     billedMinutes: 90,
@@ -38,6 +38,7 @@ const entry = (id: string, overrides: Partial<TimeEntry> = {}): TimeEntry =>
     narrativeLanguage: null,
     noCharge: false,
     rateAtEntry: 300_000,
+    returnComment: null,
     taskCode: null,
     timerStartedAt: null,
     timerStoppedAt: null,
@@ -302,7 +303,8 @@ const { timeEntriesOptions } =
   await import("@/lib/workspaces/queries/time-entries");
 const { expensesOptions } = await import("@/lib/workspaces/queries/expenses");
 const { MatterApprovalView } = await import("./matter-approval-view");
-const { InvoiceComposer } = await import("./invoice-composer");
+const { InvoiceComposer } =
+  await import("@/components/billing/invoice-composer");
 
 const resetServer = (entries: TimeEntry[], expenses: Expense[] = []) => {
   server.entries = new Map(entries.map((item) => [item.id, item]));
@@ -434,7 +436,7 @@ describe("matter approval view", () => {
     await testing.waitFor(() =>
       expect(
         testing
-          .within(rowOf("Timekeeper One: Narrative entry-a"))
+          .within(rowOf("Narrative entry-a"))
           .getByRole("button", { name: messages.billing.revertToDraft }),
       ).toBeTruthy(),
     );
@@ -467,9 +469,7 @@ describe("matter approval view", () => {
       expect(server.approveCalls).toEqual([["entry-a", "entry-c"]]),
     );
     await testing.waitFor(() =>
-      expect(
-        testing.screen.getByText("Timekeeper One: Narrative entry-c"),
-      ).toBeTruthy(),
+      expect(testing.screen.getByText("Narrative entry-c")).toBeTruthy(),
     );
     expect(server.approveCalls).toHaveLength(1);
     expect(testing.screen.getByText("Narrative entry-b")).toBeTruthy();
@@ -482,7 +482,7 @@ describe("matter approval view", () => {
     // mounts renders them at once rather than after a fetch.
     await mount("member", approvalPage, (client) => {
       client.setQueryData(
-        timeEntriesOptions(WORKSPACE, USER, { status: "draft" }).queryKey,
+        timeEntriesOptions(WORKSPACE, USER, { status: "submitted" }).queryKey,
         [{ ...draft, rateAtEntry: cents(draft.rateAtEntry) }],
       );
       client.setQueryData(
@@ -575,13 +575,13 @@ const releaseHeld = async (index: number) => {
   });
 };
 
-describe("returning approved time to draft", () => {
+describe("returning approved time to its timekeeper", () => {
   test("sends the trimmed comment, moves the entry back to draft and reads the invoice prefill again", async () => {
     resetServer([entry("entry-a", { status: "approved" })]);
     await mount("owner", approvalPage);
-    await testing.screen.findByText("Timekeeper One: Narrative entry-a");
+    await testing.screen.findByText("Narrative entry-a");
     await testing.waitFor(() => expect(server.prefillReads).toBe(1));
-    const row = rowOf("Timekeeper One: Narrative entry-a");
+    const row = rowOf("Narrative entry-a");
     const revert = testing.within(row).getByRole("button", {
       name: messages.billing.revertToDraft,
     });
@@ -597,13 +597,12 @@ describe("returning approved time to draft", () => {
     await testing.waitFor(() =>
       expect(server.returnCalls).toEqual([{ id: "entry-a", comment }]),
     );
-    // Back among the drafts, where it can be approved again.
+    // Back with its timekeeper as a draft, so it leaves the review lists
+    // until it is submitted again.
     await testing.waitFor(() =>
-      expect(
-        testing
-          .within(rowOf("Narrative entry-a"))
-          .getByRole("button", { name: messages.billing.approve }),
-      ).toBeTruthy(),
+      expect(testing.screen.queryByText("Narrative entry-a") === null).toBe(
+        true,
+      ),
     );
     await testing.waitFor(() => expect(server.prefillReads).toBe(2));
     expect(testing.screen.queryByRole("alert")).toBeNull();
@@ -615,19 +614,17 @@ describe("returning approved time to draft", () => {
       entry("entry-open", { status: "approved" }),
     ]);
     await mount("owner", approvalPage);
-    await testing.screen.findByText("Timekeeper One: Narrative entry-locked");
+    await testing.screen.findByText("Narrative entry-locked");
     await testing.waitFor(() => expect(server.prefillReads).toBe(1));
     server.refusals.set("entry-locked", "time_period_locked");
-    const locked = rowOf("Timekeeper One: Narrative entry-locked");
+    const locked = rowOf("Narrative entry-locked");
 
     await typeReturnComment(locked, "Wrong matter");
     await clickIn(locked, messages.billing.revertToDraft);
 
     const alert = await testing.screen.findByRole("alert");
     expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
-    expect(
-      rowOf("Timekeeper One: Narrative entry-locked").contains(alert),
-    ).toBe(true);
+    expect(rowOf("Narrative entry-locked").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
     expect(server.returnCalls).toEqual([
       { id: "entry-locked", comment: "Wrong matter" },
@@ -635,10 +632,14 @@ describe("returning approved time to draft", () => {
     // Still approved, and nothing billable changed.
     expect(
       testing
-        .within(rowOf("Timekeeper One: Narrative entry-locked"))
+        .within(rowOf("Narrative entry-locked"))
         .getByRole("button", { name: messages.billing.revertToDraft }),
     ).toBeTruthy();
-    expect(testing.screen.queryByText("Narrative entry-locked")).toBeNull();
+    expect(
+      testing
+        .within(rowOf("Narrative entry-locked"))
+        .queryByRole("button", { name: messages.billing.approve }) === null,
+    ).toBe(true);
     expect(server.prefillReads).toBe(1);
   });
 
@@ -648,13 +649,13 @@ describe("returning approved time to draft", () => {
       entry("entry-open", { status: "approved" }),
     ]);
     await mount("owner", approvalPage);
-    await testing.screen.findByText("Timekeeper One: Narrative entry-locked");
+    await testing.screen.findByText("Narrative entry-locked");
     server.refusals.set("entry-locked", "time_period_locked");
     server.holdWrites = true;
 
     for (const [narrative, comment] of [
-      ["Timekeeper One: Narrative entry-locked", "Wrong matter"],
-      ["Timekeeper One: Narrative entry-open", "Wrong date"],
+      ["Narrative entry-locked", "Wrong matter"],
+      ["Narrative entry-open", "Wrong date"],
     ] as const) {
       await typeReturnComment(rowOf(narrative), comment);
       await clickIn(rowOf(narrative), messages.billing.revertToDraft);
@@ -670,21 +671,15 @@ describe("returning approved time to draft", () => {
     const alert = await testing.screen.findByRole("alert");
     expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
     await releaseHeld(1);
+    // The returned entry goes back to its timekeeper and leaves the list.
     await testing.waitFor(() =>
-      expect(
-        testing
-          .within(rowOf("Narrative entry-open"))
-          .getByRole("button", { name: messages.billing.approve }),
-      ).toBeTruthy(),
+      expect(testing.screen.queryByText("Narrative entry-open") === null).toBe(
+        true,
+      ),
     );
 
-    expect(
-      rowOf("Timekeeper One: Narrative entry-locked").contains(alert),
-    ).toBe(true);
+    expect(rowOf("Narrative entry-locked").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
-    expect(
-      testing.within(rowOf("Narrative entry-open")).queryByRole("alert"),
-    ).toBeNull();
   });
 });
 
@@ -885,7 +880,7 @@ describe("approving a large selection", () => {
     expect(rowOf(`Narrative ${lastId}`).contains(alert)).toBe(true);
     await testing.waitFor(() =>
       expect(
-        testing.screen.getByText(`Timekeeper One: Narrative ${ids[0] ?? ""}`),
+        testing.screen.getByText(`Narrative ${ids[0] ?? ""}`),
       ).toBeTruthy(),
     );
     expect(document.querySelectorAll('[role="alert"]')).toHaveLength(1);
@@ -893,12 +888,18 @@ describe("approving a large selection", () => {
 });
 
 describe("lists longer than one page", () => {
+  // Time is reviewed once submitted; expenses are still approved from draft.
+  const reviewedStatus = (list: ListRequest["list"]) =>
+    list === "time-entries" ? "submitted" : "draft";
   const cursorsSent = (list: ListRequest["list"]) =>
     server.listRequests
-      .filter((request) => request.list === list && request.status === "draft")
+      .filter(
+        (request) =>
+          request.list === list && request.status === reviewedStatus(list),
+      )
       .map((request) => request.cursor);
 
-  test("a draft entry on the second page of time can be approved", async () => {
+  test("a submitted entry on the second page of time can be approved", async () => {
     resetServer([entry("entry-first"), entry("entry-second")]);
     server.pageSize = 1;
     await mount("owner", approvalPage);

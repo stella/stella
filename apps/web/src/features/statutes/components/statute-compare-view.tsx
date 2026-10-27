@@ -6,12 +6,14 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
@@ -154,6 +156,7 @@ export const StatuteCompareView = ({
     newer: resolved.newer,
     older: resolved.older,
     onClose: close,
+    statuteLists: statuteListSchemeFor(onScreen.country),
   };
 
   // Both consolidations are the same act from the same publisher, so its
@@ -193,6 +196,8 @@ type CompareFrame = {
   older: PublicStatuteVersion;
   newer: PublicStatuteVersion;
   onClose: () => void;
+  /** The act's publisher scheme, which both sides' anchors nest lists in. */
+  statuteLists: StatuteListScheme;
 };
 
 type OrderSidesOptions = {
@@ -823,7 +828,11 @@ const CompareCell = ({
           {row.move === null ? null : (
             <span className="sr-only">{t("statutes.compareMoved")}</span>
           )}
-          <ReaderBlocks language={frame.language} side={wording} />
+          <ReaderBlocks
+            language={frame.language}
+            side={wording}
+            statuteLists={frame.statuteLists}
+          />
         </div>
       </div>
     );
@@ -869,10 +878,12 @@ const CompareCell = ({
 const ReaderBlocks = ({
   language,
   side,
+  statuteLists,
 }: {
   /** The act's language; the chrome around the cell is the reader's own. */
   language: string;
   side: StatuteCompareSide;
+  statuteLists: StatuteListScheme;
 }) => (
   <div
     className="flex flex-col gap-[var(--reader-paragraph-gap)] *:my-0"
@@ -884,6 +895,7 @@ const ReaderBlocks = ({
         block={block}
         key={block.id}
         rangesByPieceId={rangesByPieceId}
+        statuteLists={statuteLists}
       />
     ))}
   </div>
@@ -969,6 +981,7 @@ const OneSidedComparison = ({ frame, sides }: OneSidedComparisonProps) => {
   const wording = (
     <ReaderBlocks
       language={frame.language}
+      statuteLists={frame.statuteLists}
       side={{
         blocks: sides.blocks,
         segments: [{ type: "equal", text: compareText(sides.blocks) }],

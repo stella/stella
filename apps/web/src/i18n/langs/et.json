@@ -508,14 +508,20 @@
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
     "approval": {
+      "approveAll": "{count, plural, one {Kinnita # kanne} other {Kinnita kõik # kannet}}",
       "approveSelected": "Kinnita {count, plural, one {# valitud kanne} other {# valitud kannet}}",
+      "billedTotal": "Arveldatud {duration}",
       "empty": "Selles toimikus ei oota midagi kinnitamist.",
+      "emptyWeek": "Sel nädalal ei oota midagi kinnitamist. Esitatud aeg ilmub siia.",
+      "everyone": "Kõik",
       "failed": "Muudatust ei salvestatud. Proovige uuesti.",
       "myTime": "Minu aeg",
+      "pending": "{count, plural, one {# kanne kinnitamiseks} other {# kannet kinnitamiseks}}",
       "refusals": {
         "invalidEntry": "Lisage kirjeldus ja kontrollige töö kuupäeva, seejärel kinnitage kanne.",
         "notApprover": "Seda kannet saab kinnitada ainult määratud kinnitaja või administraator.",
         "notFound": "Seda kannet enam ei ole. Värskendage loendit.",
+        "notSubmitted": "Seda kannet pole veel esitatud. Kõigepealt peab selle esitama kande tegija.",
         "runningTimer": "Peatage töötav taimer enne kande kinnitamist.",
         "unpriced": "Sellel kandel pole määra. Seadistage selle toimiku määr ja kinnitage seejärel kanne.",
         "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
@@ -530,6 +536,17 @@
     "batchActions": "Partiiaktsioonid",
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
+    "clientComposer": {
+      "flatFeeNote": "Esitage fikseeritud tasuga toimikute arved toimiku arvete lehel.",
+      "includeMatter": "Kaasa {matterName}",
+      "invalidPeriod": "Valige lõppkuupäev, mis ei ole alguskuupäevast varasem.",
+      "loadFailed": "Arveldamata töö laadimine ebaõnnestus. Proovige uuesti.",
+      "matterSubtotal": "Toimiku summa koos käibemaksuga: {amount} · {share} arvest",
+      "periodEnd": "Perioodi lõpp",
+      "periodStart": "Perioodi algus",
+      "title": "Esita kliendile arve",
+      "visibility": "Seda arvet näevad ainult inimesed, kellel on juurdepääs kõigile kaasatud toimikutele, ja arvelduse haldurid."
+    },
     "codes": {
       "activity": "Tegevus",
       "activityCode": "Tegevuskood",
@@ -673,6 +690,11 @@
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
       "invoiceNumber": "Arve number",
+      "lineOverrides": {
+        "editedRecorded": "Muudetud · salvestatud: {description}, {quantity} × {rate}",
+        "quantity": "Kogus",
+        "resetRecorded": "Taasta salvestatud väärtused"
+      },
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
       "markPaid": "Märgi makstuks",
@@ -811,6 +833,7 @@
       "approved": "Kinnitatud",
       "billed": "Arveldatud",
       "draft": "Mustand",
+      "submitted": "Esitatud",
       "written_off": "Maha kantud"
     },
     "stopTimer": "Peata",
@@ -2079,7 +2102,6 @@
       "orLetUsKnowAt": "või andke meile teada aadressil",
       "viewDocumentation": "Vaata dokumentatsiooni"
     },
-    "error": "Viga",
     "expenses": "Kulud",
     "export": {
       "citations": "Viited",
@@ -2153,6 +2175,7 @@
     "lastUpdated": "Viimati uuendatud",
     "layoutResetAfterProblem": "Pärast tõrget taastati vaikimisi paigutus.",
     "legalDatabase": "Õigusandmebaas",
+    "loadFailed": "Laadimine ebaõnnestus.",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
@@ -2241,7 +2264,7 @@
     "showMore": "Näita rohkem",
     "showSecretValue": "Kuva salajane väärtus",
     "signOut": "Logi välja",
-    "somethingWentWrong": "Midagi läks valesti",
+    "somethingWentWrong": "Midagi läks valesti. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "sort": "Sorteeri",
     "source": "Allikas",
     "stale": "Aegunud",
@@ -2718,7 +2741,7 @@
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },
-    "actionFailed": "Toiming ebaõnnestus",
+    "actionFailed": "See ei õnnestunud. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
       "caseLawCountryUnavailable": "Selle riigi kohtupraktika ei ole saadaval. Valige teine riik.",
@@ -3269,7 +3292,7 @@
     "saveSerializeFailedTitle": "DOCX-i ei saanud luua",
     "savingDocument": "Salvestamine...",
     "showDetails": "Näita üksikasju",
-    "somethingWentWrong": "Midagi läks valesti",
+    "somethingWentWrong": "Midagi läks valesti. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "synced": "Sünkroonitud",
     "syncing": "Sünkroonimine",
     "tableBordersAll": "Kõik äärised",
@@ -5872,6 +5895,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Sisemine töö"
+    },
+    "week": {
+      "allLogged": "Kõik on kirjendatud. Uus tegevus ilmub siia töö käigus.",
+      "days": "Nädalapäevad",
+      "entriesTitle": "Kirjendatud aeg",
+      "nextWeek": "Järgmine nädal",
+      "noActivity": "Veel pole midagi kirjendada. Töötage toimikus ja teie tegevus ilmub siia kinnitamiseks.",
+      "pendingCount": "{count, plural, one {# ettepanek} other {# ettepanekut}}",
+      "previousWeek": "Eelmine nädal",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Kontrollige töö kuupäeva ja esitage siis see kanne.",
+        "narrativeRequired": "Lisage kirjeldus ja esitage siis see kanne.",
+        "runningTimer": "Peatage töötav taimer ja esitage siis see kanne.",
+        "unpriced": "Sellel kandel pole määra. Küsige toimikule määra ja esitage see siis."
+      },
+      "returned": "Tagastatud: {comment}",
+      "submitAndApprove": "Esita ja kinnita",
+      "submitResult": "Esitatud {submitted} · kinnitatud {approved} · parandada {refused}",
+      "submitWeek": "Esita nädal",
+      "title": "Minu nädal",
+      "totals": "Kirjendatud {logged} · arveldatav {billable}"
     }
   },
   "translate": {

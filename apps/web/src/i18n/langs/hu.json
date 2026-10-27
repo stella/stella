@@ -508,14 +508,20 @@
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
     "approval": {
+      "approveAll": "{count, plural, one {# bejegyzés jóváhagyása} other {Mind a(z) # bejegyzés jóváhagyása}}",
       "approveSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} jóváhagyása",
+      "billedTotal": "Számlázva: {duration}",
       "empty": "Ebben az ügyben semmi nem vár jóváhagyásra.",
+      "emptyWeek": "Ezen a héten semmi sem vár jóváhagyásra. A beküldött idő itt jelenik meg.",
+      "everyone": "Mindenki",
       "failed": "A módosítás nem lett mentve. Próbálja újra.",
       "myTime": "Saját idő",
+      "pending": "{count, plural, one {# jóváhagyandó bejegyzés} other {# jóváhagyandó bejegyzés}}",
       "refusals": {
         "invalidEntry": "Adjon meg leírást, ellenőrizze a munkavégzés dátumát, majd hagyja jóvá a bejegyzést.",
         "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda hagyhatja jóvá.",
         "notFound": "Ez a bejegyzés már nem létezik. Frissítse a listát.",
+        "notSubmitted": "Ezt a bejegyzést még nem küldték be. Először a rögzítőjének kell beküldenie.",
         "runningTimer": "A jóváhagyás előtt állítsa le a futó időmérőt.",
         "unpriced": "Ehhez a bejegyzéshez nincs díjszabás. Állítson be díjszabást az ügyhöz, majd hagyja jóvá a bejegyzést.",
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
@@ -530,6 +536,17 @@
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
+    "clientComposer": {
+      "flatFeeNote": "Az átalánydíjas ügyeket az ügy számlázási oldalán számlázza.",
+      "includeMatter": "{matterName} hozzáadása",
+      "invalidPeriod": "A záró dátum nem lehet korábbi a kezdő dátumnál.",
+      "loadFailed": "A még nem számlázott munka betöltése sikertelen. Próbálja újra.",
+      "matterSubtotal": "Ügy összege áfával: {amount} · a számla {share} része",
+      "periodEnd": "Időszak vége",
+      "periodStart": "Időszak kezdete",
+      "title": "Ügyfél számlázása",
+      "visibility": "Ezt a számlát csak az összes érintett ügyhöz hozzáférő személyek és a számlázási rendszergazdák láthatják."
+    },
     "codes": {
       "activity": "Tevékenység",
       "activityCode": "Tevékenységkód",
@@ -673,6 +690,11 @@
       "invoiceDate": "Számla kelte",
       "invoiceDetail": "Számla részletei",
       "invoiceNumber": "Számlaszám",
+      "lineOverrides": {
+        "editedRecorded": "Módosítva · rögzítve: {description}, {quantity} × {rate}",
+        "quantity": "Mennyiség",
+        "resetRecorded": "Rögzített értékek visszaállítása"
+      },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
       "markPaid": "Fizetettnek jelöl",
@@ -811,6 +833,7 @@
       "approved": "Jóváhagyva",
       "billed": "Számlázva",
       "draft": "Piszkozat",
+      "submitted": "Beküldve",
       "written_off": "Leírva"
     },
     "stopTimer": "Leállítás",
@@ -2079,7 +2102,6 @@
       "orLetUsKnowAt": "vagy írjon nekünk ide:",
       "viewDocumentation": "Dokumentáció megtekintése"
     },
-    "error": "Hiba",
     "expenses": "Kiadások",
     "export": {
       "citations": "Hivatkozások",
@@ -2153,6 +2175,7 @@
     "lastUpdated": "Utoljára frissítve",
     "layoutResetAfterProblem": "Egy probléma miatt visszaállítottuk az alapértelmezett elrendezést.",
     "legalDatabase": "Jogi adatbázis",
+    "loadFailed": "Nem sikerült betölteni.",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
@@ -2241,7 +2264,7 @@
     "showMore": "Több megjelenítése",
     "showSecretValue": "Titkos érték megjelenítése",
     "signOut": "Kijelentkezés",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "sort": "Rendezés",
     "source": "Forrás",
     "stale": "Elavult",
@@ -2718,7 +2741,7 @@
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
       "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
     },
-    "actionFailed": "A művelet sikertelen",
+    "actionFailed": "Ez nem sikerült. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
       "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
@@ -3269,7 +3292,7 @@
     "saveSerializeFailedTitle": "A DOCX létrehozása nem sikerült",
     "savingDocument": "Mentés...",
     "showDetails": "Részletek megjelenítése",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "synced": "Szinkronizálva",
     "syncing": "Szinkronizálás",
     "tableBordersAll": "Minden szegély",
@@ -5872,6 +5895,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Belső munka"
+    },
+    "week": {
+      "allLogged": "Minden rögzítve van. Az új tevékenység munka közben itt jelenik meg.",
+      "days": "A hét napjai",
+      "entriesTitle": "Rögzített idő",
+      "nextWeek": "Következő hét",
+      "noActivity": "Még nincs mit rögzíteni. Dolgozzon egy ügyben, és a tevékenysége itt jelenik meg elfogadásra.",
+      "pendingCount": "{count, plural, one {# javaslat} other {# javaslat}}",
+      "previousWeek": "Előző hét",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Ellenőrizze a munkavégzés dátumát, majd küldje be ezt a bejegyzést.",
+        "narrativeRequired": "Adjon meg leírást, majd küldje be ezt a bejegyzést.",
+        "runningTimer": "Állítsa le a futó időmérőt, majd küldje be ezt a bejegyzést.",
+        "unpriced": "Ennek a bejegyzésnek nincs díjtétele. Kérjen díjtételt az ügyhöz, majd küldje be."
+      },
+      "returned": "Visszaküldve: {comment}",
+      "submitAndApprove": "Beküldés és jóváhagyás",
+      "submitResult": "Beküldve: {submitted} · jóváhagyva: {approved} · javítandó: {refused}",
+      "submitWeek": "Hét beküldése",
+      "title": "A hetem",
+      "totals": "Rögzítve: {logged} · számlázható: {billable}"
     }
   },
   "translate": {

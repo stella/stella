@@ -516,7 +516,111 @@ test("rejects delegated checks that no other CI step runs", () => {
 // owning job runs its `checkedBy` step.
 const DELEGABLE = ["scan-engine-wasm", "api-typecheck-projects"] as const;
 
-// timeout: exhaustively evaluates every Boolean CI context combination.
+type DelegationCase = {
+  readonly guardCondition: string;
+  readonly delegation: string;
+  /** Each delegable family's owning job condition. */
+  readonly ownerConditions: ReadonlyMap<string, string>;
+};
+
+// In every run the guard job takes, a family is handed off exactly when its
+// owning job runs (sound and complete), and each family is handed off in some
+// run. Stops at the first violating run so a broken binding fails fast.
+const delegationViolations = ({
+  guardCondition,
+  delegation,
+  ownerConditions,
+}: DelegationCase): string[] => {
+  const violations: string[] = [];
+  const delegatedSomewhere = new Set<string>();
+  // A handful of distinct values across all runs; parse each once.
+  const parsed = new Map<string, ReadonlySet<string>>();
+  for (const context of contexts([
+    guardCondition,
+    delegation,
+    ...ownerConditions.values(),
+  ])) {
+    if (evaluate(guardCondition, context) !== true) {
+      continue;
+    }
+    const value = evaluate(delegation, context);
+    if (typeof value !== "string") {
+      return [`${DELEGATED_CHECKS_ENV} is not a string`];
+    }
+    const delegated = parsed.get(value) ?? delegatedGeneratorIds(value);
+    parsed.set(value, delegated);
+    for (const id of delegated) {
+      delegatedSomewhere.add(id);
+      if (!ownerConditions.has(id)) {
+        violations.push(`${id} is delegated without an owning job`);
+      }
+    }
+    for (const [id, condition] of ownerConditions) {
+      const ownerRuns = evaluate(condition, context) === true;
+      if (delegated.has(id) !== ownerRuns) {
+        violations.push(
+          `${id} ${ownerRuns ? "is checked twice" : "is delegated to an owner that does not run"} in ${JSON.stringify(context.values)}`,
+        );
+      }
+    }
+    if (violations.length > 0) {
+      return violations;
+    }
+  }
+  for (const id of ownerConditions.keys()) {
+    if (!delegatedSomewhere.has(id)) {
+      violations.push(`${id} is never delegated`);
+    }
+  }
+  return violations;
+};
+
+test("the delegation check rejects unsound, incomplete and dead hand-offs", () => {
+  const wasm = "needs.ci-plan.outputs.wasm == 'true'";
+  const typecheck = "github.event_name == 'merge_group'";
+  const binding = (first: string, second: string) =>
+    `format('["{0}","{1}"]', ${first} && 'scan-engine-wasm' || '', ${second} && 'api-typecheck-projects' || '')`;
+  const ownerConditions = new Map([
+    ["scan-engine-wasm", wasm],
+    ["api-typecheck-projects", typecheck],
+  ]);
+  const guardCondition = "github.event_name != 'push'";
+  expect(
+    delegationViolations({
+      guardCondition,
+      delegation: binding(wasm, typecheck),
+      ownerConditions,
+    }),
+  ).toEqual([]);
+  // Handed off in a run whose owner does not run: nobody checks it.
+  expect(
+    delegationViolations({
+      guardCondition,
+      delegation: binding("true", typecheck),
+      ownerConditions,
+    }).at(0),
+  ).toContain("scan-engine-wasm is delegated to an owner that does not run");
+  // Kept although its owner runs: the check runs twice.
+  expect(
+    delegationViolations({
+      guardCondition,
+      delegation: binding(wasm, "false"),
+      ownerConditions,
+    }).at(0),
+  ).toContain("api-typecheck-projects is checked twice");
+  // An owner that never runs where the guard does leaves a dead entry.
+  expect(
+    delegationViolations({
+      guardCondition,
+      delegation: binding(wasm, "false"),
+      ownerConditions: new Map([
+        ["scan-engine-wasm", wasm],
+        ["api-typecheck-projects", "false"],
+      ]),
+    }),
+  ).toEqual(["api-typecheck-projects is never delegated"]);
+});
+
 test("Guard B delegates each check exactly in runs whose owning job runs it", () => {
   const step = namedJobStep(GUARD_JOB, "Generated files manifest guard");
   const env = step?.["env"];
@@ -524,66 +628,42 @@ test("Guard B delegates each check exactly in runs whose owning job runs it", ()
   if (typeof delegation !== "string") {
     panic(`Guard B step has no ${DELEGATED_CHECKS_ENV}`);
   }
-  const ownerOf = (id: string) => {
-    const { checkedBy } = generator(id);
-    const owners = Object.entries(workflowJobs()).flatMap(
-      ([job, definition]) =>
-        job !== GUARD_JOB &&
-        isRecord(definition) &&
-        "steps" in definition &&
-        checkedBy !== undefined &&
-        namedJobStep(job, checkedBy) !== undefined
-          ? [job]
-          : [],
-    );
-    const [owner] = owners;
-    if (owner === undefined || owners.length > 1) {
-      return panic(`${id} needs exactly one owning job: ${owners.join(", ")}`);
-    }
-    // The owning step runs whenever its job does, and ci-result gates it.
-    expect(namedJobStep(owner, checkedBy ?? "")?.["if"], id).toBeUndefined();
-    const ciResult = workflowJobs()["ci-result"];
-    const gated = isRecord(ciResult) ? ciResult["needs"] : undefined;
-    expect(Array.isArray(gated) && gated.includes(owner), owner).toBe(true);
-    return owner;
-  };
-  const owners = new Map(DELEGABLE.map((id) => [id, ownerOf(id)]));
-  const guardCondition = jobCondition(GUARD_JOB);
-  const sources = [
-    guardCondition,
-    delegation,
-    ...[...owners.values()].map(jobCondition),
-  ];
-  const outcomes = new Set<string>();
-  for (const context of contexts(sources)) {
-    if (evaluate(guardCondition, context) !== true) {
-      continue;
-    }
-    const value = evaluate(delegation, context);
-    if (typeof value !== "string") {
-      panic(`${DELEGATED_CHECKS_ENV} is not a string`);
-    }
-    const delegated = delegatedGeneratorIds(value);
-    for (const id of delegated) {
-      // Sound: a skipped family is built by its owner in this same run.
-      expect(evaluate(jobCondition(ownerOf(id)), context), id).toBe(true);
-    }
-    // Complete: no run performs a delegable check in both jobs.
-    for (const [id, owner] of owners) {
-      expect(delegated.has(id), id).toBe(
-        evaluate(jobCondition(owner), context) === true,
+  // Each family's owning job, resolved once: the job that runs its
+  // `checkedBy` step unconditionally and that ci-result gates.
+  const ownerConditions = new Map(
+    DELEGABLE.map((id) => {
+      const { checkedBy } = generator(id);
+      const owners = Object.entries(workflowJobs()).flatMap(
+        ([job, definition]) =>
+          job !== GUARD_JOB &&
+          isRecord(definition) &&
+          "steps" in definition &&
+          checkedBy !== undefined &&
+          namedJobStep(job, checkedBy) !== undefined
+            ? [job]
+            : [],
       );
-    }
-    outcomes.add([...delegated].toSorted().join(","));
-  }
-  // Each entry delegates in some run, so none is dead text.
-  for (const id of DELEGABLE) {
-    expect(
-      [...outcomes].some((outcome) => outcome.includes(id)),
-      id,
-    ).toBe(true);
-  }
-}, 10_000);
+      const [owner] = owners;
+      if (owner === undefined || owners.length > 1) {
+        return panic(
+          `${id} needs exactly one owning job: ${owners.join(", ")}`,
+        );
+      }
+      expect(namedJobStep(owner, checkedBy ?? "")?.["if"], id).toBeUndefined();
+      const ciResult = workflowJobs()["ci-result"];
+      const gated = isRecord(ciResult) ? ciResult["needs"] : undefined;
+      expect(Array.isArray(gated) && gated.includes(owner), owner).toBe(true);
+      return [id, jobCondition(owner)] as const;
+    }),
+  );
+  expect(
+    delegationViolations({
+      guardCondition: jobCondition(GUARD_JOB),
+      delegation,
+      ownerConditions,
+    }),
+  ).toEqual([]);
+});
 
 test("rejects unchanged checks that no CI step proves", () => {
   expect(unchangedGeneratorIds(undefined)).toEqual(new Set());
