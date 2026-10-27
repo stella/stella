@@ -72,7 +72,7 @@ if (!databaseUrl || !runPostgresTests) {
             db: firstDb,
             heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
             leaseMs: LEASE_MS,
-            limit: 1,
+            rerunLimit: 0,
             maxRuntimeMs: MAX_RUNTIME_MS,
             registry: new Map([[TASK, firstTask]]),
             runnerId: "runner-1",
@@ -92,7 +92,7 @@ if (!databaseUrl || !runPostgresTests) {
           const secondResult = await runSchedulerOnce({
             db: secondDb,
             leaseMs: LEASE_MS,
-            limit: 1,
+            rerunLimit: 0,
             registry: new Map([[TASK, secondTask]]),
             runnerId: "runner-2",
           });
