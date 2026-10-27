@@ -21048,14 +21048,6 @@
         "job": "measure-1"
       }
     },
-    "src/mcp/tool-confirmation.test.ts": {
-      "peakMb": 421,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
-      }
-    },
     "src/mcp/tool-name-suggestions.test.ts": {
       "peakMb": 235,
       "baselineMb": 218,
