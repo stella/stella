@@ -1,5 +1,5 @@
 import { panic, TaggedError } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -155,4 +155,35 @@ test("a request from the running operation observes the already published slot",
   expect(joined).not.toBe(first);
   await joined.completion;
   expect(runs).toBe(2);
+});
+
+test("a settlement failure reaches its owner", async () => {
+  const failure = new DrainFailure({ message: "Synthetic settlement failure" });
+  const originalWithResolvers = Promise.withResolvers.bind(Promise);
+  const handled = Promise.withResolvers<unknown>();
+  const withResolvers = spyOn(Promise, "withResolvers");
+  withResolvers.mockImplementationOnce(() => {
+    const resolvers = originalWithResolvers<undefined>();
+    return {
+      ...resolvers,
+      resolve: () => {
+        throw failure;
+      },
+    };
+  });
+  try {
+    const request = createCoalescedDrain(
+      async () => await Promise.resolve(undefined),
+      {
+        onSettlementFailure: (error) => {
+          handled.resolve(error);
+        },
+      },
+    );
+    request();
+  } finally {
+    withResolvers.mockRestore();
+  }
+
+  expect(await handled.promise).toBe(failure);
 });

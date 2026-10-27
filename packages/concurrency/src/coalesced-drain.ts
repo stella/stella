@@ -12,6 +12,16 @@ type DrainState =
 type DrainSettlement =
   { type: "fulfilled" } | { type: "rejected"; error: unknown };
 
+type CoalescedDrainOptions = {
+  readonly onSettlementFailure?: (error: unknown) => void;
+};
+
+const rethrowSettlementFailure = (error: unknown) => {
+  queueMicrotask(() => {
+    panic("Drain settlement failed", error);
+  });
+};
+
 const createSlot = (): DrainSlot => {
   const finish = Promise.withResolvers<undefined>();
   return { ticket: { completion: finish.promise }, finish };
@@ -25,7 +35,12 @@ const createSlot = (): DrainSlot => {
  * The operation owns expected failure reporting. An unexpected rejection rejects
  * its ticket while allowing the pending operation to run.
  */
-export const createCoalescedDrain = (run: () => Promise<void>) => {
+export const createCoalescedDrain = (
+  run: () => Promise<void>,
+  {
+    onSettlementFailure = rethrowSettlementFailure,
+  }: CoalescedDrainOptions = {},
+) => {
   let state: DrainState = { type: "idle" };
 
   const start = (slot: DrainSlot) => {
@@ -59,14 +74,13 @@ export const createCoalescedDrain = (run: () => Promise<void>) => {
       .then(run)
       .then(() => ({ type: "fulfilled" }) as const)
       .catch((error: unknown) => ({ type: "rejected", error }) as const)
-      .then(settle);
+      .then(settle)
+      .catch(onSettlementFailure);
   };
 
   return () => {
     if (state.type === "running") {
-      if (state.pending === null) {
-        state.pending = createSlot();
-      }
+      state.pending ??= createSlot();
       return state.pending.ticket;
     }
     const current = createSlot();
