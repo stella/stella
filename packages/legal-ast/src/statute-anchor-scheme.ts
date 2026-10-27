@@ -1,4 +1,5 @@
 // parser-output-unchanged: Statute anchor grammars for readers and provision reads; decision parsers reach this module only through document-ast and call none of it.
+// parser-output-unchanged: Minting and nesting provision anchors moved here serve provision keys and previews; decision parsers still call none of this module.
 /**
  * The grammar a publisher writes statute anchors in, and every reading of an
  * anchor's path that the readers, previews and provision reads make.
