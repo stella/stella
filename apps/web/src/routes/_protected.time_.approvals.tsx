@@ -1,7 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import * as v from "valibot";
 
-import { parsePlainDate, Temporal } from "@stll/time";
+import { Temporal } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { weekOf } from "@/features/my-week/my-week.logic";
@@ -9,6 +8,7 @@ import {
   TimeApprovalsPage,
   timeApprovalsQuery,
 } from "@/features/time-review/time-approvals-page";
+import { timeApprovalsSearchSchema } from "@/features/time-review/time-approvals-search";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -17,24 +17,12 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { routeSearchSchema } from "@/route-search-params";
 
 const todayIn = (timezoneId: string) =>
   Temporal.Now.plainDateISO(timezoneId).toString();
 
-const optionalId = v.optional(v.pipe(v.string(), v.uuid()));
-
 export const Route = createFileRoute("/_protected/time_/approvals")({
-  validateSearch: routeSearchSchema({
-    date: v.optional(
-      v.pipe(
-        v.string(),
-        v.check((date) => parsePlainDate(date) !== null),
-      ),
-    ),
-    member: optionalId,
-    matter: optionalId,
-  }),
+  validateSearch: timeApprovalsSearchSchema,
   loaderDeps: ({ search }) => ({ date: search.date }),
   beforeLoad: async ({ context }) => {
     if (

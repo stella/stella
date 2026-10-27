@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
@@ -22,6 +22,7 @@ const { QueryClient, QueryClientProvider } =
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { AuthenticatedUserProvider } =
@@ -653,21 +654,24 @@ describe("my week", () => {
       pageSize: 1,
       failLaterPages: true,
     });
-    mount();
+    const toasts = spyOn(stellaToast, "add");
+    try {
+      mount();
 
-    expect(await screen.findByText("Review lease schedule")).toBeTruthy();
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: messages.common.loadMore }),
-      );
-    });
+      expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: messages.common.loadMore }),
+        );
+      });
 
-    expect(
-      (await screen.findByText(messages.errors.actionFailed)).getAttribute(
-        "role",
-      ),
-    ).toBe("alert");
-    expect(screen.getByText("Review lease schedule")).toBeTruthy();
+      await waitFor(() => {
+        expect(toasts).toHaveBeenCalled();
+      });
+      expect(screen.getByText("Review lease schedule")).toBeTruthy();
+    } finally {
+      toasts.mockRestore();
+    }
   });
 
   test("only drafts are editable from the week", async () => {

@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import { cents } from "@stll/money";
 import { Temporal } from "@stll/time";
@@ -16,6 +16,7 @@ const { cleanup, fireEvent, render, screen, waitFor, within } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { stellaToast } = await import("@stll/ui/toast");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TimeApprovalsPage } =
   await import("@/features/time-review/time-approvals-page");
@@ -68,7 +69,13 @@ const submitted = (
 type ApiCall = { method: string; path: string; body: unknown };
 
 /** The approval queue, approve and return endpoints over in-memory rows. */
-const serveQueue = (initial: TimeApprovalItem[]) => {
+const serveQueue = (
+  initial: TimeApprovalItem[],
+  {
+    pageSize = 200,
+    failLaterPages = false,
+  }: { pageSize?: number; failLaterPages?: boolean } = {},
+) => {
   let queue = [...initial];
   const calls: ApiCall[] = [];
   const json = (value: unknown) =>
@@ -87,14 +94,20 @@ const serveQueue = (initial: TimeApprovalItem[]) => {
       if (request.method === "GET" && path === "/time-entries/approval-queue") {
         const from = url.searchParams.get("from") ?? "";
         const to = url.searchParams.get("to") ?? "";
-        const items = queue.filter(
+        const cursor = url.searchParams.get("cursor");
+        if (failLaterPages && cursor !== null) {
+          return new Response("unavailable", { status: 503 });
+        }
+        const inRange = queue.filter(
           (item) => item.dateWorked >= from && item.dateWorked <= to,
         );
+        const offset = cursor === null ? 0 : Number(cursor);
+        const more = offset + pageSize < inRange.length;
         return json({
-          items,
-          nextCursor: null,
-          limit: 200,
-          pendingCount: items.length,
+          items: inRange.slice(offset, offset + pageSize),
+          nextCursor: more ? String(offset + pageSize) : null,
+          limit: pageSize,
+          pendingCount: inRange.length,
         });
       }
       if (request.method === "POST" && path === "/time-entries/approve") {
@@ -274,6 +287,31 @@ describe("approving time by person", () => {
         ?.body,
     ).toEqual({ id: "adam-1", comment: "Split the call from the drafting" });
     expect(screen.getByText("Narrative adam-2")).toBeTruthy();
+  });
+
+  test("a later page that fails to load says so and keeps the loaded entries", async () => {
+    serveQueue([submitted("adam-1"), submitted("adam-2")], {
+      pageSize: 1,
+      failLaterPages: true,
+    });
+    const toasts = spyOn(stellaToast, "add");
+    try {
+      mount();
+
+      expect(await personSection("Adam Novak")).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: messages.common.loadMore }),
+        );
+      });
+
+      await waitFor(() => {
+        expect(toasts).toHaveBeenCalled();
+      });
+      expect(await personSection("Adam Novak")).toBeTruthy();
+    } finally {
+      toasts.mockRestore();
+    }
   });
 
   test("an empty week says where submitted time will appear", async () => {

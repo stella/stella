@@ -30,6 +30,7 @@ import {
 import { useFormatter } from "@/i18n/formatting-context";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   type TimeApprovalItem,
@@ -300,7 +301,17 @@ export const TimeApprovalsPage = ({
               <Button
                 disabled={queue.isFetchingNextPage}
                 onClick={() =>
-                  detached(queue.fetchNextPage(), "time-approvals.next-page")
+                  detached(
+                    (async () => {
+                      const page = await queue.fetchNextPage();
+                      // Loaded entries stay; the failure is said, and the
+                      // button stays to retry.
+                      if (page.isFetchNextPageError) {
+                        notifyUserError(page.error, t("errors.actionFailed"));
+                      }
+                    })(),
+                    "time-approvals.next-page",
+                  )
                 }
                 size="sm"
                 variant="outline"

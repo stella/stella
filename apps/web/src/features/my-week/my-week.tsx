@@ -37,6 +37,7 @@ import { WeekStrip } from "@/features/my-week/week-strip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 
@@ -266,7 +267,17 @@ export const MyWeek = ({
             <Button
               disabled={entriesQuery.isFetchingNextPage}
               onClick={() =>
-                detached(entriesQuery.fetchNextPage(), "my-week.next-page")
+                detached(
+                  (async () => {
+                    const page = await entriesQuery.fetchNextPage();
+                    // Loaded entries stay; the failure is said, and the
+                    // button stays to retry.
+                    if (page.isFetchNextPageError) {
+                      notifyUserError(page.error, tErrors("actionFailed"));
+                    }
+                  })(),
+                  "my-week.next-page",
+                )
               }
               size="sm"
               variant="outline"
@@ -274,11 +285,6 @@ export const MyWeek = ({
               {tCommon("loadMore")}
             </Button>
           </div>
-        )}
-        {entriesQuery.isFetchNextPageError && (
-          <p className="text-destructive pb-4 text-center text-sm" role="alert">
-            {tErrors("actionFailed")}
-          </p>
         )}
       </ScrollArea>
       <Dialog
