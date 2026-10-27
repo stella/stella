@@ -853,12 +853,14 @@ const searchExitsEarly = (options: readonly Token[]): boolean => {
     if (!/^-[A-Za-z0-9]/u.test(value)) {
       continue;
     }
-    for (const [index, letter] of [...value.slice(1)].entries()) {
+    // Short options are ASCII letters, one code unit each.
+    for (let index = 1; index < value.length; index += 1) {
+      const letter = value.charAt(index);
       if (EARLY_EXIT_SHORT_OPTIONS.has(letter)) {
         return true;
       }
       if (VALUE_SHORT_OPTIONS.has(letter)) {
-        valueNext = index === value.length - 2;
+        valueNext = index === value.length - 1;
         break;
       }
     }
