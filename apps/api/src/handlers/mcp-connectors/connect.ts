@@ -591,6 +591,7 @@ const ensureOAuthClient = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP OAuth client registration could not be persisted",
         }),
       );

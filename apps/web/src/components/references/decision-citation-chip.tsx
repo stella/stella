@@ -255,7 +255,6 @@ export const DecisionCitationChip = ({
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
         <DecisionCitationTriggerContent
           citingText={citingText}

@@ -962,6 +962,7 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/mobile/**",
         "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
@@ -1125,6 +1126,7 @@
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
+        "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/cli/**",

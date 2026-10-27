@@ -9,6 +9,7 @@ import type {
   HeadingBlock,
   HeadingLevel,
 } from "@stll/legal-ast/document-ast";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -42,14 +43,11 @@ const AnalysisProviders = ({ children }: { children: ReactNode }) => (
 );
 
 afterEach(() => {
-  // Work React scheduled on a fake clock never runs once real timers return,
-  // and every later render in the file would wait behind it: drain it first.
-  if (jest.isFakeTimers()) {
-    act(() => {
-      jest.runOnlyPendingTimers();
-    });
-  }
-  jest.useRealTimers();
+  // React work left on a fake clock runs inside act and before cleanup, so
+  // later renders in the file never wait behind it.
+  act(() => {
+    restoreRealTimers();
+  });
   cleanup();
 });
 

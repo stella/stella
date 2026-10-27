@@ -25,7 +25,7 @@ import type {
 
 const citation = {
   document: {
-    country: "CZE",
+    country: "cz",
     eli: "/eli/cz/sb/1961/141",
     id: "act",
     slug: null,

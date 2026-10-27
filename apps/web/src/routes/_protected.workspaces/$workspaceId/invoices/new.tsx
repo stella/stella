@@ -12,8 +12,9 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
@@ -104,14 +105,14 @@ function NewInvoicePage() {
   const canApprove = usePermissions({ timeEntry: ["approve"] });
   const canApproveExpenses = usePermissions({ expense: ["update"] });
   // The count is a hint; a failed read reports itself and shows no count.
-  const pendingTime = useQueryView(
+  const pendingTime = queryView(
     useQuery({
       ...timeEntriesOptions(workspaceId, userId, { status: "draft" }),
       enabled: canApprove,
     }),
   );
   useQueryViewError(pendingTime, "NewInvoicePage:pending-time");
-  const pendingExpenses = useQueryView(
+  const pendingExpenses = queryView(
     useQuery({
       ...expensesOptions(workspaceId, { status: "draft" }),
       enabled: canApprove && canApproveExpenses,
