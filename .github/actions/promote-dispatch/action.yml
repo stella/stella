@@ -172,9 +172,14 @@ runs:
         # Reuse an accepted promotion before issuing another side effect. A
         # failed run is retryable; successful and active runs are receipts.
         if ! existing="$(
-          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
+          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate --slurp \
             "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=100" \
-            --jq ".workflow_runs[] | select(.display_title == \"${expected_title}\") | select(.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"pending\" or .conclusion == \"success\") | [.id, .status, .conclusion] | @tsv" | head -n 1
+            | jq -r --arg title "$expected_title" '
+                [.[].workflow_runs[] | select(.display_title == $title) |
+                  select(.status == "queued" or .status == "in_progress" or
+                    .status == "waiting" or .status == "pending" or .conclusion == "success")]
+                | first // empty | [.id, .status, .conclusion] | @tsv
+              '
         )"; then
           echo "::error::Existing promote run lookup failed." >&2
           exit 1

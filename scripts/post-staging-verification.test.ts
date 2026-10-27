@@ -12,11 +12,15 @@ type ScenarioOptions = {
   newestRun: number;
   ownerRun: number;
   ownerState: string;
+  dispatchSha?: string;
+  state?: "pending" | "success" | "failure";
 };
 const scenario = async ({
   newestRun,
   ownerRun,
   ownerState,
+  dispatchSha = head,
+  state = "success",
 }: ScenarioOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "staging-status-owner-"));
   try {
@@ -40,16 +44,16 @@ esac
     await writeFile(
       runResponse,
       JSON.stringify({
-        workflow_runs: [
-          {
-            id: newestRun,
-            html_url: runUrl,
-            head_branch: "main",
-            path: ".github/workflows/deploy-staging.yml",
-            display_title: `Staging release proof ${head}`,
-            repository: { full_name: repository },
-          },
-        ],
+        workflow_runs: [...new Set([newestRun, runId])].map((id) => ({
+          id,
+          html_url: `https://github.com/${repository}/actions/runs/${id}`,
+          head_branch: "main",
+          path: ".github/workflows/deploy-staging.yml",
+          display_title: `Staging release proof ${dispatchSha}`,
+          event: "workflow_dispatch",
+          head_sha: dispatchSha,
+          repository: { full_name: repository },
+        })),
       }),
     );
     // The run listing can still show A when B has posted its result. This
@@ -69,7 +73,7 @@ esac
       [
         "bash",
         path.join(import.meta.dir, "post-staging-verification.sh"),
-        "success",
+        state,
         "proof passed",
       ],
       {
@@ -134,4 +138,51 @@ test("the current owner can publish its result", async () => {
     context: "staging/verified",
     target_url: runUrl,
   });
+});
+
+for (const state of ["pending", "success", "failure"] as const) {
+  test(`an ordinary blank-sha dispatch posts ${state} for the newer main commit it selected`, async () => {
+    const dispatchSha = "b".repeat(40);
+    expect(dispatchSha).not.toBe(head);
+    expect(
+      JSON.parse(
+        await scenario({
+          newestRun: runId,
+          ownerRun: runId,
+          ownerState: "pending",
+          dispatchSha,
+          state,
+        }),
+      ),
+    ).toEqual({
+      state,
+      description: "proof passed",
+      context: "staging/verified",
+      target_url: runUrl,
+    });
+  });
+}
+
+for (const ownerState of ["success", "failure", "pending"]) {
+  test(`an ordinary dispatch cannot repost over a newer ${ownerState} status`, async () => {
+    expect(
+      await scenario({
+        newestRun: runId,
+        ownerRun: runId + 1,
+        ownerState,
+        dispatchSha: "b".repeat(40),
+      }),
+    ).toBe("");
+  });
+}
+
+test("a newer ordinary dispatch prevents an older ordinary run taking ownership", async () => {
+  expect(
+    await scenario({
+      newestRun: runId + 1,
+      ownerRun: runId,
+      ownerState: "pending",
+      dispatchSha: "b".repeat(40),
+    }),
+  ).toBe("");
 });

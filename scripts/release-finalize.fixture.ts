@@ -23,7 +23,8 @@ type ProofFixture = {
   runSha?: string;
   incidents?: boolean;
   noRc?: boolean;
-  replay?: boolean;
+  finalTag?: "candidate" | "previous";
+  rcPublication?: "draft" | "published";
 };
 export const finalize = (fixture: ProofFixture = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-"));
@@ -45,8 +46,13 @@ export const finalize = (fixture: ProofFixture = {}) => {
     if (!fixture.noRc) {
       git(root, "tag", "v1.2.3-rc.2", sha);
     }
-    if (fixture.replay) {
-      git(root, "tag", "v1.2.3", sha);
+    if (fixture.finalTag) {
+      git(
+        root,
+        "tag",
+        "v1.2.3",
+        fixture.finalTag === "candidate" ? sha : `${sha}^`,
+      );
     }
     for (const source of [
       "finalize-release.sh",
@@ -102,6 +108,7 @@ case "$*" in
   *) [[ "$GH_TOKEN" == fixture-read-token ]] ;;
 esac
 case "$*" in
+  'release view '*) printf '%s\\n' '${fixture.rcPublication !== "published"}' ;;
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;

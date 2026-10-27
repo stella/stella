@@ -9,19 +9,29 @@ gh_retry_script="${GH_RETRY_SCRIPT:-$script_dir/gh-retry.sh}"
 version=$(git show "$sha:VERSION" | tr -d '[:space:]')
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 2
 final="v$version"
-# A final receipt makes every later workflow_run a no-op.
-if git show-ref --verify --quiet "refs/tags/$final"; then exit 0; fi
 rc=""
 while IFS= read -r tag; do
   [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]] || continue
   if [[ "$(git rev-parse "$tag^{commit}")" == "$sha" ]]; then rc="$tag"; break; fi
 done < <(git tag --list "v$version-rc.*" --sort=-v:refname)
 [[ -n "$rc" ]] || { echo "No RC receipt on $sha" >&2; exit 0; }
-# This trusted guard verifies the latest staging, heavy and depth receipts on
-# this SHA, including workflow provenance and the unresolved incident gate.
-GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
-rc_sha=$(git rev-parse "$rc^{commit}")
-[[ "$rc_sha" == "$sha" ]] || exit 1
-git tag -a "$final" "$rc_sha" -m "$final"
-git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
-bash "$gh_retry_script" release edit "$rc" --repo "$repo" --draft=false --prerelease --latest=false
+# A final receipt authorizes publication recovery only for its original SHA.
+if git show-ref --verify --quiet "refs/tags/$final"; then
+  [[ "$(git rev-parse "$final^{commit}")" == "$sha" ]] || {
+    echo "Final tag $final does not target $sha" >&2
+    exit 1
+  }
+else
+  # New tags still require the latest exact-SHA proof and incident verdict.
+  GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
+  rc_sha=$(git rev-parse "$rc^{commit}")
+  [[ "$rc_sha" == "$sha" ]] || exit 1
+  git tag -a "$final" "$rc_sha" -m "$final"
+  git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
+fi
+is_draft=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
+case "$is_draft" in
+  true) bash "$gh_retry_script" release edit "$rc" --repo "$repo" --draft=false --prerelease --latest=false ;;
+  false) ;;
+  *) echo "Could not resolve prerelease publication for $rc" >&2; exit 1 ;;
+esac

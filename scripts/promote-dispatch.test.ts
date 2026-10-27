@@ -42,7 +42,14 @@ if failing:
  sys.exit(23)
 if phase=='installation':payload={'id':123}
 elif phase=='token':payload={'token':'fixture-token'}
-elif phase=='existing':payload={'workflow_runs':([] if os.environ['PRIOR_RUN']=='none' else [{'id':777,'display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV'],'status':('in_progress' if os.environ['PRIOR_RUN']=='active' else 'completed'),'conclusion':('success' if os.environ['PRIOR_RUN']=='success' else 'failure' if os.environ['PRIOR_RUN']=='failed' else None)}])}
+elif phase=='existing':
+ matching=[] if os.environ['PRIOR_RUN']=='none' else [{'id':777,'display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV'],'status':('in_progress' if os.environ['PRIOR_RUN']=='active' else 'completed'),'conclusion':('success' if os.environ['PRIOR_RUN']=='success' else 'failure' if os.environ['PRIOR_RUN']=='failed' else None)}]
+ pages=[{'workflow_runs':matching}]
+ if os.environ['PRIOR_RUN_PAGE']=='2':
+  pages=[{'workflow_runs':[{'id':1000+i,'display_title':'Promote v9.9.'+str(i)+' → staging','status':'completed','conclusion':'success'} for i in range(100)]},{'workflow_runs':matching}]
+ if '--paginate' not in args:pages=pages[:1]
+ if '--slurp' in args:payload=pages
+ else:payload=pages[0]
 elif phase=='lookup':payload={'workflow_runs':[
  {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → staging'},
  {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → staging'},
@@ -78,12 +85,14 @@ type PromotionScenarioOptions = {
   failurePhase: "lookup" | "poll" | "none";
   failureKind: "transport" | "unknown";
   priorRun?: "none" | "success" | "active" | "failed";
+  priorRunPage?: 1 | 2;
   servingProduction?: boolean;
 };
 const promotionScenario = async ({
   failurePhase,
   failureKind,
   priorRun = "none",
+  priorRunPage = 1,
   servingProduction = false,
 }: PromotionScenarioOptions) => {
   const action = v.parse(
@@ -119,6 +128,7 @@ const promotionScenario = async ({
         FAKE_ROOT: directory,
         FAILURE_PHASE: failurePhase,
         PRIOR_RUN: priorRun,
+        PRIOR_RUN_PAGE: String(priorRunPage),
         EXPECTED_SHA: servingProduction ? "a".repeat(40) : "",
         FAILURE_KIND: failureKind,
         GITHUB_ACTION_PATH: actionPath,
@@ -243,4 +253,21 @@ test("production already serving the exact API and web SHA never dispatches agai
   expect(
     result.calls.filter((call) => call.startsWith("dispatch POST")),
   ).toHaveLength(0);
+});
+
+test("a successful promotion on the second page prevents another dispatch", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    priorRun: "success",
+    priorRunPage: 2,
+  });
+  expect(result.exit).toBe(0);
+  expect(result.stdout).toContain("Promotion already succeeded: 777");
+  expect(
+    result.calls.filter((call) => call.startsWith("dispatch POST")),
+  ).toHaveLength(0);
+  expect(result.calls.filter((call) => call.startsWith("poll "))).toHaveLength(
+    0,
+  );
 });
