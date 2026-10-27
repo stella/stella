@@ -6,7 +6,7 @@ import type { StatutesIndexSearch } from "./statute-index-search.logic";
  * and importing them from a component module would pull the popover into the
  * eagerly loaded route chunk.
  */
-export const STATUTE_FILTER_KEYS = ["type", "validity"] as const;
+const STATUTE_FILTER_KEYS = ["type", "validity"] as const;
 
 export type StatuteFilterKey = (typeof STATUTE_FILTER_KEYS)[number];
 

@@ -3,6 +3,8 @@ import { transformSync } from "oxc-transform-react";
 
 import { REACT_COMPILER_OPTIONS } from "@stll/scripts/src/react-compiler-options";
 
+import { parseRouteSearch } from "@/route-search-params";
+
 // Run the page with the same compiler transform as the browser build.
 plugin({
   name: "case-search-production-compiler",
@@ -24,9 +26,10 @@ plugin({
     );
   },
 });
-const { declareRouteShellProviderFixture } =
+const { declareRouteShellProviderFixture: registerRouteShellProviderFixture } =
   await import("@/__fixtures__/route-shell/route-shell-provider-fixture");
-await declareRouteShellProviderFixture({
+await registerRouteShellProviderFixture({
   mode: "public-knowledge",
   suite: "case-search",
+  parseSearch: parseRouteSearch,
 });

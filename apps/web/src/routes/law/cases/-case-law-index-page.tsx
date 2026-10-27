@@ -125,6 +125,7 @@ import {
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
+import { queryView, queryViewError } from "@/lib/query-view.logic";
 import {
   PublicLawListFailure,
   PublicLawResultsBoundary,
@@ -353,18 +354,17 @@ export function PublicCaseLawIndex({
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
-  const {
-    data: pageData,
-    error,
-    isLoading,
-    isPlaceholderData,
-    refetch,
-  } = useQuery({
+  const pageQuery = useQuery({
     ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
   });
+  const { data: pageData, isPlaceholderData, refetch } = pageQuery;
+  const pageView = queryView(pageQuery);
+  const error = queryViewError(pageView);
+  const firstPageError = queryViewError(queryView(firstPageQuery));
+  const isLoading = pageView.type === "pending";
   useCaseLawResultsTiming({
     query: search.q,
     page: pageData,
@@ -385,7 +385,7 @@ export function PublicCaseLawIndex({
   });
   const isSearchUnavailable = publicLawSearchOutage({
     hasPages: pageData !== undefined,
-    isQueryOutage: error !== null || firstPageQuery.error !== null,
+    isQueryOutage: error !== undefined || firstPageError !== undefined,
     loaded: loadedSearch,
   });
   // The rows are the only region that waits: either they are not there yet,
@@ -827,7 +827,7 @@ export function PublicCaseLawIndex({
         {isSearchUnavailable ? (
           <PublicLawListFailure
             description={t("caseLaw.searchUnavailable.description")}
-            error={error ?? firstPageQuery.error}
+            error={error ?? firstPageError}
             reset={() => {
               detached(
                 Promise.all([refetch(), firstPageQuery.refetch()]),
