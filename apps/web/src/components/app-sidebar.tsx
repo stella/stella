@@ -145,10 +145,10 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
@@ -260,7 +260,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const inboxView = useQueryView(inboxQuery);
+  const inboxView = queryView(inboxQuery);
   // This badge decorates an always-available inbox link; hide it when the count cannot be read.
   const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
@@ -271,7 +271,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
     enabled: mounted,
   });
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
     groupedThreadsView.type === "items"

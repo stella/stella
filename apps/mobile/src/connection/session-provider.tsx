@@ -3,6 +3,7 @@ import { createContext, use, useState } from "react";
 import { panic, Result } from "better-result";
 
 import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
+import { mobileRedirectUri } from "@stll/api-contract/mobile-client";
 
 import { epochMilliseconds } from "@/connection/clock";
 import { TokenError } from "@/connection/errors";
@@ -20,6 +21,7 @@ import type {
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
+import { APP_VARIANT } from "@/env";
 
 export type SessionState =
   | {
@@ -78,6 +80,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         fetch,
         now: epochMilliseconds,
         openAuthSession: openDeviceAuthSession,
+        redirectUri: mobileRedirectUri(APP_VARIANT),
         resourceFor: apiOAuthResourceUrl,
         serverUrlInput,
         // Plain http to a simulator host is for development builds only.

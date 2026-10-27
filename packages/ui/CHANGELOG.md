@@ -1,5 +1,23 @@
 # @stll/ui
 
+## 0.53.0
+
+### Minor Changes
+
+- [#6972](https://github.com/stella/stella/pull/6972) [`4dde81d`](https://github.com/stella/stella/commit/4dde81dd999d620a00b9000f0d8431b9e4d5ae98) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `KanbanCardShell` takes `selected` and `onSelectionClick`: a selected card draws the selection ring, and a Cmd/Ctrl- or Shift-click reports its modifiers instead of opening the card. `registerKanbanCardDrag` takes `getDragPreview` to draw a custom preview, such as a stack for several cards. Cards and column headers carry `data-kanban-card` and `data-kanban-column-header` markers.
+
+- [#7056](https://github.com/stella/stella/pull/7056) [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove `useComboboxFilter`. Its `Intl.Collator` match compares equal-length windows (`strasse` never finds `Straße`) and depends on the runtime locale; pass a `filter` built on `createSearchQueryMatcher` from `@stll/text-normalize/search-query-matcher` instead.
+
+- [#7071](https://github.com/stella/stella/pull/7071) [`7746519`](https://github.com/stella/stella/commit/774651920e9c2c16bdb352a117b2a51f21e35cc5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer re-exports `ClipboardPasteIcon`, `Loader2Icon`, `LoaderIcon`, `NetworkIcon` and `PresentationIcon`, which no source imports.
+
+### Patch Changes
+
+- [#6823](https://github.com/stella/stella/pull/6823) [`48c0025`](https://github.com/stella/stella/commit/48c002525572684e4c8e96ad50eec065313295b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DetailsGrid` keeps one column's width inside a popover or another box sized by its content.
+
+- [#7010](https://github.com/stella/stella/pull/7010) [`e4836e1`](https://github.com/stella/stella/commit/e4836e18472a659a03e9e7d80156685739ce3aed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `InlineRenameInput` sets `enterKeyHint="done"` by default, so touch keyboards label Enter as the commit key; callers can still override it.
+
+- [#7017](https://github.com/stella/stella/pull/7017) [`b942114`](https://github.com/stella/stella/commit/b9421146019be23569fb7f3cba3b8f094422d7a3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail renders only the rows whose entry, active state or hover state changed, keeps an unchanged entry's row when the items are rebuilt, and keeps a branch the reader closed closed across such a rebuild.
+
 ## 0.52.1
 
 ### Patch Changes

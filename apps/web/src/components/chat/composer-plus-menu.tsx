@@ -125,9 +125,9 @@ import {
   slashItemSkillId,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
+import { queryView } from "@/lib/query-view.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useEntitiesOptions } from "@/lib/workspaces/queries/entities";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
@@ -694,7 +694,7 @@ export const ComposerSkillsMenu = ({
     organizationId: activeOrganizationId,
     userId,
   });
-  const skillsView = useQueryView(skillsQuery, {
+  const skillsView = queryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(
         (page) => page.builtIn.length === 0 && page.installed.length === 0,
@@ -987,7 +987,7 @@ const useContextMentionSearch = ({
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const view = useQueryView(mentionQuery, {
+  const view = queryView(mentionQuery, {
     isEmpty: (data) => data.items.length === 0 && data.failures.length === 0,
   });
   return {
@@ -1037,7 +1037,7 @@ export const ComposerContextMenu = ({
     }),
     enabled,
   });
-  const mattersView = useQueryView(mattersQuery, {
+  const mattersView = queryView(mattersQuery, {
     isEmpty: (data) => data.workspaces.length === 0,
   });
   const matters: ContextMatter[] =
@@ -1477,10 +1477,10 @@ export const ComposerMcpSubmenu = ({
     ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
-  const connectorsView = useQueryView(connectorsQuery, {
+  const connectorsView = queryView(connectorsQuery, {
     isEmpty: (data) => data.connectors.length === 0,
   });
-  const connectionsView = useQueryView(connectionsQuery, {
+  const connectionsView = queryView(connectionsQuery, {
     isEmpty: (data) => data.connections.length === 0,
   });
   const connectorsData =

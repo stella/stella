@@ -43,8 +43,9 @@ import {
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "@/lib/organization/role-assignment.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -60,7 +61,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  const currentUserRoleView = queryView(currentUserRoleQuery);
   useQueryViewError(currentUserRoleView, "InviteMemberDialog:query");
   const currentUserRole =
     currentUserRoleView.type === "items"

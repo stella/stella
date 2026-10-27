@@ -123,8 +123,9 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
@@ -368,7 +369,7 @@ const PlaybookEditorLoader = ({
         ? false
         : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
-  const detailView = useQueryView(detailQuery, {
+  const detailView = queryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
   const seed = resolveDetailSeed({
@@ -743,7 +744,7 @@ const PlaybookEditorForm = ({
     initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
-  const documentTypesDataView = useQueryView(documentTypesDataQuery);
+  const documentTypesDataView = queryView(documentTypesDataQuery);
   useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
