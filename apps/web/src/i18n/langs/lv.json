@@ -988,7 +988,6 @@
     "coverage": {
       "completeness": "Pilnīgums",
       "courtsHeading": "Pēc tiesas",
-      "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "generatedAt": "Dati uz {date}",
@@ -999,20 +998,16 @@
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
-      "knownGaps": "Zināmie iztrūkumi",
       "lastSync": "Pēdējā sinhronizācija",
-      "noGapsRecorded": "Iztrūkumi nav reģistrēti",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
-      "pendingTexts": "Neiegūtie teksti",
       "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
-      "unreadListingPeriods": "Nenolasītie saraksta periodi"
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {

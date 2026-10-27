@@ -988,7 +988,6 @@
     "coverage": {
       "completeness": "Úplnosť",
       "courtsHeading": "Podľa súdu",
-      "courtsUnavailable": "Rozpis podľa súdov nie je momentálne k dispozícii.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "generatedAt": "Údaje k {date}",
@@ -999,20 +998,16 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatiaľ nespustené",
       "inPreparation": "Pripravuje sa",
-      "knownGaps": "Známe medzery",
       "lastSync": "Posledná synchronizácia",
-      "noGapsRecorded": "Nie sú zaznamenané žiadne medzery",
       "notCountedYet": "Zatiaľ nespočítané",
       "notMeasuredYet": "Zatiaľ nemerané",
-      "pendingTexts": "Čakajúce texty",
       "reportedByListing": "Spočítané zo zoznamu vydavateľa",
       "reportedByOperator": "Zadané ručne",
       "reportedByPublisher": "Vlastný údaj vydavateľa",
       "searchable": "Dostupné na vyhľadanie",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
-      "unreadListingPeriods": "Nenačítané obdobia zoznamu"
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "decisionTypes": {
