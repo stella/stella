@@ -43,7 +43,7 @@ whether a contract change helped.
    has more than one job. [review]
 5. **Few optionals, one discriminator.** Replace a set of mutually exclusive
    optional keys with one discriminated union (`source: { type: "ai" | "lookup"
-   | ... }`). A model that fills every property cannot produce a contradictory
+| ... }`). A model that fills every property cannot produce a contradictory
    union member; it can produce six contradictory optionals. [review]
 6. **Best effort over all-or-nothing for collections.** When a call carries a
    list of entries, validate each entry independently, apply the valid ones, and
@@ -68,7 +68,7 @@ whether a contract change helped.
 ## Every Error Is A Next Step
 
 10. **Structured envelope, closed codes.** Failures return `{ code, message, hint,
-    issues[] }` with codes from a closed set. `hint` names the corrective action,
+issues[] }` with codes from a closed set. `hint` names the corrective action,
     the tool to call, and where to go (a deep link when the fix is in the UI).
     "Disabled" without "enable it here" is a dead end. [review]
 11. **Never leak the substrate.** A malformed id is a validation issue at the
@@ -157,7 +157,7 @@ at 0.
   tolerance, description and reference drift, and a zero-diff capability export.
   [test: apps/api/src/mcp/null-optional-inputs.test.ts]
 - Total companion maps keyed by tool name (`as const satisfies Record<ToolName,
-  ...>`) for policy, consent, projection, and CLI disposition, so a new tool cannot
+...>`) for policy, consent, projection, and CLI disposition, so a new tool cannot
   land without each decision. [check: typecheck]
 - Compile-time gates in the tool factory (a schema that is not wrapped, an id that
   is not the shared schema) rather than review discipline. [check: typecheck]

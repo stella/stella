@@ -3,16 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   checkProblem,
   checkSources,
+  type CiInputs,
   ciReach,
   enumerateSources,
+  type Ledger,
   LINT_TAG_MESSAGE,
   parseLedger,
   parseRuleItems,
   readTag,
-  testProblem,
-  type CiInputs,
-  type Ledger,
   type Resolvers,
+  testProblem,
 } from "./check-instruction-enforcement";
 
 const EMPTY_LEDGER: Ledger = {
