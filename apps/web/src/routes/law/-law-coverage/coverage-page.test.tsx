@@ -222,14 +222,6 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain(messages.caseLaw.coverage.healthStalled);
   });
 
-  test("a source whose gaps nobody reviewed states nothing about them", () => {
-    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
-
-    expect(markup).toContain(messages.caseLaw.coverage.pendingTexts);
-    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
-    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
-  });
-
   test("a corpus 99.6 % of the way there prints 99, never 100", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
@@ -253,7 +245,7 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain("50%");
   });
 
-  test("a source states its decision years, pending texts and known gaps", () => {
+  test("source rows omit decision years, pending texts and gap details", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{
@@ -269,20 +261,9 @@ describe("the coverage page states what it counts", () => {
                   pendingTextCount: 1234,
                   knownGaps: {
                     type: "reconciled",
-                    summary: { missing: 2, shortSlices: 2, unlistedSlices: 0 },
+                    summary: { missing: 11, shortSlices: 1, unlistedSlices: 0 },
                     years: [
-                      {
-                        year: 1969,
-                        type: "gaps",
-                        missing: 1,
-                        shortSlices: 1,
-                      },
-                      {
-                        year: 1989,
-                        type: "gaps",
-                        missing: 1,
-                        shortSlices: 1,
-                      },
+                      { year: 1969, type: "gaps", missing: 11, shortSlices: 1 },
                     ],
                   },
                 },
@@ -293,51 +274,11 @@ describe("the coverage page states what it counts", () => {
       />,
     );
 
-    // The source's own range, distinct from the country's 1993–2026.
-    expect(markup).toContain("1958–2011");
-    expect(markup).toContain(
-      `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
-    );
-    expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
-  });
-
-  test("unread listing periods are never counted as missing decisions", () => {
-    const markup = render(
-      <CaseLawCoveragePage
-        coverage={{
-          ...COVERAGE,
-          countries: [
-            {
-              ...CZECHIA,
-              sources: [
-                {
-                  ...NEARLY_COMPLETE,
-                  knownGaps: {
-                    type: "reconciled",
-                    summary: { missing: 0, shortSlices: 0, unlistedSlices: 3 },
-                    years: [
-                      {
-                        year: 2004,
-                        type: "unlisted",
-                        missing: 0,
-                        shortSlices: 0,
-                        unlistedSlices: 3,
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        }}
-      />,
-    );
-
-    expect(markup).toContain(
-      `${messages.caseLaw.coverage.unreadListingPeriods}: 3`,
-    );
-    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
-    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
+    expect(markup).not.toContain("1958–2011");
+    expect(markup).not.toContain("1,234");
+    expect(markup).not.toContain("Decision years:");
+    expect(markup).not.toContain("Pending texts:");
+    expect(markup).not.toContain("Known gaps:");
   });
 
   test("freshness is a word, with the dot only beside it", () => {
@@ -431,14 +372,21 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain("480");
   });
 
-  test("a court breakdown the endpoint could not read says so", () => {
+  test("an available court breakdown renders its heading and rows", () => {
+    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+
+    expect(markup).toContain(messages.caseLaw.coverage.courtsHeading);
+    expect(markup).toContain(messages.caseLaw.courtTiers.supreme);
+  });
+
+  test("an unavailable court breakdown hides the entire section", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{ ...COVERAGE, countries: [{ ...CZECHIA, courts: null }] }}
       />,
     );
 
-    expect(markup).toContain(messages.caseLaw.coverage.courtsUnavailable);
+    expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
     expect(markup).not.toContain(messages.caseLaw.courtTiers.supreme);
   });
 

@@ -988,7 +988,6 @@
     "coverage": {
       "completeness": "Úplnost",
       "courtsHeading": "Podle soudu",
-      "courtsUnavailable": "Rozpis podle soudů není momentálně k dispozici.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
       "generatedAt": "Údaje k {date}",
@@ -999,20 +998,16 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatím nespuštěno",
       "inPreparation": "Připravuje se",
-      "knownGaps": "Známé mezery",
       "lastSync": "Poslední synchronizace",
-      "noGapsRecorded": "Žádné mezery nejsou zaznamenány",
       "notCountedYet": "Zatím nespočítáno",
       "notMeasuredYet": "Zatím neměřeno",
-      "pendingTexts": "Nevyřízené texty",
       "reportedByListing": "Sečteno z výpisu vydavatele",
       "reportedByOperator": "Zadáno ručně",
       "reportedByPublisher": "Vlastní údaj vydavatele",
       "searchable": "Dostupné k vyhledání",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
-      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici.",
-      "unreadListingPeriods": "Nenačtená období výpisu"
+      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "decisionTypes": {

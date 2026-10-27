@@ -45,6 +45,7 @@ import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
+import { AvailableCoverageSection } from "@/routes/law/-law-coverage/available-coverage-section";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
@@ -563,7 +564,11 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
     >
       <SourcesTable sources={country.sources} />
       {country.availability === "searchable" && (
-        <CourtsTable country={country.country} courts={country.courts} />
+        <AvailableCoverageSection data={country.courts}>
+          {(courts) => (
+            <CourtsTable country={country.country} courts={courts} />
+          )}
+        </AvailableCoverageSection>
       )}
     </CountryCard>
   );
@@ -667,7 +672,6 @@ const SourcesTable = ({
               >
                 <bdi>{source.name}</bdi>
               </a>
-              <SourceCoverageDetails source={source} />
             </TableHead>
             <TableCell className="text-end tabular-nums">
               {source.storedDecisions === null
@@ -692,59 +696,6 @@ const SourcesTable = ({
         ))}
       </TableBody>
     </Table>
-  );
-};
-
-const SourceCoverageDetails = ({
-  source,
-}: {
-  source: CaseLawCoverageSource;
-}) => {
-  const t = useTranslations();
-  const formatter = useFormatter();
-  const years =
-    source.decisionYearFrom === null || source.decisionYearTo === null
-      ? NO_VALUE
-      : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
-  // An unreviewed source states nothing about gaps rather than a line saying
-  // it cannot; unknown is still never shown as "no gaps recorded".
-  let gaps: string | null;
-  switch (source.knownGaps.type) {
-    case "not_reconciled":
-      gaps = null;
-      break;
-    case "reconciled": {
-      // Decisions and listing periods are different units: each keeps its
-      // own label rather than adding into one number.
-      const { missing, unlistedSlices } = source.knownGaps.summary;
-      const parts = [
-        ...(missing > 0
-          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
-          : []),
-        ...(unlistedSlices > 0
-          ? [
-              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
-            ]
-          : []),
-      ];
-      gaps =
-        parts.length === 0
-          ? t("caseLaw.coverage.noGapsRecorded")
-          : parts.join(" · ");
-      break;
-    }
-    default:
-      source.knownGaps satisfies never;
-      return panic("Unhandled case-law source gap state");
-  }
-
-  return (
-    <span className="text-muted-foreground mt-1 block text-xs">
-      {t("caseLaw.coverage.decisionYears")}: {years} ·{" "}
-      {t("caseLaw.coverage.pendingTexts")}:{" "}
-      {formatter.number(source.pendingTextCount)}
-      {gaps !== null && ` · ${gaps}`}
-    </span>
   );
 };
 
@@ -883,31 +834,16 @@ const CourtsTableHead = () => {
  * by name, the wide tiers as one row each naming their tier, and the courts
  * beyond the listed ones as the closing row. No heading rows between them: a
  * dozen rows read better as one list than as four lists of three.
- *
- * A breakdown the endpoint could not read says so in the table's place. An
- * empty table would claim the index names no court.
  */
 const CourtsTable = ({
   country,
   courts,
 }: {
   country: CaseLawJurisdiction;
-  courts: SearchableCountry["courts"];
+  courts: NonNullable<SearchableCountry["courts"]>;
 }) => {
   const t = useTranslations();
 
-  if (courts === null) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">
-          {t("caseLaw.coverage.courtsHeading")}
-        </h3>
-        <p className="text-muted-foreground text-xs">
-          {t("caseLaw.coverage.courtsUnavailable")}
-        </p>
-      </div>
-    );
-  }
   return (
     <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
       <TableColumns columns={COURT_COLUMNS} />
