@@ -57,7 +57,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          bun scripts/check-stll-quarantine-excludes.ts --prune
+          mapfile -d '' tracked_bunfigs < <(git ls-files -z '*bunfig.toml')
+          bun scripts/check-stll-quarantine-excludes.ts --prune "${tracked_bunfigs[@]}"
 
           if git diff --quiet -- bunfig.toml ':(glob)**/bunfig.toml'; then
             echo "changed=false" >> "$GITHUB_OUTPUT"

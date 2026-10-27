@@ -36,6 +36,7 @@ exit 99
 STUB
 chmod +x "$fixture_root/gh"
 export PATH="$fixture_root:$PATH" GITHUB_REPOSITORY=stella/stella PRUNE_BRANCH=chore/prune-quarantine-excludes
+export GH_RETRY_SCRIPT="$fixture_root/gh"
 export GITHUB_OUTPUT="$fixture_root/output" CALLS="$fixture_root/calls" PR_FILES="$fixture_root/files.json" PROPOSAL_ROOT="$fixture_root/proposal" PATCH_RESPONSE="$fixture_root/patch" PROPOSAL
 mkdir -p "$fixture_root/repo/apps/web" "$PROPOSAL_ROOT/apps/web"
 cp scripts/quarantine-prune-decision.sh "$fixture_root/repo/decision.sh"

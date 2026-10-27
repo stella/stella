@@ -31,7 +31,6 @@
  * Run: `bun scripts/check-stll-quarantine-excludes.ts`
  */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -602,13 +601,7 @@ export const pruneBunfigFiles = ({
   return changed;
 };
 
-const prune = () => {
-  const trackedFiles = execFileSync("git", ["ls-files", "*bunfig.toml"], {
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\n")
-    .filter(Boolean);
+const prune = (trackedFiles: readonly string[]) => {
   const changed = pruneBunfigFiles({ root: REPO_ROOT, trackedFiles });
   if (changed.length === 0) {
     console.log(
@@ -619,7 +612,8 @@ const prune = () => {
 
 const main = () => {
   if (process.argv.includes("--prune")) {
-    prune();
+    const pruneIndex = process.argv.indexOf("--prune");
+    prune(process.argv.slice(pruneIndex + 1));
     return;
   }
 

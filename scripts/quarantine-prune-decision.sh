@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-proposal="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
+proposal="$(bash "$gh_retry_script" pr list --repo "$GITHUB_REPOSITORY" \
   --state open --base main --head "$PRUNE_BRANCH" \
   --json number,headRefOid,isCrossRepository,autoMergeRequest \
   --jq 'map(select(.isCrossRepository == false))[0] | if . == null then empty else [.number, .headRefOid, (.autoMergeRequest != null)] | @tsv end')"
@@ -25,7 +27,7 @@ fi
 
 mapfile -t desired_files < <(git diff --name-only -- bunfig.toml ':(glob)**/bunfig.toml' | sort)
 mapfile -t existing_files < <(
-  gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$number/files" |
+  bash "$gh_retry_script" api --paginate --slurp "repos/$GITHUB_REPOSITORY/pulls/$number/files" |
     jq -r '.[][] | .filename | select(. == "bunfig.toml" or endswith("/bunfig.toml"))' |
     sort
 )
@@ -41,7 +43,7 @@ else
       break
     fi
     if ! cmp --silent "$path" <(
-      gh api --method GET "repos/$GITHUB_REPOSITORY/contents/$path" -f ref="$head" |
+      bash "$gh_retry_script" api --method GET "repos/$GITHUB_REPOSITORY/contents/$path" -f ref="$head" |
         jq -r '.content' |
         base64 --decode
     ); then
