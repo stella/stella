@@ -97,7 +97,11 @@ export const callWithChatSecret = async ({
   // SDK errors may contain upstream response data; only a fixed error crosses this boundary.
   if (result.isErr() || result.value === "failed") {
     return Result.err(
-      new HandlerError({ status: 502, message: "Connector request failed" }),
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Connector request failed",
+      }),
     );
   }
   if (result.value === "tool-unavailable") {

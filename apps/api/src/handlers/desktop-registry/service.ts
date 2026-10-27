@@ -245,6 +245,7 @@ export const searchDesktopRegistry = async (
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Could not format a registry result",
             }),
           );
@@ -310,6 +311,7 @@ export const setDesktopRegistryDefaultFormat = async (
       catch: (cause) =>
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Could not save the default format",
           cause,
         }),

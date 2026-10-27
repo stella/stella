@@ -69,6 +69,7 @@ const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
   isCorpusIndexUnavailable(error)
     ? searchIndexUnavailableError(error)
     : new HandlerError({
+        code: "internal_error",
         status:
           error.status === undefined ||
           error.status === 429 ||
