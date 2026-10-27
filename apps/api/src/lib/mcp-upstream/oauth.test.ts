@@ -498,6 +498,7 @@ test("classifies refresh outcomes from the token endpoint", async () => {
     [400, "invalid_grant", MCP_OAUTH_INVALID_GRANT_CODE],
     [503, "temporarily_unavailable", "upstream_unavailable"],
     [429, "slow_down", "upstream_unavailable"],
+    [408, "request_timeout", "upstream_unavailable"],
     [400, "invalid_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
     [401, "unauthorized_client", MCP_OAUTH_REFRESH_REFUSED_CODE],
   ] as const) {

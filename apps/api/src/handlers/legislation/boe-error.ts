@@ -6,6 +6,7 @@ import {
 } from "@stll/boe";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isRetryLaterStatus } from "@/api/lib/errors/upstream-status";
 
 export const mapBoeError = (error: unknown): HandlerError => {
   if (error instanceof BoeValidationError) {
@@ -15,16 +16,20 @@ export const mapBoeError = (error: unknown): HandlerError => {
     return new HandlerError({ status: 404, message: error.message });
   }
   if (error instanceof BoeAPIError) {
-    // Rate limiting refuses a valid request: retry later, not change it.
-    if (error.httpStatus === 429) {
+    const { httpStatus } = error;
+    if (
+      httpStatus >= 400 &&
+      httpStatus < 600 &&
+      isRetryLaterStatus(httpStatus)
+    ) {
       return new HandlerError({
         code: "upstream_unavailable",
         status: 502,
-        message: "BOE is limiting requests; retry later",
+        message: "BOE is temporarily unavailable; retry later",
         cause: error,
       });
     }
-    if (error.httpStatus >= 400 && error.httpStatus < 500) {
+    if (httpStatus >= 400 && httpStatus < 500) {
       return new HandlerError({
         status: 400,
         message:
@@ -32,17 +37,9 @@ export const mapBoeError = (error: unknown): HandlerError => {
         cause: error,
       });
     }
-    if (error.httpStatus < 500 || error.httpStatus >= 600) {
-      return new HandlerError({
-        status: 500,
-        message: "BOE returned an invalid response",
-        cause: error,
-      });
-    }
     return new HandlerError({
-      code: "upstream_unavailable",
-      status: 502,
-      message: "BOE is temporarily unavailable",
+      status: 500,
+      message: "BOE returned an invalid response",
       cause: error,
     });
   }

@@ -14,6 +14,7 @@ import {
   FetchBoundaryError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { isRetryLaterStatus } from "@/api/lib/errors/upstream-status";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 import {
   authorizationServerMetadataUrls,
@@ -989,7 +990,12 @@ const refreshFailureCode = (
     return MCP_OAUTH_INVALID_GRANT_CODE;
   }
   const status = cause instanceof FetchBoundaryError ? cause.status : undefined;
-  if (status !== undefined && status >= 400 && status < 500 && status !== 429) {
+  if (
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    !isRetryLaterStatus(status)
+  ) {
     return MCP_OAUTH_REFRESH_REFUSED_CODE;
   }
   return "upstream_unavailable";

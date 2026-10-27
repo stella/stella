@@ -10,6 +10,7 @@ import {
 import { assertProperty } from "@stll/property-testing";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
+import { isRetryLaterStatus } from "@/api/lib/errors/upstream-status";
 
 describe("mapBoeError", () => {
   it("BOE 5xx failures preserve their status as retryable upstream evidence", () => {
@@ -26,19 +27,24 @@ describe("mapBoeError", () => {
     );
   });
 
-  it("BOE rate limiting stays a retryable upstream state", () => {
-    const cause = new BoeAPIError({ message: "Too many", httpStatus: 429 });
-    const mapped = mapBoeError(cause);
-    expect(mapped.status).toBe(502);
-    expect(mapped.code).toBe("upstream_unavailable");
-    expect(mapped.cause).toBe(cause);
-  });
+  it.each([408, 425, 429])(
+    "BOE %i stays a retryable upstream state",
+    (httpStatus) => {
+      const cause = new BoeAPIError({ message: "Later", httpStatus });
+      const mapped = mapBoeError(cause);
+      expect(mapped.status).toBe(502);
+      expect(mapped.code).toBe("upstream_unavailable");
+      expect(mapped.cause).toBe(cause);
+    },
+  );
 
-  it("BOE 4xx failures other than rate limiting ask the caller to correct the request", () => {
+  it("BOE 4xx failures that do not mean retry later ask the caller to correct the request", () => {
     assertProperty(
-      "BOE 4xx failures other than rate limiting ask the caller to correct the request",
+      "BOE 4xx failures that do not mean retry later ask the caller to correct the request",
       fc.property(
-        fc.integer({ min: 400, max: 499 }).filter((status) => status !== 429),
+        fc
+          .integer({ min: 400, max: 499 })
+          .filter((status) => !isRetryLaterStatus(status)),
         (httpStatus) => {
           const cause = new BoeAPIError({ message: "Rejected", httpStatus });
           const mapped = mapBoeError(cause);
