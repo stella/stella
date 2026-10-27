@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
@@ -17,12 +17,48 @@ type PackageSelection = {
   typecheck: string | undefined;
 };
 
+type TypecheckBudgetExclusion = {
+  measuredMemory: string;
+  measuredTime: string;
+  name: string;
+};
+
+export const TYPECHECK_BUDGET_EXCLUSIONS = [
+  {
+    name: "@stll/web",
+    measuredTime: "75.6 s",
+    measuredMemory: "1.14 GB",
+  },
+] as const satisfies readonly TypecheckBudgetExclusion[];
+
+export const validateTypecheckBudgetExclusions = (
+  exclusions: readonly TypecheckBudgetExclusion[],
+  workspaceNames: ReadonlySet<string>,
+): void => {
+  for (const exclusion of exclusions) {
+    if (!workspaceNames.has(exclusion.name)) {
+      panic(
+        `pre-push-typecheck: budget exclusion names unknown package ${exclusion.name}`,
+      );
+    }
+  }
+};
+
 export const runSelectedPackages = async (
   packages: readonly PackageSelection[],
   runTypecheck: (workspace: PackageSelection) => Promise<number>,
   report: (message: string) => void,
 ): Promise<number> => {
   for (const workspace of packages) {
+    const budgetExclusion = TYPECHECK_BUDGET_EXCLUSIONS.find(
+      ({ name }) => name === workspace.name,
+    );
+    if (budgetExclusion !== undefined) {
+      report(
+        `pre-push-typecheck: ${workspace.name} skipped (${budgetExclusion.measuredTime}, ${budgetExclusion.measuredMemory} measured; over the pre-push budget); CI checks it`,
+      );
+      continue;
+    }
     if (workspace.typecheck === undefined) {
       report(
         `pre-push typecheck: skipping ${workspace.name} (no typecheck script)`,
@@ -111,6 +147,33 @@ const main = async () => {
   if (base === undefined || base.startsWith("--")) {
     panic("--base requires a git ref");
   }
+  const workspaceNames = new Set(
+    ["apps", "packages"].flatMap((workspaceDirectory) =>
+      readdirSync(path.join(REPO_ROOT, workspaceDirectory), {
+        withFileTypes: true,
+      })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => {
+          const manifest: PackageManifest = JSON.parse(
+            readFileSync(
+              path.join(
+                REPO_ROOT,
+                workspaceDirectory,
+                entry.name,
+                "package.json",
+              ),
+              "utf-8",
+            ),
+          );
+          return manifest.name;
+        })
+        .filter((name): name is string => typeof name === "string"),
+    ),
+  );
+  validateTypecheckBudgetExclusions(
+    TYPECHECK_BUDGET_EXCLUSIONS,
+    workspaceNames,
+  );
   const packages = selectTouchedPackages(
     changedFilesAgainst(base),
     (directory) =>

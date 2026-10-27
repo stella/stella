@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   runSelectedPackages,
   selectTouchedPackages,
+  TYPECHECK_BUDGET_EXCLUSIONS,
+  validateTypecheckBudgetExclusions,
 } from "./pre-push-typecheck";
 
 const manifests: Record<
@@ -76,6 +78,49 @@ test("a package without a typecheck script is skipped and named", async () => {
   expect(reports).toEqual([
     "pre-push typecheck: skipping @stll/untyped (no typecheck script)",
   ]);
+});
+
+test("an over-budget package is skipped while an unlisted package runs", async () => {
+  const packages = select([
+    "apps/web/src/route.ts",
+    "packages/small/src/index.ts",
+  ]);
+  const runs: string[] = [];
+  const reports: string[] = [];
+
+  expect(
+    await runSelectedPackages(
+      packages,
+      async ({ name }) => {
+        runs.push(name);
+        return 0;
+      },
+      (message) => {
+        reports.push(message);
+      },
+    ),
+  ).toBe(0);
+  expect(runs).toEqual(["@stll/small"]);
+  expect(reports).toEqual([
+    "pre-push-typecheck: @stll/web skipped (75.6 s, 1.14 GB measured; over the pre-push budget); CI checks it",
+    "pre-push typecheck: checking @stll/small",
+  ]);
+});
+
+test("every budget exclusion names a workspace package", () => {
+  expect(() =>
+    validateTypecheckBudgetExclusions(
+      [
+        ...TYPECHECK_BUDGET_EXCLUSIONS,
+        {
+          name: "@stll/unknown",
+          measuredTime: "21 s",
+          measuredMemory: "401 MB",
+        },
+      ],
+      new Set(["@stll/web", "@stll/small"]),
+    ),
+  ).toThrow("budget exclusion names unknown package @stll/unknown");
 });
 
 test("the real command is an immediate no-op when the range has no changes", () => {
