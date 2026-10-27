@@ -40,7 +40,7 @@ for (const [locale, messages] of Object.entries(catalogs)) {
         message: SOURCE_DETAIL,
         rawMessage: SOURCE_DETAIL,
       }),
-      expected: messages.errors.actionFailed,
+      expected: messages.common.loadFailed,
     },
   ]) {
     test(`correspondence reads show the safe ${scenario.kind} message in ${locale}`, async () => {
@@ -78,7 +78,7 @@ for (const [locale, messages] of Object.entries(catalogs)) {
         });
         const alert = await screen.findByRole("alert");
         if (scenario.kind === "recognized validation") {
-          expect(scenario.expected).not.toBe(messages.errors.actionFailed);
+          expect(scenario.expected).not.toBe(messages.common.loadFailed);
         }
         expect(alert.textContent).toContain(scenario.expected);
         expect(alert.textContent).not.toContain(SOURCE_DETAIL);
