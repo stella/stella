@@ -84,6 +84,21 @@ export const _toolsBesideTheReader = ({ decision }: { decision: Decision }) => (
   </>
 );
 
+// The chunk's arrival mounts the whole boundary, the synchronous reader too.
+export const _fallbackDrawsTheReaderBesideTheChunk = ({
+  decision,
+}: {
+  decision: Decision;
+}) => (
+  <Suspense
+    // oxlint-disable-next-line no-lazy-wrapped-content/no-lazy-wrapped-content
+    fallback={<Reader decision={decision} />}
+  >
+    <Reader decision={decision} />
+    <LazyMemberTools decisionId={decision.id} />
+  </Suspense>
+);
+
 // Tools behind their own boundary never take the place of the outer fallback.
 export const _toolsInANestedBoundary = ({
   decision,

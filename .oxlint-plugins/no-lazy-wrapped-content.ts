@@ -39,9 +39,10 @@
 // spreads are not compared, so a skeleton or a disabled button standing in for
 // the lazy one stays allowed. A boundary whose content suspends on data rather
 // than on a lazy chunk is out of scope: its fallback is a lookalike shell, not
-// the content. A fallback is compared only with the lazy elements its own
-// boundary catches: a lazy element behind a nested boundary swaps that
-// boundary's fallback, and a synchronous sibling is not the chunk.
+// the content. A boundary is checked only when it is the nearest boundary of
+// a lazy element; its fallback is then compared with everything it replaces,
+// synchronous siblings of the chunk included, up to any nested boundary, whose
+// content swaps that boundary's fallback instead.
 //
 // Analysis boundary: only `lazy` and `Suspense` imported from `react` (named,
 // default or namespace) count, and only a lazy component bound to a `const` in
@@ -164,10 +165,15 @@ type Collected = {
   values: Set<string>;
   /** Data rendered in place, as a child or a returned value. */
   rendered: Set<string>;
+  /** Markup whose content is left out, attributes and children included. */
+  skip: (node: AstNode) => boolean;
 };
 
-const emptyCollected = (): Collected => ({
+const emptyCollected = (
+  skip: (node: AstNode) => boolean = () => false,
+): Collected => ({
   rendered: new Set(),
+  skip,
   values: new Set(),
 });
 
@@ -223,6 +229,9 @@ const collectMarkup = (
   sourceCode: SourceCode,
   out: Collected,
 ): void => {
+  if (out.skip(node)) {
+    return;
+  }
   if (node.type === "JSXElement" && isAstNode(node.openingElement)) {
     const attributes = node.openingElement.attributes;
     for (const attribute of Array.isArray(attributes) ? attributes : []) {
@@ -427,28 +436,32 @@ export default eslintCompatPlugin({
                 continue;
               }
               const fallback = attributeOf(element, "fallback");
-              // Only the lazy elements this boundary catches replace its
-              // fallback: one under a nested boundary swaps that boundary's
-              // fallback instead, and a synchronous sibling is not the chunk.
-              const suspended = elements.filter(
-                (inner) =>
-                  isLazyElement(inner) &&
-                  catchingBoundary(inner, react) === element,
-              );
+              // A boundary swaps its fallback for a chunk only when it is that
+              // lazy element's nearest boundary.
               if (
                 fallback === null ||
                 !isAstNode(fallback.value) ||
                 fallback.value.type !== "JSXExpressionContainer" ||
-                suspended.length === 0
+                !elements.some(
+                  (inner) =>
+                    isLazyElement(inner) &&
+                    catchingBoundary(inner, react) === element,
+                )
               ) {
                 continue;
               }
               const shown = emptyCollected();
               collectValue(fallback.value.expression, sourceCode, shown, true);
-              const content = emptyCollected();
-              for (const lazyElement of suspended) {
-                collectMarkup(lazyElement, sourceCode, content);
-              }
+              // Everything the boundary mounts in the fallback's place, its
+              // synchronous children included; a nested boundary's content
+              // replaces that boundary's own fallback, so it is left out.
+              const content = emptyCollected(
+                (node) =>
+                  node.type === "JSXElement" &&
+                  isAstNode(node.openingElement) &&
+                  isSuspenseName(node.openingElement.name, react),
+              );
+              collectChildren(element, sourceCode, content);
               if ([...shown.values].some((v) => content.values.has(v))) {
                 context.report({
                   node: fallback,

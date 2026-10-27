@@ -40,6 +40,12 @@ const cases = [
   },
   {
     title:
+      "reports a fallback that draws a synchronous sibling of the lazy content",
+    source: `${HEADER}${LAZY}const Page = ({ decision }) => (\n<Suspense fallback={<Reader decision={decision} />}>\n<Reader decision={decision} />\n<LazyChat />\n</Suspense>\n);`,
+    lines: [4],
+  },
+  {
+    title:
       "allows a fallback that draws content whose lazy tools sit in a nested boundary",
     source: `${HEADER}${LAZY}const Page = ({ decision }) => (\n<Suspense fallback={<Reader decision={decision} />}>\n<Reader decision={decision} />\n<Suspense fallback={null}>\n<LazyChat decisionId={decision.id} />\n</Suspense>\n</Suspense>\n);`,
     lines: [],
