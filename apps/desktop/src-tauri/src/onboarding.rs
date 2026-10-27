@@ -19,8 +19,11 @@ pub const ONBOARDING_WINDOW_LABEL: &str = "onboarding";
 pub const CHANGED_EVENT: &str = "onboarding-changed";
 const PROGRESS_FILE_NAME: &str = "onboarding-v1.json";
 const HISTORY_FILE_NAME: &str = "onboarding-history-v1.json";
+/// The setup window's size. The browser harness reads these lines and
+/// renders every step at this size (`tests/desktop-window-sizes.ts`); the
+/// activity step, with its permission row, sets the height.
 const WINDOW_WIDTH: f64 = 620.0;
-const WINDOW_HEIGHT: f64 = 540.0;
+const WINDOW_HEIGHT: f64 = 680.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -443,6 +443,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
   ]),
+  fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
+    "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
+  ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
@@ -1980,6 +1983,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -3757,6 +3761,16 @@ const config = defineConfig({
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-justified-reader-text/no-justified-reader-text": "error",
+      },
+    },
+    {
+      // Desktop windows start `sm` at zero so the design system's pointer
+      // sizes apply in every window; a layout that follows the window's
+      // width names that width instead (apps/desktop/src/mainview/index.css).
+      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop": "error",
       },
     },
     {
