@@ -18,6 +18,7 @@ import { eq } from "drizzle-orm";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -308,5 +309,89 @@ describe("answering a stored or in-flight analysis", () => {
       });
       expect(statements).toBe(STORED_ANSWER_STATEMENTS);
     }
+  });
+
+  test("an AST read retries with fresh metadata when ingestion replaces the row version", async () => {
+    const oldUpdatedAt = new Date("2026-10-01T00:00:00.000Z");
+    const newUpdatedAt = new Date("2026-10-02T00:00:00.000Z");
+    const oldContentHash = "a".repeat(64);
+    const newContentHash = "b".repeat(64);
+    const newDocumentAst = {
+      ...documentAst,
+      blocks: [paragraph("new-version", "Nové znění rozhodnutí")],
+    } satisfies DocumentAst;
+    const [row] = await db
+      .insert(caseLawDecisions)
+      .values({
+        sourceId,
+        caseNumber: "old metadata",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        documentAst,
+        contentHash: oldContentHash,
+        updatedAt: oldUpdatedAt,
+      })
+      .returning({ id: caseLawDecisions.id });
+    if (!row) {
+      throw new Error("expected a decision row");
+    }
+
+    const baseScopedDb = scopedDbOf(db);
+    let reads = 0;
+    const racingScopedDb: ScopedDb = async (read) => {
+      reads += 1;
+      if (reads === 2) {
+        await db
+          .update(caseLawDecisions)
+          .set({
+            caseNumber: "new metadata",
+            documentAst: newDocumentAst,
+            contentHash: newContentHash,
+            updatedAt: newUpdatedAt,
+          })
+          .where(eq(caseLawDecisions.id, row.id));
+      }
+      return await baseScopedDb(read);
+    };
+
+    const resolution = await resolveAnalysisInput({
+      decisionId: row.id,
+      scopedDb: racingScopedDb,
+    });
+    if (resolution.kind !== "resolved") {
+      panic(`expected a resolved decision, got ${resolution.kind}`);
+    }
+    expect(reads).toBe(4);
+    expect(resolution.decision).toMatchObject({
+      caseNumber: "new metadata",
+      contentHash: newContentHash,
+      updatedAt: newUpdatedAt,
+    });
+    expect(resolution.anchorIds).toEqual(["new-version"]);
+
+    // Keep the identity fixed while poisoning storage: the second resolution
+    // must use the AST cached under the new identity, not read this value.
+    await db
+      .update(caseLawDecisions)
+      .set({
+        documentAst,
+        contentHash: newContentHash,
+        updatedAt: newUpdatedAt,
+      })
+      .where(eq(caseLawDecisions.id, row.id));
+    const cached = await resolveAnalysisInput({
+      decisionId: row.id,
+      scopedDb: baseScopedDb,
+    });
+    if (cached.kind !== "resolved") {
+      panic(`expected a cached decision, got ${cached.kind}`);
+    }
+    expect(cached.decision).toMatchObject({
+      caseNumber: "new metadata",
+      contentHash: newContentHash,
+      updatedAt: newUpdatedAt,
+    });
+    expect(cached.anchorIds).toEqual(["new-version"]);
   });
 });

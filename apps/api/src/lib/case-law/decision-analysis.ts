@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -61,17 +61,36 @@ export const readDecisionAnalysis = definePublicLawSharedQuery(
   },
 );
 
+type DecisionAnalysisAstVersion = {
+  decisionId: SafeId<"caseLawDecision">;
+  updatedAt: Date;
+  contentHash: string | null;
+};
+
+export type DecisionAnalysisAstColumnRead =
+  { kind: "found"; value: unknown } | { kind: "version-changed" };
+
 /** Lazy fallback: metadata reads do not transfer an AST served by storage. */
 export const readDecisionAnalysisAstColumn = async (
   tx: CaseLawPublicReadTransaction,
-  decisionId: SafeId<"caseLawDecision">,
-): Promise<unknown> => {
+  { decisionId, updatedAt, contentHash }: DecisionAnalysisAstVersion,
+): Promise<DecisionAnalysisAstColumnRead> => {
   const [row] = await tx
     .select({ documentAst: publishedCaseLawDecisions.documentAst })
     .from(publishedCaseLawDecisions)
-    .where(eq(publishedCaseLawDecisions.id, decisionId))
+    .where(
+      and(
+        eq(publishedCaseLawDecisions.id, decisionId),
+        eq(publishedCaseLawDecisions.updatedAt, sql`${updatedAt}::timestamptz`),
+        contentHash === null
+          ? isNull(publishedCaseLawDecisions.contentHash)
+          : eq(publishedCaseLawDecisions.contentHash, contentHash),
+      ),
+    )
     .limit(1);
-  return row?.documentAst ?? null;
+  return row === undefined
+    ? { kind: "version-changed" }
+    : { kind: "found", value: row.documentAst };
 };
 
 type DecisionAstPointers = {

@@ -5,10 +5,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { recordReadWork } from "@/api/lib/observability/request-work";
 
 type DecisionRowAst = ReturnType<typeof parsePersistedCorpusAst>;
+type DecisionRowAstLoad =
+  DecisionRowAst | typeof DECISION_ROW_AST_VERSION_CHANGED;
+export const DECISION_ROW_AST_VERSION_CHANGED = Symbol(
+  "decision-row-ast-version-changed",
+);
 type ReadDecisionRowAstOptions = {
   /** Live row id, update timestamp and payload identity, resolved after admission. */
   key: string;
   read: () => Promise<unknown>;
+  onVersionChanged?: () => void;
 };
 
 /** The row payload is fetched only after its live metadata names a cache miss. */
@@ -21,8 +27,8 @@ export const createDecisionRowAstCache = ({
     maxBytes,
     sizeOf: (ast) => JSON.stringify(ast).length * 3,
   });
-  const inFlight = new Map<string, Promise<DecisionRowAst>>();
-  return async ({ key, read }: ReadDecisionRowAstOptions) => {
+  const inFlight = new Map<string, Promise<DecisionRowAstLoad>>();
+  return async ({ key, read, onVersionChanged }: ReadDecisionRowAstOptions) => {
     const cached = cache.get(key);
     if (cached !== undefined) {
       recordReadWork("cacheHits");
@@ -31,17 +37,31 @@ export const createDecisionRowAstCache = ({
     const pending = inFlight.get(key);
     if (pending !== undefined) {
       recordReadWork("cacheHits");
-      return await pending;
+      const result = await pending;
+      if (result === DECISION_ROW_AST_VERSION_CHANGED) {
+        onVersionChanged?.();
+        return null;
+      }
+      return result;
     }
     const loading = (async () => {
-      const ast = deepFreeze(parsePersistedCorpusAst(await read()));
+      const value = await read();
+      if (value === DECISION_ROW_AST_VERSION_CHANGED) {
+        return value;
+      }
+      const ast = deepFreeze(parsePersistedCorpusAst(value));
       cache.set(key, ast);
       return ast;
     })().finally(() => {
       inFlight.delete(key);
     });
     inFlight.set(key, loading);
-    return await loading;
+    const result = await loading;
+    if (result === DECISION_ROW_AST_VERSION_CHANGED) {
+      onVersionChanged?.();
+      return null;
+    }
+    return result;
   };
 };
 
