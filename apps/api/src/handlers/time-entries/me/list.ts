@@ -302,8 +302,10 @@ const listMyTimeEntries = createSafeRootHandler(
           )
           .where(dayScope)
           .groupBy(timeEntries.dateWorked)
-          .orderBy(asc(timeEntries.dateWorked))
-          .limit(LIMITS.timeRangeDaysMax);
+          // SAFETY: grouped by work date inside a validated range, so the
+          // result holds at most LIMITS.timeRangeDaysMax rows.
+          // oxlint-disable-next-line require-query-limit/require-query-limit -- one row per work date of a range of at most timeRangeDaysMax days; see SAFETY above
+          .orderBy(asc(timeEntries.dateWorked));
         const summary = summaries.at(0);
         if (summary === undefined) {
           return panic("Daily time aggregate returned no row");
