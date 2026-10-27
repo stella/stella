@@ -102,7 +102,6 @@ const readRoute = (filePath: string) => {
       (property) =>
         property.type === "Property" &&
         property.kind === "init" &&
-        !property.method &&
         !property.shorthand &&
         !property.computed &&
         source.sourceText.slice(property.key.start, property.key.end) ===
