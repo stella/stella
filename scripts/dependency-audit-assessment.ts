@@ -247,16 +247,22 @@ export const assessAdvisories = ({
           }
         }
       }
+      // A copy no package depends on moves within its major, or wherever every
+      // root requirement allows; it still needs a forward patch either way.
       if (
         parents.length === 0 &&
-        manifestRequirements.length === 0 &&
-        !nodePatches.some(
-          (version) =>
-            version.split(".").at(0) === node.version.split(".").at(0),
+        !nodePatches.some((version) =>
+          manifestRequirements.length === 0
+            ? version.split(".").at(0) === node.version.split(".").at(0)
+            : manifestRequirements.every((requirement) =>
+                Bun.semver.satisfies(version, requirement),
+              ),
         )
       ) {
         blockers.push(
-          `${node.key}@${node.version}: no patched release in resolved major`,
+          manifestRequirements.length === 0
+            ? `${node.key}@${node.version}: no patched release in resolved major`
+            : `${node.key}@${node.version}: no forward patched release allowed by package.json`,
         );
       }
     }

@@ -284,6 +284,34 @@ test("an advisory spanning release lines keeps each line's forward patch", () =>
   ).toEqual({ status: "fix_available", patchedVersions: ["1.2.3", "2.1.1"] });
 });
 
+test("a root requirement never hides a locked copy without a forward patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        example: ["example@1.2.2", "", {}],
+        "other/example": ["example@2.1.0", "", {}],
+      },
+    }),
+    manifest: { dependencies: { example: ">=1.0.0" } },
+    versions: new Map([["example", ["1.2.2", "1.2.3", "2.1.0"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "upstream_blocked",
+    blockers: [
+      "other/example@2.1.0: no forward patched release allowed by package.json",
+    ],
+    patchedVersions: ["1.2.3"],
+  });
+});
+
 test("a patch on an older release line is no upgrade for a newer locked copy", () => {
   expect(
     multiLineAssessment({
