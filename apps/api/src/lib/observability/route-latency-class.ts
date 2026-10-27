@@ -847,6 +847,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/templates/styles": "crud",
   "PUT /v1/time-entries/:workspaceId": "crud",
   "PUT /v1/time-entries/me/daily-target": "crud",
+  "POST /v1/time-entries/me/submissions": "crud",
   "PUT /v1/time-entries/members/:userId/daily-target": "crud",
   "PUT /v1/view-templates/:workspaceId": "crud",
   "PUT /v1/views/:workspaceId": "crud",

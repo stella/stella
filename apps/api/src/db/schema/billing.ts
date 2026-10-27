@@ -117,6 +117,7 @@ const TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES = [
 ] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
 const INTERNAL_TIME_ENTRY_STATUSES = [
   "draft",
+  "submitted",
   "approved",
 ] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
 
@@ -149,10 +150,9 @@ export const timeEntries = p.pgTable(
       .text("activity_group", { enum: TIME_ENTRY_ACTIVITY_GROUPS })
       .notNull()
       .default(TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-    workspaceId: safeWorkspaceId("workspace_id").references(
-      () => workspaces.id,
-      { onDelete: "cascade" },
-    ),
+    // The matter this work bills; null for internal time. A matter with
+    // entries cannot be deleted (`WORKSPACE_DELETION_RETAINED_TABLES`).
+    workspaceId: safeWorkspaceId("workspace_id"),
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
@@ -229,7 +229,14 @@ export const timeEntries = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "time_entries_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "time_entries_workspace_id_workspaces_id_fkey",
+      })
+      .onDelete("no action"),
     p
       .index("time_entries_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateWorked),
@@ -254,6 +261,16 @@ export const timeEntries = p.pgTable(
         table.id,
       )
       .where(sql`${table.status} = 'draft'`),
+    // The approval queue reads submitted entries only, per approver and date.
+    p
+      .index("time_entries_submitted_queue_idx")
+      .on(
+        table.organizationId,
+        table.approverUserId,
+        table.dateWorked,
+        table.id,
+      )
+      .where(sql`${table.status} = 'submitted'`),
     p
       .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
       .on(table.userId)
@@ -893,9 +910,9 @@ export const expenses = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    // The matter this cost bills. A matter with expenses cannot be deleted
+    // (`WORKSPACE_DELETION_RETAINED_TABLES`).
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
     userId: p
       .text("user_id")
       .references(() => user.id, { onDelete: "set null" }),
@@ -932,7 +949,14 @@ export const expenses = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "expenses_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "expenses_workspace_id_workspaces_id_fkey",
+      })
+      .onDelete("no action"),
     p
       .index("expenses_ws_matter_status_idx")
       .on(table.workspaceId, table.matterId, table.status),

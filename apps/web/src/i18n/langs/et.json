@@ -508,14 +508,20 @@
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
     "approval": {
+      "approveAll": "{count, plural, one {Kinnita # kanne} other {Kinnita kõik # kannet}}",
       "approveSelected": "Kinnita {count, plural, one {# valitud kanne} other {# valitud kannet}}",
+      "billedTotal": "Arveldatud {duration}",
       "empty": "Selles toimikus ei oota midagi kinnitamist.",
+      "emptyWeek": "Sel nädalal ei oota midagi kinnitamist. Esitatud aeg ilmub siia.",
+      "everyone": "Kõik",
       "failed": "Muudatust ei salvestatud. Proovige uuesti.",
       "myTime": "Minu aeg",
+      "pending": "{count, plural, one {# kanne kinnitamiseks} other {# kannet kinnitamiseks}}",
       "refusals": {
         "invalidEntry": "Lisage kirjeldus ja kontrollige töö kuupäeva, seejärel kinnitage kanne.",
         "notApprover": "Seda kannet saab kinnitada ainult määratud kinnitaja või administraator.",
         "notFound": "Seda kannet enam ei ole. Värskendage loendit.",
+        "notSubmitted": "Seda kannet pole veel esitatud. Kõigepealt peab selle esitama kande tegija.",
         "runningTimer": "Peatage töötav taimer enne kande kinnitamist.",
         "unpriced": "Sellel kandel pole määra. Seadistage selle toimiku määr ja kinnitage seejärel kanne.",
         "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
@@ -827,6 +833,7 @@
       "approved": "Kinnitatud",
       "billed": "Arveldatud",
       "draft": "Mustand",
+      "submitted": "Esitatud",
       "written_off": "Maha kantud"
     },
     "stopTimer": "Peata",
@@ -5898,6 +5905,16 @@
       "pendingCount": "{count, plural, one {# ettepanek} other {# ettepanekut}}",
       "previousWeek": "Eelmine nädal",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Kontrollige töö kuupäeva ja esitage siis see kanne.",
+        "narrativeRequired": "Lisage kirjeldus ja esitage siis see kanne.",
+        "runningTimer": "Peatage töötav taimer ja esitage siis see kanne.",
+        "unpriced": "Sellel kandel pole määra. Küsige toimikule määra ja esitage see siis."
+      },
+      "returned": "Tagastatud: {comment}",
+      "submitAndApprove": "Esita ja kinnita",
+      "submitResult": "Esitatud {submitted} · kinnitatud {approved} · parandada {refused}",
+      "submitWeek": "Esita nädal",
       "title": "Minu nädal",
       "totals": "Kirjendatud {logged} · arveldatav {billable}"
     }
