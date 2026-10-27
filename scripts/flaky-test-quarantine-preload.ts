@@ -114,6 +114,7 @@ const RUNNER_GRACE_MS = 5000;
 const MAX_MESSAGE = 300;
 
 type TestFunction = (...args: unknown[]) => unknown;
+type NativeScopeFunction = (...args: never[]) => unknown;
 type Outcome = { status: "passed" } | { status: "failed"; message: string };
 
 const isFunction = (value: unknown): value is TestFunction =>
@@ -267,10 +268,10 @@ const install = (reportDir: string): void => {
   // Bun defers nested describe bodies, so each body restores the path it was
   // declared under instead of relying on call nesting.
   let describePath: readonly string[] = [];
-  const wrapDescribe = (
-    original: TestFunction,
+  const wrapDescribe = <T extends NativeScopeFunction>(
+    original: T,
     receiver: unknown,
-  ): TestFunction =>
+  ): T =>
     new Proxy(original, {
       get: (target, key) => {
         const value: unknown = Reflect.get(target, key, target);
@@ -309,10 +310,10 @@ const install = (reportDir: string): void => {
         }
         return isFunction(value) ? wrapDescribe(value, target) : value;
       },
-      apply: (target, _self, args: unknown[]) => {
+      apply: (target, _self, args: unknown[]): unknown => {
         const [label, body, ...rest] = args;
         if (!isFunction(body)) {
-          const result = Reflect.apply(target, receiver, args);
+          const result: unknown = Reflect.apply(target, receiver, args);
           return isFunction(result) ? wrapDescribe(result, target) : result;
         }
         const scope = [
@@ -371,13 +372,16 @@ const install = (reportDir: string): void => {
       console.error(`(quarantined fail) ${id}: ${outcome.message}`);
     };
 
-  const register = (original: TestFunction, receiver: unknown): TestFunction =>
+  const register = <T extends NativeScopeFunction>(
+    original: T,
+    receiver: unknown,
+  ): T =>
     new Proxy(original, {
       get: (target, key) => {
         const value: unknown = Reflect.get(target, key, target);
         return isFunction(value) ? forward(value, target) : value;
       },
-      apply: (target, _self, args: unknown[]) => {
+      apply: (target, _self, args: unknown[]): unknown => {
         const [label, second, third, ...rest] = args;
         const file = typeof label === "string" ? currentFile() : undefined;
         const id =
@@ -417,8 +421,8 @@ const install = (reportDir: string): void => {
         ? register(value, target)
         : forward(value, target);
     },
-    apply: (target, _self, args: unknown[]) =>
-      register(target, target)(...args),
+    apply: (target, _self, args: unknown[]): unknown =>
+      Reflect.apply(register(target, target), target, args),
   });
 
   void mock.module("bun:test", () => ({
