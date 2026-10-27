@@ -1,13 +1,17 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { parseSync } from "oxc-parser";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
+import {
+  devices,
+  isDevicePresetName,
+} from "../packages/playwright-tools/src/devices";
 import {
   type ArrayExpression,
   type CallExpression,
@@ -154,95 +158,7 @@ const configObjectOf = (
     : { ...first, properties: objects.flatMap(({ properties }) => properties) };
 };
 
-const devicesByPackage = new Map<string, Record<string, unknown> | undefined>();
-
-/**
- * The `devices` export of the `@playwright/test` the file resolves. Reading
- * the public export keeps presets readable across Playwright releases, which
- * move the data behind it.
- */
-export const playwrightDevices = (
-  source: Pick<Source, "file" | "root">,
-): Record<string, unknown> | undefined => {
-  // Dependency resolution and module loading are filesystem boundaries.
-  try {
-    const entry = createRequire(path.resolve(source.root, source.file)).resolve(
-      "@playwright/test",
-    );
-    if (!devicesByPackage.has(entry)) {
-      // The CommonJS entry exports the `test` function with the rest of the
-      // API, `devices` included, as its properties.
-      const playwrightTest: unknown = createRequire(entry)(entry);
-      const devices =
-        typeof playwrightTest === "function" || isRecord(playwrightTest)
-          ? Reflect.get(playwrightTest, "devices")
-          : undefined;
-      devicesByPackage.set(entry, isRecord(devices) ? devices : undefined);
-    }
-    return devicesByPackage.get(entry);
-  } catch {
-    return undefined;
-  }
-};
-
-// Preset data may only enter configuration through a direct spread. Keeping
-// the imported binding inside that read boundary excludes aliases and writes
-// whose runtime values would differ from the installed preset descriptor.
-const readOnlyDeviceBinding = (source: Source, binding: string): boolean => {
-  let readOnly = true;
-  walk(source.program, (node, ancestors) => {
-    if (node.type !== "Identifier" || node.name !== binding) {
-      return;
-    }
-    const parent = ancestors.at(-1);
-    if (parent === undefined) {
-      readOnly = false;
-      return;
-    }
-    if (
-      parent.type === "ImportSpecifier" ||
-      (parent.type === "Property" &&
-        parent.key === node &&
-        !parent.computed &&
-        !parent.shorthand) ||
-      (parent.type === "MemberExpression" &&
-        parent.property === node &&
-        !parent.computed)
-    ) {
-      return;
-    }
-    if (
-      parent.type !== "MemberExpression" ||
-      parent.object !== node ||
-      !parent.computed ||
-      parent.property.type !== "Literal" ||
-      typeof parent.property.value !== "string"
-    ) {
-      readOnly = false;
-      return;
-    }
-    let access: Node = parent;
-    let index = ancestors.length - 2;
-    let container = ancestors.at(index);
-    while (
-      (container?.type === "ParenthesizedExpression" ||
-        container?.type === "TSAsExpression" ||
-        container?.type === "TSSatisfiesExpression") &&
-      container.expression === access
-    ) {
-      access = container;
-      index -= 1;
-      container = index < 0 ? undefined : ancestors.at(index);
-    }
-    if (container?.type !== "SpreadElement" || container.argument !== access) {
-      readOnly = false;
-    }
-  });
-  return readOnly;
-};
-
-// Resolve imported device presets from the pinned package's literal data,
-// rather than exempting spreads by identifier or trusting arbitrary imports.
+// Runtime configuration and policy inspection share the same frozen presets.
 const resolveDevicePreset = (
   expression: Node,
   source: Source,
@@ -263,33 +179,29 @@ const resolveDevicePreset = (
   const imported = importedBinding(source, binding);
   if (
     imported?.type !== "named" ||
-    imported.module !== "@playwright/test" ||
+    (imported.module !== "@stll/playwright-tools/devices" &&
+      !(
+        source.file === "packages/playwright-tools/src/marketing-config.ts" &&
+        imported.module === "./devices"
+      )) ||
     imported.name !== "devices"
   ) {
     return undefined;
   }
-  if (!readOnlyDeviceBinding(source, binding)) {
+  if (!isDevicePresetName(presetName)) {
     return undefined;
   }
-  const descriptor = playwrightDevices(source)?.[presetName];
-  if (!isRecord(descriptor)) {
-    return undefined;
-  }
-  // The descriptor is plain data; read it as the object literal it equals.
-  try {
-    const literal = parseSource(
-      "device-preset.ts",
-      `export default ${JSON.stringify(descriptor)};`,
-    );
-    const statement = literal.program.body.at(0);
-    const presetExpression =
-      statement === undefined ? undefined : exportedExpression(statement);
-    return presetExpression?.type === "ObjectExpression"
-      ? presetExpression
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  const descriptor = devices[presetName];
+  const literal = parseSource(
+    "device-preset.ts",
+    `export default ${JSON.stringify(descriptor)};`,
+  );
+  const statement = literal.program.body.at(0);
+  const presetExpression =
+    statement === undefined ? undefined : exportedExpression(statement);
+  return presetExpression?.type === "ObjectExpression"
+    ? presetExpression
+    : panic("A generated device descriptor must be an object");
 };
 
 const resolveVariable = (name: string, source: Source): Node | undefined => {

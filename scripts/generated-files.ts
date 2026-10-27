@@ -1937,6 +1937,28 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "playwright-devices",
+    outputKind: "committed",
+    outputs: ["packages/playwright-tools/src/devices.gen.ts"],
+    inputs: [
+      "scripts/generate-playwright-devices.ts",
+      "packages/playwright-tools/package.json",
+      "packages/playwright-tools/src/marketing-config.ts",
+      "apps/**/playwright*.config.*",
+      "packages/**/playwright*.config.*",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
+      "packages/portable-path/src/index.ts",
+      "bunfig.toml",
+      ".prettierrc.yml",
+    ],
+    write: ["bun", "scripts/generate-playwright-devices.ts", "--write"],
+    check: ["bun", "scripts/generate-playwright-devices.ts", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "us-courts",
     outputKind: "committed",
     outputs: [

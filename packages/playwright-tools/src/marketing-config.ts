@@ -1,6 +1,7 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
+import { devices } from "./devices";
 import { playwrightEnv } from "./env";
 
 export const MARKETING_REPO_ROOT = path.resolve(

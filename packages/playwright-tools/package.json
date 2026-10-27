@@ -9,7 +9,8 @@
   "exports": {
     "./marketing-case-law.json": "./src/marketing-case-law.json",
     "./app-marketing-config": "./src/app-marketing-config.ts",
-    "./landing-marketing-config": "./src/landing-marketing-config.ts"
+    "./landing-marketing-config": "./src/landing-marketing-config.ts",
+    "./devices": "./src/devices.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

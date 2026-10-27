@@ -9,10 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { isDevicePresetName } from "../packages/playwright-tools/src/devices";
 import {
   checkTestRetries,
   findTestRetryViolations,
-  playwrightDevices,
 } from "./check-test-retries.ts";
 
 const config = (source: string) =>
@@ -668,7 +668,7 @@ test.each([
   (_name, parameters, declarations, argumentsSource) => {
     expect(
       config(`
-        import { defineConfig, devices } from "@playwright/test";
+        import { defineConfig } from "@playwright/test"; import { devices } from "@stll/playwright-tools/devices";
         const overrides = { retries: 0 };
         const projects = [];
         const use = {};
@@ -836,9 +836,9 @@ test.each([
   },
 );
 
-test("reads device presets from the @playwright/test devices export", () => {
+test("reads device presets from the immutable shared owner", () => {
   const withPreset = (name: string) => `
-    import { defineConfig, devices } from "@playwright/test";
+    import { defineConfig } from "@playwright/test"; import { devices } from "@stll/playwright-tools/devices";
     export default defineConfig({
       retries: 0,
       projects: [{ name: "browser", use: { ...devices[${JSON.stringify(name)}] } }],
@@ -850,7 +850,7 @@ test("reads device presets from the @playwright/test devices export", () => {
   ]);
 });
 
-test("every device preset a tracked config names exists in @playwright/test", () => {
+test("every device preset a tracked config names exists in the shared owner", () => {
   const root = path.resolve(import.meta.dir, "..");
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root })
     .stdout.toString()
@@ -869,7 +869,7 @@ test("every device preset a tracked config names exists in @playwright/test", ()
   }
   expect(presets.size).toBeGreaterThan(0);
   for (const [preset, file] of presets) {
-    const known = playwrightDevices({ file, root })?.[preset] !== undefined;
+    const known = isDevicePresetName(preset);
     expect({ file, preset, known }).toEqual({ file, preset, known: true });
   }
 });
