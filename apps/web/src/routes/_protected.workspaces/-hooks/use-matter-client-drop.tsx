@@ -28,9 +28,18 @@ type PromotionDialogState =
 // Applies a matter card dropped on another client's group. Moving between
 // clients happens at once; promoting a personal matter shares it with the team
 // and cannot be undone, so it waits for confirmation.
-export const useMatterClientDrop = () => {
+export const useMatterClientDrop = () =>
+  useMatterClientDropState(useUpdateWorkspace());
+
+type MatterClientDropMutation = Pick<
+  ReturnType<typeof useUpdateWorkspace>,
+  "mutate" | "isPending"
+>;
+
+export const useMatterClientDropState = (
+  updateWorkspace: MatterClientDropMutation,
+) => {
   const t = useTranslations();
-  const updateWorkspace = useUpdateWorkspace();
   const [promotion, setPromotion] = useState<PromotionDialogState>({
     type: "closed",
   });
@@ -50,6 +59,28 @@ export const useMatterClientDrop = () => {
               matterName: drop.matterName,
             }),
             type: "success",
+            action:
+              drop.type === "move"
+                ? {
+                    label: t("common.undo"),
+                    onClick: () => {
+                      updateWorkspace.mutate(
+                        {
+                          workspaceId: drop.matterId,
+                          update: {
+                            type: "clientId",
+                            value: drop.previousClientId,
+                          },
+                        },
+                        {
+                          onError: (error) => {
+                            notifyUserError(error, t("errors.actionFailed"));
+                          },
+                        },
+                      );
+                    },
+                  }
+                : undefined,
           });
           if (drop.type === "promote") {
             setPromotion({ type: "closed" });
