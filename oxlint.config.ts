@@ -1904,6 +1904,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
+    "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
@@ -5812,6 +5813,26 @@ const config = defineConfig({
       excludeFiles: ["apps/web/src/test-dom-environment.ts"],
       rules: {
         "no-direct-dom-unregister/no-direct-dom-unregister": "error",
+      },
+    },
+    {
+      // The packages whose tests render React in happy-dom, where component
+      // libraries keep module state behind their timeouts. @stll/ui must
+      // build standalone, so it cannot import the shared helper.
+      files: [
+        "apps/desktop/**/*.{ts,tsx}",
+        "apps/web/**/*.{ts,tsx}",
+        "packages/decision-reader/**/*.{ts,tsx}",
+        "packages/mcp-apps/**/*.{ts,tsx}",
+        "packages/render-probe/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
+      ],
+      // Open pull request 6989 rewrites this file's teardown and migrates it.
+      excludeFiles: [
+        "apps/web/src/components/legal-reader/reader-breadcrumb.dom.test.tsx",
+      ],
+      rules: {
+        "no-dropped-fake-timers/no-dropped-fake-timers": "error",
       },
     },
     {
