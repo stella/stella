@@ -130,7 +130,7 @@ const baseFixture = (overrides: Fixture = {}): Fixture => ({
             id: 9,
             head_branch: "main",
             path: ".github/workflows/deploy-staging.yml",
-            display_title: `Staging release proof ${DEPLOY_SHA}`,
+            display_title: `Deploy main to staging ${DEPLOY_SHA}`,
             repository: { full_name: "stella/stella" },
           },
         ],

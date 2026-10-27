@@ -32,13 +32,14 @@ esac
   refuse unsuccessful-proof "the proof run did not succeed"
 
 # The dispatched run's head_sha is main's tip; the proven commit is pinned in
-# the run title, optionally after the candidate tag that names it.
+# the run title. A staging proof also names its candidate tag
+# (scripts/proof-run-titles.test.ts renders each workflow's run-name).
 title="$(field display_title || true)"
-title_pattern='^(Staging release proof|Main heavy suites|Main PR-depth checks)( (v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*))? ([0-9a-f]{40})$'
+title_pattern='^(Staging release proof (v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*)|Main heavy suites|Main PR-depth checks) ([0-9a-f]{40})$'
 [[ "$title" =~ $title_pattern ]] ||
   refuse not-a-proof-title "the run title names no exact commit"
-named_rc="${BASH_REMATCH[3]}"
-sha="${BASH_REMATCH[4]}"
+named_rc="${BASH_REMATCH[2]}"
+sha="${BASH_REMATCH[3]}"
 
 rc=""
 while IFS= read -r tag; do

@@ -70,7 +70,7 @@ case "$*" in
   *actions/workflows/deploy-staging.yml/runs?*)
     jq -cn --arg sha "$DEPLOY_SHA" --argjson id "$GITHUB_RUN_ID" '{workflow_runs: [{
       id: $id, event: "workflow_dispatch", head_sha: $sha, head_branch: "main",
-      path: ".github/workflows/deploy-staging.yml", display_title: ("Staging release proof " + $sha),
+      path: ".github/workflows/deploy-staging.yml", display_title: ("Deploy main to staging " + $sha),
       repository: {full_name: "stella/stella"}}]}' ;;
   *commits/*/statuses?*) printf '[[]]\\n' ;;
   *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;

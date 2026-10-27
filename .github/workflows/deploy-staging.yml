@@ -758,12 +758,16 @@ jobs:
           image-digest: ${{ steps.rc-images.outputs.api || needs.build-api.outputs.digest }}
           web-image-digest: ${{ steps.rc-images.outputs.web || needs.build-web.outputs.digest }}
           git-sha: ${{ inputs.release_ref == '' && needs.resolve.outputs.sha || '' }}
-          staging-lease-before-hours: ${{ inputs.release_ref != '' && '8' || '' }}
-          staging-lease-after-hours: ${{ inputs.release_ref != '' && '2' || '' }}
+          # The infrastructure promote holds its own lease while it runs: the
+          # first lease bridges until it starts, the second covers every later
+          # step's timeout-minutes (scripts/staging-proof-lease.test.ts).
+          staging-lease-before-hours: ${{ inputs.release_ref != '' && '1' || '' }}
+          staging-lease-after-hours: ${{ inputs.release_ref != '' && '3' || '' }}
           staging-lease-sha: ${{ inputs.release_ref != '' && needs.resolve.outputs.sha || '' }}
 
       # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
+        timeout-minutes: 2
         id: deployment
         env:
           DEPLOY_ENVIRONMENT: staging
@@ -800,6 +804,7 @@ jobs:
       # were a separate job, a newer promotion could start while this smoke
       # still measures the previous commit.
       - name: Checkout deployed source
+        timeout-minutes: 3
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -807,6 +812,7 @@ jobs:
 
       # Journeys run from the target revision, including its dependencies.
       - name: Require target journey harness
+        timeout-minutes: 2
         run: |
           for required in .github/actions/user-journeys/action.yml apps/web/e2e/playwright.journeys.config.ts; do
             if [[ ! -f "$required" ]]; then
@@ -816,6 +822,7 @@ jobs:
           done
 
       - name: Setup Bun
+        timeout-minutes: 3
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -853,6 +860,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke
+        timeout-minutes: 30
         id: web-smoke
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
@@ -870,6 +878,7 @@ jobs:
       # runs on its own through staging-response-policy.yml. Report-only
       # until it has a record of green runs.
       - name: Run staging response policy checks
+        timeout-minutes: 5
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         continue-on-error: true
         run: |
@@ -891,6 +900,7 @@ jobs:
       # deps condition this step ran after a failed deploy with no toolchain
       # installed and died with `bun: command not found`.
       - name: Run staging API chat smoke
+        timeout-minutes: 5
         id: api-smoke
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
@@ -907,6 +917,7 @@ jobs:
       # summarized but does not fail the promotion. To make it blocking,
       # delete the `continue-on-error: true` line below.
       - name: Run staging API model-turn smoke
+        timeout-minutes: 5
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         continue-on-error: true
         run: |
@@ -961,6 +972,7 @@ jobs:
           echo "Staging corpus search backend answered the preflight." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run staging MCP user journeys
+        timeout-minutes: 10
         id: mcp-smoke
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.outcome == 'success' }}
         run: bun run canary:mcp
@@ -1027,6 +1039,7 @@ jobs:
         run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
       - name: Upload Playwright report
+        timeout-minutes: 5
         if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1035,6 +1048,7 @@ jobs:
           retention-days: 7
 
       - name: Upload failed journey reports
+        timeout-minutes: 5
         if: ${{ failure() && (steps.deployed-journeys.outcome == 'failure' || steps.mock-journeys.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -1047,6 +1061,7 @@ jobs:
           retention-days: 7
 
       - name: Record staging verification
+        timeout-minutes: 3
         if: ${{ always() && steps.deployment.outputs.id != '' && (inputs.release_ref == '' || steps.candidate-served-after-smokes.outcome == 'success') }}
         env:
           GH_TOKEN: ${{ github.token }}
