@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -139,10 +140,11 @@ const withFixture = async (
     }
   });
 
-// Runs the code under test inside the interleaving's own transaction.
+// Runs the code under test inside the interleaving's own transaction and
+// answers as safeDb does: the callback's value wrapped in an ok result.
 const inTransaction = (tx: Transaction) =>
-  asTestRaw<SafeDb>(
-    async (run: (current: Transaction) => Promise<unknown>) => await run(tx),
+  asTestRaw<SafeDb>(async (run: (current: Transaction) => Promise<unknown>) =>
+    Result.ok(await run(tx)),
   );
 
 const submitStep = (fixture: Fixture, approve: boolean) => ({
@@ -161,6 +163,15 @@ const submitStep = (fixture: Fixture, approve: boolean) => ({
     expect(outcome.isOk()).toBe(true);
   },
 });
+
+// Resumed, or refused because the submit came first; anything else verbatim.
+const resumeAnswer = (answer: unknown) => {
+  const text = JSON.stringify(answer);
+  if (text.includes("timer_original_entry_changed")) {
+    return "refused";
+  }
+  return text.includes('"state":"running"') ? "resumed" : text;
+};
 
 const COMMITTED: InterleavingResult<unknown>["outcomes"] = {
   a: { status: "committed" },
@@ -255,6 +266,7 @@ if (!databaseUrl || !runPostgres) {
           accumulatedSeconds: 60,
           lastResumedAt: null,
         });
+        const answers: string[] = [];
         const results = await withInterleaving({
           databaseUrl,
           a: { steps: [submitStep(fixture, false)] },
@@ -262,9 +274,8 @@ if (!databaseUrl || !runPostgres) {
             steps: [
               {
                 name: "resume",
-                // A refused resume is an answer, not a failure.
-                run: async (tx: Transaction) =>
-                  await resumeTimer.handler(
+                run: async (tx: Transaction) => {
+                  const answer = await resumeTimer.handler(
                     createTestHandlerContext<
                       Parameters<typeof resumeTimer.handler>[0]
                     >({
@@ -281,7 +292,9 @@ if (!databaseUrl || !runPostgres) {
                       }),
                       params: { id: timerId },
                     }),
-                  ),
+                  );
+                  answers.push(resumeAnswer(answer));
+                },
               },
             ],
           },
@@ -316,6 +329,7 @@ if (!databaseUrl || !runPostgres) {
         });
         // Two steps and two commits: six orders.
         expect(results).toHaveLength(6);
+        expect(new Set(answers)).toEqual(new Set(["resumed", "refused"]));
       },
     );
   }, 60_000); // timeout: six interleavings, each with its own pair of real Postgres sessions and lock waits
