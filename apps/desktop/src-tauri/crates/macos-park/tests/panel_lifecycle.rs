@@ -63,7 +63,7 @@ fn activated(application: &NSApplication, editor: &NSWindow) -> bool {
 fn main() {
   use activation::{ActivationReturn, return_activation};
   use objc2::rc::{Retained, autoreleasepool};
-  use objc2::runtime::{AnyObject, ClassBuilder};
+  use objc2::runtime::{AnyClass, AnyObject, ClassBuilder};
   use objc2_app_kit::{
     NSApplicationActivationPolicy, NSBackingStoreType, NSRunningApplication,
     NSWorkspace,
@@ -315,8 +315,14 @@ fn main() {
     editor.close();
 
     // Activating the app for the editor leaves the clipboard panel's
-    // non-activating presentation as it was.
-    assert_eq!(panel.class(), ClipboardPanel::class());
+    // non-activating presentation as it was. AppKit may start observing the
+    // panel by then; key-value observing swaps its runtime class for an
+    // `NSKVONotifying_` subclass and answers `-class` with the class it was,
+    // so the panel's own answer is what still has to be the clipboard panel.
+    // SAFETY: `-class` takes no arguments and returns the receiver's class;
+    // the panel is retained and used on the main thread.
+    let reported_panel_class: &AnyClass = unsafe { msg_send![&*panel, class] };
+    assert_eq!(reported_panel_class, ClipboardPanel::class());
     assert!(
       panel
         .styleMask()
