@@ -120,6 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,7 +173,7 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::Release tag $REF is not reachable from protected main"
             exit 1

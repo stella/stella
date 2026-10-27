@@ -46,7 +46,7 @@ import {
 } from "@/components/bilingual-translate-queries";
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
@@ -88,7 +88,7 @@ export const BilingualTranslateDialog = ({
   disabled = false,
 }: BilingualTranslateDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

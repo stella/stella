@@ -37,6 +37,7 @@ jobs:
           persist-credentials: false
 
       - name: Dispatch pinned release proofs once
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           PROOF_SHA: ${{ github.event.pull_request.head.sha }}

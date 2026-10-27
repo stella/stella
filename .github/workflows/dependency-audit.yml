@@ -188,6 +188,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Open one remediation
+        timeout-minutes: 10
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           FIX_BRANCH: automation/dependency-audit-fix
