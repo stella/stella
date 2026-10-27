@@ -14,14 +14,21 @@ import * as v from "valibot";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SCRIPT_REFERENCE =
   /(?:^|[\s"'`(])((?:\.\/)?scripts\/[\w./-]+\.(?:[cm]?[jt]s|sh))\b/gu;
-const PACKAGE_SCRIPT = /\bbun\s+run\s+([\w:.-]+)/gu;
+const BUN_ARGUMENT_SEPARATOR = String.raw`["']?(?:\s*,\s*|\s+)["']?`;
+const BUN_COMMAND_PREFIX = String.raw`\bbun${BUN_ARGUMENT_SEPARATOR}(?:--[\w-]+${BUN_ARGUMENT_SEPARATOR})*`;
+const PACKAGE_SCRIPT = new RegExp(
+  String.raw`${BUN_COMMAND_PREFIX}run${BUN_ARGUMENT_SEPARATOR}(?:--[\w-]+${BUN_ARGUMENT_SEPARATOR})*([\w:.-]+)`,
+  "gu",
+);
 const FORBIDDEN = [
   { pattern: /--type-aware\b/u, reason: "type-aware oxlint" },
   { pattern: /\btsgolint\b/u, reason: "tsgolint" },
   { pattern: /\btypecheck-coverage(?:\.ts)?\b/u, reason: "typecheck-coverage" },
   {
-    pattern:
-      /\bbun["']?(?:\s*,\s*|\s+)["']?(?:--[\w-]+["']?(?:\s*,\s*|\s+)["']?)*(?:check|--check)(?![\w./:-])/u,
+    pattern: new RegExp(
+      String.raw`${BUN_COMMAND_PREFIX}(?:check|--check)(?![\w./:-])`,
+      "u",
+    ),
     reason: "Bun compiler",
   },
   {
@@ -245,5 +252,29 @@ test.each([
       [file]: source,
     },
     (root) => expect(hookTypecheckViolations(root)).toEqual([]),
+  );
+});
+
+test.each([
+  "bun run lint",
+  '"bun" "run" "lint"',
+  'Bun.spawnSync(["bun", "run", "lint"]);',
+  'Bun.spawnSync(["bun", "--no-env-file", "run", "lint"]);',
+  'Bun.spawnSync(["bun", "run", "--silent", "lint"]);',
+])("follows package scripts reached through %s", (source) => {
+  const typescript = source.startsWith("Bun.");
+  const file = `scripts/guard.${typescript ? "ts" : "sh"}`;
+  withFixture(
+    {
+      "package.json": JSON.stringify({
+        scripts: { lint: "oxlint --type-aware ." },
+      }),
+      "lefthook.yml": `pre-push:\n  commands:\n    guard:\n      run: ${typescript ? "bun" : "bash"} ${file}\n`,
+      [file]: source,
+    },
+    (root) =>
+      expect(hookTypecheckViolations(root)).toEqual([
+        { file: "package.json#lint", reason: "type-aware oxlint" },
+      ]),
   );
 });
