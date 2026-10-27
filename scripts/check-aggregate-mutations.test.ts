@@ -588,7 +588,7 @@ describe("declared handler locks", () => {
       for (const definition of [
         `${lockImport} export let lockExample = async (tx) => { ${acquisition} };`,
         `${lockImport} export const lockExample = async (tx) => { ${acquisition} }; export function reset() { lockExample = async () => {}; }`,
-        `${lockImport} export function lockExample(tx) { ${acquisition} } lockExample = async () => {};`,
+        `${lockImport} export async function lockExample(tx) { ${acquisition} } lockExample = async () => {};`,
       ]) {
         sources.set(service, definition);
         sources.set(
@@ -615,6 +615,33 @@ describe("declared handler locks", () => {
       expect(() => verify(sources)).toThrow(
         "Cannot resolve declared aggregate handler implementation",
       );
+    });
+
+    test("wrapped const helpers retain their lock ownership", () => {
+      const sources = setup();
+      sources.set(
+        module,
+        handlerModule({
+          imports: 'import { lockExample } from "@/api/services/example-lock";',
+          body: "await safeDb(async (tx) => { await lockExample(tx); });",
+        }),
+      );
+      for (const wrap of [
+        (callback: string) => `(${callback})`,
+        (callback: string) => `(${callback}) as LockFunction`,
+        (callback: string) => `(${callback}) satisfies LockFunction`,
+      ]) {
+        sources.set(
+          service,
+          `${lockImport} export const lockExample = ${wrap(`async (tx) => { ${acquisition} }`)};`,
+        );
+        expect(verify(sources)).toBe(1);
+        sources.set(
+          service,
+          `${lockImport} export const lockExample = ${wrap("async (tx) => {}")};`,
+        );
+        expect(() => verify(sources)).toThrow("must await withAggregateLock");
+      }
     });
 
     test("direct and followed locks combine to cover the declaration", () => {

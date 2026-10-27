@@ -9,7 +9,6 @@ import {
 import type { DecisionHeadnotePreview } from "@stll/api-contract/case-law-text-field";
 
 import { readBrowseFacets } from "@/api/handlers/case-law/decisions/facets";
-import { decisionDateSortKeySql } from "@/api/handlers/case-law/decisions/list";
 import {
   loadShelfCourtEntries,
   readShelfCourts,
@@ -18,6 +17,7 @@ import {
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionDateSortKeySql } from "@/api/lib/case-law/decision-date-order";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import {
   type PublicDecisionLanguageAlternate,

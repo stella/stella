@@ -1,5 +1,13 @@
 import { panic, Result } from "better-result";
-import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
@@ -35,6 +43,11 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -712,6 +725,101 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await docketRows(caseNumber)).toEqual([
         { id: legacyRow.id, sourceDocumentId: "nalus-record:uncounted" },
       ]);
+    });
+
+    test("adopts a legacy row stored under the docket an earlier release derived", async () => {
+      // An earlier release read the docket off the CELEX and gave a case
+      // numbered before 1989 a court letter; the publisher states it without.
+      const cjeuDecision = (
+        caseNumber: string,
+        sourceDocumentId: string | undefined,
+      ) => ({
+        ...decisionAt("Court of Justice", sourceDocumentId),
+        caseNumber,
+        country: "EU",
+        language: "en",
+        decisionDate: "1979-02-20",
+        decisionType: "judgment",
+        ecli: "ECLI:EU:C:1979:42",
+      });
+      await processDecision({
+        input: plainTextIngestionResult(cjeuDecision("C-120/78", undefined)),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows("C-120/78");
+      expect(legacyRow?.sourceDocumentId).toBeNull();
+
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...cjeuDecision("120/78", "61978CJ0120:en"),
+          legacyCaseNumber: "C-120/78",
+          rawHash: "hash-cjeu-stated-docket",
+        }),
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows("C-120/78")).toEqual([]);
+      expect(await docketRows("120/78")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "61978CJ0120:en",
+        },
+      ]);
+    });
+
+    test("never adopts a legacy row under a derived docket without proof", async () => {
+      // A former spelling only widens where the legacy row is looked for;
+      // the row is still adopted only on its ECLI or source URL.
+      const decision = (
+        caseNumber: string,
+        sourceDocumentId: string | undefined,
+        ecli: string,
+      ) => ({
+        ...decisionAt("Court of Justice", sourceDocumentId),
+        caseNumber,
+        country: "EU",
+        language: "en",
+        decisionDate: "1979-02-20",
+        decisionType: "judgment",
+        ecli,
+      });
+      await processDecision({
+        input: plainTextIngestionResult(
+          decision("C-121/78", undefined, "ECLI:EU:C:1979:43"),
+        ),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      const [legacyRow] = await docketRows("C-121/78");
+
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...decision("121/78", "61978CJ0121:en", "ECLI:EU:C:1979:44"),
+          legacyCaseNumber: "C-121/78",
+          rawHash: "hash-cjeu-unproved",
+        }),
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows("C-121/78")).toEqual([
+        { id: legacyRow?.id ?? expect.unreachable(), sourceDocumentId: null },
+      ]);
+      expect(
+        (await docketRows("121/78")).map(
+          ({ sourceDocumentId }) => sourceDocumentId,
+        ),
+      ).toEqual(["61978CJ0121:en"]);
     });
 
     test("stores a keyed row under its docket without a trailing part marker", async () => {
