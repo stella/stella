@@ -98,5 +98,8 @@
     "accountTitle": "Konto",
     "server": "Server",
     "signOut": "Abmelden"
+  },
+  "header": {
+    "search": "Suchen"
   }
 }

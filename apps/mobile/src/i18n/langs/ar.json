@@ -98,5 +98,8 @@
     "accountTitle": "الحساب",
     "server": "الخادم",
     "signOut": "تسجيل الخروج"
+  },
+  "header": {
+    "search": "بحث"
   }
 }

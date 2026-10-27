@@ -98,5 +98,8 @@
     "accountTitle": "Konts",
     "server": "Serveris",
     "signOut": "Atslēgties"
+  },
+  "header": {
+    "search": "Meklēt"
   }
 }

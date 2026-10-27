@@ -98,5 +98,8 @@
     "accountTitle": "Fiók",
     "server": "Szerver",
     "signOut": "Kijelentkezés"
+  },
+  "header": {
+    "search": "Keresés"
   }
 }

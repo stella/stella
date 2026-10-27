@@ -4,14 +4,11 @@ import { Result } from "better-result";
 import { FlatList, RefreshControl } from "react-native";
 import { useTranslations } from "use-intl";
 
-import {
-  EmptyCard,
-  ScreenHeading,
-  screenStyles,
-} from "@/components/empty-state-screen";
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { useHeaderSearch } from "@/components/header-search";
 import { MatterRow } from "@/components/matter-row";
 import { RetryButton } from "@/components/retry-button";
-import type { MattersLoad } from "@/state/matters";
+import type { MattersLoad, MatterSummary } from "@/state/matters";
 import { useAppColors } from "@/theme";
 
 /** The matters a load returned, or why it could not, with pull-to-refresh either way. */
@@ -25,7 +22,7 @@ export const LoadedMatters = ({
   refreshing: boolean;
 }) => {
   const t = useTranslations("matters");
-  const tabs = useTranslations("tabs");
+  const { query } = useHeaderSearch();
   const colors = useAppColors();
   const { result } = use(load);
 
@@ -37,7 +34,9 @@ export const LoadedMatters = ({
   return (
     <FlatList
       contentContainerStyle={screenStyles.content}
-      data={Result.isOk(result) ? result.value : []}
+      // The header is the platform's translucent bar; the list scrolls under it.
+      contentInsetAdjustmentBehavior="automatic"
+      data={Result.isOk(result) ? matching(result.value, query) : []}
       keyExtractor={(matter) => matter.id}
       ListEmptyComponent={
         Result.isOk(result) ? (
@@ -51,9 +50,6 @@ export const LoadedMatters = ({
           </EmptyCard>
         )
       }
-      ListHeaderComponent={
-        <ScreenHeading description={t("description")} title={tabs("matters")} />
-      }
       refreshControl={
         <RefreshControl
           onRefresh={onReload}
@@ -65,3 +61,19 @@ export const LoadedMatters = ({
     />
   );
 };
+
+/** The matters whose name, reference or client contains what was searched for. */
+function matching(
+  matters: readonly MatterSummary[],
+  query: string,
+): readonly MatterSummary[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (needle === "") {
+    return matters;
+  }
+  return matters.filter((matter) =>
+    [matter.name, matter.reference, matter.client?.displayName].some(
+      (field) => field?.toLocaleLowerCase().includes(needle) === true,
+    ),
+  );
+}

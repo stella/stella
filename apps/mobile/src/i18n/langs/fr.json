@@ -98,5 +98,8 @@
     "accountTitle": "Compte",
     "server": "Serveur",
     "signOut": "Se déconnecter"
+  },
+  "header": {
+    "search": "Rechercher"
   }
 }

@@ -1,4 +1,4 @@
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
 
 import { ChatsList } from "@/components/chats-list";
 import { screenStyles } from "@/components/empty-state-screen";
@@ -10,14 +10,11 @@ const ChatsScreen = () => {
   const { state } = useSession();
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[screenStyles.screen, { backgroundColor: colors.background }]}
-    >
+    <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
       {state.status === "signed-in" ? (
         <ChatsList source={state.source} />
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 };
 

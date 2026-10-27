@@ -39,7 +39,7 @@ const tabGlyphs = (): Map<string, string> => {
 test("every tab draws a glyph the lucide font has", () => {
   const glyphs = tabGlyphs();
   expect([...glyphs.keys()].toSorted()).toEqual(
-    ["index", "matters", "settings", "tasks"].toSorted(),
+    ["index", "matters", "tasks"].toSorted(),
   );
   for (const glyph of glyphs.values()) {
     expect(Object.keys(codepoints)).toContain(glyph);
@@ -60,9 +60,11 @@ test("the matters tab draws the web's matter glyph, lucide's layers", () => {
   expect(tabGlyphs().get("matters")).toBe("layers");
 });
 
-test("the settings tab draws the web user menu's settings glyph", () => {
+test("the header's settings button draws the web user menu's settings glyph", () => {
   expect(read("apps/web/src/components/sidebar-user-menu.tsx")).toContain(
     "<CogIcon />",
   );
-  expect(tabGlyphs().get("settings")).toBe(glyphOf("CogIcon"));
+  expect(read("apps/mobile/src/components/protected-screens.tsx")).toContain(
+    `useGlyphImage("${glyphOf("CogIcon")}")`,
+  );
 });

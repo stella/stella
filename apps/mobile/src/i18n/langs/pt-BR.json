@@ -98,5 +98,8 @@
     "accountTitle": "Conta",
     "server": "Servidor",
     "signOut": "Sair"
+  },
+  "header": {
+    "search": "Pesquisar"
   }
 }

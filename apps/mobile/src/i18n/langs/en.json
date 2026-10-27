@@ -98,5 +98,8 @@
     "accountTitle": "Account",
     "server": "Server",
     "signOut": "Sign out"
+  },
+  "header": {
+    "search": "Search"
   }
 }

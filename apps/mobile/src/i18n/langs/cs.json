@@ -98,5 +98,8 @@
     "accountTitle": "Účet",
     "server": "Server",
     "signOut": "Odhlásit se"
+  },
+  "header": {
+    "search": "Hledat"
   }
 }

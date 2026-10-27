@@ -98,5 +98,8 @@
     "accountTitle": "Konto",
     "server": "Server",
     "signOut": "Logi välja"
+  },
+  "header": {
+    "search": "Otsing"
   }
 }

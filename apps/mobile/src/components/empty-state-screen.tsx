@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/text";
 
@@ -20,13 +19,17 @@ export const EmptyStateScreen = ({
   emptyTitle,
   title,
 }: EmptyStateScreenProps) => (
-  <SafeAreaView className="bg-background flex-1" edges={["top"]}>
-    <ScrollView className="flex-1" contentContainerStyle={screenStyles.content}>
+  <View className="bg-background flex-1">
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={screenStyles.content}
+      contentInsetAdjustmentBehavior="automatic"
+    >
       <ScreenHeading description={description} title={title} />
       {children}
       <EmptyCard description={emptyDescription} title={emptyTitle} />
     </ScrollView>
-  </SafeAreaView>
+  </View>
 );
 
 /** A screen's large title, as iOS sets one, with an optional line under it. */

@@ -98,5 +98,8 @@
     "accountTitle": "Paskyra",
     "server": "Serveris",
     "signOut": "Atsijungti"
+  },
+  "header": {
+    "search": "Ieškoti"
   }
 }

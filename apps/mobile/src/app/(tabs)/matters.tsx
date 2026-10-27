@@ -1,4 +1,4 @@
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
 
 import { screenStyles } from "@/components/empty-state-screen";
 import { MattersList } from "@/components/matters-list";
@@ -10,14 +10,11 @@ const MattersScreen = () => {
   const { state } = useSession();
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[screenStyles.screen, { backgroundColor: colors.background }]}
-    >
+    <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
       {state.status === "signed-in" ? (
         <MattersList source={state.source} />
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 };
 
