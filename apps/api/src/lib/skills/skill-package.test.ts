@@ -802,7 +802,13 @@ Instructions.`,
       ]),
     );
     const unavailable = await fetchCatalogue(async () =>
-      Result.err(new HandlerError({ status: 503, message: "Upstream busy" })),
+      Result.err(
+        new HandlerError({
+          status: 503,
+          code: "internal_error",
+          message: "Upstream busy",
+        }),
+      ),
     );
     const crashed = await fetchCatalogue(
       async () => await Promise.reject(new Error("socket closed")),

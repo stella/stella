@@ -55,7 +55,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -202,7 +202,7 @@ export const AnonymizationFacet = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;

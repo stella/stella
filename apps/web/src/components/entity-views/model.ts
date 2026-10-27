@@ -1,10 +1,10 @@
 import { panic } from "better-result";
 
-import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import {
   type ENTITY_VIEW_COLUMNS,
   ENTITY_VIEW_GROUP,
 } from "@stll/api-contract/entity-views";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import { getEntityName } from "@/components/workspaces/entity-utils";
 

@@ -1586,6 +1586,7 @@ describe("MCP template tools", () => {
       Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Organization AI configuration unavailable",
         }),
       ),
@@ -2169,6 +2170,7 @@ describe("MCP template tools", () => {
       error: "Scanner unavailable.",
       storedTemplateError: new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Scanner unavailable.",
         hint: "Retry the request.",
       }),
