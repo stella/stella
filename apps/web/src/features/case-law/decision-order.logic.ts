@@ -11,7 +11,6 @@
 
 import { panic } from "better-result";
 
-import type { SortDirection } from "@stll/api-contract/column-sort";
 import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
 import {
   DECISION_LIST_SORTS,
@@ -24,6 +23,7 @@ import type {
   DecisionSort,
   SearchSort,
 } from "@stll/api-contract/search";
+import type { SortDirection } from "@stll/workspace-ui/column-sort";
 
 import type {
   SortDirectionAvailability,
