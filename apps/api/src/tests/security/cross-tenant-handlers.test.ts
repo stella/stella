@@ -946,11 +946,13 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     runAAgainstB: async ({ desktopA, ids: testIds }) => {
       await grantDraftConsent(desktopA);
       const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
       return { status: response.status, body: await response.json() };
     },
     runBPositive: async ({ desktopB, ids: testIds }) => {
       await grantDraftConsent(desktopB);
       const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
       return { status: response.status, body: await response.json() };
     },
     expectDenied: (result) => {
@@ -3785,6 +3787,7 @@ const desktopDraftRequest = (matterId: string) =>
     body: JSON.stringify({
       entries: [
         {
+          entryId: `selected-${matterId}`,
           matterId,
           date: DESKTOP_ENTRY.dateWorked,
           timezone: DESKTOP_ENTRY.timezoneId,
