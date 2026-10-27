@@ -30,7 +30,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { defaultLanguagePair } from "@/components/document-language-picker.logic";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
@@ -57,7 +57,7 @@ export const BilingualDocumentDialog = ({
   disabled = false,
 }: BilingualDocumentDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

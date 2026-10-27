@@ -69,6 +69,13 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope: "apps/web/src/i18n/message-locale.ts",
+    drops: ["path:use-intl#useLocale"],
+    reason:
+      "This module owns the UI-language read: it wraps use-intl's useLocale as useMessageLocale so every other web module names which locale it means.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope: "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     drops: ["path:@valibot/to-json-schema+types"],
     reason:

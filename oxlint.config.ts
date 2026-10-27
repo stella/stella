@@ -793,6 +793,26 @@ const webCitationChipImport = {
     "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
 };
 
+// use-intl's useLocale is the UI language, which differs from the formatting
+// locale whenever the reader picks a regional format. Each has one named owner,
+// so a call site states which one it reads.
+const webUseIntlLocaleImport = {
+  name: "use-intl",
+  importNames: ["useLocale"],
+  message:
+    "Read the UI language with useMessageLocale from '@/i18n/message-locale', or the formatting locale with useFormattingLocale from '@/i18n/formatting-context'.",
+};
+
+// The package formats in the host's formatting locale, which reaches it
+// through WorkspaceUiFormattingProvider; use-intl's formatter and locale are
+// the UI language.
+const workspaceUiUseIntlFormattingImport = {
+  name: "use-intl",
+  importNames: ["useFormatter", "useLocale"],
+  message:
+    "Import useFormatter or useFormattingLocale from './formatting', which format in the host's formatting locale rather than the UI language.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -3975,6 +3995,22 @@ const config = defineConfig({
       rules: { "oxc/no-barrel-file": "off" },
     },
     {
+      files: ["packages/workspace-ui/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              workspaceUiUseIntlFormattingImport,
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ["apps/web/src/hooks/use-effect.ts"],
       rules: {
         // These generic wrappers intentionally accept opaque callbacks and
@@ -4092,6 +4128,37 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The UI-language owner: the one web module that reads use-intl's
+      // useLocale. Every other apps/web import restriction still applies.
+      files: ["apps/web/src/i18n/message-locale.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4130,6 +4197,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4360,6 +4428,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4395,6 +4464,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4425,6 +4495,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4463,6 +4534,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4512,6 +4584,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4559,6 +4632,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/routes/-auth-context",
                 message:
