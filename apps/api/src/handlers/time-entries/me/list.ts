@@ -152,7 +152,7 @@ const config = {
     "through endDate (at most seven days), in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
     "Follow the cursor for the next page. Logged minutes, daily target and remaining minutes cover all " +
     "accessible entries for the dates, independently of pagination, and days gives logged and billable minutes per work date that has entries. " +
-    "Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
+    "Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set, and remaining minutes are null for a range of more than one date.",
   permissions: { timeEntry: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -329,10 +329,14 @@ const listMyTimeEntries = createSafeRootHandler(
       days: day.days,
       loggedTodayMinutes: day.summary.loggedMinutes,
       dailyTargetMinutes: day.summary.dailyTargetMinutes,
-      leftTodayMinutes: leftTodayMinutes(
-        day.summary.dailyTargetMinutes,
-        day.summary.loggedMinutes,
-      ),
+      // The target is per day, so remaining minutes exist only for one date.
+      leftTodayMinutes:
+        rangeDays === 1
+          ? leftTodayMinutes(
+              day.summary.dailyTargetMinutes,
+              day.summary.loggedMinutes,
+            )
+          : null,
     });
   },
 );

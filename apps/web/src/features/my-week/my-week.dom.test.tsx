@@ -120,6 +120,9 @@ type ApiCall = {
  * personal entry range with its per-day totals, the suggestion range, a
  * decision (an accept creates the entry), and an entry update.
  */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const serveWeek = ({
   entries,
   suggestions,
@@ -227,7 +230,10 @@ const serveWeek = ({
       });
     }
     group.items = group.items.filter((item) => item !== decided);
-    const decision = body["decision"] as Record<string, unknown>;
+    const decisionInput = body["decision"];
+    const decision: Record<string, unknown> = isRecord(decisionInput)
+      ? decisionInput
+      : {};
     if (decision["type"] !== "accept") {
       return json({
         fingerprint: decided.fingerprint,
@@ -308,14 +314,15 @@ const serveWeek = ({
       }
       const decision =
         /^\/time-entries\/([^/]+)\/suggestions\/decisions$/u.exec(path);
-      if (request.method === "POST" && decision?.[1]) {
-        return decide(decision[1], body as Record<string, unknown>);
+      if (request.method === "POST" && decision?.[1] && isRecord(body)) {
+        return decide(decision[1], body);
       }
       if (
         request.method === "PATCH" &&
-        /^\/time-entries\/[^/]+\/?$/u.test(path)
+        /^\/time-entries\/[^/]+\/?$/u.test(path) &&
+        isRecord(body)
       ) {
-        return update(body as Record<string, unknown>);
+        return update(body);
       }
       return new Response(JSON.stringify({ code: "not_found" }), {
         status: 404,
