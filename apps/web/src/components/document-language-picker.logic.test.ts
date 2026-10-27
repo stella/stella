@@ -55,6 +55,9 @@ describe("language picker typeahead", () => {
     expect(
       matchesLanguageQuery({ code: "AR", label: "العربية" }, "العربية"),
     ).toBeTrue();
+    expect(
+      matchesLanguageQuery({ code: "AR", label: "العَرَبِيَّة" }, "العربيه"),
+    ).toBeTrue();
   });
 
   test("treats the localized label and code as separate searchable fields", () => {

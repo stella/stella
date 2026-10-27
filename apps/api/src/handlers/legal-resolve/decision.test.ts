@@ -6,8 +6,14 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import {
+  type DecisionIdentityRow,
+  docketFamilyCitationKeys,
+  type lookupDecisionsByIdentity,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
+import { ecjCaseNumber } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   admitLawRead,
   type LawReadAdmission,
@@ -47,6 +53,7 @@ const row = (caseNumber = "3 Afs 41/2008 - 98") =>
     court: "Nejvyšší správní soud",
     courtAbbreviation: "NSS",
     decisionDate: "2008-10-30",
+    decisionType: "rozsudek",
     ecli: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
     identifiers: [],
     language: "cs",
@@ -56,7 +63,7 @@ const row = (caseNumber = "3 Afs 41/2008 - 98") =>
 
 const lookupRows = (rows: DecisionIdentityRow[]) => async () => rows;
 
-const decisionAst = (texts = ["Text"]) =>
+const decisionAst = (texts = ["Text"], numbered = false) =>
   ({
     version: 1,
     source: {
@@ -80,6 +87,7 @@ const decisionAst = (texts = ["Text"]) =>
       anchorId: `paragraph-${String(index + 1)}`,
       plainText: text,
       inlines: [{ type: "text", text }],
+      ...(numbered ? { number: index + 1 } : {}),
     })),
   }) satisfies DocumentAst;
 
@@ -307,8 +315,11 @@ describe("decision legal resolution", () => {
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
           { minLength: 1, maxLength: 4 },
         ),
-        async (texts) => {
-          const source = decisionAst(texts);
+        // Court-numbered paragraphs are served with their number, which the
+        // extent has to count like the text does.
+        fc.boolean(),
+        async (texts, numbered) => {
+          const source = decisionAst(texts, numbered);
           const fullBlocks = parseCaseLawDecisionAst(source)?.blocks ?? [];
           const totalChars =
             toPlainCorpusText({ blocks: fullBlocks, fulltext: null })?.length ??
@@ -416,6 +427,86 @@ describe("decision legal resolution", () => {
         { decisionId: ostrava.id, label: expect.stringContaining("Ostravě") },
       ],
     });
+  });
+
+  test("tells a judgment from the opinion on the same docket", async () => {
+    // One CJEU docket holds both, from the same court; before the kind was
+    // in the label the two candidates differed only by date.
+    const eu = {
+      ...row("C-144/04"),
+      country: "EU",
+      court: "Court of Justice",
+      courtAbbreviation: null,
+      language: "en",
+    };
+    const opinion = {
+      ...eu,
+      id: createSafeId<"caseLawDecision">(),
+      decisionDate: "2005-06-30",
+      decisionType: "opinion",
+      ecli: "ECLI:EU:C:2005:420",
+    };
+    const judgment = {
+      ...eu,
+      decisionDate: "2005-11-22",
+      decisionType: "judgment",
+      ecli: "ECLI:EU:C:2005:709",
+    };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "EU",
+        identifier: "C-144/04",
+        dependencies: { lookup: lookupRows([opinion, judgment]) },
+      }),
+    ).toMatchObject({
+      status: "ambiguous",
+      candidates: [
+        {
+          decisionId: opinion.id,
+          label: "Court of Justice, opinion, 2005-06-30",
+        },
+        {
+          decisionId: judgment.id,
+          label: "Court of Justice, judgment, 2005-11-22",
+        },
+      ],
+    });
+  });
+
+  test("resolves a Court of Justice case by the docket its adapter stores", async () => {
+    // Before 1989 the Court numbered cases without a letter; the adapter
+    // stores the docket as the publisher states it, and a reader copies it.
+    for (const [celex, statement] of [
+      ["61978CJ0120", "Case 120/78."],
+      ["61955CJ0008", "Case 8-55."],
+      ["62022CJ0128", "Case C-128/22"],
+    ] as const) {
+      const caseNumber = ecjCaseNumber(celex, [statement]);
+      const stored = {
+        ...row(caseNumber),
+        country: "EU",
+        court: "Court of Justice",
+        courtAbbreviation: null,
+        ecli: null,
+        language: "en",
+      };
+      // The read side of the stored row: the key ingestion writes for its
+      // docket is one the reference's family is looked up under.
+      const lookup: typeof lookupDecisionsByIdentity = async ({ locator }) =>
+        locator.kind === "docket" &&
+        docketFamilyCitationKeys(locator).includes(bareCitationKey(caseNumber))
+          ? [stored]
+          : [];
+      const result = await resolveDecision({
+        admission,
+        country: "EU",
+        identifier: caseNumber,
+        dependencies: { lookup, read: readableDecision },
+      });
+      expect([caseNumber, result.status]).toEqual([caseNumber, "resolved"]);
+    }
+    expect(ecjCaseNumber("61978CJ0120", ["Case 120/78."])).toBe("120/78");
   });
 
   test("never resolves a printed part to the one decision of its file", async () => {

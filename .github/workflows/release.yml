@@ -64,6 +64,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/retry.sh
             scripts/check-release-candidate.sh
             scripts/verify-release-candidate-tree.mjs
           sparse-checkout-cone-mode: false
@@ -75,6 +76,8 @@ jobs:
 
       - name: Preserve release candidate verifier across source checkouts
         run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"
           echo "RELEASE_CANDIDATE_CHECKER=$RUNNER_TEMP/check-release-candidate.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/verify-release-candidate-tree.mjs" "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
@@ -129,13 +132,14 @@ jobs:
           persist-credentials: false
 
       - name: Verify release source
+        timeout-minutes: 4
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::Release tag $RELEASE_REF is not reachable from protected main"
             exit 1
@@ -160,12 +164,11 @@ jobs:
             echo "::error::Release commit must have exactly one parent"
             exit 1
           fi
-          node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_parent" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
 
           expected_title="chore: release $RELEASE_REF"
           release_pulls="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls?per_page=100")"
-          if ! jq -e \
+          release_pull="$(jq -c \
             --arg repo "$GITHUB_REPOSITORY" \
             --arg sha "$RELEASE_SHA" \
             --arg title "$expected_title" \
@@ -177,10 +180,25 @@ jobs:
               and .head.repo.full_name == $repo
               and .base.repo.full_name == $repo
               and .base.ref == "main"
-            )] | length == 1' <<<"$release_pulls" >/dev/null; then
+            )] | if length == 1 then .[0] | {number, head: .head.sha} else empty end' <<<"$release_pulls")"
+          if [[ -z "$release_pull" ]]; then
             echo "::error::Release commit must belong to exactly one same-repository main PR titled '$expected_title'"
             exit 1
           fi
+
+          # Main is squash-only: the version commit carries the release
+          # branch's bot-generated files under the merger's name. The verifier
+          # requires the version commit to hold the pull request head's exact
+          # tree and checks the range from the version commit's parent to the
+          # head, where the bots' commits are.
+          release_pr_number="$(jq -r '.number' <<<"$release_pull")"
+          release_pr_head="$(jq -r '.head' <<<"$release_pull")"
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin "+refs/pull/${release_pr_number}/head:refs/remotes/origin/release-pr-head"
+          if [[ "$(git rev-parse refs/remotes/origin/release-pr-head)" != "$release_pr_head" ]]; then
+            echo "::error::Release PR #${release_pr_number} head moved after merge"
+            exit 1
+          fi
+          node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_parent" "$RELEASE_SHA" "$GITHUB_REPOSITORY" --release-pr-head "$release_pr_head"
 
       - name: Write trusted release receipt
         env:
