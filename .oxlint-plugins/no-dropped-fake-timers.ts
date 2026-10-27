@@ -10,7 +10,7 @@
 //
 //   Flagged: `jest.useRealTimers()` and `jest.clearAllTimers()` on the
 //     `bun:test` `jest` (named, aliased or a namespace member), and the same
-//     calls on the `vitest` `vi`.
+//     calls on the `bun:test` and `vitest` `vi`.
 //   Allowed: `restoreRealTimers()`, `jest.runOnlyPendingTimers()`, and the
 //     same method names on any other object.
 //   Out of scope: a method read off `jest` into a local
@@ -32,6 +32,7 @@ const DROPPING_METHODS: ReadonlySet<string> = new Set([
 
 const TIMER_OWNERS = [
   { source: "bun:test", imported: "jest" },
+  { source: "bun:test", imported: "vi" },
   { source: "vitest", imported: "vi" },
   { source: "vitest", imported: "vitest" },
 ] as const;

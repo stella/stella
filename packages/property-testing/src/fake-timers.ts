@@ -17,6 +17,11 @@ export const restoreRealTimers = (): void => {
   if (!jest.isFakeTimers()) {
     return;
   }
-  jest.runOnlyPendingTimers();
-  jest.useRealTimers();
+  // The real clock returns even when a pending callback throws, so the throw
+  // fails this test without leaving the next one on a fake clock.
+  try {
+    jest.runOnlyPendingTimers();
+  } finally {
+    jest.useRealTimers();
+  }
 };

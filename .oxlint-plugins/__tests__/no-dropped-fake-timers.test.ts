@@ -10,16 +10,18 @@ test("rejects leaving or clearing fake timers through the test runner", async ()
       RULE,
       [
         'import * as bt from "bun:test";',
-        'import { jest, jest as clock } from "bun:test";',
+        'import { jest, jest as clock, vi as bunVi } from "bun:test";',
         'import { vi } from "vitest";',
         "jest.useRealTimers();",
         "clock.clearAllTimers();",
         "bt.jest.useRealTimers();",
         "vi.useRealTimers();",
         "jest?.useRealTimers();",
+        "bunVi.useRealTimers();",
+        "bunVi.clearAllTimers();",
       ].join("\n"),
     ),
-  ).toEqual([4, 5, 6, 7, 8]);
+  ).toEqual([4, 5, 6, 7, 8, 9, 10]);
 });
 
 test("accepts the draining helper and same-named methods on other objects", async () => {
