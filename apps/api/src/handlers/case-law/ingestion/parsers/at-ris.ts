@@ -3,12 +3,13 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-// parser-output-unchanged: imports the document AST from its package owner
-// parser-output-unchanged: keeps the same tagged XML rejection in the parser-owned pure module.
-import type {
-  Block,
-  DocumentAst,
-  ParagraphRole,
+import {
+  type Block,
+  type DocumentAst,
+  isApparatusRole,
+  type ParagraphBlock,
+  type ParagraphRole,
+  startsDecisionBody,
 } from "@stll/legal-ast/document-ast";
 
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
@@ -167,6 +168,7 @@ export const parseRisDecisionXml = (
   const blocks: Block[] = [];
   const sections = new Map<string, string[]>();
   let blockIndex = 0;
+  let bodyStarted = false;
 
   const appendSection = (contentType: string, text: string): void => {
     const printed = sections.get(contentType);
@@ -185,14 +187,21 @@ export const parseRisDecisionXml = (
       return;
     }
     blockIndex += 1;
-    blocks.push({
+    const block = {
       id: `b${blockIndex}`,
       anchorId: `p-${blockIndex}`,
       type: "paragraph",
-      ...(role ? { role } : {}),
+      ...(role
+        ? {
+            role:
+              bodyStarted && isApparatusRole(role) ? "publisher-note" : role,
+          }
+        : {}),
       inlines: [{ type: "text", text }],
       plainText: text,
-    });
+    } satisfies ParagraphBlock;
+    blocks.push(block);
+    bodyStarted ||= startsDecisionBody(block);
   };
 
   const appendNode = (node: AnyNode): void => {
@@ -210,16 +219,23 @@ export const parseRisDecisionXml = (
       return;
     }
     if (node.tagName === "ueberschrift") {
+      const nextRole = paragraphRole($(node).next("absatz").attr("ct"));
+      const publisherHeading =
+        !bodyStarted &&
+        (isApparatusRole(nextRole) ||
+          nextRole === "intro" ||
+          nextRole === "case-number");
       blockIndex += 1;
       blocks.push({
         id: `b${blockIndex}`,
         anchorId: `h-${blockIndex}`,
         type: "heading",
         level: 1,
-        role: "section-heading",
+        role: publisherHeading ? "publisher-heading" : "section-heading",
         inlines: [{ type: "text", text }],
         plainText: text,
       });
+      bodyStarted ||= !publisherHeading;
       return;
     }
 

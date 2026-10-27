@@ -1087,7 +1087,7 @@
     "reader": {
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
-      "headMatter": "Päis",
+      "headMatter": "Kohtuasja andmed",
       "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
     },
     "research": {

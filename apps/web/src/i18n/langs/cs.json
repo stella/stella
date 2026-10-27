@@ -1087,7 +1087,7 @@
     "reader": {
       "documentUpdated": "Dokument byl aktualizován.",
       "expandProvisions": "Rozbalit ustanovení",
-      "headMatter": "Úvodní část",
+      "headMatter": "Informace o věci",
       "sourceAttribution": "Zdroj dat je volně dostupný na <link>{source}</link>."
     },
     "research": {

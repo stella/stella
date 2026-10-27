@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { parseRisDecisionXml } from "./at-ris";
 
 const FIXTURE_URL = new URL(
@@ -103,4 +105,42 @@ describe("Austrian RIS XML parser", () => {
     expect(parsed.fulltext).toContain("Unbekannter strukturierter Inhalt");
     expect(parsed.validationIssues).toEqual([]);
   });
+});
+
+it("keeps publisher summaries before the body and publisher notes after it", () => {
+  const metadata = [
+    ["ecli", "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.000"],
+    ["norm", "ABGB §1295"],
+    ["leitsatz", "Leitsatz"],
+    ["betreff", "Betreff"],
+    ["rechtssatz", "Rechtssatz"],
+  ];
+  const xml = `<risdok><nutzdaten><abschnitt>
+    <ueberschrift>Leitsatz</ueberschrift><absatz ct="leitsatz">Vor der Entscheidung</absatz>
+    <ueberschrift>Spruch</ueberschrift><absatz ct="spruch">Die Revision wird zurückgewiesen.</absatz>
+    ${metadata.map(([kind, text]) => `<ueberschrift>${kind}</ueberschrift><absatz ct="${kind}">${text}</absatz>`).join("")}
+    </abschnitt></nutzdaten></risdok>`;
+  const { documentAst } = parseRisDecisionXml({
+    sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+    caseNumber: "1 Ob 1/26a",
+    ecli: undefined,
+    court: "OGH",
+    decisionDate: "2026-01-15",
+    decisionType: "beschluss",
+    sourceUrl: undefined,
+    xml,
+  }).unwrap();
+  expect(documentAst.blocks.at(0)).toMatchObject({
+    type: "heading",
+    role: "publisher-heading",
+  });
+  const paragraphs = documentAst.blocks.filter(
+    (block) => block.type === "paragraph",
+  );
+  expect(paragraphs.map(({ role }) => role)).toEqual([
+    "syllabus",
+    "holding",
+    ...metadata.map(() => "publisher-note"),
+  ]);
+  expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
 });

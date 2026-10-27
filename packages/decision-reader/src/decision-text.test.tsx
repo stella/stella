@@ -177,6 +177,95 @@ const decision = {
   },
 } satisfies ReaderDecision;
 
+test("consecutive caption information has one translated disclosure across analysis sections", () => {
+  for (const label of ["Case information", "معلومات القضية"]) {
+    for (const count of [1, 2, 10, 100]) {
+      const blocks = Array.from(
+        { length: count },
+        (_, index) =>
+          ({
+            type: "paragraph",
+            id: `caption-${index}`,
+            anchorId: `caption-${index}`,
+            role: "apparatus",
+            inlines: [
+              { type: "text", text: `Publisher information ${index}.` },
+            ],
+            plainText: `Publisher information ${index}.`,
+          }) satisfies DocumentAst["blocks"][number],
+      );
+      const sectionMap = new Map(
+        blocks.map((block) => [
+          block.anchorId,
+          { cssVar: "--muted", headingId: block.id },
+        ]),
+      );
+      const adapters = {
+        ...fakeReaderAdapters,
+        messages: {
+          ...fakeReaderAdapters.messages,
+          "caseLaw.reader.headMatter": label,
+        },
+      } satisfies DecisionReaderAdapters;
+      const markup = renderToStaticMarkup(
+        <DecisionReaderProvider adapters={adapters}>
+          <DecisionText
+            decision={{
+              ...decision,
+              documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
+            }}
+            decisionId={decision.id}
+            placements={{
+              anchorsByPieceId: {},
+              provisionsByAnchorId: new Map(),
+              failures: [],
+            }}
+            sectionMap={sectionMap}
+          />
+        </DecisionReaderProvider>,
+      );
+      expect(markup.match(/<details\b/gu)).toHaveLength(1);
+      expect(markup).toContain(
+        `class="reader-apparatus-summary">${label}</summary>`,
+      );
+      for (const block of blocks) {
+        expect(markup.split(block.plainText)).toHaveLength(2);
+      }
+    }
+  }
+});
+
+test("parties and their representatives remain visible together in the caption", () => {
+  const captionBlocks = (
+    ["parties", "counsel", "parties", "counsel"] as const
+  ).map((role, index) => ({
+    type: "paragraph",
+    id: `participant-${index}`,
+    anchorId: `participant-${index}`,
+    role,
+    inlines: [{ type: "text", text: `Participant ${index}.` }],
+    plainText: `Participant ${index}.`,
+  }));
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={{
+        ...decision,
+        documentAst: { ...ast, blocks: [...captionBlocks, ...ast.blocks] },
+      }}
+      decisionId={decision.id}
+      placements={{
+        anchorsByPieceId: {},
+        provisionsByAnchorId: new Map(),
+        failures: [],
+      }}
+    />,
+  );
+  expect(markup).not.toContain("reader-apparatus");
+  for (const block of captionBlocks) {
+    expect(markup).toContain(block.plainText);
+  }
+});
+
 test("a decision renders numbered anchored text and resolved marks without reading data", () => {
   let reads = 0;
   const renderedCitations: string[] = [];

@@ -1087,7 +1087,7 @@
     "reader": {
       "documentUpdated": "El documento se ha actualizado.",
       "expandProvisions": "Ampliar disposiciones",
-      "headMatter": "Encabezamiento",
+      "headMatter": "Información del caso",
       "sourceAttribution": "Los datos de origen están disponibles libremente en <link>{source}</link>."
     },
     "research": {

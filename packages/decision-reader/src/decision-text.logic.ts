@@ -405,7 +405,11 @@ export const apparatusBlockIds = (
 ): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const block of blocks) {
-    if (block.type === "paragraph" && isApparatusRole(block.role)) {
+    if (
+      block.type === "paragraph" &&
+      block.note === undefined &&
+      isApparatusRole(block.role)
+    ) {
       ids.add(block.id);
     }
   }

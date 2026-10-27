@@ -375,13 +375,7 @@ const headingKey = (text: string): string =>
   ).toLocaleLowerCase("hu-HU");
 
 /** Where in the document the walk currently is, which decides a body role. */
-type Region =
-  | "front"
-  | "operative"
-  | "reasoning"
-  | "apparatus"
-  | "closing"
-  | "certification";
+type Region = "front" | "operative" | "reasoning" | "closing" | "certification";
 
 /**
  * The section headings the collection prints, and the depth each sits at.
@@ -402,11 +396,13 @@ type SectionHeading = {
 const SECTION_HEADINGS = [
   { key: "rendelkező rész", level: 1, region: "operative" },
   { key: "indokolás", level: 1, region: "reasoning" },
-  { key: "a döntés elvi tartalma", level: 1, region: "apparatus" },
+  { key: "a döntés elvi tartalma", level: 1, region: "reasoning" },
+  { key: "a határozat elvi tartalma", level: 1, region: "reasoning" },
+  { key: "alkalmazott jogszabályok", level: 1, region: "reasoning" },
   {
     key: "alkalmazott jogszabályok és joggyakorlat",
     level: 1,
-    region: "apparatus",
+    region: "reasoning",
   },
   { key: "záradék", level: 1, region: "closing" },
   { key: "a felülvizsgálat alapjául szolgáló tényállás", level: 2 },
@@ -1128,9 +1124,8 @@ const BODY_ROLE = {
   front: "intro",
   operative: "holding",
   reasoning: "argumentation",
-  apparatus: "apparatus",
   closing: "closing",
-  certification: "apparatus",
+  certification: "closing",
 } as const satisfies Record<Region, ParagraphRole>;
 
 const HEADING_ROLE_BY_LEVEL = {
@@ -1185,7 +1180,7 @@ export const parseHuBhgyDecision = (
       region = "certification";
       builder.paragraph({
         type: "paragraph",
-        role: "apparatus",
+        role: "closing",
         inlines: inlinesOf(line.runs),
         plainText: line.text,
       });
@@ -1201,6 +1196,10 @@ export const parseHuBhgyDecision = (
 
     if (region === "front") {
       titleLines.push(line.text);
+      // Court numbering ends the caption even when its heading is absent.
+      if (COURT_PARAGRAPH_NUMBER.test(line.text.trim())) {
+        region = "reasoning";
+      }
     }
 
     // ── A section heading the publisher prints ──
@@ -1323,7 +1322,7 @@ export const parseHuBhgyDecision = (
     );
     const number = numbered?.groups?.["number"];
     const role: ParagraphRole = BODY_ROLE[region];
-    if (numbered === null || number === undefined) {
+    if (number === undefined) {
       builder.paragraph({
         type: "paragraph",
         role,
