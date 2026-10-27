@@ -90,10 +90,9 @@ export const useMyWeekActions = ({
       durationMinutes: values.durationMinutes,
       narrative: values.narrative,
       narrativeLanguage: values.narrativeLanguage,
-      // Unchanged billability is left to the server's default for the matter.
-      ...(values.billable === target.suggestion.billableByDefault
-        ? {}
-        : { billable: values.billable }),
+      // The value the person saw, even the default, so a rate change in the
+      // meantime cannot flip it.
+      billable: values.billable,
     });
 
   const dismiss = async (target: SuggestionTarget) =>

@@ -518,6 +518,21 @@ describe("time entry suggestions integration", () => {
     expect(await decide(pending.fingerprint, { type: "dismiss" })).toEqual(
       dismissed,
     );
+    // Accepting what was dismissed elsewhere is refused, never reported as
+    // logged time.
+    expect(
+      await decide(pending.fingerprint, {
+        type: "accept",
+        durationMinutes: 18,
+        narrative: "accepted in another tab",
+      }),
+    ).toMatchObject({ code: 409 });
+    expect(
+      await testDb.$count(
+        timeEntries,
+        eq(timeEntries.narrative, "accepted in another tab"),
+      ),
+    ).toBe(0);
 
     const extensionId = createSafeId<"chatMessage">();
     messageIds.push(extensionId);
