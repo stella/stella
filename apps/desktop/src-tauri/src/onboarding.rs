@@ -13,6 +13,7 @@ use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::permissions::{
   DesktopSurface, Permission, PermissionRow, PermissionStatus, required_permissions,
 };
+use crate::window_placement::WorkArea;
 
 pub const ONBOARDING_WINDOW_LABEL: &str = "onboarding";
 /// Payload-free: the window re-reads the snapshot.
@@ -734,19 +735,10 @@ pub struct TrayLocation {
   pub along: f64,
 }
 
-/// A rectangle in physical screen pixels.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct ScreenRect {
-  x: f64,
-  y: f64,
-  width: f64,
-  height: f64,
-}
-
 /// Places `icon` on the nearest edge of `screen`. `None` when the icon has
 /// no size or its centre is off that screen, as for an icon Windows keeps in
 /// its hidden overflow.
-fn tray_location(icon: ScreenRect, screen: ScreenRect) -> Option<TrayLocation> {
+fn tray_location(icon: WorkArea, screen: WorkArea) -> Option<TrayLocation> {
   if icon.width <= 0.0
     || icon.height <= 0.0
     || screen.width <= 0.0
@@ -780,31 +772,8 @@ fn tray_location(icon: ScreenRect, screen: ScreenRect) -> Option<TrayLocation> {
 /// Where the status icon is now, read from the OS; `None` when it cannot
 /// tell (no icon yet, or one hidden in an overflow area).
 fn read_tray_location(app: &AppHandle) -> Option<TrayLocation> {
-  let rect = crate::tray::status_icon_rect(app)?;
-  let position = rect.position.to_physical::<f64>(1.0);
-  let size = rect.size.to_physical::<f64>(1.0);
-  let screen = crate::window_placement::screen_at_physical(
-    app,
-    position.x + size.width / 2.0,
-    position.y + size.height / 2.0,
-  )?;
-  // The icon and its screen in one space: the screen's own points.
-  let scale = screen.scale_factor;
-  let icon = ScreenRect {
-    x: position.x / scale,
-    y: position.y / scale,
-    width: size.width / scale,
-    height: size.height / scale,
-  };
-  tray_location(
-    icon,
-    ScreenRect {
-      x: screen.frame.x,
-      y: screen.frame.y,
-      width: screen.frame.width,
-      height: screen.frame.height,
-    },
-  )
+  let placement = crate::tray::status_icon_placement(app)?;
+  tray_location(placement.frame, placement.screen)
 }
 
 /// The default app for `.docx`, read from the OS. macOS answers for a file,
@@ -1233,15 +1202,15 @@ mod tests {
     assert_eq!(granted, before);
   }
 
-  const SCREEN: ScreenRect = ScreenRect {
+  const SCREEN: WorkArea = WorkArea {
     x: 0.0,
     y: 0.0,
     width: 2880.0,
     height: 1800.0,
   };
 
-  fn icon_at(x: f64, y: f64) -> ScreenRect {
-    ScreenRect {
+  fn icon_at(x: f64, y: f64) -> WorkArea {
+    WorkArea {
       x,
       y,
       width: 44.0,
@@ -1258,7 +1227,7 @@ mod tests {
 
   #[test]
   fn a_taskbar_icon_sits_on_the_bottom_edge_of_its_own_screen() {
-    let second = ScreenRect {
+    let second = WorkArea {
       x: 2880.0,
       y: 0.0,
       width: 1920.0,
@@ -1267,6 +1236,26 @@ mod tests {
     let location = tray_location(icon_at(2880.0 + 1700.0, 1040.0), second).unwrap();
     assert_eq!(location.edge, ScreenEdge::Bottom);
     assert!((location.along - 1722.0 / 1920.0).abs() < 1e-9);
+  }
+
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn native_screen_frames_keep_a_secondary_menu_bar_in_its_own_points() {
+    use crate::window_placement::logical_work_area;
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+
+    // A 1x display beside a 1920-point 2x primary. Global physical
+    // coordinates would also place this icon inside the primary display.
+    let screen = NSRect::new(NSPoint::new(1920.0, 0.0), NSSize::new(1920.0, 1080.0));
+    let icon = NSRect::new(NSPoint::new(2989.0, 1058.0), NSSize::new(22.0, 22.0));
+    let location = tray_location(
+      logical_work_area(1080.0, icon),
+      logical_work_area(1080.0, screen),
+    )
+    .unwrap();
+
+    assert_eq!(location.edge, ScreenEdge::Top);
+    assert!((location.along - 1080.0 / 1920.0).abs() < 1e-9);
   }
 
   #[test]
@@ -1278,7 +1267,7 @@ mod tests {
 
   #[test]
   fn an_icon_without_a_size_or_off_its_screen_has_no_location() {
-    let hidden = ScreenRect {
+    let hidden = WorkArea {
       width: 0.0,
       height: 0.0,
       ..icon_at(100.0, 100.0)
