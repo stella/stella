@@ -123,16 +123,28 @@ const exportedExpression = (statement: Node): Node | undefined => {
 };
 
 // `defineConfig({...})` or a bare object literal.
-const configObjectOf = (expression: Node): ObjectExpression | undefined => {
-  if (expression.type === "CallExpression") {
-    return expression.arguments.toReversed().find(isObjectExpression);
+const configObjectOf = (
+  expression: Node,
+  source: Source,
+): ObjectExpression | undefined => {
+  if (isObjectExpression(expression)) {
+    return expression;
   }
-  return isObjectExpression(expression) ? expression : undefined;
-};
-
-const configObject = (statement: Node): ObjectExpression | undefined => {
-  const expression = exportedExpression(statement);
-  return expression === undefined ? undefined : configObjectOf(expression);
+  if (expression.type !== "CallExpression") {
+    return undefined;
+  }
+  const objects: ObjectExpression[] = [];
+  for (const argument of expression.arguments) {
+    const object = resolveObject(argument, source);
+    if (object === undefined) {
+      return undefined;
+    }
+    objects.push(object);
+  }
+  const first = objects.at(0);
+  return first === undefined
+    ? undefined
+    : { ...first, properties: objects.flatMap(({ properties }) => properties) };
 };
 
 const devicesByPackage = new Map<string, Record<string, unknown> | undefined>();
@@ -212,7 +224,11 @@ const resolveDevicePreset = (
       `export default ${JSON.stringify(descriptor)};`,
     );
     const statement = literal.program.body.at(0);
-    return statement === undefined ? undefined : configObject(statement);
+    const presetExpression =
+      statement === undefined ? undefined : exportedExpression(statement);
+    return presetExpression?.type === "ObjectExpression"
+      ? presetExpression
+      : undefined;
   } catch {
     return undefined;
   }
@@ -817,7 +833,7 @@ const helperConfig = (
       return undefined;
     }
   }
-  const object = configObjectOf(expression);
+  const object = configObjectOf(expression, source);
   return object === undefined ? undefined : { object, source };
 };
 
@@ -892,7 +908,7 @@ const configTarget = (source: Source): ConfigTarget | undefined => {
         }
       }
     }
-    const object = configObjectOf(expression);
+    const object = configObjectOf(expression, source);
     if (object !== undefined) {
       return { object, source };
     }
