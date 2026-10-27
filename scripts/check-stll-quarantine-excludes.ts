@@ -613,7 +613,8 @@ const prune = (trackedFiles: readonly string[]) => {
 const main = () => {
   if (process.argv.includes("--prune")) {
     const pruneIndex = process.argv.indexOf("--prune");
-    prune(process.argv.slice(pruneIndex + 1));
+    const trackedFiles = process.argv.slice(pruneIndex + 1);
+    prune(trackedFiles.length === 0 ? [BUNFIG] : trackedFiles);
     return;
   }
 
