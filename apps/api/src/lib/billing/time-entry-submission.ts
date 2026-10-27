@@ -417,19 +417,22 @@ export const submitTimeEntries = async ({
           : "submitted";
       moves.push({ entry, to });
     }
-    const approving = moves.flatMap(({ entry, to }) =>
-      to === "approved" ? [entry.id] : [],
-    );
-    if (approving.length > 0) {
-      // Approving reconciles each matter's billing cap under its matter lock.
-      // Take the timer owner, matter and entry locks first, in the order the
-      // approval queue and entry edits take them, so no entry row is held
-      // while waiting for a matter.
+    if (moves.length > 0) {
+      // Take the timer owner, matter and entry locks before any row moves, in
+      // the order the approval queue, entry edits and timer resumes take them.
+      // A resume of a linked timer then either commits first, so the guarded
+      // write sees it running and refuses that entry, or waits and finds the
+      // entry no longer a draft. Approving also reconciles each matter's
+      // billing cap under the matter lock already held. The guard refuses no
+      // entry for running: that stays a per-entry refusal of the write.
       const lockError = await guardRunningTimeEntries({
         tx,
         organizationId,
         actorUserId: userId,
-        selection: { type: "approval_batch", ids: approving },
+        selection: {
+          type: "approval_batch",
+          ids: moves.map(({ entry }) => entry.id),
+        },
       });
       if (lockError) {
         return Result.err(lockError);
