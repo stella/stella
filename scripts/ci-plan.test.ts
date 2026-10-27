@@ -57,6 +57,7 @@ import {
 } from "./ci-result-inputs";
 import { selectRootChecks } from "./ci-root-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import depthTestReasons from "./depth-script-tests.json" with { type: "json" };
 import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { GENERATORS } from "./generated-files";
 import {
@@ -6082,15 +6083,17 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toThrow("Unknown CI predicate context");
 });
 
-test("workflow and planner changes run every planner test as a merge-group gate", () => {
+test("workflow and planner changes run every fast planner test as a merge-group gate", () => {
   const root = nodePath.resolve(import.meta.dirname, "..");
-  const plannerTests = [
+  const allPlannerTests = [
     ...new Bun.Glob(
       "scripts/{ci-*plan*,ci-checks-partition,ci-completed-depth,ci-pr-pilot,ci-pr-depth-workflow,main-heavy*,thin-queue,github-expression}.test.ts",
     ).scanSync({ cwd: root }),
   ];
-  expect(plannerTests).toContain("scripts/ci-checks-partition.test.ts");
-  expect(plannerTests).toContain("scripts/ci-plan.test.ts");
+  expect(allPlannerTests).toContain("scripts/ci-checks-partition.test.ts");
+  expect(allPlannerTests).toContain("scripts/ci-plan.test.ts");
+  const depthTests = new Set(Object.keys(depthTestReasons));
+  const plannerTests = allPlannerTests.filter((file) => !depthTests.has(file));
   const unlisted = new Set(unlistedTests(plannerTests, workflow));
   const owners = new Map<
     string,
@@ -6105,7 +6108,8 @@ test("workflow and planner changes run every planner test as a merge-group gate"
         if (
           step.run?.includes(file) ||
           (unlisted.has(file) &&
-            step.run?.includes("bun scripts/run-unlisted-script-tests.ts"))
+            step.run?.includes("bun scripts/run-unlisted-script-tests.ts") &&
+            !step.run.includes("--depth"))
         ) {
           const existing = owners.get(file) ?? [];
           existing.push({ job, step });

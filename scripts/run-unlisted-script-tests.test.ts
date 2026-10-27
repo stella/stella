@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   balanceTestFiles,
   parseScriptTestArguments,
+  selectScriptTests,
   unlistedTestCommands,
   unlistedTests,
 } from "./run-unlisted-script-tests";
@@ -104,15 +105,37 @@ describe("unlistedTests", () => {
   });
 });
 
+test("depth tests run only in depth mode", () => {
+  const options = {
+    depthTests: ["scripts/depth.test.ts"],
+    discovered: ["scripts/depth.test.ts", "scripts/fast.test.ts"],
+  };
+  expect(selectScriptTests({ ...options, depth: false })).toEqual([
+    "scripts/fast.test.ts",
+  ]);
+  expect(selectScriptTests({ ...options, depth: true })).toEqual([
+    "scripts/depth.test.ts",
+  ]);
+});
+
 describe("parseScriptTestArguments", () => {
   test("accepts the default and a positive integer timeout", () => {
     expect(parseScriptTestArguments([])).toEqual({
       type: "valid",
+      depth: false,
       timeout: undefined,
     });
     expect(parseScriptTestArguments(["--timeout", "35000"])).toEqual({
       type: "valid",
+      depth: false,
       timeout: 35_000,
+    });
+    expect(
+      parseScriptTestArguments(["--depth", "--timeout", "120000"]),
+    ).toEqual({
+      type: "valid",
+      depth: true,
+      timeout: 120_000,
     });
   });
 
@@ -124,6 +147,7 @@ describe("parseScriptTestArguments", () => {
     [["--timeout", "1.5"], "requires a positive integer"],
     [["--timeout", "9007199254740992"], "requires a positive integer"],
     [["--timeout", "1", "--timeout", "2"], "may be supplied once"],
+    [["--depth", "--depth"], "may be supplied once"],
   ] as const)("rejects %j", (args, message) => {
     expect(parseScriptTestArguments(args)).toEqual({
       type: "invalid",

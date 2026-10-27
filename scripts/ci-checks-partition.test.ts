@@ -919,6 +919,7 @@ const formerBackgroundIds: Record<string, string> = {
   "Test api scripts": "api_scripts",
   "Test CLI runtime package parity": "cli_runtime_parity",
   "Test remaining repository scripts": "remaining_scripts",
+  "Test depth repository scripts": "depth_scripts",
   "Playwright config scope": "playwright_scope",
 };
 const ownedSteps = (steps: readonly Step[]) =>
@@ -2237,6 +2238,7 @@ test("repository checks run in one pool after preparation and before receipts", 
 const CONTENDED_TEST_TIMEOUTS = {
   "Test capability shard merge and package parity": 400_000,
   "Test remaining repository scripts": 35_000,
+  "Test depth repository scripts": 120_000,
   "Test release image CI gate": 50_000,
   "Test api scripts": 12_000,
   "Test CLI runtime package parity": 80_000,

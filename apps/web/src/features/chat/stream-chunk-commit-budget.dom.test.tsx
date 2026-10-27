@@ -529,6 +529,6 @@ describe(`${ORACLE}: the thread page's commit rate while each kind of chunk stre
         measured.renders.causes.parent / measured.renders.commits,
         `${ORACLE}: components rendered with unchanged props while ${streams} streamed, budget ${String(unchangedPropsRendersPerCommit)} a commit\n${formatRenderReport(measured.renders)}`,
       ).toBeLessThanOrEqual(unchangedPropsRendersPerCommit);
-    }, 30_000);
+    });
   }
 });

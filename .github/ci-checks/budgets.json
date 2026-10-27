@@ -188,6 +188,10 @@
       "p95Seconds": 418,
       "p99Seconds": 418
     },
+    "Test depth repository scripts": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Playwright config scope": {
       "minutes": 5,
       "samples": 19,

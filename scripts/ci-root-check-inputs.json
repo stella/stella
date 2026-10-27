@@ -52,6 +52,7 @@
       "scripts/**"
     ],
     "Test remaining repository scripts": ["**"],
+    "Test depth repository scripts": ["**"],
     "Test release image CI gate": [
       ".github/actions/**",
       ".github/ci-checks/**",

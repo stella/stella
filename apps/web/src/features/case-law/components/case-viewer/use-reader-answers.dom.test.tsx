@@ -1110,7 +1110,6 @@ test.each(["never", "hanging"] as const)(
     });
     expect(server.deletions()).toBe(1);
   },
-  10_000,
 );
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.

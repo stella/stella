@@ -18,17 +18,30 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import depthTestReasons from "./depth-script-tests.json" with { type: "json" };
 
 type ScriptTestArguments =
-  | { readonly type: "valid"; readonly timeout: number | undefined }
+  | {
+      readonly type: "valid";
+      readonly depth: boolean;
+      readonly timeout: number | undefined;
+    }
   | { readonly type: "invalid"; readonly message: string };
 
 export const parseScriptTestArguments = (
   args: readonly string[],
 ): ScriptTestArguments => {
   let timeout: number | undefined;
+  let depth = false;
   const argumentsIterator = args.values();
   for (const argument of argumentsIterator) {
+    if (argument === "--depth") {
+      if (depth) {
+        return { type: "invalid", message: "--depth may be supplied once" };
+      }
+      depth = true;
+      continue;
+    }
     if (argument !== "--timeout") {
       return { type: "invalid", message: `unknown argument: ${argument}` };
     }
@@ -51,7 +64,7 @@ export const parseScriptTestArguments = (
     }
     timeout = parsed;
   }
-  return { type: "valid", timeout };
+  return { type: "valid", depth, timeout };
 };
 
 type UnlistedTestCommandOptions = {
@@ -126,6 +139,7 @@ export const unlistedTestCommands = ({
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
+const DEPTH_TESTS = Object.keys(depthTestReasons).toSorted();
 
 /** Workflow text minus comment lines: a mention in a comment runs nothing. */
 const withoutComments = (workflowText: string): string =>
@@ -141,6 +155,22 @@ export const unlistedTests = (
 ): string[] => {
   const commands = withoutComments(workflowText);
   return tests.filter((test) => !commands.includes(test)).toSorted();
+};
+
+export const selectScriptTests = ({
+  depth,
+  depthTests,
+  discovered,
+}: {
+  readonly depth: boolean;
+  readonly depthTests: readonly string[];
+  readonly discovered: readonly string[];
+}): string[] => {
+  if (depth) {
+    return [...depthTests].toSorted();
+  }
+  const excluded = new Set(depthTests);
+  return discovered.filter((file) => !excluded.has(file)).toSorted();
 };
 
 const scan = (pattern: string): string[] => [
@@ -180,16 +210,21 @@ if (import.meta.main) {
   const options = parseScriptTestArguments(process.argv.slice(2));
   if (options.type === "invalid") {
     console.error(
-      `Usage: bun scripts/run-unlisted-script-tests.ts [--timeout <positive integer>]\n${options.message}`,
+      `Usage: bun scripts/run-unlisted-script-tests.ts [--depth] [--timeout <positive integer>]\n${options.message}`,
     );
     process.exitCode = 2;
   } else {
     // Pooled checks run their commands from the check pool registries.
     const workflowText = readCiCheckCommandText(REPO_ROOT);
-    const unlisted = unlistedTests(
+    const discovered = unlistedTests(
       scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
       workflowText,
     );
+    const unlisted = selectScriptTests({
+      depth: options.depth,
+      depthTests: DEPTH_TESTS,
+      discovered,
+    });
     const commands = unlistedTestCommands({
       files: unlisted,
       timeout: options.timeout,

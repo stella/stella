@@ -118,6 +118,14 @@ checks:
     # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
     run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
+  - name: Test depth repository scripts
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Depth-only script tests exercise exhaustive repository and subprocess workloads."
+    id: depth_scripts
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && needs.ci-plan.outputs.suite_depth == 'full' && (inputs.pr_depth_only == true || inputs.heavy_only == true) }}
+    run: bun scripts/run-unlisted-script-tests.ts --depth --timeout 120000
+
   - name: Playwright config scope
     env:
       CI_CHECK_KIND: STATIC
