@@ -28,6 +28,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { resolveGitleaks } from "./gitleaks";
 
 const SCANNER = "gitleaks";
 const STAGED_SCAN = [
@@ -133,7 +134,7 @@ const stagedLines = (commit: string, file: string): LineRange[] => {
 const runStagedScan = (report: string): Finding[] => {
   const result = Bun.spawnSync(
     [
-      SCANNER,
+      scanner,
       ...STAGED_SCAN,
       `--exit-code=${FINDINGS_EXIT}`,
       "--report-format=json",
@@ -203,21 +204,15 @@ const scanMerge = (heads: string[]): number => {
   return 1;
 };
 
-if (Bun.which(SCANNER) === null) {
-  console.error(
-    `error: ${SCANNER} is required for pre-commit secret scanning.`,
-  );
-  console.error(
-    "Install it from https://github.com/gitleaks/gitleaks/releases",
-  );
-  console.error("  macOS (Homebrew): brew install gitleaks");
-  console.error("  Other platforms: use the releases page above");
-  process.exit(1);
+const resolved = await resolveGitleaks();
+if (resolved.isErr()) {
+  fail(resolved.error.message);
 }
+const scanner = resolved.value;
 
 const heads = mergeHeads();
 if (heads === undefined) {
-  const scan = Bun.spawnSync([SCANNER, ...STAGED_SCAN, "."], {
+  const scan = Bun.spawnSync([scanner, ...STAGED_SCAN, "."], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",

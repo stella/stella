@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { GITLEAKS_VERSION } from "./gitleaks-pins";
+
 const SCRIPT = fileURLToPath(
   new URL("check-staged-secrets.ts", import.meta.url),
 );
@@ -58,6 +60,7 @@ writeFileSync(
   `#!/usr/bin/env bun
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
+if (args[0] === "version") { console.log(${JSON.stringify(GITLEAKS_VERSION)}); process.exit(0); }
 appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(args) + "\\n");
 const behavior = JSON.parse(readFileSync(${JSON.stringify(fakeBehavior)}, "utf-8"));
 if (behavior.exit !== undefined) process.exit(behavior.exit);
