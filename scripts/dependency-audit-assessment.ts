@@ -94,6 +94,46 @@ const resolvedKey = ({
   return keys.has(dependency) ? dependency : undefined;
 };
 
+// Every root manifest requirement on the package, and the ones that admit no
+// patched release: a pin blocks the fix until the manifest changes.
+const MANIFEST_REQUIREMENT_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+  "resolutions",
+  "overrides",
+] as const;
+type ManifestPinsOptions = {
+  manifest: unknown;
+  packageName: string;
+  patchedVersions: readonly string[];
+};
+const manifestPins = ({
+  manifest,
+  packageName,
+  patchedVersions,
+}: ManifestPinsOptions): { requirements: string[]; pins: string[] } => {
+  const requirements: string[] = [];
+  const pins: string[] = [];
+  for (const field of MANIFEST_REQUIREMENT_FIELDS) {
+    const entries = record(manifest) ? manifest[field] : undefined;
+    const requirement = record(entries) ? entries[packageName] : undefined;
+    if (typeof requirement !== "string") {
+      continue;
+    }
+    requirements.push(requirement);
+    if (
+      !patchedVersions.some((version) =>
+        Bun.semver.satisfies(version, requirement),
+      )
+    ) {
+      pins.push(`package.json ${field}.${packageName}=${requirement}`);
+    }
+  }
+  return { requirements, pins };
+};
+
 export const assessAdvisories = ({
   advisories,
   accepted,
@@ -112,11 +152,6 @@ export const assessAdvisories = ({
     const published =
       versions.get(advisory.package) ??
       invalidAssessment(`Missing registry versions for ${advisory.package}`);
-    const patchedVersions = published.filter(
-      (version) =>
-        Bun.semver.satisfies(version, "*") &&
-        !Bun.semver.satisfies(version, advisory.vulnerableVersions),
-    );
     const vulnerable = packages.filter(
       ({ name, version }) =>
         name === advisory.package &&
@@ -127,6 +162,23 @@ export const assessAdvisories = ({
         `Cannot assess ${advisory.id}: no vulnerable ${advisory.package} resolution in bun.lock`,
       );
     }
+    // Recommend forward upgrades only. A safe older release is a downgrade,
+    // not a patch; use every published and locked affected release as evidence
+    // so it cannot satisfy a parent requirement or hide a manifest pin.
+    const newestAffected =
+      [...published, ...vulnerable.map(({ version }) => version)]
+        .filter((version) =>
+          Bun.semver.satisfies(version, advisory.vulnerableVersions),
+        )
+        .toSorted(Bun.semver.order)
+        .at(-1) ??
+      invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
+    const patchedVersions = published.filter(
+      (version) =>
+        Bun.semver.satisfies(version, "*") &&
+        !Bun.semver.satisfies(version, advisory.vulnerableVersions) &&
+        Bun.semver.order(version, newestAffected) > 0,
+    );
     const acceptances = accepted.filter(
       ({ id, package: name }) =>
         id === advisory.id && name === advisory.package,
@@ -152,25 +204,11 @@ export const assessAdvisories = ({
         );
       }
     }
-    const pins: string[] = [];
-    for (const field of ["resolutions", "overrides"]) {
-      const entries = record(manifest) ? manifest[field] : undefined;
-      if (!record(entries)) {
-        continue;
-      }
-      for (const [name, requirement] of Object.entries(entries)) {
-        if (name !== advisory.package || typeof requirement !== "string") {
-          continue;
-        }
-        if (
-          !patchedVersions.some((version) =>
-            Bun.semver.satisfies(version, requirement),
-          )
-        ) {
-          pins.push(`package.json ${field}.${name}=${requirement}`);
-        }
-      }
-    }
+    const { requirements: manifestRequirements, pins } = manifestPins({
+      manifest,
+      packageName: advisory.package,
+      patchedVersions,
+    });
     const blockers: string[] = [];
     for (const node of vulnerable) {
       const parents: string[] = [];
@@ -210,6 +248,7 @@ export const assessAdvisories = ({
       }
       if (
         parents.length === 0 &&
+        manifestRequirements.length === 0 &&
         !patchedVersions.some(
           (version) =>
             version.split(".").at(0) === node.version.split(".").at(0),

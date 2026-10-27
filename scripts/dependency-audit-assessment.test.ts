@@ -159,3 +159,89 @@ describe("every advisory is assessed against its actual resolutions", () => {
     ).toThrow("Duplicate acceptance");
   });
 });
+
+test("every direct manifest requirement participates in pin classification", () => {
+  const directLockfile = JSON.stringify({
+    packages: {
+      "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.31.0", "", {}],
+    },
+  });
+  for (const field of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+    "peerDependencies",
+    "overrides",
+    "resolutions",
+  ]) {
+    const [result] = assessAdvisories({
+      advisories: [sdk],
+      accepted: [],
+      lockfile: directLockfile,
+      manifest: { [field]: { "@modelcontextprotocol/sdk": "1.31.0" } },
+      versions,
+    });
+    expect(result?.disposition.status).toBe("pinned_resolution_blocked");
+    expect(result?.action).toContain(
+      `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+    );
+  }
+});
+
+test("direct requirements can permit a patched release in another major", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, vulnerableVersions: ">=1.24.0 <2.0.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        "@modelcontextprotocol/sdk": [
+          "@modelcontextprotocol/sdk@1.31.0",
+          "",
+          {},
+        ],
+      },
+    }),
+    manifest: { dependencies: { "@modelcontextprotocol/sdk": ">=1.31.0" } },
+    versions: new Map([["@modelcontextprotocol/sdk", ["1.31.0", "2.0.0"]]]),
+  });
+  expect(result?.disposition.status).toBe("fix_available");
+});
+
+test("safe releases below the affected range never count as patched upgrades", () => {
+  const advisory = {
+    ...sdk,
+    package: "example",
+    vulnerableVersions: ">=2.0.0 <2.3.1",
+  };
+  const directLockfile = JSON.stringify({
+    packages: { example: ["example@2.2.0", "", {}] },
+  });
+  for (const published of [
+    ["1.9.0", "2.2.0", "2.3.1"],
+    ["1.9.0", "2.2.0"],
+  ]) {
+    const [result] = assessAdvisories({
+      advisories: [advisory],
+      accepted: [],
+      lockfile: directLockfile,
+      manifest: { resolutions: { example: ">=1.0.0 <2.3.1" } },
+      versions: new Map([["example", published]]),
+    });
+    const state = result?.disposition;
+    expect(state?.status).toBe(
+      published.includes("2.3.1")
+        ? "pinned_resolution_blocked"
+        : "upstream_blocked",
+    );
+    if (
+      state?.status !== "pinned_resolution_blocked" &&
+      state?.status !== "upstream_blocked"
+    ) {
+      throw new Error("Expected a blocked upgrade");
+    }
+    expect(state.patchedVersions).toEqual(
+      published.includes("2.3.1") ? ["2.3.1"] : [],
+    );
+    expect(result?.action).not.toContain("1.9.0");
+  }
+});
