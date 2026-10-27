@@ -23,12 +23,14 @@ export type PdfSignableFile = {
 
 type ReadSavedPdfSignTargetOptions = {
   entityVersionId: SafeId<"entityVersion">;
+  fileId: string;
   target: PdfSignableFile;
 };
 
 /** Resolve the upload receipt's immutable version, even if another save is current. */
 export const readSavedPdfSignTarget = async ({
   entityVersionId,
+  fileId,
   target,
 }: ReadSavedPdfSignTargetOptions) => {
   const version = unwrapApiResponse(
@@ -38,7 +40,11 @@ export const readSavedPdfSignTarget = async ({
       .versions({ versionId: entityVersionId })
       .get(),
   );
-  return resolveSavedPdfSignTarget({ fields: version.fields, target });
+  return resolveSavedPdfSignTarget({
+    fields: version.fields,
+    savedFileId: fileId,
+    target,
+  });
 };
 
 type PdfSigningSessionRef = {

@@ -35,6 +35,7 @@ export type EntityVersionUploadResult =
   | {
       type: typeof ENTITY_VERSION_UPLOAD_RESULT.uploaded;
       entityVersionId: SafeId<"entityVersion">;
+      fileId: string;
     };
 
 const abortUpload = async (
@@ -124,6 +125,7 @@ export const uploadEntityVersion = async ({
     return {
       type: ENTITY_VERSION_UPLOAD_RESULT.uploaded,
       entityVersionId: finalized.entityVersionId,
+      fileId: finalized.fileId,
     };
   });
 };

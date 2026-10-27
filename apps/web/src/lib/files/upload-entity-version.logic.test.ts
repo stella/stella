@@ -9,6 +9,7 @@ describe("entity version upload completion", () => {
     const events: string[] = [];
     const savedVersion = {
       entityVersionId: "version-a",
+      fileId: "file-saved-a",
       type: "entity_version",
     };
     const result = await completeEntityVersionUpload({

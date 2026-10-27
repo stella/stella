@@ -329,31 +329,69 @@ describe("resolveSavedPdfSignTarget", () => {
     propertyId: "property-1",
     workspaceId: "workspace-1",
   };
-  const fileField = (id: string, propertyId: string, mimeType: string) => ({
+  const fileField = (
+    id: string,
+    propertyId: string,
+    fileId: string,
+    mimeType: string,
+  ) => ({
     id,
     propertyId,
-    content: { type: "file", mimeType },
+    content: { id: fileId, type: "file", mimeType },
   });
 
-  test("signs the matching file from the exact version that was saved", () => {
+  test("signs the file named by the saved receipt even if its property changed", () => {
     expect(
       resolveSavedPdfSignTarget({
         fields: [
-          fileField("field-other", "property-2", PDF_MIME),
-          fileField("field-saved", "property-1", PDF_MIME),
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+          fileField("field-saved", "property-2", "file-saved", PDF_MIME),
         ],
+        savedFileId: "file-saved",
         target,
       }),
-    ).toEqual({ ...target, fieldId: "field-saved" });
+    ).toEqual({
+      ...target,
+      fieldId: "field-saved",
+      propertyId: "property-2",
+    });
   });
 
-  test("signs nothing when the property no longer holds a PDF", () => {
+  test("signs nothing when the receipt file is absent or is not a PDF", () => {
     expect(
       resolveSavedPdfSignTarget({
-        fields: [fileField("field-saved", "property-1", "image/png")],
+        fields: [
+          fileField(
+            "field-old-property",
+            "property-1",
+            "file-original",
+            PDF_MIME,
+          ),
+        ],
+        savedFileId: "file-saved",
         target,
       }),
     ).toBeNull();
-    expect(resolveSavedPdfSignTarget({ fields: [], target })).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [
+          fileField("field-saved", "property-2", "file-saved", "image/png"),
+        ],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSavedPdfSignTarget({
+        fields: [],
+        savedFileId: "file-saved",
+        target,
+      }),
+    ).toBeNull();
   });
 });

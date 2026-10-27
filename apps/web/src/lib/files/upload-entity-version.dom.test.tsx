@@ -43,6 +43,14 @@ const COMPETING_FIELD_ID = toSafeId<"field">(
 const PROPERTY_ID = toSafeId<"property">(
   "00000000-0000-4000-8000-000000000009",
 );
+const SAVED_PROPERTY_ID = toSafeId<"property">(
+  "00000000-0000-4000-8000-000000000012",
+);
+const SAVED_FILE_ID = "00000000-0000-4000-8000-000000000005";
+const UNCHANGED_FILE_ID = "00000000-0000-4000-8000-000000000013";
+const UNCHANGED_FIELD_ID = toSafeId<"field">(
+  "00000000-0000-4000-8000-000000000011",
+);
 
 type UploadEndpoint = ReturnType<ReturnType<typeof api.uploads>>;
 type FinalizedUploadResult = NonNullable<
@@ -60,12 +68,21 @@ test("a signing handoff targets the saved PDF even when another version becomes 
   const savedBytes = new Uint8Array(await pdf.save());
   const file = new File([savedBytes], "saved.pdf", { type: "application/pdf" });
   let currentVersionId = SAVED_VERSION_ID;
-  const field = (id: typeof SAVED_FIELD_ID) =>
+  const field = ({
+    id,
+    propertyId,
+    fileId,
+  }: {
+    id: typeof SAVED_FIELD_ID;
+    propertyId: typeof PROPERTY_ID;
+    fileId: string;
+  }) =>
     ({
       id,
-      propertyId: PROPERTY_ID,
+      propertyId,
       content: {
         type: "file",
+        id: fileId,
         mimeType: "application/pdf",
       },
     }) satisfies Parameters<
@@ -98,7 +115,7 @@ test("a signing handoff targets the saved PDF even when another version becomes 
             entityId: ENTITY_ID,
             entityVersionId: SAVED_VERSION_ID,
             versionNumber: 2,
-            fileId: "00000000-0000-4000-8000-000000000005",
+            fileId: SAVED_FILE_ID,
             fileName: "saved.pdf",
           } satisfies FinalizedUploadResult,
         });
@@ -109,13 +126,30 @@ test("a signing handoff targets the saved PDF even when another version becomes 
           versionNumber: 2,
           stamp: null,
           createdAt: "2026-10-01T12:00:00.000Z",
-          fields: [field(SAVED_FIELD_ID)],
+          fields: [
+            field({
+              id: UNCHANGED_FIELD_ID,
+              propertyId: PROPERTY_ID,
+              fileId: UNCHANGED_FILE_ID,
+            }),
+            field({
+              id: SAVED_FIELD_ID,
+              propertyId: SAVED_PROPERTY_ID,
+              fileId: SAVED_FILE_ID,
+            }),
+          ],
         });
       }
       if (pathname === ENTITY_PATH) {
         return Response.json({
           currentVersionId,
-          fields: [field(COMPETING_FIELD_ID)],
+          fields: [
+            field({
+              id: COMPETING_FIELD_ID,
+              propertyId: SAVED_PROPERTY_ID,
+              fileId: SAVED_FILE_ID,
+            }),
+          ],
         });
       }
       if (pathname === `/v1/entities/${WORKSPACE_ID}/pdf-signing-handoffs`) {
@@ -138,6 +172,7 @@ test("a signing handoff targets the saved PDF even when another version becomes 
   expect(result).toEqual({
     type: "uploaded",
     entityVersionId: SAVED_VERSION_ID,
+    fileId: SAVED_FILE_ID,
   });
   expect(currentVersionId).toBe(COMPETING_VERSION_ID);
   if (result.type !== "uploaded") {
@@ -145,9 +180,10 @@ test("a signing handoff targets the saved PDF even when another version becomes 
   }
   const savedTarget = await readSavedPdfSignTarget({
     entityVersionId: result.entityVersionId,
+    fileId: result.fileId,
     target: {
       entityId: ENTITY_ID,
-      fieldId: "00000000-0000-4000-8000-000000000011",
+      fieldId: UNCHANGED_FIELD_ID,
       propertyId: PROPERTY_ID,
       workspaceId: WORKSPACE_ID,
     },
@@ -156,12 +192,13 @@ test("a signing handoff targets the saved PDF even when another version becomes 
     panic("The saved PDF has no signing target");
   }
   expect(savedTarget.fieldId).toBe(SAVED_FIELD_ID);
+  expect(savedTarget.propertyId).toBe(SAVED_PROPERTY_ID);
   await createPdfSigningHandoff(savedTarget);
   expect(handoffs).toEqual([
     {
       entityId: ENTITY_ID,
       fieldId: SAVED_FIELD_ID,
-      propertyId: PROPERTY_ID,
+      propertyId: SAVED_PROPERTY_ID,
     },
   ]);
   expect(requests).toEqual([

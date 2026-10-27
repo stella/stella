@@ -63,24 +63,29 @@ type ResolveSavedPdfSignTargetOptions = {
   fields: readonly {
     id: string;
     propertyId: string;
-    content: { type: string; mimeType?: string | null | undefined };
+    content: {
+      type: string;
+      id?: string | undefined;
+      mimeType?: string | null | undefined;
+    };
   }[];
-  /** The file the editor was allowed to sign before it saved. */
-  target: { entityId: string; propertyId: string; workspaceId: string };
+  savedFileId: string;
+  /** The document the editor was allowed to sign before it saved. */
+  target: { entityId: string; workspaceId: string };
 };
 
 /**
- * The immutable version returned by the save, for the property being signed. The
+ * The uploaded file within the immutable version returned by the save. The
  * caller already held a sign target, so the permission it implies carries
- * over; the file itself is checked by {@link resolvePdfSignTarget} again.
+ * over; the matched file's own property is checked by {@link resolvePdfSignTarget}.
  */
 export const resolveSavedPdfSignTarget = ({
   fields,
+  savedFileId,
   target,
 }: ResolveSavedPdfSignTargetOptions) => {
   const field = fields.find(
-    ({ content, propertyId }) =>
-      propertyId === target.propertyId && content.type === "file",
+    ({ content }) => content.type === "file" && content.id === savedFileId,
   );
   return resolvePdfSignTarget({
     canUpdateEntity: true,

@@ -984,6 +984,7 @@ const LoadedPDFPageOrganizer = ({
         onClose();
         const saved = await readSavedPdfSignTarget({
           entityVersionId: savedVersion.entityVersionId,
+          fileId: savedVersion.fileId,
           target,
         });
         if (saved === null) {
