@@ -224,6 +224,16 @@ test("reader breadcrumb opens hidden levels on hover", async () => {
   expect(screen.getByRole("button", { name: "Oddíl A" })).toBeTruthy();
 });
 
+test("hovering the ellipsis shows hidden levels without moving focus into them", async () => {
+  mount(() => {});
+  const trigger = screen.getByRole("button", { name: "Show more" });
+  trigger.focus();
+  await act(async () => fireEvent.mouseEnter(trigger));
+  const entry = screen.getByRole("button", { name: "Hlava I" });
+  await waitFor(() => expect(entry.isConnected).toBe(true));
+  expect(document.activeElement).toBe(trigger);
+});
+
 test("hidden levels stay open when the ellipsis is clicked after hover", async () => {
   mount(() => {});
   const trigger = screen.getByRole("button", { name: "Show more" });

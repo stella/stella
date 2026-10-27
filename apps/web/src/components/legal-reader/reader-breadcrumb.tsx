@@ -20,6 +20,29 @@ import {
 } from "./reader-breadcrumb.logic";
 import type { ReaderContentsRow, ReaderTrail } from "./reader-contents.logic";
 
+/**
+ * How the trail's hidden middle is open. A hover only shows its sections; a
+ * press or the keyboard opens it to work in, and only then does focus move
+ * into it: a focused entry shows its tooltip over the trail the pointer is
+ * crossing, which would cover the section the reader is heading for.
+ */
+const MIDDLE_STATE = {
+  closed: "closed",
+  hovered: "hovered",
+  opened: "opened",
+} as const;
+type MiddleState = (typeof MIDDLE_STATE)[keyof typeof MIDDLE_STATE];
+
+/** A press keeps the middle open; any other change follows `open`. */
+const middleAfterChange = (open: boolean, reason: string): MiddleState =>
+  reason === "trigger-press" || open
+    ? MIDDLE_STATE.opened
+    : MIDDLE_STATE.closed;
+
+/** A hover shows a closed middle and leaves an open one as it is. */
+const middleAfterHover = (state: MiddleState): MiddleState =>
+  state === MIDDLE_STATE.closed ? MIDDLE_STATE.hovered : state;
+
 type ReaderBreadcrumbProps = {
   trail: ReaderTrail;
   rows: readonly ReaderContentsRow[];
@@ -171,7 +194,7 @@ export const ReaderBreadcrumb = ({
   const { visible, hidden } = compactReaderPath(path);
   const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
-  const [middleOpen, setMiddleOpen] = useState(false);
+  const [middle, setMiddle] = useState<MiddleState>(MIDDLE_STATE.closed);
   const current = path.at(-1);
   const currentNumber = readerProvisionNumber(current?.title ?? "");
   const currentWidth =
@@ -361,14 +384,14 @@ export const ReaderBreadcrumb = ({
                       icon={ChevronRightIcon}
                     />
                     <Popover
-                      open={middleOpen}
-                      onOpenChange={(open, { reason }) => {
-                        setMiddleOpen(reason === "trigger-press" || open);
-                      }}
+                      open={middle !== MIDDLE_STATE.closed}
+                      onOpenChange={(open, { reason }) =>
+                        setMiddle(middleAfterChange(open, reason))
+                      }
                     >
                       <PopoverTrigger
                         aria-label={t("common.showMore")}
-                        onMouseEnter={() => setMiddleOpen(true)}
+                        onMouseEnter={() => setMiddle(middleAfterHover)}
                         render={
                           <Button
                             className="size-11 shrink-0"
@@ -382,10 +405,11 @@ export const ReaderBreadcrumb = ({
                         align="start"
                         aria-label={t("common.showMore")}
                         className="w-80 max-w-[calc(100vw-2rem)]"
+                        initialFocus={middle !== MIDDLE_STATE.hovered}
                         padding="sm"
                       >
                         <ScrollArea axis="vertical" className="max-h-72">
-                          {hiddenEntries(() => setMiddleOpen(false))}
+                          {hiddenEntries(() => setMiddle(MIDDLE_STATE.closed))}
                         </ScrollArea>
                       </PopoverPopup>
                     </Popover>
