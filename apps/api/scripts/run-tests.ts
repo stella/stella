@@ -5,7 +5,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { availableParallelism, tmpdir } from "node:os";
+import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
@@ -36,6 +36,7 @@ import {
   assertTestDurationsIdentity,
   loadTestDurationWeights,
 } from "./test-timings";
+import { deriveApiTestWorkerCount } from "./test-worker-count";
 
 // Bun runs the suite: `--parallel` workers give every file a fresh global and
 // module registry, and `--update-timings` records each file's duration for the
@@ -262,10 +263,12 @@ const child = Bun.spawn(
     testArguments: [
       "--preload",
       preloadPath,
-      // One core stays free for the coordinator: PGlite's WASM and the
-      // garbage collector keep more than one thread busy per worker, so a
-      // worker per core adds contention instead of throughput.
-      `--parallel=${Math.max(1, availableParallelism() - 1)}`,
+      // One core stays free for the coordinator. The memory bound also keeps
+      // concurrently scheduled heavy PGlite suites within physical memory.
+      `--parallel=${deriveApiTestWorkerCount({
+        availableParallelism: availableParallelism(),
+        totalMemoryBytes: totalmem(),
+      })}`,
       `--timings=${plannedTimingsPath}`,
       ...reportArguments,
       ...bunArguments,
