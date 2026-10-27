@@ -23,7 +23,11 @@ export const seedRequestReceiptScenario = async (
     VALUES (${USER_ID}, 'Receipt measurement', 'receipt-measurement@example.test', true, now(), now())
     ON CONFLICT (id) DO NOTHING`);
   await database.execute(sql`TRUNCATE request_idempotency_receipts`);
-  await database.execute(sql`INSERT INTO request_idempotency_receipts
+  // Receipts are written as their owner, the only writer the table's policies admit.
+  await database.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.user_id', ${USER_ID}, true),
+      set_config('app.organization_id', ${ORGANIZATION_ID}, true)`);
+    await tx.execute(sql`INSERT INTO request_idempotency_receipts
     (id, organization_id, user_id, idempotency_key, route, request_fingerprint,
      state, response_status, response_body, claimed_at, completed_at)
     SELECT md5('receipt-' || i)::uuid, ${ORGANIZATION_ID}, ${USER_ID}, 'receipt-' || i,
@@ -36,5 +40,6 @@ export const seedRequestReceiptScenario = async (
       CASE WHEN ${cohort} = 'mixed' AND i % 16 = 0 THEN NULL
         ELSE '2026-01-10T11:00:00Z'::timestamptz END
     FROM generate_series(1, ${rows}::integer) AS i`);
+  });
   await database.execute(sql`VACUUM (ANALYZE) request_idempotency_receipts`);
 };

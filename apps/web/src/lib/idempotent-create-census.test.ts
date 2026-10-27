@@ -746,7 +746,7 @@ test("create census follows client aliases, dynamic IDs and owned method referen
     const submit = useSubmit();
     const listApi = api.things({ matterId: dynamicId });
     const signalClient = (id: string) => api.signals({ signalId: id });
-    submit.run({ body, operation: "item", send: listApi.items.post });
+    submit.run({ body, operation: \`item:\${dynamicId}\`, send: listApi.items.post });
     submit.run({ body, operation: "signal", send: (body, request) => signalClient(dynamicId).assignments.post(body, { headers: request.headers }) });
     const createMemory = (body: unknown, request: IdempotentRequest) => memoriesApi.post(body, request);
   `;
