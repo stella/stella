@@ -177,3 +177,30 @@ describe("the app's dates", () => {
     );
   });
 });
+
+describe("the app's colours", () => {
+  /** Every bundled module but the generated theme, which is where colours live. */
+  const painted = readdirSync(SOURCE_ROOT, { recursive: true })
+    .map(String)
+    .filter(
+      (name) =>
+        /\.tsx?$/u.test(name) &&
+        !name.includes(".test.") &&
+        name !== "ui-theme.gen.ts",
+    )
+    .toSorted();
+
+  test("finds the theme that maps the web's colours", () => {
+    expect(painted).toContain("theme.ts");
+  });
+
+  // A colour written into the app would drift from @stll/ui; every colour
+  // comes from the web theme through ui-theme.gen.ts.
+  test.each(painted)("%s writes no colour of its own", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      source.match(/["'`]#[\da-f]{3,8}["'`]|\b(?:rgba?|hsla?|oklch)\(/giu) ??
+        [],
+    ).toEqual([]);
+  });
+});
