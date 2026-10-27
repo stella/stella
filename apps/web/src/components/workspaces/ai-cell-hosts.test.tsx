@@ -187,23 +187,22 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
     const adapters = new Set<string>();
     let mountsTable = false;
     let ownsAiColumnFactory = false;
+    const typeOnlyDeclarations = new Set(
+      source.program.body
+        .filter(
+          (statement) =>
+            statement.type === "ImportDeclaration" &&
+            statement.importKind === "type",
+        )
+        .map((statement) => statement.start),
+    );
     for (const statement of source.module.staticImports) {
-      const named = statement.entries.filter(
-        (entry) => entry.importName.name !== null,
-      );
-      // `{ … }` with no named entry (`import {} from`) still counts as a
-      // type-only binding list, while a side-effect import has none.
-      const hasNamedBindings =
-        named.length > 0 ||
-        source.sourceText
-          .slice(statement.start, statement.moduleRequest.start)
-          .includes("{");
-      // `isType` marks every binding of `import type …` and each inline
-      // `type` binding; a type-only import carries no runtime dependency.
+      // Empty type-only declarations have no binding entries. Mixed imports
+      // retain their runtime bindings, including a default import.
       if (
+        typeOnlyDeclarations.has(statement.start) ||
         (statement.entries.length > 0 &&
-          statement.entries.every((entry) => entry.isType)) ||
-        (hasNamedBindings && named.every((entry) => entry.isType))
+          statement.entries.every((entry) => entry.isType))
       ) {
         continue;
       }
