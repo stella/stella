@@ -26,6 +26,8 @@ const { act, cleanup, fireEvent, render, renderHook, waitFor } =
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { IntlProvider: MessagesProvider } = await import("use-intl");
+const { default: csMessages } = await import("@/i18n/langs/cs.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useReaderAnswers } = await import("./use-reader-answers");
 const {
@@ -88,9 +90,11 @@ const setup = () => {
     <StrictMode>
       <QueryClientProvider client={client}>
         <AuthenticatedUserProvider user={user}>
-          <FormattingProvider locale="cs" timeZone="UTC">
-            {children}
-          </FormattingProvider>
+          <MessagesProvider locale="cs" messages={csMessages} timeZone="UTC">
+            <FormattingProvider locale="cs" timeZone="UTC">
+              {children}
+            </FormattingProvider>
+          </MessagesProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>
     </StrictMode>
@@ -733,7 +737,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "cs",
+      locale: "en",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();
