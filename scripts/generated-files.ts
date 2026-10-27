@@ -169,6 +169,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/*",
   ],
   "bun-toolchain": ["packages/portable-path/src/index.ts"],
+  "mobile-ui-theme": ["packages/portable-path/src/index.ts"],
   "capability-catalog": ["apps/api/package.json", "apps/api/scripts/*"],
   "capability-runtime": [
     "packages/legal-ast/src/analysis.ts",
@@ -998,6 +999,28 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
     check: ["bun", "scripts/generate-bun-toolchain.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "mobile-ui-theme",
+    outputKind: "committed",
+    outputs: ["apps/mobile/src/ui-theme.gen.ts"],
+    inputs: [
+      "packages/ui/src/styles/theme.css",
+      "scripts/generate-mobile-ui-theme.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      // Tailwind's palette, which the web theme's colours are mixed from.
+      "package.json",
+      "bun.lock",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["mobile-ui-theme"],
+    ],
+    write: ["bun", "scripts/generate-mobile-ui-theme.ts", "--write"],
+    check: ["bun", "scripts/generate-mobile-ui-theme.ts"],
     autofix: true,
     after: [],
   },
