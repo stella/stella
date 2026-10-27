@@ -1794,12 +1794,6 @@
     "reason": "builder-for in apps/api/src/handlers/templates/lookup-formats/default/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/time-entries/approval-queue/return.ts",
-    "fingerprint": "70ab4c7191c68e21c3a9feb15656bbe87d2115f0afe57b4e56a7ee0761d6fdd2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/approval-queue/return.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
     "fingerprint": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
     "count": 1,
@@ -2179,9 +2173,9 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-approval.ts",
-    "fingerprint": "00ad883a7d690bee58227f10fc2b0e668089a9071cc0cd4c307aa00710db044e",
+    "fingerprint": "1062846dc1709bc585d5006f940b566082038d494103626fc7a6bd1f5a8a12db",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-approval.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Approval and return share one locked read of the reviewed entries; the single-entry return's own acquisition is removed."
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-insert.ts",
@@ -2192,12 +2186,6 @@
   {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
     "fingerprint": "843c3c089ea63ede290e9f4599e4ad419f56006954fa15d36605b00060457b36",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "f9516d9c578f8199357badb9ece69d53392631b50201d0fcc28893dec4c0be2f",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -3613,15 +3601,15 @@
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "43dcac559efabea48919abdb2853456c6bcb5a803e4bafd6cdadd8caaa86dc7e",
+    "fingerprint": "175f666c3662b5398246fd148f90d65f4fbdf3fba83e500d9d9672e450dfbcaf",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on external.database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "8cd7517024c8b2fa6124cb97c69c43970c9dcb254b872ddcb786278600319dcb",
+    "fingerprint": "f5b5976998e8b3259d75c0037e2a325e0bef6c406dae071974c2ec4547205404",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",

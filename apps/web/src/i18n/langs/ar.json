@@ -527,6 +527,16 @@
         "wrongStatus": "هذا القيد لم يعد مسودة. حدّث القائمة."
       },
       "returnComment": "سبب الإرجاع",
+      "returnRefusals": {
+        "invalidEntry": "تحقق من تاريخ العمل في القيد، ثم أرجعه.",
+        "notApprover": "لا يُرجع هذا القيد إلا المعتمِد المعيّن له أو مسؤول.",
+        "notFound": "هذا القيد لم يعد موجودًا، لذا لا يمكن إرجاعه. حدّث القائمة.",
+        "notSubmitted": "لم تُرسَل هذه المسودة قط، فلا يوجد ما يُرجَع.",
+        "runningTimer": "أوقف المؤقّت الجاري قبل إرجاع هذا القيد.",
+        "timePeriodLocked": "هذا الشهر مقفل، لذا لا يمكن إرجاع القيد. اطلب من مسؤول فتحه.",
+        "wrongStatus": "لا يمكن إرجاع الوقت المُفوتر أو المشطوب إلى صاحبه."
+      },
+      "returnSelected": "إرجاع {count, plural, zero {لا قيود محددة} one {قيد محدد واحد} two {قيدين محددين} few {# قيود محددة} many {# قيدًا محددًا} other {# قيد محدد}}",
       "selectEntry": "تحديد القيد",
       "timeEntries": "قيود الوقت",
       "title": "الاعتماد"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "وضع علامة غير قابل للفوترة",
     "matterRequired": "يرجى اختيار ملف قانوني",
     "minutes": "الدقائق",
+    "moveEntryHint": "عند الحفظ، يُنقل القيد إلى هذا الملف القانوني ويُسعَّر وفق أسعاره.",
     "narrative": "البيان",
     "narrativePlaceholder": "صِف العمل المُنجز...",
     "noActiveTimer": "لا يوجد مؤقّت نشط",
@@ -988,7 +999,6 @@
     "coverage": {
       "completeness": "الاكتمال",
       "courtsHeading": "حسب المحكمة",
-      "courtsUnavailable": "التقسيم حسب المحكمة غير متاح حاليًا.",
       "decisionYears": "سنوات الأحكام",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "generatedAt": "أرقام بتاريخ {date}",
@@ -999,20 +1009,16 @@
       "healthStalled": "متعثّر",
       "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",
-      "knownGaps": "فجوات معروفة",
       "lastSync": "آخر مزامنة",
-      "noGapsRecorded": "لم تُسجّل فجوات",
       "notCountedYet": "لم يُحصَ بعد",
       "notMeasuredYet": "لم يُقَس بعد",
-      "pendingTexts": "نصوص معلقة",
       "reportedByListing": "محسوب من قائمة الجهة الناشرة",
       "reportedByOperator": "مُدخَل يدويًا",
       "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
       "searchable": "قابلة للبحث",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
-      "unavailable": "أرقام التغطية غير متاحة حاليًا.",
-      "unreadListingPeriods": "فترات القائمة غير المقروءة"
+      "unavailable": "أرقام التغطية غير متاحة حاليًا."
     },
     "decisionNotFound": "لم يُعثر على القرار",
     "decisionTypes": {

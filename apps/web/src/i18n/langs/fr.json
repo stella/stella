@@ -527,6 +527,16 @@
         "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
       },
       "returnComment": "Motif du renvoi",
+      "returnRefusals": {
+        "invalidEntry": "Vérifiez la date de travail de la saisie, puis renvoyez-la.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut renvoyer cette saisie.",
+        "notFound": "Cette saisie n’existe plus et ne peut donc pas être renvoyée. Actualisez la liste.",
+        "notSubmitted": "Ce brouillon n’a jamais été soumis : il n’y a rien à renvoyer.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant de renvoyer cette saisie.",
+        "timePeriodLocked": "Ce mois est verrouillé, la saisie ne peut donc pas être renvoyée. Demandez à un administrateur de le déverrouiller.",
+        "wrongStatus": "Le temps facturé ou passé en pertes ne peut pas être renvoyé à son auteur."
+      },
+      "returnSelected": "Renvoyer {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
       "selectEntry": "Sélectionner la saisie",
       "timeEntries": "Saisies de temps",
       "title": "Approbations"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Marquer non facturable",
     "matterRequired": "Veuillez sélectionner un dossier",
     "minutes": "min",
+    "moveEntryHint": "L’enregistrement déplace la saisie vers ce dossier et la valorise selon ses taux.",
     "narrative": "Description",
     "narrativePlaceholder": "Décrivez le travail effectué...",
     "noActiveTimer": "Aucun chronomètre actif",
@@ -988,7 +999,6 @@
     "coverage": {
       "completeness": "Exhaustivité",
       "courtsHeading": "Par juridiction",
-      "courtsUnavailable": "La répartition par juridiction est indisponible pour le moment.",
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
       "generatedAt": "Chiffres au {date}",
@@ -999,20 +1009,16 @@
       "healthStalled": "À l’arrêt",
       "healthUnknown": "Jamais exécuté",
       "inPreparation": "En préparation",
-      "knownGaps": "Lacunes connues",
       "lastSync": "Dernière synchronisation",
-      "noGapsRecorded": "Aucune lacune enregistrée",
       "notCountedYet": "Pas encore décompté",
       "notMeasuredYet": "Pas encore mesuré",
-      "pendingTexts": "Textes en attente",
       "reportedByListing": "Compté à partir de la liste du diffuseur",
       "reportedByOperator": "Saisi manuellement",
       "reportedByPublisher": "Décompte du diffuseur",
       "searchable": "Interrogeables",
       "title": "Couverture de la jurisprudence",
       "totalFrom": "Total au {date}",
-      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment.",
-      "unreadListingPeriods": "Périodes de la liste non lues"
+      "unavailable": "Les chiffres de couverture sont indisponibles pour le moment."
     },
     "decisionNotFound": "Décision introuvable",
     "decisionTypes": {

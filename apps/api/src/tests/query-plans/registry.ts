@@ -705,6 +705,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     type: "registered",
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
   },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary]: {
+    type: "excluded",
+    reason:
+      "SECURITY DEFINER hides the singleton lookup from EXPLAIN; coverage-summary.db.test.ts checks the one-statement budget at two corpus sizes and policy revocation.",
+  },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",
     reason: "Coverage mixes source metadata and decision counts.",

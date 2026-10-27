@@ -1,6 +1,6 @@
 {
   "route": "/chat/$threadId",
-  "reason": "Load one bounded private generated-view attachment after chat messages are available; load professional-use acceptance before protected route data.",
+  "reason": "Load one bounded private generated-view attachment after chat messages are available; load professional-use acceptance before protected route data. The sidebar's Time link reads the approval queue's bounded count of submitted time waiting for the signed-in person (one request, limit 1).",
   "budget": {
     "depth": 8,
     "requests": [
@@ -20,6 +20,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/signals/count",
       "GET /v1/skills",
+      "GET /v1/time-entries/approval-queue",
       "GET /v1/time-timers",
       "GET /v1/usage/entitlement",
       "GET /v1/user-files/:id/visual",
@@ -45,7 +46,8 @@
       "GET /v1/time-timers": 1,
       "GET /v1/usage/entitlement": 1,
       "GET /v1/user-files/:id/visual": 1,
-      "GET /v1/workspaces/navigation": 1
+      "GET /v1/workspaces/navigation": 1,
+      "GET /v1/time-entries/approval-queue": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -67,7 +69,8 @@
       "GET /v1/time-timers": 4,
       "GET /v1/usage/entitlement": 6,
       "GET /v1/user-files/:id/visual": 8,
-      "GET /v1/workspaces/navigation": 6
+      "GET /v1/workspaces/navigation": 6,
+      "GET /v1/time-entries/approval-queue": 10
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -88,7 +91,8 @@
       "GET /v1/time-timers": 1024,
       "GET /v1/usage/entitlement": 1024,
       "GET /v1/user-files/:id/visual": 4194304,
-      "GET /v1/workspaces/navigation": 20480
+      "GET /v1/workspaces/navigation": 20480,
+      "GET /v1/time-entries/approval-queue": 1024
     }
   }
 }

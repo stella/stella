@@ -18,6 +18,7 @@ import {
   useDecideTimeSuggestion,
   useUpdateTimeEntry,
 } from "@/lib/workspaces/mutations/time-entries";
+import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsKeys } from "@/lib/workspaces/queries/my-time-suggestions";
 import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
@@ -132,20 +133,38 @@ export const useMyWeekActions = ({
   const dismiss = async (target: SuggestionTarget) =>
     await decide(target, { type: "dismiss" });
 
+  /** Saves a draft's edits; with another matter, moves it there too. */
   const editEntry = async (
     entry: MyTimeEntry,
     values: ManualTimeEntryValues,
+    moveTo?: string,
   ) => {
-    if (entry.workspaceId === null) {
+    const from = entry.workspaceId;
+    if (from === null) {
       return;
     }
+    const to = moveTo === undefined || moveTo === from ? null : moveTo;
     await updateEntry.mutateAsync({
-      workspaceId: entry.workspaceId,
+      workspaceId: from,
       id: entry.id,
       timezoneId,
       ...values,
+      ...(to === null ? {} : { moveTo: to }),
     });
-    await refreshWeek();
+    await Promise.all([
+      refreshWeek(),
+      // A move changes both matters' time and what they can invoice.
+      ...(to === null
+        ? []
+        : [from, to].flatMap((workspaceId) => [
+            queryClient.invalidateQueries({
+              queryKey: timeEntriesKeys.all(workspaceId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: invoicesKeys.all(workspaceId),
+            }),
+          ])),
+    ]);
   };
 
   const reportFailure = (error: unknown) => {

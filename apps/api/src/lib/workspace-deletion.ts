@@ -250,7 +250,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
         if (fenced.length === 0) {
           throw new WorkspaceBillingHistoryError({
             message:
-              "This matter has invoice history and cannot be deleted. Archive it to keep its invoices and lines intact.",
+              "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
             workspaceId,
           });
         }
