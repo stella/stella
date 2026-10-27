@@ -167,10 +167,16 @@ const isIconElement = (node: unknown): boolean => {
 };
 
 // A child component that is not an icon (`CopyFeedback`, a badge, a chip) may
-// render a label the rule cannot see, so it counts as visible text.
+// render a label the rule cannot see, so it counts as visible text, unless it
+// is visually hidden.
 const isOpaqueComponent = (node: unknown): boolean => {
   const name = getElementName(node);
-  return name !== null && /^\p{Lu}/u.test(name) && !isIconElement(node);
+  return (
+    name !== null &&
+    /^\p{Lu}/u.test(name) &&
+    !isIconElement(node) &&
+    !isScreenReaderOnly(node)
+  );
 };
 
 const hasVisibleText = (node: unknown): boolean => {

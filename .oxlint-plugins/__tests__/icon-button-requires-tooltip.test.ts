@@ -16,10 +16,13 @@ test("does not count visually hidden text as a visible label", async () => {
   expect(
     await lintSingleRule(
       "icon-button-requires-tooltip",
-      'const a = <button><PlusIcon /><span className="sr-only">Open</span></button>;',
+      [
+        'const a = <button><PlusIcon /><span className="sr-only">Open</span></button>;',
+        'const b = <Button size="sm"><PlusIcon /><Label className="sr-only">Save</Label></Button>;',
+      ].join("\n"),
       { sourcePath: "source.tsx" },
     ),
-  ).toEqual([1]);
+  ).toEqual([1, 2]);
 });
 
 test("checks icon sized render controls", async () => {
