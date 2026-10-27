@@ -185,12 +185,6 @@ test("glossary and catalogue generation inputs cover their runtime import closur
   }
 });
 
-test("lock changes select generators backed by installed tool data", () => {
-  const selected = generatorsForFiles(["bun.lock"]).map(({ id }) => id);
-  expect(selected).toContain("tailwind-class-cache");
-  expect(selected).toContain("playwright-devices");
-});
-
 test("pinned facts generation inputs cover the derived parser graph", () => {
   const inputs = generator("catalogue-pinned-facts").inputs;
   const parserInputs = pinnedParserInputs();

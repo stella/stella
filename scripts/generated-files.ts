@@ -1954,7 +1954,6 @@ const GENERATOR_DECLARATIONS = [
       "packages/portable-path/src/index.ts",
       "bunfig.toml",
       ".prettierrc.yml",
-      "bun.lock",
     ],
     write: ["bun", "scripts/generate-playwright-devices.ts", "--write"],
     check: ["bun", "scripts/generate-playwright-devices.ts", "--check"],

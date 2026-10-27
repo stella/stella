@@ -140,6 +140,15 @@ test("selects direct, output, and transitive changes while unrelated files selec
   expect(affectedGeneratorIds(GENERATORS, null).size).toBe(GENERATORS.length);
 });
 
+test.each(["bun.lock", "package.json"])(
+  "shared dependency input %s selects every generator check",
+  (file) => {
+    expect(affectedGeneratorIds(GENERATORS, [file])).toEqual(
+      new Set(GENERATORS.map(({ id }) => id)),
+    );
+  },
+);
+
 test("a glob that matches nothing leaves every family unaffected", () => {
   const fixture = [
     { ...generator("bun-toolchain"), inputs: ["missing/**/*.ts"] },
