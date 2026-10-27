@@ -738,17 +738,43 @@ const webCrossWorkspaceImports = [
 // Bans reaching sideways into an application, into a private workspace
 // package, and back into itself through the package name (the intra-package
 // graph is relative, so a self-reference would only survive in-repo).
+const uiAppCodeImportBan = {
+  group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+  message:
+    "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+};
+
 const uiStandaloneImports = [
   {
     group: ["@stll/*", "@stll/*/**"],
     message:
       "@stll/ui must build standalone; it may not import another workspace package, including itself by name.",
   },
+  uiAppCodeImportBan,
+];
+
+// Workspace packages that exist only to help tests, each a devDependency of
+// @stll/ui. A ui test file may import them: tsdown builds no test file (see packages/ui/tsdown.config.ts), so the
+// dependency is a devDependency that never ships. Production src stays banned,
+// and so does every package not named here.
+const UI_TEST_HELPER_PACKAGES = ["@stll/property-testing"] as const;
+
+const UI_TEST_FILES = [
+  "packages/ui/src/**/*.test.{ts,tsx}",
+  "packages/ui/src/**/*.dom.test.tsx",
+];
+
+const uiTestStandaloneImports = [
   {
-    group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+    group: [
+      "@stll/*",
+      "@stll/*/**",
+      ...UI_TEST_HELPER_PACKAGES.flatMap((name) => [`!${name}`, `!${name}/**`]),
+    ],
     message:
-      "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+      "@stll/ui tests may import only the workspace test-helper packages; any other workspace package, including @stll/ui by name, would break the standalone build.",
   },
+  uiAppCodeImportBan,
 ];
 
 // The all-locales folio catalog entries (and their `getFolioMessages`) bundle
@@ -3963,6 +3989,26 @@ const config = defineConfig({
       },
     },
     {
+      files: UI_TEST_FILES,
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              uiPragmaticDragAdapterImport,
+            ],
+            patterns: [
+              ...uiTestStandaloneImports,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
       // The kanban package's drag-and-drop owner: the one module that may
       // call the adapter's `draggable`/`dropTargetForElements` directly. The
       // rest of the package's import restrictions still apply.
@@ -5891,14 +5937,14 @@ const config = defineConfig({
     },
     {
       // The packages whose tests render React in happy-dom, where component
-      // libraries keep module state behind their timeouts. @stll/ui must
-      // build standalone, so it cannot import the shared helper.
+      // libraries keep module state behind their timeouts.
       files: [
         "apps/desktop/**/*.{ts,tsx}",
         "apps/web/**/*.{ts,tsx}",
         "packages/decision-reader/**/*.{ts,tsx}",
         "packages/mcp-apps/**/*.{ts,tsx}",
         "packages/render-probe/**/*.{ts,tsx}",
+        "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
       ],
       // Open pull request 6989 rewrites this file's teardown and migrates it.
