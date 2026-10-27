@@ -78,7 +78,9 @@ test("the PR trigger drops exactly the workflow files autofix never reads", () =
   );
 });
 
-test("every workflow edit selects the classification digest refresh", () => {
+// Its outputs live under .github/, which the autofix action may not modify,
+// so no edit selects the classification digest refresh as an autofix.
+test("no edit selects the classification digest refresh as an autofix", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
@@ -88,11 +90,8 @@ test("every workflow edit selects the classification digest refresh", () => {
     expect(
       generatorsForFiles([file]).map(({ id }) => id),
       file,
-    ).toContain("ci-job-classification-digests");
+    ).not.toContain("ci-job-classification-digests");
   }
-  expect(
-    generatorsForFiles(["apps/web/src/main.tsx"]).map(({ id }) => id),
-  ).not.toContain("ci-job-classification-digests");
 });
 
 const namedCiStep = (workflow: unknown, name: string) => {
