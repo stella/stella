@@ -569,7 +569,7 @@ export const loadCaseLawCoverage = async ({
       pendingTextCount: source.pendingTextCount,
       courts: source.courts,
       publishedDecisions: source.publishedDecisions,
-      storedDecisions: source.storedTotal,
+      storedDecisions: source.storedTotalAsOf ? source.storedTotal : null,
       knownGaps: Result.isError(yearCompleteness)
         ? UNREAD_YEAR_COMPLETENESS
         : (yearCompleteness.value.get(String(source.id)) ??
