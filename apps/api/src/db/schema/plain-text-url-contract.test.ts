@@ -10,7 +10,7 @@ import {
 // that declares URL-bearing metadata replaces the function in a new one.
 const migration = await Bun.file(
   new URL(
-    "../../../drizzle/20261026230100_uk_fcl_metadata_url_contract/migration.sql",
+    "../../../drizzle/20261027160100_uk_fcl_metadata_url_contract/migration.sql",
     import.meta.url,
   ),
 ).text();
