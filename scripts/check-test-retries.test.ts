@@ -112,6 +112,21 @@ test("imported configuration arguments are verified before composition", () => {
   }
 });
 
+test("device presets remain read-only configuration inputs", () => {
+  expect(
+    config(`import { defineConfig, devices } from "@playwright/test";
+      Object.assign(devices["Desktop Chrome"], { retries: 2 });
+      export default defineConfig({
+        retries: 0,
+        projects: [{ ...devices["Desktop Chrome"], name: "browser" }],
+      });`),
+  ).toContainEqual({
+    file: "apps/example/playwright.config.ts",
+    message:
+      "Playwright project/use configuration is not statically inspectable",
+  });
+});
+
 test("local configuration arguments require static construction", () => {
   expect(
     config(`import { defineConfig } from "@playwright/test";
