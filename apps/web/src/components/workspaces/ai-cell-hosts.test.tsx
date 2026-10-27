@@ -413,6 +413,8 @@ describe("AI table host census", () => {
     { form: "method", entry: "cell() { return <SyntheticCell />; }" },
     { form: "shorthand", entry: "cell" },
     { form: "getter", entry: "get cell() { return renderer; }" },
+    { form: "quoted property", entry: '"cell": renderer' },
+    { form: "computed literal", entry: '["cell"]: renderer' },
   ])(
     "discovers $form cell factories and their adapter dependencies",
     ({ entry }) => {
