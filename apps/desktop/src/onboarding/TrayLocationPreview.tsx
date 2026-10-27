@@ -57,6 +57,7 @@ export const TrayLocationPreview = ({
           "text-primary absolute -translate-x-1/2",
           bottom ? "bottom-1" : "top-1",
         )}
+        data-tray-pointer=""
         style={{ insetInlineStart: `${along * 100}%` }}
       >
         {bottom ? (
