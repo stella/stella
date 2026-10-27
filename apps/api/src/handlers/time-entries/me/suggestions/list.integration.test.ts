@@ -148,7 +148,7 @@ beforeAll(async () => {
       workspaceId: hiddenMatterId,
       createdAt: at(MONDAY, "11:00:00"),
     }),
-    ...extraMatterIds.map((workspaceId) =>
+    ...extraMatterIds.map(async (workspaceId) =>
       seedAuditRow({ workspaceId, createdAt: at(MONDAY, "15:00:00") }),
     ),
   ]);
