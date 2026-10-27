@@ -2,7 +2,7 @@
   position: relative;
   display: inline-grid;
   grid-template-columns: minmax(0, max-content);
-  min-inline-size: 0;
+  min-inline-size: min(10ch, 100%);
   max-inline-size: 100%;
   vertical-align: baseline;
 }
@@ -10,7 +10,7 @@
 [data-slot="inline-rename-mirror"],
 [data-slot="inline-rename-input"] {
   grid-area: 1 / 1;
-  min-inline-size: 1px;
+  min-inline-size: min(10ch, 100%);
   max-inline-size: 100%;
   margin: 0;
   padding: 0;
