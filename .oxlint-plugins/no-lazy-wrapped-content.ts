@@ -64,6 +64,40 @@ import {
 
 const REACT_MODULE = "react";
 
+// Attributes that style or wire an element; a placeholder sharing them with
+// the content shows none of the content's data. `id` is not one: on a
+// component it names the record the content draws.
+const PRESENTATION_ATTRIBUTES = new Set([
+  "className",
+  "key",
+  "ref",
+  "role",
+  "style",
+  "tabIndex",
+]);
+const PRESENTATION_ATTRIBUTE_PATTERN = /^(?:aria-|data-|on[A-Z])/u;
+
+const attributeName = (name: AstNode): string | null => {
+  if (name.type === "JSXIdentifier" && typeof name.name === "string") {
+    return name.name;
+  }
+  if (
+    name.type === "JSXNamespacedName" &&
+    isAstNode(name.namespace) &&
+    isAstNode(name.name) &&
+    typeof name.namespace.name === "string" &&
+    typeof name.name.name === "string"
+  ) {
+    return `${name.namespace.name}:${name.name.name}`;
+  }
+  return null;
+};
+
+const isPresentationAttribute = (name: string | null): boolean =>
+  name !== null &&
+  (PRESENTATION_ATTRIBUTES.has(name) ||
+    PRESENTATION_ATTRIBUTE_PATTERN.test(name));
+
 const FUNCTION_TYPES = new Set([
   "ArrowFunctionExpression",
   "FunctionDeclaration",
@@ -238,6 +272,8 @@ const collectMarkup = (
       if (
         isAstNode(attribute) &&
         attribute.type === "JSXAttribute" &&
+        isAstNode(attribute.name) &&
+        !isPresentationAttribute(attributeName(attribute.name)) &&
         isAstNode(attribute.value) &&
         attribute.value.type === "JSXExpressionContainer"
       ) {

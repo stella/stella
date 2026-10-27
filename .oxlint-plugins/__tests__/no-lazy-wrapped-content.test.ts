@@ -56,6 +56,18 @@ const cases = [
     lines: [],
   },
   {
+    title:
+      "allows a skeleton that shares only styling and wiring identifiers with the lazy content",
+    source: `${HEADER}${LAZY}const Page = ({ className, decision, id, onOpen, style }) => (\n<Suspense fallback={<Skeleton aria-describedby={id} className={className} data-panel={id} key={id} onClick={onOpen} role={id} style={style} tabIndex={id} />}>\n<LazyChat aria-describedby={id} className={className} data-panel={id} decision={decision} key={id} onClick={onOpen} role={id} style={style} tabIndex={id} />\n</Suspense>\n);`,
+    lines: [],
+  },
+  {
+    title:
+      "reports a fallback that shares a data prop even when it shares styling too",
+    source: `${HEADER}${LAZY}const Page = ({ className, decision }) => (\n<Suspense fallback={<Reader className={className} decision={decision} />}>\n<LazyChat className={className} decision={decision} />\n</Suspense>\n);`,
+    lines: [4],
+  },
+  {
     title: "allows lazy content that only it renders",
     source: `${HEADER}${LAZY}const Page = ({ children, fallbackText }) => (\n<Suspense fallback={<Plain>{fallbackText ?? children}</Plain>}>\n<LazyChat>{children}</LazyChat>\n</Suspense>\n);`,
     lines: [],
