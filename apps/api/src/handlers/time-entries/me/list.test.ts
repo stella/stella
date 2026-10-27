@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -428,6 +429,24 @@ describe("personal time entries", () => {
     ).toMatchObject({
       code: 400,
       response: { code: "invalid_cursor" },
+    });
+  });
+
+  test("reports remaining minutes for a single date only, never against a range", async () => {
+    await withTargets(120, async () => {
+      expect(await listFor({ date: SUMMARY_DAY })).toMatchObject({
+        dailyTargetMinutes: 120,
+        leftTodayMinutes: 55,
+      });
+      expect(
+        await listFor({ date: SUMMARY_DAY, endDate: SUMMARY_DAY }),
+      ).toMatchObject({ leftTodayMinutes: 55 });
+      const week = Temporal.PlainDate.from(SUMMARY_DAY)
+        .add({ days: 6 })
+        .toString();
+      expect(await listFor({ date: SUMMARY_DAY, endDate: week })).toMatchObject(
+        { dailyTargetMinutes: 120, leftTodayMinutes: null },
+      );
     });
   });
 

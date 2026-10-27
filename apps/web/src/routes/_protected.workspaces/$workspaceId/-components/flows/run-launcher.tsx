@@ -31,8 +31,8 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FLOW_PICKER_LIMIT, flowsOptions } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { entitySummariesOptions } from "@/lib/workspaces/queries/entities";
 import { flowRunsKeys } from "@/lib/workspaces/queries/flow-runs";
 
@@ -66,7 +66,7 @@ export const RunLauncher = ({
   const flowsDataQuery = useQuery(
     flowsOptions(organizationId, FLOW_PICKER_LIMIT),
   );
-  const flowsDataView = useQueryView(flowsDataQuery, {
+  const flowsDataView = queryView(flowsDataQuery, {
     isEmpty: (data) => "items" in data && data.items.length === 0,
   });
   const flowsData =

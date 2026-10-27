@@ -1219,7 +1219,7 @@
     "apps/api/src/lib/views/table-export.ts": 1,
     "apps/api/src/lib/views/template-properties.ts": 1,
     "apps/extension/src/lib/tab-executor.ts": 1,
-    "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts": 2,
+    "apps/web/src/lib/pdf/page-editor/page-editor-transform.ts": 1,
     "apps/web/src/lib/render-storm-canary.ts": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema.ts": 1,
     "apps/web/src/routes/knowledge/-components/clause-editor-tiptap.ts": 1,

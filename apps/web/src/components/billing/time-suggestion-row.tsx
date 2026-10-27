@@ -4,6 +4,7 @@ import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
+import { typedCharacter } from "@stll/ui/typed-character";
 
 import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
 import {
@@ -59,16 +60,25 @@ export const TimeSuggestionRow = ({
   return (
     <li className="flex min-h-14 items-center gap-3 rounded-lg border px-3 py-2">
       <button
-        aria-keyshortcuts="Enter E Delete"
+        aria-keyshortcuts="Enter E Delete Backspace"
         aria-label={timeEntryActionLabel(tCommon("accept"), narrative)}
         className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 rounded-md text-start outline-none focus-visible:ring-2 disabled:opacity-50"
         disabled={busy}
         onClick={() => onAccept(suggestion, narrative)}
         onKeyDown={(event) => {
-          if (event.key === "e" || event.key === "E") {
+          // A held key never dismisses more than one suggestion.
+          if (event.repeat) {
+            return;
+          }
+          const character = typedCharacter(event.nativeEvent);
+          // Modified deletes stay with the browser and assistive technology.
+          const plainDelete =
+            (event.key === "Delete" || event.key === "Backspace") &&
+            !(event.altKey || event.ctrlKey || event.metaKey);
+          if (character === "e" || character === "E") {
             event.preventDefault();
             onEdit(suggestion, narrative);
-          } else if (event.key === "Delete" || event.key === "Backspace") {
+          } else if (plainDelete) {
             event.preventDefault();
             onDismiss(suggestion);
           }

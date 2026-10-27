@@ -79,6 +79,8 @@ const draftEntry = (overrides: Partial<ClientEntry> = {}): ClientEntry =>
     ...overrides,
   }) satisfies ClientEntry;
 
+const THREAD_TITLE = "Indemnity cap";
+
 const suggestion = {
   fingerprint: "a".repeat(64),
   startedAt: `${MONDAY}T09:00:00.000Z`,
@@ -92,7 +94,7 @@ const suggestion = {
     {
       type: "chat_thread",
       id: "thread-1",
-      title: "Indemnity cap",
+      title: THREAD_TITLE,
       messageCount: 2,
       signals: [
         {
@@ -122,6 +124,9 @@ type ApiCall = {
  * personal entry range with its per-day totals, the suggestion range, a
  * decision (an accept creates the entry), and an entry update.
  */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const serveWeek = ({
   entries,
   suggestions,
@@ -235,7 +240,10 @@ const serveWeek = ({
       });
     }
     group.items = group.items.filter((item) => item !== decided);
-    const decision = body["decision"] as Record<string, unknown>;
+    const decisionInput = body["decision"];
+    const decision: Record<string, unknown> = isRecord(decisionInput)
+      ? decisionInput
+      : {};
     if (decision["type"] !== "accept") {
       return json({
         fingerprint: decided.fingerprint,
@@ -250,7 +258,8 @@ const serveWeek = ({
       workspaceReference: group.matter.reference,
       dateWorked: group.date,
       durationMinutes: Number(decision["durationMinutes"]),
-      narrative: String(decision["narrative"]),
+      narrative:
+        typeof decision["narrative"] === "string" ? decision["narrative"] : "",
       billable:
         typeof decision["billable"] === "boolean"
           ? decision["billable"]
@@ -303,7 +312,10 @@ const serveWeek = ({
       durationMinutes: Number(
         body["durationMinutes"] ?? current.durationMinutes,
       ),
-      narrative: String(body["narrative"] ?? current.narrative),
+      narrative:
+        typeof body["narrative"] === "string"
+          ? body["narrative"]
+          : current.narrative,
       billable:
         typeof body["billable"] === "boolean"
           ? body["billable"]
@@ -341,14 +353,15 @@ const serveWeek = ({
       }
       const decision =
         /^\/time-entries\/([^/]+)\/suggestions\/decisions$/u.exec(path);
-      if (request.method === "POST" && decision?.[1]) {
-        return decide(decision[1], body as Record<string, unknown>);
+      if (request.method === "POST" && decision?.[1] && isRecord(body)) {
+        return decide(decision[1], body);
       }
       if (
         request.method === "PATCH" &&
-        /^\/time-entries\/[^/]+\/?$/u.test(path)
+        /^\/time-entries\/[^/]+\/?$/u.test(path) &&
+        isRecord(body)
       ) {
-        return update(body as Record<string, unknown>);
+        return update(body);
       }
       if (
         request.method === "POST" &&
@@ -423,7 +436,7 @@ const weekTotalsText = (logged: string, billable: string) =>
     .replace("{logged}", () => logged)
     .replace("{billable}", () => billable);
 
-const acceptLabel = `${messages.common.accept}: ${suggestion.evidence[0]?.title}`;
+const acceptLabel = `${messages.common.accept}: ${THREAD_TITLE}`;
 
 describe("my week", () => {
   test("moves between weeks and loads each week's entries and suggestions", async () => {
@@ -512,10 +525,11 @@ describe("my week", () => {
         type: "accept",
         durationMinutes: 15,
         narrative: "Indemnity cap",
+        // The billability the row showed is sent, so a later change to the
+        // matter's default cannot flip the logged entry.
+        billable: true,
       },
     });
-    // Billability left as suggested is the server's call, never sent.
-    expect(decision?.body).not.toHaveProperty("decision.billable");
   });
 
   test("editing a draft entry saves it in its matter and updates the totals", async () => {

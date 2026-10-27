@@ -267,6 +267,7 @@ const createProposalFromComments = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not apply the comments. Please try again.",
           cause,
         });
@@ -281,6 +282,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill was empty. Please try again.",
         }),
       );
@@ -289,6 +291,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The revised skill exceeds the maximum size.",
         }),
       );
@@ -302,6 +305,7 @@ const createProposalFromComments = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message:
             "The revised skill dropped or altered its frontmatter. Please try again.",
         }),

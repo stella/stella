@@ -151,9 +151,9 @@ export const PersonalTimesheetDay = ({
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
           narrativeLanguage: values.narrativeLanguage,
-          ...(values.billable === suggestion.billableByDefault
-            ? {}
-            : { billable: values.billable }),
+          // The value the form showed, even when it was the default, so a
+          // rate change while the form is open cannot flip it.
+          billable: values.billable,
         },
       });
     } finally {
