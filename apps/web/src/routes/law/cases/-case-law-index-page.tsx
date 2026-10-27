@@ -66,7 +66,6 @@ import {
   caseLawPageNumber,
   caseLawPageRest,
 } from "@/features/case-law/case-law-pages.logic";
-import { caseLawResultsFeedback } from "@/features/case-law/components/case-law-filter-notice";
 import {
   CaseLawAutoRewrite,
   RewrittenSearchLine,
@@ -132,6 +131,7 @@ import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { isSearchUnavailableError } from "@/lib/public-law-api";
 
+import { caseLawResultsFeedback } from "./-case-law-filter-notice";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
 

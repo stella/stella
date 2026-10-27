@@ -20,7 +20,7 @@ const { act, cleanup, fireEvent, render, screen } =
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
-const { CaseLawFilterNotice } = await import("./case-law-filter-notice");
+const { CaseLawFilterNotice } = await import("./-case-law-filter-notice");
 
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());

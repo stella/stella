@@ -170,10 +170,11 @@ export const Route = createFileRoute("/law/cases/")({
         validation,
       });
       if (correctedSearch !== null) {
-        throw redirect({
+        redirect({
           to: "/law/cases",
           search: correctedSearch,
           replace: true,
+          throw: true,
         });
       }
     }
@@ -185,10 +186,11 @@ export const Route = createFileRoute("/law/cases/")({
       search.country === undefined &&
       !hasActiveCaseLawFilter(search)
     ) {
-      throw redirect({
+      redirect({
         to: "/law",
         search: { country: countryParam },
         replace: true,
+        throw: true,
       });
     }
 
@@ -254,10 +256,11 @@ export const Route = createFileRoute("/law/cases/")({
     }
     const page = publicLawPageSearchValue(reached);
     if (search.country !== countryParam || search.page !== page) {
-      throw redirect({
+      redirect({
         to: "/law/cases",
         search: { ...search, country: countryParam, page },
         replace: true,
+        throw: true,
       });
     }
   },

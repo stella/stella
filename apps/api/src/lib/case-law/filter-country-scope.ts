@@ -60,7 +60,7 @@ type ReadCaseLawFilterScopeOptions = {
   country: string;
   filters: CaseLawScopedFilters;
   caseLawDb: CaseLawPublicReadDb;
-  courts?: readonly string[];
+  courts?: readonly string[] | undefined;
 };
 
 /** Each facet is checked independently: an empty intersection does not invalidate it. */
