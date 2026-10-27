@@ -674,6 +674,17 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
+export type CheckLog =
+  { type: "output"; output: string } | { type: "no-output"; output: "" };
+
+/** Read a completed check's log without turning absent output into a pool crash. */
+export const readCheckLog = (directory: string, index: number): CheckLog => {
+  const file = logPath(directory, index);
+  return existsSync(file)
+    ? { type: "output", output: readFileSync(file, "utf-8") }
+    : { type: "no-output", output: "" };
+};
+
 const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
 const CANCELLATION_LOG_TAIL_LINES = 40;
 const CANCELLATION_LOG_TOTAL_BYTES = 64 * 1024;
@@ -1365,7 +1376,7 @@ const main = async () => {
       print(`::group::${result.name}: ${label} in ${seconds(result.seconds)}`);
       const output =
         planned[index]?.status === "selected"
-          ? readFileSync(logPath(directory, index), "utf-8")
+          ? readCheckLog(directory, index).output
           : "";
       if (planned[index]?.status === "selected") {
         const text = checkLogText(output, result.outcome);

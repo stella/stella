@@ -84,6 +84,10 @@
       "p95Seconds": 24,
       "p99Seconds": 24
     },
+    "Guard rollout scope tests": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Dated waiver lifecycle guards": {
       "minutes": 5,
       "samples": 19,

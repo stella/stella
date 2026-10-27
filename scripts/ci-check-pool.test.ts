@@ -38,6 +38,7 @@ import {
   processTree,
   procStatRow,
   psSeconds,
+  readCheckLog,
   resolveEnv,
   runChecks,
   runnerWorkerStartedAt,
@@ -473,6 +474,34 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
       },
     ),
   );
+});
+
+test("a selected check without a log reports typed no output", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-no-log-"));
+  const planned: PlannedCheck[] = [
+    {
+      check: check("fails before opening its log"),
+      status: "selected",
+      env: {},
+      continueOnError: false,
+    },
+  ];
+  let reportedLog: ReturnType<typeof readCheckLog> | undefined;
+  try {
+    await runChecks({
+      planned,
+      concurrency: 1,
+      launch: async () => {
+        throw new Error("launch failed");
+      },
+      report: (index) => {
+        reportedLog = readCheckLog(directory, index);
+      },
+    });
+    expect(reportedLog).toEqual({ type: "no-output", output: "" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("a launched check runs as a bash step with its env, output and timeout", async () => {
