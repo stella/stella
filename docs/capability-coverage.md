@@ -93,6 +93,13 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `clauses.versions.restore` | write | stella:knowledge_write | — | generic invoke → `stella capability clauses versions-restore` |
 | `clauses.versions.summarize` | write | stella:knowledge_write | — | generic invoke → `stella capability clauses versions-summarize` |
 
+## client-invoices
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `client-invoices.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices create` |
+| `client-invoices.prefill` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability client-invoices prefill` |
+
 ## contacts
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -545,6 +552,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.get` | read | stella:read | — | covered by `list_tasks` |
+| `tasks.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.update` | write | stella:matters_write | — | covered by `save_task` |
 
 ## template-packs
@@ -629,6 +637,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_time_entries` |
 | `time-entries.me.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-daily-target-update` |
 | `time-entries.me.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-list` |
+| `time-entries.me.submissions.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-submissions-create` |
+| `time-entries.me.suggestions.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-suggestions-list` |
 | `time-entries.members.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries members-daily-target-update` |
 | `time-entries.pdf.export` | read | stella:read | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
 | `time-entries.split` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split` |
@@ -714,7 +724,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 34 |
+| auth_plumbing | 35 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |

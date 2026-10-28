@@ -51,6 +51,7 @@ import { useDecisionColumnPreferences } from "@/features/case-law/decision-colum
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -69,10 +70,11 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
@@ -315,7 +317,7 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
+  const shelfView = queryView(shelfQuery);
   useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
@@ -517,9 +519,9 @@ function LawHome() {
               })}
               to="/law/$country/statutes/$slug"
             >
-              <LandingItemText
+              <StatuteSignalText
                 meta={signalLine(side, item.versionValidFrom)}
-                title={item.title}
+                statute={item}
               />
             </Link>
           ))

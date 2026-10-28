@@ -76,6 +76,11 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                     />
                   </span>
                   <DocumentIdentityBadge identity={trail.identity} />
+                  {trail.citation !== null && (
+                    <BidiText as="span" className="shrink-0 whitespace-normal">
+                      {trail.citation}
+                    </BidiText>
+                  )}
                   {trail.shortTitle !== null && (
                     <BidiText as="span" className="min-w-0 truncate">
                       {trail.shortTitle}

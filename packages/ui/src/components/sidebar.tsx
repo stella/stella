@@ -8,7 +8,7 @@ import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 
 import { useIsMobile } from "../hooks/use-mobile";
-import { PanelLeftIcon } from "../icons";
+import { PanelLeftIcon, PanelRightIcon } from "../icons";
 import { Slot } from "../lib/slot";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
@@ -333,35 +333,69 @@ const Sidebar = ({
   );
 };
 
-const SidebarTrigger = ({
-  className,
-  onClick,
-  label = DEFAULT_TOGGLE_LABEL,
+type PanelTriggerSide = "left" | "right";
+
+const PANEL_TRIGGER_ICONS = {
+  left: PanelLeftIcon,
+  right: PanelRightIcon,
+} as const satisfies Record<PanelTriggerSide, typeof PanelLeftIcon>;
+
+/**
+ * Toolbar toggle for a panel docked at one edge. `SidebarTrigger` is the
+ * `"left"` one; a host panel docked at the opposite edge (an inspector)
+ * renders the `"right"` one, so the two buttons stay mirror images instead
+ * of two hand-kept copies of the same chrome. `side` is logical, like
+ * `Sidebar`'s.
+ */
+const PanelTrigger = ({
+  side,
+  label,
   "aria-label": ariaLabel,
   ...props
-}: React.ComponentProps<typeof Button> & {
+}: Omit<React.ComponentProps<typeof Button>, "children"> & {
+  side: PanelTriggerSide;
+  /** Accessible name for the trigger. */
+  label: string;
+}) => {
+  const Icon = PANEL_TRIGGER_ICONS[side];
+
+  return (
+    <Button
+      aria-label={ariaLabel ?? label}
+      data-slot="panel-trigger"
+      size="icon"
+      variant="ghost"
+      {...props}
+      className={cn("size-7", props.className)}
+    >
+      <Icon />
+      <span className="sr-only">{label}</span>
+    </Button>
+  );
+};
+
+const SidebarTrigger = ({
+  onClick,
+  label = DEFAULT_TOGGLE_LABEL,
+  ...props
+}: Omit<React.ComponentProps<typeof PanelTrigger>, "label" | "side"> & {
   /** Accessible name for the trigger. Override to localize. */
   label?: string;
 }) => {
   const { toggleSidebar } = useSidebar();
 
   return (
-    <Button
-      aria-label={ariaLabel ?? label}
-      className={cn("size-7", className)}
+    <PanelTrigger
       data-sidebar="trigger"
       data-slot="sidebar-trigger"
+      label={label}
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
       }}
-      size="icon"
-      variant="ghost"
       {...props}
-    >
-      <PanelLeftIcon />
-      <span className="sr-only">{label}</span>
-    </Button>
+      side="left"
+    />
   );
 };
 
@@ -826,6 +860,7 @@ const SidebarMenuSubButton = ({
 };
 
 export {
+  PanelTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,

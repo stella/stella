@@ -11,6 +11,7 @@ export const SCHEDULER_BACKFILL_CONFIG = {
 };
 
 export const SCHEDULER_BACKFILL_IDS = {
+  coverage: "caseLaw.refreshCoverage.fiveMinute",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",

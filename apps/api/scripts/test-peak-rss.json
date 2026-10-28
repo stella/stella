@@ -16912,14 +16912,6 @@
         "job": "measure-2"
       }
     },
-    "src/lib/oauth-cli-client-document.db.test.ts": {
-      "peakMb": 1226,
-      "baselineMb": 218,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-3"
-      }
-    },
     "src/lib/oauth-client-id-metadata-document.db.test.ts": {
       "peakMb": 970,
       "baselineMb": 202,
@@ -16958,6 +16950,14 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-2"
+      }
+    },
+    "src/lib/oauth-native-client-documents.db.test.ts": {
+      "peakMb": 1256,
+      "baselineMb": 211,
+      "source": {
+        "runId": "39090756337",
+        "job": "measure-3"
       }
     },
     "src/lib/oauth-native-consent.db.test.ts": {

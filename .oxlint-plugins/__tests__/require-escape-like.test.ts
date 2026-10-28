@@ -31,18 +31,31 @@ query\`\${col} LIKE '%' || \${q} || '%'\`;`,
   ).toEqual([2, 3]);
 });
 
-test("accepts canonical escaped patterns including wrapper calls and relative ownership", async () => {
+test("accepts canonical escaped patterns including SQL-side escapes and relative ownership", async () => {
   expect(
     await lintSingleRule(
       "require-escape-like",
       `import { ilike, sql } from "drizzle-orm";
-import { escapeLike as escape } from "../lib/escape-like";
+import { escapeLike as escape, escapeLikeSql } from "../lib/escape-like";
 const safe = escape(q);
 ilike(col, \`%\${safe}%\`);
-sql\`\${col} LIKE \${fold(escape(q))} || '%'\`;`,
+sql\`\${col} LIKE \${escapeLikeSql(fold(q))} || '%'\`;`,
       { sourcePath: "apps/api/src/handlers/search.ts", cwd: "scratch" },
     ),
   ).toEqual([]);
+});
+
+test("rejects a value folded after it was escaped", async () => {
+  // A fold such as unaccent turns full-width ％ into %, after the escape ran.
+  expect(
+    await lintSingleRule(
+      "require-escape-like",
+      `import { sql } from "drizzle-orm";
+import { escapeLike } from "../lib/escape-like";
+sql\`\${col} LIKE \${fold(escapeLike(q))} || '%'\`;`,
+      { sourcePath: "apps/api/src/handlers/search.ts", cwd: "scratch" },
+    ),
+  ).toEqual([3]);
 });
 
 test("does not trust same-named helpers from the wrong module", async () => {
