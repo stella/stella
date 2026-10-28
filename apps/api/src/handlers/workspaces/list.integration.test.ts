@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -64,7 +65,7 @@ const listWorkspacesAs = async ({
   const result = await readWorkspaces.handler(
     asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces",
+      route: "/v1/workspaces" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
       session: { activeOrganizationId: organizationId },

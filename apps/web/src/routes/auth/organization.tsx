@@ -60,7 +60,9 @@ import {
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
+import { queryView } from "@/lib/query-view.logic";
 import {
+  destinationNavigation,
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
   onboardingNavigation,
@@ -70,7 +72,6 @@ import {
   schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 
 const searchSchema = routeSearchSchema({
@@ -120,7 +121,7 @@ export const Route = createFileRoute("/auth/organization")({
       (context.session.activeOrganizationId ||
         isAcceptInvitationRedirect(search.redirectTo ?? "/"))
     ) {
-      throw redirect({ to: search.redirectTo ?? "/", replace: true });
+      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
     }
 
     return { isOauthPostLoginFromSearch, userId: context.session.userId };
@@ -170,9 +171,7 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
-  const organizationView = useQueryView(
-    useQuery(organizationListOptions(userId)),
-  );
+  const organizationView = queryView(useQuery(organizationListOptions(userId)));
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
@@ -290,7 +289,7 @@ const completeOrganizationFlow = async ({
   await refreshAuthQueries(queryClient);
 
   if (!isOauthPostLogin) {
-    await navigate({ to: redirectTo, replace: true });
+    await navigate(destinationNavigation(redirectTo));
     return;
   }
 

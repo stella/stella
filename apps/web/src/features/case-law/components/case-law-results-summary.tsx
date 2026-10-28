@@ -1,15 +1,17 @@
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_TOTAL_TYPE, type SearchTotal } from "@stll/api-contract/search";
 import { cn } from "@stll/ui/utils";
 
+import { DECISION_LIST_HEADING_KEYS } from "@/features/case-law/decision-order.logic";
+import type { DecisionOrder } from "@/features/case-law/decision-order.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type CaseLawResultsSummaryProps = {
   exactCount: number;
-  intent: DecisionQueryIntent;
+  /** The result set shown and its order, which a listing's heading names. */
+  order: DecisionOrder;
   /** The count still answers the previous search; say so without hiding it. */
   isRefreshing: boolean;
   page: number;
@@ -34,7 +36,7 @@ export const CaseLawResultsSummary = ({
 
 const CaseLawResultsSummaryText = ({
   exactCount,
-  intent,
+  order,
   page,
   relaxedHitCount = 0,
   total,
@@ -42,16 +44,16 @@ const CaseLawResultsSummaryText = ({
   const t = useTranslations();
   const format = useFormatter();
 
-  if (intent.type === "empty") {
+  if (order.type === "browse") {
     return (
       <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {page > 1
           ? t("common.page", { page: format.number(page) })
-          : t("caseLaw.newestDecisions")}
+          : t(DECISION_LIST_HEADING_KEYS[order.sort])}
       </h2>
     );
   }
-  if (intent.type === "identifier" && exactCount > 1) {
+  if (order.type === "identity" && exactCount > 1) {
     return (
       <p className="text-xs">
         {t("caseLaw.sameCaseNumber", { count: exactCount })}

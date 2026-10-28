@@ -522,6 +522,11 @@ pub fn run() {
     });
 }
 
+/// The settings window's size. The browser harness reads these lines and
+/// renders the window at this size (`tests/desktop-window-sizes.ts`).
+const SETTINGS_WINDOW_WIDTH: f64 = 480.0;
+const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
+
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
@@ -536,12 +541,12 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
 
   let builder = crate::app_window::builder(handle, "main", "index.html")
     .title("stella desktop")
-    .inner_size(480.0, 460.0)
+    .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .resizable(false);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,
-    tauri::LogicalSize::new(480.0, 460.0),
+    tauri::LogicalSize::new(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT),
   );
 
   #[cfg(target_os = "macos")]

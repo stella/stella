@@ -120,6 +120,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,7 +173,7 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}" main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::Release tag $REF is not reachable from protected main"
             exit 1
@@ -625,8 +626,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:

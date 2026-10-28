@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -12,6 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -26,6 +27,10 @@ import {
   createRemoveWorkspaceMember,
   removeWorkspaceMemberHandler,
 } from "./remove";
+
+beforeEach(() => {
+  revokeWorkspaceSseAccessMock.mockClear();
+});
 
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const removeWorkspaceMember = createRemoveWorkspaceMember({
@@ -63,7 +68,7 @@ const createContext = ({
     managedAIResidency: "eu" as const,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/members/:userId",
+    route: "/v1/workspaces/:workspaceId/members/:userId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },
@@ -141,7 +146,7 @@ describe("removeWorkspaceMember", () => {
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+            where: createSelectQueryMock([]).from().where,
             innerJoin: () => ({
               where: () => ({ as: () => ({}) }),
             }),

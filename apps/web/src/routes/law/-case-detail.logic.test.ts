@@ -10,7 +10,10 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { decisionBySlugOptions } from "@/features/case-law/queries/decisions";
+import {
+  decisionBySlugOptions,
+  decisionOptions,
+} from "@/features/case-law/queries/decisions";
 import { createPublicLawHead } from "@/lib/public-law-seo";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -276,6 +279,117 @@ describe("canonical decision redirect", () => {
       options: { params: { slug: "synthetic-decision" } },
     });
     expect(redirected).not.toHaveProperty("options.hash");
+  });
+});
+
+describe("pre-transliteration path redirect", () => {
+  const POLISH_COUNTRY =
+    publicCaseLawCountry("POL") ?? panic("Expected Poland to be public.");
+  const DECISION_ID = toSafeId<"caseLawDecision">(
+    "019dd47d-f507-7c84-b827-980af11b8980",
+  );
+  const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
+  const LODZ_DECISION = {
+    ...PUBLISHED_DECISION,
+    caseNumber: "III SA/Łd 223/21",
+    country: POLISH_COUNTRY,
+    court: "Wojewódzki Sąd Administracyjny w Łodzi",
+    id: DECISION_ID,
+    // Minted under the old fold and stored, so it stays the canonical slug.
+    slug: "iii-sa-d-223-21",
+  } satisfies DecisionBySlug;
+  const NEW_COURT = "wojewodzki-sad-administracyjny-w-lodzi";
+  const OLD_COURT = "wojewodzki-sad-administracyjny-w-odzi";
+
+  const bySlugClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(
+      decisionBySlugOptions({
+        country: POLISH_COUNTRY,
+        slug: LODZ_DECISION.slug,
+      }).queryKey,
+      LODZ_DECISION,
+    );
+    return queryClient;
+  };
+
+  const byIdClient = () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(decisionOptions(DECISION_ID).queryKey, {
+      ...LODZ_DECISION,
+      slug: null,
+    });
+    return queryClient;
+  };
+
+  const redirectOf = async (
+    params: { country: string; court: string; slug: string },
+    queryClient: QueryClient,
+  ): Promise<unknown> =>
+    await loadPublicCaseLawDecisionRoute({
+      hash: "",
+      params,
+      queryClient,
+      search: {},
+    }).then(
+      () => panic("Expected the path to redirect."),
+      (error: unknown) => error,
+    );
+
+  test("moves the old court segment permanently to the new one", async () => {
+    const redirected = await redirectOf(
+      { country: "pol", court: OLD_COURT, slug: LODZ_DECISION.slug },
+      bySlugClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: {
+        to: "/law/$country/cases/$court/$slug",
+        params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
+        statusCode: 308,
+      },
+    });
+    // Built from route params alone, so the target stays on this origin.
+    expect(redirected).not.toHaveProperty("options.href");
+  });
+
+  test("moves the old id-form prefix permanently to the new one", async () => {
+    const redirected = await redirectOf(
+      {
+        country: "pol",
+        court: OLD_COURT,
+        slug: `iii-sa-d-223-21--${COMPACT_DECISION_ID}`,
+      },
+      byIdClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: {
+        params: {
+          court: NEW_COURT,
+          slug: `iii-sa-ld-223-21--${COMPACT_DECISION_ID}`,
+        },
+        statusCode: 308,
+      },
+    });
+  });
+
+  test("keeps a temporary redirect for a path the old fold never published", async () => {
+    const redirected = await redirectOf(
+      { country: "pol", court: "some-other-court", slug: LODZ_DECISION.slug },
+      bySlugClient(),
+    );
+    expect(redirected).toMatchObject({
+      options: { params: { court: NEW_COURT }, statusCode: 307 },
+    });
+  });
+
+  test("serves the new path without a redirect", async () => {
+    const decision = await loadPublicCaseLawDecisionRoute({
+      hash: "",
+      params: { country: "pol", court: NEW_COURT, slug: LODZ_DECISION.slug },
+      queryClient: bySlugClient(),
+      search: {},
+    });
+    expect(decision.id).toBe(DECISION_ID);
   });
 });
 

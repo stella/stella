@@ -12,8 +12,8 @@ describe("browser runtime lexical bindings", () => {
     "{ const [fetch] = services; } fetch('/data');",
     "for (const fetch of services) {} fetch('/data');",
     "function read() { var fetch = load; } fetch('/data');",
-  ])("reports network as unavailable for a global call: %s", (source) => {
-    expect(inspectBrowserRuntimeSafety(source)).toEqual({
+  ])("reports network as unavailable for a global call: %s", async (source) => {
+    expect(await inspectBrowserRuntimeSafety(source)).toEqual({
       problems: ["network is unavailable"],
       templateWrites: 0,
     });
@@ -30,8 +30,8 @@ describe("browser runtime lexical bindings", () => {
     "function read() { { var fetch = load; } fetch('/data'); }",
     "const fetch = read; function render() { fetch('/data'); }",
     "function fetch() {} fetch('/data');",
-  ])("accepts calls to a visible local binding: %s", (source) => {
-    expect(inspectBrowserRuntimeSafety(source)).toEqual({
+  ])("accepts calls to a visible local binding: %s", async (source) => {
+    expect(await inspectBrowserRuntimeSafety(source)).toEqual({
       problems: [],
       templateWrites: 0,
     });
@@ -46,8 +46,8 @@ describe("browser runtime lexical bindings", () => {
     "const t = document.createElement('template'); { const { t } = nodes; t.innerHTML = 'x'; }",
     "const t = document.createElement('template'); { const [t] = nodes; t.innerHTML = 'x'; }",
     "const t = document.createElement('template'); for (const t of nodes) { t.innerHTML = 'x'; }",
-  ])("requires the visible receiver to be a template: %s", (source) => {
-    expect(inspectBrowserRuntimeSafety(source)).toEqual({
+  ])("requires the visible receiver to be a template: %s", async (source) => {
+    expect(await inspectBrowserRuntimeSafety(source)).toEqual({
       problems: ["markup outside template parsing"],
       templateWrites: 1,
     });
@@ -60,8 +60,8 @@ describe("browser runtime lexical bindings", () => {
     "const t = document.createElement('template'); try {} catch (error) { t.innerHTML = 'x'; }",
     "function parse() { { var t = document.createElement('template'); } t.innerHTML = 'x'; }",
     "const t = document.createElement('template'); { const t = document.createElement('div'); } t.innerHTML = 'x';",
-  ])("accepts the visible template receiver: %s", (source) => {
-    expect(inspectBrowserRuntimeSafety(source)).toEqual({
+  ])("accepts the visible template receiver: %s", async (source) => {
+    expect(await inspectBrowserRuntimeSafety(source)).toEqual({
       problems: [],
       templateWrites: 1,
     });
