@@ -196,6 +196,17 @@ describe("provision citation grammars", () => {
     ]);
   });
 
+  test.each([
+    "300/2005 Z. z.",
+    "300/2005 Z.z.",
+    "300/2005 Z. z.",
+    "300/2005 Z.  z.",
+  ])("Slovak gazette collections read any spacing: %p", (text) => {
+    expect(locateGazetteCitations(text).map(({ eli }) => eli)).toEqual([
+      "https://www.slov-lex.sk/eli/sk/zz/2005/300",
+    ]);
+  });
+
   test("located spans are the printed provisions, not the chain", () => {
     const text = "podle § 60 odst. 3 ve spojení s § 120 s. ř. s.";
 

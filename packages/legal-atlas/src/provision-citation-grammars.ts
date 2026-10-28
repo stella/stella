@@ -668,6 +668,27 @@ export const createProvisionCitationGrammar = <
   };
 };
 
+/**
+ * Pattern for a printed spelling whose spaces admit any whitespace run, or
+ * none after a period ("Z. z." also reads "Z.z." and "Z.&nbsp;z."). Split
+ * before escaping: `RegExp.escape` encodes spaces as `\x20`.
+ */
+const spacedSpellingSource = (spelling: string): string => {
+  const words = spelling.split(/\s+/u);
+  return words
+    .map((word, index) => {
+      let gap = "";
+      if (index > 0) {
+        gap =
+          words.at(index - 1)?.endsWith(".") === true
+            ? String.raw`\s*`
+            : String.raw`\s+`;
+      }
+      return `${gap}${RegExp.escape(word)}`;
+    })
+    .join("");
+};
+
 /** A date-free reader links only aliases that never name another act. */
 const profileAbbreviations = (
   profile: JurisdictionProfile,
@@ -700,24 +721,11 @@ const profileAbbreviations = (
     if (eli === undefined) {
       return [];
     }
-    const words = spelling.split(/\s+/u);
-    const patternSource = words
-      .map((word, index) => {
-        let gap = "";
-        if (index > 0) {
-          gap =
-            words.at(index - 1)?.endsWith(".") === true
-              ? String.raw`\s*`
-              : String.raw`\s+`;
-        }
-        return `${gap}${RegExp.escape(word)}`;
-      })
-      .join("");
     return [
       {
         canonicalAbbreviation: spelling,
         eli,
-        patternSource: `${patternSource}(?![\\p{L}\\p{N}])`,
+        patternSource: `${spacedSpellingSource(spelling)}(?![\\p{L}\\p{N}])`,
         caseSensitive: true,
       },
     ];
@@ -865,9 +873,7 @@ export const PROVISION_CITATION_GRAMMARS = {
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?<collection>${SK_PROFILE.collections
         .flatMap(({ spellings }) => spellings)
         .toSorted((left, right) => right.length - left.length)
-        .map((spelling) =>
-          RegExp.escape(spelling).replaceAll(" ", () => String.raw`\s*`),
-        )
+        .map(spacedSpellingSource)
         .join("|")})(?![\p{L}\p{N}/]|\.+[\p{L}\p{N}/])`,
     },
     jurisdiction: SK_PROFILE.jurisdiction,
