@@ -538,19 +538,14 @@ export const createApprovalHarness = ({
       url: "http://localhost/v1/chat",
     });
     if (sources.contextMatterIds !== undefined) {
-      // The matters the page's context names, as its composer sends them
-      // (TanStack mirrors the forwarded props as `data`).
+      // The matters the page's context names, as its composer sends them.
       const contextMatterIds = [...sources.contextMatterIds];
       Object.assign(body.forwardedProps, { contextMatterIds });
-      Object.assign(body.data, { contextMatterIds });
     }
     if (user?.context !== undefined) {
       // The profile the page sends with every message.
       const userContext = { ...user.context };
       Object.assign(body.forwardedProps, { userContext });
-      if (typeof body.data === "object") {
-        Object.assign(body.data, { userContext });
-      }
     }
     const ctx = asTestRaw<SendMessageCtx>({
       body,

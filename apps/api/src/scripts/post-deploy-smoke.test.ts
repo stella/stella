@@ -382,7 +382,7 @@ describe("buildChatSmokeBody", () => {
       sendMode: "rawOverride",
       message,
     });
-    expect(body.data).toEqual(body.forwardedProps);
+    expect(body).not.toHaveProperty("data");
     expect(body.messages).toEqual([message]);
     expect(message.role).toBe("user");
     expect(message.id).toMatch(uuid);
