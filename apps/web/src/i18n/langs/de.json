@@ -4521,7 +4521,8 @@
       "flowRunFailed": "Workflow <bdi>{flowName}</bdi> fehlgeschlagen",
       "mention": "<bdi>{actorName}</bdi> hat Sie in einem Kommentar erwähnt",
       "reportExportFailed": "Ihr Berichtsexport ist fehlgeschlagen",
-      "reportExportSucceeded": "Ihr Bericht ist bereit"
+      "reportExportSucceeded": "Ihr Bericht ist bereit",
+      "taskAssigned": "<bdi>{actorName}</bdi> hat Ihnen eine Aufgabe zugewiesen"
     },
     "loadOlder": "Ältere laden",
     "markAllRead": "Alle als gelesen markieren",

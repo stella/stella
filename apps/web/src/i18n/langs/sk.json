@@ -4521,7 +4521,8 @@
       "flowRunFailed": "Pracovný postup <bdi>{flowName}</bdi> zlyhal",
       "mention": "<bdi>{actorName}</bdi> vás spomenul v komentári",
       "reportExportFailed": "Export správy zlyhal",
-      "reportExportSucceeded": "Vaša správa je pripravená"
+      "reportExportSucceeded": "Vaša správa je pripravená",
+      "taskAssigned": "<bdi>{actorName}</bdi> vám priradil úlohu"
     },
     "loadOlder": "Načítať staršie",
     "markAllRead": "Označiť všetko ako prečítané",

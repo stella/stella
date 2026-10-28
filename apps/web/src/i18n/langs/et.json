@@ -4521,7 +4521,8 @@
       "flowRunFailed": "Töövoog <bdi>{flowName}</bdi> ebaõnnestus",
       "mention": "<bdi>{actorName}</bdi> mainis teid kommentaaris",
       "reportExportFailed": "Aruande eksportimine ebaõnnestus",
-      "reportExportSucceeded": "Teie aruanne on valmis"
+      "reportExportSucceeded": "Teie aruanne on valmis",
+      "taskAssigned": "<bdi>{actorName}</bdi> määras teile ülesande"
     },
     "loadOlder": "Laadi vanemad",
     "markAllRead": "Märgi kõik loetuks",

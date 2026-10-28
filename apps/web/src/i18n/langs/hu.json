@@ -4521,7 +4521,8 @@
       "flowRunFailed": "A(z) <bdi>{flowName}</bdi> munkafolyamat sikertelen",
       "mention": "<bdi>{actorName}</bdi> megemlítette Önt egy hozzászólásban",
       "reportExportFailed": "A jelentés exportálása sikertelen",
-      "reportExportSucceeded": "A jelentése elkészült"
+      "reportExportSucceeded": "A jelentése elkészült",
+      "taskAssigned": "<bdi>{actorName}</bdi> feladatot osztott ki Önnek"
     },
     "loadOlder": "Régebbiek betöltése",
     "markAllRead": "Összes megjelölése olvasottként",
