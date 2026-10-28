@@ -9,6 +9,7 @@ set -euo pipefail
 
 readonly workflow="deploy-staging.yml"
 readonly applying_step="Deploy to staging"
+readonly owner_step="Wait for the current staging owner"
 mode="${STAGING_OWNER_MODE:?STAGING_OWNER_MODE is required}"
 interval="${STAGING_OWNER_INTERVAL_SECONDS:-30}"
 
@@ -34,10 +35,14 @@ ordinary_promote_busy() {
   runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=in_progress&per_page=100" --jq \
     ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Deploy main to staging \")) | .id")" ||
     read_failed
+  # An ordinary promote owns staging from the moment its owner step succeeds
+  # until its deploy step completes, including while that step is queued or
+  # not listed yet. One still waiting in its owner step is parked behind this
+  # candidate, and one with no steps yet will park there: neither owns it.
   while IFS= read -r run_id; do
     [[ -n "$run_id" ]] || continue
     jobs="$(api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" --jq \
-      ".jobs[] | select(.name == \"Promote staging images\") | select(any(.steps[]; .name == \"${applying_step}\" and .status == \"in_progress\")) | .id")" ||
+      ".jobs[] | select(.name == \"Promote staging images\") | (.steps // []) as \$steps | select(any(\$steps[]; .name == \"${applying_step}\" and .status == \"in_progress\") or (any(\$steps[]; .name == \"${owner_step}\" and .status == \"completed\" and .conclusion == \"success\") and all(\$steps[]; .name != \"${applying_step}\" or .status != \"completed\"))) | .id")" ||
       read_failed
     [[ -z "$jobs" ]] || return 0
   done <<<"$runs"

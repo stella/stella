@@ -118,6 +118,78 @@ describe("staging promotion ownership", () => {
     );
   });
 
+  const ordinaryRun = {
+    id: 1,
+    display_title: "Deploy main to staging abc",
+    status: "in_progress",
+  };
+  const ownerPassed = {
+    name: "Wait for the current staging owner",
+    status: "completed",
+    conclusion: "success",
+  };
+  for (const [name, deploySteps] of [
+    ["queued", [{ name: "Deploy to staging", status: "queued" }]],
+    ["not listed yet", []],
+  ] as const) {
+    test(`candidate waits for an ordinary promotion past its owner step with deployment ${name}`, async () => {
+      const result = await runGate("candidate", {
+        workflow_runs: [ordinaryRun],
+        jobs: [
+          {
+            name: "Promote staging images",
+            status: "in_progress",
+            id: 2,
+            steps: [ownerPassed, ...deploySteps],
+          },
+        ],
+      });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "Timed out waiting for an ordinary staging promotion",
+      );
+    });
+  }
+
+  test("candidate passes once the ordinary deployment completed", async () => {
+    const result = await runGate("candidate", {
+      workflow_runs: [ordinaryRun],
+      jobs: [
+        {
+          name: "Promote staging images",
+          status: "in_progress",
+          id: 2,
+          steps: [
+            ownerPassed,
+            {
+              name: "Deploy to staging",
+              status: "completed",
+              conclusion: "success",
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+  });
+
+  // A job with no steps reported has not reached its owner step, where it
+  // will park behind the candidate, so it is not the owner.
+  test("candidate passes an ordinary promotion with no steps reported yet", async () => {
+    const result = await runGate("candidate", {
+      workflow_runs: [ordinaryRun],
+      jobs: [
+        {
+          name: "Promote staging images",
+          status: "queued",
+          id: 2,
+          steps: null,
+        },
+      ],
+    });
+    expect(result.exitCode, result.stderr).toBe(0);
+  });
+
   for (const candidateStatus of ["queued", "in_progress"]) {
     test(`ordinary gate waits and candidate gate passes with a ${candidateStatus} proof and an ordinary promotion waiting for ownership`, async () => {
       const fixture = {
