@@ -512,7 +512,9 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
   const install = step("install");
   const seal = step("install-time");
   const save = steps.find(
-    (entry) => entry["uses"] === "$/.github/actions/ci-store-save",
+    (entry) =>
+      typeof entry["uses"] === "string" &&
+      entry["uses"].startsWith("actions/cache/save@"),
   );
   if (save === undefined) {
     expect.unreachable("Missing main-only ci-install cache save");
@@ -539,6 +541,7 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     `\${{ steps.install-time.outputs.milliseconds }}`,
   );
   expect(restore["uses"]).toMatch(/^actions\/cache\/restore@[0-9a-f]{40}/u);
+  expect(save["uses"]).toMatch(/^actions\/cache\/save@[0-9a-f]{40}/u);
   expect(save["continue-on-error"]).toBe(true);
   expect(restoreInputs).toEqual({
     path: `\${{ steps.identity.outputs.store }}`,
@@ -599,6 +602,16 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     sealRun.indexOf("fi"),
   );
   expect(save["if"]).toContain("github.ref == 'refs/heads/main'");
+  expect(save["if"]).toContain("steps.install-time.outcome == 'success'");
+  expect(save["if"]).toContain("steps.cache.outputs.cache-hit != 'true'");
+  expect(
+    steps.filter(
+      (entry) =>
+        typeof entry["uses"] === "string" &&
+        (entry["uses"].startsWith("actions/cache/save@") ||
+          entry["uses"] === "$/.github/actions/ci-store-save"),
+    ),
+  ).toHaveLength(1);
   expect(stepsByOrder).toEqual(stepsByOrder.toSorted((a, b) => a - b));
 
   const upload = steps.find(
