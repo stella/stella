@@ -230,7 +230,7 @@
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.87.0",
     "@shadcn/lint": "0.1.0",
-    "@silurus/ooxml": "0.88.0",
+    "@silurus/ooxml": "0.89.2",
     "@stll/aho-corasick": "1.0.4",
     "@stll/aho-corasick-wasm": "1.0.4",
     "@stll/anonymize": "3.0.7",
