@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import { PayloadBudgetError, zstdCompress } from "@/api/lib/compression";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 
@@ -9,6 +7,9 @@ import {
   LinkRecallPayloadError,
   readLinkRecallPayload,
 } from "./link-recall-corpus-reader";
+
+const errorOf = (result: Awaited<ReturnType<typeof readLinkRecallPayload>>) =>
+  result.isErr() ? result.error : undefined;
 
 const budgets = { maxCompressedBytes: 4096, maxDecompressedBytes: 4096 };
 
@@ -25,7 +26,7 @@ test("audit corpus reads decode plain objects as text without requiring JSON", a
       },
       ...budgets,
     }),
-  ).toBe(payload);
+  ).toMatchObject({ status: "ok", value: payload });
   expect(requests).toEqual([{ key: "corpus/text.zst" }]);
 });
 
@@ -42,7 +43,7 @@ test("audit packed reads request and verify precisely the declared member", asyn
       },
       ...budgets,
     }),
-  ).toBe('{"paragraphs":["Ve věci"]}');
+  ).toMatchObject({ status: "ok", value: '{"paragraphs":["Ve věci"]}' });
   expect(requests).toEqual([
     {
       key: "corpus/pack.stlpack",
@@ -68,8 +69,8 @@ test("audit packed reads reject truncated overlong and tampered members", async 
     [new Uint8Array(bytes.byteLength + 1), "range length"],
     [tampered, "digest"],
   ] as const) {
-    const error = await rejectionOf(
-      readLinkRecallPayload({
+    const error = errorOf(
+      await readLinkRecallPayload({
         location: `pack:pack.stlpack@2+${bytes.byteLength}#${corpusMemberDigest(bytes)}`,
         readObject: async () => response,
         ...budgets,
@@ -82,8 +83,8 @@ test("audit packed reads reject truncated overlong and tampered members", async 
 
 test("audit reads reject oversized declared ranges before requesting any bytes", async () => {
   const requests: unknown[] = [];
-  const error = await rejectionOf(
-    readLinkRecallPayload({
+  const error = errorOf(
+    await readLinkRecallPayload({
       location: `pack:pack.stlpack@0+4097#${"a".repeat(64)}`,
       readObject: async (request) => {
         requests.push(request);
@@ -98,8 +99,8 @@ test("audit reads reject oversized declared ranges before requesting any bytes",
 
 test("audit reads reject empty and overflowing packed address ranges", async () => {
   for (const range of ["0+0", `${Number.MAX_SAFE_INTEGER}+2`]) {
-    const error = await rejectionOf(
-      readLinkRecallPayload({
+    const error = errorOf(
+      await readLinkRecallPayload({
         location: `pack:pack.stlpack@${range}#${"a".repeat(64)}`,
         readObject: async () => new Uint8Array(),
         ...budgets,
@@ -113,8 +114,8 @@ test("audit reads reject empty and overflowing packed address ranges", async () 
 });
 
 test("audit reads bound transferred and decompressed payloads independently", async () => {
-  const transferred = await rejectionOf(
-    readLinkRecallPayload({
+  const transferred = errorOf(
+    await readLinkRecallPayload({
       location: "large.zst",
       readObject: async () => new Uint8Array(4097),
       ...budgets,
@@ -123,12 +124,92 @@ test("audit reads bound transferred and decompressed payloads independently", as
   expect(transferred).toBeInstanceOf(PayloadBudgetError);
   const bytes = zstdCompress("x".repeat(100_000));
   expect(bytes.byteLength).toBeLessThan(budgets.maxCompressedBytes);
-  const decompressed = await rejectionOf(
-    readLinkRecallPayload({
+  const decompressed = errorOf(
+    await readLinkRecallPayload({
       location: "bomb.zst",
       readObject: async () => bytes,
       ...budgets,
     }),
   );
   expect(decompressed).toBeInstanceOf(PayloadBudgetError);
+});
+
+test("audit reader errors preserve object rejection causes and existing tagged errors", async () => {
+  for (const failure of [
+    new LinkRecallPayloadError({ message: "Read failed" }),
+    new PayloadBudgetError({ message: "Read overflow" }),
+  ]) {
+    const result = await readLinkRecallPayload({
+      location: "object.zst",
+      readObject: async () => await Promise.reject(failure),
+      ...budgets,
+    });
+    expect(errorOf(result)).toBe(failure);
+  }
+  const cause = new TypeError("Storage unavailable");
+  const result = await readLinkRecallPayload({
+    location: "object.zst",
+    readObject: async () => await Promise.reject(cause),
+    ...budgets,
+  });
+  expect(errorOf(result)).toMatchObject({
+    message: "Audit corpus object could not be read",
+    cause,
+  });
+});
+
+test("audit readers return malformed locations and invalid budgets without reading an object", async () => {
+  const requests: unknown[] = [];
+  const readObject = async (request: unknown) => {
+    requests.push(request);
+    return new Uint8Array();
+  };
+  for (const location of [
+    "pack:malformed",
+    `pack:pack.stlpack@${Number.MAX_SAFE_INTEGER}0+1#${"a".repeat(64)}`,
+  ]) {
+    const result = await readLinkRecallPayload({
+      location,
+      readObject,
+      ...budgets,
+    });
+    expect(errorOf(result)).toMatchObject({
+      message: "Audit corpus location could not be parsed",
+      cause: expect.any(Error),
+    });
+  }
+  for (const invalid of [
+    0,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    for (const limits of [
+      { maxCompressedBytes: invalid, maxDecompressedBytes: 4096 },
+      { maxCompressedBytes: 4096, maxDecompressedBytes: invalid },
+    ]) {
+      const result = await readLinkRecallPayload({
+        location: "object.zst",
+        readObject,
+        ...limits,
+      });
+      expect(errorOf(result)).toMatchObject({
+        message: expect.stringContaining("positive safe integers"),
+      });
+    }
+  }
+  expect(requests).toEqual([]);
+});
+
+test("corrupt compressed bytes resolve to a tagged reader error with the decompressor cause", async () => {
+  const result = await readLinkRecallPayload({
+    location: "corrupt.zst",
+    readObject: async () => new Uint8Array([1, 2, 3]),
+    ...budgets,
+  });
+  expect(errorOf(result)).toMatchObject({
+    message: "Audit corpus payload could not be decompressed",
+    cause: expect.any(Error),
+  });
 });
