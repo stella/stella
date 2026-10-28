@@ -416,9 +416,8 @@ const runnerRows = async (userId: string, organizationId: string) =>
       ),
     );
 
-const startInput = (desktopId: string, runId: string) => ({
+const startInput = (desktopId: string) => ({
   owner,
-  runId,
   desktopId,
   harness: "codex" as const,
   harnessVersion: HARNESS_VERSION,
@@ -429,6 +428,14 @@ const startInput = (desktopId: string, runId: string) => ({
   mcp: { serverName: "stella", url: "https://api.example.test/mcp" },
   workspaceIds: [],
 });
+
+/** Start a run on `desktopId` and return the id the API minted for it. */
+const assignRun = async (desktopId: string) => {
+  const outcome = (await control.startRun(startInput(desktopId))).unwrap();
+  return outcome.type === "assigned"
+    ? outcome.runId
+    : panic(`the run was not assigned: ${outcome.type}`);
+};
 
 const textEvent = (runId: string, seq: number, delta: string) => ({
   type: "run.event",
@@ -466,14 +473,9 @@ const ofRun = (runId: string) => (message: DesktopRunnerServerMessage) => {
 /** A desktop holding a run it accepted. */
 const acceptedRun = async (instance: Instance) => {
   const desktopId = Bun.randomUUIDv7();
-  const runId = Bun.randomUUIDv7();
   const desktop = await openDesktop(instance, desktopId);
   await desktop.hello();
-  expect(
-    (await control.startRun(startInput(desktopId, runId))).unwrap(),
-  ).toEqual({
-    type: "assigned",
-  });
+  const runId = await assignRun(desktopId);
   const start = await desktop.receive("run.start", ofRun(runId));
   desktop.send({ type: "run.accepted", runId });
   return { desktopId, runId, desktop, start };
@@ -770,9 +772,6 @@ describe("leases", () => {
       state: "waiting_for_computer",
       desktopId,
     });
-    expect(
-      (await control.startRun(startInput(Bun.randomUUIDv7(), runId))).unwrap(),
-    ).toEqual({ type: "conflict" });
     expect((await control.cancelRun({ owner, runId })).unwrap()).toEqual({
       type: "queued",
     });
@@ -814,10 +813,7 @@ describe("leases", () => {
     const { desktopId, runId: accepted, desktop } = await acceptedRun(first);
     desktop.send(textEvent(accepted, 1, "Working"));
     await desktop.receive("ack");
-    const unaccepted = Bun.randomUUIDv7();
-    expect(
-      (await control.startRun(startInput(desktopId, unaccepted))).unwrap(),
-    ).toEqual({ type: "assigned" });
+    const unaccepted = await assignRun(desktopId);
     await desktop.receive("run.start", ofRun(unaccepted));
     await desktop.close();
 
@@ -852,13 +848,8 @@ describe("routing and delivery across API tasks", () => {
       report: { state: "needs_login" },
     });
 
-    const runId = Bun.randomUUIDv7();
     // Queued through the first task's view; the socket lives on the second.
-    expect(
-      (await control.startRun(startInput(desktopId, runId))).unwrap(),
-    ).toEqual({
-      type: "assigned",
-    });
+    const runId = await assignRun(desktopId);
     await desktop.receive("run.start", ofRun(runId));
     desktop.send({ type: "run.accepted", runId });
 
@@ -946,11 +937,7 @@ describe("upgrade scaling", () => {
     const desktop = await openDesktop(first, desktopId);
     await desktop.hello();
     for (let index = 0; index < 20; index += 1) {
-      expect(
-        (
-          await control.startRun(startInput(desktopId, Bun.randomUUIDv7()))
-        ).unwrap(),
-      ).toEqual({ type: "assigned" });
+      await assignRun(desktopId);
     }
     await desktop.close();
     const large = await desktopRunnerUpgradeScalingScenario.measure(fixture);
@@ -1055,11 +1042,9 @@ describe("credential revocation", () => {
       >(db),
     });
     // Routing skips the revoked key's runner from the revocation on.
-    expect(
-      (
-        await control.startRun(startInput(desktopId, Bun.randomUUIDv7()))
-      ).unwrap(),
-    ).toEqual({ type: "no_computer" });
+    expect((await control.startRun(startInput(desktopId))).unwrap()).toEqual({
+      type: "no_computer",
+    });
     expect(await desktop.closed).toEqual({
       code: DESKTOP_RUNNER_CLOSE.credentialRevoked.code,
       reason: DESKTOP_RUNNER_CLOSE.credentialRevoked.reason,
@@ -1150,10 +1135,7 @@ describe("runs the API ends", () => {
     const desktopId = Bun.randomUUIDv7();
     const desktop = await openDesktop(first, desktopId);
     await desktop.hello();
-    const runId = Bun.randomUUIDv7();
-    expect(
-      (await control.startRun(startInput(desktopId, runId))).unwrap(),
-    ).toEqual({ type: "assigned" });
+    const runId = await assignRun(desktopId);
     await desktop.receive("run.start", ofRun(runId));
     clock.now += DESKTOP_RUNNER_LIMITS.abandonedRunMs + 1;
     await first.gateway.sweep();
@@ -1169,11 +1151,9 @@ describe("runs the API ends", () => {
     const desktop = await openDesktop(beating, desktopId);
     await desktop.hello();
     // The ended run is started first, so a refresh for it would arrive first.
-    const [ended, running] = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+    const ended = await assignRun(desktopId);
+    const running = await assignRun(desktopId);
     for (const runId of [ended, running]) {
-      expect(
-        (await control.startRun(startInput(desktopId, runId))).unwrap(),
-      ).toEqual({ type: "assigned" });
       await desktop.receive("run.start", ofRun(runId));
       desktop.send({ type: "run.accepted", runId });
       // Frames are handled in order: this ack follows the stored acceptance.
@@ -1385,16 +1365,14 @@ describe("outbound frames", () => {
         })
       ).unwrap(),
     ).toEqual({ type: "too_large" });
-    const tooLarge = Bun.randomUUIDv7();
     expect(
       (
         await control.startRun({
-          ...startInput(desktopId, tooLarge),
+          ...startInput(desktopId),
           messages: [{ role: "user", content: huge }],
         })
       ).unwrap(),
     ).toEqual({ type: "too_large" });
-    expect(await runState(tooLarge)).toBeNull();
     await desktop.close();
   });
 
@@ -1479,16 +1457,11 @@ describe("outbound frames", () => {
     );
     await arrival(({ type }) => type === "welcome");
 
-    const [buffered, waiting] = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
     // Bun buffers the first start: the socket takes nothing more until it drains.
     statuses.push(-1);
-    expect(
-      (await control.startRun(startInput(desktopId, buffered))).unwrap(),
-    ).toEqual({ type: "assigned" });
+    const buffered = await assignRun(desktopId);
     await arrival(ofRun(buffered));
-    expect(
-      (await control.startRun(startInput(desktopId, waiting))).unwrap(),
-    ).toEqual({ type: "assigned" });
+    const waiting = await assignRun(desktopId);
     // A delivery attempt has run once the sweep's own delivery resolves.
     await gateway.sweep();
     const starts = () =>
@@ -1501,5 +1474,68 @@ describe("outbound frames", () => {
     expect(starts()).toEqual([buffered, waiting]);
     session.close(socket, 1000, "done");
     await gateway.drain();
+  });
+});
+
+describe("gateway edges", () => {
+  test("a draining task tells a socket that had not opened yet to reconnect as it opens", async () => {
+    const gateway = createDesktopRunnerGateway({
+      db: gatewayDb,
+      doorbell: sharedDoorbell,
+      instanceId: "api-drain-early",
+      authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
+      mintRunToken,
+      now,
+      random: () => 0.5,
+      timing: TIMING,
+    });
+    await gateway.start();
+    const accepted: { session: ApiSocketSession | null } = { session: null };
+    const server = asTestRaw<HttpServer>({
+      upgrade: (_request: Request, upgrade: { data: ApiSocketData }) => {
+        accepted.session = upgrade.data.session;
+        return true;
+      },
+    });
+    expect(
+      await gateway.upgrade(
+        await upgradeRequest(first, Bun.randomUUIDv7()),
+        server,
+      ),
+    ).toBeNull();
+    const session =
+      accepted.session ?? panic("the gateway took the upgrade over");
+    await gateway.drain();
+    const sent: unknown[] = [];
+    const closes: number[] = [];
+    const socket = asTestRaw<ApiServerWebSocket>({
+      send: (text: string) => {
+        sent.push(JSON.parse(text));
+        return 1;
+      },
+      close: (code: number) => {
+        closes.push(code);
+      },
+      ping: () => undefined,
+    });
+    session.open(socket);
+    expect(sent).toEqual([{ type: "reconnect", afterMs: 500 }]);
+    expect(closes).toEqual([DESKTOP_RUNNER_CLOSE.goingAway.code]);
+    session.close(socket, DESKTOP_RUNNER_CLOSE.goingAway.code, "going_away");
+  });
+
+  test("the API mints each run's id, so a caller never names one", async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(first, desktopId);
+    await desktop.hello();
+    const [one, two] = [await assignRun(desktopId), await assignRun(desktopId)];
+    expect(one).not.toBe(two);
+    for (const runId of [one, two]) {
+      expect((await desktop.receive("run.start", ofRun(runId))).runId).toBe(
+        runId,
+      );
+      expect((await runState(runId))?.desktopId).toBe(desktopId);
+    }
+    await desktop.close();
   });
 });

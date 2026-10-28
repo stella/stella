@@ -174,6 +174,8 @@ type SessionState = {
   queuedBytes: number;
   /** Bun buffered the last command; delivery resumes when the socket drains. */
   backpressured: boolean;
+  /** The task began draining before the socket opened: the delay to send then. */
+  drainOnOpen: number | null;
   queuedDelivery: Promise<void> | null;
   /** The last queued command this socket has sent. */
   deliveredThrough: number;
@@ -223,6 +225,11 @@ const send = (
 };
 
 const drain = (state: SessionState, afterMs: number) => {
+  // An upgraded socket that has not opened yet is told as soon as it opens.
+  if (state.phase.type === "connecting") {
+    state.drainOnOpen = afterMs;
+    return;
+  }
   send(state, { type: DESKTOP_RUNNER_SERVER_MESSAGE.reconnect, afterMs });
   close(state, DESKTOP_RUNNER_CLOSE.goingAway);
 };
@@ -716,6 +723,7 @@ export const createRunnerSession = ({
     queuedFrames: 0,
     queuedBytes: 0,
     backpressured: false,
+    drainOnOpen: null,
     queuedDelivery: null,
     deliveredThrough: 0,
     claimed: false,
@@ -728,6 +736,10 @@ export const createRunnerSession = ({
   const socketSession: ApiSocketSession = {
     open: (socket) => {
       state.phase = { type: "awaiting_hello", socket };
+      if (state.drainOnOpen !== null) {
+        drain(state, state.drainOnOpen);
+        return;
+      }
       state.timeouts.push(
         context.timers.setTimeout(() => {
           if (state.phase.type === "awaiting_hello") {
