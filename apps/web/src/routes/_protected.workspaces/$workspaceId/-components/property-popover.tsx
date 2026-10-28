@@ -42,7 +42,7 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
@@ -337,7 +337,7 @@ export const PropertyPopover = ({
       case "ai-unavailable":
         // Running a column is an explicit request, so say why nothing
         // happened; the side-effect call sites stay quiet on this one.
-        notifyUserError(undefined, t("errors.failedToStartWorkflow"));
+        notifyUserProblem(t("errors.failedToStartWorkflow"));
         return;
       case "failed":
         // Already reported by `useStartWorkflow`, error included.

@@ -1530,12 +1530,6 @@
     "reason": "builder-for in apps/api/src/handlers/lists/items/fact-details/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/memories/update.ts",
-    "fingerprint": "57d76d747519bcd8783087297221d3bc1f79297d2e24cc71a984fa7cc5eaad27",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/memories/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/number-series/archive.ts",
     "fingerprint": "d786dd5c6c6ad332a4049be7fc81223d561d9a938b131cdad5c69793e98c5a8b",
     "count": 1,
@@ -3600,18 +3594,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/properties/property-lock.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "175f666c3662b5398246fd148f90d65f4fbdf3fba83e500d9d9672e450dfbcaf",
-    "count": 1,
-    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
-  },
-  {
-    "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "f5b5976998e8b3259d75c0037e2a325e0bef6c406dae071974c2ec4547205404",
-    "count": 1,
-    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
-  },
-  {
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "7224a12a5c3044925eb22fbcc8c94d43c4d20ce2be95805097667ca9ad9c8199",
     "count": 1,
@@ -3688,12 +3670,6 @@
     "fingerprint": "39a4e8d62ba9d960e915a5aa143491be6b19f7b632fc7cf0ecf1975c8441aae4",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts",
-    "fingerprint": "2de3c463d153cae55427b4ff77b5b6c62900465dea74526235bd8ee180904f2d",
-    "count": 1,
-    "reason": "for update in apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/chat-turn-reaper.ts",

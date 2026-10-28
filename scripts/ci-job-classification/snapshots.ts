@@ -14,7 +14,12 @@ import { decisionKeyFromPath } from "./decisions";
 import { readClassificationInputs } from "./generate";
 import { createGitProvider } from "./git-provider";
 import { decisionPathForKey } from "./inputs";
-import { parseRemoteReference, sameMetadataOrigin } from "./references";
+import {
+  parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
+  sameMetadataOrigin,
+} from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
@@ -215,6 +220,53 @@ const pairSuppliers = ({
   return { replacements, copies };
 };
 
+type SnapshotMergeOptions = {
+  root: string;
+  previous: Snapshots;
+  documents: Map<string, Record<string, string>>;
+  origins: Map<string, Snapshot["origin"]>;
+};
+const mergeSnapshotDocuments = ({
+  root,
+  previous,
+  documents,
+  origins,
+}: SnapshotMergeOptions) => {
+  const retained = Object.fromEntries(
+    Object.entries(previous).filter(([, snapshot]) =>
+      documents.has(sourceIdentity(snapshot.origin)),
+    ),
+  );
+  for (const identity of [...documents.keys()].toSorted(compareCodeUnit)) {
+    const origin = origins.get(identity);
+    if (!origin) {
+      throw new AdmissionError({ message: "Snapshot origin disappeared" });
+    }
+    const exact = Object.entries(retained).find(([, snapshot]) =>
+      sameMetadataOrigin({ caller: origin, target: snapshot.origin }),
+    );
+    const supplier =
+      exact?.[0] ?? nextSupplierKey(root, { ...previous, ...retained });
+    retained[supplier] = {
+      origin,
+      documents: Object.fromEntries(
+        Object.entries(documents.get(identity) ?? {}).toSorted(
+          ([left], [right]) => compareCodeUnit(left, right),
+        ),
+      ),
+    };
+  }
+  return retained;
+};
+
+type VisitDocumentOptions = {
+  identity: string;
+  origin: Snapshot["origin"];
+  file: string;
+  read: (file: string) => string;
+  mount?: string | null;
+};
+
 export const writeSnapshots = ({
   root,
   sources,
@@ -234,6 +286,7 @@ export const writeSnapshots = ({
   const documents = new Map<string, Record<string, string>>();
   const origins = new Map<string, Snapshot["origin"]>();
   const visited = new Set<string>();
+  const mounts = new Map<string, string>();
 
   const existingFor = (origin: Snapshot["origin"]) =>
     Object.entries(previous).find(([, snapshot]) =>
@@ -286,24 +339,31 @@ export const writeSnapshots = ({
         throw error;
       }
     }
-    visitDocument(identity, origin, file, read);
+    visitDocument({ identity, origin, file, read });
   };
-  const visitDocument = (
-    identity: string,
-    origin: Snapshot["origin"],
-    file: string,
-    read: (file: string) => string,
-  ) => {
+  const visitDocument = ({
+    identity,
+    origin,
+    file,
+    read,
+    mount = null,
+  }: VisitDocumentOptions) => {
     const visitKey = `${identity}:${file}`;
-    if (visited.has(visitKey)) {
-      return;
-    }
-    visited.add(visitKey);
     const text = read(file);
     const parsed = parseDocument(text);
     if (parsed.isErr()) {
       throw parsed.error;
     }
+    recordMetadataMount({
+      mounts,
+      identity: visitKey,
+      mount,
+      document: parsed.value,
+    });
+    if (visited.has(visitKey)) {
+      return;
+    }
+    visited.add(visitKey);
     origins.set(identity, origin);
     const collected = documents.get(identity) ?? {};
     collected[file] = text;
@@ -311,13 +371,24 @@ export const writeSnapshots = ({
     for (const [reference, kind] of Object.entries(parsed.value.dependencies)) {
       if (reference.startsWith("./") || reference.startsWith("$/")) {
         const relative = reference.slice(2);
-        const sourcePath =
-          parsed.value.relocatedActions[reference]?.at(0)?.path ?? relative;
+        const selected = resolveLocalMetadataPath({
+          reference,
+          kind,
+          relocations: parsed.value.relocatedActions[reference] ?? [],
+          inheritedMount: mount,
+        });
+        const sourcePath = selected.path;
         const target =
           kind === "reusable-workflow"
             ? relative
             : actionPath(read, sourcePath);
-        visitDocument(identity, origin, target, read);
+        visitDocument({
+          identity,
+          origin,
+          file: target,
+          read,
+          mount: selected.mount,
+        });
       } else {
         visitRemote(reference, kind);
       }
@@ -327,25 +398,36 @@ export const writeSnapshots = ({
   const candidateVisited = new Set<string>();
   const readCandidate = (file: string) =>
     readFileSync(path.resolve(root, file), "utf-8");
-  const visitCandidate = (file: string) => {
-    if (candidateVisited.has(file)) {
-      return;
-    }
-    candidateVisited.add(file);
+  const visitCandidate = (file: string, mount: string | null = null) => {
     const parsed = parseDocument(readCandidate(file));
     if (parsed.isErr()) {
       throw parsed.error;
     }
+    recordMetadataMount({
+      mounts,
+      identity: `candidate:${file}`,
+      mount,
+      document: parsed.value,
+    });
+    if (candidateVisited.has(file)) {
+      return;
+    }
+    candidateVisited.add(file);
     for (const [reference, kind] of Object.entries(parsed.value.dependencies)) {
       if (reference.startsWith("./") || reference.startsWith("$/")) {
         const relative = reference.slice(2);
-        const sourcePath =
-          parsed.value.relocatedActions[reference]?.at(0)?.path ?? relative;
+        const selected = resolveLocalMetadataPath({
+          reference,
+          kind,
+          relocations: parsed.value.relocatedActions[reference] ?? [],
+          inheritedMount: mount,
+        });
+        const sourcePath = selected.path;
         const target =
           kind === "reusable-workflow"
             ? relative
             : actionPath(readCandidate, sourcePath);
-        visitCandidate(target);
+        visitCandidate(target, selected.mount);
       } else {
         visitRemote(reference, kind);
       }
@@ -357,30 +439,12 @@ export const writeSnapshots = ({
     visitCandidate(file);
   }
 
-  const retained = Object.fromEntries(
-    Object.entries(previous).filter(([, snapshot]) =>
-      documents.has(sourceIdentity(snapshot.origin)),
-    ),
-  );
-  for (const identity of [...documents.keys()].toSorted(compareCodeUnit)) {
-    const origin = origins.get(identity);
-    if (!origin) {
-      throw new AdmissionError({ message: "Snapshot origin disappeared" });
-    }
-    const exact = Object.entries(retained).find(([, snapshot]) =>
-      sameMetadataOrigin({ caller: origin, target: snapshot.origin }),
-    );
-    const supplier =
-      exact?.[0] ?? nextSupplierKey(root, { ...previous, ...retained });
-    retained[supplier] = {
-      origin,
-      documents: Object.fromEntries(
-        Object.entries(documents.get(identity) ?? {}).toSorted(
-          ([left], [right]) => compareCodeUnit(left, right),
-        ),
-      ),
-    };
-  }
+  const retained = mergeSnapshotDocuments({
+    root,
+    previous,
+    documents,
+    origins,
+  });
   const refreshBase = base ?? gitBase(root);
   const moves = pinMoves(root, refreshBase);
   const { replacements, copies } = pairSuppliers({ previous, retained, moves });

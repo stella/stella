@@ -69,7 +69,7 @@
     "lint:fix": "turbo run lint:fix",
     "lint:profile:api": "bun --cwd=apps/api run lint:profile",
     "lint:profile:web": "bun run generate && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --debug timings --format=default apps/web",
-    "assets:check": "bun test scripts/check-duplicate-raster-assets.test.ts && bun scripts/check-duplicate-raster-assets.ts",
+    "assets:check": "bun test scripts/check-public-assets.test.ts && bun scripts/check-public-assets.ts",
     "lint:ws": "sherif -r unsync-similar-dependencies -i '@babel/core@^7.29.0' && bun packages/scripts/src/workspace-hygiene.ts",
     "new-package": "bun scripts/new-package.ts",
     "i18n:check": "turbo run i18n:check --",
