@@ -11,6 +11,9 @@ use serde_json::Value;
 
 /// Allowed clock difference, in seconds.
 const CLOCK_SKEW_SECONDS: i64 = 5;
+/// An ID token is verified right after the exchange that issued it; an
+/// older one is a replay.
+const MAX_AGE_SECONDS: i64 = 10 * 60;
 const MAX_TOKEN_BYTES: usize = 32 * 1024;
 const AUTH_CLAIMS: &str = "https://api.openai.com/auth";
 
@@ -52,6 +55,8 @@ pub(crate) enum IdTokenError {
   Expired,
   Nonce,
   Subject,
+  /// Issued in the future, or too long ago for a fresh sign-in.
+  IssuedAt,
 }
 
 pub(crate) struct Expectations<'a> {
@@ -204,30 +209,50 @@ fn check_claims(
   if claims.get("iss").and_then(Value::as_str) != Some(expect.issuer) {
     return Err(IdTokenError::Issuer);
   }
-  let audience_matches = match claims.get("aud") {
-    Some(Value::String(audience)) => audience == expect.client_id,
+  let audiences: Vec<&str> = match claims.get("aud") {
+    Some(Value::String(audience)) => vec![audience.as_str()],
     Some(Value::Array(audiences)) => audiences
       .iter()
-      .any(|audience| audience.as_str() == Some(expect.client_id)),
-    _ => false,
+      .map(|audience| audience.as_str().ok_or(IdTokenError::Malformed))
+      .collect::<Result<_, _>>()?,
+    _ => return Err(IdTokenError::Audience),
   };
-  if !audience_matches {
+  if !audiences.contains(&expect.client_id) {
     return Err(IdTokenError::Audience);
+  }
+  // OpenID Connect Core 3.1.3.7: with several audiences the authorized party
+  // must be this client, and when present it must always be.
+  match claims.get("azp") {
+    Some(Value::String(party)) if party != expect.client_id => {
+      return Err(IdTokenError::Audience);
+    }
+    Some(Value::String(_)) => {}
+    None if audiences.len() > 1 => return Err(IdTokenError::Audience),
+    None => {}
+    Some(_) => return Err(IdTokenError::Malformed),
   }
   let expires = claims
     .get("exp")
     .and_then(Value::as_i64)
     .ok_or(IdTokenError::Expired)?;
-  if expires + CLOCK_SKEW_SECONDS <= expect.now {
+  if expires.saturating_add(CLOCK_SKEW_SECONDS) <= expect.now {
     return Err(IdTokenError::Expired);
   }
-  if claims.get("iat").and_then(Value::as_i64).is_none() {
-    return Err(IdTokenError::Malformed);
+  let issued = claims
+    .get("iat")
+    .and_then(Value::as_i64)
+    .ok_or(IdTokenError::Malformed)?;
+  if issued.saturating_sub(CLOCK_SKEW_SECONDS) > expect.now
+    || issued.saturating_add(MAX_AGE_SECONDS) < expect.now
+  {
+    return Err(IdTokenError::IssuedAt);
   }
   if claims
     .get("nbf")
     .and_then(Value::as_i64)
-    .is_some_and(|not_before| not_before - CLOCK_SKEW_SECONDS > expect.now)
+    .is_some_and(|not_before| {
+      not_before.saturating_sub(CLOCK_SKEW_SECONDS) > expect.now
+    })
   {
     return Err(IdTokenError::Expired);
   }
@@ -392,6 +417,54 @@ mod tests {
         "{claim}"
       );
     }
+  }
+
+  #[test]
+  fn the_issue_time_must_be_recent_and_not_ahead() {
+    let issuer = FakeIssuer::new("k1");
+    for (iat, expected) in [
+      (NOW - 10, Ok(())),
+      (NOW + 3, Ok(())),
+      (NOW + 60, Err(IdTokenError::IssuedAt)),
+      (NOW - MAX_AGE_SECONDS - 1, Err(IdTokenError::IssuedAt)),
+      (i64::MIN, Err(IdTokenError::IssuedAt)),
+    ] {
+      let mut changed = claims();
+      changed["iat"] = json!(iat);
+      assert_eq!(
+        verify(&issuer.sign(&changed), &issuer.jwks(), &expect()).map(|_| ()),
+        expected,
+        "{iat}"
+      );
+    }
+  }
+
+  #[test]
+  fn several_audiences_need_this_client_as_authorized_party() {
+    let issuer = FakeIssuer::new("k1");
+    let with = |aud: Value, azp: Option<&str>| {
+      let mut changed = claims();
+      changed["aud"] = aud;
+      if let Some(azp) = azp {
+        changed["azp"] = json!(azp);
+      }
+      verify(&issuer.sign(&changed), &issuer.jwks(), &expect()).map(|_| ())
+    };
+    let both = || json!(["oaiapp_client", "oaiapp_other"]);
+    assert_eq!(with(both(), None), Err(IdTokenError::Audience));
+    assert_eq!(with(both(), Some("oaiapp_client")), Ok(()));
+    assert_eq!(
+      with(both(), Some("oaiapp_other")),
+      Err(IdTokenError::Audience)
+    );
+    assert_eq!(
+      with(json!(["oaiapp_client"]), Some("oaiapp_other")),
+      Err(IdTokenError::Audience)
+    );
+    assert_eq!(
+      with(json!(["oaiapp_client", 7]), None),
+      Err(IdTokenError::Malformed)
+    );
   }
 
   #[test]
