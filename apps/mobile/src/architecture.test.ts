@@ -121,3 +121,19 @@ describe("the app's builds", () => {
     }
   });
 });
+
+describe("the app's JavaScript engine", () => {
+  test("finds the app's modules to scan", () => {
+    expect(appModules).toContain(path.join("state", "chat-threads.ts"));
+  });
+
+  test.each(appModules)(
+    "%s calls no array method Hermes lacks (toSorted, toReversed, toSpliced)",
+    (name) => {
+      const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+      expect(
+        source.match(/\.(?:toSorted|toReversed|toSpliced)\(/gu) ?? [],
+      ).toEqual([]);
+    },
+  );
+});

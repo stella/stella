@@ -527,6 +527,16 @@
         "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
       },
       "returnComment": "Grund für Rückgabe",
+      "returnRefusals": {
+        "invalidEntry": "Prüfen Sie das Arbeitsdatum des Eintrags und geben Sie ihn dann zurück.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag zurückgeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr und kann nicht zurückgegeben werden. Aktualisieren Sie die Liste.",
+        "notSubmitted": "Dieser Entwurf wurde nie eingereicht, es gibt also nichts zurückzugeben.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag zurückgeben.",
+        "timePeriodLocked": "Dieser Monat ist gesperrt, daher kann der Eintrag nicht zurückgegeben werden. Bitten Sie einen Administrator, ihn zu entsperren.",
+        "wrongStatus": "Abgerechnete oder abgeschriebene Zeit kann nicht an die erfassende Person zurückgegeben werden."
+      },
+      "returnSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} zurückgeben",
       "selectEntry": "Eintrag auswählen",
       "timeEntries": "Zeiteinträge",
       "title": "Freigaben"
@@ -738,6 +748,7 @@
     "markNonBillableSelected": "Als nicht abrechenbar markieren",
     "matterRequired": "Bitte wählen Sie eine Akte aus",
     "minutes": "Minuten",
+    "moveEntryHint": "Beim Speichern wird der Eintrag in diese Akte verschoben und mit deren Sätzen bewertet.",
     "narrative": "Beschreibungstext",
     "narrativePlaceholder": "Beschreiben Sie die durchgeführte Arbeit...",
     "noActiveTimer": "Kein aktiver Timer",
@@ -1007,7 +1018,6 @@
     "coverage": {
       "completeness": "Vollständigkeit",
       "courtsHeading": "Nach Gericht",
-      "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
       "generatedAt": "Zahlen vom {date}",
@@ -1018,20 +1028,16 @@
       "healthStalled": "Stockt",
       "healthUnknown": "Noch nie gelaufen",
       "inPreparation": "In Vorbereitung",
-      "knownGaps": "Bekannte Lücken",
       "lastSync": "Letzte Synchronisierung",
-      "noGapsRecorded": "Keine Lücken verzeichnet",
       "notCountedYet": "Noch nicht gezählt",
       "notMeasuredYet": "Noch nicht gemessen",
-      "pendingTexts": "Ausstehende Texte",
       "reportedByListing": "Aus der Liste des Herausgebers gezählt",
       "reportedByOperator": "Manuell erfasst",
       "reportedByPublisher": "Eigene Zählung des Herausgebers",
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
-      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {

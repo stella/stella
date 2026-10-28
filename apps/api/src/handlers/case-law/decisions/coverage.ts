@@ -1,19 +1,15 @@
 import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { compareCodeUnit } from "@stll/collation";
-import {
-  createTtlFlightCache,
-  type TtlFlightCache,
-} from "@stll/concurrency/ttl-flight-cache";
-import { Temporal } from "@stll/time";
 
 import {
+  caseLawBrowseFacetCounts,
   caseLawSources,
   publishedCaseLawDecisions,
   SOURCE_TOTAL_ORIGIN,
@@ -39,26 +35,28 @@ import {
   type CaseLawKnownGaps,
   readCaseLawCoverageYearsQuery,
 } from "@/api/handlers/case-law/decisions/coverage-years";
-import { readBrowseFacetsUnderPolicy } from "@/api/handlers/case-law/decisions/facets";
+import { readBrowseFacetsWithin } from "@/api/handlers/case-law/decisions/facets";
 import {
   type CaseLawCourtStatusRow,
   caseLawCourtStatusRows,
   readCaseLawCourtActivityQuery,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import {
   readProvisionPendingCounts,
   unavailableProvisionPendingCounts,
 } from "@/api/lib/case-law/provision-pending";
-import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
+import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { decisionDateWithinBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -71,10 +69,13 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * How much case law the corpus holds, per country and per source, and whether
@@ -105,6 +106,8 @@ export const CASE_LAW_COVERAGE_AVAILABILITY = {
   IN_PREPARATION: "in-preparation",
 } as const;
 
+type CoverageCourt = { court: string | null; decisions: number };
+
 /** One court feed, as a public page may describe it. */
 type CaseLawCoverageSource = {
   /**
@@ -129,6 +132,9 @@ type CaseLawCoverageSource = {
    * counted it; null before the first count, never a zero standing in for one.
    */
   storedDecisions: number | null;
+  /** Published decisions, partitioned by deciding court in the same snapshot. */
+  publishedDecisions: number;
+  courts: readonly CoverageCourt[];
   /** Reconciled slice-ledger completeness by calendar year. */
   knownGaps: CaseLawKnownGaps;
   completeness: CaseLawSourceCompleteness;
@@ -265,6 +271,8 @@ type CaseLawCoverageSourceRow = {
   decisionYearFrom: number | null;
   decisionYearTo: number | null;
   pendingTextCount: number;
+  courts: readonly CoverageCourt[];
+  publishedDecisions: number;
 };
 
 /**
@@ -292,11 +300,50 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
+        courts: sql<CoverageCourt[]>`coalesce((
+          WITH population AS (
+            SELECT f.value AS court, f.total AS decisions
+            FROM ${caseLawBrowseFacetCounts} AS f
+            WHERE f.kind = 'court' AND f.source_id = case_law_sources.id
+            UNION ALL
+            SELECT d.court, 1 AS decisions
+            FROM ${publishedCaseLawDecisions} AS d
+            WHERE d.source_id = case_law_sources.id
+              AND NOT EXISTS (
+                SELECT 1 FROM ${caseLawBrowseFacetCounts} AS source_facets
+                WHERE source_facets.kind = 'court'
+                  AND source_facets.source_id = case_law_sources.id
+                LIMIT 1
+              )
+          ), normalized AS (
+            SELECT nullif(btrim(court), '') AS court, decisions FROM population
+          ), grouped AS (
+            SELECT court, sum(decisions)::integer AS decisions
+            FROM normalized GROUP BY court
+          ), ranked AS (
+            SELECT *, row_number() OVER (ORDER BY decisions DESC, court ASC) AS position
+            FROM grouped
+          ), bucketed AS (
+            SELECT CASE WHEN position <= ${LIMITS.caseLawFacetLimit} THEN court END AS court,
+              decisions
+            FROM ranked
+          ), bounded AS (
+            SELECT court, sum(decisions)::integer AS decisions
+            FROM bucketed GROUP BY court
+          )
+          SELECT jsonb_agg(jsonb_build_object('court', court, 'decisions', decisions)
+            ORDER BY decisions DESC, court ASC)
+          FROM bounded
+        ), '[]'::jsonb)`,
         decisionYearFrom: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND coverage_decisions.decision_date IS NOT NULL
+            AND ${decisionDateWithinBoundsSql(
+              sql`coverage_decisions.decision_date`,
+              sql`coverage_decisions.country`,
+            )}
           ORDER BY coverage_decisions.decision_date ASC, coverage_decisions.id ASC
           LIMIT 1
         )`,
@@ -305,6 +352,10 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
           WHERE coverage_decisions.source_id = case_law_sources.id
             AND coverage_decisions.decision_date IS NOT NULL
+            AND ${decisionDateWithinBoundsSql(
+              sql`coverage_decisions.decision_date`,
+              sql`coverage_decisions.country`,
+            )}
           ORDER BY coverage_decisions.decision_date DESC, coverage_decisions.id DESC
           LIMIT 1
         )`,
@@ -326,6 +377,10 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
     return sources.map((source) => ({
       ...source,
       pendingTextCount: countsBySource.get(source.id) ?? 0,
+      publishedDecisions: source.courts.reduce(
+        (total, row) => total + row.decisions,
+        0,
+      ),
     }));
   },
 );
@@ -508,8 +563,9 @@ export const loadCaseLawCoverage = async ({
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,
       pendingTextCount: source.pendingTextCount,
-      storedDecisions:
-        source.storedTotalAsOf === null ? null : source.storedTotal,
+      courts: source.courts,
+      publishedDecisions: source.publishedDecisions,
+      storedDecisions: source.storedTotalAsOf ? source.storedTotal : null,
       knownGaps: Result.isError(yearCompleteness)
         ? UNREAD_YEAR_COMPLETENESS
         : (yearCompleteness.value.get(String(source.id)) ??
@@ -671,71 +727,32 @@ export type CaseLawCoverageComputation = {
   complete: boolean;
 };
 
-/**
- * How long one computed answer is served. The answer walks every country's
- * facets and court activity, seconds of reads, and it describes a corpus that
- * moves by ingestion batches; `generatedAt` states the instant it describes,
- * so a cached answer never claims to be newer than it is. Shorter than the
- * HTTP response's shared cache, which already serves an answer this old.
- */
-const COVERAGE_ANSWER_TTL_MS = 5 * 60_000;
+/** One bounded snapshot read; policy revocation is enforced inside the SQL function. */
+export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary,
+  async (tx: CaseLawPublicReadTransaction): Promise<CaseLawCoverageAnswer> => {
+    const row = executedRows(
+      await tx.execute(
+        sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+      ),
+    ).at(0);
+    if (!isRecord(row) || row["answer"] === null) {
+      return { message: "Coverage is unavailable" };
+    }
+    const parsed = v.safeParse(coverageResponseSchema, row["answer"]);
+    if (!parsed.success) {
+      logger.warn("case_law.coverage.summary_invalid");
+      return { message: "Coverage is unavailable" };
+    }
+    return parsed.output;
+  },
+);
 
-/**
- * Computed answers, per read database and per source policy. Every surface
- * (the public page's origin, the MCP tool) asks for the same whole answer, so
- * they share one computation instead of each call walking the corpus again,
- * and concurrent calls share one flight. An unavailable answer is never kept.
- */
-const coverageAnswers = new WeakMap<
-  CaseLawPublicReadDb,
-  TtlFlightCache<CaseLawCoverageComputation>
->();
-
-/** The shared answer cache; only a complete answer is kept. */
-export const createCaseLawCoverageCache = (now: () => number) =>
-  createTtlFlightCache<CaseLawCoverageComputation>({
-    ttlMs: COVERAGE_ANSWER_TTL_MS,
-    // One key per source policy; a policy changes rarely.
-    maxEntries: 4,
-    now,
-    keep: ({ complete }) => complete,
-  });
-
-const coverageAnswersFor = (
-  caseLawDb: CaseLawPublicReadDb,
-): TtlFlightCache<CaseLawCoverageComputation> => {
-  const existing = coverageAnswers.get(caseLawDb);
-  if (existing !== undefined) {
-    return existing;
-  }
-  const created = createCaseLawCoverageCache(
-    () => Temporal.Now.instant().epochMilliseconds,
-  );
-  coverageAnswers.set(caseLawDb, created);
-  return created;
-};
-
+/** Cold replicas read the same stored answer; requests never rebuild the corpus summary. */
 export const readCaseLawCoverageHandler = async (
   caseLawDb: CaseLawPublicReadDb,
-): Promise<CaseLawCoverageAnswer> => {
-  // Read ahead of the cache: the source policy is an input to the answer, so a
-  // revocation changes the key instead of keeping a withheld source's numbers
-  // public for a whole window.
-  const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
-  if (Result.isError(excludedSourceIds)) {
-    logger.warn("case_law.coverage.unavailable", {
-      "error.type": errorTag(excludedSourceIds.error),
-    });
-    return { message: "Coverage is unavailable" };
-  }
-  const policy = excludedSourceIds.value;
-  const { answer } = await coverageAnswersFor(caseLawDb).read(
-    // A set: the order it was read in must not split one policy in two.
-    JSON.stringify(policy.toSorted(compareCodeUnit)),
-    async () => await computeCaseLawCoverageAnswer(caseLawDb, policy),
-  );
-  return answer;
-};
+): Promise<CaseLawCoverageAnswer> =>
+  await caseLawDb(readCaseLawCoverageSummaryQuery);
 
 type CoverageAssembly = {
   load: Omit<CoverageLoad, "onPartialFailure">;
@@ -794,8 +811,13 @@ export const assembleCaseLawCoverageAnswer = async ({
   };
 };
 
-const computeCaseLawCoverageAnswer = async (
-  caseLawDb: CaseLawPublicReadDb,
+export type CaseLawCoverageReadDb = <T>(
+  read: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+  options?: PublicLawReadOptions,
+) => Promise<T>;
+
+export const computeCaseLawCoverageAnswer = async (
+  caseLawDb: CaseLawCoverageReadDb,
   excludedSourceIds: readonly SafeId<"caseLawSource">[],
 ): Promise<CaseLawCoverageComputation> => {
   // One instant for the whole page: the freshness windows, the arrivals window
@@ -803,7 +825,7 @@ const computeCaseLawCoverageAnswer = async (
   // source's last sync against the stated time is comparing like with like.
   const now = new Date();
 
-  return await assembleCaseLawCoverageAnswer({
+  const computation = await assembleCaseLawCoverageAnswer({
     readProvisionProcessing: async () =>
       await caseLawDb(readProvisionPendingCounts, {
         isolation: "repeatable-read",
@@ -838,13 +860,13 @@ const computeCaseLawCoverageAnswer = async (
         return arrivals.value;
       },
       readFacets: async (country) =>
-        await readBrowseFacetsUnderPolicy({
-          country,
-          excludedSourceIds,
-        }),
+        await caseLawDb(
+          async (tx) =>
+            await readBrowseFacetsWithin(tx, { country, excludedSourceIds }),
+        ),
       readCourts: async ({ buckets, country, total }) => {
         const [courtWeights, activity, courtCount] = await Promise.all([
-          loadPublicCourtWeights(),
+          caseLawDb(async (tx) => await loadPublicCourtWeightsWithin(tx)),
           caseLawDb(
             async (tx) =>
               await readCaseLawCourtActivityQuery(tx, {
@@ -874,4 +896,11 @@ const computeCaseLawCoverageAnswer = async (
       },
     },
   });
+  if (!computation.complete || "message" in computation.answer) {
+    return computation;
+  }
+  return {
+    answer: projectResponseText(computation.answer, coverageResponseSchema),
+    complete: true,
+  };
 };

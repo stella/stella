@@ -2773,3 +2773,34 @@ export const lockTimerMatterAccessRows = async ({
       return panic("Invalid timer matter lock scope");
   }
 };
+
+/** Fence snapshot writers before removal discards their inputs. */
+export const lockCaseLawRemovalSnapshots = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(sql`LOCK TABLE case_law_browse_facet_counts, case_law_coverage_summaries,
+    case_law_sitemap_shard_counts, case_law_sitemap_shards, case_law_source_arrivals
+    IN SHARE ROW EXCLUSIVE MODE`);
+};
+
+/** A coverage answer holds its snapshot fence before reading its inputs. */
+export const lockCaseLawCoverageSnapshot = async (
+  tx: ExecuteTransaction,
+): Promise<void> => {
+  await tx.execute(
+    sql`LOCK TABLE case_law_coverage_summaries IN SHARE ROW EXCLUSIVE MODE`,
+  );
+};
+
+/** Removal discovery and completion serialize their ledger and checkpoint on one source. */
+export const lockCaseLawRemovalSource = async ({
+  tx,
+  sourceId,
+}: {
+  tx: ExecuteTransaction;
+  sourceId: SafeId<"caseLawSource">;
+}): Promise<void> => {
+  await tx.execute(
+    sql`SELECT id FROM case_law_sources WHERE id = ${sourceId} FOR UPDATE`,
+  );
+};

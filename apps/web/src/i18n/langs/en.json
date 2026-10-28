@@ -527,6 +527,16 @@
         "wrongStatus": "This entry is no longer a draft. Refresh the list."
       },
       "returnComment": "Reason for returning",
+      "returnRefusals": {
+        "invalidEntry": "Check the entry's work date, then return it.",
+        "notApprover": "Only the entry's assigned approver or an administrator can return it.",
+        "notFound": "This entry no longer exists, so it cannot be returned. Refresh the list.",
+        "notSubmitted": "This draft was never submitted, so there is nothing to return.",
+        "runningTimer": "Stop the running timer before returning this entry.",
+        "timePeriodLocked": "This month is locked, so the entry cannot be returned. Ask an administrator to unlock it.",
+        "wrongStatus": "Billed or written-off time cannot be returned to its timekeeper."
+      },
+      "returnSelected": "Return {count, plural, one {# selected entry} other {# selected entries}}",
       "selectEntry": "Select entry",
       "timeEntries": "Time entries",
       "title": "Approvals"
@@ -738,6 +748,7 @@
     "markNonBillableSelected": "Mark non-billable",
     "matterRequired": "Please select a matter",
     "minutes": "Minutes",
+    "moveEntryHint": "Saving moves the entry to this matter and prices it with this matter's rates.",
     "narrative": "Narrative",
     "narrativePlaceholder": "Describe the work performed...",
     "noActiveTimer": "No active timer",
@@ -1007,7 +1018,6 @@
     "coverage": {
       "completeness": "Completeness",
       "courtsHeading": "By court",
-      "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "generatedAt": "Figures from {date}",
@@ -1018,20 +1028,16 @@
       "healthStalled": "Stalled",
       "healthUnknown": "Never run",
       "inPreparation": "In preparation",
-      "knownGaps": "Known gaps",
       "lastSync": "Last sync",
-      "noGapsRecorded": "No gaps recorded",
       "notCountedYet": "Not counted yet",
       "notMeasuredYet": "Not measured yet",
-      "pendingTexts": "Pending texts",
       "reportedByListing": "Counted from the publisher's listing",
       "reportedByOperator": "Recorded by hand",
       "reportedByPublisher": "Publisher's own count",
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now.",
-      "unreadListingPeriods": "Listing periods not read"
+      "unavailable": "Coverage figures are unavailable right now."
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {

@@ -196,6 +196,11 @@ export const PUBLISHER_GATES = {
     intervalMs: 2000,
     hosts: ["decyzje.uokik.gov.pl"],
   },
+  "fcl-uk": {
+    publisher: "Find Case Law",
+    intervalMs: 500,
+    hosts: ["caselaw.nationalarchives.gov.uk"],
+  },
   /** eakta.birosag.hu. */
   "birosag-hu": {
     publisher: "Országos Bírósági Hivatal",

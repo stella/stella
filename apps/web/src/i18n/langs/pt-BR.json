@@ -527,6 +527,16 @@
         "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
       },
       "returnComment": "Motivo da devolução",
+      "returnRefusals": {
+        "invalidEntry": "Confira a data do trabalho do registro e depois devolva-o.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode devolver este registro.",
+        "notFound": "Este registro não existe mais, então não pode ser devolvido. Atualize a lista.",
+        "notSubmitted": "Este rascunho nunca foi enviado, então não há nada a devolver.",
+        "runningTimer": "Pare o cronômetro em andamento antes de devolver este registro.",
+        "timePeriodLocked": "Este mês está bloqueado, então o registro não pode ser devolvido. Peça a um administrador para desbloqueá-lo.",
+        "wrongStatus": "Tempo faturado ou anulado não pode ser devolvido a quem o registrou."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados}}",
       "selectEntry": "Selecionar registro",
       "timeEntries": "Registros de tempo",
       "title": "Aprovações"
@@ -738,6 +748,7 @@
     "markNonBillableSelected": "Marcar como não faturável",
     "matterRequired": "Selecione um caso",
     "minutes": "Minutos",
+    "moveEntryHint": "Ao salvar, o registro passa para este caso e é precificado com as tarifas dele.",
     "narrative": "Narrativa",
     "narrativePlaceholder": "Descreva o trabalho realizado...",
     "noActiveTimer": "Nenhum temporizador ativo",
@@ -1007,7 +1018,6 @@
     "coverage": {
       "completeness": "Completude",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "generatedAt": "Números de {date}",
@@ -1018,20 +1028,16 @@
       "healthStalled": "Sem avanço",
       "healthUnknown": "Nunca executado",
       "inPreparation": "Em preparação",
-      "knownGaps": "Lacunas conhecidas",
       "lastSync": "Última sincronização",
-      "noGapsRecorded": "Nenhuma lacuna registrada",
       "notCountedYet": "Ainda não contado",
       "notMeasuredYet": "Ainda não medido",
-      "pendingTexts": "Textos pendentes",
       "reportedByListing": "Contado a partir da listagem do próprio órgão",
       "reportedByOperator": "Informado manualmente",
       "reportedByPublisher": "Contagem do próprio órgão",
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
-      "unreadListingPeriods": "Períodos da listagem não lidos"
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {

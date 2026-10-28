@@ -75,6 +75,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -725,6 +726,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
                                 )}
                               </kbd>
                             </SidebarMenuBadge>
+                          );
+                        }
+                        if (item.id === "timesheets") {
+                          return (
+                            <PendingApprovalsNavBadge
+                              organizationId={user.activeOrganizationId}
+                              userId={user.id}
+                            />
                           );
                         }
                         if (item.id === "inbox" && openInboxCount > 0) {

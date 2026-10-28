@@ -527,6 +527,16 @@
         "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
       },
       "returnComment": "Powód zwrotu",
+      "returnRefusals": {
+        "invalidEntry": "Sprawdź datę pracy we wpisie, a potem go zwróć.",
+        "notApprover": "Ten wpis może zwrócić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje, więc nie można go zwrócić. Odśwież listę.",
+        "notSubmitted": "Ta wersja robocza nigdy nie została przesłana, więc nie ma czego zwracać.",
+        "runningTimer": "Zatrzymaj działający stoper przed zwróceniem wpisu.",
+        "timePeriodLocked": "Ten miesiąc jest zablokowany, więc wpisu nie można zwrócić. Poproś administratora o jego odblokowanie.",
+        "wrongStatus": "Zafakturowanego ani odpisanego czasu nie można zwrócić autorowi."
+      },
+      "returnSelected": "Zwróć {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
       "selectEntry": "Wybierz wpis",
       "timeEntries": "Wpisy czasu",
       "title": "Zatwierdzenia"
@@ -738,6 +748,7 @@
     "markNonBillableSelected": "Oznacz jako nierozliczalne",
     "matterRequired": "Wybierz sprawę",
     "minutes": "Minuty",
+    "moveEntryHint": "Zapisanie przeniesie wpis do tej sprawy i wyceni go według jej stawek.",
     "narrative": "Opis",
     "narrativePlaceholder": "Opisz wykonaną pracę...",
     "noActiveTimer": "Brak aktywnego timera",
@@ -1007,7 +1018,6 @@
     "coverage": {
       "completeness": "Kompletność",
       "courtsHeading": "Według sądu",
-      "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "generatedAt": "Dane na {date}",
@@ -1018,20 +1028,16 @@
       "healthStalled": "Bez postępu",
       "healthUnknown": "Jeszcze nieuruchomione",
       "inPreparation": "W przygotowaniu",
-      "knownGaps": "Znane luki",
       "lastSync": "Ostatnia synchronizacja",
-      "noGapsRecorded": "Brak zarejestrowanych luk",
       "notCountedYet": "Jeszcze niepoliczone",
       "notMeasuredYet": "Jeszcze niezmierzone",
-      "pendingTexts": "Oczekujące teksty",
       "reportedByListing": "Policzone z wykazu wydawcy",
       "reportedByOperator": "Wpisane ręcznie",
       "reportedByPublisher": "Własne dane wydawcy",
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
-      "unreadListingPeriods": "Nieodczytane okresy wykazu"
+      "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {

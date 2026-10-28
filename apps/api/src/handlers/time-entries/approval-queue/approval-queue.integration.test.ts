@@ -193,9 +193,17 @@ const approveFor = async (
   await approve.handler(
     asTestRaw<ApproveCtx>({ ...context(actor, role), body: { ids: selected } }),
   );
-const returnFor = async (id: SafeId<"timeEntry">, comment: string) =>
+const returnFor = async (
+  selected: SafeId<"timeEntry">[],
+  comment: string,
+  actor = ids.userA2,
+  role: "member" | "owner" = "member",
+) =>
   await returnEntry.handler(
-    asTestRaw<ReturnCtx>({ ...context(), body: { id, comment } }),
+    asTestRaw<ReturnCtx>({
+      ...context(actor, role),
+      body: { ids: selected, comment },
+    }),
   );
 const listFor = async (
   query: ListCtx["query"] = {},
@@ -299,13 +307,14 @@ describe("approval queue authorization", () => {
     }
     expect((await stored(foreign))?.status).toBe("submitted");
     expect((await stored(otherApprover))?.status).toBe("submitted");
-    expect(await returnFor(otherApprover, "Please revise")).toMatchObject({
-      code: 409,
+    expect(await returnFor([otherApprover, foreign], "Please revise")).toEqual({
+      results: [
+        { id: otherApprover, status: "refused", reason: "not_approver" },
+        { id: foreign, status: "refused", reason: "not_found" },
+      ],
     });
     expect((await stored(otherApprover))?.returnComment).toBeNull();
-    expect(await returnFor(foreign, "Please revise")).toMatchObject({
-      code: 404,
-    });
+    expect((await stored(foreign))?.returnComment).toBeNull();
   });
 });
 
@@ -314,12 +323,11 @@ describe("return and reapproval lifecycle", () => {
     const id = await seedEntry();
     await approveFor([id]);
     for (const comment of ["", "   ", "\t\n"]) {
-      expect(await returnFor(id, comment)).toMatchObject({ code: 400 });
+      expect(await returnFor([id], comment)).toMatchObject({ code: 400 });
       expect((await stored(id))?.status).toBe("approved");
     }
-    expect(await returnFor(id, "Please clarify the work")).toEqual({
-      id,
-      status: "draft",
+    expect(await returnFor([id], "Please clarify the work")).toEqual({
+      results: [{ id, status: "returned" }],
     });
     const returned = await stored(id);
     expect(returned).toMatchObject({
@@ -367,6 +375,119 @@ describe("return and reapproval lifecycle", () => {
       returnComment: null,
       returnedAt: null,
       returnedByUserId: null,
+    });
+  });
+});
+
+describe("returning several entries at once", () => {
+  test("one call returns each eligible entry with the same reason, audits each, and refuses the rest per entry", async () => {
+    const submitted = await seedEntry();
+    const approved = await seedEntry({ status: "approved" });
+    const neverSubmitted = await seedEntry({ status: "draft" });
+    const otherApprover = await seedEntry({ approverUserId: ids.userAdmin });
+    const running = await seedEntry({ timerStartedAt: START });
+    const billed = await seedEntry({ status: "billed" });
+    const before = new Date();
+
+    expect(
+      await returnFor(
+        [submitted, approved, neverSubmitted, otherApprover, running, billed],
+        "  Split the call from the drafting  ",
+      ),
+    ).toEqual({
+      results: [
+        { id: submitted, status: "returned" },
+        { id: approved, status: "returned" },
+        { id: neverSubmitted, status: "refused", reason: "not_submitted" },
+        { id: otherApprover, status: "refused", reason: "not_approver" },
+        { id: running, status: "refused", reason: "running_timer" },
+        { id: billed, status: "refused", reason: "wrong_status" },
+      ],
+    });
+    for (const id of [submitted, approved]) {
+      const row = await stored(id);
+      expect(row).toMatchObject({
+        status: "draft",
+        approvedAt: null,
+        approvedByUserId: null,
+        returnedByUserId: ids.userA2,
+        returnComment: "Split the call from the drafting",
+      });
+      expect(row?.returnedAt?.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
+    }
+    expect((await stored(neverSubmitted))?.status).toBe("draft");
+    expect((await stored(neverSubmitted))?.returnComment).toBeNull();
+    for (const [id, status] of [
+      [otherApprover, "submitted"],
+      [running, "submitted"],
+      [billed, "billed"],
+    ] as const) {
+      expect(await stored(id)).toMatchObject({ status, returnComment: null });
+    }
+    const audited = async () =>
+      await db
+        .select({
+          resourceId: auditLogs.resourceId,
+          userId: auditLogs.userId,
+          workspaceId: auditLogs.workspaceId,
+        })
+        .from(auditLogs)
+        .where(
+          inArray(auditLogs.resourceId, [
+            submitted,
+            approved,
+            neverSubmitted,
+            otherApprover,
+            running,
+            billed,
+          ]),
+        );
+    const logs = await audited();
+    expect(logs.map(({ resourceId }) => resourceId).toSorted()).toEqual(
+      [submitted, approved].toSorted(),
+    );
+    for (const log of logs) {
+      expect(log).toMatchObject({ userId: ids.userA2, workspaceId: ids.wsA2 });
+    }
+
+    // Repeating the return changes nothing and audits nothing more.
+    const returnedAt = (await stored(submitted))?.returnedAt;
+    expect(
+      await returnFor(
+        [submitted, approved],
+        "Split the call from the drafting",
+      ),
+    ).toEqual({
+      results: [
+        { id: submitted, status: "returned" },
+        { id: approved, status: "returned" },
+      ],
+    });
+    expect((await stored(submitted))?.returnedAt).toEqual(returnedAt);
+    expect(await audited()).toHaveLength(2);
+  });
+
+  test("an owner returns entries no one is assigned to approve; their timekeeper cannot", async () => {
+    const unassigned = await seedEntry({ approverUserId: null });
+    expect(
+      await returnFor([unassigned], "Add the client reference", ids.userA1),
+    ).toEqual({
+      results: [{ id: unassigned, status: "refused", reason: "not_approver" }],
+    });
+    expect((await stored(unassigned))?.status).toBe("submitted");
+    expect(
+      await returnFor(
+        [unassigned],
+        "Add the client reference",
+        ids.userAdmin,
+        "owner",
+      ),
+    ).toEqual({ results: [{ id: unassigned, status: "returned" }] });
+    expect(await stored(unassigned)).toMatchObject({
+      status: "draft",
+      returnedByUserId: ids.userAdmin,
     });
   });
 });
@@ -463,8 +584,10 @@ describe("approval lifecycle guards", () => {
     expect(await approveFor([id])).toMatchObject({
       results: [{ id, status: "refused", reason: "time_period_locked" }],
     });
-    expect(await returnFor(approvedId, "Please revise")).toMatchObject({
-      code: 409,
+    expect(await returnFor([approvedId], "Please revise")).toEqual({
+      results: [
+        { id: approvedId, status: "refused", reason: "time_period_locked" },
+      ],
     });
     expect((await stored(id))?.status).toBe("submitted");
     expect((await stored(approvedId))?.status).toBe("approved");
@@ -561,10 +684,10 @@ describe("approval policy serialization", () => {
     const returned = await returnEntry.handler(
       asTestRaw<ReturnCtx>({
         ...policyCheckingContext(),
-        body: { id, comment: "Revise" },
+        body: { ids: [id], comment: "Revise" },
       }),
     );
-    expect(returned).toEqual({ id, status: "draft" });
+    expect(returned).toEqual({ results: [{ id, status: "returned" }] });
   });
 
   test("an absent policy is initialized with unchanged effective defaults", async () => {
@@ -742,9 +865,8 @@ describe("internal work approvals", () => {
     expect(await approveFor([id])).toEqual({
       results: [{ id, status: "approved" }],
     });
-    expect(await returnFor(id, "Clarify internal activity")).toEqual({
-      id,
-      status: "draft",
+    expect(await returnFor([id], "Clarify internal activity")).toEqual({
+      results: [{ id, status: "returned" }],
     });
     expect(await stored(id)).toMatchObject({
       workspaceId: null,
