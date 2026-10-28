@@ -87,7 +87,7 @@ const styles: Record<string, React.CSSProperties> = {
   button: {
     backgroundColor: brand.blue,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",
