@@ -655,8 +655,8 @@ jobs:
     permissions:
       contents: write # read the candidate's draft release
     outputs:
-      api: ${{ steps.images.outputs.api }}
-      web: ${{ steps.images.outputs.web }}
+      api: ${{ steps.manifest.outputs.api }}
+      web: ${{ steps.manifest.outputs.web }}
     steps:
       - name: Checkout GitHub API tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -669,7 +669,7 @@ jobs:
 
       - name: Resolve RC manifest images
         timeout-minutes: 5
-        id: images
+        id: manifest
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REF: ${{ inputs.release_ref }}
