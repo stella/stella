@@ -16,6 +16,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { queryAvailability } from "@/lib/availability";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -60,9 +61,15 @@ function UsageSettingsPage() {
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
   const entitlementView = queryView(entitlementQuery);
-  const data =
-    entitlementView.type === "items" ? entitlementView.items : undefined;
-  const isLoading = entitlementView.type === "pending";
+  const availability = queryAvailability(
+    env.VITE_FEATURE_USAGE,
+    entitlementView,
+  );
+  if (availability.status === "disabled") {
+    return null;
+  }
+  const data = availability.status === "ready" ? availability.value : undefined;
+  const isLoading = availability.status === "pending";
   const entitlement = data?.entitlement;
   const packsPurchasable =
     entitlement?.source === "hosted" &&
@@ -74,10 +81,10 @@ function UsageSettingsPage() {
         description={t("settings.organization.usageDescription")}
         title={t("settings.organization.usage")}
       />
-      {entitlementView.type !== "pending" && (
+      {availability.status !== "pending" && (
         <QueryViewFeedback view={entitlementView} />
       )}
-      {entitlementView.type !== "error" && (
+      {availability.status !== "error" && (
         <UsageBody
           data={data?.entitlement ? data : null}
           isLoading={isLoading}
