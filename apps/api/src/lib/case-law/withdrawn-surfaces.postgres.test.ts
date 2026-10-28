@@ -2176,7 +2176,187 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
-  test("reference summary overflow preserves the committed log", async () => {
+  test.each(
+    (["tool", "structured"] as const).flatMap((kind) =>
+      [40 * 1024, 300 * 1024].map((bytes) => ({ kind, bytes })),
+    ),
+  )(
+    "current producer delivers $bytes-byte $kind inputs and masks closed replay",
+    async ({ kind, bytes }) => {
+      const { writer, options } = await liveLogFixture("generic");
+      const assistantId = createSafeId<"chatMessage">();
+      await writer.append([
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: assistantId,
+          role: "assistant",
+        },
+      ]);
+      const referenceSummary = async () =>
+        await scopedDb(
+          async (tx) =>
+            (
+              await tx
+                .select({ state: chatRunLogs.referenceSummary })
+                .from(chatRunLogs)
+                .where(eq(chatRunLogs.runId, options.runId))
+                .limit(1)
+            ).at(0)?.state,
+        );
+      expect((await referenceSummary())?.type).toBe("checkpointed");
+      const ready = Promise.withResolvers<undefined>();
+      let reads = 0;
+      const observedDb = (async (read) => {
+        reads++;
+        if (reads === 2) {
+          ready.resolve(undefined);
+        }
+        return await scopedDb(read);
+      }) satisfies ScopedDb;
+      const live = createChatRunLog({ ...options, db: observedDb });
+      const controller = new AbortController();
+      const liveEntries = live.read("now", controller.signal);
+      const iterator = liveEntries[Symbol.asyncIterator]();
+      const first = iterator.next();
+      await ready.promise;
+      const payload = `{"document":"${"x".repeat(bytes)}${secret}","decisionId":"${decisionId}"}`;
+      const split = payload.length - 20;
+      const chunks = [
+        ...(kind === "tool"
+          ? ([
+              {
+                type: EventType.TOOL_CALL_START,
+                toolCallId: "document",
+                toolCallName: "draft",
+                parentMessageId: assistantId,
+              },
+            ] satisfies StreamChunk[])
+          : ([
+              {
+                type: EventType.CUSTOM,
+                name: "structured-output.start",
+                value: { messageId: assistantId },
+              },
+            ] satisfies StreamChunk[])),
+        ...(kind === "tool"
+          ? ([
+              {
+                type: EventType.TOOL_CALL_ARGS,
+                toolCallId: "document",
+                delta: payload.slice(0, 16),
+              },
+              {
+                type: EventType.TOOL_CALL_ARGS,
+                toolCallId: "document",
+                delta: payload.slice(16, split),
+              },
+              {
+                type: EventType.TOOL_CALL_ARGS,
+                toolCallId: "document",
+                delta: payload.slice(split),
+              },
+              { type: EventType.TOOL_CALL_END, toolCallId: "document" },
+            ] satisfies StreamChunk[])
+          : ([
+              {
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: assistantId,
+                delta: payload.slice(0, 16),
+              },
+              {
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: assistantId,
+                delta: payload.slice(16, split),
+              },
+              {
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: assistantId,
+                delta: payload.slice(split),
+              },
+            ] satisfies StreamChunk[])),
+      ];
+      try {
+        await writer.append(chunks.slice(0, 2));
+        const delivered = [await first, await iterator.next()];
+        for (const chunk of chunks.slice(2)) {
+          const pending = iterator.next();
+          await writer.append([chunk]);
+          delivered.push(await pending);
+        }
+        expect(delivered.map((entry) => entry.value?.chunk)).toEqual(chunks);
+        const state = await referenceSummary();
+        expect(state?.type).toBe("rescan-required");
+        expect(Buffer.byteLength(JSON.stringify(state))).toBeLessThan(1024);
+        expect(JSON.stringify(state)).not.toContain(secret);
+        await writer.close();
+        expect((await iterator.next()).done).toBe(true);
+        const replay = await request(async () => await writer.snapshot());
+        expect(JSON.stringify(replay)).toContain(marker);
+        expect(JSON.stringify(replay)).not.toContain(secret);
+      } finally {
+        controller.abort();
+        await iterator.return?.();
+        await writer.close();
+      }
+    },
+  );
+
+  test("reference reconstruction fallback preserves the existing run byte ceiling", async () => {
+    const { writer, options } = await liveLogFixture("generic");
+    await writer.append([
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "large-document",
+        role: "assistant",
+      },
+      {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "document",
+        toolCallName: "draft",
+        parentMessageId: "large-document",
+      },
+    ]);
+    const before = await scopedDb(
+      async (tx) =>
+        await tx
+          .update(chatRunLogs)
+          .set({ bytesUsed: BigInt(MAX_RUN_BYTES) })
+          .where(eq(chatRunLogs.runId, options.runId))
+          .returning({
+            nextSeq: chatRunLogs.nextSeq,
+            state: chatRunLogs.referenceSummary,
+          }),
+    );
+    expect(before.at(0)?.state.type).toBe("rescan-required");
+    const append = await Result.tryPromise(
+      async () =>
+        await writer.append([
+          {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: "document",
+            delta: "{}",
+          },
+        ]),
+    );
+    expect(append.isErr()).toBe(true);
+    if (append.isErr()) {
+      expect(append.error.cause).toMatchObject({
+        message: "Chat run log exceeds its size limit",
+      });
+    }
+    const after = await scopedDb(
+      async (tx) =>
+        await tx
+          .select({ nextSeq: chatRunLogs.nextSeq })
+          .from(chatRunLogs)
+          .where(eq(chatRunLogs.runId, options.runId))
+          .limit(1),
+    );
+    expect(after.at(0)?.nextSeq).toBe(before.at(0)?.nextSeq);
+    await writer.close();
+  });
+
+  test("reference summary overflow defers reconstruction and preserves append delivery", async () => {
     const { writer, options } = await liveLogFixture("generic");
     await writer.append([
       { type: EventType.RUN_STARTED, runId: options.runId, threadId },
@@ -2209,17 +2389,14 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           },
         ]),
     );
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.cause).toMatchObject({
-        message: "Chat run log reference summary exceeds its size limit",
-      });
-    }
-    expect(await header()).toEqual(before);
+    expect(result.isOk()).toBe(true);
+    const after = await header();
+    expect(after.at(0)?.nextSeq).toBe((before.at(0)?.nextSeq ?? 0n) + 1n);
+    expect(after.at(0)?.state).toMatchObject({ type: "rescan-required" });
     await writer.close();
   });
 
-  test("an incomplete reference summary is refused without rebuilding history", async () => {
+  test("a persisted checkpoint gap is refused on read and repaired by the next append", async () => {
     const { writer, options } = await liveLogFixture("generic");
     await writer.append([
       { type: EventType.RUN_STARTED, runId: options.runId, threadId },
@@ -2251,12 +2428,11 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           { type: EventType.RUN_STARTED, runId: options.runId, threadId },
         ]),
     );
-    expect(append.isErr()).toBe(true);
-    if (append.isErr()) {
-      expect(append.error.cause).toMatchObject({
-        message: "Chat run log reference summary is incomplete",
-      });
-    }
+    expect(append.isOk()).toBe(true);
+    const repaired = await Result.tryPromise(
+      async () => await writer.snapshot(),
+    );
+    expect(repaired.isOk()).toBe(true);
     await writer.close();
   });
 
@@ -2311,7 +2487,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
   );
 
   test.each(["thinking", "activity"] as const)(
-    "bounded SDK carry preserves %s references across appends",
+    "persisted replay preserves %s references across appends",
     async (kind) => {
       const { writer } = await liveLogFixture("generic");
       const assistantId = createSafeId<"chatMessage">();
@@ -2371,7 +2547,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
-  test("bounded carry retains structured references when a stream ends early", async () => {
+  test("persisted replay retains structured references when a stream ends early", async () => {
     const { writer } = await liveLogFixture("generic");
     const assistantId = createSafeId<"chatMessage">();
     await writer.append([
@@ -2533,7 +2709,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           const pages = queries.filter(({ query }) =>
             query.includes('from "chat_run_log_entries"'),
           );
-          expect(pages.length).toBeGreaterThanOrEqual(6);
+          expect(pages.length).toBeGreaterThan(1);
           expect(
             pages.every(
               ({ query, params }) =>
