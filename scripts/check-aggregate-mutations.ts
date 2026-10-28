@@ -903,6 +903,12 @@ const JOINING_RUNNERS = {
       suppliesTransaction: true,
     },
     {
+      module: `${API}db/safe-db.ts`,
+      exported: "resultTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
       module: REGISTRY,
       exported: "withAggregateSavepoint",
       argument: 1,
@@ -1220,6 +1226,55 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
+const hasLockIds = (argument: Argument | undefined): boolean => {
+  if (argument === undefined || argument.type === "SpreadElement") {
+    return false;
+  }
+  const ids = unwrapExpression(argument);
+  return (
+    !(ids.type === "ArrayExpression" && ids.elements.length === 0) &&
+    !(ids.type === "Identifier" && ids.name === "undefined") &&
+    !(ids.type === "Literal" && ids.value === null) &&
+    !(ids.type === "UnaryExpression" && ids.operator === "void")
+  );
+};
+
+const hasWorkspaceParentBatch = (
+  call: CallExpression,
+  access: SourceAccess,
+): boolean => {
+  const options = call.arguments.at(0);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateParentBatch"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        !property.method &&
+        property.kind === "init",
+    )
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (property) => staticPropertyKey(property) === "workspaceIds",
+  );
+  const field = workspaceIds.at(0);
+  return (
+    workspaceIds.length === 1 &&
+    field !== undefined &&
+    isPropertyAssignment(field) &&
+    hasLockIds(field.value)
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
@@ -1275,6 +1330,20 @@ const awaitedAggregateNames = ({
       node.argument.callee.type === "Identifier"
     ) {
       const options = node.argument.arguments.at(0);
+      if (
+        isTrustedImport({
+          identifier: node.argument.callee,
+          access,
+          module: REGISTRY,
+          exported: ["withInvoiceMatterLocks"],
+        }) &&
+        hasLockIds(node.argument.arguments.at(1))
+      ) {
+        names.add("workspace");
+      }
+      if (hasWorkspaceParentBatch(node.argument, access)) {
+        names.add("workspace");
+      }
       if (
         isTrustedImport({
           identifier: node.argument.callee,

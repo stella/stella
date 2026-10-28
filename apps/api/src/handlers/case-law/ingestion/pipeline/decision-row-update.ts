@@ -125,6 +125,7 @@ type ReplacedDecisionState = NonNullable<
 
 type LockedCitationScopeStateOptions = {
   incomingCarriesDocument: boolean;
+  pendingMirrorPayload: DecisionWritePlan["pendingMirrorPayload"];
   preparedMetadata: DecisionWritePlan["preparedMetadata"];
   replacedState: ReplacedDecisionState | null;
   reusedCitationScopeEnvelope: DecisionWritePlan["reusedCitationScopeEnvelope"];
@@ -132,6 +133,7 @@ type LockedCitationScopeStateOptions = {
 
 const lockedCitationScopeState = ({
   incomingCarriesDocument,
+  pendingMirrorPayload,
   preparedMetadata,
   replacedState,
   reusedCitationScopeEnvelope,
@@ -144,9 +146,13 @@ const lockedCitationScopeState = ({
       JSON.stringify(
         sortDeep(replacedState.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
       ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope ?? null)),
-    metadata: preservesDocument
-      ? preserveCitationScopeEnvelope(preparedMetadata, replacedState.metadata)
-      : preparedMetadata,
+    metadata:
+      preservesDocument && pendingMirrorPayload?.astStatus !== "text-only"
+        ? preserveCitationScopeEnvelope(
+            preparedMetadata,
+            replacedState.metadata,
+          )
+        : preparedMetadata,
   };
 };
 
@@ -305,6 +311,7 @@ export const describeRowUpdateTx = async (
     : await replacedDecisionState(tx, existing.id);
   const scopeState = lockedCitationScopeState({
     incomingCarriesDocument,
+    pendingMirrorPayload,
     preparedMetadata,
     replacedState,
     reusedCitationScopeEnvelope,

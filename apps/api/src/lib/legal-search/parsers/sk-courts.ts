@@ -40,6 +40,12 @@ import { PDF, SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import {
+  classifyLineWrap,
+  LINE_JOIN,
+  lineJoinOf,
+  splitsDate,
+} from "@stll/legal-ast/line-wrap";
+import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
@@ -389,8 +395,11 @@ const buildSpanSegments = (
 const STARTS_NEW_PARAGRAPH_RE =
   /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
 
+/** A line set larger than this is the decision title. */
+const TITLE_FONT_SIZE = 14;
+
 function isStructuralStart(line: PdfLine, section: Section): boolean {
-  if (line.fontSize > 14) {
+  if (line.fontSize > TITLE_FONT_SIZE) {
     return true; // title
   }
   if (
@@ -419,11 +428,53 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   return false;
 }
 
+/**
+ * Whether each line continues the sentence of the line before it, as the
+ * shared line-wrap reader decides: the line above was full, ended by the
+ * layout inside a sentence, as in `dňa 22.` / `10. 2003` or `exekútora` /
+ * `JUDr. A. B.`. Whether such a line still opens a point or a signature is
+ * `continuesPastStart`'s call. Bold lines (section markers, headings) and
+ * the title are not running prose, so they neither count toward the page's
+ * line width nor continue anything.
+ */
+const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
+  const prose = lines.map(({ text, bold, fontSize }) =>
+    bold || fontSize > TITLE_FONT_SIZE ? null : text,
+  );
+  const classification = classifyLineWrap(prose);
+  return prose.map(
+    (text, index) =>
+      index > 0 &&
+      lineJoinOf(classification, prose[index - 1] ?? null, text) !==
+        LINE_JOIN.BREAK,
+  );
+};
+
+/**
+ * Whether a structural-looking line the line-wrap reader continues opens
+ * nothing after all. Only two openings can be a wrapped sentence's next
+ * word: the month and year of a date split after its day (`dňa 22.` /
+ * `10. 2003`, as the shared date rule confirms it; a number merely out of
+ * sequence is still a point), and an academic title (`exekútora` /
+ * `JUDr. A. B.`), unless the paragraph above is the closing formula or a
+ * signature, after which a title opens the next signature.
+ */
+const continuesPastStart = (
+  previous: string,
+  line: PdfLine,
+  afterSignatures: boolean,
+): boolean =>
+  splitsDate(previous, line.text) ||
+  (!afterSignatures && SK_JUDGE_TITLE_RE.test(line.text));
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
+  const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
+  /** Whether the paragraph being built is the closing formula or a signature. */
+  let inSignatures = false;
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (line.bold && isSkHoldingMarker(line.text)) {
       section = "holding";
     }
@@ -442,13 +493,20 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // - first line
     // - bold changed
     // - font size changed
-    // - line is a structural start (numbered, section marker)
+    // - line is a structural start (numbered, section marker), unless
+    //   it continues the previous line's sentence (`continuesPastStart`)
     // - previous line was bold (section markers are standalone)
     // Font size tolerance: libpdf/core may report
     // slightly different sizes across pages (e.g., 10.0
     // vs 9.98) due to PDF matrix rounding.
     const fontSizeChanged =
       Math.abs(line.fontSize - (prev?.fontSize ?? 0)) > 0.5;
+    const structuralStart =
+      isStructuralStart(line, section) &&
+      !(
+        continuations[index] === true &&
+        continuesPastStart(lines[index - 1]?.text ?? "", line, inSignatures)
+      );
 
     // SK ÚS PDFs sometimes bold a short continuation
     // (e.g., "zrušuje.", "1 014,41 eur ...") that belongs
@@ -457,17 +515,13 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // section marker. This preserves the prev.bold rule
     // that prevents merging after section headings.
     const boldContinuation =
-      prev &&
-      !prev.bold &&
-      line.bold &&
-      !fontSizeChanged &&
-      !isStructuralStart(line, section);
+      prev && !prev.bold && line.bold && !fontSizeChanged && !structuralStart;
 
     const startNew =
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
-      isStructuralStart(line, section) ||
+      structuralStart ||
       prev.bold;
 
     if (startNew) {
@@ -475,6 +529,9 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
         ...line,
         segments: [...line.segments],
       });
+      inSignatures =
+        SK_CLOSING_RE.test(line.text) ||
+        (inSignatures && SK_JUDGE_TITLE_RE.test(line.text));
     } else {
       // Continuation: append text and segments.
       // Keep latest pageIndex for page boundary detection.
@@ -531,6 +588,50 @@ const boldInline = (text: string): Inline[] => [
 
 type Section = SkDocumentSection;
 
+type AppendDecisionTitleOptions = {
+  blocks: Block[];
+  line: PdfLine;
+  makeId: () => string;
+  makeAnchor: (anchor: string) => string;
+};
+
+const appendDecisionTitle = ({
+  blocks,
+  line,
+  makeId,
+  makeAnchor,
+}: AppendDecisionTitleOptions): void => {
+  const previous = blocks.at(-1);
+  if (previous?.type === "heading" && previous.role === "decision-title") {
+    previous.plainText += ` ${line.text}`;
+    previous.inlines.push(
+      { type: "text", text: " " },
+      ...segmentsToInlines(line.segments),
+    );
+    return;
+  }
+  blocks.push({
+    id: makeId(),
+    anchorId: makeAnchor("h-title"),
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: segmentsToInlines(line.segments),
+    plainText: line.text,
+  });
+};
+
+const createSectionAnchorGenerator = (blocks: readonly Block[]) => {
+  const seen = new Set<string>();
+  return (anchor: string): string => {
+    if (seen.has(anchor)) {
+      return `${anchor}-${blocks.length + 1}`;
+    }
+    seen.add(anchor);
+    return anchor;
+  };
+};
+
 /**
  * Classify extracted PDF lines into AST blocks.
  *
@@ -541,22 +642,18 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
   const makeId = createIdGenerator();
   let blockCount = 0;
   const blocks: Block[] = [];
+  const makeAnchor = createSectionAnchorGenerator(blocks);
   let section: Section = "preamble";
 
   for (const line of lines) {
     const { text, bold, fontSize } = line;
 
     // Decision title: large font or matching decision type
-    if (section === "preamble" && (fontSize > 14 || isSkDecisionTitle(text))) {
-      blocks.push({
-        id: makeId(),
-        anchorId: "h-title",
-        type: "heading",
-        level: 1,
-        role: "decision-title",
-        inlines: segmentsToInlines(line.segments),
-        plainText: text,
-      });
+    if (
+      section === "preamble" &&
+      (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
+    ) {
+      appendDecisionTitle({ blocks, line, makeId, makeAnchor });
       continue;
     }
 
@@ -565,7 +662,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "holding";
       blocks.push({
         id: makeId(),
-        anchorId: "h-holding",
+        anchorId: makeAnchor("h-holding"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -579,7 +676,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "reasoning";
       blocks.push({
         id: makeId(),
-        anchorId: "h-reasoning",
+        anchorId: makeAnchor("h-reasoning"),
         type: "heading",
         level: 2,
         role: "section-heading",
@@ -595,7 +692,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       if (isStandalone) {
         blocks.push({
           id: makeId(),
-          anchorId: "h-instruction",
+          anchorId: makeAnchor("h-instruction"),
           type: "heading",
           level: 2,
           role: "section-heading",

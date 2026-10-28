@@ -89,9 +89,8 @@ jobs:
                 --workflow publish-product-media.yml \
                 --event workflow_dispatch \
                 --json databaseId,createdAt,displayTitle \
-                --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                --limit 10 \
-                | head -n 1
+                --jq "first(.[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId)" \
+                --limit 10
             )"
             if [[ -n "$run_id" ]]; then
               break

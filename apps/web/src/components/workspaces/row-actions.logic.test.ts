@@ -15,6 +15,7 @@ import {
   getOcrSource,
   getOcrSources,
   hasOcrExport,
+  offersCellReview,
   planFolderFromSelection,
   requestDesktopEditTakeover,
   resolveRowMenuSubject,
@@ -462,15 +463,13 @@ describe("row menu sections", () => {
 
   test("keeps a file cell's actions on that cell's own file", () => {
     expect(ROW_MENU_SECTIONS["file-cell"]).toEqual(
-      expect.arrayContaining(["run-ocr", "translate", "cell-review"]),
+      expect.arrayContaining(["run-ocr", "translate"]),
     );
   });
 
-  test("offers cell review on every cell and never on the row", () => {
-    expect(subjectsOffering("cell-review")).toEqual([
-      "file-cell",
-      "row-file-cell",
-      "value-cell",
-    ]);
+  test("offers cell review only on value cells", () => {
+    expect(subjectsOffering("cell-review")).toEqual(["value-cell"]);
+    expect(offersCellReview("file")).toBe(false);
+    expect(offersCellReview("value")).toBe(true);
   });
 });

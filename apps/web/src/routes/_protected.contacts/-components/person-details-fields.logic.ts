@@ -1,6 +1,6 @@
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
@@ -81,22 +81,17 @@ export const parseBirthDateDraft = (
 type FilterNationalityOptionsArgs<T> = {
   countries: readonly T[];
   query: string;
-  locale: string;
 };
 
-/** Locale-aware nationality filtering; accents and field boundaries stay significant. */
+/** Nationalities whose localized name or code matches the query, in order. */
 export const filterNationalityOptions = <
   T extends { name: string; code: string },
 >({
   countries,
   query,
-  locale,
-}: FilterNationalityOptionsArgs<T>): T[] => {
-  const normalizedQuery = query.trim().toLocaleLowerCase(locale);
-  return countries.filter(
-    ({ name, code }) =>
-      !normalizedQuery ||
-      containsSearchMatchKey(name.toLocaleLowerCase(locale), normalizedQuery) ||
-      containsSearchMatchKey(code.toLocaleLowerCase(locale), normalizedQuery),
-  );
-};
+}: FilterNationalityOptionsArgs<T>): T[] =>
+  filterBySearchQuery({
+    items: countries,
+    query,
+    fields: ({ code, name }) => [name, code],
+  });

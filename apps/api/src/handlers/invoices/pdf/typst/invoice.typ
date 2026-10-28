@@ -98,14 +98,22 @@
       data.labels.total,
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
-  // One row per line: the description wraps in its own column beside the figures.
-  ..data.lines.map(line => (
-    line.description,
-    if line.quantity != none { line.quantity } else { [] },
-    if line.unitPrice != none { line.unitPrice } else { [] },
-    line.net,
-    [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
-    text(weight: "medium", line.total),
+  // Lines grouped by matter; one row per line, the description wrapping in its
+  // own column beside the figures.
+  ..data.groups.map(group => (
+    table.cell(colspan: 6, fill: tint, text(weight: "semibold", group.workspaceName)),
+    ..group.lines.map(line => (
+      line.description,
+      if line.quantity != none { line.quantity } else { [] },
+      if line.unitPrice != none { line.unitPrice } else { [] },
+      line.net,
+      [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
+      text(weight: "medium", line.total),
+    )).flatten(),
+    table.cell(colspan: 3, text(weight: "semibold", data.labels.total + ": " + group.workspaceName)),
+    text(weight: "semibold", group.net),
+    text(weight: "semibold", group.vat),
+    text(weight: "semibold", group.total),
   )).flatten(),
 )
 #v(10pt)

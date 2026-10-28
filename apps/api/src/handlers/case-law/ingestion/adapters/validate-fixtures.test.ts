@@ -19,6 +19,7 @@ import {
   type RawIngestionResult,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { ukFclFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -158,4 +159,8 @@ describe("fixture validation", () => {
       ).toBeLessThan(NINETY_DAYS);
     }
   });
+});
+
+test("synthetic UK fixture has the common decision shape", async () => {
+  validateDecision(await ukFclFixture().buildDecision(), 0, "uk-fcl");
 });
