@@ -483,7 +483,6 @@ describe("detect-e2e-changes", () => {
       "Checkout",
       "Resolve available CI images",
       "Plan release marketing screenshots",
-      "Setup Bun for dependency scope",
       "Check changed file scope",
     ]) {
       expect(
@@ -491,6 +490,12 @@ describe("detect-e2e-changes", () => {
         stepName,
       ).toContain("steps.check.outputs.trusted == 'true'");
     }
+    // Bun comes only from the trusted workflow revision, never from the PR checkout.
+    expect(
+      workflowStepValue(plan, "Setup Bun for planning")["with"],
+    ).toMatchObject({
+      "bun-version-file": ".workflow-tooling/package.json",
+    });
     expect(
       requiredExpression(
         workflowStepValue(plan, "Resolve available CI images")["if"],
