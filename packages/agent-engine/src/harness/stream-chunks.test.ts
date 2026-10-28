@@ -516,48 +516,40 @@ describe("chunk stream invariants", () => {
           const results = new Map<string, number>();
           const runIds = new Set<string>();
           for (const [index, chunk] of chunks.entries()) {
-            switch (chunk.type) {
-              case EventType.RUN_STARTED:
-                expect(open).toBe(false);
-                expect(runIds.has(chunk.runId)).toBe(false);
-                runIds.add(chunk.runId);
-                open = true;
-                break;
-              case EventType.RUN_FINISHED:
-              case EventType.RUN_ERROR: {
-                expect(open).toBe(true);
-                open = false;
-                const isPause =
-                  chunk.type === EventType.RUN_FINISHED &&
-                  chunk.outcome?.type === "interrupt";
-                expect(index === chunks.length - 1).toBe(!isPause);
-                if (
-                  chunk.type === EventType.RUN_FINISHED &&
-                  chunk.outcome?.type === "interrupt"
-                ) {
-                  for (const interrupt of chunk.outcome.interrupts) {
-                    expect(started.has(String(interrupt.toolCallId))).toBe(
-                      true,
-                    );
-                  }
-                }
-                break;
+            if (chunk.type === EventType.RUN_STARTED) {
+              expect(open).toBe(false);
+              expect(runIds.has(chunk.runId)).toBe(false);
+              runIds.add(chunk.runId);
+              open = true;
+            } else if (
+              chunk.type === EventType.RUN_FINISHED ||
+              chunk.type === EventType.RUN_ERROR
+            ) {
+              expect(open).toBe(true);
+              open = false;
+              const interrupts =
+                chunk.type === EventType.RUN_FINISHED &&
+                chunk.outcome?.type === "interrupt"
+                  ? chunk.outcome.interrupts
+                  : null;
+              expect(index === chunks.length - 1).toBe(interrupts === null);
+              for (const interrupt of interrupts ?? []) {
+                expect(started.has(String(interrupt.toolCallId))).toBe(true);
               }
-              case EventType.TOOL_CALL_START:
-                expect(open).toBe(true);
-                expect(started.has(chunk.toolCallId)).toBe(false);
-                started.add(chunk.toolCallId);
-                break;
-              case EventType.TOOL_CALL_RESULT:
-                expect(open).toBe(true);
-                expect(started.has(chunk.toolCallId)).toBe(true);
-                results.set(
-                  chunk.toolCallId,
-                  (results.get(chunk.toolCallId) ?? 0) + 1,
-                );
-                break;
-              default:
-                expect(open).toBe(true);
+            } else if (chunk.type === EventType.TOOL_CALL_START) {
+              expect(open).toBe(true);
+              expect(started.has(chunk.toolCallId)).toBe(false);
+              started.add(chunk.toolCallId);
+            } else if (chunk.type === EventType.TOOL_CALL_RESULT) {
+              expect(open).toBe(true);
+              expect(started.has(chunk.toolCallId)).toBe(true);
+              results.set(
+                chunk.toolCallId,
+                (results.get(chunk.toolCallId) ?? 0) + 1,
+              );
+            } else {
+              // Every other chunk belongs inside an open run.
+              expect(open).toBe(true);
             }
           }
           expect(open).toBe(false);
