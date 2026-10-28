@@ -116,11 +116,17 @@ type Asset = {
 type Release = { version: string; assets: Record<Platform, Asset> };
 
 /** The one HTTP call: registry and release metadata, read once per pin bump. */
-const get = async (url: string, headers: HeadersInit): Promise<Response> =>
+const get = async (
+  url: string,
+  headers: Readonly<Record<string, string>>,
+): Promise<Response> =>
   // oxlint-disable-next-line require-polite-publisher-fetch/require-polite-publisher-fetch -- package registry and release metadata, not publisher content; a manual tool making ten requests per pin bump
   await fetch(url, { headers });
 
-const fetchJson = async (url: string, headers: HeadersInit = {}) => {
+const fetchJson = async (
+  url: string,
+  headers: Readonly<Record<string, string>> = {},
+) => {
   const response = await get(url, headers);
   if (!response.ok) {
     return panic(`GET ${url} answered ${String(response.status)}`);
