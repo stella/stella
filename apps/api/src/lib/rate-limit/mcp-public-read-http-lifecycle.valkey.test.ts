@@ -15,6 +15,10 @@ import {
 } from "@/api/lib/legal-search/public-read-timeout-context";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 import {
   ACQUIRE_SCRIPT,
@@ -233,6 +237,143 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               await Promise.allSettled([run]);
             }
           });
+        });
+      });
+    }
+
+    for (const consumption of ["unconsumed", "consumed", "failed"] as const) {
+      test(`${consumption} body keeps its caller slot until settlement`, async () => {
+        await withStore(async (redis) => {
+          const analytics = installRecordingAnalytics();
+          const logs = installRecordingLogger();
+          const identity = caller();
+          const entered = Promise.withResolvers<undefined>();
+          const finish = Promise.withResolvers<undefined>();
+          const failure = new DOMException("Read failed", "NetworkError");
+          let releases = 0;
+          let cancellations = 0;
+          const owner = withMcpPublicReadAdmission({
+            caller: identity,
+            limit: 1,
+            redis: {
+              send: async (command, args) => {
+                if (args.at(0) === RELEASE_SCRIPT) {
+                  releases += 1;
+                }
+                return await redis.send(command, args);
+              },
+            },
+            run: async (signal) =>
+              await runWithPublicReadScope(
+                { budgetMs: 30_000, signal },
+                async () =>
+                  await withPublicReadIo(
+                    "corpus-index",
+                    async (io) =>
+                      await io.fetch(
+                        "https://corpus.fixture/read",
+                        { timeoutMs: 30_000 },
+                        async (response) => {
+                          if (consumption === "consumed") {
+                            const text = await response.text();
+                            entered.resolve(undefined);
+                            await finish.promise;
+                            return text;
+                          }
+                          if (consumption === "failed") {
+                            return await Promise.reject(failure);
+                          }
+                          return "read";
+                        },
+                        async () =>
+                          new Response(
+                            new ReadableStream<Uint8Array>({
+                              start: (controller) => {
+                                if (consumption === "consumed") {
+                                  controller.enqueue(
+                                    new TextEncoder().encode("read"),
+                                  );
+                                  controller.close();
+                                }
+                              },
+                              cancel: async () => {
+                                cancellations += 1;
+                                entered.resolve(undefined);
+                                await finish.promise;
+                                return await Promise.reject(
+                                  new DOMException(
+                                    "private cleanup detail",
+                                    "NetworkError",
+                                  ),
+                                );
+                              },
+                            }),
+                          ),
+                      ),
+                  ),
+              ),
+          });
+          try {
+            await entered.promise;
+            expect(releases).toBe(0);
+            const contender = await withMcpPublicReadAdmission({
+              caller: identity,
+              redis,
+              limit: 1,
+              run: async () => "contender",
+            });
+            expect(contender).toMatchObject({
+              status: "error",
+              error: { code: "action_concurrency_busy" },
+            });
+            finish.resolve(undefined);
+            const admitted = await owner;
+            const outcome = admitted.andThen(({ value }) => value);
+            switch (consumption) {
+              case "unconsumed":
+                expect(outcome).toMatchObject({
+                  status: "error",
+                  error: { _tag: "PublicReadCleanupError" },
+                });
+                break;
+              case "consumed":
+                expect(outcome).toEqual(Result.ok("read"));
+                break;
+              case "failed":
+                expect(outcome).toEqual(Result.err(failure));
+                break;
+              default:
+                consumption satisfies never;
+            }
+            expect(cancellations).toBe(consumption === "consumed" ? 0 : 1);
+            expect(releases).toBe(1);
+            expect(
+              await withMcpPublicReadAdmission({
+                caller: identity,
+                redis,
+                limit: 1,
+                run: async () => "next",
+              }),
+            ).toEqual(Result.ok({ status: "leased", value: "next" }));
+            const observations = logs.records.filter(
+              ({ message }) => message === "public_read.body_cleanup_failed",
+            );
+            expect(observations).toHaveLength(
+              consumption === "consumed" ? 0 : 1,
+            );
+            expect(
+              JSON.stringify({
+                observations,
+                captures: analytics.exceptions(),
+                outcome,
+              }),
+            ).not.toContain("private cleanup detail");
+          } finally {
+            finish.resolve(undefined);
+            await owner;
+            logs.restore();
+            analytics.restore();
+          }
         });
       });
     }

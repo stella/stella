@@ -327,6 +327,7 @@ export const FAILURE_TAGS = [
   "ProvisionBackfillUnitError",
   "PublicLawStatementError",
   "PublicReadAdmissionCoordinationError",
+  "PublicReadCleanupError",
   "PublisherGateReplyError",
   "PublisherPacingStopped",
   "PublisherTargetError",

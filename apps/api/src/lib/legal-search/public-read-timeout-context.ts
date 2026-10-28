@@ -1,12 +1,15 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { declareFingerprintFields } from "@stll/errors";
 import type { Fetcher, FetchWithTimeoutInit } from "@stll/fetch";
 
 import type { Transaction } from "@/api/db/root";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import { detached } from "@/api/lib/analytics/capture";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { fetchPublicReadRequest } from "@/api/lib/safe-outbound-fetch";
 
 import type {
@@ -120,6 +123,37 @@ export type PublicReadIo = {
   readonly signal: AbortSignal | undefined;
 } & PublicReadIoMethods<AnyDrizzle<Transaction>, Transaction>;
 
+class PublicReadCleanupError extends TaggedError("PublicReadCleanupError")<{
+  message: string;
+  phase: "cancel";
+  reason: "unavailable";
+}> {
+  static {
+    declareFingerprintFields(this, ["phase", "reason"]);
+  }
+}
+
+const CLEANUP_FAILURE = failureSink({
+  event: "public_read.body_cleanup_failed",
+  expected: [],
+});
+
+const observeCleanupFailure = (error: unknown) => {
+  if (PublicReadCleanupError.is(error)) {
+    return error;
+  }
+  const failure = new PublicReadCleanupError({
+    message: "Public read body cleanup failed",
+    phase: "cancel",
+    reason: "unavailable",
+  });
+  observeFailure(failure, {
+    sink: CLEANUP_FAILURE,
+    ctx: { source: "public_read", phase: "cancel" },
+  });
+  return failure;
+};
+
 type OwnedResponseOptions = {
   response: Response;
   signal: AbortSignal | undefined;
@@ -138,7 +172,10 @@ const ownedResponse = ({
   const reader = response.body.getReader();
   let state:
     | { status: "active" }
-    | { status: "cancelling"; completion: Promise<void> }
+    | {
+        status: "cancelling";
+        completion: Promise<Result<void, PublicReadCleanupError>>;
+      }
     | { status: "settled" } = { status: "active" };
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const settle = () => {
@@ -154,31 +191,42 @@ const ownedResponse = ({
     switch (state.status) {
       case "settled":
         return;
-      case "cancelling":
-        await state.completion;
+      case "cancelling": {
+        const completed = await state.completion;
+        if (Result.isError(completed)) {
+          await Promise.reject(completed.error);
+        }
         return;
+      }
       case "active":
         break;
       default:
         state satisfies never;
         panic("Unhandled public response state");
     }
-    const completion = Promise.withResolvers<undefined>();
+    const completion =
+      Promise.withResolvers<Result<void, PublicReadCleanupError>>();
     state = { status: "cancelling", completion: completion.promise };
     const cancelled = await Result.tryPromise({
       try: async () => await reader.cancel(reason),
-      catch: (error: unknown) => error,
+      catch: observeCleanupFailure,
     });
     if (Result.isError(cancelled) && !signal?.aborted) {
       controller?.error(cancelled.error);
     }
     settle();
-    completion.resolve(undefined);
+    completion.resolve(cancelled);
+    if (Result.isError(cancelled)) {
+      await Promise.reject(cancelled.error);
+    }
   };
   const abort = () => {
     controller?.error(signal?.reason);
     // The registered operation remains pending until actual stream cancellation settles.
-    detached(cancel(signal?.reason), "public-read.cancel-body");
+    detached(
+      Promise.allSettled([cancel(signal?.reason)]),
+      "public-read.cancel-body",
+    );
   };
   const body = new ReadableStream<Uint8Array>(
     {
@@ -195,7 +243,7 @@ const ownedResponse = ({
         }
         if (Result.isError(next)) {
           streamController.error(next.error);
-          await cancel(next.error);
+          await Promise.allSettled([cancel(next.error)]);
           return;
         }
         if (next.value.done) {
@@ -313,11 +361,20 @@ export const withPublicReadIo = async <T>(
         } finally {
           const body = response.body;
           if (body !== null && !body.locked) {
-            if (consumption === "consumed") {
-              await body.cancel();
+            const cancellation = body.cancel();
+            if (context?.work === undefined) {
+              const cleanup = await Result.tryPromise({
+                try: async () => await cancellation,
+                catch: observeCleanupFailure,
+              });
+              if (consumption === "consumed" && Result.isError(cleanup)) {
+                await Promise.reject(cleanup.error);
+              }
+            } else if (consumption === "consumed") {
+              await cancellation;
             } else {
-              // Consumption failure takes precedence over a cleanup failure.
-              await Promise.allSettled([body.cancel()]);
+              // The reader owner observes cleanup; the original read error wins.
+              await Promise.allSettled([cancellation]);
             }
           }
         }
