@@ -103,7 +103,7 @@ const startReceiver = (
 const analyticsFor = (
   host: string,
   options: PostHogClientOptions = {},
-  deployEnvironment: DeployEnvironment | undefined = undefined,
+  deployEnvironment?: DeployEnvironment,
 ) =>
   createPostHogServerAnalytics("phc_test", host, deployEnvironment, {
     // Timer and size flushes stay out of the way unless a test asks for them.
