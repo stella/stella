@@ -53,6 +53,14 @@ describe("person date of birth precision", () => {
     ).toBeNull();
     expect(
       parseBirthDateDraft({
+        precision: "year",
+        year: String(new Date().getUTCFullYear() + 1),
+        month: "",
+        day: "",
+      }),
+    ).toBeNull();
+    expect(
+      parseBirthDateDraft({
         precision: "day",
         year: "1900",
         month: "2",
