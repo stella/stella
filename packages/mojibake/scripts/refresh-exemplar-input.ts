@@ -51,6 +51,11 @@ export const characterSets = (value: unknown, tag: string) => {
       message: `CLDR ${tag} has no characters object`,
     });
   }
+  if (characters["exemplarCharacters"] === undefined) {
+    throw new ExemplarInputError({
+      message: `CLDR ${tag} has no primary exemplar set`,
+    });
+  }
   const fields = new Map<string, string>();
   for (const field of FIELD_NAMES) {
     const raw = characters[field];

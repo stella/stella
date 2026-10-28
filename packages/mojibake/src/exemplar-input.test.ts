@@ -36,3 +36,17 @@ test("supplement input rejects missing locales and malformed UnicodeSets", () =>
   ).toThrow("CLDR exemplar must be a UnicodeSet string");
   expect(() => normalizedSet("not a set")).toThrow("Invalid CLDR exemplar");
 });
+
+test("resolved primary exemplars must be present but may inherit the empty root set", () => {
+  expect(() =>
+    characterSets({ main: { blt: { characters: {} } } }, "blt"),
+  ).toThrow("CLDR blt has no primary exemplar set");
+  // release-49 root.xml declares []; contributed-only resolution can inherit
+  // it when a locale's own exemplars remain unconfirmed (for example blt).
+  expect(
+    characterSets(
+      { main: { blt: { characters: { exemplarCharacters: "[]" } } } },
+      "blt",
+    ),
+  ).toEqual({ exemplarCharacters: "[]" });
+});
