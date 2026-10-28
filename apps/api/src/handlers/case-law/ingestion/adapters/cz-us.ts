@@ -23,9 +23,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -912,12 +912,14 @@ const parallelCitationIdentifiers = ({
  * they are the two roles of one list, which is why the result carries
  * `judges` rather than a field per role.
  */
+type NalusPublisherRecord = Readonly<Record<NalusDetailLabel, unknown>>;
+
 const NALUS_SOURCE_FIELDS = {
   "Identifikátor evropské judikatury": {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "Název soudu": excludedSourceField(
+  "Název soudu": legacyExcludedSourceField(
     "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
   ),
   "Spisová značka": {
@@ -1012,10 +1014,10 @@ const NALUS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "note" },
   },
-  "URL adresa": excludedSourceField(
+  "URL adresa": legacyExcludedSourceField(
     "the retrieval address of the document the row already stores as sourceUrl",
   ),
-} as const satisfies Record<NalusDetailLabel, SourceFieldDisposition>;
+} as const satisfies Record<keyof NalusPublisherRecord, SourceFieldDisposition>;
 
 /**
  * The record card as it reached the build.

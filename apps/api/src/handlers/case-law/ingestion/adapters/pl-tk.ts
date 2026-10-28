@@ -1396,6 +1396,10 @@ const SOURCE_FIELDS = [
   "Skład",
 ] as const;
 
+type PlTkPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const PL_TK_SOURCE_FIELDS = {
   Sygnatura: {
     disposition: "stored",
@@ -1458,10 +1462,7 @@ const PL_TK_SOURCE_FIELDS = {
     target: { type: "metadata", key: "publications" },
   },
   Skład: { disposition: "stored", target: { type: "result", key: "judges" } },
-} as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof PlTkPublisherRecord, SourceFieldDisposition>;
 
 const listPlTkSourceFields = (parts: SourceRawParts): readonly string[] => {
   const page = parts[PL_TK_RAW_PART.CASE_PAGE];

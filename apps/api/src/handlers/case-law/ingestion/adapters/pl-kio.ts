@@ -612,6 +612,8 @@ type PlKioSourceField = (typeof SOURCE_FIELDS)[number];
 const isSourceField = (value: string): value is PlKioSourceField =>
   SOURCE_FIELDS.some((field) => field === value);
 
+type PlKioPublisherRecord = Readonly<Record<PlKioSourceField, unknown>>;
+
 const PL_KIO_SOURCE_FIELDS = {
   "Organ wydający": {
     disposition: "stored",
@@ -670,7 +672,7 @@ const PL_KIO_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "keywords" },
   },
-} as const satisfies Record<PlKioSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKioPublisherRecord, SourceFieldDisposition>;
 
 /** Response payloads and bounded-read dispositions needed for replay. */
 const RAW_PART = {

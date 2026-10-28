@@ -74,9 +74,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -507,6 +507,8 @@ const JUDGES_FIELD = {
   target: { type: "result", key: "judges" },
 } as const satisfies SourceFieldDisposition;
 
+type PlNcourtPublisherRecord = Readonly<Record<PlNcourtSourceField, unknown>>;
+
 const PL_NCOURT_SOURCE_FIELDS = {
   id: { disposition: "stored", target: { type: "identity" } },
   signature: {
@@ -537,7 +539,7 @@ const PL_NCOURT_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "documentTypes" },
   },
-  excerpt: excludedSourceField(
+  excerpt: legacyExcludedSourceField(
     "the opening characters of the document the document part holds whole",
   ),
   chairman: JUDGES_FIELD,
@@ -603,10 +605,13 @@ const PL_NCOURT_SOURCE_FIELDS = {
   "xPart@xClassifier": DOCUMENT_FIELD,
   "xPart@xClassifierFullName": DOCUMENT_FIELD,
   "xPart@xClassified": DOCUMENT_FIELD,
-  "xPart@xml:space": excludedSourceField(
+  "xPart@xml:space": legacyExcludedSourceField(
     "a serialisation directive for the XML, not a statement about the judgment",
   ),
-} as const satisfies Record<PlNcourtSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlNcourtPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The names a stored document states: its root, its name, its attributes. */
 const contentFieldNames = (content: PlNcourtContent): string[] => [

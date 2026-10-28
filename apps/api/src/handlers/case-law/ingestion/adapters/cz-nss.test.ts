@@ -63,6 +63,11 @@ import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  inspectPublisherFieldCoverage,
+  PUBLISHER_FIELD_COVERAGE_EVENT,
+} from "@/api/lib/legal-search/publisher-field-coverage";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -74,6 +79,72 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 
 /** One backslash, for fixtures that must carry a literal escape. */
 const BACKSLASH = String.fromCodePoint(92);
+
+test("NSS publisher labels remain observable when their mapping is removed", async () => {
+  const detail = await Bun.file(
+    new URL(
+      "__fixtures__/cz-nss-publisher-field-excerpt.html",
+      import.meta.url,
+    ),
+  ).text();
+  const observed = await czNssAdapter.sourceFields.listSourceFields({ detail });
+  expect(observed).toContain("krajskysoud");
+  expect(observed).toContain("vztahkpredpisům");
+  expect(observed).toContain("spzncjnapadenarozhodnutinss");
+
+  const result = Object.freeze({
+    sourceRaw: encodeSourceRawEnvelope({ detail }),
+  });
+  const reports: unknown[] = [];
+  const report = (...args: unknown[]) => {
+    reports.push(args);
+  };
+  const fullyAccounted = {
+    ...czNssAdapter.sourceFields,
+    fields: Object.fromEntries(
+      observed.map((field) => [
+        field,
+        { disposition: "stored", target: { type: "identity" } } as const,
+      ]),
+    ),
+  };
+  await inspectPublisherFieldCoverage({
+    adapterKey: czNssAdapter.key,
+    inventory: fullyAccounted,
+    result,
+    report,
+  });
+  expect(reports).toEqual([]);
+
+  for (const removed of observed) {
+    reports.length = 0;
+    await inspectPublisherFieldCoverage({
+      adapterKey: czNssAdapter.key,
+      inventory: {
+        ...fullyAccounted,
+        fields: Object.fromEntries(
+          Object.entries(fullyAccounted.fields).filter(
+            ([field]) => field !== removed,
+          ),
+        ),
+      },
+      result,
+      report,
+    });
+    expect(reports).toEqual([
+      [
+        PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED,
+        {
+          adapterKey: czNssAdapter.key,
+          recordCount: 1,
+          unmappedFieldCount: 1,
+          retainedRaw: true,
+        },
+      ],
+    ]);
+    expect(decodeSourceRawEnvelope(result.sourceRaw)?.["detail"]).toBe(detail);
+  }
+});
 
 // ── Portal-shaped fixtures ───────────────────────────────
 

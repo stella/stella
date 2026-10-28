@@ -363,6 +363,67 @@ const storedFeedField = {
   disposition: "stored",
   target: { type: "metadata", key: "feedFields" },
 } as const satisfies SourceFieldDisposition;
+type UkFclPublisherRecord = Readonly<
+  Record<
+    | "{http://www.w3.org/2005/Atom}title"
+    | "{http://www.w3.org/2005/Atom}published"
+    | "{http://www.w3.org/2005/Atom}updated"
+    | "{http://www.w3.org/2005/Atom}author"
+    | "{http://www.w3.org/2005/Atom}name"
+    | "{http://www.w3.org/2005/Atom}id"
+    | "{http://www.w3.org/2005/Atom}link"
+    | "{https://caselaw.nationalarchives.gov.uk}uri"
+    | "{https://caselaw.nationalarchives.gov.uk}identifier"
+    | "{https://caselaw.nationalarchives.gov.uk}contenthash"
+    | "{https://caselaw.nationalarchives.gov.uk}assets_base"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}akomaNtoso"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judgment"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}meta"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}identification"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRWork"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRthis"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRuri"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRdate"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRauthor"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRcountry"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRnumber"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRname"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRExpression"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRlanguage"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}FRBRManifestation"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}references"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCOrganization"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCPerson"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}TLCRole"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}proprietary"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}court"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}year"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}number"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}cite"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}parser"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}hash"
+    | "{https://caselaw.nationalarchives.gov.uk/akn}tna-enrichment-engine"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}header"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}p"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}neutralCitation"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}party"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judge"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}docDate"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}block"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}ref"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}judgmentBody"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}decision"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}level"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}heading"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}paragraph"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}num"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}content"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}b"
+    | "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}img",
+    unknown
+  >
+>;
+
 export const UK_FCL_SOURCE_FIELDS = {
   "{http://www.w3.org/2005/Atom}title": storedFeedField,
   "{http://www.w3.org/2005/Atom}published": storedFeedField,
@@ -433,7 +494,7 @@ export const UK_FCL_SOURCE_FIELDS = {
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}content": storedXmlField,
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}b": storedXmlField,
   "{http://docs.oasis-open.org/legaldocml/ns/akn/3.0}img": storedXmlField,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<keyof UkFclPublisherRecord, SourceFieldDisposition>;
 const SOURCE_SURFACES = [
   "listing",
   "document",

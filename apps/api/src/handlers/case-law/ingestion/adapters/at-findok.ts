@@ -17,9 +17,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   sourceTotalRead,
   storedSourceSurface,
@@ -1140,9 +1140,11 @@ const FINDOK_SOURCE_FIELDS_LIST = [
 
 type FindokSourceField = (typeof FINDOK_SOURCE_FIELDS_LIST)[number];
 
-const SEGMENT_BOOKKEEPING = excludedSourceField(
+const SEGMENT_BOOKKEEPING = legacyExcludedSourceField(
   "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
 );
+
+type FindokPublisherRecord = Readonly<Record<FindokSourceField, unknown>>;
 
 const FINDOK_SOURCE_FIELDS = {
   appdat: {
@@ -1155,7 +1157,7 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionType" },
   },
-  gueltig: excludedSourceField(
+  gueltig: legacyExcludedSourceField(
     "the service's own inventory flag: a row it marks invalid is never ingested, so every stored row would carry the same value",
   ),
   gueltigAb: {
@@ -1166,7 +1168,7 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "caseNumber" },
   },
-  inFindokSeit: excludedSourceField(
+  inFindokSeit: legacyExcludedSourceField(
     "a rendering of the timestamp the row states beside it in a sortable form",
   ),
   inFindokSeitDate: {
@@ -1189,7 +1191,7 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/appdat": excludedSourceField(
+  "Grundk/appdat": legacyExcludedSourceField(
     "the manifest row states the decision date",
   ),
   "Grundk/appdatbis": {
@@ -1200,14 +1202,14 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "officiallyPublished" },
   },
-  "Grundk/behoerde": excludedSourceField(
+  "Grundk/behoerde": legacyExcludedSourceField(
     "the manifest row states the deciding authority",
   ),
   "Grundk/betreff": {
     disposition: "stored",
     target: { type: "textField", key: "summary" },
   },
-  "Grundk/doktyptxt": excludedSourceField(
+  "Grundk/doktyptxt": legacyExcludedSourceField(
     "the manifest row states the same decision type",
   ),
   "Grundk/ecli": {
@@ -1226,7 +1228,7 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "findokGid" },
   },
-  "Grundk/gz": excludedSourceField("the manifest row states the docket"),
+  "Grundk/gz": legacyExcludedSourceField("the manifest row states the docket"),
   "Grundk/lastchangedat": {
     disposition: "stored",
     target: { type: "metadata", key: "modified" },
@@ -1243,7 +1245,7 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "statutes" },
   },
-  "Grundk/stammnr": excludedSourceField(
+  "Grundk/stammnr": legacyExcludedSourceField(
     "the manifest row states the same serial, which is also the archive's entry name",
   ),
   "Grundk/uebersex_net": {
@@ -1255,7 +1257,7 @@ const FINDOK_SOURCE_FIELDS = {
     target: { type: "metadata", key: "published" },
   },
   "Segk/dok_fassungsnr": SEGMENT_BOOKKEEPING,
-  "Segk/dokformat": excludedSourceField(
+  "Segk/dokformat": legacyExcludedSourceField(
     "the media type of the body element beside it, which is the one this parser reads",
   ),
   "Segk/fsgnr": SEGMENT_BOOKKEEPING,
@@ -1279,7 +1281,10 @@ const FINDOK_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-} as const satisfies Record<FindokSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof FindokPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** Every field the stored envelope states, read from the payloads themselves. */
 const listFindokSourceFields = (parts: SourceRawParts): readonly string[] => {

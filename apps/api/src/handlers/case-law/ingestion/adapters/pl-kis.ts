@@ -63,8 +63,8 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -926,6 +926,8 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlKisPublisherRecord = Readonly<Record<PlKisSourceField, unknown>>;
+
 const PL_KIS_SOURCE_FIELDS = {
   ID_INFORMACJI: { disposition: "stored", target: { type: "identity" } },
   KATEGORIA_INFORMACJI: {
@@ -963,23 +965,23 @@ const PL_KIS_SOURCE_FIELDS = {
   DATA_REJESTRACJI: metadataField("registeredAt"),
   KOMENTARZE_BIP: metadataField("bipComments"),
   KOM_BIP_OPIS: metadataField("bipCommentNote"),
-  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: excludedSourceField(
+  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: legacyExcludedSourceField(
     "which of the service's editor groups may see a part of the document; it says nothing about the document",
   ),
   WYNIK_ANALIZY: metadataField("analysisResultId"),
-  [`${TOP_PREFIX}id`]: excludedSourceField(
+  [`${TOP_PREFIX}id`]: legacyExcludedSourceField(
     "the same id ID_INFORMACJI states, which keys the row",
   ),
   [`${TOP_PREFIX}versionId`]: metadataField("versionId"),
-  [`${TOP_PREFIX}nazwa`]: excludedSourceField(
+  [`${TOP_PREFIX}nazwa`]: legacyExcludedSourceField(
     "the category's name, which KATEGORIA_INFORMACJI states",
   ),
   [`${TOP_PREFIX}szablonId`]: metadataField("templateId"),
   [`${TOP_PREFIX}wersjaSzablonuId`]: metadataField("templateVersionId"),
-  [`${TOP_PREFIX}informacjaTytulDto`]: excludedSourceField(
+  [`${TOP_PREFIX}informacjaTytulDto`]: legacyExcludedSourceField(
     "an empty list on every document observed; the title is TEZA",
   ),
-} as const satisfies Record<PlKisSourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlKisPublisherRecord, SourceFieldDisposition>;
 
 const KNOWN_FIELDS: ReadonlySet<string> = new Set(SOURCE_FIELDS);
 

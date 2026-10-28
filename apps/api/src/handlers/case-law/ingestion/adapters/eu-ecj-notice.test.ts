@@ -847,7 +847,7 @@ describe("stored Formex refresh", () => {
     expect(outcome.decision.fulltext).not.toBe("");
   });
 
-  test("a successful Formex refresh removes an earlier refusal marker", async () => {
+  test("a successful Formex refresh preserves prior refusal provenance without marking the recovered document incomplete", async () => {
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({
@@ -866,7 +866,7 @@ describe("stored Formex refresh", () => {
     }
     const parts = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(parts?.["formex"]).toBe(formexEn);
-    expect(parts?.["formex-state"]).toBeUndefined();
+    expect(parts?.["formex-state"]).toBe("formex:refused:403");
     expect(outcome.decision.observationDetail).toBe("complete");
   });
 

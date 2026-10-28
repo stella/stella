@@ -59,6 +59,7 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { sourceExclusionCensus } from "@/api/lib/legal-search/source-exclusion-census";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import {
@@ -74,6 +75,8 @@ import {
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
+import legacySourceExclusions from "./legacy-source-exclusions.json";
+
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -87,6 +90,27 @@ const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
 const adapterFor = (key: SourceRegistrationKey) =>
   getSourceRegistration(key)?.source ??
   panic(`${key} is declared but not registered`);
+
+test("every exclusion is visible and legacy exclusions match the migration census exactly", () => {
+  const census = Object.fromEntries(
+    DECLARED_ADAPTER_KEYS.map((key) => [
+      key,
+      sourceExclusionCensus(adapterFor(key).sourceFields),
+    ]),
+  );
+  const legacy = Object.fromEntries(
+    Object.entries(census).flatMap(([key, rows]) => {
+      const fields = Object.fromEntries(
+        rows
+          .filter(({ policy }) => policy === "legacy")
+          .map(({ field, reason }) => [field, reason]),
+      );
+      return Object.keys(fields).length === 0 ? [] : [[key, fields]];
+    }),
+  );
+  expect(legacy).toEqual(legacySourceExclusions);
+  expect(census).toMatchSnapshot();
+});
 
 /** The registry and the fixture census must agree even after runtime widening. */
 const plainTextFixtureFor = (key: SourceRegistrationKey) => {
@@ -313,7 +337,7 @@ describe("every adapter accounts for the fields its source states", () => {
         `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
       ).toEqual([]);
 
-      // `excludedSourceField` rejects a blank reason at the call site, so this
+      // `legacyExcludedSourceField` rejects a blank reason at the call site, so this
       // is the backstop for a reason that reaches an inventory some other way.
       const unreasoned = stated.filter((field) => {
         const disposition: SourceFieldDisposition | undefined =

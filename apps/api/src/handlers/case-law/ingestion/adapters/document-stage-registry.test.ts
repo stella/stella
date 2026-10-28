@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   DOCUMENT_FETCH_EVENT,
@@ -7,7 +7,11 @@ import {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { defineSourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  encodeSourceRawEnvelope,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapters,
   listDocumentStageAdapters,
@@ -15,14 +19,72 @@ import {
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
+import { PUBLISHER_FIELD_COVERAGE_EVENT } from "@/api/lib/legal-search/publisher-field-coverage";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { logger } from "@/api/lib/observability/logger";
+import { plKioFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 defineSourceAdapter({
   ...plKioAdapter,
   // @ts-expect-error PL KIO's manifest requires inline document fetching.
   documentStage: "deferred",
+});
+
+test("publisher drift is retained and counted through live page and reconciliation entrypoints", async () => {
+  const decision = await plKioFixture().buildDecision();
+  const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
+  if (parts === null || parts["detail"] === undefined) {
+    throw new TypeError("PL KIO fixture must retain its publisher detail page");
+  }
+  const sourceRaw = encodeSourceRawEnvelope({
+    ...parts,
+    detail: parts["detail"].replace(
+      '<div class="details-metrics">',
+      '<div class="details-metrics"><p><label>Publisher added field</label><br />Retain this value</p>',
+    ),
+  });
+  expect(sourceRaw).not.toBe(decision.sourceRaw);
+  const observed = { ...decision, sourceRaw };
+  const observedParts = decodeSourceRawEnvelope(sourceRaw);
+  expect(observedParts).not.toBeNull();
+  expect(
+    await plKioAdapter.sourceFields.listSourceFields(observedParts ?? {}),
+  ).toContain("Publisher added field");
+  const page = Result.ok({ decisions: [observed], nextCursor: null });
+  const built = { type: "built", decision: observed } as const;
+  const adapter = defineSourceAdapter({
+    ...plKioAdapter,
+    fetchPage: async () => page,
+    reconciliation: {
+      ...plKioAdapter.reconciliation,
+      buildDecision: async () => built,
+      createSliceBuildDecision: () => async () => built,
+    },
+  });
+  const report = spyOn(logger, "error").mockImplementation(() => {});
+  try {
+    expect(await adapter.fetchPage(null, {})).toBe(page);
+    expect(await adapter.reconciliation.buildDecision({})).toBe(built);
+    expect(await adapter.reconciliation.createSliceBuildDecision()()).toBe(
+      built,
+    );
+    expect(observed.sourceRaw).toBe(sourceRaw);
+    expect(report.mock.calls).toEqual(
+      Array.from({ length: 3 }, () => [
+        PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED,
+        {
+          adapterKey: plKioAdapter.key,
+          recordCount: 1,
+          unmappedFieldCount: 1,
+          retainedRaw: true,
+        },
+      ]),
+    );
+  } finally {
+    report.mockRestore();
+  }
 });
 
 describe("registered document stages", () => {
@@ -165,7 +227,7 @@ test("adapter ownership scopes nested count and factory-created builder failures
   expect(new Set(fingerprints).size).toBe(2);
 });
 
-test("scoped adapter callbacks preserve receivers, arguments, returned promises and rejections", async () => {
+test("scoped adapter callbacks preserve receivers, arguments and rejections while awaiting coverage", async () => {
   const outcome = { type: "unkeyable" } as const;
   const pending = Promise.withResolvers<typeof outcome>();
   const signal = new AbortController().signal;
@@ -212,15 +274,17 @@ test("scoped adapter callbacks preserve receivers, arguments, returned promises 
     payload,
     signal,
   ) satisfies Promise<typeof outcome>;
-  expect(returned).toBe(pending.promise);
+  expect(returned).not.toBe(pending.promise);
   const created = adapter.reconciliation.createSliceBuildDecision();
   const receiver = {};
   expectedBuildReceiver = receiver;
   const factoryReturned = created.call(receiver, payload, signal);
-  expect(factoryReturned).toBe(pending.promise);
+  expect(factoryReturned).not.toBe(pending.promise);
   const failure = new TypeError("fixture callback failure");
   const rejected = rejectionOf(returned);
+  const factoryRejected = rejectionOf(factoryReturned);
   pending.reject(failure);
   expect(await rejected).toBe(failure);
+  expect(await factoryRejected).toBe(failure);
   expect(getExceptionScope()).toBeUndefined();
 });

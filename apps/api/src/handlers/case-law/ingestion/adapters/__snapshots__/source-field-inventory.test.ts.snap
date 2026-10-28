@@ -1,0 +1,1327 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`every exclusion is visible and legacy exclusions match the migration census exactly 1`] = `
+{
+  "at-asylgh": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-bks": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/organ",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-bvwg": [
+    {
+      "field": "Dokument/ecli",
+      "policy": "legacy",
+      "reason": "the listing states the identifier as a field of its own",
+    },
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-courts": [
+    {
+      "field": "Dokument/ecli",
+      "policy": "legacy",
+      "reason": "the listing states the identifier as a field of its own",
+    },
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/norm",
+      "policy": "legacy",
+      "reason": "the listing states the same provisions as a list of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-findok": [
+    {
+      "field": "Grundk/appdat",
+      "policy": "legacy",
+      "reason": "the manifest row states the decision date",
+    },
+    {
+      "field": "Grundk/behoerde",
+      "policy": "legacy",
+      "reason": "the manifest row states the deciding authority",
+    },
+    {
+      "field": "Grundk/doktyptxt",
+      "policy": "legacy",
+      "reason": "the manifest row states the same decision type",
+    },
+    {
+      "field": "Grundk/gz",
+      "policy": "legacy",
+      "reason": "the manifest row states the docket",
+    },
+    {
+      "field": "Grundk/stammnr",
+      "policy": "legacy",
+      "reason": "the manifest row states the same serial, which is also the archive's entry name",
+    },
+    {
+      "field": "Segk/dok_fassungsnr",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/dokformat",
+      "policy": "legacy",
+      "reason": "the media type of the body element beside it, which is the one this parser reads",
+    },
+    {
+      "field": "Segk/fsgnr",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/gid",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/id_multifassung",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/inkraftvon",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/lastchangedat",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/neuzdat",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/segbez",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "Segk/segnr2",
+      "policy": "legacy",
+      "reason": "the archive's own segmentation of one document into versioned pieces, which the row stores whole",
+    },
+    {
+      "field": "gueltig",
+      "policy": "legacy",
+      "reason": "the service's own inventory flag: a row it marks invalid is never ingested, so every stored row would carry the same value",
+    },
+    {
+      "field": "inFindokSeit",
+      "policy": "legacy",
+      "reason": "a rendering of the timestamp the row states beside it in a sortable form",
+    },
+  ],
+  "at-lvwg": [
+    {
+      "field": "Dokument/ecli",
+      "policy": "legacy",
+      "reason": "the listing states the identifier as a field of its own",
+    },
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-ubas": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/organ",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-umse": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/organ",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-uvs": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/organ",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-verg": [
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Dokument/organ",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-vfgh": [
+    {
+      "field": "Dokument/ecli",
+      "policy": "legacy",
+      "reason": "the listing states the identifier as a field of its own",
+    },
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "at-vwgh": [
+    {
+      "field": "Dokument/ecli",
+      "policy": "legacy",
+      "reason": "the listing states the identifier as a field of its own",
+    },
+    {
+      "field": "Dokument/entscheidungsdatum",
+      "policy": "legacy",
+      "reason": "the listing states the decision date as a date",
+    },
+    {
+      "field": "Dokument/gericht",
+      "policy": "legacy",
+      "reason": "the listing states the deciding body in a field of its own",
+    },
+    {
+      "field": "Dokument/gz",
+      "policy": "legacy",
+      "reason": "the listing states every docket of the decision",
+    },
+    {
+      "field": "Judikatur/GesamteEntscheidungUrl",
+      "policy": "legacy",
+      "reason": "the address of a page presenting the decision and its headnotes together, both of which the row keeps as parts of their own",
+    },
+    {
+      "field": "Judikatur/RechtssaetzeUrl",
+      "policy": "legacy",
+      "reason": "the address of a page listing the headnotes the row stores as a part of its own",
+    },
+    {
+      "field": "Judikatur/Vwgh/RechtssatzketteUrl",
+      "policy": "legacy",
+      "reason": "the address of a chain page on the host that answers an automated client with a challenge; the parent headnote it chains is named by an identifier the branch already states",
+    },
+    {
+      "field": "Technisch/Applikation",
+      "policy": "legacy",
+      "reason": "the application this adapter names in its own query, restated in the answer",
+    },
+    {
+      "field": "Technisch/ImportTimestamp",
+      "policy": "legacy",
+      "reason": "nil on every search answer; only the change feed carries a value in it",
+    },
+  ],
+  "cz-ns": [
+    {
+      "field": "Senátní značka",
+      "policy": "legacy",
+      "reason": "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
+    },
+  ],
+  "cz-nss": [
+    {
+      "field": "aktualizovano",
+      "policy": "legacy",
+      "reason": "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbcislo",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbcl",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbodst",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbpism",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbpredpis",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysbrok",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanepravnipredpisysb§",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "aplikovanopravoeu",
+      "policy": "legacy",
+      "reason": "The applied-legislation grid, one column per part of a reference (act, year, number, section, paragraph, letter, article). This source's rows carry no statute list, and reading the columns would mean rebuilding references the grid splits apart.",
+    },
+    {
+      "field": "cj",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "datumnapadenehorozhodnuti",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "datumpravnimoci",
+      "policy": "legacy",
+      "reason": "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    },
+    {
+      "field": "datumpredkladacihorozhodnutinss",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "datumrozhodnutikrajskehosoudu",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "datumskonceniirizeni",
+      "policy": "legacy",
+      "reason": "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    },
+    {
+      "field": "datumvyhotovenirozhodnuti",
+      "policy": "legacy",
+      "reason": "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    },
+    {
+      "field": "datumvypravenirozhodnuti",
+      "policy": "legacy",
+      "reason": "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    },
+    {
+      "field": "datumzahajenirizeni",
+      "policy": "legacy",
+      "reason": "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
+    },
+    {
+      "field": "datumzahajenirizeninka",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "druh",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "hvtparagrafy",
+      "policy": "legacy",
+      "reason": "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
+    },
+    {
+      "field": "identifikacevesbirkach",
+      "policy": "legacy",
+      "reason": "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as \`citation\`.",
+    },
+    {
+      "field": "identifikacevesbirkachdelenejudikat",
+      "policy": "legacy",
+      "reason": "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as \`citation\`.",
+    },
+    {
+      "field": "identifikacevesbirkachdelenerok",
+      "policy": "legacy",
+      "reason": "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as \`citation\`.",
+    },
+    {
+      "field": "identifikacevesbirkachdelenesesit",
+      "policy": "legacy",
+      "reason": "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as \`citation\`.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecideleneclistu",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecideleneporc",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecidelenerejstrik",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecidelenerok",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecidelenesenat",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacnistiznostoznacenivecivcelku",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "kasacniustavnistiznost",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "krajskysoud",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "napadeno",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "nazevorganu",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "nazevsoudusubjektu",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "oznacenivecidelenecislojednaci",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "oznacenivecideleneporadovecislo",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "oznacenivecidelenerejstrikovaznacka",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "oznacenivecidelenerok",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "oznacenivecidelenesenat",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "oznacenivecivcelku",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "podanakasacnistiznostD",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "povaha",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "pravnivetaanv",
+      "policy": "legacy",
+      "reason": "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecideleneclistu",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecideleneporc",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecidelenerejstrik",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecidelenerok",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecidelenesenat",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "prejudikaturaoznacenivecivcelku",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "rozhodnutivevztahukrizeni",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "rozhodnuto",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "rozhodnutonapkasst",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "sbnsspublikovano",
+      "policy": "legacy",
+      "reason": "How the portal identifies the decision inside the court's own reporter, and whether it appeared there at all. The row has no reporter-publication field; the reporter citation itself is stored as \`citation\`.",
+    },
+    {
+      "field": "souladnaprejudikatura",
+      "policy": "legacy",
+      "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "spzncjpredkladacihorozhodnutinss",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "spzncjrizenipodani",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "spzncjrozhodnutispravnihoorganu",
+      "policy": "legacy",
+      "reason": "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    },
+    {
+      "field": "sz",
+      "policy": "legacy",
+      "reason": "The reference this document is filed under, whole and split per part. The row is stored under the reference the listing states, as published, with the docket and sheet split off it.",
+    },
+    {
+      "field": "typucastnika",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "typzastupce",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "ucastnikrizeni",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "zastupce",
+      "policy": "legacy",
+      "reason": "Columns of the participants grid: each party, its role, its representative and that representative's kind. The participants line the portal states for the decision is stored; the grid repeats it per person, and a decision row keeps no personal detail beyond what the decision itself states.",
+    },
+    {
+      "field": "zobrazovanedatum",
+      "policy": "legacy",
+      "reason": "What the portal states about its own record rather than about the decision: when the entry was refreshed, which date its result list sorts on, and the paragraph-search aid printed beside it.",
+    },
+  ],
+  "cz-regional": [
+    {
+      "field": "document.metadata",
+      "policy": "legacy",
+      "reason": "the object holding the thirteen metadata keys below, each of which carries its own disposition",
+    },
+    {
+      "field": "document.styles[].alignment",
+      "policy": "legacy",
+      "reason": "how the paragraph was aligned on the printed page; the document model carries the text and its emphasis, not its layout",
+    },
+    {
+      "field": "document.styles[].hasSpaceAfter",
+      "policy": "legacy",
+      "reason": "vertical spacing below the paragraph on the printed page, which the document model does not represent",
+    },
+    {
+      "field": "document.styles[].hasSpaceBefore",
+      "policy": "legacy",
+      "reason": "vertical spacing above the paragraph on the printed page, which the document model does not represent",
+    },
+    {
+      "field": "document.tableCellInfo",
+      "policy": "legacy",
+      "reason": "a paragraph's placement inside a table; every payload sampled states it as null, so the shape a non-null value would take is unstated and nothing can be read from it",
+    },
+  ],
+  "cz-uohs": [],
+  "cz-us": [
+    {
+      "field": "Název soudu",
+      "policy": "legacy",
+      "reason": "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
+    },
+    {
+      "field": "URL adresa",
+      "policy": "legacy",
+      "reason": "the retrieval address of the document the row already stores as sourceUrl",
+    },
+  ],
+  "eu-ecj": [
+    {
+      "field": "formex.body",
+      "policy": "legacy",
+      "reason": "the same decision text the document part carries, in the publisher's semantic encoding; the part is kept so a later parse can be checked against it rather than read into the row today",
+    },
+    {
+      "field": "notice.EXPRESSION/CREATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository first held this translation's record",
+    },
+    {
+      "field": "notice.EXPRESSION/EXPRESSION_BELONGS_TO_WORK",
+      "policy": "legacy",
+      "reason": "the work this translation belongs to, which is what the row is keyed by",
+    },
+    {
+      "field": "notice.EXPRESSION/EXPRESSION_CASE-LAW_PARTIES",
+      "policy": "legacy",
+      "reason": "the parties' names, which the decision's own text carries and bounds",
+    },
+    {
+      "field": "notice.EXPRESSION/EXPRESSION_MANIFESTED_BY_MANIFESTATION",
+      "policy": "legacy",
+      "reason": "the formats of this translation without their types, which the format records state",
+    },
+    {
+      "field": "notice.EXPRESSION/LANG",
+      "policy": "legacy",
+      "reason": "the two-letter form of this translation's language, which the language concept states",
+    },
+    {
+      "field": "notice.EXPRESSION/LASTMODIFICATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository last touched this translation's record",
+    },
+    {
+      "field": "notice.EXPRESSION/PARTIES",
+      "policy": "legacy",
+      "reason": "the parties' names under a generic name",
+    },
+    {
+      "field": "notice.EXPRESSION/SAMEAS",
+      "policy": "legacy",
+      "reason": "the CELEX and ECLI forms of this translation's address",
+    },
+    {
+      "field": "notice.EXPRESSION/TITLE",
+      "policy": "legacy",
+      "reason": "the translated title under a generic name",
+    },
+    {
+      "field": "notice.EXPRESSION/URI",
+      "policy": "legacy",
+      "reason": "the repository address of this translation",
+    },
+    {
+      "field": "notice.MANIFESTATION/CREATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository first held this format's record",
+    },
+    {
+      "field": "notice.MANIFESTATION/LASTMODIFICATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository last touched this format's record",
+    },
+    {
+      "field": "notice.MANIFESTATION/MANIFESTATION_HAS_ITEM",
+      "policy": "legacy",
+      "reason": "the numbered items of the format, which the content stream resolves on request",
+    },
+    {
+      "field": "notice.MANIFESTATION/MANIFESTATION_MANIFESTS_EXPRESSION",
+      "policy": "legacy",
+      "reason": "the translation this format belongs to, which is this row's",
+    },
+    {
+      "field": "notice.MANIFESTATION/SAMEAS",
+      "policy": "legacy",
+      "reason": "the CELEX and ECLI forms of this format's address",
+    },
+    {
+      "field": "notice.MANIFESTATION/TYPE",
+      "policy": "legacy",
+      "reason": "the ontology classes of the format record",
+    },
+    {
+      "field": "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT.MEMBERLIST",
+      "policy": "legacy",
+      "reason": "a wrapper listing the directory chains stated beside it, with no level of its own",
+    },
+    {
+      "field": "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY_ROLE-QUALIFIER",
+      "policy": "legacy",
+      "reason": "the same country as the originating-country field, carrying the role it is named in",
+    },
+    {
+      "field": "notice.WORK/COMPLEX_WORK_HAS_MEMBER_WORK",
+      "policy": "legacy",
+      "reason": "a grouping work verified to carry no expression and no manifestation",
+    },
+    {
+      "field": "notice.WORK/CREATED_BY",
+      "policy": "legacy",
+      "reason": "the agent link of the created-by-agent field, without the corporate body that names the court",
+    },
+    {
+      "field": "notice.WORK/CREATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository first held the record, which moves when the Office re-indexes",
+    },
+    {
+      "field": "notice.WORK/DATE",
+      "policy": "legacy",
+      "reason": "the document date under a generic name; the dated field is read instead",
+    },
+    {
+      "field": "notice.WORK/DATE_CREATION_LEGACY",
+      "policy": "legacy",
+      "reason": "the document date as an earlier system recorded it",
+    },
+    {
+      "field": "notice.WORK/DATE_DOCUMENT",
+      "policy": "legacy",
+      "reason": "the document date under a second generic name",
+    },
+    {
+      "field": "notice.WORK/IDENTIFIER",
+      "policy": "legacy",
+      "reason": "the ECLI with its scheme prefixed, which the ECLI field states plain",
+    },
+    {
+      "field": "notice.WORK/ID_CELEX",
+      "policy": "legacy",
+      "reason": "the CELEX number under a generic name",
+    },
+    {
+      "field": "notice.WORK/ID_SECTOR",
+      "policy": "legacy",
+      "reason": "the first character of the CELEX number, which the CELEX number carries",
+    },
+    {
+      "field": "notice.WORK/IS_ABOUT",
+      "policy": "legacy",
+      "reason": "the subject concepts flattened out of the chains that state their depth",
+    },
+    {
+      "field": "notice.WORK/LASTMODIFICATIONDATE",
+      "policy": "legacy",
+      "reason": "when the repository last touched the record, which moves when the Office re-indexes",
+    },
+    {
+      "field": "notice.WORK/PART_OF",
+      "policy": "legacy",
+      "reason": "the container work under a generic name; its coordinates are read from the container itself",
+    },
+    {
+      "field": "notice.WORK/RESOURCE_LEGAL_NUMBER_NATURAL_CELEX",
+      "policy": "legacy",
+      "reason": "the case number digits of the CELEX number, which the CELEX number carries",
+    },
+    {
+      "field": "notice.WORK/RESOURCE_LEGAL_YEAR",
+      "policy": "legacy",
+      "reason": "the year digits of the CELEX number, which the CELEX number carries",
+    },
+    {
+      "field": "notice.WORK/SAMEAS",
+      "policy": "legacy",
+      "reason": "the CELEX and ECLI forms of this work's address, both read from their own fields",
+    },
+    {
+      "field": "notice.WORK/TYPE",
+      "policy": "legacy",
+      "reason": "the ontology classes of the record, which describe the repository's model rather than the decision",
+    },
+    {
+      "field": "notice.WORK/URI",
+      "policy": "legacy",
+      "reason": "the repository address of the work, which the row holds as the address the document was served from",
+    },
+    {
+      "field": "notice.WORK/WORK_HAS_EXPRESSION",
+      "policy": "legacy",
+      "reason": "the other language expressions of this work, each of which is a row of its own",
+    },
+    {
+      "field": "notice.WORK/WORK_ID_DOCUMENT",
+      "policy": "legacy",
+      "reason": "the CELEX number with its scheme prefixed",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS",
+      "policy": "legacy",
+      "reason": "the works of the case file under a generic relation, which the case event lists",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK",
+      "policy": "legacy",
+      "reason": "this decision restated as a member of its own case file",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TITLE",
+      "policy": "legacy",
+      "reason": "the docket without its scheme, which the case-file identifier carries whole",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TYPE_REFERENCE",
+      "policy": "legacy",
+      "reason": "that the file is a case, which is the scheme its identifier already names",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/PART_OF",
+      "policy": "legacy",
+      "reason": "the case file the delivery event belongs to, which the case-file identifier names",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_DOSSIER/TYPE",
+      "policy": "legacy",
+      "reason": "the ontology classes of the case-file record",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/CONTAINS",
+      "policy": "legacy",
+      "reason": "the decisions the Reports volume holds, which are documents of their own",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_TITLE",
+      "policy": "legacy",
+      "reason": "the title of the Reports volume, not of the decision",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_USES_LANGUAGE",
+      "policy": "legacy",
+      "reason": "the language the Reports volume's own title is given in",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/NUMBER",
+      "policy": "legacy",
+      "reason": "the container number under a generic name",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/TYPE",
+      "policy": "legacy",
+      "reason": "the ontology classes of the container record",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/WORK_DATE_DOCUMENT",
+      "policy": "legacy",
+      "reason": "the decision date restated on its container",
+    },
+    {
+      "field": "notice.WORK/WORK_PART_OF_WORK/WORK_HAS_RESOURCE-TYPE",
+      "policy": "legacy",
+      "reason": "that the container is the Reports of Cases, which its coordinates already name",
+    },
+    {
+      "field": "notice.WORK/YEAR",
+      "policy": "legacy",
+      "reason": "the case year under a generic name",
+    },
+  ],
+  "hu-bhgy": [
+    {
+      "field": "DownloadLink",
+      "policy": "legacy",
+      "reason": "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag",
+    },
+    {
+      "field": "NemHivatkozhatoSzoveg",
+      "policy": "legacy",
+      "reason": "null on every row the search serves; the citability filter changes no count it reports",
+    },
+    {
+      "field": "RezumeSzovegKornyezet",
+      "policy": "legacy",
+      "reason": "keyword-search highlight over Rezume, which is stored whole",
+    },
+    {
+      "field": "Szoveg",
+      "policy": "legacy",
+      "reason": "always null on a listing row; the decision's text is the downloaded document",
+    },
+  ],
+  "pl-courts": [],
+  "pl-kio": [],
+  "pl-kis": [
+    {
+      "field": "POZIOM_DOSTEPU_WYBRANEJ_TRESCI",
+      "policy": "legacy",
+      "reason": "which of the service's editor groups may see a part of the document; it says nothing about the document",
+    },
+    {
+      "field": "informacja/id",
+      "policy": "legacy",
+      "reason": "the same id ID_INFORMACJI states, which keys the row",
+    },
+    {
+      "field": "informacja/informacjaTytulDto",
+      "policy": "legacy",
+      "reason": "an empty list on every document observed; the title is TEZA",
+    },
+    {
+      "field": "informacja/nazwa",
+      "policy": "legacy",
+      "reason": "the category's name, which KATEGORIA_INFORMACJI states",
+    },
+  ],
+  "pl-ncourt": [
+    {
+      "field": "excerpt",
+      "policy": "legacy",
+      "reason": "the opening characters of the document the document part holds whole",
+    },
+    {
+      "field": "xPart@xml:space",
+      "policy": "legacy",
+      "reason": "a serialisation directive for the XML, not a statement about the judgment",
+    },
+  ],
+  "pl-nsa": [],
+  "pl-sn": [],
+  "pl-tk": [],
+  "pl-uodo": [
+    {
+      "field": "type",
+      "policy": "legacy",
+      "reason": "the record format's own name; every record the search returns carries the same value",
+    },
+    {
+      "field": "version",
+      "policy": "legacy",
+      "reason": "the version of the record format, not a fact about the document",
+    },
+  ],
+  "pl-uokik": [
+    {
+      "field": "listing.@position",
+      "policy": "legacy",
+      "reason": "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
+    },
+    {
+      "field": "listing.@siblings",
+      "policy": "legacy",
+      "reason": "the view's size, the same on every row; the total probe reads it",
+    },
+    {
+      "field": "listing.entrydata",
+      "policy": "legacy",
+      "reason": "the column container; each value in it is declared below",
+    },
+  ],
+  "sk-courts": [
+    {
+      "field": "povodnySud.adresaString",
+      "policy": "legacy",
+      "reason": "the transferring courthouse's postal address, as for the deciding court's",
+    },
+    {
+      "field": "povodnySud.suradnice.zemepisnaDlzka",
+      "policy": "legacy",
+      "reason": "the transferring courthouse's map position, as for the deciding court's",
+    },
+    {
+      "field": "povodnySud.suradnice.zemepisnaSirka",
+      "policy": "legacy",
+      "reason": "the transferring courthouse's map position, as for the deciding court's",
+    },
+    {
+      "field": "sud.adresaString",
+      "policy": "legacy",
+      "reason": "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
+    },
+    {
+      "field": "sud.suradnice.zemepisnaDlzka",
+      "policy": "legacy",
+      "reason": "the courthouse's map position, as for its address",
+    },
+    {
+      "field": "sud.suradnice.zemepisnaSirka",
+      "policy": "legacy",
+      "reason": "the courthouse's map position, as for its address",
+    },
+    {
+      "field": "zvyraznenie",
+      "policy": "legacy",
+      "reason": "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
+    },
+  ],
+  "sk-us": [
+    {
+      "field": "content",
+      "policy": "legacy",
+      "reason": "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
+    },
+    {
+      "field": "extension",
+      "policy": "legacy",
+      "reason": "empty on every record of every corpus this endpoint serves",
+    },
+    {
+      "field": "index",
+      "policy": "legacy",
+      "reason": "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
+    },
+    {
+      "field": "mkDecisionInTermsOfForSort",
+      "policy": "legacy",
+      "reason": "a sort projection of the basis field: the same values flattened into one string",
+    },
+    {
+      "field": "size",
+      "policy": "legacy",
+      "reason": "empty on every record of every corpus this endpoint serves",
+    },
+  ],
+  "uk-fcl": [],
+  "us-courtlistener": [],
+}
+`;

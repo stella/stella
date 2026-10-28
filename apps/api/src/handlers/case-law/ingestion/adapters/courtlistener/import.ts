@@ -1,4 +1,9 @@
 import { IMPORT_SOURCE_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  recordPublisherFieldCoverage,
+  retainedPublisherParts,
+} from "@/api/lib/legal-search/publisher-field-coverage";
+import { logger } from "@/api/lib/observability/logger";
 
 import {
   COURTLISTENER_SOURCE_FIELD_INVENTORY,
@@ -21,7 +26,20 @@ export const courtListenerImport = {
   language: "en",
   manifest,
   parserVersion: COURTLISTENER_PARSER_VERSION,
-  mapRecord: mapCourtListenerRecord,
+  mapRecord: (input: unknown) =>
+    mapCourtListenerRecord(input).tap((result) => {
+      const parts = retainedPublisherParts({
+        adapterKey: manifest.key,
+        result,
+      });
+      recordPublisherFieldCoverage({
+        adapterKey: manifest.key,
+        inventory: COURTLISTENER_SOURCE_FIELD_INVENTORY,
+        observedFields:
+          COURTLISTENER_SOURCE_FIELD_INVENTORY.listSourceFields(parts),
+        report: logger.error,
+      });
+    }),
   reparseStoredRaw,
   sourceFields: COURTLISTENER_SOURCE_FIELD_INVENTORY,
   sourceSurfaces: COURTLISTENER_SOURCE_SURFACES,

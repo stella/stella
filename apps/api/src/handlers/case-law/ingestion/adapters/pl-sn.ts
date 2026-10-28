@@ -1002,6 +1002,10 @@ const SOURCE_FIELDS = [
   "data_modyfikacji",
 ] as const;
 
+type PlSnPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const PL_SN_SOURCE_FIELDS = {
   sygnatura_sprawy: {
     disposition: "stored",
@@ -1062,10 +1066,7 @@ const PL_SN_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "modifiedDate" },
   },
-} as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof PlSnPublisherRecord, SourceFieldDisposition>;
 
 /**
  * What the publisher labels for one decision.

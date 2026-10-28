@@ -1322,6 +1322,10 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlNsaPublisherRecord = Readonly<
+  Record<SourceField | keyof PlNsaRow, unknown>
+>;
+
 const PL_NSA_SOURCE_FIELDS = {
   country: metadataField("dataset"),
   court_type: metadataField("dataset"),
@@ -1365,7 +1369,7 @@ const PL_NSA_SOURCE_FIELDS = {
   // The dataset's own rendering of the sections under their headings: the
   // text the parsed document is checked against, kept verbatim in the row.
   full_text: { disposition: "stored", target: { type: "document" } },
-} as const satisfies Record<SourceField, SourceFieldDisposition>;
+} as const satisfies Record<keyof PlNsaPublisherRecord, SourceFieldDisposition>;
 
 /** What the stored row states: its columns and the fields of its lists. */
 const listPlNsaSourceFields = (parts: SourceRawParts): readonly string[] => {

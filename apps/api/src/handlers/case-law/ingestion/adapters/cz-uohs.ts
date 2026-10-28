@@ -16,7 +16,10 @@ import {
   sourceTotalRead,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import {
   readPublisherBytes,
@@ -92,6 +95,9 @@ const recordSchema = v.looseObject({
   dokument: v.array(v.looseObject({ typ: v.string(), url: v.string() })),
 });
 type CzUohsRecord = v.InferOutput<typeof recordSchema>;
+type CzUohsPublisherRecord = {
+  [TField in keyof typeof recordSchema.entries]: CzUohsRecord[TField];
+};
 
 const listingSchema = v.looseObject({ rozhodnutí: v.array(recordSchema) });
 
@@ -726,7 +732,10 @@ export const czUohsAdapter = defineSourceAdapter({
         disposition: "stored",
         target: { type: "metadata", key: "documents" },
       },
-    },
+    } as const satisfies Record<
+      keyof CzUohsPublisherRecord,
+      SourceFieldDisposition
+    >,
     listSourceFields: ({ listing }) => {
       const parsed: unknown = JSON.parse(listing ?? "{}");
       return isRecord(parsed) ? Object.keys(parsed) : [];

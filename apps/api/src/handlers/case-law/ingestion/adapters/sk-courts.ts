@@ -25,9 +25,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -112,6 +112,7 @@ import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -256,11 +257,13 @@ const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
 /**
  * A courthouse's map position.
  *
- * Named but not read into: the inventory excludes both coordinates, so the
- * guard accepts the object the schema promises rather than asserting a shape
- * nothing depends on.
+ * The publisher uses numeric and textual coordinate spellings. Naming both
+ * leaves makes a schema addition require an inventory disposition.
  */
-type SkSuradnice = Readonly<Record<string, unknown>>;
+type SkSuradnice = {
+  zemepisnaDlzka?: number | string | null;
+  zemepisnaSirka?: number | string | null;
+};
 
 /**
  * A court as this service's `BaseSud` schema declares it, excluded registry
@@ -1809,13 +1812,13 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "court" },
   },
-  "sud.adresaString": excludedSourceField(
+  "sud.adresaString": legacyExcludedSourceField(
     "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
   ),
-  "sud.suradnice.zemepisnaDlzka": excludedSourceField(
+  "sud.suradnice.zemepisnaDlzka": legacyExcludedSourceField(
     "the courthouse's map position, as for its address",
   ),
-  "sud.suradnice.zemepisnaSirka": excludedSourceField(
+  "sud.suradnice.zemepisnaSirka": legacyExcludedSourceField(
     "the courthouse's map position, as for its address",
   ),
   "sudca.registreGuid": {
@@ -1838,7 +1841,7 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  zvyraznenie: excludedSourceField(
+  zvyraznenie: legacyExcludedSourceField(
     "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
   ),
   ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
@@ -1887,20 +1890,23 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "originCourt" },
   },
-  "povodnySud.adresaString": excludedSourceField(
+  "povodnySud.adresaString": legacyExcludedSourceField(
     "the transferring courthouse's postal address, as for the deciding court's",
   ),
-  "povodnySud.suradnice.zemepisnaDlzka": excludedSourceField(
+  "povodnySud.suradnice.zemepisnaDlzka": legacyExcludedSourceField(
     "the transferring courthouse's map position, as for the deciding court's",
   ),
-  "povodnySud.suradnice.zemepisnaSirka": excludedSourceField(
+  "povodnySud.suradnice.zemepisnaSirka": legacyExcludedSourceField(
     "the transferring courthouse's map position, as for the deciding court's",
   ),
   povodnaSpisovaZnacka: {
     disposition: "stored",
     target: { type: "metadata", key: "originCaseNumber" },
   },
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  SourceRecordPaths<SkDetailItem>,
+  SourceFieldDisposition
+>;
 
 /** The paths the inventory decides about, for the schema diff in the tests. */
 export const SK_COURTS_SOURCE_FIELD_PATHS = Object.keys(

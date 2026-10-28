@@ -3,9 +3,9 @@
  * The CourtListener bulk CSV columns of the pinned 2026-06-30 snapshot, one
  * map per table in header order, each column with what becomes of it.
  *
- * The maps are the header: the admitted row shape is derived from their keys,
- * so a column cannot be admitted without a disposition, and a row holding a
- * column the snapshot lacks, or lacking one it has, is schema drift. A column
+ * The pinned headers declare the publisher records independently of their
+ * disposition maps. Admitting a new column requires a map entry at compile
+ * time; removing an entry cannot silently narrow the accepted row. A column
  * excluded here is still kept in the stored raw; exclusion says only that the
  * decision row does not carry it.
  */
@@ -13,7 +13,7 @@
 import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
 import {
-  excludedSourceField,
+  legacyExcludedSourceField,
   type SourceFieldDisposition,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
@@ -50,38 +50,79 @@ const DOCUMENT: SourceFieldDisposition = {
   target: { type: "document" },
 };
 
-const TIMESTAMP = excludedSourceField(
+const TIMESTAMP = legacyExcludedSourceField(
   "publisher record-keeping timestamp, not a date the decision states",
 );
-const JOIN_KEY = excludedSourceField(
+const JOIN_KEY = legacyExcludedSourceField(
   "join key to a parent row, verified equal on admission",
 );
-const FILE_PATH = excludedSourceField(
+const FILE_PATH = legacyExcludedSourceField(
   "storage or archive path of a file this record does not fetch",
 );
-const TRIAL = excludedSourceField(
+const TRIAL = legacyExcludedSourceField(
   "trial-docket administration data the decision does not state",
 );
-const ASSIGNED = excludedSourceField(
+const ASSIGNED = legacyExcludedSourceField(
   "trial-level judge assignment; judges come from opinion attribution",
 );
-const DIRECTORY = excludedSourceField(
+const DIRECTORY = legacyExcludedSourceField(
   "court directory attribute; the generated directory owns court identity",
 );
-const BIO = excludedSourceField(
+const BIO = legacyExcludedSourceField(
   "biographical data; the decision states only who wrote or joined",
 );
-const RESTATED = excludedSourceField(
+const RESTATED = legacyExcludedSourceField(
   "restates the cluster's case name or slug, which are stored",
 );
-const BINARY = excludedSourceField(
+const BINARY = legacyExcludedSourceField(
   "attribute of the binary rendition, which this record does not fetch",
 );
-const DOCKET_BLOCK = excludedSourceField(
+const DOCKET_BLOCK = legacyExcludedSourceField(
   "the cluster's blocking state is stored; the docket's serves admission",
 );
 
 /** `opinion-clusters-2026-06-30.csv` */
+export const CLUSTER_COLUMNS = [
+  "id",
+  "date_created",
+  "date_modified",
+  "judges",
+  "date_filed",
+  "date_filed_is_approximate",
+  "slug",
+  "case_name_short",
+  "case_name",
+  "case_name_full",
+  "scdb_id",
+  "scdb_decision_direction",
+  "scdb_votes_majority",
+  "scdb_votes_minority",
+  "source",
+  "procedural_history",
+  "attorneys",
+  "nature_of_suit",
+  "posture",
+  "syllabus",
+  "headnotes",
+  "summary",
+  "disposition",
+  "history",
+  "other_dates",
+  "cross_reference",
+  "correction",
+  "citation_count",
+  "precedential_status",
+  "date_blocked",
+  "blocked",
+  "filepath_json_harvard",
+  "filepath_pdf_harvard",
+  "docket_id",
+  "arguments",
+  "headmatter",
+] as const;
+
+type ClusterPublisherRecord = CsvRow<(typeof CLUSTER_COLUMNS)[number]>;
+
 export const CLUSTER_FIELDS = {
   id: { disposition: "stored", target: { type: "identity" } },
   date_created: TIMESTAMP,
@@ -110,7 +151,7 @@ export const CLUSTER_FIELDS = {
   other_dates: meta("otherDates"),
   cross_reference: meta("crossReference"),
   correction: meta("correction"),
-  citation_count: excludedSourceField(
+  citation_count: legacyExcludedSourceField(
     "count of citing decisions at export time, not read as treatment",
   ),
   precedential_status: meta("precedentialStatus"),
@@ -121,14 +162,78 @@ export const CLUSTER_FIELDS = {
   docket_id: JOIN_KEY,
   arguments: DOCUMENT,
   headmatter: DOCUMENT,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof ClusterPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** `dockets-2026-06-30.csv` */
+export const DOCKET_COLUMNS = [
+  "id",
+  "date_created",
+  "date_modified",
+  "source",
+  "appeal_from_str",
+  "assigned_to_str",
+  "referred_to_str",
+  "panel_str",
+  "date_last_index",
+  "date_cert_granted",
+  "date_cert_denied",
+  "date_argued",
+  "date_reargued",
+  "date_reargument_denied",
+  "date_filed",
+  "date_terminated",
+  "date_last_filing",
+  "case_name_short",
+  "case_name",
+  "case_name_full",
+  "slug",
+  "docket_number",
+  "docket_number_core",
+  "pacer_case_id",
+  "cause",
+  "nature_of_suit",
+  "jury_demand",
+  "jurisdiction_type",
+  "appellate_fee_status",
+  "appellate_case_type_information",
+  "mdl_status",
+  "filepath_local",
+  "filepath_ia",
+  "filepath_ia_json",
+  "ia_upload_failure_count",
+  "ia_needs_upload",
+  "ia_date_first_change",
+  "view_count",
+  "date_blocked",
+  "blocked",
+  "appeal_from_id",
+  "assigned_to_id",
+  "court_id",
+  "idb_data_id",
+  "originating_court_information_id",
+  "referred_to_id",
+  "federal_dn_case_type",
+  "federal_dn_office_code",
+  "federal_dn_judge_initials_assigned",
+  "federal_dn_judge_initials_referred",
+  "federal_defendant_number",
+  "parent_docket_id",
+  "docket_number_raw",
+  "docket_number_source",
+] as const;
+
+type DocketPublisherRecord = CsvRow<(typeof DOCKET_COLUMNS)[number]>;
+
 export const DOCKET_FIELDS = {
   id: meta("courtListener"),
   date_created: TIMESTAMP,
   date_modified: TIMESTAMP,
-  source: excludedSourceField("publisher code for how it acquired the docket"),
+  source: legacyExcludedSourceField(
+    "publisher code for how it acquired the docket",
+  ),
   appeal_from_str: meta("appealFrom"),
   assigned_to_str: ASSIGNED,
   referred_to_str: ASSIGNED,
@@ -162,10 +267,12 @@ export const DOCKET_FIELDS = {
   ia_upload_failure_count: TIMESTAMP,
   ia_needs_upload: TIMESTAMP,
   ia_date_first_change: TIMESTAMP,
-  view_count: excludedSourceField("page-view counter of the publisher's site"),
+  view_count: legacyExcludedSourceField(
+    "page-view counter of the publisher's site",
+  ),
   date_blocked: DOCKET_BLOCK,
   blocked: DOCKET_BLOCK,
-  appeal_from_id: excludedSourceField(
+  appeal_from_id: legacyExcludedSourceField(
     "directory ID of the court below; appealFrom keeps its printed name",
   ),
   assigned_to_id: ASSIGNED,
@@ -181,9 +288,37 @@ export const DOCKET_FIELDS = {
   parent_docket_id: TRIAL,
   docket_number_raw: meta("docketNumberRaw"),
   docket_number_source: TRIAL,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof DocketPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** `courts-2026-06-30.csv` */
+export const COURT_COLUMNS = [
+  "id",
+  "pacer_court_id",
+  "pacer_has_rss_feed",
+  "pacer_rss_entry_types",
+  "date_last_pacer_contact",
+  "fjc_court_id",
+  "date_modified",
+  "in_use",
+  "has_opinion_scraper",
+  "has_oral_argument_scraper",
+  "position",
+  "citation_string",
+  "short_name",
+  "full_name",
+  "url",
+  "start_date",
+  "end_date",
+  "jurisdiction",
+  "notes",
+  "parent_court_id",
+] as const;
+
+type CourtPublisherRecord = CsvRow<(typeof COURT_COLUMNS)[number]>;
+
 export const COURT_FIELDS = {
   id: result("courtId"),
   pacer_court_id: DIRECTORY,
@@ -205,9 +340,37 @@ export const COURT_FIELDS = {
   jurisdiction: DIRECTORY,
   notes: DIRECTORY,
   parent_court_id: DIRECTORY,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<keyof CourtPublisherRecord, SourceFieldDisposition>;
 
 /** `opinions-2026-06-30.csv` */
+export const OPINION_COLUMNS = [
+  "id",
+  "date_created",
+  "date_modified",
+  "author_str",
+  "per_curiam",
+  "joined_by_str",
+  "type",
+  "sha1",
+  "page_count",
+  "download_url",
+  "local_path",
+  "plain_text",
+  "html",
+  "html_lawbox",
+  "html_columbia",
+  "html_anon_2020",
+  "xml_harvard",
+  "xml_scan",
+  "html_with_citations",
+  "extracted_by_ocr",
+  "author_id",
+  "cluster_id",
+] as const;
+
+type OpinionPublisherRecord = OpinionRow &
+  CsvRow<(typeof OPINION_COLUMNS)[number]>;
+
 export const OPINION_FIELDS = {
   id: meta("courtListener"),
   date_created: TIMESTAMP,
@@ -226,18 +389,34 @@ export const OPINION_FIELDS = {
   html_columbia: DOCUMENT,
   html_anon_2020: DOCUMENT,
   xml_harvard: DOCUMENT,
-  xml_scan: excludedSourceField(
+  xml_scan: legacyExcludedSourceField(
     "scan-layout XML needing page images; a record with only it is held",
   ),
   html_with_citations: DOCUMENT,
   extracted_by_ocr: meta("ocr"),
   author_id: result("judges"),
   cluster_id: JOIN_KEY,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof OpinionPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** `citations-2026-06-30.csv` */
+export const CITATION_COLUMNS = [
+  "id",
+  "volume",
+  "reporter",
+  "page",
+  "type",
+  "cluster_id",
+  "date_created",
+  "date_modified",
+] as const;
+
+type CitationPublisherRecord = CsvRow<(typeof CITATION_COLUMNS)[number]>;
+
 export const CITATION_FIELDS = {
-  id: excludedSourceField("row key; it orders tuples that tie"),
+  id: legacyExcludedSourceField("row key; it orders tuples that tie"),
   volume: result("identifiers"),
   reporter: result("identifiers"),
   page: result("identifiers"),
@@ -245,9 +424,43 @@ export const CITATION_FIELDS = {
   cluster_id: JOIN_KEY,
   date_created: TIMESTAMP,
   date_modified: TIMESTAMP,
-} as const satisfies Record<string, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof CitationPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** `people-db-people-2026-06-30.csv`, where judge relations are supplied. */
+export const PERSON_COLUMNS = [
+  "id",
+  "date_created",
+  "date_modified",
+  "date_completed",
+  "fjc_id",
+  "slug",
+  "name_first",
+  "name_middle",
+  "name_last",
+  "name_suffix",
+  "date_dob",
+  "date_granularity_dob",
+  "date_dod",
+  "date_granularity_dod",
+  "dob_city",
+  "dob_state",
+  "dob_country",
+  "dod_city",
+  "dod_state",
+  "dod_country",
+  "gender",
+  "religion",
+  "ftm_total_received",
+  "ftm_eid",
+  "has_photo",
+  "is_alias_of_id",
+] as const;
+
+type PersonPublisherRecord = CsvRow<(typeof PERSON_COLUMNS)[number]>;
+
 export const PERSON_FIELDS = {
   id: JOIN_KEY,
   date_created: TIMESTAMP,
@@ -275,22 +488,10 @@ export const PERSON_FIELDS = {
   ftm_eid: BIO,
   has_photo: BIO,
   is_alias_of_id: BIO,
-} as const satisfies Record<string, SourceFieldDisposition>;
-
-/** A map's keys in declaration order, which is header order. */
-const columnsOf = <TFields extends object>(fields: TFields) =>
-  Object.keys(fields).filter((key): key is Extract<keyof TFields, string> =>
-    Object.hasOwn(fields, key),
-  );
-
-export const CLUSTER_COLUMNS = columnsOf(CLUSTER_FIELDS);
-export const DOCKET_COLUMNS = columnsOf(DOCKET_FIELDS);
-export const COURT_COLUMNS = columnsOf(COURT_FIELDS);
-export const OPINION_COLUMNS = columnsOf(
-  OPINION_FIELDS,
-) satisfies readonly (keyof OpinionRow)[];
-export const CITATION_COLUMNS = columnsOf(CITATION_FIELDS);
-export const PERSON_COLUMNS = columnsOf(PERSON_FIELDS);
+} as const satisfies Record<
+  keyof PersonPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** One CSV row: every pinned column, as the decoder produced its text. */
 export type CsvRow<TColumn extends string> = Readonly<Record<TColumn, string>>;

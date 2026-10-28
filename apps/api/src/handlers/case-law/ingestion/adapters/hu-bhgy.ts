@@ -70,9 +70,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1161,6 +1161,10 @@ const DOCUMENT_FIELDS = [
 
 const SOURCE_FIELDS = [...LISTING_FIELDS, ...DOCUMENT_FIELDS] as const;
 
+type HuBhgyPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number] | keyof HuBhgyRow, unknown>
+>;
+
 const HU_BHGY_SOURCE_FIELDS = {
   Azonosito: {
     disposition: "stored",
@@ -1193,7 +1197,7 @@ const HU_BHGY_SOURCE_FIELDS = {
   // The search never fills this on a listing row; the decision's text comes
   // from the download, which is what `documentAst` and `fulltext` are read
   // from.
-  Szoveg: excludedSourceField(
+  Szoveg: legacyExcludedSourceField(
     "always null on a listing row; the decision's text is the downloaded document",
   ),
   Rezume: {
@@ -1202,7 +1206,7 @@ const HU_BHGY_SOURCE_FIELDS = {
   },
   // Only a keyword search fills this: it is the résumé re-rendered with the
   // query's hits marked, so it is a view of `Rezume` rather than a field.
-  RezumeSzovegKornyezet: excludedSourceField(
+  RezumeSzovegKornyezet: legacyExcludedSourceField(
     "keyword-search highlight over Rezume, which is stored whole",
   ),
   EgyediAzonosito: {
@@ -1215,14 +1219,14 @@ const HU_BHGY_SOURCE_FIELDS = {
   },
   // The verbatim row is kept in the envelope, so reading this later is a
   // parser change rather than another walk of the collection.
-  NemHivatkozhatoSzoveg: excludedSourceField(
+  NemHivatkozhatoSzoveg: legacyExcludedSourceField(
     "null on every row the search serves; the citability filter changes no count it reports",
   ),
   IndexId: { disposition: "stored", target: { type: "identity" } },
   // Always null: the collection addresses a download by the three fields above
   // rather than by a link, and a link in a payload is not one this adapter
   // would follow (rule 21).
-  DownloadLink: excludedSourceField(
+  DownloadLink: legacyExcludedSourceField(
     "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag",
   ),
 
@@ -1262,7 +1266,7 @@ const HU_BHGY_SOURCE_FIELDS = {
     target: { type: "metadata", key: "instanceChainLines" },
   },
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof HuBhgyPublisherRecord,
   SourceFieldDisposition
 >;
 

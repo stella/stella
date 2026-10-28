@@ -58,9 +58,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1860,11 +1860,15 @@ const metadataField = (key: string): SourceFieldDisposition => ({
   target: { type: "metadata", key },
 });
 
+type PlUodoPublisherRecord = Readonly<
+  Record<PlUodoSourceField | keyof PlUodoRow, unknown>
+>;
+
 const PL_UODO_SOURCE_FIELDS = {
-  type: excludedSourceField(
+  type: legacyExcludedSourceField(
     "the record format's own name; every record the search returns carries the same value",
   ),
-  version: excludedSourceField(
+  version: legacyExcludedSourceField(
     "the version of the record format, not a fact about the document",
   ),
   id: metadataField("portalEventId"),
@@ -1941,7 +1945,10 @@ const PL_UODO_SOURCE_FIELDS = {
   "resources{}.size": metadataField("resources"),
   "resources{}.checksum": metadataField("resources"),
   body: { disposition: "stored", target: { type: "document" } },
-} as const satisfies Record<PlUodoSourceField, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof PlUodoPublisherRecord,
+  SourceFieldDisposition
+>;
 
 /** The structures inside a record whose own keys the inventory names. */
 const NESTED_OBJECTS = ["publication", "publicator"] as const;
