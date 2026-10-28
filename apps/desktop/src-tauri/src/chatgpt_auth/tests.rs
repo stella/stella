@@ -61,6 +61,8 @@ struct FakeState {
   refresh_errors: VecDeque<&'static str>,
   /// The scopes a renewal grants.
   refresh_scope: String,
+  /// A renewal answers without a refresh token or scope, as RFC 6749 allows.
+  refresh_omits_optional: bool,
   revoke_status: StatusCode,
   /// While set, the key set waits for this before it answers.
   jwks_gate: Option<Arc<tokio::sync::Notify>>,
@@ -102,6 +104,7 @@ impl FakeOpenAi {
       issued: 0,
       refresh_errors: VecDeque::new(),
       refresh_scope: ALL_SCOPES.into(),
+      refresh_omits_optional: false,
       revoke_status: StatusCode::OK,
       jwks_gate: None,
       exchanged: Arc::new(tokio::sync::Notify::new()),
@@ -249,6 +252,16 @@ async fn token(
         return oauth_error(StatusCode::UNAUTHORIZED, "invalid_client");
       }
       fake.issued += 1;
+      if fake.refresh_omits_optional {
+        // The presented refresh token stays valid.
+        fake.live_refresh.insert(presented, client_id);
+        return Json(json!({
+          "access_token": format!("access-{}", fake.issued),
+          "token_type": "Bearer",
+          "expires_in": 3600,
+        }))
+        .into_response();
+      }
       let refresh = format!("refresh-{}", fake.issued);
       fake.live_refresh.insert(refresh.clone(), client_id);
       Json(json!({
@@ -1168,6 +1181,80 @@ async fn a_sign_in_without_plan_usage_revokes_old_and_new_tokens() {
   let mut dropped = revoked(&harness);
   dropped.sort();
   assert_eq!(dropped, ["refresh-1", "refresh-2"]);
+}
+
+#[tokio::test]
+async fn a_repeated_start_keeps_the_attempt_in_progress() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.auth.start(SignInIntent::SameAccount);
+  let params = harness.authorization().await;
+  harness.auth.start(SignInIntent::SameAccount);
+  harness.auth.start(SignInIntent::NewAccount);
+  assert!(
+    harness.browser.opened.try_recv().is_err(),
+    "no second browser tab"
+  );
+  assert_eq!(harness.auth.status().await.state, ChatGptState::SigningIn);
+  // The first tab still completes the sign-in.
+  let callback = Harness::callback_url(&params, &params["state"], true);
+  assert_eq!(harness.browser_returns(&callback).await, StatusCode::OK);
+  assert!(matches!(
+    harness.settled().await,
+    ChatGptState::Connected { .. }
+  ));
+}
+
+#[tokio::test]
+async fn a_renewal_without_refresh_token_or_scope_keeps_them() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  let before = harness.session().unwrap();
+  expire(&harness);
+  harness.fake.with(|fake| fake.refresh_omits_optional = true);
+  assert_eq!(harness.auth.access(None).await.as_deref(), Ok("access-2"));
+  let after = harness.session().unwrap();
+  assert_eq!(after.access_token, "access-2");
+  assert_eq!(after.refresh_token, before.refresh_token);
+  assert_eq!(after.scopes, before.scopes);
+  assert!(revoked(&harness).is_empty());
+  // The kept refresh token still renews.
+  expire(&harness);
+  assert_eq!(harness.auth.access(None).await.as_deref(), Ok("access-3"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dropped_renewal_cannot_overwrite_a_later_disconnect() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  expire(&harness);
+  let (started, wait_started) = std::sync::mpsc::channel();
+  let (release, wait_release) = std::sync::mpsc::channel();
+  *harness.vault.hold_next_save.lock().unwrap() = Some((started, wait_release));
+
+  // A renewal whose caller goes away while its write runs, as a broker
+  // request that times out does.
+  let renewal = tokio::spawn({
+    let auth = harness.auth.clone();
+    async move { auth.access(None).await }
+  });
+  tokio::task::spawn_blocking(move || wait_started.recv().unwrap())
+    .await
+    .unwrap();
+  renewal.abort();
+
+  let disconnect = tokio::spawn({
+    let auth = harness.auth.clone();
+    async move { auth.disconnect().await }
+  });
+  release.send(()).unwrap();
+  assert_eq!(disconnect.await.unwrap(), Ok(true));
+  // The renewal's write finished first, and the sign-out after it deleted
+  // and revoked the renewed tokens.
+  assert!(harness.session().is_none());
+  assert_eq!(revoked(&harness), ["refresh-2"]);
+  assert!(!harness.auth.status().await.session_stored);
 }
 
 #[tokio::test]

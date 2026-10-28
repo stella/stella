@@ -265,6 +265,10 @@ fn unavailable(error: String) -> VaultUnavailable {
 pub(crate) struct MemoryVault {
   pub host: Mutex<Option<String>>,
   pub record: Mutex<ChatGptRecord>,
+  /// When set, the next save reports that it started, then waits to be
+  /// released before it writes.
+  pub hold_next_save:
+    Mutex<Option<(std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>)>>,
 }
 
 #[cfg(test)]
@@ -277,6 +281,11 @@ impl ChatGptVault for MemoryVault {
     Ok(self.record.lock().unwrap().clone())
   }
   fn save(&self, record: &ChatGptRecord) -> Result<(), VaultUnavailable> {
+    let held = self.hold_next_save.lock().unwrap().take();
+    if let Some((started, release)) = held {
+      started.send(()).unwrap();
+      release.recv().unwrap();
+    }
     *self.record.lock().unwrap() = record.clone();
     Ok(())
   }

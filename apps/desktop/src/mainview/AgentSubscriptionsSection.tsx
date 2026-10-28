@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -24,6 +24,9 @@ export const AgentSubscriptionsSection = ({
 }) => {
   const [status, setStatus] = useState<ChatGptStatus | null>(null);
   const [notice, setNotice] = useState<ChatGptNotice | null>(null);
+  // Set before the start command is sent, so a second click in the same
+  // frame cannot send another.
+  const starting = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -115,12 +118,23 @@ export const AgentSubscriptionsSection = ({
         void run(async () => invoke("chatgpt_auth_open_usage"));
       }}
       onSignIn={({ account, newAccount }) => {
+        if (starting.current) {
+          return;
+        }
+        starting.current = true;
         void run(async () =>
-          invoke("chatgpt_auth_start", {
+          invoke<unknown>("chatgpt_auth_start", {
             account: account ?? null,
             newAccount,
           }),
-        );
+        ).then((started) => {
+          starting.current = false;
+          // Shown at once, without waiting for the change event.
+          if (isChatGptStatus(started)) {
+            setStatus(started);
+          }
+          return undefined;
+        });
       }}
       status={status}
     />,
