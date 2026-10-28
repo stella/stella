@@ -102,8 +102,8 @@ const segmentSeparatorOf = (scheme: StatuteAnchorScheme): string | null => {
 
 type AnchorWithinOptions = { ancestor: string; anchor: string };
 
-/** A block kind and ordinal appended by a parser to the block that owns it. */
-const PARSER_CHILD_SUFFIX = /^-[^.\-/]+_\d+(?:$|[.\-/])/u;
+/** A table's owned anchor; publisher subdivision kinds use their scheme. */
+const PARSER_CHILD_SUFFIX = /^-table_\d+(?:$|[.\-/])/u;
 
 /**
  * Whether `anchor` sits under `ancestor`: it continues the ancestor's path by
