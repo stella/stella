@@ -527,6 +527,16 @@
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
       },
       "returnComment": "Visszaküldés oka",
+      "returnRefusals": {
+        "invalidEntry": "Ellenőrizze a bejegyzés munkavégzési dátumát, majd küldje vissza.",
+        "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda küldheti vissza.",
+        "notFound": "Ez a bejegyzés már nem létezik, ezért nem küldhető vissza. Frissítse a listát.",
+        "notSubmitted": "Ezt a piszkozatot sosem küldték be, így nincs mit visszaküldeni.",
+        "runningTimer": "A visszaküldés előtt állítsa le a futó időmérőt.",
+        "timePeriodLocked": "Ez a hónap zárolva van, ezért a bejegyzés nem küldhető vissza. Kérje meg a rendszergazdát a feloldására.",
+        "wrongStatus": "A számlázott vagy leírt idő nem küldhető vissza a rögzítőjének."
+      },
+      "returnSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} visszaküldése",
       "selectEntry": "Bejegyzés kijelölése",
       "timeEntries": "Időbejegyzések",
       "title": "Jóváhagyások"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Nem számlázhatónak jelöl",
     "matterRequired": "Kérjük, válasszon ügyet",
     "minutes": "Perc",
+    "moveEntryHint": "Mentéskor a bejegyzés ebbe az ügybe kerül, és ennek díjtételei szerint árazódik.",
     "narrative": "Szöveges leírás",
     "narrativePlaceholder": "Írja le az elvégzett munkát...",
     "noActiveTimer": "Nincs aktív időmérő",
@@ -988,7 +999,6 @@
     "coverage": {
       "completeness": "Teljesség",
       "courtsHeading": "Bíróságonként",
-      "courtsUnavailable": "A bíróságonkénti bontás jelenleg nem érhető el.",
       "decisionYears": "Határozatok évei",
       "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
       "generatedAt": "Adatok: {date}",
@@ -999,20 +1009,16 @@
       "healthStalled": "Elakadt",
       "healthUnknown": "Még nem futott",
       "inPreparation": "Előkészületben",
-      "knownGaps": "Ismert hiányok",
       "lastSync": "Utolsó szinkronizálás",
-      "noGapsRecorded": "Nincs rögzített hiány",
       "notCountedYet": "Még nincs megszámolva",
       "notMeasuredYet": "Még nincs megmérve",
-      "pendingTexts": "Függőben lévő szövegek",
       "reportedByListing": "A közzétevő jegyzékéből megszámolva",
       "reportedByOperator": "Kézzel rögzítve",
       "reportedByPublisher": "A közzétevő saját adata",
       "searchable": "Kereshető",
       "title": "Az ítélkezési gyakorlat lefedettsége",
       "totalFrom": "Összesítés {date} szerint",
-      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el.",
-      "unreadListingPeriods": "A jegyzék be nem olvasott időszakai"
+      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
     },
     "decisionNotFound": "A határozat nem található",
     "decisionTypes": {

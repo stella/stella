@@ -527,6 +527,16 @@
         "wrongStatus": "Tento záznam už nie je koncept. Obnovte zoznam."
       },
       "returnComment": "Dôvod vrátenia",
+      "returnRefusals": {
+        "invalidEntry": "Skontrolujte dátum práce pri zázname a potom ho vráťte.",
+        "notApprover": "Záznam môže vrátiť len jeho priradený schvaľovateľ alebo správca.",
+        "notFound": "Tento záznam už neexistuje, a preto ho nemožno vrátiť. Obnovte zoznam.",
+        "notSubmitted": "Tento koncept nebol odoslaný na schválenie, takže nie je čo vracať.",
+        "runningTimer": "Pred vrátením záznamu zastavte bežiaci časovač.",
+        "timePeriodLocked": "Tento mesiac je uzamknutý, a preto záznam nemožno vrátiť. Požiadajte správcu o jeho odomknutie.",
+        "wrongStatus": "Fakturovaný alebo odpísaný čas nemožno vrátiť jeho autorovi."
+      },
+      "returnSelected": "Vrátiť {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamov}}",
       "selectEntry": "Vybrať záznam",
       "timeEntries": "Časové záznamy",
       "title": "Schvaľovanie"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Označiť ako nefakturovateľné",
     "matterRequired": "Vyberte spis",
     "minutes": "Minúty",
+    "moveEntryHint": "Uložením sa záznam presunie do tohto spisu a ocení sa podľa jeho sadzieb.",
     "narrative": "Popis",
     "narrativePlaceholder": "Opíšte vykonanú prácu...",
     "noActiveTimer": "Žiadny aktívny časovač",
@@ -988,7 +999,6 @@
     "coverage": {
       "completeness": "Úplnosť",
       "courtsHeading": "Podľa súdu",
-      "courtsUnavailable": "Rozpis podľa súdov nie je momentálne k dispozícii.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "generatedAt": "Údaje k {date}",
@@ -999,20 +1009,16 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatiaľ nespustené",
       "inPreparation": "Pripravuje sa",
-      "knownGaps": "Známe medzery",
       "lastSync": "Posledná synchronizácia",
-      "noGapsRecorded": "Nie sú zaznamenané žiadne medzery",
       "notCountedYet": "Zatiaľ nespočítané",
       "notMeasuredYet": "Zatiaľ nemerané",
-      "pendingTexts": "Čakajúce texty",
       "reportedByListing": "Spočítané zo zoznamu vydavateľa",
       "reportedByOperator": "Zadané ručne",
       "reportedByPublisher": "Vlastný údaj vydavateľa",
       "searchable": "Dostupné na vyhľadanie",
       "title": "Pokrytie judikatúry",
       "totalFrom": "Celkom k {date}",
-      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii.",
-      "unreadListingPeriods": "Nenačítané obdobia zoznamu"
+      "unavailable": "Údaje o pokrytí momentálne nie sú k dispozícii."
     },
     "decisionNotFound": "Rozhodnutie sa nenašlo",
     "decisionTypes": {

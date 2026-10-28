@@ -1,10 +1,12 @@
 import { useState } from "react";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
-import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
+import type {
+  TimeApprovalRefusal,
+  TimeReturnRefusal,
+} from "@stll/api-contract/time-entries";
 
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -12,7 +14,7 @@ import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   useApproveTimeEntries,
-  useReturnTimeEntry,
+  useReturnTimeEntries,
 } from "@/lib/workspaces/mutations/time-entries";
 
 const REFUSAL_KEYS = {
@@ -25,6 +27,17 @@ const REFUSAL_KEYS = {
   time_period_locked: "billing.globalTimer.periodLocked",
   invalid_entry: "billing.approval.refusals.invalidEntry",
 } as const satisfies Record<TimeApprovalRefusal, TranslationKey>;
+
+// A return reports only these, in its own words.
+const RETURN_REFUSAL_KEYS = {
+  not_found: "billing.approval.returnRefusals.notFound",
+  not_approver: "billing.approval.returnRefusals.notApprover",
+  not_submitted: "billing.approval.returnRefusals.notSubmitted",
+  wrong_status: "billing.approval.returnRefusals.wrongStatus",
+  running_timer: "billing.approval.returnRefusals.runningTimer",
+  time_period_locked: "billing.approval.returnRefusals.timePeriodLocked",
+  invalid_entry: "billing.approval.returnRefusals.invalidEntry",
+} as const satisfies Record<TimeReturnRefusal, TranslationKey>;
 
 const isRefusal = (code: string | undefined): code is TimeApprovalRefusal =>
   code !== undefined && Object.hasOwn(REFUSAL_KEYS, code);
@@ -61,6 +74,8 @@ export const useItemErrors = () => {
   return {
     errors,
     refusalText: (reason: TimeApprovalRefusal) => t(REFUSAL_KEYS[reason]),
+    returnRefusalText: (reason: TimeReturnRefusal) =>
+      t(RETURN_REFUSAL_KEYS[reason]),
     errorText: (error: unknown) =>
       APIError.is(error) && isRefusal(error.code)
         ? t(REFUSAL_KEYS[error.code])
@@ -81,16 +96,24 @@ const matterIdsOf = (targets: readonly ReviewTarget[]) =>
     workspaceId === null ? [] : [workspaceId],
   );
 
+/** A review call's answer: one outcome per entry, refused ones with why. */
+type ReviewBatch<TRefusal extends string> = {
+  results: readonly (
+    | { id: string; status: "refused"; reason: TRefusal }
+    | { id: string; status: "approved" | "returned" }
+  )[];
+};
+
 /**
  * Approving and returning time, shared by the matter's approval view and the
- * approver's page: per-row pending state, per-row refusals, bounded approval
- * batches, and the selection for bulk approval.
+ * approver's page: per-row pending state, per-row refusals, bounded batches
+ * for both decisions, and the selection they act on.
  */
 export const useTimeReview = () => {
   const itemErrors = useItemErrors();
   const pending = usePendingRows();
   const approve = useApproveTimeEntries();
-  const returnEntry = useReturnTimeEntry();
+  const returnEntries = useReturnTimeEntries();
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
 
   const uncheck = (ids: readonly string[]) =>
@@ -102,14 +125,16 @@ export const useTimeReview = () => {
       return next;
     });
 
-  const requestApproval = async (targets: readonly ReviewTarget[]) => {
-    const ids = targets.map(({ id }) => id);
-    const outcome = await approve
-      .mutateAsync({ workspaceIds: matterIdsOf(targets), ids })
-      .then(
-        (batch) => ({ type: "answered" as const, batch }),
-        (error: unknown) => ({ type: "failed" as const, error }),
-      );
+  /** Shows each entry's refusal, or the failure on all of them. */
+  const settle = async <TRefusal extends string>(
+    ids: readonly string[],
+    request: Promise<ReviewBatch<TRefusal>>,
+    refusalText: (reason: TRefusal) => string,
+  ) => {
+    const outcome = await request.then(
+      (batch) => ({ type: "answered" as const, batch }),
+      (error: unknown) => ({ type: "failed" as const, error }),
+    );
     if (outcome.type === "failed") {
       itemErrors.show(
         ids,
@@ -124,12 +149,35 @@ export const useTimeReview = () => {
       Object.fromEntries(
         outcome.batch.results.flatMap((result) =>
           result.status === "refused"
-            ? [[result.id, itemErrors.refusalText(result.reason)]]
+            ? [[result.id, refusalText(result.reason)]]
             : [],
         ),
       ),
     );
     uncheck(ids);
+  };
+
+  // The API takes a bounded batch; a larger selection goes out in batches,
+  // each settling its own entries. One request per batch.
+  const inBatches = <TRefusal extends string>(
+    targets: readonly ReviewTarget[],
+    send: (batch: readonly ReviewTarget[]) => Promise<ReviewBatch<TRefusal>>,
+    refusalText: (reason: TRefusal) => string,
+  ) => {
+    const requests: Promise<void>[] = [];
+    for (
+      let start = 0;
+      start < targets.length;
+      start += TIME_ENTRIES_APPROVAL_BATCH_MAX
+    ) {
+      const batch = targets.slice(
+        start,
+        start + TIME_ENTRIES_APPROVAL_BATCH_MAX,
+      );
+      const ids = batch.map(({ id }) => id);
+      requests.push(pending.track(ids, settle(ids, send(batch), refusalText)));
+    }
+    return requests;
   };
 
   return {
@@ -149,46 +197,35 @@ export const useTimeReview = () => {
     /** The checked entries still on screen, in the order given. */
     selectedOf: <T extends ReviewTarget>(rows: readonly T[]) =>
       rows.filter(({ id }) => checked.has(id)),
-    // The API takes a bounded batch; a larger selection goes out in batches,
-    // each settling its own entries.
     approve: (targets: readonly ReviewTarget[]) => {
-      for (
-        let start = 0;
-        start < targets.length;
-        start += TIME_ENTRIES_APPROVAL_BATCH_MAX
-      ) {
-        const batch = targets.slice(
-          start,
-          start + TIME_ENTRIES_APPROVAL_BATCH_MAX,
-        );
-        detached(
-          pending.track(
-            batch.map(({ id }) => id),
-            requestApproval(batch),
-          ),
-          "time-review.approve",
-        );
+      const requests = inBatches(
+        targets,
+        async (batch) =>
+          await approve.mutateAsync({
+            workspaceIds: matterIdsOf(batch),
+            ids: batch.map(({ id }) => id),
+          }),
+        itemErrors.refusalText,
+      );
+      for (const request of requests) {
+        detached(request, "time-review.approve");
       }
     },
-    returnToDraft: ({ id, workspaceId }: ReviewTarget, comment: string) => {
-      const request = async () => {
-        const returned = await Result.tryPromise({
-          try: async () =>
-            await returnEntry.mutateAsync({
-              workspaceId,
-              id,
-              comment: comment.trim(),
-            }),
-          catch: (cause: unknown): unknown => cause,
-        });
-        if (Result.isError(returned)) {
-          itemErrors.show([id], { [id]: itemErrors.errorText(returned.error) });
-          return;
-        }
-        itemErrors.show([id], {});
-        uncheck([id]);
-      };
-      detached(pending.track([id], request()), "time-review.return");
+    /** Returns the entries to their owners with one reason. */
+    returnToDraft: (targets: readonly ReviewTarget[], comment: string) => {
+      const requests = inBatches(
+        targets,
+        async (batch) =>
+          await returnEntries.mutateAsync({
+            workspaceIds: matterIdsOf(batch),
+            ids: batch.map(({ id }) => id),
+            comment: comment.trim(),
+          }),
+        itemErrors.returnRefusalText,
+      );
+      for (const request of requests) {
+        detached(request, "time-review.return");
+      }
     },
   };
 };

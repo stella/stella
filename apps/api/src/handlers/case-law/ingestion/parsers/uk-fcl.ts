@@ -392,6 +392,7 @@ export const parseUkFclDecision = ({
   ) {
     return rejectedJudgment("Invalid LegalDocML judgment root");
   }
+  const decisionType = judgment.getAttribute("name")?.trim();
   const body = elements(judgment, "judgmentBody").at(0);
   const court = Array.from(judgment.getElementsByTagNameNS(UK, "court"))
     .at(0)
@@ -406,6 +407,7 @@ export const parseUkFclDecision = ({
     ?.getAttribute("date");
   if (
     body === undefined ||
+    !decisionType ||
     !court ||
     !caseNumber ||
     !decisionDate ||
@@ -459,7 +461,7 @@ export const parseUkFclDecision = ({
       court,
       decisionDate,
       ecli: null,
-      decisionType: null,
+      decisionType,
       keywords: [],
       statutes: [],
     },
@@ -476,6 +478,7 @@ export const parseUkFclDecision = ({
     court,
     decisionDate,
     caseName,
+    decisionType,
     judges,
     metadata: {
       xmlFields: fieldsOf(document),

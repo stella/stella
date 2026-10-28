@@ -527,6 +527,16 @@
         "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
       },
       "returnComment": "Atgriešanas iemesls",
+      "returnRefusals": {
+        "invalidEntry": "Pārbaudiet ieraksta darba datumu un pēc tam to atgrieziet.",
+        "notApprover": "Šo ierakstu var atgriezt tikai tam piešķirtais apstiprinātājs vai administrators.",
+        "notFound": "Šis ieraksts vairs nepastāv, tāpēc to nevar atgriezt. Atsvaidziniet sarakstu.",
+        "notSubmitted": "Šis melnraksts nekad nav iesniegts, tāpēc nav ko atgriezt.",
+        "runningTimer": "Pirms ieraksta atgriešanas apturiet aktīvo taimeri.",
+        "timePeriodLocked": "Šis mēnesis ir bloķēts, tāpēc ierakstu nevar atgriezt. Lūdziet administratoram to atbloķēt.",
+        "wrongStatus": "Laiku, par kuru izrakstīts rēķins vai kurš norakstīts, nevar atgriezt tā autoram."
+      },
+      "returnSelected": "Atgriezt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
       "selectEntry": "Atlasīt ierakstu",
       "timeEntries": "Laika ieraksti",
       "title": "Apstiprinājumi"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Atzīmēt kā neapmaksājamus",
     "matterRequired": "Lūdzu, izvēlieties lietu",
     "minutes": "Minūtes",
+    "moveEntryHint": "Saglabājot ieraksts tiek pārvietots uz šo lietu un novērtēts pēc tās likmēm.",
     "narrative": "Apraksts",
     "narrativePlaceholder": "Aprakstiet veikto darbu...",
     "noActiveTimer": "Nav aktīva taimeris",
@@ -988,7 +999,6 @@
     "coverage": {
       "completeness": "Pilnīgums",
       "courtsHeading": "Pēc tiesas",
-      "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "generatedAt": "Dati uz {date}",
@@ -999,20 +1009,16 @@
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
-      "knownGaps": "Zināmie iztrūkumi",
       "lastSync": "Pēdējā sinhronizācija",
-      "noGapsRecorded": "Iztrūkumi nav reģistrēti",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
-      "pendingTexts": "Neiegūtie teksti",
       "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
-      "unreadListingPeriods": "Nenolasītie saraksta periodi"
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {

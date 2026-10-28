@@ -17,6 +17,7 @@ import {
   type Week,
   weekOf,
 } from "@/components/billing/work-week.logic";
+import { ReturnSelected } from "@/features/time-review/return-selected";
 import {
   groupForReview,
   type PersonReview,
@@ -146,15 +147,20 @@ const PersonSection = ({
             ].join(" · ")}
           </p>
         </div>
-        <Button
-          loading={target.some(({ id }) => review.isPending(id))}
-          onClick={() => review.approve(target)}
-          size="sm"
-        >
-          {selected.length > 0
-            ? t("billing.approval.approveSelected", { count: selected.length })
-            : t("billing.approval.approveAll", { count: rows.length })}
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ReturnSelected review={review} selected={selected} />
+          <Button
+            loading={target.some(({ id }) => review.isPending(id))}
+            onClick={() => review.approve(target)}
+            size="sm"
+          >
+            {selected.length > 0
+              ? t("billing.approval.approveSelected", {
+                  count: selected.length,
+                })
+              : t("billing.approval.approveAll", { count: rows.length })}
+          </Button>
+        </div>
       </div>
       {person.days.map((day) => (
         <div className="flex flex-col gap-2" key={day.date}>

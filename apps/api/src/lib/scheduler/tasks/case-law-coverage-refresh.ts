@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { sql } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -10,6 +11,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
+import { lockCaseLawCoverageSnapshot } from "@/api/lib/db/aggregate-lock";
 import {
   logSchedulerBackfillStatus,
   SCHEDULER_BACKFILL_CONFIG,
@@ -84,6 +86,7 @@ export const createCaseLawCoverageRefreshTask =
           return await runtime.step(
             async ({ tx }): Promise<CoverageRefreshBatch> => {
               refreshSignal.throwIfAborted();
+              await lockCaseLawCoverageSnapshot(tx);
               const policy =
                 await readNonRedistributableCaseLawSourceIdsQuery(tx);
               const { answer, complete } = await compute(async (read) => {
@@ -154,3 +157,11 @@ export const createCaseLawCoverageRefreshTask =
     });
     return undefined;
   };
+
+/** Removal retires the cached answer before its next governed refresh. */
+export const invalidateCaseLawCoverageSummaryTx = async (
+  tx: Transaction,
+): Promise<void> => {
+  // audit: skip — coverage invalidation belongs to the canonical removal audit.
+  await tx.delete(caseLawCoverageSummaries).where(sql`true`);
+};

@@ -430,7 +430,7 @@ describe("public case-law route boundary", () => {
       source.indexOf("export const configureReadTransaction"),
     );
     const readConfiguration = source.slice(
-      source.indexOf("const configureReadTransaction"),
+      source.indexOf("export const configureReadTransaction"),
       source.indexOf("const publicLawReadGuards"),
     );
     const validation = source.slice(
@@ -468,9 +468,19 @@ describe("public case-law route boundary", () => {
       "set_config('idle_in_transaction_session_timeout',",
     );
     expect(validation).toContain("configureReadTransaction(");
-    expect(validation).toContain("validateExternalPublicLawDatabase(tx)");
+    expect(validation).toContain(
+      "const observedTransaction = observePublicLawReadTransaction(tx)",
+    );
+    expect(validation).toContain(
+      'observedTransaction,\n      "read-committed",\n      EXTERNAL_PUBLIC_LAW_READ_GUARDS,',
+    );
+    expect(validation).toContain(
+      "validateExternalPublicLawDatabase(observedTransaction)",
+    );
     expect(validation.indexOf("configureReadTransaction(")).toBeLessThan(
-      validation.indexOf("validateExternalPublicLawDatabase(tx)"),
+      validation.indexOf(
+        "validateExternalPublicLawDatabase(observedTransaction)",
+      ),
     );
     expect(publicRead).toContain("configureReadTransaction(");
     expect(publicRead).toContain("return await fn(tx)");

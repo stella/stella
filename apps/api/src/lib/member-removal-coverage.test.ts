@@ -66,6 +66,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_polarity_rules.surface_forms",
   "case_law_provision_extractions.unresolved_counts",
   "case_law_reconciliation_items.payload",
+  // Corpus removal evidence and retry state contain no member identifiers.
+  "case_law_removal_reconciliation_items.payload",
   "case_law_replay_audit_events.details",
   "case_law_replay_batches.gate_verdict",
   "case_law_research_answers.answer",
@@ -75,6 +77,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "case_law_sitemap_shard_counts.months",
   "case_law_sources.config",
   "case_law_sources.descriptor",
+  // Corpus enumeration cursor and publisher backoff contain no member identifiers.
+  "case_law_sources.removal_checkpoint",
   "chat_thread_compactions.summary",
   "chat_thread_names.target",
   "chat_threads.active_skill",
