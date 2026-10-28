@@ -112,6 +112,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   chamber: INSPECTED,
   chambers: INSPECTED,
   citation: INSPECTED,
+  citationRestriction: INSPECTED,
   citedDecisions: INSPECTED,
   citedProvisions: INSPECTED,
   clarificationOfLegalRegulation: INSPECTED,

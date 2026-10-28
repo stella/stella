@@ -306,11 +306,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "move range markers between blocks are skipped as positions, so paragraph text and footnotes in the document AST are recomputed, and neither has feature storage of its own",
+        "Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent.",
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {

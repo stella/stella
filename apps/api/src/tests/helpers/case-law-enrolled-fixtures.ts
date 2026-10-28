@@ -2255,12 +2255,21 @@ const HU_BHGY_DOCUMENT = new URL(
 export const huBhgyFixture = (
   documentUrl = HU_BHGY_DOCUMENT,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    Szoveg: HU_BHGY_LISTING_ROW.Szoveg,
+    RezumeSzovegKornyezet: HU_BHGY_LISTING_ROW.RezumeSzovegKornyezet,
+    DownloadLink: HU_BHGY_LISTING_ROW.DownloadLink,
+  },
   buildDecision: async () => {
     const bytes = new Uint8Array(await Bun.file(documentUrl).arrayBuffer());
     const document =
       huBhgyDocumentOf(bytes) ??
       panic("the hu-bhgy fixture is not a decision file");
-    const row = { ...HU_BHGY_LISTING_ROW };
+    // Exercise a non-empty restriction; the captured listing leaves it null.
+    const row = {
+      ...HU_BHGY_LISTING_ROW,
+      NemHivatkozhatoSzoveg: "Nem hivatkozható",
+    };
     const built = await assembleHuBhgyDecision({
       row: normalizeHuBhgyRow(row),
       document,

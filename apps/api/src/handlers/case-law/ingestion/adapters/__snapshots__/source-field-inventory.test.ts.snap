@@ -1167,28 +1167,7 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
       "reason": "the case year under a generic name",
     },
   ],
-  "hu-bhgy": [
-    {
-      "field": "DownloadLink",
-      "policy": "legacy",
-      "reason": "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag",
-    },
-    {
-      "field": "NemHivatkozhatoSzoveg",
-      "policy": "legacy",
-      "reason": "null on every row the search serves; the citability filter changes no count it reports",
-    },
-    {
-      "field": "RezumeSzovegKornyezet",
-      "policy": "legacy",
-      "reason": "keyword-search highlight over Rezume, which is stored whole",
-    },
-    {
-      "field": "Szoveg",
-      "policy": "legacy",
-      "reason": "always null on a listing row; the decision's text is the downloaded document",
-    },
-  ],
+  "hu-bhgy": [],
   "pl-courts": [],
   "pl-kio": [],
   "pl-kis": [

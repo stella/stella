@@ -308,6 +308,45 @@ describe("reading a row's own fields", () => {
   });
 });
 
+test.each(["Nem hivatkozható", "Csak a közzétett rész idézhető"])(
+  "publisher citation restrictions survive assembly and stored-raw replay: %s",
+  async (restriction) => {
+    const row = {
+      ...rowAt(0, "2025-01-01T00:00:00+01:00"),
+      NemHivatkozhatoSzoveg: restriction,
+    };
+    const built = await assembleHuBhgyDecision({
+      row: normalizeHuBhgyRow(row),
+      document: undefined,
+      rawParts: huBhgyRawPartsOf(row, undefined),
+    });
+    expect(built.type).toBe("detail-unavailable");
+    if (built.type === "unkeyable") {
+      return;
+    }
+    const stored = built.decision;
+    expect(stored.metadata["citationRestriction"]).toBe(restriction);
+    const replayed = await huBhgyAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw ?? ""),
+      contentType: stored.sourceRawContentType ?? null,
+      caseNumber: stored.caseNumber,
+      sourceDocumentId: stored.sourceDocumentId ?? null,
+      language: stored.language,
+      court: stored.court,
+      ecli: null,
+      decisionDate: stored.decisionDate ?? null,
+      decisionType: stored.decisionType ?? null,
+      sourceUrl: stored.sourceUrl ?? null,
+      documentUrl: stored.documentUrl ?? null,
+      metadata: stored.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.metadata["citationRestriction"]).toBe(restriction);
+    }
+  },
+);
+
 // ── The served document ──────────────────────────────────
 
 describe("classifying the download", () => {

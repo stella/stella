@@ -73,7 +73,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -968,6 +967,7 @@ export const assembleHuBhgyDecision = async ({
       legalArea: row.JogTerulet,
       decisionYear: row.HatarozatEve,
       publishedAt: row.IndexelesIdeje,
+      citationRestriction: row.NemHivatkozhatoSzoveg,
       statutes,
       relatedProceedings: related,
       ...(read?.documentDocket === undefined
@@ -1198,18 +1198,32 @@ const HU_BHGY_SOURCE_FIELDS = {
   // The search never fills this on a listing row; the decision's text comes
   // from the download, which is what `documentAst` and `fulltext` are read
   // from.
-  Szoveg: legacyExcludedSourceField(
-    "always null on a listing row; the decision's text is the downloaded document",
-  ),
+  Szoveg: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["Szoveg"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
   Rezume: {
     disposition: "stored",
     target: { type: "textField", key: "headnote" },
   },
   // Only a keyword search fills this: it is the résumé re-rendered with the
   // query's hits marked, so it is a view of `Rezume` rather than a field.
-  RezumeSzovegKornyezet: legacyExcludedSourceField(
-    "keyword-search highlight over Rezume, which is stored whole",
-  ),
+  RezumeSzovegKornyezet: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["RezumeSzovegKornyezet"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
   EgyediAzonosito: {
     disposition: "stored",
     target: { type: "metadata", key: "bhgyIdentifier" },
@@ -1218,18 +1232,26 @@ const HU_BHGY_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "publishedAt" },
   },
-  // The verbatim row is kept in the envelope, so reading this later is a
-  // parser change rather than another walk of the collection.
-  NemHivatkozhatoSzoveg: legacyExcludedSourceField(
-    "null on every row the search serves; the citability filter changes no count it reports",
-  ),
+  // The publisher's citation restriction is part of the legal record, even
+  // though the sampled listing rows leave it empty.
+  NemHivatkozhatoSzoveg: {
+    disposition: "stored",
+    target: { type: "metadata", key: "citationRestriction" },
+  },
   IndexId: { disposition: "stored", target: { type: "identity" } },
   // Always null: the collection addresses a download by the three fields above
   // rather than by a link, and a link in a payload is not one this adapter
   // would follow (rule 21).
-  DownloadLink: legacyExcludedSourceField(
-    "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag",
-  ),
+  DownloadLink: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["DownloadLink"],
+      reason:
+        "Publisher listing field retained verbatim, including null and alternate renderings",
+    },
+  },
 
   // ── The decision file's header ──
 
