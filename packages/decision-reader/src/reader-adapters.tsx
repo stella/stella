@@ -3,6 +3,8 @@ import type { ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
+
 import type { ReaderCitationTreatment } from "./citation-treatment";
 import type { MissingBodyReason } from "./decision-body-state.logic";
 import type { ReaderMessageKey } from "./reader-message-types";
@@ -71,6 +73,7 @@ export type DecisionReaderAdapters = ReaderPresentationAdapters & {
   renderDecisionLink: (props: ReaderDecisionLinkProps) => ReactElement;
   renderStatuteLink: (props: ReaderStatuteLinkProps) => ReactElement;
   renderBodyUnavailable: (props: {
+    textState: CaseLawTextStatus | null;
     decisionId: string;
     reason: MissingBodyReason;
   }) => ReactNode;

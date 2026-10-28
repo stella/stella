@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   encodePlSnCursor,
@@ -24,6 +27,7 @@ import {
   plSnListingIdentity,
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
+import { READ_OUTCOME_METADATA_KEY } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -372,6 +376,35 @@ describe("walking decision-date months oldest first", () => {
       : panic(`the walk was refused: ${result.error.message}`);
   };
 
+  const documentResponseFor = (body: string): void => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const task = url.searchParams.get("task");
+      if (task === "searchOrzeczenia") {
+        const from = url.searchParams.get("data_wydania_od") ?? "";
+        return await Promise.resolve(
+          jsonResponse(
+            envelope(
+              from.startsWith("1994-03")
+                ? [
+                    {
+                      id: "x",
+                      sygnatura_sprawy: "I CSK 1/94",
+                      forma_orzeczenia: "wyrok SN",
+                    },
+                  ]
+                : [],
+            ),
+          ),
+        );
+      }
+      if (task === "OrzeczeniePlikPdf") {
+        return await Promise.resolve(jsonResponse(body));
+      }
+      return await Promise.resolve(jsonResponse(envelope({})));
+    });
+  };
+
   test("empty months are stepped over inside one page rather than one per cycle", async () => {
     const asked = sourceHolding("1994-03", [
       { id: "x", sygnatura_sprawy: "I CSK 1/94", forma_orzeczenia: "wyrok SN" },
@@ -543,7 +576,7 @@ describe("walking decision-date months oldest first", () => {
     },
   );
 
-  test("a listed row whose document the proxy withholds is still stored", async () => {
+  test("an explicit no-document response is typed absent and its raw response is retained", async () => {
     sourceHolding("1994-03", [
       { id: "x", sygnatura_sprawy: "I CSK 1/94", forma_orzeczenia: "wyrok SN" },
     ]);
@@ -552,6 +585,108 @@ describe("walking decision-date months oldest first", () => {
 
     expect(decision?.isListingOnly).toBe(true);
     expect(decision?.sourceDocumentId).toBe("x");
+    const readOutcome: unknown = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(readOutcome).toEqual({
+      type: "absent",
+      evidence: "publisher-typed-absence",
+    });
+    const rawParts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
+    expect(rawParts?.["document"]).toBe(envelope([]));
+  });
+
+  test("malformed document payloads stay parser refusals with their response raw", async () => {
+    const cases = [
+      [envelope({}), "missing_pdf_base64"],
+      [envelope({ raw: "not-base64!" }), "invalid_pdf_base64"],
+      [
+        envelope({ raw: Buffer.from("not a PDF").toString("base64") }),
+        "document_response_not_pdf",
+      ],
+      ["not-json", "invalid_proxy_envelope"],
+    ] as const;
+
+    for (const [body, code] of cases) {
+      documentResponseFor(body);
+      const [decision] = (await walk("1994-03:0")).decisions;
+
+      const readOutcome: unknown =
+        decision?.metadata[READ_OUTCOME_METADATA_KEY];
+      expect(readOutcome).toMatchObject({
+        type: "unavailable",
+        scope: "document",
+        cause: { kind: "parser-refusal", code },
+      });
+      expect(
+        decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["document"],
+      ).toBe(body);
+    }
+  });
+
+  test("an embedded authorization refusal remains typed and retains its raw response", async () => {
+    const body = envelope({
+      error: "Forbidden",
+      debug: { json_status: 403 },
+    });
+    documentResponseFor(body);
+    const [decision] = (await walk("1994-03:0")).decisions;
+
+    const readOutcome: unknown = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(readOutcome).toMatchObject({
+      type: "refused",
+      status: 403,
+      scope: "document",
+    });
+    expect(
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["document"],
+    ).toBe(body);
+  });
+
+  test("a PDF parser refusal is stored distinctly with its original response", async () => {
+    const body = envelope({
+      raw: Buffer.from("%PDF-1.7\nnot a valid PDF").toString("base64"),
+    });
+    documentResponseFor(body);
+    const [decision] = (await walk("1994-03:0")).decisions;
+
+    const readOutcome: unknown = decision?.metadata[READ_OUTCOME_METADATA_KEY];
+    expect(readOutcome).toMatchObject({
+      type: "unavailable",
+      scope: "document",
+      cause: { kind: "parser-refusal" },
+    });
+    expect(
+      decodeSourceRawEnvelope(decision?.sourceRaw ?? "")?.["document"],
+    ).toBe(body);
+  });
+
+  test("a document HTTP 404 fails the crawl rather than stating publisher absence", async () => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const task = url.searchParams.get("task");
+      if (task === "searchOrzeczenia") {
+        const from = url.searchParams.get("data_wydania_od") ?? "";
+        return await Promise.resolve(
+          jsonResponse(
+            envelope(
+              from.startsWith("1994-03")
+                ? [{ id: "x", sygnatura_sprawy: "I CSK 1/94" }]
+                : [],
+            ),
+          ),
+        );
+      }
+      if (task === "OrzeczeniePlikPdf") {
+        return await Promise.resolve(new Response("missing", { status: 404 }));
+      }
+      return await Promise.resolve(jsonResponse(envelope({})));
+    });
+
+    const result = await plSnAdapter.fetchPage("1994-03:0", {});
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.httpStatus).toBe(404);
+    }
   });
 });
 

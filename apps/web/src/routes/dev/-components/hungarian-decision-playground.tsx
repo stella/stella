@@ -85,6 +85,7 @@ const HUNGARIAN_DECISION_FIXTURE = {
   documentAst: ast,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   id: "00000000-0000-4000-8000-000000000891",

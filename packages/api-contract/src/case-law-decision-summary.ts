@@ -1,9 +1,11 @@
 import type { CourtTierLabel } from "./case-law-court-tiers";
 import type { DecisionHeadnotePreview } from "./case-law-text-field";
+import type { CaseLawTextStatus } from "./case-law-text-status";
 import type { SafeId } from "./safe-id";
 
 /** Stored facts used by compact decision previews; no document body is read. */
 export type CaseLawDecisionSummary = {
+  textState: CaseLawTextStatus | null;
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
   court: string;

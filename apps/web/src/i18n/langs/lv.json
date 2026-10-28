@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
       "relevance": "Atbilstošākie"
     },
+    "textState": {
+      "textFetchFailed": "Teksta izgūšana neizdevās",
+      "textMetadataOnlySource": "Avots sniedz tikai metadatus",
+      "textNotPublished": "Teksts nav publicēts",
+      "textPending": "Teksts gaida izgūšanu"
+    },
     "viewer": {
       "abstract": "Kopsavilkums",
       "appliedVersionNotStated": "Piemērotā redakcija nav norādīta",

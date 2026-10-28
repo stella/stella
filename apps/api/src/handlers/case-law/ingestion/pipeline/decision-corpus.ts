@@ -13,6 +13,8 @@ import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipelin
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { processResultForCorpusOutcome } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { hasVerifiedCorpusText } from "@/api/lib/case-law/fulltext-state";
+import { recordDecisionTextObservationTx } from "@/api/lib/case-law/fulltext-state-store";
 import { pgPayloadCarriesDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -95,7 +97,11 @@ export const enqueueCorpusMirror = async ({
         // to pending, but a settled record in that snapshot still proves
         // those payloads were confirmed, so an identical one need not be
         // written again.
-        stored: existing === undefined ? null : storedCorpusWrite(existing),
+        stored:
+          existing === undefined ||
+          !hasVerifiedCorpusText(existing.textState, existing.contentHash)
+            ? null
+            : storedCorpusWrite(existing),
         settle: async ({ intentId, written }) => {
           const upload = await settleReservedCaseLawCorpusUpload({
             apply: async ({ projectionLock, tx, written: settled }) => {
@@ -110,6 +116,19 @@ export const enqueueCorpusMirror = async ({
               });
               if (!applied) {
                 return { type: "superseded" };
+              }
+              if (settled !== null) {
+                await recordDecisionTextObservationTx(tx, {
+                  decisionId,
+                  payloadWrite: {
+                    type: "corpus",
+                    payload: corpusPayload,
+                    written: settled,
+                  },
+                  caseNumberType: write.plan.docketColumns.caseNumberType,
+                  metadata: write.plan.preparedMetadata,
+                  now: write.observedAt,
+                });
               }
               if (projectionLock !== null) {
                 await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {

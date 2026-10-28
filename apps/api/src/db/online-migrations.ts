@@ -25,6 +25,7 @@ import {
 } from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import { CASE_LAW_TEXT_STATE_INDEXES } from "./case-law-fulltext-state";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -218,6 +219,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  ...CASE_LAW_TEXT_STATE_INDEXES,
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:

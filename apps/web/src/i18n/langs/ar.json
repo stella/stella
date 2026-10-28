@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "تُرتَّب نتائج البحث حسب الصلة أو الأحدث أولًا. امسح البحث لعرض أقدم الأحكام أولًا.",
       "relevance": "الأكثر صلة"
     },
+    "textState": {
+      "textFetchFailed": "تعذّر جلب النص",
+      "textMetadataOnlySource": "المصدر يوفّر البيانات الوصفية فقط",
+      "textNotPublished": "لم يُنشر النص",
+      "textPending": "النص بانتظار الجلب"
+    },
     "viewer": {
       "abstract": "الملخّص",
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",

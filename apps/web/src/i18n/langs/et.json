@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
       "relevance": "Asjakohaseimad"
     },
+    "textState": {
+      "textFetchFailed": "Teksti allalaadimine ebaõnnestus",
+      "textMetadataOnlySource": "Allikas pakub ainult metaandmeid",
+      "textNotPublished": "Teksti pole avaldatud",
+      "textPending": "Tekst ootab allalaadimist"
+    },
     "viewer": {
       "abstract": "Kokkuvõte",
       "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",

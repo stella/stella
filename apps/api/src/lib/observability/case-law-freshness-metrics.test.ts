@@ -13,6 +13,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 afterEach(resetMetricLineSinkForTesting);
 
 const report = {
+  fulltextHealth: [],
   backlogItems: 3,
   backlogCapped: false,
   oldestUnpublishedAge: { type: "measured", seconds: 42, source: "desired_at" },
@@ -113,4 +114,82 @@ test("the scheduler task reads and emits one report per run", async () => {
   );
   expect(transactions).toBe(1);
   expect(lines).toHaveLength(4);
+});
+
+test.each([
+  { missingState: true, failed: { type: "exact", count: 0 } },
+  { missingState: false, failed: { type: "at-least", count: 101 } },
+] as const)(
+  "full-text invariant breaches emit their report before failing the scheduler: %j",
+  async (health) => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    const outcome = await reportCaseLawFreshnessTask(
+      asTestRaw<SchedulerTaskContext>({
+        db: asTestRaw({
+          transaction: async () => ({
+            ...report,
+            fulltextHealth: [
+              { source: "cz-ns", failedThreshold: 100, ...health },
+            ],
+          }),
+        }),
+      }),
+    );
+    expect(outcome).toMatchObject({
+      status: "error",
+      error: {
+        _tag: "SchedulerTaskFailure",
+        message: "Case-law full-text invariant health breached",
+      },
+    });
+    expect(lines.map((line) => JSON.parse(line))).toContainEqual(
+      expect.objectContaining({
+        CaseLawTextStateMissing: health.missingState ? 1 : 0,
+        source: "cz-ns",
+      }),
+    );
+    expect(lines.map((line) => JSON.parse(line))).toContainEqual(
+      expect.objectContaining({
+        CaseLawTextFailedOverThreshold: health.failed.count > 100 ? 1 : 0,
+        source: "cz-ns",
+      }),
+    );
+  },
+);
+
+test("a source at its failure threshold emits clear gauges and the scheduler succeeds", async () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  const outcome = await reportCaseLawFreshnessTask(
+    asTestRaw<SchedulerTaskContext>({
+      db: asTestRaw({
+        transaction: async () => ({
+          ...report,
+          fulltextHealth: [
+            {
+              source: "cz-ns",
+              missingState: false,
+              failedThreshold: 100,
+              failed: { type: "exact", count: 100 },
+            },
+          ],
+        }),
+      }),
+    }),
+  );
+  expect(outcome).toMatchObject({ status: "ok" });
+  expect(lines.map((line) => JSON.parse(line))).toContainEqual(
+    expect.objectContaining({ CaseLawTextStateMissing: 0, source: "cz-ns" }),
+  );
+  expect(lines.map((line) => JSON.parse(line))).toContainEqual(
+    expect.objectContaining({
+      CaseLawTextFailedOverThreshold: 0,
+      source: "cz-ns",
+    }),
+  );
 });

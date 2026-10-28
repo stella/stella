@@ -21,6 +21,7 @@ const summaryWithText = (text: string) => ({
   decisionType: text,
   headnote: { type: "absent" as const, reason: "not_published" as const },
   citationCount: 17,
+  textState: null,
   publication: text,
 });
 
@@ -52,6 +53,7 @@ test("a summary keeps absent stored facts absent", () => {
     courtAbbreviation: null,
     decisionDate: null,
     decisionType: null,
+    textState: null,
     publication: null,
   };
   expect(projectDecisionSummary(input)).toEqual(input);

@@ -267,6 +267,7 @@ const mountGraph = async ({
                 result: toolResult({
                   status: "unavailable",
                   metadata: {
+                    textState: null,
                     decisionId,
                     url: `https://stella.example/law/cze/cases/${decisionId}`,
                     caseNumber: "Fixture case",

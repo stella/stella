@@ -81,6 +81,7 @@ const benchDecisions = (): Decision[] =>
       id: `bench-${index}`,
       match: "all_terms",
       textAvailability: "available",
+      textState: null,
       caseNumber: `${senate} Cdo ${sequence}/2024`,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: `ECLI:BENCH:2024:${senate}.CDO.${sequence}.1`,

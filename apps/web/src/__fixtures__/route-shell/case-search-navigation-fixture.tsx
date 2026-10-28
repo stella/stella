@@ -44,6 +44,7 @@ const hit = {
   textWithheldReason: null,
   citationAuthority: 0,
   textAvailability: "available",
+  textState: null,
   matchingPassages: 1,
   headline: "Fixture <mark>odpovědnost</mark> za <mark>škodu</mark>",
   match: "all_terms",

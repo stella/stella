@@ -11,6 +11,7 @@ import {
   isReadRefusal,
   readOutcomeOfStatus,
 } from "@/api/lib/errors/read-outcome";
+import type { ReadOutcome } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -203,6 +204,26 @@ test("only a refusal with a refusal status and a scope is a refusal marker", () 
 });
 
 describe("unreadPublisherError", () => {
+  test("a parser refusal stays a parser refusal, without an HTTP or network cause", () => {
+    const outcome = {
+      type: "unavailable",
+      cause: { kind: "parser-refusal", code: "invalid_pdf_base64" },
+    } as const satisfies Extract<
+      ReadOutcome<string>,
+      { readonly type: "unavailable" }
+    >;
+    const error = unreadPublisherError({
+      outcome,
+      message: "Document could not be decoded",
+      adapterKey: ADAPTER_KEYS.PL_SN,
+      cursor: null,
+    });
+
+    expect(error.message).toContain("parser refused invalid_pdf_base64");
+    expect(error.httpStatus).toBeUndefined();
+    expect(error.cause).toBeUndefined();
+  });
+
   test.each([
     { scope: "document", stopKind: "adapter_error" },
     { scope: "part", stopKind: "adapter_error" },

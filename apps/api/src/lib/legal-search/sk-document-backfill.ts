@@ -42,7 +42,10 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { DECISION_TEXT_FAILURE } from "@stll/api-contract/case-law-fulltext-state";
+import type { DecisionTextFailure } from "@stll/api-contract/case-law-fulltext-state";
 import { sanitizeErrorForOutput } from "@stll/errors";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   DOCUMENT_FETCH_OUTCOME,
@@ -67,10 +70,19 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import {
+  FULLTEXT_RECOVERY_LIMITS,
+  textFailureFromError,
+} from "@/api/lib/case-law/fulltext-state";
+import {
+  recordDecisionTextFailureTx,
+  recordDecisionTextObservationTx,
+} from "@/api/lib/case-law/fulltext-state-store";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import type {
+  AbsenceEvidence,
   ReadOutcome,
   ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
@@ -233,20 +245,15 @@ const OVERSIZED_PREFIX_BYTES = 1024;
 /** What one download produced. */
 export type PdfFetchResult =
   | { type: "document"; bytes: Uint8Array }
-  /** The publisher states there is nothing to fetch. */
-  | { type: "absent" }
+  /** The publisher's response or trusted fetch boundary refused this URL. */
+  | { type: "failed"; cause: DecisionTextFailure; detail: string }
   /**
    * The body ran past `limitBytes`; reading stopped there. `prefix` holds its
    * leading bytes, so a body that is not a PDF is still refused as one; null
    * where the reader that stopped kept none.
    */
   | { type: "too-large"; limitBytes: number; prefix: Uint8Array | null }
-  | {
-      type: "failed";
-      failure: Exclude<DocumentFetchFailure, "unparseable" | "too-large">;
-      /** A short tag for telemetry: the status or the error's code. */
-      detail: string;
-    };
+  | { type: "absent" };
 
 /**
  * Client-error statuses that describe the publisher or this client rather
@@ -325,17 +332,29 @@ export const fetchPdfBytes = async ({
 }: FetchPdfBytesOptions): Promise<PdfFetchResult> => {
   const target = restrictSkCourtDocumentUrl(documentUrl);
   if (target === null) {
-    // Persisted legacy rows can predate the provider boundary. Returning the
-    // terminal unavailable outcome lets the caller drain them from the queue;
-    // retrying cannot make an off-origin URL become trusted.
-    return { type: "absent" };
+    return {
+      type: "failed",
+      cause: {
+        kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+        code: "untrusted_document_url",
+      },
+      detail: "untrusted-document-url",
+    };
   }
 
   const read = await fetchDocument(target, { signal });
   switch (read.type) {
     case "refused-target":
+      return {
+        type: "failed",
+        cause: {
+          kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+          code: "refused_document_target",
+        },
+        detail: "refused-document-target",
+      };
     case "absent":
-      return { type: "absent" };
+      return readAbsencePdf(read.evidence);
     case "present":
       return await servedPdfBytes(read.value);
     case "refused":
@@ -371,13 +390,23 @@ const servedPdfBytes = async (response: Response): Promise<PdfFetchResult> => {
   if (detail === undefined) {
     throw body.error;
   }
-  return { type: "failed", failure: DOCUMENT_FETCH_FAILURE.NETWORK, detail };
+  return {
+    type: "failed",
+    cause:
+      detail === "TimeoutError"
+        ? {
+            kind: DECISION_TEXT_FAILURE.TIMEOUT,
+            timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+          }
+        : { kind: DECISION_TEXT_FAILURE.NETWORK, code: detail },
+    detail,
+  };
 };
 
 /**
- * A download that served no document. Only a 404 or 410 proves there is
- * none, and those arrive as `absent`; an empty 204 is this document's own
- * failure, and a request that threw is rethrown as it was.
+ * A response that could not provide a document. HTTP statuses, byte limits,
+ * and network faults retain their typed cause; only publisher-typed absence
+ * evidence reaches the terminal `absent` outcome.
  */
 const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
   switch (cause.kind) {
@@ -393,17 +422,50 @@ const unavailablePdf = (cause: ReadUnavailableCause): PdfFetchResult => {
     case "no-content":
       return {
         type: "failed",
-        failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+        cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: cause.status },
         detail: `http-${cause.status}`,
       };
     case "too-large":
-      return { type: "too-large", limitBytes: cause.maxBytes, prefix: null };
+      return {
+        type: "failed",
+        cause: { kind: DECISION_TEXT_FAILURE.SIZE, limitBytes: cause.maxBytes },
+        detail: `over-${cause.maxBytes}-bytes`,
+      };
+    case "parser-refusal":
+      return {
+        type: "failed",
+        cause: { kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL, code: cause.code },
+        detail: cause.code,
+      };
     case "status":
     case "empty-body":
       return publisherStatusPdf(cause.status);
     default:
       cause satisfies never;
       return panic(`Unhandled read cause: ${String(cause)}`);
+  }
+};
+
+const readAbsencePdf = (evidence: AbsenceEvidence): PdfFetchResult => {
+  switch (evidence) {
+    case "http-404":
+      return {
+        type: "failed",
+        cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: 404 },
+        detail: "http-404",
+      };
+    case "http-410":
+      return {
+        type: "failed",
+        cause: { kind: DECISION_TEXT_FAILURE.HTTP, status: 410 },
+        detail: "http-410",
+      };
+    case "publisher-typed-absence":
+    case "stated-zero":
+      return { type: "absent" };
+    default:
+      evidence satisfies never;
+      return panic("Unhandled publisher document absence");
   }
 };
 
@@ -415,7 +477,7 @@ const publisherStatusPdf = (status: number): PdfFetchResult => {
   if (isDocumentOwnStatus(status)) {
     return {
       type: "failed",
-      failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+      cause: { kind: DECISION_TEXT_FAILURE.HTTP, status },
       detail: `http-${status}`,
     };
   }
@@ -1160,6 +1222,31 @@ const storeBackfilledDocumentOwned = async ({
       });
     }
     if (applied.length > 0) {
+      await recordDecisionTextObservationTx(tx, {
+        decisionId: decision.id,
+        payloadWrite:
+          written === null
+            ? {
+                type: "postgres",
+                payload: {
+                  text: document.fulltext,
+                  sections,
+                  ast: document.documentAst,
+                },
+              }
+            : {
+                type: "corpus",
+                payload: {
+                  text: document.fulltext,
+                  sections,
+                  ast: document.documentAst,
+                },
+                written,
+              },
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        metadata: {},
+        now: new Date(),
+      });
       await runDecisionWriteExtension(tx, decision.id);
     }
     return applied.length > 0;
@@ -1262,8 +1349,20 @@ const storeBackfilledDocumentOwned = async ({
     );
   }
 
+  await reindexBackfilledDecision(decision.id, scopedDb);
+  // A missed compare-and-set is a superseded store, not a stored document:
+  // the source moved while this fetch was in flight, and the queue's next
+  // pass fetches the current version. Reporting it as stored would count a
+  // document that is not there.
+  return stored ? "stored" : "superseded";
+};
+
+const reindexBackfilledDecision = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+): Promise<void> => {
   const projection = await Result.tryPromise({
-    try: async () => await indexDecision(decision.id, scopedDb),
+    try: async () => await indexDecision(decisionId, scopedDb),
     catch: (error) => error,
   });
   const indexed = projection.andThen((result) => result);
@@ -1277,22 +1376,17 @@ const storeBackfilledDocumentOwned = async ({
       handlerErrorContext(
         "legalsearch.storeBackfilledDocumentOwned.indexed_error",
         {
-          decisionId: decision.id,
+          decisionId,
           step: "storeBackfilledDocument.indexDecision",
         },
       ),
     );
     logger.error("case_law.search_index.store_projection_failed", {
-      decisionId: decision.id,
+      decisionId,
       ...errorSystemFields(indexed.error),
       ...pgErrorFields(indexed.error),
     });
   }
-  // A missed compare-and-set is a superseded store, not a stored document:
-  // the source moved while this fetch was in flight, and the queue's next
-  // pass fetches the current version. Reporting it as stored would count a
-  // document that is not there.
-  return stored ? "stored" : "superseded";
 };
 
 type WriteFetchBookkeepingOptions = {
@@ -1681,9 +1775,19 @@ export type DecisionDocumentOutcome =
   /** The source moved mid-fetch; the queue's next pass fetches the current version. */
   | { status: "superseded" }
   /** This decision failed; it comes back after its own cooldown. */
-  | { status: "deferred"; failure: DocumentFetchFailure; detail: string }
+  | {
+      status: "deferred";
+      failure: DocumentFetchFailure;
+      cause: DecisionTextFailure;
+      detail: string;
+    }
   /** This decision failed and has left the walk until it is requeued. */
-  | { status: "parked"; failure: DocumentFetchFailure; detail: string };
+  | {
+      status: "parked";
+      failure: DocumentFetchFailure;
+      cause: DecisionTextFailure;
+      detail: string;
+    };
 
 /**
  * Wall-clock budget for the whole unit. The download has its own
@@ -1710,6 +1814,16 @@ type ParseFetchedDocumentOptions = {
   fence: DeferredDocumentSourceFence;
 };
 
+class DocumentParserFailureError extends Error {
+  override readonly name = "DocumentParserFailureError";
+  readonly original: unknown;
+
+  constructor(original: unknown) {
+    super("Slovak decision parser failed");
+    this.original = original;
+  }
+}
+
 /**
  * Throw for a body that is not a PDF: a publisher serving an error page serves
  * it for every download, so the walk backs off rather than parking each one.
@@ -1732,7 +1846,7 @@ const assertPdfBody = (bytes: Uint8Array): void => {
 
 type ParseFetchedDocumentResult =
   | { type: "parsed"; document: BackfilledDocument | undefined }
-  | { type: "parked"; detail: string }
+  | { type: "parked"; detail: string; cause: DecisionTextFailure }
   /** The source moved mid-fetch, so these bytes judge nothing. */
   | { type: "superseded" };
 
@@ -1759,15 +1873,42 @@ const parseFetchedDocument = async ({
     return { type: "parsed", document: parsed.value };
   }
   if (!isUnreadablePdfError(parsed.error)) {
-    throw parsed.error;
+    throw new DocumentParserFailureError(parsed.error);
   }
   const parked = await parkDocumentFetchOwned({
     decision,
     fence,
   });
   return parked === "parked"
-    ? { type: "parked", detail: errorTag(parsed.error) }
+    ? {
+        type: "parked",
+        detail: errorTag(parsed.error),
+        cause: textFailureFromError({
+          error: parsed.error,
+          phase: "parser",
+          timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+        }),
+      }
     : { type: "superseded" };
+};
+
+const failureForCause = (cause: DecisionTextFailure): DocumentFetchFailure => {
+  switch (cause.kind) {
+    case DECISION_TEXT_FAILURE.HTTP:
+      return DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS;
+    case DECISION_TEXT_FAILURE.NETWORK:
+    case DECISION_TEXT_FAILURE.TIMEOUT:
+      return DOCUMENT_FETCH_FAILURE.NETWORK;
+    case DECISION_TEXT_FAILURE.PARSER_REFUSAL:
+      return DOCUMENT_FETCH_FAILURE.UNPARSEABLE;
+    case DECISION_TEXT_FAILURE.SIZE:
+      return DOCUMENT_FETCH_FAILURE.TOO_LARGE;
+    case DECISION_TEXT_FAILURE.STORAGE:
+      return panic("Storage failures are not document fetch outcomes");
+    default:
+      cause satisfies never;
+      return panic("Unhandled document failure cause");
+  }
 };
 
 const runDecisionDocumentFetch = async ({
@@ -1798,20 +1939,42 @@ const runDecisionDocumentFetch = async ({
       }),
     catch: (error) => error,
   });
-  if (
-    Result.isError(result) &&
-    (isDeferredDocumentOwnershipLost(result.error) || signal.aborted)
-  ) {
+  if (Result.isError(result) && isDeferredDocumentOwnershipLost(result.error)) {
     throw result.error;
   }
-  if (
-    claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS &&
-    (Result.isError(result) ||
-      (result.value.status !== "filled" &&
-        result.value.status !== "unavailable"))
+  let cause: DecisionTextFailure | null = null;
+  if (Result.isError(result)) {
+    const failureError =
+      result.error instanceof DocumentParserFailureError
+        ? result.error.original
+        : result.error;
+    const phase =
+      result.error instanceof SkDocumentNonPdfError ||
+      result.error instanceof DocumentParserFailureError
+        ? "parser"
+        : "publisher";
+    cause = textFailureFromError({
+      error: failureError,
+      phase,
+      timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+    });
+  } else if (
+    result.value.status === "deferred" ||
+    result.value.status === "parked"
   ) {
-    await scopedDb(
-      async (tx) =>
+    cause = result.value.cause;
+  }
+  if (cause !== null) {
+    await scopedDb(async (tx) => {
+      await recordDecisionTextFailureTx(tx, {
+        decisionId: claim.decision.id,
+        sourceHash: claim.decision.sourceHash,
+        attemptCount: claim.attempts,
+        cause,
+        now: new Date(),
+        retryFloorMs: FULLTEXT_RECOVERY_LIMITS.INITIAL_RETRY_MS,
+      });
+      if (claim.attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS) {
         await writeFetchBookkeeping(tx, {
           set: {
             documentFetchAttempts: sql`greatest(${caseLawDecisions.documentFetchAttempts}, ${claim.attempts}::int)`,
@@ -1821,11 +1984,14 @@ const runDecisionDocumentFetch = async ({
             eq(caseLawDecisions.sourceId, fence.sourceId),
             holdsClaimedSource(claim.decision.sourceHash),
           ),
-        }),
-    );
+        });
+      }
+    });
   }
   if (Result.isError(result)) {
-    throw result.error;
+    throw result.error instanceof DocumentParserFailureError
+      ? result.error.original
+      : result.error;
   }
   return result.value;
 };
@@ -1863,13 +2029,23 @@ const settleFetchedDocument = async ({
     case "absent":
       return { type: "parsed", document: undefined };
     case "failed": {
-      const { failure, detail } = fetched;
+      const { cause, detail } = fetched;
       return {
         type: "settled",
         outcome:
           attempts >= MAX_DOCUMENT_FETCH_ATTEMPTS
-            ? { status: "parked", failure, detail }
-            : { status: "deferred", failure, detail },
+            ? {
+                status: "parked",
+                failure: failureForCause(cause),
+                cause,
+                detail,
+              }
+            : {
+                status: "deferred",
+                failure: failureForCause(cause),
+                cause,
+                detail,
+              },
       };
     }
     case "too-large": {
@@ -1887,6 +2063,10 @@ const settleFetchedDocument = async ({
             ? {
                 status: "parked",
                 failure: DOCUMENT_FETCH_FAILURE.TOO_LARGE,
+                cause: {
+                  kind: DECISION_TEXT_FAILURE.SIZE,
+                  limitBytes: fetched.limitBytes,
+                },
                 detail: `over-${fetched.limitBytes}-bytes`,
               }
             : { status: "superseded" },
@@ -1922,7 +2102,14 @@ const processClaimedDocument = async ({
             signal,
           }),
       )
-    : { type: "absent" };
+    : {
+        type: "failed",
+        cause: {
+          kind: DECISION_TEXT_FAILURE.PARSER_REFUSAL,
+          code: "missing_document_url",
+        },
+        detail: "missing-document-url",
+      };
 
   const parsed = await settleFetchedDocument({
     attempts: claim.attempts,
@@ -1937,6 +2124,7 @@ const processClaimedDocument = async ({
       return {
         status: "parked",
         failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
+        cause: parsed.cause,
         detail: parsed.detail,
       };
     case "superseded":

@@ -221,7 +221,7 @@ const CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS = {
 // migration must never refer to a column that does not exist at that point.
 const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   ...CASE_LAW_DECISION_INITIAL_VIEW_COLUMN_GRANTS,
-  text_state: "permitted",
+  text_state: "required",
 } as const;
 
 /**

@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_TEXT_RECOVERY } from "@stll/api-contract/case-law-fulltext-state";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
@@ -21,6 +23,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import {
   queryCountLogger,
   runWithQueryCounter,
@@ -51,6 +54,7 @@ import {
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 
+import { readDecisionHandler } from "./get";
 import { readDecisionReaderSource } from "./reader";
 import type { ReaderSourceOptions } from "./reader";
 
@@ -75,6 +79,9 @@ const listingOnlyId = createSafeId<"caseLawDecision">();
 const redactedId = createSafeId<"caseLawDecision">();
 const unavailableCountryId = createSafeId<"caseLawDecision">();
 const missingId = createSafeId<"caseLawDecision">();
+const publisherNoTextId = createSafeId<"caseLawDecision">();
+const sourceMetadataOnlyId = createSafeId<"caseLawDecision">();
+const pendingReadableId = createSafeId<"caseLawDecision">();
 const provisionSmallId = createSafeId<"caseLawDecision">();
 const provisionLargeId = createSafeId<"caseLawDecision">();
 const provisionStaleId = createSafeId<"caseLawDecision">();
@@ -241,6 +248,40 @@ beforeAll(
       citationCount: LARGE_CITATION_COUNT,
     });
     await db.insert(caseLawDecisions).values([
+      {
+        ...row(publisherNoTextId, sourceId),
+        documentUrl: "https://publisher.example/no-text",
+        textState: {
+          status: CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT,
+          observedAt: "2026-10-28T00:00:00.000Z",
+          evidence: {
+            recordUrl: "https://publisher.example/no-text",
+            sourceHash: "a".repeat(64),
+            field: "text",
+            kind: "explicit_statement",
+          },
+        },
+      },
+      {
+        ...row(sourceMetadataOnlyId, sourceId),
+        documentUrl: "https://publisher.example/metadata-only",
+        textState: {
+          status: CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE,
+          observedAt: "2026-10-28T00:00:00.000Z",
+          policy: "fixture_metadata_only",
+        },
+      },
+      {
+        ...row(pendingReadableId, sourceId),
+        documentAst: smallAst,
+        textState: {
+          status: CASE_LAW_TEXT_STATUS.FETCH_PENDING,
+          attemptCount: 0,
+          nextAttemptAt: "2026-10-28T00:00:00.000Z",
+          lastAttemptAt: null,
+          recovery: { type: DECISION_TEXT_RECOVERY.VERIFY_STORAGE },
+        },
+      },
       {
         ...row(smallId, sourceId),
         documentAst: smallAst,
@@ -436,6 +477,42 @@ const measuredRead = async (
   });
 
 describe("public decision reader database boundary", () => {
+  test.each([publisherNoTextId, sourceMetadataOnlyId])(
+    "terminal text state stops read-through scheduling for %s",
+    async (decisionId) => {
+      const decision = await withRedistributableSubject(
+        caseLawDb,
+        "search",
+        { kind: "id", id: decisionId },
+        async (subject) =>
+          await readDecisionHandler({ subject, citationsCursor: null }),
+      );
+      if (decision === null || !("documentPending" in decision)) {
+        throw new TypeError("Expected terminal decision reader data");
+      }
+      expect(decision.documentPending).toBe(false);
+      expect(decision.hasDocument).toBe(false);
+      expect(decision.textState).not.toBeNull();
+    },
+  );
+
+  test("pending storage verification preserves a successfully read body", async () => {
+    const decision = await withRedistributableSubject(
+      caseLawDb,
+      "search",
+      { kind: "id", id: pendingReadableId },
+      async (subject) =>
+        await readDecisionHandler({ subject, citationsCursor: null }),
+    );
+    if (decision === null || !("documentPending" in decision)) {
+      throw new TypeError("Expected pending verification reader data");
+    }
+    expect(decision.textState).toBe(CASE_LAW_TEXT_STATUS.FETCH_PENDING);
+    expect(decision.hasDocument).toBe(true);
+    expect(decision.documentAst).not.toBeNull();
+    expect(decision.documentPending).toBe(false);
+  });
+
   test("unpublished, restricted, unavailable-country and missing decisions expose no reader data", async () => {
     for (const decisionId of [
       listingOnlyId,

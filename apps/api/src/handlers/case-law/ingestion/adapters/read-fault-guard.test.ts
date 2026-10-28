@@ -658,12 +658,25 @@ test("stored outcome markers are recognised only in their typed shape", () => {
   expect(isStoredReadUnavailable(marker)).toBe(true);
   for (const value of [
     { ...marker, consecutiveCycles: 0 },
+    { ...marker, consecutiveCycles: Number.MAX_SAFE_INTEGER + 1 },
     { ...marker, scope: "source" },
     { ...marker, cause: { kind: "guessed" } },
-    { type: "unavailable", cause: { kind: "status", status: 500 } },
+    { ...marker, cause: { kind: "status" } },
+    { ...marker, cause: { kind: "status", status: 99 } },
+    { ...marker, cause: { kind: "status", status: 600 } },
+    { ...marker, cause: { kind: "too-large", maxBytes: 0 } },
+    { ...marker, cause: { kind: "too-large", maxBytes: 1.5 } },
+    { ...marker, cause: { kind: "parser-refusal", code: "" } },
+    { ...marker, cause: { kind: "parser-refusal", code: "x".repeat(129) } },
   ]) {
     expect(isStoredReadUnavailable(value)).toBe(false);
   }
+  expect(
+    isStoredReadUnavailable({
+      ...marker,
+      cause: { kind: "parser-refusal", code: "invalid_pdf_base64" },
+    }),
+  ).toBe(true);
   expect(
     isStoredReadAbsence({
       type: "absent",

@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
+import { caseLawTextStatusSchema } from "@stll/api-contract/case-law-fulltext-state";
 
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -26,12 +27,13 @@ const SUMMARY_TEXT_BYTES = {
         Key in keyof CaseLawDecisionSummary
       ]: CaseLawDecisionSummary[Key] extends string | null ? Key : never;
     }[keyof CaseLawDecisionSummary],
-    "id" | "courtTier"
+    "id" | "courtTier" | "textState"
   >,
   number
 >;
 
 export const decisionSummaryResponseSchema = v.object({
+  textState: v.nullable(caseLawTextStatusSchema),
   id: resourceIdSchema("caseLawDecision"),
   caseNumber: boundedString(SUMMARY_TEXT_BYTES.caseNumber),
   court: boundedString(SUMMARY_TEXT_BYTES.court),
@@ -49,6 +51,7 @@ export const decisionSummaryResponseSchema = v.object({
 export const projectDecisionSummary = (
   decision: CaseLawDecisionSummary,
 ): CaseLawDecisionSummary => ({
+  textState: decision.textState,
   id: decision.id,
   caseNumber: truncateTextBytes(
     decision.caseNumber,

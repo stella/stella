@@ -5,11 +5,13 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { parseDecisionDate } from "@/features/case-law/citation-format";
+import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import { useFormatter } from "@/i18n/formatting-context";
 import {
@@ -79,6 +81,10 @@ export const PublicDecisionCaseFile = ({
                           )}
                         </time>
                       )}
+                      <DecisionTextAvailabilityMarker
+                        textState={document.textState}
+                        availability={DECISION_TEXT_AVAILABILITY.AVAILABLE}
+                      />
                       {document.ecli !== null && (
                         <BidiText className="text-xs">{document.ecli}</BidiText>
                       )}

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
 
@@ -52,6 +53,22 @@ test.each(Object.values(DECISION_TEXT_AVAILABILITY))(
     }
     expect(view.results.map((row) => row.textAvailability)).toEqual(
       APP_SEARCH_FIXTURE.results.map(() => textAvailability),
+    );
+  },
+);
+
+test.each([null, ...Object.values(CASE_LAW_TEXT_STATUS)])(
+  "search view preserves %s lifecycle status",
+  (textState) => {
+    const view = searchView({
+      ...APP_SEARCH_FIXTURE,
+      results: APP_SEARCH_FIXTURE.results.map((row) => ({ ...row, textState })),
+    });
+    if (view.type !== "search") {
+      throw new TypeError("Expected a search view");
+    }
+    expect(view.results.map((row) => row.textState)).toEqual(
+      APP_SEARCH_FIXTURE.results.map(() => textState),
     );
   },
 );

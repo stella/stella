@@ -67,6 +67,7 @@ const openedDecision = (decisionId: string, url: string | null) =>
   ({
     status: "unavailable",
     metadata: {
+      textState: null,
       decisionId,
       url,
       caseNumber: "Synthetic case",

@@ -116,6 +116,7 @@ const decision = {
   documentAst: ast,
   documentPending: false,
   documentReadFailed: false,
+  textState: null,
   documentUnavailable: false,
   fulltext: null,
   id: toSafeId<"caseLawDecision">("9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),
@@ -180,6 +181,7 @@ const resolved = [
 ] satisfies CitationAnchorSource[];
 
 const summary = {
+  textState: null,
   caseNumber: CITED_CASE,
   citationCount: 2,
   court: "Ústavní soud",

@@ -19,6 +19,7 @@ import {
   TEXT_FIELD_TYPE,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
 import type { DecisionSearchMatch } from "@stll/api-contract/search";
 import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
 import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
@@ -71,6 +72,7 @@ export type Decision = {
   match?: DecisionSearchMatch;
   /** Search hits report text separately from publisher summaries. */
   textAvailability?: DecisionTextAvailability;
+  textState?: CaseLawTextStatus | null;
   id: string;
   caseNumber: string;
   /** What `caseNumber` is: a docket, or a reporter or neutral citation. */
@@ -186,6 +188,7 @@ export const CaseNumberCell = ({
         {decision.textAvailability !== undefined && (
           <DecisionTextAvailabilityMarker
             availability={decision.textAvailability}
+            textState={decision.textState ?? null}
           />
         )}
         {decision.match === "some_terms" && (

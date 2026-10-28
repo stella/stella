@@ -1,6 +1,10 @@
 import { fireEvent, render } from "@testing-library/react";
 import { expect, test } from "bun:test";
 
+import {
+  CASE_LAW_TEXT_STATUS,
+  type CaseLawTextStatus,
+} from "@stll/api-contract/case-law-text-status";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import { DECISION_SEARCH_MATCHES } from "@stll/api-contract/search";
 
@@ -118,6 +122,7 @@ test("resolved decisions preserve citations and open the external link", () => {
         rows: [
           {
             type: "resolve",
+            textState: null,
             snippet: null,
             decisionId: "decision-1",
             court: "Nejvyšší soud",
@@ -229,3 +234,45 @@ test("metadata-only search hits visibly distinguish summaries from decision text
   const ui = render(<CaseLawApp bridge={host.bridge} />);
   expect(ui.getByText("Rozhodnutí nemá text")).toBeDefined();
 });
+
+test.each([
+  { status: CASE_LAW_TEXT_STATUS.STORED, label: null },
+  {
+    status: CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT,
+    label: "No text published",
+  },
+  { status: CASE_LAW_TEXT_STATUS.FETCH_PENDING, label: "Text pending" },
+  { status: CASE_LAW_TEXT_STATUS.FETCH_FAILED, label: "Text retrieval failed" },
+  {
+    status: CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE,
+    label: "Metadata-only source",
+  },
+] as const satisfies readonly {
+  status: CaseLawTextStatus;
+  label: string | null;
+}[])(
+  "search distinguishes $status from missing legacy text",
+  ({ status, label }) => {
+    const host = fakeBridge({
+      ...baseSnapshot,
+      context: { locale: "en" },
+      input: { country: "CZE", queries: ["fixture"] },
+      result: {
+        status: "ready",
+        view: searchView({
+          ...APP_SEARCH_FIXTURE,
+          results: APP_SEARCH_FIXTURE.results.map((row) => ({
+            ...row,
+            textState: status,
+            textAvailability: "available" as const,
+          })),
+        }),
+      },
+    });
+    const ui = render(<CaseLawApp bridge={host.bridge} />);
+    expect(ui.queryByText("No decision text")).toBeNull();
+    if (label !== null) {
+      expect(ui.getByText(label)).toBeDefined();
+    }
+  },
+);

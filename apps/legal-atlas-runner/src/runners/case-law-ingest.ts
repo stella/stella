@@ -49,6 +49,7 @@ import {
   getAdapter,
   listAdapters,
   listDeferredDocumentDrains,
+  listSourceRegistrations,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
@@ -56,7 +57,7 @@ import {
   RECONCILIATION_INGEST_BUDGET_MS,
   RECONCILIATION_LISTING_WORST_CASE_MS,
   RECONCILIATION_UNIT_SETTLE_MS,
-  runReconciliationWorkUnit,
+  runSourceReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   createSourceStoredTotalMaintenanceRuntime,
@@ -1520,15 +1521,18 @@ export const runCaseLawIngest = async (
     }
     const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.reconciliationFetchDelayMs;
     const reconcilable: ReconciliationSource[] = [];
-    for (const { adapterKey, name } of SOURCES) {
-      const adapter = getAdapter(adapterKey);
-      const reconciliation = adapter?.reconciliation;
-      // Every case-law adapter implements the capability. Absence here means
-      // the configured source key has no registered adapter.
-      if (reconciliation === undefined) {
-        continue;
+    for (const registration of listSourceRegistrations()) {
+      const adapterKey = registration.key;
+      if (
+        registration.capability === "crawl" &&
+        !DISABLED_ADAPTER_KEYS.has(adapterKey)
+      ) {
+        await ensureSource(
+          registration.source.key,
+          registration.source.name,
+          null,
+        );
       }
-      const source = await ensureSource(adapterKey, name, null);
       // One schedule per source, living as long as this process: a slice whose
       // walk threw is held out of that source's selection order until its
       // retry comes due, so it cannot be handed back on every turn.
@@ -1536,6 +1540,17 @@ export const runCaseLawIngest = async (
       reconcilable.push({
         adapterKey,
         runWorkUnit: async () => {
+          // Import sources may appear after daemon startup; discovery stays
+          // with their importer, while held rows join this standing repair.
+          const source = await findCaseLawSource(adapterKey);
+          if (source === undefined) {
+            return { turn: RECONCILIATION_TURN.IDLE };
+          }
+          const publisherAccess =
+            source.enabled && !DISABLED_ADAPTER_KEYS.has(adapterKey)
+              ? "enabled"
+              : "disabled";
+
           const signal = AbortSignal.any([
             drainController.signal,
             createSettlingDeadlineSignal({
@@ -1547,22 +1562,39 @@ export const runCaseLawIngest = async (
             "case-law-reconciliation",
             RECONCILIATION_HARD_DEADLINE_MS,
             async () =>
-              await runReconciliationWorkUnit({
-                adapterKey,
+              await runSourceReconciliationWorkUnit({
                 sourceId: source.id,
-                reconciliation,
-                reparseStoredRaw: adapter?.reparseStoredRaw,
+                registration,
+                publisherAccess,
                 scopedDb: backfillDb,
                 now: () => new Date(),
+                signal,
                 fetchDelayMs,
                 sleep: async (ms) => {
                   await Bun.sleep(ms);
                 },
                 sliceRetries,
-                signal,
               }),
           );
           switch (outcome.type) {
+            case "fulltext-worked":
+              return {
+                turn: RECONCILIATION_TURN.WORKED,
+                counts: {
+                  listed: 0,
+                  keyable: 0,
+                  unidentifiable: 0,
+                  heldBefore: outcome.summary.verified,
+                  scheduled: outcome.summary.adopted,
+                  written: outcome.summary.recovered,
+                  parked: outcome.summary.failed,
+                  terminal: outcome.summary.verified,
+                  resolved: outcome.summary.recovered,
+                  failed: outcome.summary.failed,
+                  deferred: outcome.summary.continued,
+                  pruned: 0,
+                },
+              };
             case "worked":
               return {
                 turn: RECONCILIATION_TURN.WORKED,

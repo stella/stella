@@ -221,6 +221,7 @@ const textDecision = (overrides: { documentAst?: DocumentAst } = {}) => {
     documentAst: null,
     documentPending: false,
     documentReadFailed: false,
+    textState: null,
     documentUnavailable: false,
     fulltext: "Odpovědnosti za škodu se nelze vyhnout.",
     id: toSafeId<"caseLawDecision">("9b1f0f3d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"),

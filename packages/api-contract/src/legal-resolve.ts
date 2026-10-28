@@ -1,6 +1,9 @@
 import * as v from "valibot";
 
+import { caseLawTextStatusSchema } from "./case-law-fulltext-state";
+
 const legalResolveCandidateSchema = v.strictObject({
+  textState: v.nullable(caseLawTextStatusSchema),
   decisionId: v.string(),
   identifier: v.string(),
   label: v.string(),
@@ -35,6 +38,7 @@ const legalResolveDecisionAlternateSchema = v.strictObject({
 const legalResolveDocumentSchema = v.variant("kind", [
   v.strictObject({
     kind: v.literal("decision"),
+    textState: v.nullable(caseLawTextStatusSchema),
     decisionId: v.string(),
     identifier: v.string(),
     country: v.string(),

@@ -1437,7 +1437,9 @@ const foldReaderSelectGrants = (
         continue;
       }
       const granting = match.groups["verb"]?.toUpperCase() === "GRANT";
-      const tables = identifiers(match.groups["tables"] ?? "");
+      const tables = identifiers(match.groups["tables"] ?? "").map((table) =>
+        table.replace(/^public\./u, ""),
+      );
       const columnList = match.groups["columns"];
       for (const table of tables) {
         if (columnList === undefined) {
@@ -1475,6 +1477,19 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
+  test("normalizes explicit public schema grants without hiding other schemas", () => {
+    const grants = foldReaderSelectGrants(
+      [
+        'GRANT SELECT (text_state) ON TABLE public."case_law_decisions", other."case_law_decisions" TO stella_public_law_reader;',
+      ],
+      READER_ROLE,
+    );
+    expect(sortedColumns(grants)).toEqual({
+      case_law_decisions: ["text_state"],
+      "other.case_law_decisions": ["text_state"],
+    });
+  });
+
   test("committed decision-view grants match the canonical role registry", () => {
     const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())

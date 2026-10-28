@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { caseLawTextStatusSchema } from "@stll/api-contract/case-law-fulltext-state";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   TEXT_ABSENCE_REASONS,
@@ -67,6 +68,7 @@ const DECISION_READER_TEXT_BYTES = {
     | "citationsNextCursor"
     | "courtTier"
     | "documentAstSource"
+    | "textState"
   >,
   number
 >;
@@ -138,6 +140,7 @@ const languageAlternateSchema = v.object({
 >);
 
 const caseFileDocumentSchema = v.object({
+  textState: v.nullable(caseLawTextStatusSchema),
   id: resourceIdSchema("caseLawDecision"),
   caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
   country: boundedString(DECISION_READER_TEXT_BYTES.country),
@@ -160,6 +163,7 @@ const caseFileDocumentSchema = v.object({
 >);
 
 export const readDecisionSuccessResponseSchema = v.object({
+  textState: v.nullable(caseLawTextStatusSchema),
   documentPending: v.boolean(),
   hasDocument: v.boolean(),
   documentReadFailed: v.boolean(),

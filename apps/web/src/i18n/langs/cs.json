@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "Vyhledávání řadí výsledky podle relevance nebo od nejnovějších. Chcete-li zobrazit nejdříve nejstarší rozhodnutí, vymažte vyhledávání.",
       "relevance": "Nejrelevantnější"
     },
+    "textState": {
+      "textFetchFailed": "Načtení textu selhalo",
+      "textMetadataOnlySource": "Zdroj poskytuje jen metadata",
+      "textNotPublished": "Text nebyl zveřejněn",
+      "textPending": "Text čeká na načtení"
+    },
     "viewer": {
       "abstract": "Abstrakt",
       "appliedVersionNotStated": "Použité znění neuvedeno",

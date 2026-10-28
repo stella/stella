@@ -15,6 +15,7 @@ type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
   | {
       type: "search";
+      textState: SearchPage["results"][number]["textState"];
       textAvailability: SearchPage["results"][number]["textAvailability"];
       match: SearchPage["results"][number]["match"];
       snippet: string | null;
@@ -24,7 +25,11 @@ type RowContent =
         | { type: "not_stated" }
         | { type: "omitted" };
     }
-  | { type: "resolve"; snippet: null };
+  | {
+      type: "resolve";
+      snippet: null;
+      textState: SearchPage["results"][number]["textState"];
+    };
 
 export type ResultRow = Pick<
   SearchPage["results"][number],
@@ -93,6 +98,7 @@ export const searchView = (data: SearchResults) => {
       resultRow(row, {
         type: "search",
         match: row.match,
+        textState: row.textState,
         textAvailability: row.textAvailability,
         // A licence-withheld row carries no excerpt to show.
         snippet: "snippet" in row ? row.snippet : null,
@@ -146,7 +152,11 @@ export const resolveView = (data: ResolveResults) => {
                   decisionDate: document.decisionDate,
                   url: document.readerUrl,
                 },
-                { type: "resolve", snippet: null },
+                {
+                  type: "resolve",
+                  snippet: null,
+                  textState: document.textState,
+                },
               ),
             ],
           } as const;
@@ -162,7 +172,8 @@ export const resolveView = (data: ResolveResults) => {
         type: "resolve",
         status: data.status,
         candidates: data.candidates.map(
-          ({ decisionId, identifier, label, readerUrl }) => ({
+          ({ decisionId, identifier, label, readerUrl, textState }) => ({
+            textState,
             type: "resolve" as const,
             decisionId,
             identifier,

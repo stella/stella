@@ -29,6 +29,7 @@ import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
+import { decisionTextStateStatusColumn } from "@/api/lib/case-law/text-state-projection";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type {
   UnbackedProjectionKeys,
@@ -41,6 +42,7 @@ import {
 } from "../summary-response";
 
 const DECISION_SUMMARY_COLUMNS = {
+  textState: decisionTextStateStatusColumn(publishedCaseLawDecisions),
   id: publishedCaseLawDecisions.id,
   caseNumber: publishedCaseLawDecisions.caseNumber,
   court: publishedCaseLawDecisions.court,
@@ -187,6 +189,7 @@ const readDecisionSummary = async (
   }
   const presentation = courtPresentation(courtWeights, decision);
   return projectDecisionSummary({
+    textState: decision.textState,
     id: decision.id,
     caseNumber: decision.caseNumber,
     court: decision.court,

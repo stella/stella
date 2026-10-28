@@ -36,6 +36,8 @@ export type ReadUnavailableCause =
   | { readonly kind: "empty-body"; readonly status: number }
   /** The served body exceeded the reader's byte ceiling; reading stopped. */
   | { readonly kind: "too-large"; readonly maxBytes: number }
+  /** A served document could not be decoded or parsed; retrying may succeed after a parser fix. */
+  | { readonly kind: "parser-refusal"; readonly code: string }
   | { readonly kind: "thrown"; readonly error: unknown };
 
 /** The statuses by which a source refuses a read. */
@@ -89,7 +91,10 @@ export const readRefused = <T>(refusal: {
 
 export const readUnavailable = <T>(
   cause: ReadUnavailableCause,
-): ReadOutcome<T> => ({ type: "unavailable", cause });
+): ReadOutcome<T> => ({
+  type: "unavailable",
+  cause,
+});
 
 /** The absence an HTTP status states on its own, if any. */
 const httpAbsenceEvidence = (status: number): AbsenceEvidence | null => {
@@ -168,10 +173,7 @@ export const UNAVAILABLE_CYCLES_BEFORE_MARKING = 3;
 
 /** A {@link ReadUnavailableCause} reduced to what can be stored. */
 export type StoredReadUnavailableCause =
-  | { readonly kind: "status"; readonly status: number }
-  | { readonly kind: "no-content"; readonly status: number }
-  | { readonly kind: "empty-body"; readonly status: number }
-  | { readonly kind: "too-large"; readonly maxBytes: number }
+  | Exclude<ReadUnavailableCause, { readonly kind: "thrown" }>
   | { readonly kind: "thrown" };
 
 /**
@@ -236,6 +238,7 @@ const UNAVAILABLE_KIND_RECORD = {
   "no-content": true,
   "empty-body": true,
   "too-large": true,
+  "parser-refusal": true,
   thrown: true,
 } as const satisfies Record<StoredReadUnavailableCause["kind"], true>;
 
@@ -250,11 +253,50 @@ export const isStoredReadUnavailable = (
   isRecord(value) &&
   value["type"] === "unavailable" &&
   (value["scope"] === "document" || value["scope"] === "part") &&
-  isRecord(value["cause"]) &&
-  UNAVAILABLE_KINDS.has(value["cause"]["kind"]) &&
+  isStoredReadUnavailableCause(value["cause"]) &&
+  Number.isSafeInteger(value["consecutiveCycles"]) &&
   typeof value["consecutiveCycles"] === "number" &&
-  Number.isInteger(value["consecutiveCycles"]) &&
   value["consecutiveCycles"] >= 1;
+
+const isStoredReadUnavailableCause = (
+  value: unknown,
+): value is StoredReadUnavailableCause => {
+  if (
+    !isRecord(value) ||
+    typeof value["kind"] !== "string" ||
+    !UNAVAILABLE_KINDS.has(value["kind"])
+  ) {
+    return false;
+  }
+  const kind = value["kind"];
+  switch (kind) {
+    case "status":
+    case "no-content":
+    case "empty-body":
+      return (
+        typeof value["status"] === "number" &&
+        Number.isInteger(value["status"]) &&
+        value["status"] >= 100 &&
+        value["status"] <= 599
+      );
+    case "too-large":
+      return (
+        typeof value["maxBytes"] === "number" &&
+        Number.isSafeInteger(value["maxBytes"]) &&
+        value["maxBytes"] > 0
+      );
+    case "parser-refusal":
+      return (
+        typeof value["code"] === "string" &&
+        value["code"].trim().length > 0 &&
+        value["code"].length <= 128
+      );
+    case "thrown":
+      return true;
+    default:
+      return false;
+  }
+};
 
 /** Whether a value is a stored absence marker. */
 export const isStoredReadAbsence = (

@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
+import { caseLawTextStatusSchema } from "@stll/api-contract/case-law-fulltext-state";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_SOURCE,
@@ -41,10 +42,8 @@ import {
   SANCTIONS_COMPANY_REGISTRIES,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
-import {
-  DECISION_READ_ABSENCE_STATUSES,
-  DECISION_READ_STATUS,
-} from "@/api/lib/case-law/decision-read-vocabulary";
+import type { DECISION_READ_ABSENCE_STATUSES } from "@/api/lib/case-law/decision-read-vocabulary";
+import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1662,6 +1661,8 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  textState: v.nullable(caseLawTextStatusSchema),
+
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
   // when `url` is the reader's.
@@ -1793,6 +1794,27 @@ const caseLawDecisionProjection = v.strictObject({
  * message. The only ids are public case-law decision ids another call takes;
  * there are no row ids. `metadata` is an unenumerated public jsonb subtree.
  */
+const decisionReadAbsenceProjections = {
+  [DECISION_READ_STATUS.notFound]: projectionBranch(
+    v.strictObject({
+      decisionId: passthroughId(),
+      message: v.string(),
+      status: v.literal(DECISION_READ_STATUS.notFound),
+    }),
+  ),
+  [DECISION_READ_STATUS.pending]: projectionBranch(
+    v.strictObject({
+      decisionId: passthroughId(),
+      message: v.string(),
+      status: v.literal(DECISION_READ_STATUS.pending),
+      textState: v.nullable(caseLawTextStatusSchema),
+    }),
+  ),
+} as const satisfies Record<
+  (typeof DECISION_READ_ABSENCE_STATUSES)[number],
+  v.GenericSchema
+>;
+
 export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
   items: v.array(
     v.variant("status", [
@@ -1807,15 +1829,7 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
           status: v.literal(DECISION_READ_STATUS.found),
         }),
       ),
-      ...DECISION_READ_ABSENCE_STATUSES.map((status) =>
-        projectionBranch(
-          v.strictObject({
-            decisionId: passthroughId(),
-            message: v.string(),
-            status: v.literal(status),
-          }),
-        ),
-      ),
+      ...Object.values(decisionReadAbsenceProjections),
     ]),
   ),
 });

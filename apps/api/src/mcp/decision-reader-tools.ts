@@ -66,6 +66,7 @@ const withheldReason = {
 } as const;
 const metadataOf = ({ decision }: ReaderSource) => ({
   decisionId: decision.id,
+  textState: decision.textState,
   caseNumber: decision.caseNumber.slice(0, 256),
   caseNumberType: decision.caseNumberType,
   courtAbbreviation: decision.courtAbbreviation,

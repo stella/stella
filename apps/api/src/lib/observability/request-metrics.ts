@@ -462,6 +462,8 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   oldestUnpublishedAgeSeconds: "CaseLawOldestUnpublishedAgeSeconds",
   sourceSyncAgeSeconds: "CaseLawSourceSyncAgeSeconds",
   projectionConvergence: "CaseLawProjectionConvergence",
+  textStateMissing: "CaseLawTextStateMissing",
+  textFailedOverThreshold: "CaseLawTextFailedOverThreshold",
 } as const satisfies Record<string, string>;
 
 const buildCaseLawMetricRecord = ({
@@ -525,6 +527,31 @@ export const buildCaseLawProjectionConvergenceMetric = (status: string) => ({
     value: 1,
   }),
   status,
+});
+
+export const buildCaseLawTextStateMissingMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["source"],
+    name: CASE_LAW_FRESHNESS_METRIC.textStateMissing,
+    unit: "Count",
+    value,
+  }),
+  source,
+});
+export const buildCaseLawTextFailedOverThresholdMetric = (
+  source: string,
+  value: number,
+) => ({
+  ...buildCaseLawMetricRecord({
+    dimensions: ["source"],
+    name: CASE_LAW_FRESHNESS_METRIC.textFailedOverThreshold,
+    unit: "Count",
+    value,
+  }),
+  source,
 });
 
 export const REQUEST_CLASSES = [

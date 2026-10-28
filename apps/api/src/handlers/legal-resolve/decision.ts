@@ -147,6 +147,7 @@ const candidateLabel = (row: DecisionIdentityRow): string =>
 
 const candidate = (row: DecisionIdentityRow) => ({
   decisionId: row.id,
+  textState: row.textState,
   identifier: row.ecli ?? row.caseNumber,
   label: candidateLabel(row),
   readerUrl: buildCaseLawDecisionUrl({
@@ -183,6 +184,7 @@ const resolvedDecision = async (
     status: "resolved",
     document: {
       kind: "decision",
+      textState: row.textState,
       decisionId: row.id,
       identifier: row.ecli ?? row.caseNumber,
       country: row.country,

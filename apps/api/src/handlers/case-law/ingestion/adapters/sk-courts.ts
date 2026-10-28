@@ -501,6 +501,7 @@ const causeHttpStatus = (
   switch (cause.kind) {
     case "thrown":
     case "too-large":
+    case "parser-refusal":
       return {};
     case "status":
     case "no-content":
@@ -1386,6 +1387,12 @@ const listingFailureError = ({
     case "too-large":
       return new AdapterFetchError({
         message: `SK courts listing exceeded ${cause.maxBytes} bytes`,
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor,
+      });
+    case "parser-refusal":
+      return new AdapterFetchError({
+        message: `SK courts listing parser refused ${cause.code}`,
         adapterKey: ADAPTER_KEYS.SK_COURTS,
         cursor,
       });

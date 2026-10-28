@@ -34,7 +34,6 @@ import {
   parsePlUokikDetail,
   PL_UOKIK_APPEAL_WATCH,
   PL_UOKIK_DETAIL_STATUS,
-  PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_FILE_STATUS,
   PL_UOKIK_LABEL,
   PL_UOKIK_UNDATED_SLICE,
@@ -57,6 +56,8 @@ import { readGzipJson } from "@/api/lib/gzip-json";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_UOKIK_DOCUMENT_ABSENCE } from "./pl-uokik.text-policy";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 

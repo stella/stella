@@ -24,6 +24,7 @@ import type { CaseLawJudgeDependencies } from "@/api/handlers/case-law/ingestion
 import type { DecisionInputProvenance } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { StoredSupplement } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import type { SafeId } from "@/api/lib/branded-types";
+import { recordDecisionTextObservationTx } from "@/api/lib/case-law/fulltext-state-store";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { logger } from "@/api/lib/observability/logger";
@@ -49,6 +50,24 @@ export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
     rawWrites: RawWriteState;
     judges: CaseLawJudgeDependencies;
   };
+
+/** The mandatory text-state transition shares the decision's row transaction. */
+export const recordRowTextStateTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<void> =>
+  await recordDecisionTextObservationTx(tx, {
+    decisionId,
+    payloadWrite:
+      write.shape.preservesExistingDetail ||
+      write.plan.corpusPlan.type === "preserve-stored"
+        ? { type: "preserved" }
+        : { type: "postgres", payload: write.plan.corpusPayload },
+    caseNumberType: write.plan.docketColumns.caseNumberType,
+    metadata: write.plan.preparedMetadata,
+    now: write.observedAt,
+  });
 
 type DecisionIdentifierLookup = Pick<
   DecisionWritePlan["identifierRows"][number],

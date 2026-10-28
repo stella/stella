@@ -16,6 +16,7 @@ import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { DECISION_TEXT_FAILURE } from "@stll/api-contract/case-law-fulltext-state";
 import {
   DOCUMENT_FETCH_EVENT,
   type DocumentStageObservation,
@@ -519,6 +520,10 @@ describe("a stale claim", () => {
       expect(outcome).toEqual({
         status: "deferred",
         failure: "network",
+        cause: {
+          kind: DECISION_TEXT_FAILURE.TIMEOUT,
+          timeoutMs: expect.any(Number),
+        },
         detail: "TimeoutError",
       });
       expect(await fetchState(label)).toEqual({

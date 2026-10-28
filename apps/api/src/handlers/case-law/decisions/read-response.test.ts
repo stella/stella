@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import { TEXT_FIELD_TYPE } from "@stll/api-contract/case-law-text-field";
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { assertProperty } from "@stll/property-testing";
 
@@ -38,6 +39,7 @@ const decisionWithText = (text: string) => {
     documentPending: false,
     hasDocument: true,
     documentReadFailed: false,
+    textState: null,
     documentUnavailable: false,
     id: decisionId,
     resolution: {
@@ -211,3 +213,17 @@ test("decision readers keep every section whole so citation section indices reso
   expect(response.sections).toEqual(sections);
   expect(schemaIssues(response)).toEqual([]);
 });
+
+test.each(Object.values(CASE_LAW_TEXT_STATUS))(
+  "reader projection keeps %s independent of a transient body read failure",
+  (textState) => {
+    const response = projectDecisionReader({
+      ...decisionWithText(""),
+      textState,
+      documentReadFailed: true,
+    });
+    expect(response.textState).toBe(textState);
+    expect(response.documentReadFailed).toBe(true);
+    expect(schemaIssues(response)).toEqual([]);
+  },
+);

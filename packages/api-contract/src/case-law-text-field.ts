@@ -1,6 +1,11 @@
 // parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 import { panic } from "better-result";
 
+import {
+  CASE_LAW_TEXT_STATUS,
+  type CaseLawTextStatus,
+} from "./case-law-text-status.ts";
+
 // parser-output-unchanged: Publication provenance and its schema checks affect metadata only, not canonical document payloads.
 // parser-output-unchanged: Publisher field absence markers widen the accepted absence fields; adapters that emit none produce the same output.
 // parser-output-unchanged: The decision text-source constant names read-time passage selection; no parser emits it.
@@ -25,6 +30,35 @@ export const DECISION_TEXT_AVAILABILITY = {
 
 export type DecisionTextAvailability =
   (typeof DECISION_TEXT_AVAILABILITY)[keyof typeof DECISION_TEXT_AVAILABILITY];
+
+/** Shared marker keys; both browser catalogs provide the same short labels. */
+export const CASE_LAW_TEXT_STATUS_MARKERS = {
+  [CASE_LAW_TEXT_STATUS.STORED]: null,
+  [CASE_LAW_TEXT_STATUS.PUBLISHER_HAS_NO_TEXT]: "textNotPublished",
+  [CASE_LAW_TEXT_STATUS.FETCH_PENDING]: "textPending",
+  [CASE_LAW_TEXT_STATUS.FETCH_FAILED]: "textFetchFailed",
+  [CASE_LAW_TEXT_STATUS.METADATA_ONLY_BY_SOURCE]: "textMetadataOnlySource",
+} as const satisfies Record<CaseLawTextStatus, string | null>;
+
+export const decisionTextStatusMarker = (
+  textState: CaseLawTextStatus | null,
+  legacyAvailability: DecisionTextAvailability,
+) => {
+  if (textState !== null) {
+    return CASE_LAW_TEXT_STATUS_MARKERS[textState];
+  }
+  switch (legacyAvailability) {
+    case DECISION_TEXT_AVAILABILITY.AVAILABLE:
+      return null;
+    case DECISION_TEXT_AVAILABILITY.METADATA_ONLY:
+      return "noDecisionText";
+    default:
+      legacyAvailability satisfies never;
+      return panic(
+        `Unhandled legacy text availability: ${String(legacyAvailability)}`,
+      );
+  }
+};
 
 export const DECISION_TEXT_WITHHELD_REASON = {
   SOURCE_LICENCE: "source_licence",

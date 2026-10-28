@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 
+import { CASE_LAW_TEXT_STATUS } from "@stll/api-contract/case-law-text-status";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
@@ -46,6 +47,7 @@ test("requires a law-read admission at compile time", () => {
 
 const row = (caseNumber = "3 Afs 41/2008 - 98") =>
   ({
+    textState: null,
     id: createSafeId<"caseLawDecision">(),
     caseNumber,
     caseNumberType: "case-number",
@@ -94,6 +96,7 @@ const decisionAst = (texts = ["Text"], numbered = false) =>
 const readableDecision: typeof readDecisionReaderSource = async () => ({
   status: "read",
   decision: {
+    textState: null,
     id: row().id,
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
@@ -623,5 +626,22 @@ describe("decision legal resolution", () => {
         ],
       },
     });
+  });
+});
+
+test("resolution keeps the stored state when the document read fails", async () => {
+  const failedRow = { ...row(), textState: CASE_LAW_TEXT_STATUS.FETCH_FAILED };
+  const result = await resolveDecision({
+    admission,
+    country: "CZE",
+    identifier: failedRow.caseNumber,
+    dependencies: { lookup: lookupRows([failedRow]), read: missingDecision },
+  });
+  expect(result).toMatchObject({
+    status: "resolved",
+    document: {
+      textState: CASE_LAW_TEXT_STATUS.FETCH_FAILED,
+      text: { status: "unavailable" },
+    },
   });
 });

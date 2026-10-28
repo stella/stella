@@ -298,6 +298,12 @@ const unavailableReadError = ({
         adapterKey,
         cursor,
       });
+    case "parser-refusal":
+      return new AdapterFetchError({
+        message: `${message}: parser refused ${cause.code}`,
+        adapterKey,
+        cursor,
+      });
     case "thrown":
       return new AdapterFetchError({
         message: `${message}: ${cause.error instanceof Error ? cause.error.message : String(cause.error)}`,

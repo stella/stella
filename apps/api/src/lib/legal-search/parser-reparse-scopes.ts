@@ -165,11 +165,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+        "Re-read stored Supreme Court responses to retain typed document-read outcomes and raw bodies when PDF decoding or parsing fails.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {

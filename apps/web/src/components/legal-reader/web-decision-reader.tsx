@@ -2,6 +2,7 @@ import { useRef } from "react";
 
 import { panic } from "better-result";
 
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import {
   DecisionText,
   prepareDecisionTextPlacements,
@@ -30,6 +31,7 @@ import {
   presentationBesideCitationText,
 } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import { DecisionTextAvailabilityMarker } from "@/features/case-law/components/decision-text-availability";
 import type { DecisionReaderSurface } from "@/features/case-law/decision-reader-surfaces";
 import { useProvisionPlacementTelemetry } from "@/features/case-law/use-provision-placement-telemetry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -168,13 +170,23 @@ const WebDecisionReaderContent = ({
   }, [landingAnchorId, landingSessionId]);
 
   return (
-    <DecisionText
-      {...props}
-      annotationAnchors={annotationAnchors}
-      articleRef={articleRef}
-      isHydrated={hydrated}
-      placements={placements}
-    />
+    <>
+      {blocks.length > 0 && (
+        <div className="reader-chrome">
+          <DecisionTextAvailabilityMarker
+            textState={props.decision.textState}
+            availability={DECISION_TEXT_AVAILABILITY.AVAILABLE}
+          />
+        </div>
+      )}
+      <DecisionText
+        {...props}
+        annotationAnchors={annotationAnchors}
+        articleRef={articleRef}
+        isHydrated={hydrated}
+        placements={placements}
+      />
+    </>
   );
 };
 

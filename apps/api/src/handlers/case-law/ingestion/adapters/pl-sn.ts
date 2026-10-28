@@ -98,6 +98,19 @@ import {
   checkedDecisionMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import {
+  READ_OUTCOME_METADATA_KEY,
+  readAbsent,
+  readPresent,
+  readRefused,
+  readUnavailable,
+  storedReadUnavailable,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import type {
+  ReadOutcome,
+  StoredReadOutcome,
+} from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
@@ -413,12 +426,28 @@ const requestProxy = async ({
     catch: () => null,
   }).unwrapOr(null);
   const payload = readPlSnEnvelope(parsed);
-  if (payload === null) {
+  if (payload === null && task !== PROXY_TASK.DOCUMENT) {
     return Result.err(
       proxyError(cursor, `${task} answered no readable envelope`),
     );
   }
   const refusal = readPlSnRefusal(payload);
+  if (refusal !== null && task === PROXY_TASK.DOCUMENT) {
+    if (
+      refusal.status === 401 ||
+      refusal.status === 403 ||
+      refusal.status === 451
+    ) {
+      return Result.ok({ raw, payload, url: target.toString() });
+    }
+    return Result.err(
+      proxyError(
+        cursor,
+        `${task} was refused: ${refusal.error}`,
+        refusal.status,
+      ),
+    );
+  }
   if (refusal !== null) {
     return Result.err(
       proxyError(
@@ -549,27 +578,72 @@ const isPdf = (bytes: Uint8Array): boolean =>
   bytes.length >= PDF_SIGNATURE_BYTES.length &&
   PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
 
+/** A valid base64 string, including optional canonical padding. */
+const isPlSnBase64 = (value: string): boolean => {
+  if (!/^[A-Za-z0-9+/]*={0,2}$/u.test(value) || value.length % 4 === 1) {
+    return false;
+  }
+  const bytes = Buffer.from(value, "base64");
+  const canonical = bytes.toString("base64");
+  return value.includes("=")
+    ? canonical === value
+    : canonical.replaceAll("=", "") === value;
+};
+
 /**
- * The decision's PDF, or `undefined` where the proxy served something else.
- *
- * The signature is checked because this proxy answers 200 with an error
- * object as readily as with a document: bytes taken on faith would be stored
- * as the decision's raw payload and read as the document by every replay.
+ * Decode the PDF while keeping absence and refusal separate from malformed
+ * data. The raw response is carried alongside this outcome by the fetcher.
  */
-const decodePlSnDocument = (payload: unknown): Uint8Array | undefined => {
+const decodePlSnDocument = (payload: unknown): ReadOutcome<Uint8Array> => {
+  const refusal = readPlSnRefusal(payload);
+  if (refusal !== null) {
+    if (refusal.status === undefined) {
+      return readUnavailable({
+        kind: "parser-refusal",
+        code: "publisher_error_response",
+      });
+    }
+    switch (refusal.status) {
+      case 401:
+      case 403:
+      case 451:
+        return readRefused({
+          status: refusal.status,
+          scope: "document",
+          cause: { kind: "http-status", retryAfter: null },
+        });
+      default:
+        return readUnavailable({ kind: "status", status: refusal.status });
+    }
+  }
+  if (Array.isArray(payload) && payload.length === 0) {
+    return readAbsent("publisher-typed-absence");
+  }
   const base64 = isRecord(payload) ? payload["raw"] : undefined;
   if (typeof base64 !== "string" || base64.length === 0) {
-    return undefined;
+    return readUnavailable({
+      kind: "parser-refusal",
+      code: "missing_pdf_base64",
+    });
   }
-  const bytes = Result.try({
-    try: () => Buffer.from(base64, "base64"),
-    catch: () => null,
-  }).unwrapOr(null);
-  if (bytes === null) {
-    return undefined;
+  if (!isPlSnBase64(base64)) {
+    return readUnavailable({
+      kind: "parser-refusal",
+      code: "invalid_pdf_base64",
+    });
   }
-  const view = new Uint8Array(bytes);
-  return isPdf(view) ? view : undefined;
+  const bytes = new Uint8Array(Buffer.from(base64, "base64"));
+  return isPdf(bytes)
+    ? readPresent(bytes)
+    : readUnavailable({
+        kind: "parser-refusal",
+        code: "document_response_not_pdf",
+      });
+};
+
+type PlSnDocumentResponse = {
+  raw: string;
+  outcome: ReadOutcome<Uint8Array>;
 };
 
 const fetchDocument = async ({
@@ -577,7 +651,7 @@ const fetchDocument = async ({
   id,
   signal,
 }: DecisionIdOptions): Promise<
-  Result<{ bytes: Uint8Array; raw: string } | undefined, AdapterFetchError>
+  Result<PlSnDocumentResponse, AdapterFetchError>
 > => {
   const requested = await requestProxy({
     cursor,
@@ -590,8 +664,16 @@ const fetchDocument = async ({
     return requested;
   }
   const { payload, raw } = requested.value;
-  const bytes = decodePlSnDocument(payload);
-  return Result.ok(bytes === undefined ? undefined : { bytes, raw });
+  return Result.ok({
+    raw,
+    outcome:
+      payload === null
+        ? readUnavailable({
+            kind: "parser-refusal",
+            code: "invalid_proxy_envelope",
+          })
+        : decodePlSnDocument(payload),
+  });
 };
 
 // ── Normalization ────────────────────────────────────────
@@ -715,9 +797,7 @@ const documentUrlOf = (id: string): string =>
 type PlSnBuildResult =
   | { type: "built"; decision: IngestionResult }
   /** No id and no docket to key on; nothing can store this item. */
-  | { type: "unkeyable" }
-  /** The proxy served no document for the id the listing states. */
-  | { type: "detail-unavailable"; decision: IngestionResult };
+  | { type: "unkeyable" };
 
 /**
  * The parts of the stored raw envelope, named by the response each holds.
@@ -734,10 +814,31 @@ export type AssemblePlSnDecisionOptions = {
   item: PlSnListingItem;
   /** The detail record, where one was read. */
   detail: PlSnDetail | null;
-  /** The document's bytes, where the proxy served one. */
-  documentBytes: Uint8Array | undefined;
+  /** The document response, or its typed read outcome. */
+  documentRead: ReadOutcome<Uint8Array>;
   /** Every response this observation was built from, verbatim. */
   rawParts: SourceRawParts;
+};
+
+const storedDocumentOutcome = (
+  outcome: ReadOutcome<Uint8Array>,
+): StoredReadOutcome | null => {
+  switch (outcome.type) {
+    case "present":
+      return null;
+    case "absent":
+    case "refused":
+      return outcome;
+    case "unavailable":
+      return storedReadUnavailable({
+        cause: outcome.cause,
+        scope: "document",
+        consecutiveCycles: UNAVAILABLE_CYCLES_BEFORE_MARKING,
+      });
+    default:
+      outcome satisfies never;
+      return panic("Unhandled PL-SN document read outcome");
+  }
 };
 
 /**
@@ -751,7 +852,7 @@ export type AssemblePlSnDecisionOptions = {
  */
 export const assemblePlSnDecision = async ({
   detail,
-  documentBytes,
+  documentRead,
   item,
   rawParts,
 }: AssemblePlSnDecisionOptions): Promise<PlSnBuildResult> => {
@@ -772,17 +873,15 @@ export const assemblePlSnDecision = async ({
   const decisionType = plSnDecisionType(decisionForm);
   const decisionDate = isoDate(record.data_wydania ?? item.data_wydania);
 
-  // A parse failure is deliberately not the decision's failure: the document
-  // is stored verbatim below, so its text is recoverable by re-parsing what
-  // was kept rather than by asking the court again. The error is carried as
-  // its structural tag, which is all the report below states about it.
+  // A parser refusal is carried with the raw response, so replay can retry it
+  // without mistaking the failure for publisher absence.
   const parsed =
-    documentBytes === undefined
+    documentRead.type !== "present"
       ? null
       : await Result.tryPromise({
           try: async () =>
             await parsePlSnDecisionPdf({
-              pdfBytes: documentBytes,
+              pdfBytes: documentRead.value,
               caseNumber,
               court,
               decisionDate,
@@ -801,6 +900,14 @@ export const assemblePlSnDecision = async ({
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
+  const observedRead: ReadOutcome<Uint8Array> =
+    parsed !== null && Result.isError(parsed)
+      ? readUnavailable({
+          kind: "parser-refusal",
+          code: errorTag(parsed.error).slice(0, 128) || "pdf_parser_refused",
+        })
+      : documentRead;
+  const readOutcome = storedDocumentOutcome(observedRead);
   const documentAst: DocumentAst | EmptyAst =
     document?.documentAst ?? EMPTY_AST;
   const fulltext = document?.fulltext;
@@ -816,9 +923,7 @@ export const assemblePlSnDecision = async ({
     decisionDate,
     decisionType,
     fulltext,
-    // The listing proves the document exists; without it this row carries
-    // metadata only and must never overwrite detail a later fetch recovered.
-    ...(documentBytes === undefined ? { isListingOnly: true } : {}),
+    ...(document === null ? { isListingOnly: true } : {}),
     sourceUrl: decisionUrl(id),
     documentUrl: documentUrlOf(id),
     // sn.pl publishes no abstract, headnote or legal sentence beside the
@@ -842,6 +947,9 @@ export const assemblePlSnDecision = async ({
       dissentingOnDecision: record.zglaszajacy_zdanie_odrebne_orzeczenie,
       dissentingOnReasons: record.zglaszajacy_zdanie_odrebne_uzasadnienie,
       modifiedDate: record.data_modyfikacji,
+      ...(readOutcome === null
+        ? {}
+        : { [READ_OUTCOME_METADATA_KEY]: readOutcome }),
       rulingKeys: plSupremeCourtRulingKeys({
         caseNumber,
         court,
@@ -856,9 +964,7 @@ export const assemblePlSnDecision = async ({
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
 
-  return documentBytes === undefined
-    ? { type: "detail-unavailable", decision }
-    : { type: "built", decision };
+  return { type: "built", decision };
 };
 
 type FetchPlSnDecisionOptions = {
@@ -904,13 +1010,11 @@ const buildPlSnDecision = async ({
     await assemblePlSnDecision({
       item,
       detail: detail?.detail ?? null,
-      documentBytes: document?.bytes,
+      documentRead: document.outcome,
       rawParts: {
         [RAW_PART.LISTING]: listingRaw,
         ...(detail === null ? {} : { [RAW_PART.DETAIL]: detail.raw }),
-        ...(document === undefined
-          ? {}
-          : { [RAW_PART.DOCUMENT]: document.raw }),
+        [RAW_PART.DOCUMENT]: document.raw,
       },
     }),
   );
@@ -959,13 +1063,25 @@ const reparsePlSnStoredRaw = async (
           }).unwrapOr(null),
         );
 
+  let documentRead: ReadOutcome<Uint8Array>;
+  if (documentPart === undefined) {
+    documentRead = readUnavailable({
+      kind: "parser-refusal",
+      code: "document_response_not_stored",
+    });
+  } else if (documentPayload === null) {
+    documentRead = readUnavailable({
+      kind: "parser-refusal",
+      code: "invalid_document_envelope",
+    });
+  } else {
+    documentRead = decodePlSnDocument(documentPayload);
+  }
+
   const built = await assemblePlSnDecision({
     item,
     detail: isRecord(detailPayload) ? normalizePlSnDetail(detailPayload) : null,
-    documentBytes:
-      documentPayload === null
-        ? undefined
-        : decodePlSnDocument(documentPayload),
+    documentRead,
     rawParts: parts,
   });
   return built.type === "unkeyable"
@@ -1257,11 +1373,6 @@ const buildPlSnFromPayload = async (
       return { type: "built", decision: built.decision };
     case "unkeyable":
       return { type: "unkeyable" };
-    case "detail-unavailable":
-      // Storing the listing observation here would make the identity held
-      // while its document stayed unread, and the decision would leave every
-      // later reconciliation.
-      return { type: "detail-unavailable" };
     default: {
       built satisfies never;
       return panic(`Unhandled pl-sn build result: ${JSON.stringify(built)}`);
@@ -1398,7 +1509,6 @@ const plSnFetchPage = async (
         const outcome = result.value;
         switch (outcome.type) {
           case "built":
-          case "detail-unavailable":
             return outcome.decision;
           case "unkeyable":
             return undefined;
@@ -1428,10 +1538,6 @@ const plSnFetchPage = async (
     switch (built.type) {
       case "unkeyable":
         break;
-      // The cursor moves past this document either way, so the crawl keeps
-      // the listing-only row a document the proxy served nothing for still
-      // describes; only the reconciliation refuses it.
-      case "detail-unavailable":
       case "built":
         decisions.push(built.decision);
         break;

@@ -60,6 +60,7 @@ const createClient = () => {
     headnote: { type: "absent", reason: "not_published" },
     citationCount: 0,
     publication: null,
+    textState: null,
   } satisfies CaseLawDecisionSummary);
   clients.push(client);
   return client;

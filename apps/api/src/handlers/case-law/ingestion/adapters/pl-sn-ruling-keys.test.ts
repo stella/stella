@@ -29,6 +29,7 @@ import {
   normalizeSupremeCourtDocket,
   plSupremeCourtRulingKeys,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
+import { readAbsent } from "@/api/lib/errors/read-outcome";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
@@ -58,7 +59,7 @@ const snRowKeys = async (row: Record<string, unknown>): Promise<string[]> => {
   const built = await assemblePlSnDecision({
     item: normalizePlSnListingItem(row),
     detail: null,
-    documentBytes: undefined,
+    documentRead: readAbsent("publisher-typed-absence"),
     rawParts: { listing: JSON.stringify(row) },
   });
   return built.type === "unkeyable"
@@ -70,7 +71,7 @@ const snRowDecision = async (row: Record<string, unknown>) => {
   const built = await assemblePlSnDecision({
     item: normalizePlSnListingItem(row),
     detail: null,
-    documentBytes: undefined,
+    documentRead: readAbsent("publisher-typed-absence"),
     rawParts: { listing: JSON.stringify(row) },
   });
   return built.type === "unkeyable"

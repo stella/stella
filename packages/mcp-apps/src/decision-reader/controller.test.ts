@@ -13,6 +13,7 @@ type ToolResponse = Awaited<ReturnType<ReaderBridge["requestTool"]>>;
 type BridgeSnapshot = ReturnType<ReaderBridge["getSnapshot"]>;
 
 const metadata = {
+  textState: null,
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "1 C 1/2026",
   caseNumberType: "case-number",

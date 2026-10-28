@@ -30,6 +30,7 @@ import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
   recordParsedGenerationTx,
+  recordRowTextStateTx,
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import type { DecisionRowWrite } from "@/api/handlers/case-law/ingestion/pipeline/decision-row-context";
 import {
@@ -551,6 +552,7 @@ export const finishRefreshedRowTx = async (
     shape: { incomingCarriesDocument },
     plan: { citations },
   } = write;
+  await recordRowTextStateTx(tx, write, existing.id);
   if (
     replacedState !== null &&
     resolutionIdentityChanged(write, replacedState)

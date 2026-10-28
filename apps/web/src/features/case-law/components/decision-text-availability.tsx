@@ -1,30 +1,28 @@
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
-  DECISION_TEXT_AVAILABILITY,
   type DecisionTextAvailability,
+  decisionTextStatusMarker,
 } from "@stll/api-contract/case-law-text-field";
+import type { CaseLawTextStatus } from "@stll/api-contract/case-law-text-status";
 
 export const DecisionTextAvailabilityMarker = ({
   availability,
+  textState,
 }: {
   availability: DecisionTextAvailability;
+  textState: CaseLawTextStatus | null;
 }) => {
   const t = useTranslations();
-  switch (availability) {
-    case DECISION_TEXT_AVAILABILITY.AVAILABLE:
-      return null;
-    case DECISION_TEXT_AVAILABILITY.METADATA_ONLY:
-      return (
-        <span className="text-muted-foreground text-xs">
-          {t("caseLaw.research.answers.failureReasons.noText")}
-        </span>
-      );
-    default:
-      availability satisfies never;
-      return panic(
-        `Unhandled decision text availability: ${String(availability)}`,
-      );
+  const key = decisionTextStatusMarker(textState, availability);
+  if (key === null) {
+    return null;
   }
+  return (
+    <span className="text-muted-foreground text-xs">
+      {key === "noDecisionText"
+        ? t("caseLaw.research.answers.failureReasons.noText")
+        : t(`caseLaw.textState.${key}`)}
+    </span>
+  );
 };

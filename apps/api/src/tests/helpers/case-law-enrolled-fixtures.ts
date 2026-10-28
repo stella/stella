@@ -135,7 +135,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
-import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
+import {
+  readPresent,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
 import {
@@ -939,22 +942,31 @@ const plSnDetailRecord = (): Record<string, unknown> => {
 };
 
 /**
- * Built from the payloads directly rather than through the adapter's fetch
- * path. What these guards certify is the mapping from a stated field to the
- * row, and driving a stubbed transport to reach it only added this publisher's
- * one-second request gate to every run. No document is supplied: no declared
- * field is stored through it, so the fixture states exactly what the inventory
- * reads.
+ * Exercises the field union and the real document parser without transport.
+ * The synthetic field union above is paired with the recorded I CSK 3410/25
+ * PDF; its adjacent provenance file identifies the publisher URL and digest.
+ * These are deliberately separate observations, not a capture of one ruling.
+ * The document envelope reconstructs the proxy's base64 wrapper from those
+ * unchanged recorded PDF bytes so stored-raw replay retains the same input.
  */
 export const plSnFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
+    const documentBytes = await Bun.file(
+      new URL(
+        "../../handlers/case-law/ingestion/parsers/__fixtures__/pl-sn-i-csk-3410-25.pdf",
+        import.meta.url,
+      ),
+    ).bytes();
     const built = await assemblePlSnDecision({
       item: { ...PL_SN_LISTING_ROW },
       detail: normalizePlSnDetail(plSnDetailRecord()),
-      documentBytes: undefined,
+      documentRead: readPresent(documentBytes),
       rawParts: {
         listing: JSON.stringify(PL_SN_LISTING_ROW),
         detail: PL_SN_DETAIL_PAYLOAD,
+        document: JSON.stringify({
+          raw: Buffer.from(documentBytes).toBase64(),
+        }),
       },
     });
     return built.type === "unkeyable"

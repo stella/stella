@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "Une recherche est triée par pertinence ou de la plus récente à la plus ancienne. Effacez la recherche pour afficher d'abord les décisions les plus anciennes.",
       "relevance": "Les plus pertinentes"
     },
+    "textState": {
+      "textFetchFailed": "Échec de récupération du texte",
+      "textMetadataOnlySource": "Source limitée aux métadonnées",
+      "textNotPublished": "Texte non publié",
+      "textPending": "Texte en attente"
+    },
     "viewer": {
       "abstract": "Résumé",
       "appliedVersionNotStated": "Version appliquée non précisée",

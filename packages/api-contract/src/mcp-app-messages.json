@@ -126,7 +126,11 @@
     "supportive": "متَّبع",
     "mixed": "متباين",
     "unclassified": "غير مصنَّف",
-    "noDecisionText": "لا يتوفر نص الحكم"
+    "noDecisionText": "لا يتوفر نص الحكم",
+    "textPending": "النص بانتظار الجلب",
+    "textFetchFailed": "تعذّر جلب النص",
+    "textNotPublished": "لم يُنشر النص",
+    "textMetadataOnlySource": "المصدر يوفّر البيانات الوصفية فقط"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -255,7 +259,11 @@
     "supportive": "Následováno",
     "mixed": "Smíšené",
     "unclassified": "Neklasifikováno",
-    "noDecisionText": "Rozhodnutí nemá text"
+    "noDecisionText": "Rozhodnutí nemá text",
+    "textPending": "Text čeká na načtení",
+    "textFetchFailed": "Načtení textu selhalo",
+    "textNotPublished": "Text nebyl zveřejněn",
+    "textMetadataOnlySource": "Zdroj poskytuje jen metadata"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -384,7 +392,11 @@
     "supportive": "Gefolgt",
     "mixed": "Uneinheitlich",
     "unclassified": "Nicht eingeordnet",
-    "noDecisionText": "Kein Entscheidungstext"
+    "noDecisionText": "Kein Entscheidungstext",
+    "textPending": "Text wird abgerufen",
+    "textFetchFailed": "Textabruf fehlgeschlagen",
+    "textNotPublished": "Kein Text veröffentlicht",
+    "textMetadataOnlySource": "Quelle liefert nur Metadaten"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -513,7 +525,11 @@
     "supportive": "Followed",
     "mixed": "Mixed",
     "unclassified": "Unclassified",
-    "noDecisionText": "No decision text"
+    "noDecisionText": "No decision text",
+    "textPending": "Text pending",
+    "textFetchFailed": "Text retrieval failed",
+    "textNotPublished": "No text published",
+    "textMetadataOnlySource": "Metadata-only source"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -642,7 +658,11 @@
     "supportive": "Järgitud",
     "mixed": "Vastuoluline",
     "unclassified": "Liigitamata",
-    "noDecisionText": "Lahendi tekst puudub"
+    "noDecisionText": "Lahendi tekst puudub",
+    "textPending": "Tekst ootab allalaadimist",
+    "textFetchFailed": "Teksti allalaadimine ebaõnnestus",
+    "textNotPublished": "Teksti pole avaldatud",
+    "textMetadataOnlySource": "Allikas pakub ainult metaandmeid"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -771,7 +791,11 @@
     "supportive": "Suivie",
     "mixed": "Mitigée",
     "unclassified": "Non classée",
-    "noDecisionText": "Texte de la décision absent"
+    "noDecisionText": "Texte de la décision absent",
+    "textPending": "Texte en attente",
+    "textFetchFailed": "Échec de récupération du texte",
+    "textNotPublished": "Texte non publié",
+    "textMetadataOnlySource": "Source limitée aux métadonnées"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -900,7 +924,11 @@
     "supportive": "Követett",
     "mixed": "Vegyes",
     "unclassified": "Besorolatlan",
-    "noDecisionText": "Nincs határozatszöveg"
+    "noDecisionText": "Nincs határozatszöveg",
+    "textPending": "Szöveg lekérésre vár",
+    "textFetchFailed": "A szöveg lekérése sikertelen",
+    "textNotPublished": "A szöveg nincs közzétéve",
+    "textMetadataOnlySource": "A forrás csak metaadatokat közöl"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -1029,7 +1057,11 @@
     "supportive": "Sekots",
     "mixed": "Pretrunīgs",
     "unclassified": "Neklasificēts",
-    "noDecisionText": "Nav nolēmuma teksta"
+    "noDecisionText": "Nav nolēmuma teksta",
+    "textPending": "Teksts gaida izgūšanu",
+    "textFetchFailed": "Teksta izgūšana neizdevās",
+    "textNotPublished": "Teksts nav publicēts",
+    "textMetadataOnlySource": "Avots sniedz tikai metadatus"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -1158,7 +1190,11 @@
     "supportive": "Sekama",
     "mixed": "Mišrus",
     "unclassified": "Neklasifikuota",
-    "noDecisionText": "Nėra sprendimo teksto"
+    "noDecisionText": "Nėra sprendimo teksto",
+    "textPending": "Tekstas laukia gavimo",
+    "textFetchFailed": "Nepavyko gauti teksto",
+    "textNotPublished": "Tekstas nepaskelbtas",
+    "textMetadataOnlySource": "Šaltinis pateikia tik metaduomenis"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -1287,7 +1323,11 @@
     "supportive": "Podzielone",
     "mixed": "Mieszane",
     "unclassified": "Niesklasyfikowane",
-    "noDecisionText": "Brak tekstu orzeczenia"
+    "noDecisionText": "Brak tekstu orzeczenia",
+    "textPending": "Tekst oczekuje na pobranie",
+    "textFetchFailed": "Nie udało się pobrać tekstu",
+    "textNotPublished": "Tekst nie został opublikowany",
+    "textMetadataOnlySource": "Źródło udostępnia tylko metadane"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -1416,7 +1456,11 @@
     "supportive": "Seguida",
     "mixed": "Mista",
     "unclassified": "Não classificada",
-    "noDecisionText": "Sem texto da decisão"
+    "noDecisionText": "Sem texto da decisão",
+    "textPending": "Texto aguardando obtenção",
+    "textFetchFailed": "Falha ao obter o texto",
+    "textNotPublished": "Texto não publicado",
+    "textMetadataOnlySource": "Fonte fornece apenas metadados"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -1545,7 +1589,11 @@
     "supportive": "Nasledované",
     "mixed": "Zmiešané",
     "unclassified": "Neklasifikované",
-    "noDecisionText": "Rozhodnutie nemá text"
+    "noDecisionText": "Rozhodnutie nemá text",
+    "textPending": "Text čaká na načítanie",
+    "textFetchFailed": "Načítanie textu zlyhalo",
+    "textNotPublished": "Text nebol zverejnený",
+    "textMetadataOnlySource": "Zdroj poskytuje iba metadáta"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1674,6 +1722,10 @@
     "supportive": "Seguida",
     "mixed": "Mixta",
     "unclassified": "Sin clasificar",
-    "noDecisionText": "Sin texto de la resolución"
+    "noDecisionText": "Sin texto de la resolución",
+    "textPending": "Texto pendiente de recuperación",
+    "textFetchFailed": "Error al recuperar el texto",
+    "textNotPublished": "Texto no publicado",
+    "textMetadataOnlySource": "La fuente solo proporciona metadatos"
   }
 }

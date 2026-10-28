@@ -22,6 +22,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
   ({
     status: "read",
     decision: {
+      textState: null,
       id: decisionId,
       caseNumberType: "case-number",
       courtAbbreviation: "ÚS",

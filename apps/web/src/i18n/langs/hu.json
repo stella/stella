@@ -1202,6 +1202,12 @@
       "oldestUnavailable": "A keresés találatai relevancia szerint vagy a legújabbtól kezdve rendeződnek. A legrégebbi határozatok elöl való megjelenítéséhez törölje a keresést.",
       "relevance": "Legrelevánsabb"
     },
+    "textState": {
+      "textFetchFailed": "A szöveg lekérése sikertelen",
+      "textMetadataOnlySource": "A forrás csak metaadatokat közöl",
+      "textNotPublished": "A szöveg nincs közzétéve",
+      "textPending": "Szöveg lekérésre vár"
+    },
     "viewer": {
       "abstract": "Kivonat",
       "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",

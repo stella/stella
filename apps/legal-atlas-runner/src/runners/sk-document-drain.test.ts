@@ -82,11 +82,13 @@ const OUTCOMES = {
   deferred: {
     status: "deferred",
     failure: "publisher-status",
+    cause: { kind: "http", status: 400 },
     detail: "http-400",
   },
   parked: {
     status: "parked",
     failure: "unparseable",
+    cause: { kind: "parser_refusal", code: "UnrecoverableParseError" },
     detail: "UnrecoverableParseError",
   },
 } as const satisfies Record<

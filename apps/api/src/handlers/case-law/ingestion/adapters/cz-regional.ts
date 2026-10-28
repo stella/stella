@@ -677,6 +677,7 @@ const isRetryableFinaldocRead = (read: ReadOutcome<Response>): boolean => {
     case "no-content":
     case "empty-body":
     case "too-large":
+    case "parser-refusal":
       return false;
     default:
       read.cause satisfies never;
