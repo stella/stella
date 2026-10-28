@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Taimeri",
-    "start": "Sākt taimeri",
+    "start": "Sākt",
+    "startTimer": "Sākt taimeri",
     "newTimer": "Jauns taimeris",
     "description": "Pie kā strādājat?",
     "matterTitle": "Lieta",

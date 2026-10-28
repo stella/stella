@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Timers",
-    "start": "Start a timer",
+    "start": "Start",
+    "startTimer": "Start a timer",
     "newTimer": "New timer",
     "description": "What are you working on?",
     "matterTitle": "Matter",

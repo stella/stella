@@ -9,11 +9,23 @@ import { useSession } from "@/connection/session-provider";
 import { needsConsent } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 
-/** Why a change did not save: a scope the sign-in never granted, or anything else. */
-export type WriteFailure = "consent" | "failed";
+/**
+ * Why a change did not save: a scope the sign-in never granted, or anything
+ * else, with the server's own explanation when it gave one.
+ */
+export type WriteFailure =
+  | { readonly kind: "consent" }
+  | { readonly kind: "failed"; readonly detail: string | undefined };
 
-export const writeFailure = (error: ApiError): WriteFailure =>
-  needsConsent(error) ? "consent" : "failed";
+export const writeFailure = (error: ApiError): WriteFailure => {
+  if (needsConsent(error)) {
+    return { kind: "consent" };
+  }
+  return {
+    kind: "failed",
+    detail: error._tag === "ApiRequestError" ? error.detail : undefined,
+  };
+};
 
 /**
  * What a sheet says when a change did not save. A sign-in from before the
@@ -35,8 +47,16 @@ export const WriteFailureNotice = ({
   if (failure === null) {
     return null;
   }
-  if (failure === "failed") {
-    return <Text variant="error">{message}</Text>;
+  if (failure.kind === "failed") {
+    return (
+      <View className="gap-1">
+        <Text variant="error">{message}</Text>
+        {failure.detail === undefined ? null : (
+          // The server's own words, which it writes in English.
+          <Text variant="caption">{failure.detail}</Text>
+        )}
+      </View>
+    );
   }
   return (
     <View className="gap-3">

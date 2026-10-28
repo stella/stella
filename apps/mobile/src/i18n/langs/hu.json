@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Időzítők",
-    "start": "Időzítő indítása",
+    "start": "Indítás",
+    "startTimer": "Időzítő indítása",
     "newTimer": "Új időzítő",
     "description": "Min dolgozik?",
     "matterTitle": "Ügy",

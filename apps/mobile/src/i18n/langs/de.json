@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Timer",
-    "start": "Timer starten",
+    "start": "Starten",
+    "startTimer": "Timer starten",
     "newTimer": "Neuer Timer",
     "description": "Woran arbeiten Sie?",
     "matterTitle": "Akte",

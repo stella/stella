@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "المؤقتات",
-    "start": "بدء مؤقت",
+    "start": "بدء",
+    "startTimer": "بدء مؤقت",
     "newTimer": "مؤقت جديد",
     "description": "على ماذا تعمل؟",
     "matterTitle": "القضية",

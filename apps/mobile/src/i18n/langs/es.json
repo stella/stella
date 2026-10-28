@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Temporizadores",
-    "start": "Iniciar un temporizador",
+    "start": "Iniciar",
+    "startTimer": "Iniciar un temporizador",
     "newTimer": "Nuevo temporizador",
     "description": "¿En qué está trabajando?",
     "matterTitle": "Asunto",

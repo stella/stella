@@ -93,4 +93,29 @@ describe("finishing a timer", () => {
     await discardTimer({ fetch, source, timer: TIMER });
     expect(requests).toEqual(["DELETE /v1/time-timers/timer-1"]);
   });
+
+  test("a refusal keeps the server's explanation", async () => {
+    const fetch: Fetch = async () =>
+      Response.json(
+        {
+          code: "bad_request",
+          message: "Billable time entries need an effective rate",
+          hint: "Set a rate for the matter.",
+        },
+        { status: 400 },
+      );
+    const saved = await saveTimer({
+      fetch,
+      source: recordingServer().source,
+      timeZone: "Europe/Prague",
+      timer: TIMER,
+    });
+    expect(
+      saved.isErr() && saved.error._tag === "ApiRequestError"
+        ? saved.error.detail
+        : undefined,
+    ).toBe(
+      "Billable time entries need an effective rate Set a rate for the matter.",
+    );
+  });
 });

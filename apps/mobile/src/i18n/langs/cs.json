@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Časovače",
-    "start": "Spustit časovač",
+    "start": "Spustit",
+    "startTimer": "Spustit časovač",
     "newTimer": "Nový časovač",
     "description": "Na čem pracujete?",
     "matterTitle": "Spis",

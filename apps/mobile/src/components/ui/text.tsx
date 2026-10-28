@@ -63,6 +63,23 @@ const FACES = {
 
 export type TextVariant = keyof typeof TEXT_VARIANTS;
 
+/** `text-` utilities that set a size, alignment or wrapping rather than a colour. */
+const NOT_A_COLOUR =
+  /^text-(?:xs|sm|base|lg|\d*xl|\[|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip)/u;
+
+/**
+ * `classes` with the foreground colour first, unless they name a colour of
+ * their own. Both would be one utility, and the stylesheet orders them by
+ * name, so `text-foreground` would win over `text-destructive` whatever
+ * order they were written in.
+ */
+const withForeground = (classes: string): string =>
+  classes
+    .split(/\s+/u)
+    .some((name) => name.startsWith("text-") && !NOT_A_COLOUR.test(name))
+    ? classes
+    : `text-foreground ${classes}`;
+
 /** The app's text: DM Sans in the web's foreground, at a role's size. */
 export const Text = ({
   className,
@@ -72,7 +89,7 @@ export const Text = ({
 }: TextProps & { className?: string; variant?: TextVariant }) => (
   <NativeText
     style={[{ fontFamily: FACES[variant] }, style]}
-    className={`text-foreground ${TEXT_VARIANTS[variant]} ${className ?? ""}`}
+    className={withForeground(`${TEXT_VARIANTS[variant]} ${className ?? ""}`)}
     {...props}
   />
 );
@@ -103,7 +120,7 @@ export const TextInput = ({
 }) => (
   <NativeTextInput
     style={[{ fontFamily: "DMSans-Regular" }, style]}
-    className={`text-foreground ${INPUT_VARIANTS[variant]} ${className ?? ""}`}
+    className={withForeground(`${INPUT_VARIANTS[variant]} ${className ?? ""}`)}
     cursorColorClassName="accent-foreground"
     placeholderTextColorClassName="accent-muted-foreground"
     selectionColorClassName="accent-ring"

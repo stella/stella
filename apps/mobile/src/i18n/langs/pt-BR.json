@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Cronômetros",
-    "start": "Iniciar um cronômetro",
+    "start": "Iniciar",
+    "startTimer": "Iniciar um cronômetro",
     "newTimer": "Novo cronômetro",
     "description": "No que você está trabalhando?",
     "matterTitle": "Caso",

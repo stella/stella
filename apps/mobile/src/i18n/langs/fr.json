@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Minuteurs",
-    "start": "Démarrer un minuteur",
+    "start": "Démarrer",
+    "startTimer": "Démarrer un minuteur",
     "newTimer": "Nouveau minuteur",
     "description": "Sur quoi travaillez-vous ?",
     "matterTitle": "Dossier",

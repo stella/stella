@@ -14,8 +14,27 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
    * from before the app asked for that scope does; signing in again grants it.
    */
   insufficientScope?: boolean | undefined;
+  /** What the server said was wrong, and how to fix it, when it said so. */
+  detail?: string | undefined;
   cause?: unknown;
 }> {}
+
+const refusalSchema = v.object({
+  message: v.optional(v.string()),
+  hint: v.optional(v.string()),
+});
+
+/** The server's own words for a refusal, from its `{ message, hint }` body. */
+const refusalDetail = (json: unknown): string | undefined => {
+  const parsed = v.safeParse(refusalSchema, json);
+  if (!parsed.success) {
+    return undefined;
+  }
+  const words = [parsed.output.message, parsed.output.hint].filter(
+    (part): part is string => part !== undefined && part !== "",
+  );
+  return words.length === 0 ? undefined : words.join(" ");
+};
 
 /** Whether `error` is the server asking for a scope this sign-in never granted. */
 export const needsConsent = (error: ApiError): boolean =>
@@ -67,10 +86,21 @@ const requestJson = async <TSchema extends v.GenericSchema>(
           response.headers
             .get("WWW-Authenticate")
             ?.includes('error="insufficient_scope"') === true;
-        return { status: response.status, json: undefined, insufficientScope };
+        const refusal: unknown = await response.json().catch(() => undefined);
+        return {
+          status: response.status,
+          json: undefined,
+          insufficientScope,
+          detail: refusalDetail(refusal),
+        };
       }
       const json: unknown = await response.json();
-      return { status: response.status, json, insufficientScope: false };
+      return {
+        status: response.status,
+        json,
+        insufficientScope: false,
+        detail: undefined,
+      };
     },
     catch: (cause) =>
       new ApiRequestError({ message: `The request to ${url} failed`, cause }),
@@ -78,13 +108,14 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json, insufficientScope } = answered.value;
+  const { status, json, insufficientScope, detail } = answered.value;
   if (json === undefined) {
     return Result.err(
       new ApiRequestError({
         message: `The request to ${url} responded ${status}`,
         status,
         insufficientScope,
+        detail,
       }),
     );
   }

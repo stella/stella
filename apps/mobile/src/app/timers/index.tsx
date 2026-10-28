@@ -48,7 +48,7 @@ const TimersScreen = () => {
               : [
                   {
                     icon: { source: plusGlyph, type: "image" },
-                    label: t("start"),
+                    label: t("startTimer"),
                     onPress: () => {
                       router.push("/timers/new");
                     },

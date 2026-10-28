@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Laikmačiai",
-    "start": "Paleisti laikmatį",
+    "start": "Paleisti",
+    "startTimer": "Paleisti laikmatį",
     "newTimer": "Naujas laikmatis",
     "description": "Prie ko dirbate?",
     "matterTitle": "Byla",

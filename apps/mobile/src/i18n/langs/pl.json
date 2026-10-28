@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Liczniki czasu",
-    "start": "Uruchom licznik",
+    "start": "Uruchom",
+    "startTimer": "Uruchom licznik",
     "newTimer": "Nowy licznik",
     "description": "Nad czym pracujesz?",
     "matterTitle": "Sprawa",

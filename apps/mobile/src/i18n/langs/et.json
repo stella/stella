@@ -170,7 +170,8 @@
   },
   "timers": {
     "title": "Taimerid",
-    "start": "Käivita taimer",
+    "start": "Käivita",
+    "startTimer": "Käivita taimer",
     "newTimer": "Uus taimer",
     "description": "Mille kallal töötate?",
     "matterTitle": "Asi",
