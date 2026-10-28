@@ -1,6 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type {
   DesktopBillingDraft,
   DesktopBillingDraftOperation,
@@ -8,6 +7,8 @@ import type {
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
+
+import { matterClassificationAllowed } from "./matter-classification";
 
 const OPERATION_EFFECT = {
   rewrite: "scalar",
@@ -208,24 +209,10 @@ export const validateBillingDraftResult = (
     matterId: string,
   ) => {
     const matter = matters.get(matterId);
-    if (!matter) {
-      return false;
-    }
-    switch (classification.type) {
-      case "ledes":
-        return matter.ledesEnabled;
-      case "activity_group":
-        // Internal entries require a null matter; every draft in this slice is matter-backed.
-        return (
-          !matter.ledesEnabled &&
-          classification.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT
-        );
-      default:
-        return panic(
-          "Unknown billing classification",
-          classification satisfies never,
-        );
-    }
+    return (
+      matter !== undefined &&
+      matterClassificationAllowed(classification, matter.ledesEnabled)
+    );
   };
 
   if (entries.size !== context.entries.length) {

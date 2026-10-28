@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
 import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
@@ -8,7 +8,6 @@ import { Temporal } from "@stll/time";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   billingDraftUserSettings,
-  contacts,
   organizationSettings,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -19,6 +18,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+import { loadMatterLedes } from "./matter-classification";
 
 export const BILLING_DRAFT_CONTEXT_LIMITS = {
   historyDays: 90,
@@ -95,44 +96,21 @@ const loadBillingDraftMatters = async ({
         [...selected, ...candidates].map((row) => [row.id, row]),
       ).values(),
     );
-    const allClientIds = Array.from(
-      new Set(
-        matterRows.flatMap(({ clientId }) => (clientId ? [clientId] : [])),
+    const ledesByMatter = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await loadMatterLedes(tx, { organizationId, matters: matterRows }),
       ),
     );
-    const formats =
-      allClientIds.length === 0
-        ? []
-        : yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ id: contacts.id, format: contacts.timeBillingFormat })
-                .from(contacts)
-                .where(
-                  and(
-                    eq(contacts.organizationId, organizationId),
-                    inArray(contacts.id, allClientIds),
-                  ),
-                )
-                .limit(allClientIds.length),
-            ),
-          );
-    const formatsById = new Map(formats.map(({ id, format }) => [id, format]));
     const matters = matterRows.map(
-      ({ id, name, clientId, billingNarrativeLanguage }) => {
-        const format =
-          clientId === null ? "categories" : formatsById.get(clientId);
-        if (format === undefined) {
-          return panic("Matter billing client is inaccessible");
-        }
-        return {
-          matterId: id,
-          name,
-          clientId,
-          narrativeLanguage: billingNarrativeLanguage,
-          ledesEnabled: format === "ledes",
-        };
-      },
+      ({ id, name, clientId, billingNarrativeLanguage }) => ({
+        matterId: id,
+        name,
+        clientId,
+        narrativeLanguage: billingNarrativeLanguage,
+        ledesEnabled:
+          ledesByMatter.get(id) ?? panic("Billing draft matter disappeared"),
+      }),
     );
     return Result.ok({ selected, matters });
   });

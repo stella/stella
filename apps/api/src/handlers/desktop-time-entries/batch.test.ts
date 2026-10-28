@@ -46,6 +46,7 @@ import { createDesktopTimeEntryBatchStatusEndpoint } from "./batch-status";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 const MATTER = "00000000-0000-4000-8000-00000000abcd";
+const CLIENT = "00000000-0000-4000-8000-00000000c11e";
 const BODY = {
   idempotencyKey: "review",
   entries: [
@@ -145,6 +146,8 @@ test("an entry without a classification keeps the fingerprint it had before the 
 const createBatchHarness = (existingEntries = 0) => {
   let receipt: v.InferOutput<typeof receiptSchema> | undefined;
   let missingMatter = false;
+  // The matter's client billing format; null is a matter without a client.
+  let clientFormat: "ledes" | "categories" | null = null;
   let rateReads = 0;
   const writes: unknown[] = [];
   // Every insert in arrival order, so a test can place audit rows relative
@@ -155,7 +158,15 @@ const createBatchHarness = (existingEntries = 0) => {
       execute: async (statement: SQL) => aggregateExecutionRows(statement),
       query: {
         workspaces: {
-          findMany: async () => (missingMatter ? [] : [{ id: MATTER }]),
+          findMany: async () =>
+            missingMatter
+              ? []
+              : [
+                  {
+                    id: MATTER,
+                    clientId: clientFormat === null ? null : CLIENT,
+                  },
+                ],
           findFirst: async () => ({ leadUserId: null }),
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
@@ -166,7 +177,14 @@ const createBatchHarness = (existingEntries = 0) => {
           },
         },
       },
-      select: () => createSelectQueryMock(receipt ? [receipt] : []),
+      select: (selection: Record<string, unknown>) =>
+        "format" in selection
+          ? createSelectQueryMock(
+              clientFormat === null
+                ? []
+                : [{ id: CLIENT, format: clientFormat }],
+            )
+          : createSelectQueryMock(receipt ? [receipt] : []),
       $count: async () => existingEntries,
       insert: (table: unknown) => ({
         values: (row: unknown) => {
@@ -279,6 +297,9 @@ const createBatchHarness = (existingEntries = 0) => {
     rateReads: () => rateReads,
     revokeMatter: () => {
       missingMatter = true;
+    },
+    billClientIn: (format: "ledes" | "categories" | null) => {
+      clientFormat = format;
     },
     [Symbol.asyncDispose]: server.stop,
   };
@@ -491,7 +512,8 @@ test("missing bulk rates reject billable entries without individual rate reads o
 });
 
 test("LEDES classification persists as codes; matter entries refuse the internal group", async () => {
-  const { send, writes } = createBatchHarness();
+  const { send, writes, billClientIn } = createBatchHarness();
+  billClientIn("ledes");
   const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
   const ledes = await send({
     idempotencyKey: "classified",
@@ -521,5 +543,52 @@ test("LEDES classification persists as codes; matter entries refuse the internal
     ],
   });
   expect(internal.status).toBe(400);
+  expect(writes).toHaveLength(1);
+});
+
+test("LEDES codes are refused unless the matter's client bills in LEDES", async () => {
+  await using harness = createBatchHarness();
+  const { send, writes, billClientIn } = harness;
+  const entry = BODY.entries.at(0) ?? panic("Missing fixture entry");
+  const coded = (idempotencyKey: string) => ({
+    idempotencyKey,
+    entries: [
+      {
+        ...entry,
+        classification: {
+          type: "ledes" as const,
+          taskCode: "L120",
+          activityCode: "A103",
+        },
+      },
+    ],
+  });
+  for (const format of [null, "categories"] as const) {
+    billClientIn(format);
+    expect((await send(coded(`coded-${format}`))).status).toBe(400);
+  }
+  billClientIn("ledes");
+  const grouped = await send({
+    idempotencyKey: "grouped-ledes",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "client" },
+      },
+    ],
+  });
+  expect(grouped.status).toBe(400);
+  expect(writes).toHaveLength(0);
+  billClientIn("categories");
+  const accepted = await send({
+    idempotencyKey: "grouped-categories",
+    entries: [
+      {
+        ...entry,
+        classification: { type: "activity_group", activityGroup: "client" },
+      },
+    ],
+  });
+  expect(accepted.status).toBe(200);
   expect(writes).toHaveLength(1);
 });

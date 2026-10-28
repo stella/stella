@@ -1,10 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import {
-  TIME_ENTRY_ACTIVITY_GROUP,
-  TIME_ENTRY_SOURCE,
-} from "@stll/api-contract";
+import { TIME_ENTRY_SOURCE } from "@stll/api-contract";
 import {
   type DesktopTimeEntryBatch,
   desktopTimeEntryBatchResponseSchema,
@@ -13,6 +10,7 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import type { Transaction } from "@/api/db/root";
 import {
   abortableTx,
   abortTransaction,
@@ -40,6 +38,7 @@ import {
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
 } from "@/api/lib/billing/time-entry-insert";
+import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
@@ -47,6 +46,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  type ClassifiedMatter,
+  loadMatterLedes,
+  matterClassificationAllowed,
+} from "./matter-classification";
 
 const canonicalClassification = (
   classification: DesktopTimeEntryClassification,
@@ -114,30 +118,75 @@ const classificationCodes = (
   };
 };
 
-/** Lower-cased matter ids with the accepted codes as entry fields. Matter
- * entries bill to the client, so only that activity group is accepted. */
-const normalizedBatchEntries = ({ entries }: DesktopTimeEntryBatch) => {
+/** Lower-cased matter ids with the accepted codes as entry fields. */
+const normalizedBatchEntries = ({ entries }: DesktopTimeEntryBatch) =>
+  entries.map(({ matterId, classification, ...entry }) => ({
+    ...entry,
+    ...classificationCodes(classification),
+    matterId: matterId.toLowerCase(),
+  }));
+
+type LoadBatchMattersOptions = {
+  organizationId: SafeId<"organization">;
+  entries: readonly { matterId: string }[];
+};
+
+/** The batch's active matters, or null when any is missing or inactive. */
+const loadBatchMatters = async (
+  tx: Transaction,
+  { organizationId, entries }: LoadBatchMattersOptions,
+) => {
+  const requestedMatterIds = [
+    ...new Set(entries.map(({ matterId }) => matterId)),
+  ];
+  const matters = await tx.query.workspaces.findMany({
+    where: {
+      RAW: (table) =>
+        sql`${table.id} IN (${sql.join(
+          requestedMatterIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      organizationId: { eq: organizationId },
+      status: { eq: "active" },
+    },
+    columns: { id: true, clientId: true },
+    limit: requestedMatterIds.length,
+  });
+  return matters.length === requestedMatterIds.length ? matters : null;
+};
+
+type CheckBatchClassificationsOptions = {
+  organizationId: SafeId<"organization">;
+  matters: readonly ClassifiedMatter[];
+  entries: DesktopTimeEntryBatch["entries"];
+};
+
+/** Read in the transaction, so codes follow the client's billing format as it
+ * stands when the entries are created. */
+const checkBatchClassifications = async (
+  tx: Transaction,
+  { organizationId, matters, entries }: CheckBatchClassificationsOptions,
+) => {
+  const ledesByMatter = await loadMatterLedes(tx, { organizationId, matters });
   if (
     entries.some(
-      ({ classification }) =>
-        classification?.type === "activity_group" &&
-        classification.activityGroup !== TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
+      ({ matterId, classification }) =>
+        classification !== undefined &&
+        !matterClassificationAllowed(
+          classification,
+          ledesByMatter.get(matterId.toLowerCase()) ??
+            panic("Authorized batch matter disappeared"),
+        ),
     )
   ) {
     return Result.err(
       new HandlerError({
         status: 400,
-        message: "Matter time entries bill to the client activity group",
+        message: "Classification does not match the matter's billing format",
       }),
     );
   }
-  return Result.ok(
-    entries.map(({ matterId, classification, ...entry }) => ({
-      ...entry,
-      ...classificationCodes(classification),
-      matterId: matterId.toLowerCase(),
-    })),
-  );
+  return Result.ok();
 };
 
 const responseSchemas = safePublicHandlerResponseSchemasWithStatusText(
@@ -168,7 +217,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
           }),
         );
       }
-      const normalizedEntries = yield* normalizedBatchEntries(body);
+      const normalizedEntries = normalizedBatchEntries(body);
       const fingerprint = desktopBatchFingerprint(body);
       const response = yield* Result.await(
         abortableTx(account.safeDb, async (tx) => {
@@ -201,23 +250,11 @@ export const createDesktopTimeEntryBatchEndpoint = (
               new HandlerError({ status: 409, message: "Batch was cancelled" }),
             );
           }
-          const requestedMatterIds = [
-            ...new Set(normalizedEntries.map(({ matterId }) => matterId)),
-          ];
-          const matters = await tx.query.workspaces.findMany({
-            where: {
-              RAW: (table) =>
-                sql`${table.id} IN (${sql.join(
-                  requestedMatterIds.map((id) => sql`${id}`),
-                  sql`, `,
-                )})`,
-              organizationId: { eq: account.organizationId },
-              status: { eq: "active" },
-            },
-            columns: { id: true },
-            limit: requestedMatterIds.length,
+          const matters = await loadBatchMatters(tx, {
+            organizationId: account.organizationId,
+            entries: normalizedEntries,
           });
-          if (matters.length !== requestedMatterIds.length) {
+          if (matters === null) {
             return abortTransaction(
               new HandlerError({ status: 404, message: "Matter not found" }),
             );
@@ -238,6 +275,14 @@ export const createDesktopTimeEntryBatchEndpoint = (
             return (
               receipt.result ?? panic("Committed batch receipt has no result")
             );
+          }
+          const classified = await checkBatchClassifications(tx, {
+            organizationId: account.organizationId,
+            matters,
+            entries: body.entries,
+          });
+          if (classified.isErr()) {
+            return abortTransaction(classified.error);
           }
           const safeDb = safeDbFromScoped(async (run) => await run(tx));
           const rates = await resolveWorkspaceRatesInTransaction({
