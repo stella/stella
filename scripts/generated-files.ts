@@ -751,6 +751,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/executed-rows.ts",
     "apps/api/src/lib/db/service-client-contract.ts",
     "apps/api/src/lib/db/transitions.ts",
+    "apps/api/src/lib/desktop-runner/run-transitions.ts",
+    "apps/api/src/lib/desktop-runner/states.ts",
     "apps/api/src/lib/document-review/contract.ts",
     "apps/api/src/lib/document-review/run-contract.ts",
     "apps/api/src/lib/document-translation/contract.ts",

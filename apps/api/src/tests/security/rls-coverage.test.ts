@@ -475,6 +475,13 @@ describe("policy coverage", () => {
     // on the owner connection and deny the request role entirely
     // (asserted in rls-table-grants.test.ts).
     "organization_professional_use_acceptances",
+    // Desktop runner sockets and runs are served on the owner connection:
+    // every row is bound to an account, organization, installation and device
+    // key the socket proved, and the request role is denied outright
+    // (owner-only policies, privileges revoked; asserted in
+    // rls-table-grants.test.ts).
+    "desktop_runners",
+    "desktop_runner_runs",
     // A notification is addressed to a person, not to a matter: recipient and
     // organization are what admit the row, and its nullable workspace_id is a
     // link pointer the client resolves through the ordinary authorized routes,

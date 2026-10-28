@@ -39,7 +39,7 @@ export const createLocalDoorbell = (): DesktopRunnerDoorbell => {
       listeners.set(instanceId, onRing);
       return await Promise.resolve(async () => {
         listeners.delete(instanceId);
-        return await Promise.resolve();
+        await Promise.resolve();
       });
     },
   };

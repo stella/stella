@@ -33,6 +33,7 @@ import {
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   transitionLifecycle,
   transitionLifecycleBatch,
@@ -239,17 +240,24 @@ export const claimRunnerSession = async (
       set: { updatedAt: now },
       recordTransitionAuditEvent: skipRunAudit,
     });
-    const held = await tx
-      .select({
-        runId: runs.runId,
-        state: runs.state,
-        ackSeq: runs.ackSeq,
-        workspaceIds: runs.workspaceIds,
-      })
-      .from(runs)
-      .where(and(boundTo(binding), inArray(runs.runId, [...heldIds])))
-      .orderBy(asc(runs.runId))
-      .limit(MAX_HELD_RUNS);
+    // `hello` lists at most MAX_HELD_RUNS runs, so the read is bounded by them.
+    const heldRead = await readBounded(
+      tx
+        .select({
+          runId: runs.runId,
+          state: runs.state,
+          ackSeq: runs.ackSeq,
+          workspaceIds: runs.workspaceIds,
+        })
+        .from(runs)
+        .where(and(boundTo(binding), inArray(runs.runId, [...heldIds])))
+        .orderBy(asc(runs.runId)),
+      MAX_HELD_RUNS,
+    );
+    const held =
+      heldRead.type === "complete"
+        ? heldRead.rows
+        : panic("A hello lists more runs than the contract allows");
     return {
       previous:
         existing === undefined ||

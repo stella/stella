@@ -277,10 +277,6 @@
       "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/desktop/runner",
-      "reason": "A WebSocket upgrade with no response body; the socket's reads are bounded pages of one desktop's queue."
-    },
-    {
       "id": "GET /v1/dev/public-law-connection",
       "reason": "Requires a dev fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },

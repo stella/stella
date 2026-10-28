@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "/v1/desktop/runner",
+    "The desktop runner socket authenticates the desktop account and device on every deployment; runs reach it only when the API assigns them",
+  ],
+  [
     "/v1/tasks",
     "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
   ],
