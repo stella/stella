@@ -3,6 +3,7 @@ import type * as React from "react";
 
 import { useTranslations } from "use-intl";
 
+import { BRAND_COLORS } from "@stll/brand";
 import { sleep } from "@stll/concurrency/sleep";
 import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
@@ -315,7 +316,9 @@ export function UiPlayground() {
   const [otpValue, setOtpValue] = useState("123");
   const [dateValue, setDateValue] = useState<string | null>("2026-04-27");
   const [colorValue, setColorValue] = useState("blue");
-  const [hexColor, setHexColor] = useState("#59A1D4");
+  const [hexColor, setHexColor] = useState(
+    BRAND_COLORS.blueAccent.toUpperCase(),
+  );
   const [byokDialogOpen, setByokDialogOpen] = useState(false);
   const destructiveConfirmation = useDestructiveActionConfirmation(
     "delete this workspace",

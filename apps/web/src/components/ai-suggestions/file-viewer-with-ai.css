@@ -41,7 +41,7 @@
  * highlight still shows, but no longer combines with a saturated purple glyph
  * colour into a low-contrast block. */
 [data-file-viewer-ai] .docx-deletion--suggested {
-  color: var(--doc-text-muted, #6b7280);
+  color: var(--doc-text-muted, var(--muted-foreground));
   opacity: 0.48;
   background-image: none;
   text-decoration-color: currentcolor;
@@ -49,14 +49,14 @@
 }
 
 [data-file-viewer-ai] .docx-insertion--suggested {
-  color: var(--doc-text, #111827);
+  color: var(--doc-text, var(--foreground));
   background-image: linear-gradient(
-    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent),
-    color-mix(in oklch, var(--doc-success, #166534) 12%, transparent)
+    color-mix(in oklch, var(--doc-success, var(--success)) 12%, transparent),
+    color-mix(in oklch, var(--doc-success, var(--success)) 12%, transparent)
   );
   text-decoration-color: color-mix(
     in oklch,
-    var(--doc-success, #166534) 70%,
+    var(--doc-success, var(--success)) 70%,
     currentcolor
   );
   text-decoration-style: solid;

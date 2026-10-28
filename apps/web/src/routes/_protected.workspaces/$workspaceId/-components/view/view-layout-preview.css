@@ -39,13 +39,17 @@
 
   38% {
     transform: translate(0.25rem, -4.875rem) rotate(2.5deg) scale(1.05);
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+    filter: drop-shadow(
+      0 8px 10px color-mix(in srgb, var(--color-black) 28%, transparent)
+    );
   }
 
   64% {
     transform: translate(calc(100% + 1.25rem), -4.875rem) rotate(2.5deg)
       scale(1.05);
-    filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.28));
+    filter: drop-shadow(
+      0 8px 10px color-mix(in srgb, var(--color-black) 28%, transparent)
+    );
   }
 
   74%,

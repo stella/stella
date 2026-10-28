@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { NEUTRAL_COLORS } from "@stll/brand";
 import type { ScanPageRotation } from "@stll/scan-engine/types";
 
 import { type PageCleanScan, placeCleanScan } from "./clean-scan-placement";
@@ -84,7 +85,7 @@ export const drawCleanScanPage = ({
   if (!context || !source) {
     return;
   }
-  context.fillStyle = "#ffffff";
+  context.fillStyle = NEUTRAL_COLORS.white;
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.save();
   rotatePage(context, rotation, canvas);

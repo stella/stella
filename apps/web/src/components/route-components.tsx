@@ -332,8 +332,6 @@ const UnexpectedRouteError = ({
             var(--error-gradient-end)
           );
         }
-        :root { --error-gradient-end: #fbe9e4; }
-        .dark { --error-gradient-end: #261815; }
       `}</style>
       <section
         aria-labelledby="route-error-title"
