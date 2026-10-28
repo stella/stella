@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { TaskPane } from "@/components/detail-panes";
@@ -16,7 +16,11 @@ const TasksScreen = () => {
   const t = useTranslations("tasks");
 
   return (
-    <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
+    // Left and right: an iPhone Duo docks the tab bar as a rail at the side.
+    <SafeAreaView
+      edges={["left", "right"]}
+      style={[screenStyles.screen, { backgroundColor: colors.background }]}
+    >
       {state.status === "signed-in" ? (
         <SplitPane
           detail={
@@ -29,7 +33,7 @@ const TasksScreen = () => {
           list={<TasksList source={state.source} />}
         />
       ) : null}
-    </View>
+    </SafeAreaView>
   );
 };
 

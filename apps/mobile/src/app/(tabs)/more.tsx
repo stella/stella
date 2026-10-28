@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { screenStyles } from "@/components/empty-state-screen";
@@ -75,27 +76,32 @@ const MoreScreen = () => {
   ];
 
   return (
-    <ScrollView
-      contentContainerStyle={screenStyles.content}
-      // The header is the platform's translucent bar; the list scrolls under it.
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ backgroundColor: colors.background }}
+    // Left and right: an iPhone Duo docks the tab bar as a rail at the side.
+    <SafeAreaView
+      edges={["left", "right"]}
+      style={{ backgroundColor: colors.background, flex: 1 }}
     >
-      {groups.map((rows) => (
-        <View
-          className="border-border bg-card overflow-hidden rounded-2xl border"
-          key={rows[0]?.label}
-        >
-          {rows.map((row, index) => (
-            <MoreRowView
-              key={row.label}
-              last={index === rows.length - 1}
-              row={row}
-            />
-          ))}
-        </View>
-      ))}
-    </ScrollView>
+      <ScrollView
+        contentContainerStyle={screenStyles.content}
+        // The header is the platform's translucent bar; the list scrolls under it.
+        contentInsetAdjustmentBehavior="automatic"
+      >
+        {groups.map((rows) => (
+          <View
+            className="border-border bg-card overflow-hidden rounded-2xl border"
+            key={rows[0]?.label}
+          >
+            {rows.map((row, index) => (
+              <MoreRowView
+                key={row.label}
+                last={index === rows.length - 1}
+                row={row}
+              />
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
