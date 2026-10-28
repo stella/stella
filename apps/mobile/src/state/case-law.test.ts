@@ -16,7 +16,9 @@ describe("defaultCaseLawCountry", () => {
   });
 
   test("falls back to the first public jurisdiction", () => {
-    expect(defaultCaseLawCountry("de")).toBe(CASE_LAW_COUNTRIES[0] ?? "CZE");
+    expect<string>(defaultCaseLawCountry("de")).toBe(
+      CASE_LAW_COUNTRIES[0] ?? "CZE",
+    );
   });
 });
 

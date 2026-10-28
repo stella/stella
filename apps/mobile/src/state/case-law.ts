@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Result } from "better-result";
 import * as v from "valibot";
 
@@ -43,7 +44,7 @@ export const defaultCaseLawCountry = (locale: string): CaseLawCountry => {
   return (
     CASE_LAW_COUNTRIES.find((country) => country === wanted) ??
     CASE_LAW_COUNTRIES[0] ??
-    "CZE"
+    panic("The case-law contract names no public jurisdiction")
   );
 };
 
