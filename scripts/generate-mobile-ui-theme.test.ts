@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   declarationsOf,
   mobileUiTheme,
+  optionColorsOf,
   semanticColorsOf,
   substitute,
   toSrgb,
@@ -66,4 +67,21 @@ test("dark mode overrides light, and both fall back to the palette", () => {
     light: { background: "#fff", border: "#0000001a" },
     dark: { background: "#262626", border: "#0000001a" },
   });
+});
+
+test("carries the option tags' colour pairs, not their swatches", () => {
+  const scope = declarationsOf(
+    `:root {
+  --option-red: #f00;
+  --option-red-bg: color-mix(in srgb, var(--option-red) 12%, #fff);
+  --option-red-fg: var(--option-red);
+}`,
+    ":root",
+  );
+  expect(optionColorsOf(scope)).toEqual(
+    new Map([
+      ["option-red-bg", "--option-red-bg"],
+      ["option-red-fg", "--option-red-fg"],
+    ]),
+  );
 });

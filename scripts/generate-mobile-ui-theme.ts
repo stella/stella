@@ -55,6 +55,18 @@ export const semanticColorsOf = (css: string): Map<string, string> => {
 };
 
 /**
+ * The option tags' background and foreground pairs (`--option-x-bg`,
+ * `--option-x-fg`), which the web paints tags with directly rather than
+ * through `@theme`, as `option-x-bg` to `--option-x-bg`.
+ */
+export const optionColorsOf = (scope: Scope): Map<string, string> =>
+  new Map(
+    [...scope.keys()]
+      .filter((name) => /^--option-[\w-]+-(?:bg|fg)$/u.test(name))
+      .map((name) => [name.slice(2), name]),
+  );
+
+/**
  * `value` with every `var()` replaced by its definition and Tailwind's
  * `--alpha(color / n%)` spelled as the `color-mix()` Tailwind emits for it.
  */
@@ -121,10 +133,12 @@ export const mobileUiTheme = (uiCss: string, tailwindCss: string) => {
   const dark = new Map([...light, ...declarationsOf(uiCss, ".dark")]);
   const colorsFor = (scope: Scope) =>
     Object.fromEntries(
-      [...semanticColorsOf(uiCss)].map(([name, source]) => [
-        camelCase(name),
-        toSrgb(substitute(`var(${source})`, [scope, palette])),
-      ]),
+      [...semanticColorsOf(uiCss), ...optionColorsOf(light)].map(
+        ([name, source]) => [
+          camelCase(name),
+          toSrgb(substitute(`var(${source})`, [scope, palette])),
+        ],
+      ),
     );
   return { light: colorsFor(light), dark: colorsFor(dark) };
 };
