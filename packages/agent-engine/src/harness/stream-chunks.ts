@@ -262,7 +262,8 @@ class ChunkMapper {
     }
     this.opened.add(toolCall.id);
     this.unresolved.add(toolCall.id);
-    const args = JSON.stringify(toolCall.input) ?? "{}";
+    const args =
+      toolCall.input === undefined ? "{}" : JSON.stringify(toolCall.input);
     this.push(
       {
         type: EventType.TOOL_CALL_START,

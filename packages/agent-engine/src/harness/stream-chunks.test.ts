@@ -213,9 +213,14 @@ describe("local harness chunks", () => {
     expect(cloudStored.flatMap(({ parts }) => parts).length).toBeGreaterThan(3);
     expect(storedParts(fold(localStream))).toEqual(cloudStored);
 
-    const usage = (chunks: readonly StreamChunk[]) =>
-      chunks.findLast((chunk) => chunk.type === EventType.RUN_FINISHED);
-    expect(usage(localStream)).toEqual(usage(await cloudChunks(cloud)));
+    // Usage and finish reason match; each stream stamps its own time.
+    const finish = (chunks: readonly StreamChunk[]) => {
+      const last = chunks.findLast(
+        (chunk) => chunk.type === EventType.RUN_FINISHED,
+      );
+      return { finishReason: last?.finishReason, usage: last?.usage };
+    };
+    expect(finish(localStream)).toEqual(finish(await cloudChunks(cloud)));
   });
 
   test("an approval pauses the run on the tool call and the answer continues it", async () => {
