@@ -949,12 +949,12 @@ const LoadedPDFPageOrganizer = ({
               `Unhandled entity version upload: ${String(uploadResult)}`,
             );
         }
-        const outcome = uploadOwnerRef.current.complete(
+        const provisional = uploadOwnerRef.current.prepareCompletion(
           pendingUpload,
           uploadResult,
         );
-        if (outcome.type !== "completed") {
-          return outcome;
+        if (provisional.type !== "provisional") {
+          return provisional;
         }
         await Promise.all([
           queryClient.invalidateQueries({
@@ -962,6 +962,10 @@ const LoadedPDFPageOrganizer = ({
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
+        const outcome = uploadOwnerRef.current.commit(provisional);
+        if (outcome.type !== "completed") {
+          return outcome;
+        }
         stellaToast.add({
           title: tPageEditor("versionSaved"),
           type: "success",

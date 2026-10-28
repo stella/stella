@@ -20,7 +20,7 @@ describe("page organizer upload ownership", () => {
     let visibleVersion = "original";
 
     owner.cancel(pending);
-    const late = owner.complete(pending, receipt("withdrawn"));
+    const late = owner.prepareCompletion(pending, receipt("withdrawn"));
     if (late.type === "completed") {
       commitCompletedUpload(late, (upload) => {
         commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
@@ -38,7 +38,11 @@ describe("page organizer upload ownership", () => {
     const cancelled = owner.begin();
     owner.cancel(cancelled);
     const next = owner.begin();
-    const outcome = owner.complete(next, receipt("next"));
+    const provisional = owner.prepareCompletion(next, receipt("next"));
+    const outcome =
+      provisional.type === "provisional"
+        ? owner.commit(provisional)
+        : provisional;
     const commits: string[] = [];
 
     if (outcome.type === "completed") {
@@ -54,8 +58,15 @@ describe("page organizer upload ownership", () => {
     const owner = createPageOrganizerUploadOwner();
     const first = owner.begin();
     const second = owner.begin();
-    const secondOutcome = owner.complete(second, receipt("second"));
-    const firstOutcome = owner.complete(first, receipt("first"));
+    const secondProvisional = owner.prepareCompletion(
+      second,
+      receipt("second"),
+    );
+    const secondOutcome =
+      secondProvisional.type === "provisional"
+        ? owner.commit(secondProvisional)
+        : secondProvisional;
+    const firstOutcome = owner.prepareCompletion(first, receipt("first"));
     const commits: string[] = [];
 
     for (const outcome of [secondOutcome, firstOutcome]) {
@@ -69,5 +80,42 @@ describe("page organizer upload ownership", () => {
       uploadId: first.uploadId,
     });
     expect(commits).toEqual(["file-second"]);
+  });
+
+  test("unmount during query invalidation prevents saving or reading the signing target", async () => {
+    const owner = createPageOrganizerUploadOwner();
+    const pending = owner.begin();
+    const provisional = owner.prepareCompletion(pending, receipt("dismissed"));
+    if (provisional.type !== "provisional") {
+      throw new Error("Expected the upload to be provisional");
+    }
+    let releaseInvalidation = () => {};
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    const savedVersions: string[] = [];
+    const signingTargetReads: string[] = [];
+    const finish = async () => {
+      await invalidation;
+      const outcome = owner.commit(provisional);
+      if (outcome.type === "completed") {
+        commitCompletedUpload(outcome, (upload) => {
+          savedVersions.push(upload.fileId);
+          signingTargetReads.push(upload.fileId);
+        });
+      }
+      return outcome;
+    };
+
+    const result = finish();
+    owner.cancelCurrent();
+    releaseInvalidation();
+
+    expect(await result).toEqual({
+      type: "cancelled",
+      uploadId: pending.uploadId,
+    });
+    expect(savedVersions).toEqual([]);
+    expect(signingTargetReads).toEqual([]);
   });
 });

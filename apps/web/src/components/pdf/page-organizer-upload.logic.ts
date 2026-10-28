@@ -17,6 +17,11 @@ export type CompletedPageOrganizerUpload = Extract<
   { type: "completed" }
 >;
 
+export type ProvisionalPageOrganizerUpload = {
+  type: "provisional";
+  uploadId: number;
+} & PageOrganizerUploadReceipt;
+
 type PendingPageOrganizerUpload = Extract<
   PageOrganizerUploadOutcome,
   { type: "pending" }
@@ -25,7 +30,8 @@ type PendingPageOrganizerUpload = Extract<
 /** Owns upload identity so an obsolete async result cannot become committable. */
 export function createPageOrganizerUploadOwner() {
   let nextUploadId = 0;
-  let current: PageOrganizerUploadOutcome | null = null;
+  let current:
+    PageOrganizerUploadOutcome | ProvisionalPageOrganizerUpload | null = null;
 
   return {
     begin(): PendingPageOrganizerUpload {
@@ -42,24 +48,42 @@ export function createPageOrganizerUploadOwner() {
       }
     },
     cancelCurrent(): void {
-      if (current?.type === "pending") {
+      if (current?.type === "pending" || current?.type === "provisional") {
         current = { type: "cancelled", uploadId: current.uploadId };
       }
     },
-    complete(
+    prepareCompletion(
       pending: PendingPageOrganizerUpload,
       receipt: PageOrganizerUploadReceipt,
-    ): PageOrganizerUploadOutcome {
+    ): PageOrganizerUploadOutcome | ProvisionalPageOrganizerUpload {
       if (current !== pending) {
         return current?.uploadId === pending.uploadId
           ? current
           : { type: "superseded", uploadId: pending.uploadId };
       }
-      const completed = {
-        type: "completed",
+      const provisional = {
+        type: "provisional",
         uploadId: pending.uploadId,
         entityVersionId: receipt.entityVersionId,
         fileId: receipt.fileId,
+      } as const;
+      current = provisional;
+      return provisional;
+    },
+    commit(
+      provisional: ProvisionalPageOrganizerUpload,
+    ): PageOrganizerUploadOutcome {
+      if (current !== provisional) {
+        return current?.uploadId === provisional.uploadId &&
+          current.type !== "provisional"
+          ? current
+          : { type: "superseded", uploadId: provisional.uploadId };
+      }
+      const completed = {
+        type: "completed",
+        uploadId: provisional.uploadId,
+        entityVersionId: provisional.entityVersionId,
+        fileId: provisional.fileId,
       } as const;
       current = completed;
       return completed;
@@ -69,7 +93,8 @@ export function createPageOrganizerUploadOwner() {
       error: unknown,
     ): PageOrganizerUploadOutcome {
       if (current !== pending) {
-        return current?.uploadId === pending.uploadId
+        return current?.uploadId === pending.uploadId &&
+          current.type !== "provisional"
           ? current
           : { type: "superseded", uploadId: pending.uploadId };
       }
