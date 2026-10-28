@@ -177,4 +177,14 @@ describe("failed chunk recovery", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(reload).not.toHaveBeenCalled();
   });
+
+  test("the Vite listener leaves unrelated import failures for the route boundary", () => {
+    installPreloadErrorRecovery();
+    const event = Object.assign(
+      new Event("vite:preloadError", { cancelable: true }),
+      { payload: new Error("route module evaluation failed") },
+    );
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
 });

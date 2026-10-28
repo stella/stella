@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 
 import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
@@ -22,6 +23,8 @@ import { detached } from "@/lib/detached";
 const RELOAD_COOLDOWN_MS = 10_000;
 const STORAGE_KEY = "stella:preload-reload-at";
 const VERSION_MANIFEST_PATH = "/version.json";
+const VERSION_MANIFEST_MAX_BYTES = 1024;
+const VERSION_MANIFEST_IDLE_TIMEOUT_MS = 8000;
 const INITIAL_RUNTIME_RETRY_DELAYS_MS = [250, 1000] as const;
 
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
@@ -65,7 +68,7 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 export type FailedChunkLoadClassification =
   { type: "offline" } | { type: "network-error" } | { type: "build-skew" };
 
-export type StaleDeploymentReloadOutcome =
+type StaleDeploymentReloadOutcome =
   | { type: "started" }
   | { type: "refused-cooldown" }
   | { type: "refused-storage" };
@@ -87,13 +90,20 @@ export const classifyFailedChunkLoad =
 
     return fetchWithTimeout(VERSION_MANIFEST_PATH, {
       cache: "no-store",
-      timeoutMs: 8000,
+      timeout: { type: "idle", ms: VERSION_MANIFEST_IDLE_TIMEOUT_MS },
     })
       .then(async (response): Promise<FailedChunkLoadClassification> => {
-        if (!response.ok) {
+        if (!response.ok || !response.body) {
           return { type: "network-error" };
         }
-        const manifest: unknown = await response.json();
+        const bytes = await readCappedBytes(
+          response.body,
+          VERSION_MANIFEST_MAX_BYTES,
+        );
+        if (bytes === null) {
+          return { type: "network-error" };
+        }
+        const manifest: unknown = JSON.parse(new TextDecoder().decode(bytes));
         if (!isVersionManifest(manifest)) {
           return { type: "network-error" };
         }
@@ -134,7 +144,7 @@ const recordReloadAt = (timestamp: number): boolean =>
  * cooldown or the guard cannot be recorded. Refusal outcomes tell callers to
  * render their actionable failure state instead of waiting for navigation.
  */
-export const reloadForStaleDeployment = (): StaleDeploymentReloadOutcome => {
+const reloadForStaleDeployment = (): StaleDeploymentReloadOutcome => {
   const last = readReloadAt();
   if (last === null) {
     return { type: "refused-storage" };
@@ -152,7 +162,7 @@ export const reloadForStaleDeployment = (): StaleDeploymentReloadOutcome => {
   return { type: "started" };
 };
 
-export type FailedChunkRecovery =
+type FailedChunkRecovery =
   | { type: "reload"; outcome: StaleDeploymentReloadOutcome }
   | { type: "retry-when-online" }
   | { type: "retry-now" };
@@ -274,13 +284,11 @@ export const installPreloadErrorRecovery = (): void => {
   window.addEventListener("vite:preloadError", (event: Event) => {
     const error = "payload" in event ? event.payload : undefined;
     if (isStaleDeploymentLoadError(error)) {
+      const recovery = recoverFromStaleDeploymentLoad(error, () => undefined);
       // Keep the current document while the asynchronous probe decides whether
       // this is transport failure or confirmed build skew.
       event.preventDefault();
-      detached(
-        recoverFromStaleDeploymentLoad(error, () => undefined),
-        "preload-error-recovery.classify",
-      );
+      detached(recovery, "preload-error-recovery.classify");
     }
   });
 };
