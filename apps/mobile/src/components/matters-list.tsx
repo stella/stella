@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { ActivityIndicator } from "react-native";
 
 import { LoadedMatters } from "@/components/loaded-matters";
+import { useMattersView } from "@/components/matters-view";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -11,8 +12,16 @@ import { listMatters } from "@/state/matters";
 import type { MattersLoad } from "@/state/matters";
 import { useAppColors } from "@/theme";
 
-/** Loads the signed-in person's matters once, and again on every pull to refresh. */
+/**
+ * Loads the signed-in person's matters once, again on every pull to
+ * refresh, and afresh after a matter is opened from the header's "+".
+ */
 export const MattersList = ({ source }: { source: AccessTokenSource }) => {
+  const { revision } = useMattersView();
+  return <MattersLoader key={revision} source={source} />;
+};
+
+const MattersLoader = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
   const { end } = useSession();
   // A session the server ended sends the person back to sign in, from the

@@ -77,7 +77,12 @@
     "groupBy": "Gruppieren nach",
     "noGrouping": "Nicht gruppieren",
     "groupClient": "Klient",
-    "personal": "Persönlich"
+    "personal": "Persönlich",
+    "newMatter": "Neue Akte",
+    "create": "Erstellen",
+    "name": "Name der Akte",
+    "personalHint": "Sie wird als persönliche Akte angelegt, die nur Sie sehen. Mandant und Mitglieder fügen Sie im Web hinzu.",
+    "createFailed": "Die Akte konnte nicht erstellt werden. Versuchen Sie es erneut."
   },
   "matter": {
     "documents": "Dokumente",

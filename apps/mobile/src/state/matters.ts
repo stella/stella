@@ -45,3 +45,34 @@ export const listMatters = async ({
     );
     return Result.ok(workspaces);
   });
+
+const createdMatterSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+});
+
+/**
+ * Opens a matter under `name`. Without a client the server makes it a
+ * personal matter, which only its creator sees until they share it.
+ */
+export const createMatter = async ({
+  fetch,
+  name,
+  source,
+}: {
+  readonly fetch: Fetch;
+  readonly name: string;
+  readonly source: AccessTokenSource;
+}): Promise<Result<string, ApiError>> =>
+  await Result.gen(async function* () {
+    const { id } = yield* Result.await(
+      requestApi({
+        body: { name },
+        fetch,
+        method: "PUT",
+        path: MATTERS_PATH,
+        schema: createdMatterSchema,
+        source,
+      }),
+    );
+    return Result.ok(id);
+  });

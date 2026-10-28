@@ -77,7 +77,12 @@
     "groupBy": "Agrupar por",
     "noGrouping": "Sem agrupamento",
     "groupClient": "Cliente",
-    "personal": "Pessoal"
+    "personal": "Pessoal",
+    "newMatter": "Novo caso",
+    "create": "Criar",
+    "name": "Nome do caso",
+    "personalHint": "Ele é criado como caso pessoal, visível só para você. Adicione um cliente e membros na web.",
+    "createFailed": "Não foi possível criar o caso. Tente novamente."
   },
   "matter": {
     "documents": "Documentos",

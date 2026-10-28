@@ -77,7 +77,12 @@
     "groupBy": "Agrupar por",
     "noGrouping": "No agrupar",
     "groupClient": "Cliente",
-    "personal": "Personal"
+    "personal": "Personal",
+    "newMatter": "Nuevo asunto",
+    "create": "Crear",
+    "name": "Nombre del asunto",
+    "personalHint": "Se crea como asunto personal, visible solo para usted. Añada un cliente y miembros en la web.",
+    "createFailed": "No se pudo crear el asunto. Inténtelo de nuevo."
   },
   "matter": {
     "documents": "Documentos",

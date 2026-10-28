@@ -77,7 +77,12 @@
     "groupBy": "Grupēt pēc",
     "noGrouping": "Negrupēt",
     "groupClient": "Klients",
-    "personal": "Personīga"
+    "personal": "Personīga",
+    "newMatter": "Jauna lieta",
+    "create": "Izveidot",
+    "name": "Lietas nosaukums",
+    "personalHint": "Tā tiek izveidota kā personīga lieta, ko redzat tikai jūs. Klientu un dalībniekus pievienojiet tīmeklī.",
+    "createFailed": "Lietu neizdevās izveidot. Mēģiniet vēlreiz."
   },
   "matter": {
     "documents": "Dokumenti",

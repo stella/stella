@@ -11,6 +11,9 @@ type MattersView = {
   /** The groups folded shut, by key. */
   readonly collapsed: ReadonlySet<string>;
   readonly toggleGroup: (key: string) => void;
+  /** Counts the matters opened here, so the list loads afresh after each. */
+  readonly revision: number;
+  readonly matterAdded: () => void;
 };
 
 const MattersViewContext = createContext<MattersView | null>(null);
@@ -26,6 +29,10 @@ export const MattersViewProvider = ({ children }: React.PropsWithChildren) => {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [revision, setRevision] = useState(0);
+  const matterAdded = () => {
+    setRevision((current) => current + 1);
+  };
   const toggleGroup = (key: string) => {
     setCollapsed((current) => {
       const next = new Set(current);
@@ -36,7 +43,16 @@ export const MattersViewProvider = ({ children }: React.PropsWithChildren) => {
     });
   };
   return (
-    <MattersViewContext value={{ collapsed, groupBy, setGroupBy, toggleGroup }}>
+    <MattersViewContext
+      value={{
+        collapsed,
+        groupBy,
+        matterAdded,
+        revision,
+        setGroupBy,
+        toggleGroup,
+      }}
+    >
       {children}
     </MattersViewContext>
   );

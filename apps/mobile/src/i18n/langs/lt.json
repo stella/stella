@@ -77,7 +77,12 @@
     "groupBy": "Grupuoti pagal",
     "noGrouping": "Negrupuoti",
     "groupClient": "Klientas",
-    "personal": "Asmeninė"
+    "personal": "Asmeninė",
+    "newMatter": "Nauja byla",
+    "create": "Sukurti",
+    "name": "Bylos pavadinimas",
+    "personalHint": "Ji sukuriama kaip asmeninė byla, matoma tik jums. Klientą ir narius pridėsite žiniatinklyje.",
+    "createFailed": "Nepavyko sukurti bylos. Bandykite dar kartą."
   },
   "matter": {
     "documents": "Dokumentai",

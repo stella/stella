@@ -77,7 +77,12 @@
     "groupBy": "Grupuj według",
     "noGrouping": "Nie grupuj",
     "groupClient": "Klient",
-    "personal": "Osobista"
+    "personal": "Osobista",
+    "newMatter": "Nowa sprawa",
+    "create": "Utwórz",
+    "name": "Nazwa sprawy",
+    "personalHint": "Powstanie jako sprawa osobista, widoczna tylko dla Ciebie. Klienta i członków dodasz w wersji webowej.",
+    "createFailed": "Nie udało się utworzyć sprawy. Spróbuj ponownie."
   },
   "matter": {
     "documents": "Dokumenty",

@@ -35,8 +35,9 @@ export const ProtectedScreens = () => {
  * glass where the system has it, laid out as GitHub's app lays its out: the
  * person's button leading, to the settings; no title, as the tab bar already
  * says where one is; the tab's own action and search trailing, together. The
- * action is the tab's "+", a new conversation over the chats and a new task
- * over the tasks, and how to group the matters over theirs. Search is the system's field, which the list under it filters by;
+ * action is the tab's "+": a new conversation over the chats, a new task over
+ * the tasks and a new matter over the matters, which also offer how to group
+ * them. Search is the system's field, which the list under it filters by;
  * More has nothing to search.
  */
 const Screens = () => {
@@ -135,6 +136,15 @@ const Screens = () => {
         />
         <Stack.Screen name="thread/[threadId]" />
         <Stack.Screen
+          name="matter/new"
+          options={{
+            ...pushedScreen,
+            presentation: "formSheet",
+            sheetAllowedDetents: [0.5, 1],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen
           name="task/new"
           options={{
             ...pushedScreen,
@@ -205,8 +215,16 @@ const useTabHeaderItems = (tab: string): NativeStackHeaderItem[] => {
       },
     ];
   }
-  if (tab === "matters" && groupGlyph !== null) {
+  if (tab === "matters" && plusGlyph !== null && groupGlyph !== null) {
     return [
+      {
+        icon: { source: plusGlyph, type: "image" },
+        label: matters("newMatter"),
+        onPress: () => {
+          router.push("/matter/new");
+        },
+        type: "button",
+      },
       {
         icon: { source: groupGlyph, type: "image" },
         label: matters("groupBy"),

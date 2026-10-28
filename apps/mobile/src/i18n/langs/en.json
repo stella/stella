@@ -77,7 +77,12 @@
     "groupBy": "Group by",
     "noGrouping": "No grouping",
     "groupClient": "Client",
-    "personal": "Personal"
+    "personal": "Personal",
+    "newMatter": "New matter",
+    "create": "Create",
+    "name": "Matter name",
+    "personalHint": "It opens as a personal matter, visible only to you. Add a client and members on the web.",
+    "createFailed": "The matter could not be created. Try again."
   },
   "matter": {
     "documents": "Documents",

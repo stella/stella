@@ -77,7 +77,12 @@
     "groupBy": "Csoportosítás",
     "noGrouping": "Ne csoportosítson",
     "groupClient": "Ügyfél",
-    "personal": "Személyes"
+    "personal": "Személyes",
+    "newMatter": "Új ügy",
+    "create": "Létrehozás",
+    "name": "Ügy neve",
+    "personalHint": "Személyes ügyként jön létre, csak Ön látja. Ügyfelet és tagokat a weben adhat hozzá.",
+    "createFailed": "Az ügyet nem sikerült létrehozni. Próbálja újra."
   },
   "matter": {
     "documents": "Dokumentumok",

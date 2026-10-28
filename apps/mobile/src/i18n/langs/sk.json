@@ -77,7 +77,12 @@
     "groupBy": "Zoskupiť podľa",
     "noGrouping": "Nezoskupovať",
     "groupClient": "Klient",
-    "personal": "Osobný"
+    "personal": "Osobný",
+    "newMatter": "Nový spis",
+    "create": "Vytvoriť",
+    "name": "Názov spisu",
+    "personalHint": "Spis vznikne ako osobný a uvidíte ho len vy. Klienta a členov pridáte na webe.",
+    "createFailed": "Spis sa nepodarilo vytvoriť. Skúste to znova."
   },
   "matter": {
     "documents": "Dokumenty",
