@@ -45,11 +45,23 @@ export type DesktopRunnerLimits = {
    * before the API ends it as lost.
    */
   readonly abandonedRunMs: number;
+  /** Sequenced messages (events, approval requests, the final one) one run may store. */
+  readonly maxMessagesPerRun: number;
+  /** UTF-8 bytes of sequenced messages one run may store. */
+  readonly maxMessageBytesPerRun: number;
+  /** Commands one run may queue, its `run.start` included. */
+  readonly maxCommandsPerRun: number;
+  /** How long an ended run, with its messages and commands, is kept. */
+  readonly endedRunRetentionMs: number;
 };
 
 export const DESKTOP_RUNNER_LIMITS = {
   maxRunnersPerAccount: 10,
   abandonedRunMs: 24 * 60 * 60_000,
+  maxMessagesPerRun: 20_000,
+  maxMessageBytesPerRun: 64 * 1024 * 1024,
+  maxCommandsPerRun: 2000,
+  endedRunRetentionMs: 30 * 24 * 60 * 60_000,
 } as const satisfies DesktopRunnerLimits;
 
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {

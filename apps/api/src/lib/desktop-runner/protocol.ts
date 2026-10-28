@@ -25,8 +25,9 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  * - 1008, `policyViolation(reason)`: a frame the contract rejects
  *   (`not_json`, `unknown_type`, `invalid`), a message before `hello`
  *   (`hello_required`), a second `hello` (`hello_repeated`), a run message its
- *   run's state does not allow (`run_state`), or a chunk that is not a valid
- *   AG-UI event (`unfoldable_chunk`).
+ *   run's state does not allow (`run_state`), a chunk that is not a valid
+ *   AG-UI event (`unfoldable_chunk`), or a run message past what one run may
+ *   store (`run_limit`; the API ends that run as lost).
  * - `tooLarge`: a frame above `DESKTOP_RUNNER_MAX_FRAME_BYTES`.
  * - `overloaded`: the desktop sent frames faster than they could be stored.
  * - `internalError`: the API could not persist or read what it needed; the
@@ -71,6 +72,7 @@ const DESKTOP_RUNNER_POLICY_REASONS = [
   "hello_repeated",
   "run_state",
   "unfoldable_chunk",
+  "run_limit",
 ] as const;
 export type DesktopRunnerPolicyReason =
   (typeof DESKTOP_RUNNER_POLICY_REASONS)[number];

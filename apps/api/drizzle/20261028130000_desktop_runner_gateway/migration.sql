@@ -42,6 +42,7 @@ CREATE TABLE "desktop_runner_runs" (
   "harness_session_id" varchar(256),
   "accepted_at" timestamptz,
   "ack_seq" bigint DEFAULT 0 NOT NULL,
+  "message_bytes" bigint DEFAULT 0 NOT NULL,
   "lease_expires_at" timestamptz NOT NULL,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
@@ -51,7 +52,8 @@ CREATE TABLE "desktop_runner_runs" (
   CONSTRAINT "desktop_runner_runs_state_check" CHECK ("state" IN ('assigned','running','waiting_for_computer','finished','rejected','lost')),
   CONSTRAINT "desktop_runner_runs_outcome_check" CHECK (("state" = 'finished') = ("outcome" IS NOT NULL) AND ("outcome" IS NULL OR "outcome" IN ('completed','interrupted','cancelled','failed','limit_reached','needs_login'))),
   CONSTRAINT "desktop_runner_runs_reject_reason_check" CHECK (("state" = 'rejected') = ("reject_reason" IS NOT NULL) AND ("reject_reason" IS NULL OR "reject_reason" IN ('harness_not_installed','harness_needs_login','harness_limited','harness_unsupported','harness_version_unavailable','model_unavailable','policy_unsupported','at_capacity','unknown_run'))),
-  CONSTRAINT "desktop_runner_runs_ack_seq_check" CHECK ("ack_seq" BETWEEN 0 AND 4294967295)
+  CONSTRAINT "desktop_runner_runs_ack_seq_check" CHECK ("ack_seq" BETWEEN 0 AND 4294967295),
+  CONSTRAINT "desktop_runner_runs_message_bytes_check" CHECK ("message_bytes" >= 0)
 );--> statement-breakpoint
 CREATE INDEX "desktop_runner_runs_runner_state_idx" ON "desktop_runner_runs" USING btree ("user_id", "organization_id", "desktop_id", "state");--> statement-breakpoint
 CREATE INDEX "desktop_runner_runs_lease_idx" ON "desktop_runner_runs" USING btree ("lease_expires_at") WHERE "state" IN ('assigned','running');--> statement-breakpoint

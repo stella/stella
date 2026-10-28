@@ -1183,3 +1183,76 @@ describe("runs the API ends", () => {
     await desktop.close();
   });
 });
+
+describe("what one run may store", () => {
+  test("a message past the run's message cap ends the run as lost and is not stored", async () => {
+    const capped = await startInstance("api-message-cap", sharedDoorbell, {
+      limits: { maxMessagesPerRun: 2 },
+    });
+    const { runId, desktop } = await acceptedRun(capped);
+    for (const seq of [1, 2]) {
+      desktop.send(textEvent(runId, seq, `Part ${String(seq)}`));
+      expect(await desktop.receive("ack")).toEqual({ type: "ack", runId, seq });
+    }
+    desktop.send(textEvent(runId, 3, "One too many"));
+    expect(await desktop.closed).toEqual({ code: 1008, reason: "run_limit" });
+    expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1, 2]);
+    expect((await runState(runId))?.state).toBe("lost");
+  });
+
+  test("a message past the run's byte cap ends the run as lost and is not stored", async () => {
+    const capped = await startInstance("api-byte-cap", sharedDoorbell, {
+      limits: { maxMessageBytesPerRun: 2048 },
+    });
+    const { runId, desktop } = await acceptedRun(capped);
+    desktop.send(textEvent(runId, 1, "Short"));
+    await desktop.receive("ack");
+    desktop.send(textEvent(runId, 2, "x".repeat(4096)));
+    expect(await desktop.closed).toEqual({ code: 1008, reason: "run_limit" });
+    expect((await storedSeqs(runId)).map(({ seq }) => seq)).toEqual([1]);
+    expect((await runState(runId))?.state).toBe("lost");
+  });
+
+  test("a run holds at most its command cap, its start included", async () => {
+    const cappedControl = createDesktopRunnerControl({
+      db: gatewayDb,
+      doorbell: sharedDoorbell,
+      now,
+      timing: TIMING,
+      limits: { maxCommandsPerRun: 2 },
+    });
+    const { runId, desktop } = await acceptedRun(first);
+    const input = () => ({
+      owner,
+      runId,
+      inputId: Bun.randomUUIDv7(),
+      message: { role: "user" as const, content: "More." },
+    });
+    expect((await cappedControl.sendInput(input())).unwrap()).toEqual({
+      type: "queued",
+    });
+    expect((await cappedControl.sendInput(input())).unwrap()).toEqual({
+      type: "command_limit",
+    });
+    await desktop.close();
+  });
+
+  test("an ended run is deleted with its messages once its retention window passes", async () => {
+    const { runId, desktop } = await acceptedRun(first);
+    desktop.send({
+      type: "run.finished",
+      runId,
+      seq: 1,
+      outcome: "completed",
+      harnessSessionId: null,
+    });
+    await desktop.receive("ack");
+    await desktop.close();
+    await first.gateway.sweep();
+    expect((await runState(runId))?.state).toBe("finished");
+    clock.now += DESKTOP_RUNNER_LIMITS.endedRunRetentionMs + 1;
+    await first.gateway.sweep();
+    expect(await runState(runId)).toBeNull();
+    expect(await storedSeqs(runId)).toEqual([]);
+  });
+});
