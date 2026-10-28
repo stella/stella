@@ -14,6 +14,12 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
 
 export type ApiError = ApiRequestError | SignedOutError | TokenError;
 
+/** One load of a screen's data, stamped with when it returned so rows can say "2 hours ago" without reading the clock while rendering. */
+export type Load<T> = {
+  readonly loadedAt: number;
+  readonly result: Result<T, ApiError>;
+};
+
 type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly path: string;
   readonly schema: TSchema;

@@ -112,9 +112,9 @@
       "documents": {"title": 14, "description": 402, "inputSchema": 1112, "outputSchema": 392, "annotations": 92, "payloadUtf8Bytes": 2111}
     },
     "list_invoices": {
-      "advanced": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2780, "annotations": 91, "payloadUtf8Bytes": 4034},
-      "anonymized": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2780, "annotations": 91, "payloadUtf8Bytes": 4034},
-      "default": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2780, "annotations": 91, "payloadUtf8Bytes": 4034}
+      "advanced": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2924, "annotations": 91, "payloadUtf8Bytes": 4178},
+      "anonymized": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2924, "annotations": 91, "payloadUtf8Bytes": 4178},
+      "default": {"title": 13, "description": 468, "inputSchema": 584, "outputSchema": 2924, "annotations": 91, "payloadUtf8Bytes": 4178}
     },
     "list_matters": {
       "advanced": {"title": 12, "description": 348, "inputSchema": 677, "outputSchema": 1615, "annotations": 90, "payloadUtf8Bytes": 2839},

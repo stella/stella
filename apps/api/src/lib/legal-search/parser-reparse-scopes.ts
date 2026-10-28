@@ -308,6 +308,14 @@ export const PARSER_VERSION_SCOPES = {
         "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
     },
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    version: 3,
+    scope: {
+      type: "all",
+      reason:
+        "Read the stated judgment type and ECLI availability from the stored XML envelope.",
+    },
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     version: 22,
     scope: {

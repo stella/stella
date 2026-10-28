@@ -13,6 +13,7 @@ use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::permissions::{
   DesktopSurface, Permission, PermissionRow, PermissionStatus, required_permissions,
 };
+use crate::window_placement::WorkArea;
 
 pub const ONBOARDING_WINDOW_LABEL: &str = "onboarding";
 /// Payload-free: the window re-reads the snapshot.
@@ -337,6 +338,8 @@ pub struct OnboardingSnapshot {
   /// Asked on the Activity step, beside what they enable.
   pub activity_permissions: Vec<Permission>,
   pub document_app: Option<DocumentApp>,
+  /// Read for the last step, which points at the icon.
+  pub tray_location: Option<TrayLocation>,
 }
 
 async fn permission_rows(app: &AppHandle) -> Result<Vec<PermissionRow>, String> {
@@ -421,6 +424,11 @@ async fn snapshot(app: &AppHandle) -> Result<OnboardingSnapshot, String> {
     activity_permissions: activity_step_permissions(context.activity_available)
       .to_vec(),
     document_app,
+    tray_location: if step == Step::Done {
+      read_tray_location(app)
+    } else {
+      None
+    },
   })
 }
 
@@ -703,6 +711,69 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
 pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
   crate::ensure_main_window(&app, "general");
   Ok(())
+}
+
+/// The screen edge the app's status icon sits on: the menu bar on macOS,
+/// usually the taskbar's notification area on Windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScreenEdge {
+  Top,
+  Bottom,
+  Left,
+  Right,
+}
+
+/// Where the status icon sits on its screen, so the last setup step can
+/// point at the real icon rather than describe it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayLocation {
+  pub edge: ScreenEdge,
+  /// The icon's centre along that edge: 0 at its left (or top) end, 1 at
+  /// its right (or bottom) end.
+  pub along: f64,
+}
+
+/// Places `icon` on the nearest edge of `screen`. `None` when the icon has
+/// no size or its centre is off that screen, as for an icon Windows keeps in
+/// its hidden overflow.
+fn tray_location(icon: WorkArea, screen: WorkArea) -> Option<TrayLocation> {
+  if icon.width <= 0.0
+    || icon.height <= 0.0
+    || screen.width <= 0.0
+    || screen.height <= 0.0
+  {
+    return None;
+  }
+  let centre_x = icon.x + icon.width / 2.0 - screen.x;
+  let centre_y = icon.y + icon.height / 2.0 - screen.y;
+  if !(0.0..=screen.width).contains(&centre_x)
+    || !(0.0..=screen.height).contains(&centre_y)
+  {
+    return None;
+  }
+  let distances = [
+    (ScreenEdge::Top, centre_y),
+    (ScreenEdge::Bottom, screen.height - centre_y),
+    (ScreenEdge::Left, centre_x),
+    (ScreenEdge::Right, screen.width - centre_x),
+  ];
+  let (edge, _) = distances
+    .into_iter()
+    .min_by(|(_, left), (_, right)| left.total_cmp(right))?;
+  let along = match edge {
+    ScreenEdge::Top | ScreenEdge::Bottom => centre_x / screen.width,
+    ScreenEdge::Left | ScreenEdge::Right => centre_y / screen.height,
+  };
+  Some(TrayLocation { edge, along })
+}
+
+/// Where the status icon is now, read from the OS; `None` when it cannot
+/// tell (no icon yet, or one hidden in an overflow area).
+fn read_tray_location(app: &AppHandle) -> Option<TrayLocation> {
+  let placement = crate::tray::status_icon_placement(app)?;
+  tray_location(placement.frame, placement.screen)
 }
 
 /// The default app for `.docx`, read from the OS. macOS answers for a file,
@@ -1129,5 +1200,90 @@ mod tests {
       &rows(&[(Permission::Notifications, PermissionStatus::Granted)]),
     );
     assert_eq!(granted, before);
+  }
+
+  const SCREEN: WorkArea = WorkArea {
+    x: 0.0,
+    y: 0.0,
+    width: 2880.0,
+    height: 1800.0,
+  };
+
+  fn icon_at(x: f64, y: f64) -> WorkArea {
+    WorkArea {
+      x,
+      y,
+      width: 44.0,
+      height: 44.0,
+    }
+  }
+
+  #[test]
+  fn a_menu_bar_icon_sits_on_the_top_edge_where_it_is_drawn() {
+    let location = tray_location(icon_at(2178.0, 0.0), SCREEN).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Top);
+    assert!((location.along - 2200.0 / 2880.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn a_taskbar_icon_sits_on_the_bottom_edge_of_its_own_screen() {
+    let second = WorkArea {
+      x: 2880.0,
+      y: 0.0,
+      width: 1920.0,
+      height: 1080.0,
+    };
+    let location = tray_location(icon_at(2880.0 + 1700.0, 1040.0), second).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Bottom);
+    assert!((location.along - 1722.0 / 1920.0).abs() < 1e-9);
+  }
+
+  #[cfg(target_os = "macos")]
+  #[test]
+  fn native_screen_frames_keep_a_secondary_menu_bar_in_its_own_points() {
+    use crate::window_placement::logical_work_area;
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+
+    // A 1x display beside a 1920-point 2x primary. Global physical
+    // coordinates would also place this icon inside the primary display.
+    let screen = NSRect::new(NSPoint::new(1920.0, 0.0), NSSize::new(1920.0, 1080.0));
+    let icon = NSRect::new(NSPoint::new(2989.0, 1058.0), NSSize::new(22.0, 22.0));
+    let location = tray_location(
+      logical_work_area(1080.0, icon),
+      logical_work_area(1080.0, screen),
+    )
+    .unwrap();
+
+    assert_eq!(location.edge, ScreenEdge::Top);
+    assert!((location.along - 1080.0 / 1920.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn a_vertical_taskbar_reports_the_position_down_its_edge() {
+    let location = tray_location(icon_at(4.0, 1500.0), SCREEN).unwrap();
+    assert_eq!(location.edge, ScreenEdge::Left);
+    assert!((location.along - 1522.0 / 1800.0).abs() < 1e-9);
+  }
+
+  #[test]
+  fn an_icon_without_a_size_or_off_its_screen_has_no_location() {
+    let hidden = WorkArea {
+      width: 0.0,
+      height: 0.0,
+      ..icon_at(100.0, 100.0)
+    };
+    assert_eq!(tray_location(hidden, SCREEN), None);
+    assert_eq!(tray_location(icon_at(-400.0, 10.0), SCREEN), None);
+  }
+
+  #[test]
+  fn every_location_is_a_fraction_of_its_edge() {
+    for x in (0..2880).step_by(97) {
+      for y in (0..1800).step_by(83) {
+        let icon = icon_at(f64::from(x) - 22.0, f64::from(y) - 22.0);
+        let location = tray_location(icon, SCREEN).unwrap();
+        assert!((0.0..=1.0).contains(&location.along), "{location:?}");
+      }
+    }
   }
 }

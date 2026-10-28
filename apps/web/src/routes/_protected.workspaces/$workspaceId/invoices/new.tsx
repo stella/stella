@@ -8,6 +8,7 @@ import { ArrowLeftIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { InvoiceComposer } from "@/components/billing/invoice-composer";
 import { usePermissions } from "@/hooks/use-permissions";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -18,7 +19,6 @@ import { useQueryViewError } from "@/lib/use-query-view";
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { invoicePrefillOptions } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
-import { InvoiceComposer } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-composer";
 import { prefetchPendingApprovals } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/new-invoice-loader";
 
 export const Route = createFileRoute(
@@ -101,13 +101,13 @@ function NewInvoicePage() {
     select: (context) => context.user.id,
   });
   // Only someone who can approve is sent to the approval queue; the API
-  // lists every timekeeper's drafts to them alone.
+  // lists every timekeeper's submitted time to them alone.
   const canApprove = usePermissions({ timeEntry: ["approve"] });
   const canApproveExpenses = usePermissions({ expense: ["update"] });
   // The count is a hint; a failed read reports itself and shows no count.
   const pendingTime = queryView(
     useQuery({
-      ...timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+      ...timeEntriesOptions(workspaceId, userId, { status: "submitted" }),
       enabled: canApprove,
     }),
   );

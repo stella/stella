@@ -118,5 +118,9 @@
   "sk-us": {
     "fingerprint": "45887da9241973d531b070ad2f735849813355361ca030f7f2cadbe0a273d901",
     "version": 13
+  },
+  "uk-fcl": {
+    "fingerprint": "a18c90b6cb13f4456e0b5addba6dbcc042e29b4a314212687e9114fa240354d5",
+    "version": 3
   }
 }

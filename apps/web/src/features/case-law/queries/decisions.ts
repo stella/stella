@@ -24,6 +24,7 @@ import {
   unwrapApiResponse,
 } from "@/lib/errors/api";
 import {
+  PUBLIC_LAW_READ_TIMEOUT_MS,
   type PublicLawData,
   unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
@@ -88,7 +89,7 @@ type DecisionListScope = {
 /** Root segment every cached read of a public decision shares. */
 const DECISION_KEY_ROOT = "case-law-decisions";
 
-const caseLawDecisionKeys = {
+export const caseLawDecisionKeys = {
   all: [DECISION_KEY_ROOT],
   coverage: () => [...caseLawDecisionKeys.all, "coverage"],
   facets: (country: string | undefined) => [
@@ -308,7 +309,14 @@ export const decisionsPageOptions = ({
               alternatives: listFilters.alternatives,
             }),
           },
-          { fetch: { signal } },
+          {
+            fetch: {
+              signal: AbortSignal.any([
+                signal,
+                AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+              ]),
+            },
+          },
         );
 
         const data = unwrapPublicLawResponse(
@@ -381,7 +389,12 @@ export const decisionsPageOptions = ({
             language: filters.language,
           }),
         },
-        fetch: { signal },
+        fetch: {
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+          ]),
+        },
       });
 
       const data = unwrapPublicLawResponse(

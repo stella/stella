@@ -78,25 +78,67 @@ export const createAccessTokenSource = ({
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
-  const refresh = async (): Promise<
-    Result<string, SignedOutError | TokenError>
-  > => {
+  /**
+   * After the server refuses `presented`: another run of the app (a reload
+   * during development, a render React threw away) may have rotated the
+   * grant first and kept its successor, which this source then adopts and
+   * presents once. Only a successor for exactly this session (same server,
+   * issuer, client, endpoints and resource) is adopted, so a source left
+   * over from another sign-in never takes, or sends anywhere, a token that
+   * belongs to the one now kept. Only a keychain still holding the refused
+   * token means the grant itself ended and is cleared; one holding another
+   * session is left alone. Never throws: a keychain that cannot be read or
+   * cleared still ends in a signed-out session.
+   */
+  const afterRefusal = async (
+    presented: string,
+    oauthError: string,
+    adopted: boolean,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const kept = await Result.tryPromise(async () => await store.read());
+    const successor = Result.isOk(kept) ? kept.value : undefined;
+    const sameSession =
+      successor !== undefined && sameSessionIdentity(successor, current);
+    if (!adopted && sameSession && successor.refreshToken !== presented) {
+      current = successor;
+      return await refresh(true);
+    }
+    // Only a keychain read as empty or still holding the refused token is
+    // cleared: a newer token another run stored, or a keychain that could
+    // not be read, is left as it is.
+    const refusedKept =
+      Result.isOk(kept) &&
+      (successor === undefined ||
+        (sameSession && successor.refreshToken === presented));
+    if (refusedKept) {
+      (
+        await Result.tryPromise(async () => {
+          await store.clear();
+        })
+      ).unwrapOr(undefined);
+    }
+    return Result.err(
+      new SignedOutError({
+        message: `The server ended the session: ${oauthError}`,
+      }),
+    );
+  };
+
+  const refresh = async (
+    adopted = false,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const presented = current.refreshToken;
     const refreshed = await refreshTokens({
       fetch,
       clientId: current.clientId,
-      refreshToken: current.refreshToken,
+      refreshToken: presented,
       resource: current.resource,
       tokenEndpoint: current.tokenEndpoint,
     });
     if (Result.isError(refreshed)) {
       const { oauthError } = refreshed.error;
       if (oauthError !== undefined && TERMINAL_REFRESH_ERRORS.has(oauthError)) {
-        await store.clear();
-        return Result.err(
-          new SignedOutError({
-            message: `The server ended the session: ${oauthError}`,
-          }),
-        );
+        return await afterRefusal(presented, oauthError, adopted);
       }
       return Result.err(refreshed.error);
     }
@@ -143,3 +185,15 @@ export const createAccessTokenSource = ({
     },
   };
 };
+
+/** Whether two stored sessions are the same sign-in, whatever their refresh token. */
+function sameSessionIdentity(a: StoredSession, b: StoredSession): boolean {
+  return (
+    a.serverUrl === b.serverUrl &&
+    a.issuer === b.issuer &&
+    a.clientId === b.clientId &&
+    a.tokenEndpoint === b.tokenEndpoint &&
+    a.revocationEndpoint === b.revocationEndpoint &&
+    a.resource === b.resource
+  );
+}

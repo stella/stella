@@ -1,10 +1,12 @@
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
   getPublicReadStatementTimeoutMs,
   runWithPublicReadStatementTimeout,
 } from "@/api/lib/legal-search/public-read-timeout-context";
-import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import { publicCorpusClassOf } from "@/api/public-corpus-policy";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 
@@ -33,11 +35,19 @@ export const runPublicReadRequest = <T>(
   );
 };
 
-/** SQLSTATE survives query and Result wrappers; SQL diagnostics stay server-side. */
+/** Only observed public-law statements carry the provenance for this refusal. */
 export const publicReadTimeoutError = (error: unknown) => {
+  if (getPublicReadStatementTimeoutMs() === undefined) {
+    return null;
+  }
+  const { nodes } = readEvidence(error);
+  const statementIndex = nodes.findIndex((node) =>
+    node.prototypes.includes(PublicLawStatementError.prototype),
+  );
   if (
-    getPublicReadStatementTimeoutMs() === undefined ||
-    getPgErrorCode(error) !== PG_ERROR.QUERY_CANCELED
+    statementIndex === -1 ||
+    nodes.slice(statementIndex).find((node) => node.sqlState !== undefined)
+      ?.sqlState !== PG_ERROR.QUERY_CANCELED
   ) {
     return null;
   }

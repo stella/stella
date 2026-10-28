@@ -508,19 +508,35 @@
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
     "approval": {
+      "approveAll": "{count, plural, one {Aprovar # lançamento} other {Aprovar os # lançamentos}}",
       "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "billedTotal": "{duration} faturado",
       "empty": "Nada aguarda aprovação neste caso.",
+      "emptyWeek": "Nada aguarda aprovação nesta semana. O tempo enviado aparece aqui.",
+      "everyone": "Todos",
       "failed": "A alteração não foi salva. Tente novamente.",
       "myTime": "Meu tempo",
+      "pending": "{count, plural, one {# lançamento para aprovar} other {# lançamentos para aprovar}}",
       "refusals": {
         "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
         "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
         "notFound": "Este registro não existe mais. Atualize a lista.",
+        "notSubmitted": "Este lançamento ainda não foi enviado. Quem o registrou precisa enviá-lo primeiro.",
         "runningTimer": "Pare o cronômetro em andamento antes de aprovar este registro.",
         "unpriced": "Este registro não tem taxa. Defina uma taxa para este caso e depois aprove o registro.",
         "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
       },
       "returnComment": "Motivo da devolução",
+      "returnRefusals": {
+        "invalidEntry": "Confira a data do trabalho do registro e depois devolva-o.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode devolver este registro.",
+        "notFound": "Este registro não existe mais, então não pode ser devolvido. Atualize a lista.",
+        "notSubmitted": "Este rascunho nunca foi enviado, então não há nada a devolver.",
+        "runningTimer": "Pare o cronômetro em andamento antes de devolver este registro.",
+        "timePeriodLocked": "Este mês está bloqueado, então o registro não pode ser devolvido. Peça a um administrador para desbloqueá-lo.",
+        "wrongStatus": "Tempo faturado ou anulado não pode ser devolvido a quem o registrou."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados}}",
       "selectEntry": "Selecionar registro",
       "timeEntries": "Registros de tempo",
       "title": "Aprovações"
@@ -530,6 +546,17 @@
     "batchActions": "Ações em lote",
     "billable": "Faturável",
     "billedAmount": "Valor faturado",
+    "clientComposer": {
+      "flatFeeNote": "Fature os casos com honorários fixos pela página de faturas do caso.",
+      "includeMatter": "Incluir {matterName}",
+      "invalidPeriod": "Escolha uma data final igual ou posterior à data inicial.",
+      "loadFailed": "Não foi possível carregar o trabalho não faturado. Tente novamente.",
+      "matterSubtotal": "Total do caso com IVA: {amount} · {share} da fatura",
+      "periodEnd": "Fim do período",
+      "periodStart": "Início do período",
+      "title": "Faturar cliente",
+      "visibility": "Esta fatura só fica visível para pessoas com acesso a todos os casos incluídos e administradores de faturamento."
+    },
     "codes": {
       "activity": "Atividade",
       "activityCode": "Código de atividade",
@@ -673,6 +700,11 @@
       "invoiceDate": "Data da fatura",
       "invoiceDetail": "Detalhe da fatura",
       "invoiceNumber": "Número da fatura",
+      "lineOverrides": {
+        "editedRecorded": "Editado · registrado: {description}, {quantity} × {rate}",
+        "quantity": "Quantidade",
+        "resetRecorded": "Restaurar valores registrados"
+      },
       "linkedExpenses": "Despesas vinculadas",
       "linkedTimeEntries": "Entradas de tempo vinculadas",
       "markPaid": "Marcar como pago",
@@ -697,6 +729,7 @@
     "markNonBillableSelected": "Marcar como não faturável",
     "matterRequired": "Selecione um caso",
     "minutes": "Minutos",
+    "moveEntryHint": "Ao salvar, o registro passa para este caso e é precificado com as tarifas dele.",
     "narrative": "Narrativa",
     "narrativePlaceholder": "Descreva o trabalho realizado...",
     "noActiveTimer": "Nenhum temporizador ativo",
@@ -811,6 +844,7 @@
       "approved": "Aprovado",
       "billed": "Faturado",
       "draft": "Rascunho",
+      "submitted": "Enviado",
       "written_off": "Anulado"
     },
     "stopTimer": "Parar",
@@ -965,7 +999,6 @@
     "coverage": {
       "completeness": "Completude",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "A distribuição por tribunal está indisponível no momento.",
       "decisionYears": "Anos das decisões",
       "description": "Quanta jurisprudência o acervo contém, por país e por tribunal, e quão atualizada está cada fonte.",
       "generatedAt": "Números de {date}",
@@ -976,20 +1009,16 @@
       "healthStalled": "Sem avanço",
       "healthUnknown": "Nunca executado",
       "inPreparation": "Em preparação",
-      "knownGaps": "Lacunas conhecidas",
       "lastSync": "Última sincronização",
-      "noGapsRecorded": "Nenhuma lacuna registrada",
       "notCountedYet": "Ainda não contado",
       "notMeasuredYet": "Ainda não medido",
-      "pendingTexts": "Textos pendentes",
       "reportedByListing": "Contado a partir da listagem do próprio órgão",
       "reportedByOperator": "Informado manualmente",
       "reportedByPublisher": "Contagem do próprio órgão",
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
-      "unreadListingPeriods": "Períodos da listagem não lidos"
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {
@@ -2079,7 +2108,6 @@
       "orLetUsKnowAt": "ou deixe-nos saber em",
       "viewDocumentation": "Ver documentação"
     },
-    "error": "Erro",
     "expenses": "Despesas",
     "export": {
       "citations": "Citações",
@@ -2153,6 +2181,7 @@
     "lastUpdated": "Última atualização",
     "layoutResetAfterProblem": "O layout foi redefinido após um problema.",
     "legalDatabase": "Base de dados jurídica",
+    "loadFailed": "Não foi possível carregar.",
     "loadMore": "Carregar mais",
     "loading": "Carregando",
     "logTime": "Registrar tempo",
@@ -2241,7 +2270,7 @@
     "showMore": "Mostrar mais",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Sair",
-    "somethingWentWrong": "Algo deu errado",
+    "somethingWentWrong": "Algo deu errado. Tente novamente ou recarregue a página se isso continuar acontecendo.",
     "sort": "Classificar",
     "source": "Fonte",
     "stale": "Desatualizado",
@@ -2718,7 +2747,7 @@
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },
-    "actionFailed": "Falha na ação",
+    "actionFailed": "Não deu certo. Tente novamente ou recarregue a página se isso continuar acontecendo.",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",
       "caseLawCountryUnavailable": "A jurisprudência deste país não está disponível. Escolha outro país.",
@@ -3269,7 +3298,7 @@
     "saveSerializeFailedTitle": "Não foi possível criar DOCX",
     "savingDocument": "Salvando...",
     "showDetails": "Mostrar detalhes",
-    "somethingWentWrong": "Algo deu errado",
+    "somethingWentWrong": "Algo deu errado. Tente novamente ou recarregue a página se isso continuar acontecendo.",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "tableBordersAll": "Todas as bordas",
@@ -5882,6 +5911,16 @@
       "pendingCount": "{count, plural, one {# sugestão} other {# sugestões}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Confira a data do trabalho e depois envie este lançamento.",
+        "narrativeRequired": "Adicione uma descrição e depois envie este lançamento.",
+        "runningTimer": "Pare o cronômetro em andamento e depois envie este lançamento.",
+        "unpriced": "Este lançamento não tem tarifa. Peça uma tarifa para o caso e depois envie-o."
+      },
+      "returned": "Devolvido: {comment}",
+      "submitAndApprove": "Enviar e aprovar",
+      "submitResult": "{submitted} enviados · {approved} aprovados · {refused} para corrigir",
+      "submitWeek": "Enviar semana",
       "title": "Minha semana",
       "totals": "{logged} lançados · {billable} faturáveis"
     }

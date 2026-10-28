@@ -1,17 +1,23 @@
-import { useTranslations } from "use-intl";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { EmptyStateScreen } from "@/components/empty-state-screen";
+import { ChatsList } from "@/components/chats-list";
+import { screenStyles } from "@/components/empty-state-screen";
+import { useSession } from "@/connection/session-provider";
+import { useAppColors } from "@/theme";
 
 const ChatsScreen = () => {
-  const t = useTranslations();
+  const colors = useAppColors();
+  const { state } = useSession();
 
   return (
-    <EmptyStateScreen
-      description={t("chat.description")}
-      emptyDescription={t("chat.emptyDescription")}
-      emptyTitle={t("chat.emptyTitle")}
-      title={t("tabs.chat")}
-    />
+    <SafeAreaView
+      edges={["top"]}
+      style={[screenStyles.screen, { backgroundColor: colors.background }]}
+    >
+      {state.status === "signed-in" ? (
+        <ChatsList source={state.source} />
+      ) : null}
+    </SafeAreaView>
   );
 };
 
