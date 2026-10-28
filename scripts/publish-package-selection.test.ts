@@ -172,10 +172,10 @@ describe("publish package selection", () => {
 
     expect(workflow).toContain("artifact_run_id:");
     expect(workflow).toContain(
-      `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
+      `run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || github.run_id }}`,
     );
     expect(workflow).toContain(
-      "The reusable workflow verifies that a resumed artifact comes from this",
+      "run: node .release-tooling/.github/actions/npm-independent-release/verify-artifact-run.mjs",
     );
   });
 

@@ -11,6 +11,7 @@ const source = readFileSync(
 const stepSchema = v.object({
   id: v.optional(v.string()),
   run: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
 });
 const readWorkflow = (text: string) =>
   v.parse(
@@ -20,8 +21,8 @@ const readWorkflow = (text: string) =>
         pack: v.object({ if: v.string(), steps: v.array(stepSchema) }),
         release: v.object({
           if: v.string(),
-          uses: v.string(),
-          with: v.record(v.string(), v.unknown()),
+          steps: v.array(stepSchema),
+          environment: v.string(),
           permissions: v.record(v.string(), v.string()),
         }),
       }),
@@ -74,17 +75,26 @@ test("RC runs publish no npm version or dist-tag", () => {
     expect(workflow.jobs.release.if).toContain(
       "needs.pack.result == 'success'",
     );
-    expect(workflow.jobs.release.with["dist-tag"]).toBeUndefined();
+    const batch = readFileSync(
+      new URL("publish-npm-batch.ts", import.meta.url),
+      "utf-8",
+    );
+    expect(batch).toContain('DIST_TAG: "latest"');
     expect(source).not.toContain("'next'");
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
 });
 
-test("stable npm source must equal the final tag and its RC SHA through the unchanged publisher", () => {
-  expect(workflow.jobs.release.uses).toBe(
-    "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+test("stable npm source must equal the final tag and its RC SHA through pinned publishing transactions", () => {
+  const transaction = workflow.jobs.release.steps.find(
+    ({ with: inputs }) => inputs?.["path"] === ".release-tooling",
   );
+  expect(transaction?.with?.["repository"]).toBe("stella/.github");
+  expect(transaction?.with?.["ref"]).toBe(
+    "5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+  );
+  expect(workflow.jobs.release.environment).toBe("release-app");
   const validation = requiredRun(workflow.jobs.pack.steps, "release-source");
   expect(validation).toContain('if [[ "$source_sha" != "$release_sha" ]]');
   expect(validation).toContain('git tag --points-at "$release_sha"');

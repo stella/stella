@@ -7,12 +7,12 @@ defaults:
 
 # Keep this filename stable: npm trusted publishing authorizes the calling
 # repository workflow, even though the privileged release transaction is
-# implemented by stella/.github.
+# implemented with the pinned stella/.github release tooling.
 #
 # Shared libraries publish from version bumps on main. The CLI remains gated on
 # the exact stable Release Artifacts production job receipt and its RC SHA.
 # RC runs publish no npm versions. Build, lifecycle, pack, and canary commands
-# run without OIDC; only the shared release job receives id-token and
+# run without OIDC; only the release job receives id-token and
 # contents-write permissions.
 
 env:
@@ -279,6 +279,23 @@ jobs:
           persist-credentials: false
           ref: ${{ steps.source.outputs.ref }}
 
+      # Recovery source can predate the current pack and declaration tools.
+      # They resolve their dependencies from the source's locked install.
+      - name: Checkout pack tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .pack-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/pack-reproducibly.sh
+            scripts/prepare-publish.ts
+            scripts/publish-manifest.ts
+            scripts/publish-declarations.ts
+            scripts/install-packed-cli.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       - name: Verify manual package recovery source
         timeout-minutes: 5
         if: >-
@@ -361,14 +378,8 @@ jobs:
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
-            if [[ "$package" == cli ]]; then
-              (cd packages/cli && bun run codegen:runtime)
-            fi
-            (cd "packages/${package}" && bun run build)
-            bun scripts/prepare-publish.ts "packages/${package}"
-            destination="release-artifacts/${package}"
-            mkdir -p "$destination"
-            (cd "packages/${package}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${destination}")
+            PACK_SOURCE_ROOT="$GITHUB_WORKSPACE" bash .pack-tooling/scripts/pack-reproducibly.sh \
+              "$package" "$GITHUB_WORKSPACE/release-artifacts/${package}"
             echo "::endgroup::"
           done
 
@@ -436,11 +447,10 @@ jobs:
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
         run: |
           set -euo pipefail
-          tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
           smoke="$(mktemp -d)"
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/install-packed-cli.sh" \
+            "$GITHUB_WORKSPACE/release-artifacts" "$smoke" "$GITHUB_WORKSPACE/.pack-tooling/scripts/retry.sh"
           cd "$smoke"
-          npm init -y >/dev/null
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
           cli="node_modules/@stll/cli/dist/cli.js"
           node "$cli" --version
           node "$cli" --help
@@ -462,11 +472,10 @@ jobs:
           && (github.event_name == 'workflow_run' || inputs.publish)
         run: |
           set -euo pipefail
-          tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
           canary="$(mktemp -d)"
+          bash "$GITHUB_WORKSPACE/.pack-tooling/scripts/install-packed-cli.sh" \
+            "$GITHUB_WORKSPACE/release-artifacts" "$canary" "$GITHUB_WORKSPACE/.pack-tooling/scripts/retry.sh"
           cd "$canary"
-          npm init -y >/dev/null
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
           node node_modules/@stll/cli/dist/cli.js compatibility check \
             --server https://api.stll.app
 
@@ -705,21 +714,101 @@ jobs:
       actions: read # Verify exact artifacts when a release transaction is resumed.
       contents: write # Create immutable package tags and GitHub releases.
       id-token: write # Exchange a short-lived npm trusted-publishing credential.
-    # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # release job environment input
-    with:
-      # The release App key is an environment secret; the shared job runs in
-      # this environment so only main and release tags can mint the token.
-      environment: release-app
-      artifact-pattern: npm-tarball-*
-      # The reusable workflow verifies that a resumed artifact comes from this
-      # workflow and the immutable source commit before it is downloaded.
-      artifact-run-id: ${{ inputs.artifact_run_id || '' }}
-      package-files: ${{ needs.pack.outputs.package_files }}
-      source-ref: ${{ needs.pack.outputs.source_sha }}
-    secrets:
-      RELEASE_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
-      RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    environment: release-app
+    steps:
+      - name: Checkout immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.pack.outputs.source_sha }}
+
+      # Run orchestration from the workflow commit, including when recovering
+      # source that predates this script. Package source runs only in pack.
+      - name: Checkout publish orchestration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .publish-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/publish-npm-batch.ts
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      # Preserve the reviewed transaction's exact-asset, immutable-tag and
+      # registry-integrity checks; isolate failures at the package boundary.
+      - name: Checkout shared release transaction
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stella/.github
+          ref: 5764ab66e4df84cfd2e642c7d7e4678261e668f8
+          path: .release-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            .github/actions/npm-independent-release
+            .github/actions/npm-visibility
+
+      - name: Checkout hardened npm publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: stella/.github
+          ref: 42bd6a23099a2dc219dd1af9c55f8f0506fcfffd
+          path: .publish-hardened
+          persist-credentials: false
+          sparse-checkout: .github/actions/npm-publish-hardened
+
+      - name: Setup Node for trusted publishing
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22.21.1"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for trusted publishing # zizmor: ignore[adhoc-packages] pinned publishing client, lifecycle scripts disabled
+        timeout-minutes: 5
+        run: bash .publish-tooling/scripts/retry.sh npm install --global --ignore-scripts npm@11.11.1
+
+      # The pinned verifier requires the same caller workflow and immutable
+      # source commit before downloading any artifacts from a prior run.
+      - name: Verify recovery artifact source
+        if: inputs.artifact_run_id != ''
+        env:
+          ARTIFACT_RUN_ID: ${{ inputs.artifact_run_id }}
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.pack.outputs.source_sha }}
+        run: node .release-tooling/.github/actions/npm-independent-release/verify-artifact-run.mjs
+
+      - name: Download selected packed packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ github.event_name == 'workflow_dispatch' && inputs.package != 'all' && format('npm-tarball-{0}', inputs.package) || 'npm-tarball-*' }}
+          path: release-artifacts
+          merge-multiple: false
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Mint release token
+        id: release-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.STELLA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Publish packages in dependency order and report all failures
+        timeout-minutes: 45
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          PACKAGE_FILES: ${{ needs.pack.outputs.package_files }}
+          SOURCE_SHA: ${{ needs.pack.outputs.source_sha }}
+          SHARED_RELEASE_TOOLING: ${{ github.workspace }}/.release-tooling/.github/actions/npm-independent-release
+          HARDENED_PUBLISH_TOOLING: ${{ github.workspace }}/.publish-hardened/.github/actions/npm-publish-hardened
+        run: node .publish-tooling/scripts/publish-npm-batch.ts
 
   verify-npm:
     name: Verify npm serves the released versions
