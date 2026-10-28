@@ -399,7 +399,7 @@ const readStampRows = async (bytes: Uint8Array) => {
         column += 1;
       }
       baseline = y;
-      row = `${column}:${matrix[2]}`;
+      row = `${String(column)}:${String(y)}`;
     } else if (span) {
       actualText = new TextDecoder("utf-16be").decode(
         Buffer.from(span[1] ?? "", "hex"),
