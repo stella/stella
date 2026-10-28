@@ -70,6 +70,14 @@ export const MARK_COLORS = {
 } as const satisfies Record<string, HexColor>;
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/iu;
+const HEX_DIGITS = "0123456789abcdef";
+
+// A validated two-digit hex pair as 0..255: each digit's value is its place
+// in HEX_DIGITS.
+const hexPairValue = (pair: string): number => {
+  const [high = "0", low = "0"] = pair.toLowerCase();
+  return HEX_DIGITS.indexOf(high) * 16 + HEX_DIGITS.indexOf(low);
+};
 
 /** The 0..255 channels of a `#rgb` or `#rrggbb` colour. */
 const hexChannels = (hex: HexColor): readonly [number, number, number] => {
@@ -80,9 +88,7 @@ const hexChannels = (hex: HexColor): readonly [number, number, number] => {
     hex.length === 4
       ? [...hex.slice(1)].map((digit) => digit + digit)
       : [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)];
-  const [red = 0, green = 0, blue = 0] = digits.map((pair) =>
-    Number.parseInt(pair, 16),
-  );
+  const [red = 0, green = 0, blue = 0] = digits.map(hexPairValue);
   return [red, green, blue];
 };
 

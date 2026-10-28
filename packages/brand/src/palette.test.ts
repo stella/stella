@@ -10,6 +10,7 @@ import {
   NEUTRAL_SRGB,
   srgbFromHex,
 } from "./palette";
+import type { HexColor } from "./palette";
 
 const DESIGN_DOC = path.resolve(import.meta.dir, "../../../DESIGN.md");
 
@@ -58,6 +59,16 @@ describe("brand palette", () => {
     expect(BRAND_SRGB.black).toEqual([0, 0, 0]);
     expect(NEUTRAL_SRGB.white).toEqual([1, 1, 1]);
     expect(NEUTRAL_COLORS.black).toBe(BRAND_COLORS.black);
+  });
+
+  test("every channel byte reads back as itself, in either case", () => {
+    for (let value = 0; value <= 0xff; value += 1) {
+      const pair = value.toString(16).padStart(2, "0");
+      const red: HexColor = `#${pair}0000`;
+      const green: HexColor = `#00${pair.toUpperCase()}00`;
+      expect(srgbFromHex(red)[0]).toBe(value / 255);
+      expect(srgbFromHex(green)[1]).toBe(value / 255);
+    }
   });
 
   test("a three-digit hex expands each digit", () => {
