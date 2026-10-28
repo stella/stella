@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia, więc nie można go przeanalizować.",
+        "documentUnparseable": "Nie udało się odczytać tekstu tego orzeczenia, więc nie można go przeanalizować.",
+        "languageUnsupported": "Analiza AI jest dostępna tylko dla orzeczeń w tych językach: {languages}.",
+        "openLanguageVersion": "Otwórz wersję językową: {language}",
         "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
         "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
         "retryAfter": "Możesz spróbować ponownie po {time}.",

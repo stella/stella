@@ -5,8 +5,18 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   authenticLanguageTag,
+  AUTHORITY_LANGUAGE_TAGS,
   preferredLanguageVersionsFirst,
 } from "@/api/lib/case-law/decision-language";
+
+// The database reads the language of the case through a spelled-out table;
+// it must say what `authenticLanguageTag` says for every code it holds.
+test("the database's authority-code table reads every code as the API does", () => {
+  for (const [authority, tag] of Object.entries(AUTHORITY_LANGUAGE_TAGS)) {
+    expect(authenticLanguageTag(authority)).toBe(tag);
+  }
+  expect(Object.keys(AUTHORITY_LANGUAGE_TAGS)).toHaveLength(24);
+});
 
 describe("the language version a lookup answers in", () => {
   test("reads the authority code a notice states as a row language", () => {

@@ -80,7 +80,7 @@ const openWith = async (pageReach: SearchPageReach) => {
       defaultOptions: { queries: { retry: false } },
     }),
     search: { country: "cz", q: ECLI },
-    uiLocale: "cs",
+    readingLanguages: ["cs", "fr"],
   });
   return { navigations, opened };
 };

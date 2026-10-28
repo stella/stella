@@ -106,6 +106,7 @@ import {
   usePrefetchedDecisionPage,
 } from "@/features/case-law/queries/decisions";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import {
   QuestionColumnControls,
   useQuestionColumns,
@@ -116,7 +117,6 @@ import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
-import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -249,7 +249,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useMessageLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const search = Route.useSearch({
     select: ({
       country,
@@ -351,12 +351,17 @@ export function PublicCaseLawIndex({
   // search required. On the first page it is the page on screen as well, and
   // the two reads are one query.
   const firstPageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: 1, pageSize }),
+    ...decisionsPageOptions({ filters, page: 1, pageSize, readingLanguages }),
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
   const pageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
+    ...decisionsPageOptions({
+      filters,
+      page: wantedPage,
+      pageSize,
+      readingLanguages,
+    }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
@@ -426,6 +431,7 @@ export function PublicCaseLawIndex({
     filters,
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
+    readingLanguages,
   });
   // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
@@ -657,7 +663,7 @@ export function PublicCaseLawIndex({
         navigate: routerNavigate,
         queryClient,
         search: { ...scopedSearch, q: entry },
-        uiLocale,
+        readingLanguages,
       }),
       "cases.open-match",
     );

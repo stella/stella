@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Jūsu organizācijas {provider} atslēga atgrieza nepilnīgu atbildi.} other {AI modelis atgrieza nepilnīgu atbildi.}}",
+        "decisionNotFound": "Šo nolēmumu neizdevās atrast, tāpēc to nevar analizēt.",
+        "documentUnparseable": "Šī nolēmuma tekstu neizdevās nolasīt, tāpēc to nevar analizēt.",
+        "languageUnsupported": "AI analīze ir pieejama tikai nolēmumiem šajās valodās: {languages}.",
+        "openLanguageVersion": "Atvērt valodas versiju: {language}",
         "providerRefused": "{source, select, organization {{provider} noraidīja pieprasījumu, kas veikts ar jūsu organizācijas atslēgu. Pārbaudiet atslēgu, tās kvotu un norēķinus organizācijas iestatījumos.} other {AI pakalpojumu sniedzējs noraidīja pieprasījumu.}}",
         "providerUnavailable": "{source, select, organization {{provider} pašlaik nav pieejams ar jūsu organizācijas atslēgu.} other {AI pakalpojumu sniedzējs pašlaik nav pieejams.}}",
         "retryAfter": "Vēlreiz mēģināt varēsiet pēc {time}.",

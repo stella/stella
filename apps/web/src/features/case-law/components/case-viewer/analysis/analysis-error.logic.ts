@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 
-import type { CaseLawAnalysisFailureCode as AnalysisFailureCode } from "@stll/api-contract";
+import {
+  type CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  type CaseLawAnalysisUnavailableCode,
+  isCaseLawAnalysisLanguage,
+} from "@stll/api-contract";
+import { pickCaseLawLanguageVersion } from "@stll/api-contract/case-law-reading-languages";
 
 import {
   PROVIDER_KEYS,
@@ -29,6 +34,18 @@ export const ANALYSIS_KEYED_FAILURE_MESSAGE = {
 
 type KeyedFailureCode = keyof typeof ANALYSIS_KEYED_FAILURE_MESSAGE;
 
+/**
+ * Why the server makes no analysis of a decision, one sentence per reason, so
+ * a reader can tell a text that could not be read from a language no prompt is
+ * written for. `languageUnsupported` names the languages that are.
+ */
+export const ANALYSIS_UNAVAILABLE_MESSAGE = {
+  decision_not_found: "caseLaw.analysis.errors.decisionNotFound",
+  document_unparseable: "caseLaw.analysis.errors.documentUnparseable",
+  language_unsupported: "caseLaw.analysis.errors.languageUnsupported",
+  analysis_unavailable: "caseLaw.analysis.errors.unavailable",
+} as const satisfies Record<CaseLawAnalysisUnavailableCode, TranslationKey>;
+
 /** What the reader is told about an analysis that is not there. */
 export type AnalysisErrorMessage =
   | {
@@ -37,7 +54,10 @@ export type AnalysisErrorMessage =
       values: { source: AnalysisFailureKey["source"]; provider: string };
     }
   | { kind: "generic" }
-  | { kind: "unavailable" };
+  | {
+      kind: "unavailable";
+      key: (typeof ANALYSIS_UNAVAILABLE_MESSAGE)[CaseLawAnalysisUnavailableCode];
+    };
 
 const isProviderKey = (
   provider: string,
@@ -73,7 +93,10 @@ export const analysisErrorMessage = (
 ): AnalysisErrorMessage => {
   switch (error.kind) {
     case "unavailable":
-      return { kind: "unavailable" };
+      return {
+        kind: "unavailable",
+        key: ANALYSIS_UNAVAILABLE_MESSAGE[error.code],
+      };
     case "unreadable":
       return { kind: "generic" };
     case "failed": {
@@ -96,3 +119,17 @@ export const analysisErrorMessage = (
       return panic("Unhandled analysis error");
   }
 };
+
+/**
+ * The version of this decision an analysis can be made in, for a reader whose
+ * version has none: among the versions in an analysis language, the one the
+ * reader would be shown first. Null when the decision has no such version.
+ */
+export const analysisLanguageVersion = <TVersion extends { language: string }>(
+  versions: readonly TVersion[],
+  readingLanguages: readonly string[],
+): TVersion | null =>
+  pickCaseLawLanguageVersion(
+    versions.filter((version) => isCaseLawAnalysisLanguage(version.language)),
+    { readingLanguages },
+  );

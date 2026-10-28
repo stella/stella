@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
+        "decisionNotFound": "Diese Entscheidung wurde nicht gefunden und kann daher nicht analysiert werden.",
+        "documentUnparseable": "Der Text dieser Entscheidung ist nicht lesbar, daher ist keine KI-Analyse möglich.",
+        "languageUnsupported": "Die KI-Analyse ist nur für Entscheidungen in diesen Sprachen verfügbar: {languages}.",
+        "openLanguageVersion": "Sprachfassung öffnen: {language}",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
         "retryAfter": "Sie können es ab {time} erneut versuchen.",

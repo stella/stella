@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
+        "decisionNotFound": "Ez a határozat nem található, ezért nem elemezhető.",
+        "documentUnparseable": "A határozat szövege nem olvasható, ezért nem elemezhető.",
+        "languageUnsupported": "AI-elemzés csak az alábbi nyelvű határozatokhoz érhető el: {languages}.",
+        "openLanguageVersion": "Nyelvi változat megnyitása: {language}",
         "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
         "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
         "retryAfter": "{time} után újra megpróbálhatja.",

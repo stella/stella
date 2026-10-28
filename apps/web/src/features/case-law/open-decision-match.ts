@@ -121,8 +121,8 @@ type OpenDecisionMatchOptions = {
   navigate: ReturnType<typeof useNavigate>;
   queryClient: QueryClient;
   search: CaseLawSearchScope;
-  /** The reader's UI language, which picks between language versions. */
-  uiLocale: string;
+  /** The reader's languages, which pick between language versions. */
+  readingLanguages: readonly string[];
 };
 
 /**
@@ -169,7 +169,7 @@ export const openDecisionMatch = async ({
   navigate,
   queryClient,
   search,
-  uiLocale,
+  readingLanguages,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
   const jurisdiction = caseLawCountryScope(search.country);
   const intent = readDecisionIntent(search.q, { jurisdiction });
@@ -208,8 +208,8 @@ export const openDecisionMatch = async ({
 
   const preferred = pickPreferredCaseLawLanguageVariant({
     alternates: only.languageAlternates,
-    matchedLanguage: only.language,
-    uiLocale,
+    rowLanguage: only.language,
+    readingLanguages,
   });
   const target =
     preferred === null

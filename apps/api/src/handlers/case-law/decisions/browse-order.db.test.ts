@@ -94,6 +94,8 @@ const seeds: Seed[] = [
     language,
     languageGroupKey: "ECLI:EU:T:2021:7",
   })),
+  // Decided in French, the language of the case; the Czech version was
+  // stored first.
   ...["cs", "en", "fr"].map((language, i) => ({
     caseNumber: "C-131/12",
     court: "Court of Justice",
@@ -101,6 +103,7 @@ const seeds: Seed[] = [
     decisionDate: "2024-03-05",
     language,
     languageGroupKey: "ECLI:EU:C:2014:317",
+    metadata: { procedureLanguage: [{ code: "FRA" }] },
   })),
   // A second jurisdiction whose busiest court is a district court: six newer
   // district judgments against one supreme judgment.
@@ -526,6 +529,53 @@ test(
     ]);
     expect(cjeu).toHaveLength(1);
     expect(cjeu?.[0]?.languageAlternates).toHaveLength(3);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// A multilingual judgment is one row in the listing and one on the shelf,
+// whatever filters it: the version the reader reads first (their languages,
+// then the language of the case), never merely the version stored first.
+// timeout: six reads through the embedded Postgres under the reader role.
+test(
+  "a court filter lists a multilingual judgment once, in the reader's version",
+  async () => {
+    const listed = async (readingLanguages?: string) => {
+      const result = await listDecisionsHandler(
+        {
+          country: "CZE",
+          court: "Court of Justice",
+          limit: 10,
+          ...(readingLanguages === undefined ? {} : { readingLanguages }),
+        },
+        caseLawDb,
+        async () => courtWeightMapFromSeed(),
+      );
+      if (!("items" in result)) {
+        throw new Error("list failed");
+      }
+      return result.items.map(({ caseNumber, language }) => [
+        caseNumber,
+        language,
+      ]);
+    };
+
+    expect(await listed()).toEqual([["C-131/12", "fr"]]);
+    expect(await listed("en,cs,fr")).toEqual([["C-131/12", "en"]]);
+    expect(await listed("cs,fr")).toEqual([["C-131/12", "cs"]]);
+    expect(await listed("de,el")).toEqual([["C-131/12", "fr"]]);
+
+    const shelfVersion = async (readingLanguages?: readonly string[]) => {
+      const shelf = await readLatestDecisionsByCourt({
+        caseLawDb,
+        country: "CZE",
+        courts: [{ court: "Court of Justice", tierLabel: "constitutional" }],
+        ...(readingLanguages === undefined ? {} : { readingLanguages }),
+      });
+      return shelf.flatMap((group) => group.decisions.map((d) => d.language));
+    };
+    expect(await shelfVersion()).toEqual(["fr"]);
+    expect(await shelfVersion(["en", "cs", "fr"])).toEqual(["en"]);
   },
   DB_TEST_TIMEOUT_MS,
 );

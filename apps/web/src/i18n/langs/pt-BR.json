@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {A chave {provider} da sua organização retornou uma resposta incompleta.} other {O modelo de IA retornou uma resposta incompleta.}}",
+        "decisionNotFound": "Não foi possível encontrar esta decisão, por isso ela não pode ser analisada.",
+        "documentUnparseable": "Não foi possível ler o texto desta decisão, por isso ela não pode ser analisada.",
+        "languageUnsupported": "A análise por IA só está disponível para decisões nestes idiomas: {languages}.",
+        "openLanguageVersion": "Abrir a versão no idioma: {language}",
         "providerRefused": "{source, select, organization {{provider} recusou a solicitação feita com a chave da sua organização. Verifique a chave, a cota e o faturamento nas configurações da organização.} other {O provedor de IA recusou a solicitação.}}",
         "providerUnavailable": "{source, select, organization {{provider} está indisponível no momento para a chave da sua organização.} other {O provedor de IA está indisponível no momento.}}",
         "retryAfter": "Você poderá tentar novamente a partir de {time}.",

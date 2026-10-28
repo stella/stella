@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Klíč vaší organizace pro {provider} vrátil neúplnou odpověď.} other {AI model vrátil neúplnou odpověď.}}",
+        "decisionNotFound": "Toto rozhodnutí se nepodařilo najít, a proto ho nelze analyzovat.",
+        "documentUnparseable": "Text tohoto rozhodnutí se nepodařilo přečíst, a proto ho nelze analyzovat.",
+        "languageUnsupported": "AI analýza je dostupná jen pro rozhodnutí v těchto jazycích: {languages}.",
+        "openLanguageVersion": "Otevřít jazykovou verzi: {language}",
         "providerRefused": "{source, select, organization {{provider} odmítl požadavek s klíčem vaší organizace. Zkontrolujte klíč, jeho kvótu a fakturaci v nastavení organizace.} other {Poskytovatel AI požadavek odmítl.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pro klíč vaší organizace momentálně nedostupný.} other {Poskytovatel AI je momentálně nedostupný.}}",
         "retryAfter": "Znovu to můžete zkusit po {time}.",

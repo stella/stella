@@ -10,6 +10,7 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { parseCaseLawReadingLanguages } from "@stll/api-contract/case-law-reading-languages";
 import { numberFromString } from "@stll/api-contract/http-input";
 import {
   DECISION_LIST_SORTS,
@@ -40,6 +41,7 @@ import {
   decodeDecisionDateCursor,
   encodeDecisionDateCursor,
 } from "@/api/lib/case-law/decision-date-order";
+import { languageVersionRankSql } from "@/api/lib/case-law/decision-language";
 import {
   decisionPageOffsetSchema,
   decisionPageRequestRefusal,
@@ -79,6 +81,11 @@ export const listDecisionsQuerySchema = v.object({
   decisionType: v.optional(v.pipe(v.string(), v.maxLength(128))),
   sourceId: v.optional(resourceIdSchema("caseLawSource")),
   language: v.optional(v.pipe(v.string(), v.maxLength(8))),
+  /**
+   * The reader's languages, most preferred first, comma-separated: which
+   * version of a multilingual decision stands for it in the listing.
+   */
+  readingLanguages: v.optional(v.pipe(v.string(), v.maxLength(128))),
   sort: v.optional(v.picklist(DECISION_LIST_SORTS)),
 });
 
@@ -204,6 +211,14 @@ const decisionBandWalk = ({
   // PostgreSQL never pulls an EXISTS with an offset up into a join, so it is
   // what keeps the check a subplan. `list-plan.db.test.ts` fails without it.
   // A sibling in the other band is still eligible: the walk lists it there.
+  // A group is listed once, by the version the reader reads first (their
+  // languages, then the language of the case), the oldest among equals.
+  const readingLanguages = parseCaseLawReadingLanguages(query.readingLanguages);
+  const siblingRank = languageVersionRankSql(sibling, readingLanguages);
+  const rowRank = languageVersionRankSql(
+    publishedCaseLawDecisions,
+    readingLanguages,
+  );
   const earlierSibling = tx
     .select({ id: sibling.id })
     .from(sibling)
@@ -215,7 +230,7 @@ const decisionBandWalk = ({
           publishedCaseLawDecisions.languageGroupKey,
         ),
         // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-        sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
+        sql`(${siblingRank}, ${sibling.createdAt}, ${sibling.id}) < (${rowRank}, ${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
         redistributableCaseLawSourceFor(siblingSource.descriptor),
         ...decisionFilterConditions(query, sibling),
       ),
@@ -226,7 +241,7 @@ const decisionBandWalk = ({
   return {
     where: and(
       ...conditions,
-      // Only an older version eligible for this request hides a row.
+      // Only a preferred version eligible for this request hides a row.
       // A null group key matches no sibling, so ungrouped rows remain.
       not(hasEarlierSibling),
     ),

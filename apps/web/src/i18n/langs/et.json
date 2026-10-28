@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda lahendit ei leitud, seega ei saa seda analüüsida.",
+        "documentUnparseable": "Selle lahendi teksti ei õnnestunud lugeda, seega ei saa seda analüüsida.",
+        "languageUnsupported": "AI-analüüs on saadaval ainult nendes keeltes lahenditele: {languages}.",
+        "openLanguageVersion": "Ava keeleversioon: {language}",
         "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
         "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",

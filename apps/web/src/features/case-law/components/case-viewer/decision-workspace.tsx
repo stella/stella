@@ -159,7 +159,8 @@ type DecisionWorkspaceDecision = Pick<
   | "sourceAttributionUrl"
   | "textFields"
   | "updatedAt"
->;
+> &
+  Partial<Pick<PublicCaseLawDecision, "languageAlternates">>;
 
 type DecisionWorkspaceBaseProps = {
   decision: DecisionWorkspaceDecision;
@@ -1102,6 +1103,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   {showAiNotes && analysisState.status === "error" && (
                     <AnalysisErrorNotice
                       error={analysisState.error}
+                      languageVersions={decision.languageAlternates}
                       onRetry={() => {
                         detached(generate(), "decision-workspace.generate");
                       }}

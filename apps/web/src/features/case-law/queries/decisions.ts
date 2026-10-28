@@ -17,6 +17,7 @@ import {
   DEFAULT_PUBLIC_LAW_PAGE_SIZE,
   type PublicLawPageSize,
 } from "@/components/public-law-table/public-law-route-pagination.logic";
+import { defaultCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { api } from "@/lib/api";
 import {
   APIError,
@@ -97,10 +98,10 @@ export const caseLawDecisionKeys = {
     "facets",
     { country },
   ],
-  latest: (country: string) => [
+  latest: (country: string, readingLanguages: readonly string[]) => [
     ...caseLawDecisionKeys.all,
     "latest",
-    { country },
+    { country, readingLanguages },
   ],
   status: (country: string) => [
     ...caseLawDecisionKeys.all,
@@ -124,6 +125,7 @@ export const caseLawDecisionKeys = {
       language: key.language,
       page: key.page,
       pageSize: key.pageSize,
+      readingLanguages: key.readingLanguages,
       search: key.search,
       sort: key.sort,
       sourceId: key.sourceId,
@@ -159,6 +161,12 @@ export const caseLawDecisionKeys = {
 type DecisionListKey = DecisionListFilters & {
   page: number;
   pageSize: PublicLawPageSize;
+  /**
+   * The reader's languages, for a listing: they choose which version of a
+   * multilingual decision stands for it. Absent for a search, whose row is
+   * the version that matched.
+   */
+  readingLanguages: readonly string[] | undefined;
 };
 
 type DecisionBySlugKey = {
@@ -201,13 +209,19 @@ export const decisionFacetsOptions = (country: string) =>
     retry: shouldRetryAPIRequest,
   });
 
-/** The newest decisions of a jurisdiction's largest courts: the browse page's shelf. */
-export const latestDecisionsOptions = (country: string) =>
+/**
+ * The newest decisions of a jurisdiction's largest courts: the browse page's
+ * shelf, each multilingual decision in the version the reader reads first.
+ */
+export const latestDecisionsOptions = (
+  country: string,
+  readingLanguages: readonly string[] = defaultCaseLawReadingLanguages(),
+) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.latest(country),
+    queryKey: caseLawDecisionKeys.latest(country, readingLanguages),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions.latest.get({
-        query: { country },
+        query: { country, readingLanguages: readingLanguages.join(",") },
         fetch: { signal },
       });
 
@@ -262,6 +276,11 @@ export type DecisionsPageOptionsInput = {
   /** One-based; at most `caseLawDeepestPage(pageSize)`. */
   page: number;
   pageSize?: PublicLawPageSize | undefined;
+  /**
+   * The reader's languages (`useCaseLawReadingLanguages`). A loader, which
+   * cannot run hooks, reads the UI language alone.
+   */
+  readingLanguages?: readonly string[] | undefined;
 };
 
 /**
@@ -273,9 +292,16 @@ export const decisionsPageOptions = ({
   filters,
   page,
   pageSize = DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  readingLanguages = defaultCaseLawReadingLanguages(),
 }: DecisionsPageOptionsInput) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.page({ ...filters, page, pageSize }),
+    queryKey: caseLawDecisionKeys.page({
+      ...filters,
+      page,
+      pageSize,
+      readingLanguages:
+        filters.search === undefined ? readingLanguages : undefined,
+    }),
     queryFn: async ({ signal }) => {
       const offset = (page - 1) * pageSize;
 
@@ -397,6 +423,7 @@ export const decisionsPageOptions = ({
           ...(filters.language !== undefined && {
             language: filters.language,
           }),
+          readingLanguages: readingLanguages.join(","),
         },
         fetch: {
           signal: AbortSignal.any([
@@ -449,9 +476,15 @@ export const usePrefetchedDecisionPage = ({
   filters,
   page,
   pageSize,
+  readingLanguages,
 }: UsePrefetchedDecisionPageInput) => {
   useQuery({
-    ...decisionsPageOptions({ filters, page: page ?? 1, pageSize }),
+    ...decisionsPageOptions({
+      filters,
+      page: page ?? 1,
+      pageSize,
+      readingLanguages,
+    }),
     enabled: page !== null,
     notifyOnChangeProps: [],
   });

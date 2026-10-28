@@ -913,6 +913,10 @@
       },
       "errors": {
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found, so it cannot be analyzed.",
+        "documentUnparseable": "The text of this decision could not be read, so it cannot be analyzed.",
+        "languageUnsupported": "AI analysis is available only for decisions in {languages}.",
+        "openLanguageVersion": "Open the {language} version",
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
         "retryAfter": "You can try again after {time}.",

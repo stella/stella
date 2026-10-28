@@ -52,7 +52,11 @@ const multilingual: Decision = {
 
 describe("the version a case-number link names", () => {
   test("a decision with no other version is its own target", () => {
-    expect(preferredDecisionTarget(monolingual, { uiLocale: "en" })).toEqual({
+    expect(
+      preferredDecisionTarget(monolingual, {
+        readingLanguages: ["en", "cs", "fr"],
+      }),
+    ).toEqual({
       caseNumber: "III. ÚS 649/05",
       country: "CZE",
       court: "Ústavní soud",
@@ -64,7 +68,9 @@ describe("the version a case-number link names", () => {
   });
 
   test("the reader's language wins over the version that matched", () => {
-    const target = preferredDecisionTarget(multilingual, { uiLocale: "en" });
+    const target = preferredDecisionTarget(multilingual, {
+      readingLanguages: ["en", "cs", "fr"],
+    });
 
     expect(target.decisionId).toBe("decision-en");
     expect(target.slug).toBe("c-123-20-en");
@@ -75,7 +81,9 @@ describe("the version a case-number link names", () => {
   // send the link to a path the chosen version does not live at.
   test("the link the target builds addresses the chosen version", () => {
     const params = createCaseLawDecisionRouteParams(
-      preferredDecisionTarget(multilingual, { uiLocale: "en" }),
+      preferredDecisionTarget(multilingual, {
+        readingLanguages: ["en", "cs", "fr"],
+      }),
     );
 
     expect(params.language).toBe("en");
@@ -93,7 +101,7 @@ describe("the words the reader was searching for", () => {
     });
     const caseNumber = preferredDecisionTarget(multilingual, {
       searchQuery: "náhrada škody",
-      uiLocale: "en",
+      readingLanguages: ["en", "cs", "fr"],
     });
 
     expect(passage.searchQuery).toBe("náhrada škody");
@@ -108,7 +116,7 @@ describe("the words the reader was searching for", () => {
       "searchQuery" in
         preferredDecisionTarget(multilingual, {
           searchQuery: "",
-          uiLocale: "en",
+          readingLanguages: ["en", "cs", "fr"],
         }),
     ).toBe(false);
   });
