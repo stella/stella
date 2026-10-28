@@ -11,9 +11,25 @@
 // server; and opens the app. Ctrl-C stops Metro, and the simulator too when
 // this run booted it, so nothing keeps running once you are done.
 //
+//   bun run mobile:sim --device iPad    another simulator, by part of its name
+//   bun run mobile:sim stop             ends the run from another terminal
+//
+// A simulator costs the machine several gigabytes, so a run boots one and
+// gives it back. It records itself in `.stella-dev/simulator-run.json`;
+// `stop` signals that run, which stops Metro and powers off the simulator it
+// booted, as Ctrl-C does, and then quits Simulator and Xcode's DeviceHub
+// once no simulator is left booted.
+//
 // `STELLA_SERVER_URL` names another server than the stack's API.
 
 import { Result } from "better-result";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -24,6 +40,8 @@ const APP_ROOT = path.resolve(import.meta.dir, "..");
 const REPO_ROOT = path.resolve(APP_ROOT, "../..");
 const DEVELOPMENT_IDENTIFIER = "app.stll.mobile.dev";
 const METRO_READY_TIMEOUT_MS = 180_000;
+/** The running `mobile:sim` of this checkout, for `stop` to signal. */
+const RUN_PATH = path.join(REPO_ROOT, ".stella-dev", "simulator-run.json");
 
 const simulatorListingSchema = v.object({
   devices: v.record(
@@ -65,11 +83,14 @@ const newerFirst = (a: readonly number[], b: readonly number[]) => {
 /**
  * The simulator to run on: an iPhone that is already booted, so a second
  * device never starts beside it, otherwise an iPhone on the newest iOS
- * runtime. Null when no iPhone simulator is installed.
+ * runtime. With `named`, the same among the simulators whose name contains
+ * it ("iPad", "Duo"). Null when none is installed.
  */
 export const chooseSimulator = (
   listing: SimulatorListing,
+  named = "iPhone",
 ): SimulatorChoice | null => {
+  const wanted = named.toLowerCase();
   const runtimes = Object.entries(listing.devices)
     .flatMap(([runtime, devices]) => {
       const version = iosRuntimeVersion(runtime);
@@ -77,7 +98,7 @@ export const chooseSimulator = (
     })
     .toSorted((a, b) => newerFirst(a.version, b.version));
   const iPhones = runtimes.flatMap(({ devices }) =>
-    devices.filter((device) => device.name.startsWith("iPhone")),
+    devices.filter((device) => device.name.toLowerCase().includes(wanted)),
   );
   const chosen =
     iPhones.find((device) => device.state === "Booted") ?? iPhones[0];
@@ -171,9 +192,67 @@ const fail = (message: string) => {
   return 1;
 };
 
+/** The value after `--device`, or undefined. */
+export const deviceArgument = (args: readonly string[]): string | undefined => {
+  const index = args.indexOf("--device");
+  return index === -1 ? undefined : args[index + 1];
+};
+
+const runRecordSchema = v.object({ pid: v.number() });
+
+/** Whether a process with this id is alive. */
+const alive = (pid: number) => Result.try(() => process.kill(pid, 0)).isOk();
+
+const bootedCount = async () => {
+  const listing = await run(["xcrun", "simctl", "list", "devices", "booted"]);
+  return (listing.stdout.match(/\(Booted\)/gu) ?? []).length;
+};
+
+/**
+ * Ends this checkout's running `mobile:sim` as Ctrl-C would: it stops Metro
+ * and powers off the simulator it booted. Then, with no simulator left
+ * booted, quits Simulator and DeviceHub, which otherwise keep their memory.
+ */
+const stopRun = async (): Promise<number> => {
+  const record = existsSync(RUN_PATH)
+    ? v.safeParse(
+        v.pipe(v.string(), v.parseJson(), runRecordSchema),
+        readFileSync(RUN_PATH, "utf-8"),
+      )
+    : null;
+  if (record?.success === true && alive(record.output.pid)) {
+    const { pid } = record.output;
+    process.stdout.write(`Stopping mobile:sim (pid ${String(pid)}).\n`);
+    process.kill(pid, "SIGTERM");
+    for (let waited = 0; waited < 60 && alive(pid); waited += 1) {
+      await Bun.sleep(500);
+    }
+  } else {
+    process.stdout.write("No mobile:sim is running for this checkout.\n");
+  }
+  rmSync(RUN_PATH, { force: true });
+  const left = await bootedCount();
+  if (left === 0) {
+    await run(["osascript", "-e", 'quit app "Simulator"']);
+    await run(["osascript", "-e", 'quit app "DeviceHub"']);
+    process.stdout.write(
+      "No simulator is booted; Simulator and DeviceHub quit.\n",
+    );
+  } else {
+    process.stdout.write(
+      `${String(left)} simulator(s) this run did not boot are still booted; power them off in Simulator (File > Shut Down) when no one uses them.\n`,
+    );
+  }
+  return 0;
+};
+
 const main = async (): Promise<number> => {
   if (process.platform !== "darwin") {
     return fail("The iOS simulator runs only on macOS.");
+  }
+  const args = process.argv.slice(2);
+  if (args[0] === "stop") {
+    return await stopRun();
   }
   const server = serverUrl(
     process.env["STELLA_SERVER_URL"],
@@ -200,12 +279,15 @@ const main = async (): Promise<number> => {
       `Could not list simulators; is Xcode installed? ${listing.stderr}`,
     );
   }
-  const simulator = chooseSimulator(parsed.output);
+  const named = deviceArgument(args);
+  const simulator = chooseSimulator(parsed.output, named);
   if (simulator === null) {
     return fail(
-      "No iPhone simulator is installed. Add an iOS runtime in Xcode (Settings > Components).",
+      `No ${named ?? "iPhone"} simulator is installed. Add an iOS runtime in Xcode (Settings > Components).`,
     );
   }
+  mkdirSync(path.dirname(RUN_PATH), { recursive: true });
+  writeFileSync(RUN_PATH, `${JSON.stringify({ pid: process.pid })}\n`);
 
   const bootedHere = !simulator.booted;
   const cleanUp = async () => {
@@ -271,6 +353,7 @@ const main = async (): Promise<number> => {
     metro.kill("SIGINT");
     await metro.exited;
     await cleanUp();
+    rmSync(RUN_PATH, { force: true });
   };
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {

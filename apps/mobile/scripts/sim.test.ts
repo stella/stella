@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { chooseSimulator, developmentClientUrl, serverUrl } from "./sim";
+import {
+  chooseSimulator,
+  developmentClientUrl,
+  deviceArgument,
+  serverUrl,
+} from "./sim";
 import type { SimulatorListing } from "./sim";
 
 const RUNTIME = "com.apple.CoreSimulator.SimRuntime";
@@ -54,6 +59,32 @@ describe("the simulator a run uses", () => {
         },
       }),
     ).toBeNull();
+  });
+});
+
+describe("another simulator by name", () => {
+  const listing: SimulatorListing = {
+    devices: {
+      [`${RUNTIME}.iOS-27-1`]: [
+        device("phone", "iPhone 18 Pro"),
+        device("ipad", "iPad Pro 11-inch (M5)"),
+        device("duo", "iPhone Duo"),
+      ],
+    },
+  };
+
+  test("part of the name, in any case, picks it", () => {
+    expect(chooseSimulator(listing, "ipad")?.udid).toBe("ipad");
+    expect(chooseSimulator(listing, "Duo")?.udid).toBe("duo");
+  });
+
+  test("a name no simulator has means none", () => {
+    expect(chooseSimulator(listing, "Vision")).toBeNull();
+  });
+
+  test("--device names it on the command line", () => {
+    expect(deviceArgument(["--device", "iPad"])).toBe("iPad");
+    expect(deviceArgument([])).toBeUndefined();
   });
 });
 
