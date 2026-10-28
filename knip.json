@@ -228,7 +228,10 @@
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],
   "ignoreIssues": {
-    "packages/infosoud/src/constants.ts": ["duplicates"]
+    "packages/infosoud/src/constants.ts": ["duplicates"],
+    // The web's whole icon module, regenerated for the app from
+    // packages/ui/src/icons.ts; the app draws only some of its glyphs.
+    "apps/mobile/src/icons.gen.ts": ["exports", "types"]
   },
   "exclude": ["exports", "types"],
   "ignoreDependencies": [

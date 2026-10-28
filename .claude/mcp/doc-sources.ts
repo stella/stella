@@ -612,6 +612,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "scslre",
     ["https://raw.githubusercontent.com/RunDevelopment/scslre/HEAD/llms.txt"],
   ],
+  [
+    "sharp",
+    [
+      "https://sharp.pixelplumbing.com/llms.txt",
+      "https://raw.githubusercontent.com/lovell/sharp/HEAD/llms.txt",
+    ],
+  ],
   ["sherif", ["https://raw.githubusercontent.com/QuiiBz/sherif/HEAD/llms.txt"]],
   [
     "slimdom",

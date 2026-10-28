@@ -13,7 +13,7 @@ import {
  */
 
 /** stella's own service, which every build signs in to unless told otherwise. */
-export const STELLA_SERVER_URL = "https://api.stll.app";
+const STELLA_SERVER_URL = "https://api.stll.app";
 
 /**
  * The server sign-in uses: stella's own, or the one a build names (a local

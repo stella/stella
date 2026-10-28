@@ -1,35 +1,6 @@
-import type { ReactNode } from "react";
-
-import { ScrollView, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { Text } from "@/components/ui/text";
-
-type EmptyStateScreenProps = {
-  children?: ReactNode;
-  emptyDescription: string;
-  emptyTitle: string;
-};
-
-/**
- * A tab with nothing to list yet. Its name is the tab bar's to say, so the
- * screen carries no heading of its own.
- */
-export const EmptyStateScreen = ({
-  children,
-  emptyDescription,
-  emptyTitle,
-}: EmptyStateScreenProps) => (
-  <View className="bg-background flex-1">
-    <ScrollView
-      className="flex-1"
-      contentContainerStyle={screenStyles.content}
-      contentInsetAdjustmentBehavior="automatic"
-    >
-      {children}
-      <EmptyCard description={emptyDescription} title={emptyTitle} />
-    </ScrollView>
-  </View>
-);
 
 /** What a list shows when it has nothing, centred in a quiet card. */
 export const EmptyCard = ({
@@ -50,7 +21,7 @@ export const EmptyCard = ({
  * The widest a column of content grows, as t3code caps its chat: on an iPad
  * or a wide pane, lines and rows stay readable and the content centres.
  */
-export const READABLE_MAX_WIDTH = 960;
+const READABLE_MAX_WIDTH = 960;
 
 export const screenStyles = StyleSheet.create({
   content: {

@@ -40,7 +40,7 @@ export type ReaderBlock =
       readonly rows: readonly ReaderTableRow[];
     };
 
-export type ReaderTableRow = {
+type ReaderTableRow = {
   readonly id: string;
   readonly cells: readonly { readonly id: string; readonly text: string }[];
 };

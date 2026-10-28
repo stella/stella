@@ -5,7 +5,7 @@ import * as v from "valibot";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
-import type { ApiError, Load } from "@/state/api-request";
+import type { ApiError } from "@/state/api-request";
 
 /** The person's own timers in the active organization. */
 const TIMERS_PATH = "/v1/time-timers";
@@ -27,8 +27,6 @@ const timerSchema = v.object({
 const timersPageSchema = v.object({ items: v.array(timerSchema) });
 
 export type Timer = v.InferOutput<typeof timerSchema>;
-
-export type TimersLoad = Load<Timer[]>;
 
 const timerPath = (timerId: string, action?: string) =>
   `${TIMERS_PATH}/${encodeURIComponent(timerId)}${action === undefined ? "" : `/${action}`}`;

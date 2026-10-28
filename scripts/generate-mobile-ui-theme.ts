@@ -173,7 +173,7 @@ export const renderMobileUiTheme = (
 export const extraTextSizesOf = (css: string): string[] => {
   const start = css.indexOf("@theme inline {");
   const block = css.slice(start, css.indexOf("\n}", start));
-  return [...block.matchAll(/(--text-[\w-]+)\s*:\s*([^;]+);/gu)].flatMap(
+  return [...block.matchAll(/(--text-[\w-]+)\s*:([^;]+);/gu)].flatMap(
     ([, name, value]) =>
       name === undefined || value === undefined
         ? []

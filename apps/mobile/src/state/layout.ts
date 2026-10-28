@@ -2,8 +2,8 @@
  * Below this window size the app shows one column, as on a phone: an iPad
  * in Slide Over or a narrow split, or a folded phone.
  */
-export const SPLIT_LAYOUT_MIN_WIDTH = 720;
-export const SPLIT_LAYOUT_MIN_HEIGHT = 600;
+const SPLIT_LAYOUT_MIN_WIDTH = 720;
+const SPLIT_LAYOUT_MIN_HEIGHT = 600;
 
 /** The list column's bounds beside a selection. */
 const LIST_PANE_MIN_WIDTH = 300;
