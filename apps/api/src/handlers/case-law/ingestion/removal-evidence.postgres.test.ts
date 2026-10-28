@@ -25,6 +25,7 @@ import { REMOVAL_SUPERSEDED_REASON } from "@/api/lib/legal-search/removal-eviden
 import { REMOVAL_RETRY_KIND } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { publisherRemovalProbe } from "@/api/tests/helpers/publisher-removal-probe";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -103,10 +104,10 @@ if (!databaseUrl || !runPostgresTests) {
         signal: new AbortController().signal,
         now: () => NOW,
         clock: () => elapsed,
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           elapsed = REMOVAL_SWEEP_TIME_BUDGET_MS;
           return await absent();
-        },
+        }),
       });
       expect(result.unwrap()).toMatchObject({
         type: "budget",
@@ -149,9 +150,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
     const run = async (options: {
       sourceId: SafeId<"caseLawSource">;
-      probe: NonNullable<
-        Parameters<typeof reconcilePublisherRemovals>[0]["probe"]
-      >;
+      probe: ReturnType<typeof publisherRemovalProbe>;
       remove: typeof removePublisherDecision;
       now?: Date;
     }) =>
@@ -213,13 +212,13 @@ if (!databaseUrl || !runPostgresTests) {
           await run({
             sourceId,
             remove: removeWithCount(erased),
-            probe: async () => {
+            probe: publisherRemovalProbe(async () => {
               probes++;
               if (boundary === "transaction") {
                 await update();
               }
               return await absent();
-            },
+            }),
           });
           await expectLive(id);
           expect(erased).toEqual([]);
@@ -239,10 +238,10 @@ if (!databaseUrl || !runPostgresTests) {
             sourceId,
             now: new Date(NOW.getTime() + 60_000),
             remove: removeWithCount(erased),
-            probe: async (identity) => {
+            probe: publisherRemovalProbe(async (identity) => {
               identities.push(identity);
               return await present();
-            },
+            }),
           });
           expect(identities).toEqual([
             change === "identity" ? "uksc/2024/new" : "uksc/2024/old",
@@ -258,7 +257,11 @@ if (!databaseUrl || !runPostgresTests) {
       const { sourceId, id } = await seed();
       const queued = await queueAbsence(sourceId);
       const erased: string[] = [];
-      await run({ sourceId, probe: present, remove: removeWithCount(erased) });
+      await run({
+        sourceId,
+        probe: publisherRemovalProbe(present),
+        remove: removeWithCount(erased),
+      });
       await expectLive(id);
       expect(erased).toEqual([]);
       expect((await retryItem(sourceId))?.payload).toMatchObject({
@@ -269,7 +272,7 @@ if (!databaseUrl || !runPostgresTests) {
       await run({
         sourceId,
         now: new Date(NOW.getTime() + 60_000),
-        probe: present,
+        probe: publisherRemovalProbe(present),
         remove: removeWithCount(erased),
       });
       expect(await retryItem(sourceId)).toBeUndefined();
@@ -284,7 +287,11 @@ if (!databaseUrl || !runPostgresTests) {
         .values({ retiredDecisionId: id, canonicalDecisionId: canonicalId });
       const erased: string[] = [];
       try {
-        await run({ sourceId, probe: absent, remove: removeWithCount(erased) });
+        await run({
+          sourceId,
+          probe: publisherRemovalProbe(absent),
+          remove: removeWithCount(erased),
+        });
         expect(erased).toEqual([]);
         await expectLive(canonicalId);
         expect((await retryItem(sourceId))?.payload).toMatchObject({
@@ -335,7 +342,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
           return removed;
         },
-        probe: async (identity) => {
+        probe: publisherRemovalProbe(async (identity) => {
           if (identity.endsWith("slow-discovery")) {
             order.push("discovery");
             elapsed = REMOVAL_SWEEP_TIME_BUDGET_MS;
@@ -343,7 +350,7 @@ if (!databaseUrl || !runPostgresTests) {
           }
           order.push("confirmation");
           return await absent();
-        },
+        }),
       });
       expect(result.unwrap()).toMatchObject({
         type: "budget",

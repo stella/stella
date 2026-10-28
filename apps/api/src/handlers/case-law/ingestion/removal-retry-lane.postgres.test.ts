@@ -2,7 +2,6 @@
  * Publisher removal retries have a dedicated durable lane. Run only
  * against the migrated Postgres test database; skipped elsewhere.
  */
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, getTableName, isNull, sql } from "drizzle-orm";
 
@@ -38,6 +37,7 @@ import { REMOVAL_RETRY_KIND } from "@/api/lib/legal-search/removal-reconciliatio
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { publisherRemovalProbe } from "@/api/tests/helpers/publisher-removal-probe";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -111,10 +111,7 @@ if (!databaseUrl || !runPostgresTests) {
     }: {
       sourceId: SafeId<"caseLawSource">;
       now: Date;
-      probe: (
-        identity: string,
-        signal: AbortSignal,
-      ) => Promise<PublisherRemovalRead>;
+      probe: ReturnType<typeof publisherRemovalProbe>;
       remove?: Parameters<typeof reconcilePublisherRemovals>[0]["remove"];
     }) =>
       await reconcilePublisherRemovals({
@@ -183,10 +180,10 @@ if (!databaseUrl || !runPostgresTests) {
       const first = await reconcile({
         sourceId,
         now: FIXED_NOW,
-        probe: async (identity) => {
+        probe: publisherRemovalProbe(async (identity) => {
           probes.push(identity);
           return { type: "absent", evidence: "publisher-typed-absence" };
-        },
+        }),
         remove: makeRemove(async () => {
           sweeps++;
           return { type: "swept", legacy: "none" };
@@ -243,10 +240,10 @@ if (!databaseUrl || !runPostgresTests) {
       const retried = await reconcile({
         sourceId,
         now: new Date(FIXED_NOW.getTime() + 60_000),
-        probe: async (identity) => {
+        probe: publisherRemovalProbe(async (identity) => {
           probes.push(identity);
           return { type: "present", value: null };
-        },
+        }),
       });
       expect(retried.unwrap()).toMatchObject({
         type: "not-due",
@@ -332,10 +329,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         now: FIXED_NOW,
         remove,
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           probes++;
           return { type: "absent", evidence: "publisher-typed-absence" };
-        },
+        }),
       });
       expect(first.unwrap()).toMatchObject({
         type: "complete",
@@ -378,7 +375,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         now: FIXED_NOW,
         remove,
-        probe: async () => ({ type: "present", value: null }),
+        probe: publisherRemovalProbe(async () => ({
+          type: "present",
+          value: null,
+        })),
       });
       expect(rediscovered.unwrap()).toMatchObject({
         type: "complete",
@@ -420,10 +420,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         now: new Date(FIXED_NOW.getTime() + 60_000),
         remove,
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           probes++;
           return { type: "present", value: null };
-        },
+        }),
       });
       expect(retry.unwrap()).toMatchObject({
         type: "not-due",
@@ -450,10 +450,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         now: new Date(FIXED_NOW.getTime() + 60_000),
         remove,
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           probes++;
           return { type: "present", value: null };
-        },
+        }),
       });
       expect(replay.unwrap()).toMatchObject({
         type: "not-due",
@@ -520,34 +520,32 @@ if (!databaseUrl || !runPostgresTests) {
       const resumeAt = new Date(FIXED_NOW.getTime() + 30_000 + 2 * 3_600_000);
       let currentTime = FIXED_NOW;
       let probes = 0;
-      const probe = async (identity: string): Promise<PublisherRemovalRead> => {
-        probes++;
-        if (identity.endsWith("source-refused")) {
-          currentTime = new Date(FIXED_NOW.getTime() + 30_000);
-          const originalFetch = globalThis.fetch;
-          globalThis.fetch = asFetchMock(
-            async () =>
-              new Response("rate limit", {
-                status: 429,
-                headers: { "Retry-After": "7200" },
-              }),
-          );
-          const observed = await Result.tryPromise({
-            try: async () =>
-              await probeUkFclRemoval(
-                "uksc/2024/1",
-                new AbortController().signal,
-              ),
-            catch: (error: unknown) => error,
-          });
-          globalThis.fetch = originalFetch;
-          if (observed.isErr()) {
-            throw observed.error;
+      const probe = publisherRemovalProbe(
+        async (identity: string): Promise<PublisherRemovalRead> => {
+          probes++;
+          if (identity.endsWith("source-refused")) {
+            currentTime = new Date(FIXED_NOW.getTime() + 30_000);
+            const originalFetch = globalThis.fetch;
+            globalThis.fetch = asFetchMock(
+              async () =>
+                new Response("rate limit", {
+                  status: 429,
+                  headers: { "Retry-After": "7200" },
+                }),
+            );
+            const observed = await probeUkFclRemoval(
+              "uksc/2024/1",
+              new AbortController().signal,
+            );
+            globalThis.fetch = originalFetch;
+            if (observed.isErr()) {
+              throw observed.error;
+            }
+            return observed.value;
           }
-          return observed.value;
-        }
-        return { type: "absent", evidence: "publisher-typed-absence" };
-      };
+          return { type: "absent", evidence: "publisher-typed-absence" };
+        },
+      );
       const paused = await reconcilePublisherRemovals({
         scopedDb,
         sourceId,
@@ -588,12 +586,12 @@ if (!databaseUrl || !runPostgresTests) {
       const resumed = await reconcile({
         sourceId,
         now: resumeAt,
-        probe: async (identity) => {
+        probe: publisherRemovalProbe(async (identity) => {
           probes++;
           return identity.endsWith("source-after")
             ? { type: "absent", evidence: "publisher-typed-absence" }
             : { type: "present", value: null };
-        },
+        }),
         remove: makeRemove(async () => {
           erasures++;
           return { type: "swept", legacy: "none" };
@@ -634,12 +632,12 @@ if (!databaseUrl || !runPostgresTests) {
       const first = await reconcile({
         sourceId,
         now: FIXED_NOW,
-        probe: async () => ({
+        probe: publisherRemovalProbe(async () => ({
           type: "refused",
           scope: "document",
           status: 403,
           cause: { kind: "http-status", retryAfter: null },
-        }),
+        })),
       });
       expect(first.unwrap()).toMatchObject({
         type: "complete",
@@ -650,7 +648,7 @@ if (!databaseUrl || !runPostgresTests) {
       const retry = await reconcile({
         sourceId,
         now: attemptAt,
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           throw new PublisherRateLimitRefusalError({
             adapterKey: "uk-fcl",
             publisherKey: "fcl-uk",
@@ -659,7 +657,7 @@ if (!databaseUrl || !runPostgresTests) {
             retryAfter: "7200",
             cooldownUntilEpochMs: attemptAt.getTime() + 15 * 60_000,
           });
-        },
+        }),
       });
       const resumeAt = new Date(attemptAt.getTime() + 2 * 3_600_000);
       expect(retry.unwrap()).toMatchObject({
@@ -681,7 +679,10 @@ if (!databaseUrl || !runPostgresTests) {
       const resumed = await reconcile({
         sourceId,
         now: resumeAt,
-        probe: async () => ({ type: "present", value: null }),
+        probe: publisherRemovalProbe(async () => ({
+          type: "present",
+          value: null,
+        })),
       });
       expect(resumed.unwrap()).toMatchObject({
         type: "not-due",
@@ -703,7 +704,10 @@ if (!databaseUrl || !runPostgresTests) {
       const queued = await reconcile({
         sourceId,
         now: FIXED_NOW,
-        probe: async () => ({ type: "present", value: null }),
+        probe: publisherRemovalProbe(async () => ({
+          type: "present",
+          value: null,
+        })),
       });
       expect(queued.unwrap()).toMatchObject({ checked: 1, retried: 0 });
       const listingId = createSafeId<"caseLawReconciliationItem">();
@@ -764,10 +768,12 @@ if (!databaseUrl || !runPostgresTests) {
           language: "en",
         })),
       );
-      const probe = async (): Promise<PublisherRemovalRead> => ({
-        type: "present",
-        value: null,
-      });
+      const probe = publisherRemovalProbe(
+        async (): Promise<PublisherRemovalRead> => ({
+          type: "present",
+          value: null,
+        }),
+      );
       const discovered = await reconcile({ sourceId, now: FIXED_NOW, probe });
       expect(discovered.unwrap()).toMatchObject({
         type: "complete",
@@ -837,7 +843,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         signal: AbortSignal.timeout(10_000),
         now: () => FIXED_NOW,
-        probe: async () => ({ type: "present", value: null }),
+        probe: publisherRemovalProbe(async () => ({
+          type: "present",
+          value: null,
+        })),
       });
       expect(
         failed.isErr() ? Bun.inspect(failed.error) : "unexpected success",
@@ -867,7 +876,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId,
         signal: AbortSignal.timeout(10_000),
         now: () => FIXED_NOW,
-        probe: async () => ({ type: "present", value: null }),
+        probe: publisherRemovalProbe(async () => ({
+          type: "present",
+          value: null,
+        })),
       });
       expect(replay.unwrap()).toMatchObject({
         type: "complete",

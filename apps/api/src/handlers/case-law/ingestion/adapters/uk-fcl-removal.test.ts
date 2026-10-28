@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
@@ -22,10 +21,9 @@ for (const status of [200, 204, 401, 403, 404, 410, 451] as const) {
         status,
       });
     });
-    const outcome = await probeUkFclRemoval(
-      "ewhc/kb/2026/1",
-      new AbortController().signal,
-    );
+    const outcome = (
+      await probeUkFclRemoval("ewhc/kb/2026/1", new AbortController().signal)
+    ).unwrap();
     expect(urls).toEqual([
       "https://caselaw.nationalarchives.gov.uk/ewhc/kb/2026/1/data.xml",
     ]);
@@ -52,7 +50,9 @@ test("an invalid publisher identity performs no request", async () => {
     return new Response("fixture");
   });
   expect(
-    (await probeUkFclRemoval("../document", new AbortController().signal)).type,
+    (
+      await probeUkFclRemoval("../document", new AbortController().signal)
+    ).unwrap().type,
   ).toBe("unprobeable");
   expect(calls).toBe(0);
 });
@@ -76,11 +76,10 @@ for (const response of [
       requests++;
       return new Response(response.body, response);
     });
-    const observed = await Result.tryPromise({
-      try: async () =>
-        await probeUkFclRemoval("uksc/2024/1", new AbortController().signal),
-      catch: (error: unknown) => error,
-    });
+    const observed = await probeUkFclRemoval(
+      "uksc/2024/1",
+      new AbortController().signal,
+    );
     expect(observed.isErr()).toBe(true);
     if (observed.isErr()) {
       expect(observed.error).toBeInstanceOf(AdapterFetchError);

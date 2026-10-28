@@ -30,6 +30,7 @@ import {
   caseLawJudges,
   caseLawProvisionCitations,
   caseLawProvisionExtractions,
+  caseLawProvisionExtractionScopes,
   caseLawRawSweeps,
   caseLawReconciliationItems,
   caseLawRemovalReconciliationItems,
@@ -49,7 +50,6 @@ import {
   REMOVAL_RECONCILIATION_CONFIG_KEY,
   REMOVAL_SWEEP_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
-import type { PublisherRemovalRead } from "@/api/handlers/case-law/ingestion/removal-reconciliation";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
 import { removePublisherDecision } from "@/api/handlers/case-law/publisher-removal";
@@ -62,6 +62,7 @@ import {
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
+import { publisherRemovalProbe } from "@/api/tests/helpers/publisher-removal-probe";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -157,6 +158,9 @@ if (!databaseUrl || !runPostgresTests) {
         ceiling: decisionId,
       });
 
+    let scopeRestore:
+      | Pick<typeof caseLawProvisionExtractionScopes.$inferSelect, "status">
+      | undefined;
     const redactWithLocalRawSweep = async (
       options: Parameters<typeof redactCaseLawDecisionWithSupplementHolders>[0],
     ) =>
@@ -185,10 +189,7 @@ if (!databaseUrl || !runPostgresTests) {
       now,
       ...options
     }: {
-      probe: (
-        identity: string,
-        signal: AbortSignal,
-      ) => Promise<PublisherRemovalRead>;
+      probe: ReturnType<typeof publisherRemovalProbe>;
       remove?: typeof removeWithLocalRawSweep;
       now?: Date;
     }) =>
@@ -201,6 +202,20 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
     cleanUp(async () => {
+      if (scopeRestore !== undefined) {
+        await db
+          .update(caseLawProvisionExtractionScopes)
+          .set({
+            status: scopeRestore.status,
+            generation: sql`${caseLawProvisionExtractionScopes.generation} + 1`,
+          })
+          .where(
+            and(
+              eq(caseLawProvisionExtractionScopes.country, "GBR"),
+              eq(caseLawProvisionExtractionScopes.language, "en"),
+            ),
+          );
+      }
       await db
         .delete(caseLawDecisionAliases)
         .where(eq(caseLawDecisionAliases.retiredDecisionId, retiredAliasId));
@@ -479,6 +494,39 @@ if (!databaseUrl || !runPostgresTests) {
           enqueueReason: "input",
         })
         .onConflictDoNothing();
+      scopeRestore = {
+        status:
+          (
+            await db
+              .select({ status: caseLawProvisionExtractionScopes.status })
+              .from(caseLawProvisionExtractionScopes)
+              .where(
+                and(
+                  eq(caseLawProvisionExtractionScopes.country, "GBR"),
+                  eq(caseLawProvisionExtractionScopes.language, "en"),
+                ),
+              )
+              .limit(1)
+          ).at(0)?.status ?? "retired",
+      };
+      await db
+        .insert(caseLawProvisionExtractionScopes)
+        .values({
+          country: "GBR",
+          language: "en",
+          status: "active",
+          generation: 1,
+        })
+        .onConflictDoUpdate({
+          target: [
+            caseLawProvisionExtractionScopes.country,
+            caseLawProvisionExtractionScopes.language,
+          ],
+          set: {
+            status: "active",
+            generation: sql`${caseLawProvisionExtractionScopes.generation} + 1`,
+          },
+        });
       const ast = {
         version: 1,
         source: {
@@ -560,10 +608,10 @@ if (!databaseUrl || !runPostgresTests) {
 
       rawSweeps = 0;
       const failedCorpusDelete = await reconcile({
-        probe: async () => ({
+        probe: publisherRemovalProbe(async () => ({
           type: "absent",
           evidence: "publisher-typed-absence",
-        }),
+        })),
         remove: removeWithLocalRawSweep,
       });
       expect(failedCorpusDelete.unwrap()).toMatchObject({
@@ -631,9 +679,9 @@ if (!databaseUrl || !runPostgresTests) {
 
       currentNow = new Date(cycleNow.getTime() + 2 * 60_000);
       const crashedAfterRemoval = await reconcile({
-        probe: async (identity) => {
+        probe: publisherRemovalProbe(async (identity) => {
           throw new Error(`redacted retry must not probe ${identity}`);
-        },
+        }),
         remove: async (options) =>
           await removeWithLocalRawSweep(options).then((outcome) => {
             if (outcome.isOk() && outcome.value.type === "removed") {
@@ -660,10 +708,10 @@ if (!databaseUrl || !runPostgresTests) {
       let replayProbes = 0;
       currentNow = new Date(cycleNow.getTime() + 10 * 60_000);
       const removed = await reconcile({
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           replayProbes++;
           return { type: "present", value: null };
-        },
+        }),
         remove: removeWithLocalRawSweep,
       });
 
@@ -700,10 +748,10 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
       ).toEqual([]);
       const fixedPoint = await reconcile({
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           replayProbes++;
           return { type: "present", value: null };
-        },
+        }),
         remove: removeWithLocalRawSweep,
       });
       expect(fixedPoint.unwrap()).toMatchObject({
@@ -830,6 +878,7 @@ if (!databaseUrl || !runPostgresTests) {
           lane: "repair",
           workStatus: "eligible",
           enqueueReason: "scope_retired",
+          dueAt: expect.any(Date),
         },
       ]);
       expect(
@@ -1004,12 +1053,12 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId: isolatedSourceId,
         signal: AbortSignal.timeout(10_000),
         now: () => cycleNow,
-        probe: async () => ({
+        probe: publisherRemovalProbe(async () => ({
           type: "refused",
           status: 403,
           scope: "document",
           cause: { kind: "http-status", retryAfter: null },
-        }),
+        })),
       });
 
       expect(outcome.unwrap()).toMatchObject({
@@ -1023,10 +1072,10 @@ if (!databaseUrl || !runPostgresTests) {
         sourceId: isolatedSourceId,
         signal: AbortSignal.timeout(10_000),
         now: () => retryAt,
-        probe: async () => ({
+        probe: publisherRemovalProbe(async () => ({
           type: "unavailable",
           cause: { kind: "thrown", error: "publisher timed out" },
-        }),
+        })),
       });
       expect(transient.unwrap()).toMatchObject({
         type: "not-due",
@@ -1097,10 +1146,10 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         sourceId: disabledSourceId,
         signal: AbortSignal.timeout(10_000),
-        probe: async () => {
+        probe: publisherRemovalProbe(async () => {
           probes++;
           return { type: "absent", evidence: "publisher-typed-absence" };
-        },
+        }),
       });
 
       expect(outcome.unwrap()).toMatchObject({
@@ -1153,10 +1202,10 @@ if (!databaseUrl || !runPostgresTests) {
           sourceId: pagedSourceId,
           signal: AbortSignal.timeout(10_000),
           now: () => now,
-          probe: async () => {
+          probe: publisherRemovalProbe(async () => {
             probes++;
             return { type: "present", value: null };
-          },
+          }),
         });
 
       const firstPage = await run(cycleNow);

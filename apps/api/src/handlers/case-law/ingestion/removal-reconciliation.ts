@@ -22,6 +22,7 @@ import { lockCaseLawRemovalSource } from "@/api/lib/db/aggregate-lock";
 import type {
   AbsenceEvidence,
   ReadOutcome,
+  ReadRefusalScope,
 } from "@/api/lib/errors/read-outcome";
 import {
   AdapterFetchError,
@@ -70,7 +71,7 @@ export type PublisherRemovalRead =
 type RemovalProbe = (
   identity: string,
   signal: AbortSignal,
-) => Promise<PublisherRemovalRead>;
+) => Promise<Result<PublisherRemovalRead, AdapterFetchError>>;
 export const REMOVAL_SOURCE_PROBES = {
   [ADAPTER_KEYS.UK_FCL]: probeUkFclRemoval,
 } as const satisfies Record<string, RemovalProbe>;
@@ -283,6 +284,35 @@ const publisherRemovalPause = (
   return null;
 };
 
+type RemovalObservation =
+  | Exclude<PublisherRemovalRead, { type: "refused" }>
+  | (Extract<PublisherRemovalRead, { type: "refused" }> & {
+      scope: Exclude<ReadRefusalScope, "source">;
+    });
+const removalObservation = (
+  outcome: PublisherRemovalRead,
+): Result<RemovalObservation, AdapterFetchError> => {
+  if (outcome.type !== "refused") {
+    return Result.ok(outcome);
+  }
+  if (outcome.scope === "source") {
+    return Result.err(
+      unreadPublisherError({
+        outcome,
+        adapterKey: "publisher-removal",
+        cursor: null,
+        message: "Publisher removal source paused",
+      }),
+    );
+  }
+  return Result.ok({
+    type: outcome.type,
+    scope: outcome.scope,
+    status: outcome.status,
+    cause: outcome.cause,
+  });
+};
+
 type ProcessRemovalDecisionOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
@@ -313,7 +343,7 @@ const processRemovalDecision = async ({
       ? mode.item.payload.evidence
       : undefined;
   const result = await Result.tryPromise({
-    try: async (): Promise<RemovalStepOutcome> => {
+    try: async (): Promise<RemovalStepOutcome | SourcePausedOutcome> => {
       const decision = await scopedDb(async (tx) =>
         (
           await tx
@@ -360,7 +390,25 @@ const processRemovalDecision = async ({
           };
         }
         // A queued absence is rechecked before its first irreversible redaction.
-        const observation = await reader(decision.sourceDocumentId, signal);
+        const observed = (
+          await reader(decision.sourceDocumentId, signal)
+        ).andThen(removalObservation);
+        if (observed.isErr()) {
+          const paused = publisherRemovalPause(observed.error, now());
+          if (paused !== null) {
+            return paused;
+          }
+          captureError(
+            observed.error,
+            handlerErrorContext("caseLaw.removal.probe_failed", { decisionId }),
+          );
+          return {
+            type: "pending",
+            operation: "probe",
+            reason: REMOVAL_PENDING_REASON.OPERATION_FAILED,
+          };
+        }
+        const observation = observed.value;
         switch (observation.type) {
           case "present":
             return evidence === undefined
@@ -379,14 +427,6 @@ const processRemovalDecision = async ({
               reason: REMOVAL_PENDING_REASON.PUBLISHER_UNAVAILABLE,
             };
           case "refused":
-            if (observation.scope === "source") {
-              throw unreadPublisherError({
-                outcome: observation,
-                adapterKey: "publisher-removal",
-                cursor: null,
-                message: "Publisher removal source paused",
-              });
-            }
             return {
               type: "pending",
               operation: "probe",
