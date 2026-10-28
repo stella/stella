@@ -671,9 +671,10 @@ const buildSearchFilterFragments = ({
     }
     const foldedTitle = sql`lower(unaccent(arabic_normalize(${title})))`;
     const foldedQuery = sql`lower(unaccent(arabic_normalize(${query.trim()})))`;
+    const foldedQueryStem = sql`regexp_replace(${foldedQuery}, '\\.[^.[:space:]]+$', '')`;
     return sql`CASE
       WHEN ${foldedTitle} = ${foldedQuery} THEN ${SEARCH_TIER.EXACT_TITLE}::int
-      WHEN starts_with(${foldedTitle}, ${foldedQuery}) THEN ${SEARCH_TIER.TITLE_PREFIX}::int
+      WHEN starts_with(${foldedTitle}, ${foldedQueryStem}) THEN ${SEARCH_TIER.TITLE_PREFIX}::int
       WHEN to_tsvector('simple', unaccent(arabic_normalize(${title}))) @@ ${titleTsQuery}
         THEN ${SEARCH_TIER.ALL_TITLE_TOKENS}::int
       ELSE ${SEARCH_TIER.LOOSE}::int
