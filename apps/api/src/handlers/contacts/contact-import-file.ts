@@ -111,7 +111,7 @@ export type ContactImportPreviewRow = {
   warnings: ContactImportWarning[];
 };
 
-export type ContactImportWarning = {
+type ContactImportWarning = {
   code: ContactImportWarningCode;
   column?: string | undefined;
   duplicateOfRowNumber?: number | undefined;
@@ -161,7 +161,7 @@ const normalizeToken = (value: string): string =>
     .toLowerCase()
     .replace(/[^\p{Letter}\p{Number}]+/gu, "");
 
-export const CONTACT_IMPORT_HEADER_VOCABULARIES = {
+const CONTACT_IMPORT_HEADER_VOCABULARIES = {
   en: {
     type: ["type", "kind", "contact type"],
     display_name: ["displayname", "fullname", "name", "contact name"],
@@ -278,22 +278,28 @@ export const CONTACT_IMPORT_HEADER_VOCABULARIES = {
   Partial<Record<ContactImportField, readonly string[]>>
 >;
 
+/** Every (field, alias) pair the vocabularies declare, field by field. */
 const collectHeaderAliases = (
   vocabularies: readonly Partial<
     Record<ContactImportField, readonly string[]>
   >[],
 ) => {
-  const aliases = new Map<ContactImportField, string[]>();
+  const aliases: { field: ContactImportField; alias: string }[] = [];
   for (const field of CONTACT_IMPORT_FIELDS) {
-    aliases.set(
-      field,
-      vocabularies.flatMap((vocabulary) => vocabulary[field] ?? []),
-    );
+    for (const vocabulary of vocabularies) {
+      const labels = vocabulary[field];
+      if (labels === undefined) {
+        continue;
+      }
+      for (const alias of labels) {
+        aliases.push({ field, alias });
+      }
+    }
   }
   return aliases;
 };
 
-const aliasesByField = collectHeaderAliases(
+const headerAliases = collectHeaderAliases(
   Object.values(CONTACT_IMPORT_HEADER_VOCABULARIES),
 );
 
@@ -306,16 +312,13 @@ export const assertContactImportHeaderAliases = (
   for (const field of CONTACT_IMPORT_FIELDS) {
     destinationByToken.set(normalizeToken(field), field);
   }
-  const fixtureAliases = collectHeaderAliases(vocabularies);
-  for (const field of CONTACT_IMPORT_FIELDS) {
-    for (const alias of fixtureAliases.get(field) ?? []) {
-      const token = normalizeToken(alias);
-      const previous = destinationByToken.get(token);
-      if (previous !== undefined && previous !== field) {
-        panic("Contact import header aliases must map to one field");
-      }
-      destinationByToken.set(token, field);
+  for (const { field, alias } of collectHeaderAliases(vocabularies)) {
+    const token = normalizeToken(alias);
+    const previous = destinationByToken.get(token);
+    if (previous !== undefined && previous !== field) {
+      panic("Contact import header aliases must map to one field");
     }
+    destinationByToken.set(token, field);
   }
 };
 
@@ -364,15 +367,13 @@ const BRAZILIAN_TAX_ID_TOKENS = new Set(
 const TARGET_FOR_ALIAS = new Map<string, ContactImportSuggestedTarget>(
   CONTACT_IMPORT_FIELDS.map((field) => [normalizeToken(field), field]),
 );
-for (const field of CONTACT_IMPORT_FIELDS) {
-  for (const alias of aliasesByField.get(field) ?? []) {
-    const token = normalizeToken(alias);
-    const previous = TARGET_FOR_ALIAS.get(token);
-    if (previous !== undefined && previous !== field) {
-      panic("Contact import header aliases must map to one field");
-    }
-    TARGET_FOR_ALIAS.set(token, field);
+for (const { field, alias } of headerAliases) {
+  const token = normalizeToken(alias);
+  const previous = TARGET_FOR_ALIAS.get(token);
+  if (previous !== undefined && previous !== field) {
+    panic("Contact import header aliases must map to one field");
   }
+  TARGET_FOR_ALIAS.set(token, field);
 }
 // Vocabulary labels are the source of truth for the labeled-text format; the
 // loop above already covers the ones that reach a first-class field, so this
@@ -1032,7 +1033,7 @@ type DuplicateEvidence =
   | "nameAndBirthDate"
   | "nameAndPhone";
 
-export type InFileDuplicateDecision<Row> =
+type InFileDuplicateDecision<Row> =
   | { kind: "duplicate"; of: Row; by: DuplicateEvidence }
   | { kind: "possibleDuplicate"; of: Row; by: "nameOnly" }
   | { kind: "distinct" };
@@ -1060,14 +1061,14 @@ const conflicting = (left: string | undefined, right: string | undefined) =>
 // Every entry counts as identity evidence, not only the first one listed.
 const emailSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
   new Set(
-    (contact.emails ?? [])
-      .map(({ address }) => address.trim().toLocaleLowerCase())
+    contact.emails
+      ?.map(({ address }) => address.trim().toLocaleLowerCase())
       .filter((address) => address !== ""),
   );
 
 const phoneSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
   new Set(
-    (contact.phones ?? []).flatMap(({ number }) => {
+    contact.phones?.flatMap(({ number }) => {
       const normalized = normalizedValue(number);
       return normalized === undefined ? [] : [normalized];
     }),
