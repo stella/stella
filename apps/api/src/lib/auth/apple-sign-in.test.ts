@@ -6,6 +6,8 @@ import { decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
 import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
 
+import { resolveAppleSignIn } from "@/api/lib/apple-sign-in-config";
+import type { AppleSignInSettings } from "@/api/lib/apple-sign-in-config";
 import {
   APPLE_FORM_POST,
   withAppleFormPostOrigin,
@@ -15,9 +17,7 @@ import {
   APPLE_CLIENT_SECRET_LIFETIME_SECONDS,
   createAppleClientSecretSource,
   createAppleProviderOptions,
-  resolveAppleSignIn,
 } from "@/api/lib/auth/apple-sign-in";
-import type { AppleSignInSettings } from "@/api/lib/auth/apple-sign-in";
 import { AUTH_API_PATH } from "@/api/lib/auth/auth-paths";
 import {
   createSocialIdentityValidation,
@@ -225,6 +225,9 @@ const createAppleFixture = async () => {
     secret: "test-secret-that-is-long-enough-for-better-auth",
     logger: { disabled: true },
     trustedOrigins: (request) => withAppleFormPostOrigin(request, [baseURL]),
+    // Better Auth skips its origin check when NODE_ENV is "test"; the
+    // callback is exercised with the check on, as it runs in production.
+    advanced: { disableOriginCheck: false },
     database: memoryAdapter({
       user: [],
       session: [],
@@ -449,12 +452,23 @@ describe("Sign in with Apple callback", () => {
   test("never joins an existing account with the same email", async () => {
     const apple = await fixture();
     const email = "counsel@firm.example";
-    const existing = await apple.context.internalAdapter.createUser(
-      { email, name: "Counsel", emailVerified: true },
-      { method: "admin" },
-    );
+    // Seeded straight into storage: creating a user through the internal
+    // adapter runs the identity validation, which needs a request context.
+    const existingUserId = "existing-counsel";
+    await apple.context.adapter.create({
+      model: "user",
+      data: {
+        id: existingUserId,
+        email,
+        name: "Counsel",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      forceAllowId: true,
+    });
     await apple.context.internalAdapter.linkAccount({
-      userId: existing.id,
+      userId: existingUserId,
       providerId: "google",
       accountId: "google-account",
     });
@@ -463,9 +477,8 @@ describe("Sign in with Apple callback", () => {
 
     const location = new URL(response.headers.get("location") ?? "");
     expect(location.searchParams.get("error")).toBe("account_not_linked");
-    const accounts = await apple.context.internalAdapter.findAccounts(
-      existing.id,
-    );
+    const accounts =
+      await apple.context.internalAdapter.findAccounts(existingUserId);
     expect(accounts.map((account) => account.providerId)).toEqual(["google"]);
   });
 });

@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
-import { resolveAppleSignIn } from "@/api/lib/auth/apple-sign-in";
-import type { AppleSignIn } from "@/api/lib/auth/apple-sign-in";
+import { resolveAppleSignIn } from "@/api/lib/apple-sign-in-config";
+import type { AppleSignIn } from "@/api/lib/apple-sign-in-config";
 
 let configured: AppleSignIn | undefined;
 

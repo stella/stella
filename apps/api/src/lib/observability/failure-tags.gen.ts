@@ -15,6 +15,7 @@ export const FAILURE_TAGS = [
   "AggregateLockUpgradeRefused",
   "AnonymizedFieldBoundaryError",
   "ApiAccessTokenError",
+  "AppleSignInConfigError",
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",
   "BackfillHeldError",

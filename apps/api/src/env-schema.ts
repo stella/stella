@@ -13,7 +13,7 @@ import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   type AppleSignInInput,
   resolveAppleSignIn,
-} from "@/api/lib/auth/apple-sign-in";
+} from "@/api/lib/apple-sign-in-config";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,

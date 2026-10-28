@@ -14,7 +14,7 @@ export const APPLE_FORM_POST = {
 } as const;
 
 /** Whether the request is a POST to Apple's callback, whatever its origin. */
-export const isAppleCallbackPost = (request: Request | undefined): boolean =>
+const isAppleCallbackPost = (request: Request | undefined): boolean =>
   request?.method === "POST" &&
   URL.parse(request.url)?.pathname === APPLE_FORM_POST.pathname;
 
