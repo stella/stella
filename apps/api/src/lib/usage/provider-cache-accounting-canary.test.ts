@@ -29,6 +29,8 @@ describe("provider cache accounting canaries", () => {
     // excludes cache reads, so the cached count legitimately dwarfs it.
     const usage = buildAnthropicUsage({
       cache_creation: null,
+      fallback_credit: null,
+      output_tokens_details: null,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 18_874,
       inference_geo: null,
@@ -51,6 +53,8 @@ describe("provider cache accounting canaries", () => {
   test("anthropic adapter keeps cache writes out of promptTokens too", () => {
     const usage = buildAnthropicUsage({
       cache_creation: null,
+      fallback_credit: null,
+      output_tokens_details: null,
       cache_creation_input_tokens: 9502,
       cache_read_input_tokens: 0,
       inference_geo: null,
