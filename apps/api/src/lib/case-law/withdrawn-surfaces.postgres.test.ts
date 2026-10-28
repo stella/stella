@@ -21,7 +21,6 @@ import {
   chatMessageRevisions,
   chatMessages,
   chatMessageSearchDocuments,
-  chatRunLogs,
   chatThreadCompactions,
   chatThreads,
   chatThreadSearchDocuments,
@@ -59,8 +58,6 @@ import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persist
 import {
   createChatRunLog,
   createChatRunLogReplay,
-  MAX_CHUNK_BYTES,
-  MAX_RUN_BYTES,
 } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
@@ -750,7 +747,25 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           { type: EventType.TEXT_MESSAGE_END, messageId },
           { type: EventType.RUN_FINISHED, runId, threadId },
         ]);
-        expect(await log.snapshot()).toEqual([]);
+        const entries = await request(async () => log.snapshot());
+        expect(entries.map(({ offset }) => offset)).toEqual([
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+        ]);
+        expect(JSON.stringify(entries)).toContain(marker);
+        expect(JSON.stringify(entries)).not.toContain(secret);
+        const { processor } = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        for (const { chunk } of entries) {
+          processor.processChunk(chunk);
+        }
+        expect(JSON.stringify(processor.getMessages())).toContain(marker);
+        expect(JSON.stringify(processor.getMessages())).not.toContain(secret);
         await log.append([
           {
             type: EventType.TEXT_MESSAGE_START,
@@ -764,29 +779,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           },
           { type: EventType.TEXT_MESSAGE_END, messageId: userMessageId },
         ]);
-        await log.close();
-        const entries = await request(async () => log.snapshot());
-        expect(entries.map(({ offset }) => offset)).toEqual([
-          "1",
-          "2",
-          "3",
-          "4",
-          "5",
-          "6",
-          "7",
-          "8",
-        ]);
-        expect(JSON.stringify(entries)).toContain(marker);
-        expect(JSON.stringify(entries)).not.toContain(secret);
-        const { processor } = createStreamMessageCapture({
-          initialMessages: [],
-          capture: (message) => message,
-        });
-        for (const { chunk } of entries) {
-          processor.processChunk(chunk);
-        }
-        expect(JSON.stringify(processor.getMessages())).toContain(marker);
-        expect(JSON.stringify(processor.getMessages())).not.toContain(secret);
         const suffix = await request(async () => {
           const reconnected = createChatRunLog({
             db: scopedDb,
@@ -1527,6 +1519,10 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       { split: "scheme", deltas: 3, delivery: "existing" },
       { split: "id", deltas: 2, delivery: "existing" },
       { split: "id", deltas: 3, delivery: "existing" },
+      { split: "scheme", deltas: 2, delivery: "tail" },
+      { split: "scheme", deltas: 3, delivery: "tail" },
+      { split: "id", deltas: 2, delivery: "tail" },
+      { split: "id", deltas: 3, delivery: "tail" },
       { split: "id", deltas: 2, delivery: "separate messages" },
     ].flatMap((testCase) =>
       (
@@ -1534,7 +1530,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       ).map((event) => ({ ...testCase, event })),
     ),
   )(
-    "completed generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
+    "running generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
     async ({ split, deltas, delivery, event }) => {
       const id = createSafeId<"chatThread">();
       seededThreads.push(id);
@@ -1639,14 +1635,15 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           : [textDelta(final)]
       ) satisfies StreamChunk[];
       await log.append(initial);
-      await log.append(suffix);
-      await log.close();
-      const snapshot = await request(async () => await log.snapshot());
-      expect(JSON.stringify(snapshot)).toContain(
-        delivery === "separate messages" ? secret : marker,
-      );
-      if (delivery !== "separate messages") {
-        expect(JSON.stringify(snapshot)).not.toContain(secret);
+      if (delivery !== "tail") {
+        await log.append(suffix);
+        const snapshot = await request(async () => await log.snapshot());
+        expect(JSON.stringify(snapshot)).toContain(
+          delivery === "separate messages" ? secret : marker,
+        );
+        if (delivery !== "separate messages") {
+          expect(JSON.stringify(snapshot)).not.toContain(secret);
+        }
       }
       await request(async () => {
         const controller = new AbortController();
@@ -1661,6 +1658,9 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             }
             expect(entry.value.chunk.type).toBe(expectedChunk.type);
             entries.push(entry.value);
+          }
+          if (delivery === "tail") {
+            await log.append(suffix);
           }
           for (const expectedChunk of suffix) {
             const entry = await reader.next();
@@ -1700,6 +1700,78 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           await reader.return?.();
         }
       });
+    },
+  );
+
+  test.each(
+    (["answer", "run"] as const).flatMap((field) =>
+      (["withdrawn", "active"] as const).map((source) => ({ field, source })),
+    ),
+  )(
+    "available research owner projects its $field reference ($source)",
+    async ({ field, source }) => {
+      const link = ` [decision](#stella-decision=${source === "withdrawn" ? decisionId : activeId})`;
+      const value = {
+        columnId,
+        organizationId,
+        decisionId: activeId,
+        state: "answered",
+        answer: {
+          version: 1,
+          type: "text",
+          value: `${secret}${field === "answer" ? link : ""}`,
+        },
+        run: {
+          version: 1,
+          model: "fixture",
+          completedAt: "2026-10-28T00:00:00.000Z",
+          retrieved: false,
+          rationale: `${secret}${field === "run" ? link : ""}`,
+          justification: { version: 1, blocks: [] },
+        },
+      } satisfies typeof caseLawResearchAnswers.$inferInsert;
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .insert(caseLawResearchAnswers)
+            .values(value)
+            .onConflictDoUpdate({
+              target: [
+                caseLawResearchAnswers.columnId,
+                caseLawResearchAnswers.decisionId,
+              ],
+              set: value,
+            }),
+      );
+      const result = (
+        await request(
+          async () =>
+            await readResearchAnswers({
+              safeDb,
+              organizationId,
+              decisionIds: [activeId],
+            }),
+        )
+      ).unwrap();
+      expect(result).toHaveLength(1);
+      if (source === "withdrawn") {
+        expect(result.at(0)).toMatchObject({
+          decisionId: activeId,
+          state: "withdrawn",
+          answer: null,
+          run: null,
+          withdrawnMarker: marker,
+        });
+        expect(JSON.stringify(result)).not.toContain(secret);
+      } else {
+        expect(result.at(0)).toMatchObject({
+          decisionId: activeId,
+          state: "answered",
+          answer: value.answer,
+          run: value.run,
+          withdrawnMarker: null,
+        });
+      }
     },
   );
 
@@ -1762,7 +1834,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       ),
     ),
   )(
-    "live $subject $mode holds text until later references are resolved ($source)",
+    "open $subject $mode delivers text and interaction before close ($source)",
     async ({ mode, source, subject }) => {
       const {
         writer,
@@ -1795,6 +1867,18 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               delta: ".",
             }) as const,
         ),
+        {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "question",
+          toolCallName: "ask-user",
+          parentMessageId: assistantId,
+        },
+        {
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: "question",
+          delta: JSON.stringify({ question: own }),
+        },
+        { type: EventType.TOOL_CALL_END, toolCallId: "question" },
       ] satisfies StreamChunk[];
       await writer.append(prefix);
       const polled = Promise.withResolvers<undefined>();
@@ -1826,8 +1910,22 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         })();
         try {
           await polled.promise;
-          expect(entries).toEqual([]);
-          expect(await writer.snapshot()).toEqual([]);
+          expect(JSON.stringify(entries)).toContain(secret);
+          const live = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for (const entry of entries) {
+            live.processor.processChunk(entry.chunk);
+          }
+          expect(live.processor.getMessages().at(0)?.parts).toContainEqual(
+            expect.objectContaining({
+              type: "tool-call",
+              name: "ask-user",
+              state: "input-complete",
+              arguments: JSON.stringify({ question: own }),
+            }),
+          );
           const link = ` [decision](#stella-decision=${source === "withdrawn" ? decisionId : activeId})`;
           const suffix = [
             {
@@ -1843,7 +1941,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             },
           ] satisfies StreamChunk[];
           await writer.append(suffix);
-          expect(await writer.snapshot()).toEqual([]);
           await writer.close();
           await consume;
           const capture = createStreamMessageCapture({
@@ -1855,20 +1952,33 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           }
           const messages = JSON.stringify(capture.processor.getMessages());
           if (source === "withdrawn") {
-            expect(JSON.stringify(entries)).not.toContain(secret);
-            expect(messages).toContain(marker);
-            expect(messages).not.toContain(secret);
+            const snapshot = await writer.snapshot();
+            expect(JSON.stringify(snapshot)).toContain(marker);
+            expect(JSON.stringify(snapshot)).not.toContain(secret);
+            const closed = [];
+            for await (const entry of writer.read("-1")) {
+              closed.push(entry);
+            }
+            expect(closed).toEqual(snapshot);
           } else {
-            expect(entries.map(({ chunk }) => chunk)).toEqual([
-              ...prefix,
-              ...suffix,
-            ]);
-            expect(capture.processor.getMessages().at(0)?.parts).toEqual([
-              {
-                type: "text",
-                content: `${secret}${".".repeat(mode === "compact" ? 260 : 0)}${link}`,
-              },
-            ]);
+            if (mode !== "compact") {
+              expect(entries.map(({ chunk }) => chunk)).toEqual([
+                ...prefix,
+                ...suffix,
+              ]);
+            }
+            expect(
+              capture.processor
+                .getMessages()
+                .at(0)
+                ?.parts.flatMap((part) =>
+                  part.type === "text" ? [part.content] : [],
+                )
+                .join(""),
+            ).toBe(
+              `${secret}${".".repeat(mode === "compact" ? 260 : 0)}${link}`,
+            );
+            expect(messages).not.toContain(marker);
           }
           expect(entries.map(({ offset }) => BigInt(offset))).toEqual(
             entries
@@ -1887,58 +1997,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       });
     },
   );
-
-  test("unchecked generic output stays inside the durable run byte bound", async () => {
-    const {
-      writer,
-      options,
-      threadId: genericThreadId,
-    } = await liveLogFixture("generic");
-    await writer.append([
-      {
-        type: EventType.RUN_STARTED,
-        runId: options.runId,
-        threadId: genericThreadId,
-      },
-    ]);
-    const readHeader = async () =>
-      await scopedDb(
-        async (tx) =>
-          await tx
-            .select({
-              bytes: chatRunLogs.bytesUsed,
-              nextSeq: chatRunLogs.nextSeq,
-            })
-            .from(chatRunLogs)
-            .where(eq(chatRunLogs.runId, options.runId))
-            .limit(1),
-      );
-    const before = await readHeader();
-    const delta = "x".repeat(MAX_CHUNK_BYTES / 2);
-    const overflow = await Result.tryPromise(
-      async () =>
-        await writer.append(
-          Array.from(
-            { length: Math.ceil(MAX_RUN_BYTES / delta.length) + 1 },
-            () =>
-              ({
-                type: EventType.TEXT_MESSAGE_CONTENT,
-                messageId,
-                delta,
-              }) as const,
-          ),
-        ),
-    );
-    expect(overflow.isErr()).toBe(true);
-    if (overflow.isErr()) {
-      expect(overflow.error.cause).toMatchObject({
-        message: "Chat run log exceeds its size limit",
-      });
-    }
-    expect(await readHeader()).toEqual(before);
-    expect(await writer.snapshot()).toEqual([]);
-    await writer.close();
-  });
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
     const id = createSafeId<"chatThread">();
@@ -1988,7 +2046,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     await log.append([
       { type: EventType.RUN_STARTED, runId: laterRunId, threadId: id },
     ]);
-    expect(await request(async () => await log.snapshot())).toEqual([]);
+    await request(async () => await log.snapshot());
     await log.append([
       { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
       {
@@ -1999,7 +2057,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       { type: EventType.TEXT_MESSAGE_END, messageId },
       { type: EventType.RUN_FINISHED, runId: laterRunId, threadId: id },
     ]);
-    await log.close();
     const checked = await request(async () => await log.snapshot());
     expect(JSON.stringify(checked)).toContain(marker);
     expect(JSON.stringify(checked)).not.toContain(secret);

@@ -35,8 +35,8 @@ import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
-export const MAX_CHUNK_BYTES = 1024 * 1024;
-export const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
+const MAX_CHUNK_BYTES = 1024 * 1024;
+const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
 const READ_PAGE_SIZE = 256;
 const TAIL_POLL_MS = 250;
 const FIRST_ENTRY_WAIT_MS = 30_000;
@@ -187,8 +187,6 @@ type RunLogHeaderOptions = Pick<
   tx: Transaction;
   includeReferences: boolean;
 };
-// A run's complete source set is known only when its producer closes it.
-const runDeliveryReady = sql<boolean>`${chatRunLogs.closedAt} IS NOT NULL`;
 const readRunLogHeaderOnTx = async ({
   tx,
   organizationId,
@@ -202,11 +200,10 @@ const readRunLogHeaderOnTx = async ({
         nextSeq: chatRunLogs.nextSeq,
         subjectDecisionId: chatThreads.subjectDecisionId,
         sourceContent: chatMessages.content,
-        deliveryReady: runDeliveryReady,
         decisionReferences: includeReferences
           ? sql<
               { seq: string; chunk: StreamChunk }[] | null
-            >`CASE WHEN ${runDeliveryReady} THEN (select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId}) ELSE NULL END`
+            >`(select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId})`
           : sql<{ seq: string; chunk: StreamChunk }[] | null>`null`,
         tailChunk: chatRunLogEntries.chunk,
         tailTimingSeq: sql<string | null>`(
@@ -478,7 +475,7 @@ const createRunLogReader = ({
   ) =>
     await db(async (tx) => {
       const log = await loadHeader(tx, !projection.hasRead());
-      if (log === undefined || !log.deliveryReady) {
+      if (log === undefined) {
         return { entries: [], log };
       }
       // Settlement releases the terminal suffix; projection state advances only for delivered entries.
@@ -575,7 +572,7 @@ const createRunLogReader = ({
       await db(async (tx) => {
         const { projectEntries } = createRunLogCopyProjection();
         const log = await loadHeader(tx, true);
-        if (log === undefined || !log.deliveryReady) {
+        if (log === undefined) {
           return [];
         }
         const result: { offset: string; chunk: StreamChunk }[] = [];

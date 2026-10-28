@@ -240,7 +240,6 @@ describe("chat run log database contract", () => {
           resumeOffset: "-1",
         })) ?? panic("Expected running rejoin");
       const reader = replay.read("-1")[Symbol.asyncIterator]();
-      await log.close();
       const first = await reader.next();
       if (first.done) {
         panic("Expected replayed assistant start");
@@ -368,20 +367,19 @@ describe("chat run log database contract", () => {
     await log.close();
   });
 
-  test("a generic reader waits for the close marker before draining stored chunks", async () => {
+  test("a reader drains stored chunks and waits for the close marker", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
     const reader = log.read("-1")[Symbol.asyncIterator]();
     const firstRead = reader.next();
     const finished = chunk("live entry");
     await log.append([finished]);
-    expect(await log.snapshot()).toEqual([]);
-    await log.close();
     expect(await firstRead).toEqual({
       done: false,
       value: { offset: "1", chunk: finished },
     });
     const finalRead = reader.next();
+    await log.close();
     expect(await finalRead).toEqual({ done: true, value: undefined });
   });
 
@@ -664,7 +662,9 @@ describe("chat run log database contract", () => {
           ? [chunk("prefix"), timingEnd, terminal]
           : [chunk("prefix"), timingEnd];
       await log.append(batch);
-      expect(await log.snapshot()).toEqual([]);
+      expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual(
+        batch,
+      );
       const reader = log.read("1")[Symbol.asyncIterator]();
       const nowReader = log.read("now")[Symbol.asyncIterator]();
       const nowPending = nowReader.next();
@@ -786,6 +786,17 @@ describe("chat run log database contract", () => {
         resumeOffset: "-1",
       })) ?? panic("Expected replay");
     const reader = replay.read("-1")[Symbol.asyncIterator]();
+    const first = await reader.next();
+    if (first.done) {
+      panic("Expected catch-up snapshot");
+    }
+    expect(first.value.chunk.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    expect(first.value.offset).toBe("262");
+    const { processor } = createStreamMessageCapture({
+      initialMessages: [],
+      capture: (message) => message,
+    });
+    processor.processChunk(first.value.chunk);
     const suffix: StreamChunk[] = [
       { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: "tail" },
       { type: EventType.TEXT_MESSAGE_END, messageId },
@@ -797,17 +808,6 @@ describe("chat run log database contract", () => {
     ];
     await log.append(suffix);
     await log.close();
-    const first = await reader.next();
-    if (first.done) {
-      panic("Expected catch-up snapshot");
-    }
-    expect(first.value.chunk.type).toBe(EventType.MESSAGES_SNAPSHOT);
-    expect(first.value.offset).toBe("264");
-    const { processor } = createStreamMessageCapture({
-      initialMessages: [],
-      capture: (message) => message,
-    });
-    processor.processChunk(first.value.chunk);
     const tail = [];
     for (;;) {
       const next = await reader.next();
@@ -817,7 +817,7 @@ describe("chat run log database contract", () => {
       tail.push(next.value.chunk);
       processor.processChunk(next.value.chunk);
     }
-    expect(tail).toEqual(suffix.slice(-1));
+    expect(tail).toEqual(suffix);
     expect(processor.getMessages().at(0)?.parts).toEqual([
       { type: "text", content: `${deltas.join("")}tail` },
     ]);

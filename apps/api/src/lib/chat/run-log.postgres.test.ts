@@ -30,7 +30,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 // Keep the real statements and READ COMMITTED sessions: the producer commits
-// between reader polls, before the next header SELECT executes.
+// after the reader's header SELECT and before its entries SELECT executes.
 const beforeQuery = <Builder extends object>(
   builder: Builder,
   before: () => Promise<void>,
@@ -137,7 +137,7 @@ if (!databaseUrl || !runPostgresTests) {
       await db.delete(user).where(eq(user.id, userId));
     });
 
-    test("replay holds a final batch across open-header polls until settlement", async () => {
+    test("replay fences a final batch committed between header and entries until settlement", async () => {
       const execution = {
         id: createSafeId<"chatTurn">(),
         executionId: Bun.randomUUIDv7(),
@@ -149,7 +149,6 @@ if (!databaseUrl || !runPostgresTests) {
         organizationId,
         userId,
         title: "Replay fence test",
-        subjectDecisionId: createSafeId<"caseLawDecision">(),
       });
       await db.insert(chatMessages).values({
         id: incomingMessageId,
@@ -196,8 +195,7 @@ if (!databaseUrl || !runPostgresTests) {
       } satisfies StreamChunk;
       await log.append([prefix]);
       let selections = 0;
-      const appended = Promise.withResolvers<undefined>();
-      const settled = Promise.withResolvers<undefined>();
+      let committed = false;
       const racingDb: ScopedDb = async (callback) =>
         await scopedDb(
           async (tx) =>
@@ -224,8 +222,7 @@ if (!databaseUrl || !runPostgresTests) {
                       }
                       return beforeQuery(builder, async () => {
                         await log.append([end, terminal]);
-                        appended.resolve(undefined);
-                        await settled.promise;
+                        committed = true;
                       });
                     },
                   });
@@ -240,9 +237,17 @@ if (!databaseUrl || !runPostgresTests) {
         runId: racedRunId,
       }).read("-1");
       const reader = replayStream[Symbol.asyncIterator]();
-      const firstRead = reader.next();
-      await appended.promise;
-      expect(await log.snapshot()).toEqual([]);
+      expect(await reader.next()).toEqual({
+        done: false,
+        value: { offset: "1", chunk: prefix },
+      });
+      expect(committed).toBe(true);
+      expect((await log.snapshot()).map(({ chunk }) => chunk)).toEqual([
+        prefix,
+        end,
+        terminal,
+      ]);
+      const pending = reader.next();
       expect(
         await scopedDb(
           async (tx) =>
@@ -261,12 +266,7 @@ if (!databaseUrl || !runPostgresTests) {
       if (Result.isError(timing)) {
         panic("Could not read settled replay timing", timing.error);
       }
-      settled.resolve(undefined);
-      expect(await firstRead).toEqual({
-        done: false,
-        value: { offset: "1", chunk: prefix },
-      });
-      const deliveredEnd = await reader.next();
+      const deliveredEnd = await pending;
       const deliveredTerminal = await reader.next();
       expect(await reader.next()).toEqual({ done: true, value: undefined });
       expect(timing.value?.status).toBe("finished");

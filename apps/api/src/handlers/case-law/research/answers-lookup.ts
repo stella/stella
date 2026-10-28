@@ -69,7 +69,7 @@ export const readResearchAnswers = async ({
         toResearchAnswerResponse(
           row,
           now,
-          withdrawal.marker(null, row.decisionId),
+          withdrawal.marker(row, row.decisionId),
         ),
       ),
     );
