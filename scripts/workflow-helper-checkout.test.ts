@@ -17,6 +17,8 @@ const record = (value: unknown): Record<string, unknown> =>
     ? Object.fromEntries(Object.entries(value))
     : {};
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const text = (value: unknown): string =>
+  typeof value === "string" ? value : "";
 
 const helperReadsAfterRootCheckout = (source: string, file: string) => {
   const offenders: string[] = [];
@@ -26,7 +28,7 @@ const helperReadsAfterRootCheckout = (source: string, file: string) => {
     let removed = false;
     for (const value of list(record(definition)["steps"])) {
       const step = record(value);
-      if (String(step["uses"] ?? "").startsWith("actions/checkout@")) {
+      if (text(step["uses"]).startsWith("actions/checkout@")) {
         const checkoutPath = record(step["with"])["path"];
         if (checkoutPath === helperPath) {
           helper = true;
@@ -37,7 +39,7 @@ const helperReadsAfterRootCheckout = (source: string, file: string) => {
         continue;
       }
       if (removed && JSON.stringify(step).includes(`${helperPath}/`)) {
-        offenders.push(`${file} ${job}: ${String(step["name"])}`);
+        offenders.push(`${file} ${job}: ${text(step["name"])}`);
       }
     }
   }
