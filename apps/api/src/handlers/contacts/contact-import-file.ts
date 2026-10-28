@@ -1038,6 +1038,25 @@ const normalizedValue = (value: string | undefined): string | undefined => {
 const conflicting = (left: string | undefined, right: string | undefined) =>
   Boolean(left && right && left !== right);
 
+// Every entry counts as identity evidence, not only the first one listed.
+const emailSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
+  new Set(
+    (contact.emails ?? [])
+      .map(({ address }) => address.trim().toLocaleLowerCase())
+      .filter((address) => address !== ""),
+  );
+
+const phoneSet = (contact: ContactImportCandidate): ReadonlySet<string> =>
+  new Set(
+    (contact.phones ?? []).flatMap(({ number }) => {
+      const normalized = normalizedValue(number);
+      return normalized === undefined ? [] : [normalized];
+    }),
+  );
+
+const shares = (left: ReadonlySet<string>, right: ReadonlySet<string>) =>
+  [...left].some((value) => right.has(value));
+
 /** The sole owner of the evidence grade used for in-file duplicate review. */
 export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
   earlier: Row,
@@ -1045,8 +1064,11 @@ export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
 ): InFileDuplicateDecision<Row> => {
   const left = earlier.contact;
   const right = later.contact;
-  const leftEmail = left.emails?.at(0)?.address.trim().toLocaleLowerCase();
-  const rightEmail = right.emails?.at(0)?.address.trim().toLocaleLowerCase();
+  const leftEmails = emailSet(left);
+  const rightEmails = emailSet(right);
+  const sharedEmail = shares(leftEmails, rightEmails);
+  const conflictingEmails =
+    leftEmails.size > 0 && rightEmails.size > 0 && !sharedEmail;
   const leftRegistration = normalizedValue(left.registrationNumber);
   const rightRegistration = normalizedValue(right.registrationNumber);
   const leftTaxId = normalizedValue(left.taxId);
@@ -1059,14 +1081,14 @@ export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
     : undefined;
 
   if (
-    conflicting(leftEmail, rightEmail) ||
+    conflictingEmails ||
     conflicting(leftRegistration, rightRegistration) ||
     conflicting(leftTaxId, rightTaxId) ||
     conflicting(leftBirthDate, rightBirthDate)
   ) {
     return { kind: "distinct" };
   }
-  if (leftEmail && leftEmail === rightEmail) {
+  if (sharedEmail) {
     return { kind: "duplicate", of: earlier, by: "email" };
   }
   if (leftRegistration && leftRegistration === rightRegistration) {
@@ -1084,21 +1106,25 @@ export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
   if (leftBirthDate && leftBirthDate === rightBirthDate) {
     return { kind: "duplicate", of: earlier, by: "nameAndBirthDate" };
   }
-  const leftPhone = normalizedValue(left.phones?.at(0)?.number);
-  const rightPhone = normalizedValue(right.phones?.at(0)?.number);
-  if (leftPhone && leftPhone === rightPhone) {
+  const leftPhones = phoneSet(left);
+  const rightPhones = phoneSet(right);
+  if (shares(leftPhones, rightPhones)) {
     return { kind: "duplicate", of: earlier, by: "nameAndPhone" };
   }
 
   const leftHasIdentifier = Boolean(
-    leftEmail || leftRegistration || leftTaxId || leftBirthDate || leftPhone,
+    leftEmails.size > 0 ||
+    leftRegistration ||
+    leftTaxId ||
+    leftBirthDate ||
+    leftPhones.size > 0,
   );
   const rightHasIdentifier = Boolean(
-    rightEmail ||
+    rightEmails.size > 0 ||
     rightRegistration ||
     rightTaxId ||
     rightBirthDate ||
-    rightPhone,
+    rightPhones.size > 0,
   );
   return leftHasIdentifier || rightHasIdentifier
     ? { kind: "distinct" }

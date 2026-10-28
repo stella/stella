@@ -320,6 +320,45 @@ describe("contact import document", () => {
     });
   });
 
+  test("a shared secondary email or phone still identifies a duplicate", () => {
+    const mobile = (number: string, isPrimary: boolean) => ({
+      isPrimary,
+      number,
+      type: "mobile" as const,
+    });
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("Jane Doe"),
+          emails: [email("jane@example.com"), email("shared@example.com")],
+        },
+        {
+          ...person("Janet Roe"),
+          emails: [email("janet@example.com"), email("shared@example.com")],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            mobile("+1 202 555 0101", true),
+            mobile("+1 202 555 0199", false),
+          ],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            mobile("+1 202 555 0102", true),
+            mobile("+1 202 555 0199", false),
+          ],
+        },
+      ],
+      rowNumbers: [2, 3, 4, 5],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+    expect(rows.at(3)?.issues.at(0)?.duplicateOfRowNumber).toBe(4);
+  });
+
   test("only surviving rows block later duplicate candidates", () => {
     const rows = validateContactImportCandidates({
       candidates: [
