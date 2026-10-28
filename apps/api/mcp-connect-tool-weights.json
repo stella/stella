@@ -553,9 +553,9 @@
       "name": "search_case_law",
       "nameChars": 15,
       "descriptionChars": 499,
-      "inputSchemaChars": 5190,
-      "totalChars": 5704,
-      "estimatedTokens": 2334
+      "inputSchemaChars": 5153,
+      "totalChars": 5667,
+      "estimatedTokens": 2319
     },
     {
       "name": "search_legislation",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127496,
-    "estimatedTokens": 50544
+    "characters": 127459,
+    "estimatedTokens": 50529
   }
 }
