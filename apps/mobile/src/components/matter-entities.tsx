@@ -8,13 +8,13 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
+import { Text } from "@/components/ui/text";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";

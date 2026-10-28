@@ -15,9 +15,14 @@ const FAVICON = path.join(REPO_ROOT, "apps/web/public/favicon.svg");
 const OUTPUT = path.join(REPO_ROOT, "apps/mobile/assets/icon.png");
 const SIZE = 1024;
 
+/** The favicon's tile: its first `<rect>` tag. */
+const TILE = /<rect\b[^>]*>/u;
+
 /** The favicon with its tile's corners squared and drawn at the icon's size. */
 export const appIconSvg = (favicon: string): string => {
-  const squared = favicon.replace(/(<rect\b[^>]*?)\s+rx="[\d.]+"/u, "$1");
+  const squared = favicon.replace(TILE, (tile) =>
+    tile.replace(/\srx="[\d.]+"/u, ""),
+  );
   if (squared === favicon) {
     return panic("The favicon has no rounded tile to square");
   }
@@ -29,7 +34,7 @@ export const appIconSvg = (favicon: string): string => {
 
 /** The tile's colour, which fills the PNG so it carries no alpha channel. */
 const tileColour = (favicon: string): string =>
-  /<rect\b[^>]*\bfill="(#[\da-f]{6})"/iu.exec(favicon)?.[1] ??
+  /\sfill="(#[\da-f]{6})"/iu.exec(TILE.exec(favicon)?.[0] ?? "")?.[1] ??
   panic("The favicon's tile has no fill colour");
 
 const main = async () => {

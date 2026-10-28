@@ -34,6 +34,7 @@
         "oxlint-tsgolint": "7.0.2003",
         "react": "catalog:react19",
         "scslre": "0.3.0",
+        "sharp": "0.35.5",
         "shell-quote": "1.12.0",
         "sherif": "catalog:",
         "squawk-cli": "2.67.0",
@@ -378,6 +379,7 @@
       "dependencies": {
         "@expo-google-fonts/dm-sans": "0.4.2",
         "@expo/vector-icons": "15.1.1",
+        "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",

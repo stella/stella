@@ -183,8 +183,16 @@ describe("the app's dates", () => {
 });
 
 describe("the app's colours", () => {
-  /** Every bundled module but the generated theme, which is where colours live. */
-  const painted = appModules.filter((name) => name !== "ui-theme.gen.ts");
+  /**
+   * Every bundled module but the generated theme, which is where colours
+   * live, and the sign-in backdrop, whose blue the web writes outside its
+   * theme (auth-backdrop.test.ts holds it to the web's).
+   */
+  const painted = appModules.filter(
+    (name) =>
+      name !== "ui-theme.gen.ts" &&
+      name !== path.join("components", "auth-backdrop.ts"),
+  );
 
   test("finds the theme that maps the web's colours", () => {
     expect(painted).toContain("theme.ts");

@@ -1,5 +1,6 @@
-import { Linking, Platform, StyleSheet, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, View } from "react-native";
 
+import { Text } from "@/components/ui/text";
 import { parseMarkdown } from "@/state/markdown";
 import type { Block, Span } from "@/state/markdown";
 import { useAppColors } from "@/theme";

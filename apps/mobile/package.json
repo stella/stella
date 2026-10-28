@@ -26,6 +26,7 @@
   "dependencies": {
     "@expo-google-fonts/dm-sans": "0.4.2",
     "@expo/vector-icons": "15.1.1",
+    "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",

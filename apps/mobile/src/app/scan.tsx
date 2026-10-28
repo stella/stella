@@ -5,6 +5,8 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
@@ -45,6 +47,11 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
     size: string;
     uri: string;
   }>();
+  // The scanner writes both counts; a missing one reads as none.
+  const size = parseIntegerToken(params.size, { sign: "unsigned" }).unwrapOr(0);
+  const pageCount = parseIntegerToken(params.pageCount, {
+    sign: "unsigned",
+  }).unwrapOr(0);
   const [name, setName] = useState(() =>
     t("defaultName", {
       day: format.dateTime(epochMilliseconds(), {
@@ -81,7 +88,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
           file: {
             mimeType: "application/pdf",
             sha256Hex: params.sha256Hex,
-            size: Number(params.size),
+            size,
             uri: params.uri,
           },
           matterId,
@@ -142,9 +149,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
             value={name}
           />
           <View className="px-1">
-            <Text variant="caption">
-              {t("pages", { count: Number(params.pageCount) })}
-            </Text>
+            <Text variant="caption">{t("pages", { count: pageCount })}</Text>
           </View>
         </View>
         {uploading ? <ActivityIndicator color={colors.muted} /> : null}

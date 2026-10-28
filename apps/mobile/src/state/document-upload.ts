@@ -115,15 +115,19 @@ export const uploadDocument = async ({
     );
     const sent = await putBytes(fetch, file.uri, presigned);
     if (Result.isError(sent)) {
-      // Best effort: an upload left open expires on its own.
-      await requestApi({
+      // Best effort: an upload left open expires on its own, so whether the
+      // abort lands, the failure to show is the send's.
+      const aborted = await requestApi({
         fetch,
         method: "POST",
         path: `${uploadsPath(matterId)}/${encodeURIComponent(presigned.uploadId)}/abort`,
         schema: v.unknown(),
         source,
       });
-      return Result.err(sent.error);
+      return aborted.match({
+        ok: () => Result.err(sent.error),
+        err: () => Result.err(sent.error),
+      });
     }
     const finalized = yield* Result.await(
       requestApi({

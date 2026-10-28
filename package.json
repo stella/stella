@@ -171,6 +171,7 @@
     "oxlint-tsgolint": "7.0.2003",
     "react": "catalog:react19",
     "scslre": "0.3.0",
+    "sharp": "0.35.5",
     "shell-quote": "1.12.0",
     "sherif": "catalog:",
     "squawk-cli": "2.67.0",
