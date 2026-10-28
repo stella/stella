@@ -315,6 +315,40 @@ test("a successful HTTP status with persistent command failure exhausts four att
   expect(result.stderr).toContain("HTTP 200, attempt 4/4");
 });
 
+test.each([
+  ["view", ["run", "view", "123", "--exit-status"]],
+  ["watch", ["run", "watch", "--exit-status=true", "123"]],
+])(
+  "run %s returns a failed workflow conclusion without retrying",
+  async (_, args) => {
+    const result = await scenario({
+      args,
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  },
+);
+
+test("run --exit-status still retries a transient HTTP response", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123", "--exit-status"],
+    responses: [{ exit: 1, http: 502 }, success],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+});
+
+test("run view without --exit-status retries a 2xx decode failure", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+});
+
 test("HTTP writes and GraphQL mutations stay single-shot", async () => {
   const operations = [
     ...["POST", "PATCH", "PUT", "DELETE"].map((method) => [

@@ -61,6 +61,7 @@ endpoint=''
 query=''
 stdin_needed=false
 paginated=false
+exit_status=false
 # Consume option values as values; filenames after -- are never flags.
 for ((i=1; i<${#args[@]}; i+=1)); do
   arg="${args[i]}"
@@ -75,6 +76,7 @@ for ((i=1; i<${#args[@]}; i+=1)); do
       ;;
     --input=*) method=POST; [[ "$arg" != --input=- ]] || stdin_needed=true ;;
     --paginate) paginated=true ;;
+    --exit-status|--exit-status=true) exit_status=true ;;
     -f|-F|--field|--raw-field)
       flag="$arg"; method=POST; i=$((i+1)); value="${args[i]:-}"
       [[ "$value" != query=* ]] || query="${value#query=}"
@@ -104,7 +106,12 @@ case "${args[0]}" in
       retryable=true; response_retryable=true
     fi
     ;;
-  run) [[ "${args[1]:-}" != list && "${args[1]:-}" != view && "${args[1]:-}" != watch && "${args[1]:-}" != download ]] || { retryable=true; transport_retryable=true; response_retryable=true; } ;;
+  run)
+    if [[ "${args[1]:-}" == list || "${args[1]:-}" == view || "${args[1]:-}" == watch || "${args[1]:-}" == download ]]; then
+      retryable=true; transport_retryable=true
+      [[ "$exit_status" == true ]] || response_retryable=true
+    fi
+    ;;
   release)
     case "${args[1]:-}" in
       view|download) retryable=true; transport_retryable=true; response_retryable=true ;;
