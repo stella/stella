@@ -130,6 +130,9 @@ export const notifyUserError = (
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
+  if (APIError.is(error) && error.transportKind === "aborted") {
+    return false;
+  }
   if (notifyStepUp(error)) {
     return false;
   }

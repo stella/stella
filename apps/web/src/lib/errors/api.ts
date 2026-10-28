@@ -117,14 +117,26 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
 export const toAPIError = (error: ToAPIErrorProps): APIError => {
   if (error.kind !== undefined) {
     const t = getTranslator();
+    let message: string;
+    switch (error.kind) {
+      case "network":
+        message = t("transportErrors.network");
+        break;
+      case "timeout":
+        message = t("transportErrors.timeout");
+        break;
+      case "aborted":
+        message = "Request aborted";
+        break;
+      default:
+        error.kind satisfies never;
+        panic("Unknown API transport kind", error.kind);
+    }
     return new APIError({
       status: error.status,
       transportKind: error.kind,
       cause: error.cause,
-      message:
-        error.kind === "timeout"
-          ? t("transportErrors.timeout")
-          : t("transportErrors.network"),
+      message,
     });
   }
   const { status, value } = error;

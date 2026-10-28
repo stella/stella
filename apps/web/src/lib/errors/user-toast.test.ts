@@ -93,6 +93,24 @@ describe("detachedUserAction", () => {
 });
 
 describe("notifyUserError", () => {
+  test("an aborted fetch is neither shown nor reported", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const abort = new DOMException("Cancelled", "AbortError");
+    const error = toAPIError({
+      status: 0,
+      value: null,
+      kind: "aborted",
+      cause: abort,
+    });
+
+    expect(notifyUserError(error, FAILURE)).toBe(false);
+    expect(userVisibleReports(capture)).toEqual([]);
+    expect(add).not.toHaveBeenCalled();
+  });
+
   test("reports two different notices without errors", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
