@@ -59,12 +59,17 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     // Only the workspace name blocks the breadcrumb. Start every independent
     // metadata request before awaiting it so they share the first network round.
     return await loadWorkspaceRouteQueries({
-      loadWorkspace: async () =>
-        await loadRouteResource({
+      loadWorkspace: async () => {
+        const workspace = await loadRouteResource({
           ids: [wsId],
           load: async () =>
             await ensureRouteQueryData(qc, workspaceOptions(wsId)),
-        }),
+        });
+        if (workspace.isErr()) {
+          throw workspace.error;
+        }
+        return workspace.value;
+      },
       startPrefetches: [
         () =>
           detached(

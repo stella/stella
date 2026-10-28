@@ -31,13 +31,16 @@ export const Route = createFileRoute(
       },
       context: { allowMissingThread: true },
     });
-    await loadRouteResource({
+    const threadResult = await loadRouteResource({
       ids: [params.workspaceId, params.threadId],
       load: async () =>
         context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
         (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
       exists: (thread) => thread.threadExists,
     });
+    if (threadResult.isErr()) {
+      throw threadResult.error;
+    }
   },
 });
 

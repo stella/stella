@@ -243,7 +243,7 @@ export const Route = createFileRoute(
 )({
   component: ReportExportRecoveryPage,
   loader: async ({ context, params }) => {
-    await loadRouteResource({
+    const report = await loadRouteResource({
       ids: [params.workspaceId, params.exportId],
       load: async () =>
         await ensureRouteQueryData(
@@ -251,6 +251,9 @@ export const Route = createFileRoute(
           reportExportRecoveryOptions({ ...params, userId: context.user.id }),
         ),
     });
+    if (report.isErr()) {
+      throw report.error;
+    }
   },
   pendingComponent: ReportExportRecoverySkeleton,
 });

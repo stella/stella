@@ -95,13 +95,16 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // awaited refetch would replace the seed with the server's (possibly
     // empty) set before the page's matter picker ever saw it. The loader
     // only fills a cold cache.
-    await loadRouteResource({
+    const threadResult = await loadRouteResource({
       ids: [params.threadId],
       load: async () =>
         context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
         (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
       exists: (thread) => thread.threadExists,
     });
+    if (threadResult.isErr()) {
+      throw threadResult.error;
+    }
   },
 });
 

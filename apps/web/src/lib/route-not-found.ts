@@ -1,4 +1,5 @@
 import { notFound } from "@tanstack/react-router";
+import { Result } from "better-result";
 
 import { isUuid } from "@stll/api-contract/safe-id";
 
@@ -20,21 +21,23 @@ export async function loadRouteResource<T>({
   ids,
   load,
   exists = () => true,
-}: LoadRouteResourceOptions<T>): Promise<T> {
+}: LoadRouteResourceOptions<T>): Promise<Result<T, unknown>> {
   if (ids.some((id) => !isUuid(id))) {
-    throw notFound();
+    return Result.err(notFound());
   }
 
-  try {
-    const resource = await load();
-    if (!exists(resource)) {
-      throw notFound();
-    }
-    return resource;
-  } catch (error) {
-    if (APIError.is(error) && MISSING_RESOURCE_STATUSES.has(error.status)) {
-      throw notFound();
-    }
-    throw error;
+  const loaded = await Result.tryPromise({
+    try: load,
+    catch: (error) => error,
+  });
+  if (loaded.isErr()) {
+    return Result.err(
+      APIError.is(loaded.error) &&
+        MISSING_RESOURCE_STATUSES.has(loaded.error.status)
+        ? notFound()
+        : loaded.error,
+    );
   }
+
+  return exists(loaded.value) ? loaded : Result.err(notFound());
 }

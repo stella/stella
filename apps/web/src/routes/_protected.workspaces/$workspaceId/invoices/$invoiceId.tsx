@@ -81,7 +81,7 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     // Prime the invoice query the detail view suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
-    await loadRouteResource({
+    const invoice = await loadRouteResource({
       ids: [params.workspaceId, params.invoiceId],
       load: async () =>
         await ensureRouteQueryData(
@@ -89,6 +89,9 @@ export const Route = createFileRoute(
           invoiceByIdOptions(params.workspaceId, params.invoiceId),
         ),
     });
+    if (invoice.isErr()) {
+      throw invoice.error;
+    }
   },
   remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });

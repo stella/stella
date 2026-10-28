@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
-    await loadRouteResource({
+    const contact = await loadRouteResource({
       ids: [params.contactId],
       load: async () =>
         await ensureRouteQueryData(
@@ -51,6 +51,9 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
           contactOptions(context.user.activeOrganizationId, params.contactId),
         ),
     });
+    if (contact.isErr()) {
+      throw contact.error;
+    }
   },
   pendingComponent: ContactDetailPending,
   remountDeps: ({ params }) => params.contactId,

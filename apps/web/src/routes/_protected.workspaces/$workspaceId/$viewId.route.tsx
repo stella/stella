@@ -116,12 +116,16 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await loadRouteResource({
+    const viewsResult = await loadRouteResource({
       ids: [workspaceId, viewId],
       load: async () =>
         await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
       exists: (loadedViews) => loadedViews.some((view) => view.id === viewId),
     });
+    if (viewsResult.isErr()) {
+      throw viewsResult.error;
+    }
+    const views = viewsResult.value;
     const activeView = views.find((view) => view.id === viewId);
 
     if (!activeView) {

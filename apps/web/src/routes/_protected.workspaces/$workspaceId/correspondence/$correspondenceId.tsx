@@ -38,7 +38,7 @@ export const Route = createFileRoute(
 )({
   component: CorrespondenceDetailPage,
   loader: async ({ context, params }) => {
-    await loadRouteResource({
+    const correspondence = await loadRouteResource({
       ids: [params.workspaceId, params.correspondenceId],
       load: async () =>
         await ensureRouteQueryData(
@@ -49,6 +49,9 @@ export const Route = createFileRoute(
           ),
         ),
     });
+    if (correspondence.isErr()) {
+      throw correspondence.error;
+    }
   },
 });
 

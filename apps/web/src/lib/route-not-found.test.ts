@@ -1,4 +1,5 @@
 import { isNotFound } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import nodePath from "node:path";
@@ -24,7 +25,11 @@ test("malformed route ids become not found without loading", async () => {
   });
 
   expect(loaded).toBe(false);
-  expect(isNotFound(await result.catch((error: unknown) => error))).toBe(true);
+  const outcome = await result;
+  expect(Result.isError(outcome)).toBe(true);
+  if (Result.isError(outcome)) {
+    expect(isNotFound(outcome.error)).toBe(true);
+  }
 });
 
 for (const status of [403, 404]) {
@@ -36,9 +41,11 @@ for (const status of [403, 404]) {
       },
     });
 
-    expect(isNotFound(await result.catch((error: unknown) => error))).toBe(
-      true,
-    );
+    const outcome = await result;
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(isNotFound(outcome.error)).toBe(true);
+    }
   });
 }
 
@@ -49,7 +56,11 @@ test("a successful response that names no resource becomes not found", async () 
     exists: ({ exists }) => exists,
   });
 
-  expect(isNotFound(await result.catch((error: unknown) => error))).toBe(true);
+  const outcome = await result;
+  expect(Result.isError(outcome)).toBe(true);
+  if (Result.isError(outcome)) {
+    expect(isNotFound(outcome.error)).toBe(true);
+  }
 });
 
 test("other loader failures are preserved", async () => {
@@ -61,7 +72,11 @@ test("other loader failures are preserved", async () => {
     },
   });
 
-  expect(await result.catch((error: unknown) => error)).toBe(failure);
+  const outcome = await result;
+  expect(Result.isError(outcome)).toBe(true);
+  if (Result.isError(outcome)) {
+    expect(outcome.error).toBe(failure);
+  }
 });
 
 const RESOURCE_PATHS = new Set([
