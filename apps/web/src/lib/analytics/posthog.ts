@@ -42,6 +42,7 @@ import type {
   ErrorCaptureContext,
   WebAnalyticsEvent,
 } from "@/lib/analytics/types";
+import { APIError } from "@/lib/errors/api";
 import { logDevError } from "@/lib/errors/telemetry";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
@@ -802,6 +803,15 @@ const captureError: Analytics["captureError"] = (
   error,
   { fingerprintKey, scope, context },
 ) => {
+  // A cancelled request is expected control flow, not an operational failure.
+  if (
+    (APIError.is(error) && error.transportKind === "aborted") ||
+    (typeof DOMException !== "undefined" &&
+      error instanceof DOMException &&
+      error.name === "AbortError")
+  ) {
+    return;
+  }
   // Cheap guards before the SDK call: a stray `captureError(null)`
   // or `captureError(undefined)` would otherwise reach PostHog as
   // `Error: "undefined"` noise that the `before_send` filter then
