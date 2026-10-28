@@ -12,7 +12,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getWorkspaceRealtimeQueryActions,
   getWorkspaceReconnectQueryActions,
@@ -206,7 +206,7 @@ export const useWorkspaceSSE = (
     );
   });
   const leaveEndedMatter = useLatestCallback(async () => {
-    notifyUserError(undefined, t("errors.matterNotFound"));
+    notifyUserProblem(t("errors.matterNotFound"));
     // Leave first: dropping the cache while the matter's views are still
     // mounted would only make them refetch into the same refusal.
     await navigate({ to: "/workspaces", replace: true });

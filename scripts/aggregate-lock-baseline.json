@@ -3600,18 +3600,6 @@
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/properties/property-lock.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "175f666c3662b5398246fd148f90d65f4fbdf3fba83e500d9d9672e450dfbcaf",
-    "count": 1,
-    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
-  },
-  {
-    "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "f5b5976998e8b3259d75c0037e2a325e0bef6c406dae071974c2ec4547205404",
-    "count": 1,
-    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
-  },
-  {
     "file": "apps/api/src/lib/review-organization/reset.ts",
     "fingerprint": "7224a12a5c3044925eb22fbcc8c94d43c4d20ce2be95805097667ca9ad9c8199",
     "count": 1,

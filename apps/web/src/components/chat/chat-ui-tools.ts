@@ -11,6 +11,7 @@ import {
   CREATE_DOCUMENT_TOOL_NAME,
   isServerChatToolCall,
 } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import {
   isApprovalGatedBuiltInChatTool,
@@ -119,7 +120,7 @@ export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 // handle the interaction.
 type BuiltInApprovalToolName = Exclude<
   keyof ChatUITools,
-  "ask-user" | "create-document" | "request_secret"
+  "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
 export type ApprovalToolName = BuiltInApprovalToolName | `mcp__${string}`;
 const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
@@ -168,7 +169,13 @@ const isChatToolCallState = (
 const USER_INPUT_TOOL_NAMES = {
   [ASK_USER_TOOL_NAME]: true,
   [REQUEST_SECRET_TOOL_NAME]: true,
+  [CONNECT_CONNECTOR_TOOL_NAME]: true,
 } as const satisfies Record<string, true>;
+export type UserInputChatToolName = keyof typeof USER_INPUT_TOOL_NAMES;
+
+export const isUserInputChatToolName = (
+  name: string,
+): name is UserInputChatToolName => Object.hasOwn(USER_INPUT_TOOL_NAMES, name);
 
 // folio-agents tools a DOCX surface auto-runs against its bridge with no
 // approval click: the read tools, plus the queue-only registration of
@@ -228,6 +235,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
   request_secret: "chat.tool.request_secret",
+  connect_connector: "chat.tool.connect_connector",
   use_connector_secret: "chat.tool.use_connector_secret",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
   boe_get_law: "chat.tool.boe_get_law",
@@ -263,6 +271,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   get_document_outline: "chat.tool.get_document_outline",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
+  list_connectable_connectors: "catalogue.filter.mcps",
   list_stories: "chat.tool.list_stories",
   list_templates: "chat.tool.list_templates",
   add_matter_member: "chat.tool.add_matter_member",
@@ -532,7 +541,8 @@ export const isApprovalToolName = (
     isChatToolName(toolName) &&
     toolName !== "ask-user" &&
     toolName !== "create-document" &&
-    toolName !== "request_secret"
+    toolName !== "request_secret" &&
+    toolName !== "connect_connector"
   );
 };
 

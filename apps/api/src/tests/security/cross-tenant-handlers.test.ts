@@ -91,6 +91,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -2242,6 +2243,23 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(submitChatSecret, sameUserWorkspaceB, {
         body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
         params: { threadId: chatThreadB, toolCallId: "missing-request" },
         query: {},
       }),
