@@ -68,15 +68,18 @@ export const canonicalCzechReviewCourt = (court: string): string => {
   normalized = normalized
     .replace("správního", "správní")
     .replace("soudu", "soud")
-    .replace("pobočky", "pobočka")
-    .replace(/\s+České republiky$/u, "");
+    .replace("pobočky", "pobočka");
+  const stateSuffix = " České republiky";
+  if (normalized.endsWith(stateSuffix)) {
+    normalized = normalized.slice(0, -stateSuffix.length);
+  }
   const key = foldDecisionIdentifierInput(normalized);
   const compoundDistrictSeat = new RegExp(
     String.raw`^Okresní soud (?<seat>${DISTRICT_COMPOUND_SEAT_SOURCE})$`,
     "u",
   ).exec(key)?.groups?.["seat"];
   if (compoundDistrictSeat !== undefined) {
-    return `Okresní soud ${compoundDistrictSeat.replace(/\s*-\s*|\s+/gu, "-")}`;
+    return `Okresní soud ${compoundDistrictSeat.replaceAll(" ", "-").replace(/-+/gu, "-")}`;
   }
   // The source can name courts absent from the ECLI registry. Keep their
   // explicit names as unresolved evidence; registered names use its spelling.
@@ -136,60 +139,119 @@ type ReviewOutcomeOptions = {
   target: ReviewTarget;
   items: string[];
   targetCount: number;
-  sameFileTargetCount: number;
+  sameFileTargets: ReviewTarget[];
 };
 
 const reviewOutcome = ({
   target,
   items,
   targetCount,
-  sameFileTargetCount,
+  sameFileTargets,
 }: ReviewOutcomeOptions): CzechAppealReview["outcome"] => {
   const key = docketKey(target.reviewedCaseNumber);
-  const namesTarget = (item: string): boolean | null => {
+  const namesTarget = (
+    item: string,
+  ): "target" | "other" | "ambiguous" | "unnamed" => {
     const dockets = [...item.matchAll(new RegExp(DOCKET_SOURCE, "gu"))];
-    if (dockets.length > 0) {
-      return dockets.some((match) => {
-        if (docketKey(match[0]) !== key) {
-          return false;
+    if (dockets.length === 0) {
+      const court = new RegExp(COURT_SOURCE, "u").exec(item)?.[0];
+      if (
+        court !== undefined &&
+        canonicalCzechReviewCourt(court) !== target.reviewedCourt
+      ) {
+        return "other";
+      }
+      if (court === undefined && /(?<!\p{L})soudu(?!\p{L})/u.test(item)) {
+        return "ambiguous";
+      }
+      if (
+        targetCount > 1 &&
+        reversal.test(item) &&
+        !ancillaryOrder.test(item)
+      ) {
+        return "ambiguous";
+      }
+      return "unnamed";
+    }
+    let ambiguous = false;
+    let previousDocketEnd = 0;
+    for (const match of dockets) {
+      const context = item.slice(previousDocketEnd, match.index);
+      previousDocketEnd = match.index + match[0].length;
+      if (docketKey(match[0]) !== key) {
+        continue;
+      }
+      const identity = new RegExp(
+        String.raw`(?:(?<court>${COURT_SOURCE})\s+)?(?:ze\s+dne\s+(?<date>${DATE_SOURCE}),?\s*)?(?:č\.\s*j\.|čj\.|sp\.\s*zn\.)\s*$`,
+        "u",
+      ).exec(context)?.groups;
+      const date = identity?.["date"];
+      const court = identity?.["court"];
+      const reviewedDate = date === undefined ? null : dateOf(date);
+      const reviewedCourt =
+        court === undefined ? null : canonicalCzechReviewCourt(court);
+      const candidates = sameFileTargets.filter(
+        (candidate) =>
+          (reviewedCourt === null ||
+            candidate.reviewedCourt === reviewedCourt) &&
+          (reviewedDate === null ||
+            candidate.reviewedDecisionDate === null ||
+            candidate.reviewedDecisionDate === reviewedDate),
+      );
+      if (court === undefined && /(?<!\p{L})soudu(?!\p{L})/u.test(context)) {
+        if (candidates.includes(target)) {
+          ambiguous = true;
         }
-        const date = new RegExp(
-          String.raw`ze\s+dne\s+(?<date>${DATE_SOURCE}),?\s*(?:č\.\s*j\.|čj\.|sp\.\s*zn\.)\s*$`,
-          "u",
-        ).exec(item.slice(0, match.index))?.groups?.["date"];
-        const reviewedDate = date === undefined ? null : dateOf(date);
-        return reviewedDate === null
-          ? sameFileTargetCount === 1
-          : target.reviewedDecisionDate === null ||
-              reviewedDate === target.reviewedDecisionDate;
-      });
+        continue;
+      }
+      if (candidates.length === 1 && candidates[0] === target) {
+        return "target";
+      }
+      if (candidates.includes(target)) {
+        ambiguous = true;
+      }
     }
-    return null;
+    return ambiguous ? "ambiguous" : "other";
   };
-  const dispositionItems = items.filter((item) => {
-    if (!reversal.test(item)) {
-      return false;
-    }
-    const named = namesTarget(item);
-    if (named !== null) {
-      return named;
-    }
-    // Without an identity in the holding, only a sole reviewed judgment can
-    // inherit the generic disposition. Orders about counsel are separate.
-    if (targetCount !== 1 || ancillaryOrder.test(item)) {
-      return false;
-    }
-    const documentType =
-      target.documentType === "rozsudku" ? "rozsudek" : target.documentType;
-    return new RegExp(
-      String.raw`^(?:napaden[ýé]\s+)?(?:${documentType}|výrok(?:u|y)?\s+)`,
-      "iu",
-    ).test(item.trim());
-  });
-  const rejection = items.some(
-    (item) => remedyRejected.test(item) && namesTarget(item) !== false,
+  const dispositions = items.map((item) => ({
+    item,
+    match: namesTarget(item),
+  }));
+  const dispositionItems = dispositions
+    .filter(({ item, match }) => {
+      if (!reversal.test(item)) {
+        return false;
+      }
+      if (match !== "unnamed") {
+        return match === "target";
+      }
+      // Without an identity in the holding, only a sole reviewed judgment can
+      // inherit the generic disposition. Orders about counsel are separate.
+      if (targetCount !== 1 || ancillaryOrder.test(item)) {
+        return false;
+      }
+      const documentType =
+        target.documentType === "rozsudku" ? "rozsudek" : target.documentType;
+      return new RegExp(
+        String.raw`^(?:napaden[ýé]\s+)?(?:${documentType}|výrok(?:u|y)?\s+)`,
+        "iu",
+      ).test(item.trim());
+    })
+    .map(({ item }) => item);
+  const rejection = dispositions.some(
+    ({ item, match }) =>
+      remedyRejected.test(item) && (match === "target" || match === "unnamed"),
   );
   if (dispositionItems.length === 0) {
+    // A remaining-part rejection cannot settle which of the indistinguishable
+    // judgments an explicit but ambiguous annulment overturned.
+    if (
+      dispositions.some(
+        ({ item, match }) => match === "ambiguous" && reversal.test(item),
+      )
+    ) {
+      return "unknown";
+    }
     if (rejection) {
       return "upheld";
     }
@@ -280,12 +342,11 @@ export const extractCzechAppealReviews = ({
       target,
       items,
       targetCount: targets.length,
-      sameFileTargetCount: targets.filter(
+      sameFileTargets: targets.filter(
         (candidate) =>
-          candidate.reviewedCourt === target.reviewedCourt &&
           docketKey(candidate.reviewedCaseNumber) ===
-            docketKey(target.reviewedCaseNumber),
-      ).length,
+          docketKey(target.reviewedCaseNumber),
+      ),
     }),
   }));
 };
@@ -354,13 +415,17 @@ export const planCzechAppealReviews = ({
     Array.isArray(rawRows) &&
     rawRows.some((row) => isRecord(row) && row["status"] === "incomplete");
   const stored = metadata?.["publisherReviews"];
-  const parsed = v.safeParse(v.array(publisherReviewSchema), stored ?? []);
+  const parsed = v.safeParse(v.nullish(v.array(publisherReviewSchema)), stored);
   if (!parsed.success) {
     return panic(
       "Publisher review metadata does not match its ingestion contract",
     );
   }
-  if (parsed.output.length === 0) {
+  if (
+    parsed.output === undefined ||
+    parsed.output === null ||
+    parsed.output.length === 0
+  ) {
     // An empty publisher table supplies no usable target identity. A malformed
     // row is retained by the adapter and reported as conflicting evidence.
     return opening.map((review) => ({

@@ -4,13 +4,18 @@ import { sql } from "drizzle-orm";
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import { readDecisionDocketReference } from "@stll/api-contract/decision-docket-reference";
 
+import type { Transaction } from "@/api/db/root";
 import { caseLawDecisionReviews, caseLawDecisions } from "@/api/db/schema";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { planCzechAppealReviews } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { CASE_LAW_REVIEW_EXTRACTION_VERSION } from "@/api/handlers/case-law/ingestion/review-outcomes";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import type { SystemAuditCounts } from "@/api/lib/system-audit/actors";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /** Null preserves existing edges when an observation supplies no new evidence. */
 type PlanDecisionReviewsOptions = {
@@ -81,7 +86,7 @@ type WriteDecisionReviewsOptions = {
  * A two-row candidate cap makes ambiguity explicit instead of picking a row.
  */
 export const writeDecisionReviews = async (
-  tx: CitationGraphTransaction,
+  tx: CitationGraphTransaction<Transaction>,
   {
     decisionId,
     country,
@@ -92,17 +97,31 @@ export const writeDecisionReviews = async (
   if (country !== "CZE" && previousIdentity?.country !== "CZE") {
     return;
   }
+  // This invocation is one tenantless reconciliation operation, including lazy reparses.
+  const auditSubject = createSafeId<"systemScriptRun">();
+  const counts = {
+    removedReviews: 0,
+    writtenReviews: 0,
+    resolvedReviews: 0,
+    extractionVersions: 0,
+  } satisfies SystemAuditCounts<"system:case-law-review-reconcile">;
   if (country !== "CZE") {
-    // audit: skip — remove procedural projection after a jurisdiction correction
-    await tx.execute(sql`DELETE FROM ${caseLawDecisionReviews}
-      WHERE reviewing_decision_id = ${decisionId}::uuid`);
-    // audit: skip — the corrected decision no longer belongs to the Czech projection
-    await tx.execute(sql`UPDATE ${caseLawDecisions}
-      SET review_extraction_version = NULL WHERE id = ${decisionId}::uuid`);
+    counts.removedReviews += executedRows(
+      await tx.execute(sql`DELETE FROM ${caseLawDecisionReviews}
+      WHERE reviewing_decision_id = ${decisionId}::uuid
+      RETURNING 1`),
+    ).length;
+
+    counts.extractionVersions += executedRows(
+      await tx.execute(sql`UPDATE ${caseLawDecisions}
+      SET review_extraction_version = NULL WHERE id = ${decisionId}::uuid
+        AND review_extraction_version IS NOT NULL
+      RETURNING 1`),
+    ).length;
   }
   if (country === "CZE" && reviews !== null) {
-    // audit: skip — derived procedural history of public court decisions
-    await tx.execute(sql`DELETE FROM ${caseLawDecisionReviews} stored
+    counts.removedReviews += executedRows(
+      await tx.execute(sql`DELETE FROM ${caseLawDecisionReviews} stored
       WHERE reviewing_decision_id = ${decisionId}::uuid
         AND NOT EXISTS (
           SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(reviews)}::text::jsonb)
@@ -110,10 +129,12 @@ export const writeDecisionReviews = async (
           WHERE incoming."reviewedCourt" = stored.reviewed_court
             AND incoming."reviewedCaseNumber" = stored.reviewed_case_number
             AND incoming."reviewedDecisionDate" IS NOT DISTINCT FROM stored.reviewed_decision_date
-        )`);
+        )
+      RETURNING 1`),
+    ).length;
     if (reviews.length > 0) {
-      // audit: skip — derived procedural history of public court decisions
-      await tx.execute(sql`
+      counts.writtenReviews += executedRows(
+        await tx.execute(sql`
         INSERT INTO ${caseLawDecisionReviews} (
           reviewing_decision_id, reviewed_case_number, reviewed_citation_key,
           reviewed_docket_family_key, reviewed_court, reviewed_decision_date,
@@ -150,16 +171,22 @@ export const writeDecisionReviews = async (
           EXCLUDED.reviewed_docket_family_key, EXCLUDED.reviewed_decision_date,
           EXCLUDED.reviewed_sheet_number, EXCLUDED.outcome, EXCLUDED.source,
           EXCLUDED.evidence_classification, EXCLUDED.opening_evidence, EXCLUDED.parser_version)
-      `);
+
+      RETURNING 1`),
+      ).length;
     }
-    // audit: skip — version of public court decision header/holding extraction
-    await tx.execute(sql`UPDATE ${caseLawDecisions}
+
+    counts.extractionVersions += executedRows(
+      await tx.execute(sql`UPDATE ${caseLawDecisions}
       SET review_extraction_version = ${CASE_LAW_REVIEW_EXTRACTION_VERSION}
       WHERE id = ${decisionId}::uuid AND country = 'CZE'
-        AND review_extraction_version IS DISTINCT FROM ${CASE_LAW_REVIEW_EXTRACTION_VERSION}`);
+        AND review_extraction_version IS DISTINCT FROM ${CASE_LAW_REVIEW_EXTRACTION_VERSION}
+      RETURNING 1`),
+    ).length;
   }
-  // audit: skip — resolve public procedural edges under the citation graph lock
-  await tx.execute(sql`
+
+  counts.resolvedReviews += executedRows(
+    await tx.execute(sql`
     WITH affected AS (
       SELECT review.*
       FROM ${caseLawDecisionReviews} review
@@ -213,5 +240,11 @@ export const writeDecisionReviews = async (
       AND review.reviewed_case_number = resolved.reviewed_case_number
       AND review.reviewed_decision_date IS NOT DISTINCT FROM resolved.reviewed_decision_date
       AND review.reviewed_decision_id IS DISTINCT FROM resolved.target
-  `);
+
+      RETURNING 1`),
+  ).length;
+  await recordSystemAudit(tx, "system:case-law-review-reconcile", {
+    subject: auditSubject,
+    counts,
+  });
 };

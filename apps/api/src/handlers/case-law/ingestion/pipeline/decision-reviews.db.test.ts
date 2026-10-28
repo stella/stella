@@ -16,6 +16,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
 import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const MIGRATION =
   "../../../../../drizzle/20261028173000_case_law_decision_reviews/migration.sql";
@@ -65,7 +66,24 @@ const prepare = async () => {
       ast_s3_key text
     );
   `);
+  await client.exec(`CREATE TABLE system_audit_runs (
+    id uuid PRIMARY KEY, actor text NOT NULL, subject text NOT NULL,
+    counts jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+  );
+  ALTER TABLE system_audit_runs ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE system_audit_runs FORCE ROW LEVEL SECURITY;
+  CREATE POLICY system_audit_runs_owner_access ON system_audit_runs
+    FOR ALL TO public USING (current_user = (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.system_audit_runs'::regclass))
+    WITH CHECK (current_user = (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.system_audit_runs'::regclass));`);
   await client.exec(await Bun.file(new URL(MIGRATION, import.meta.url)).text());
+  await client.exec(
+    await Bun.file(
+      new URL(
+        "../../../../../drizzle/20261028200000_review_reconciliation_audit/migration.sql",
+        import.meta.url,
+      ),
+    ).text(),
+  );
   return client;
 };
 type Db = ReturnType<typeof drizzle>;
@@ -109,12 +127,15 @@ const apply = async ({
   await runCitationGraphTransaction(
     (run) => db.transaction(run),
     (tx) =>
-      writeDecisionReviews(tx, {
-        decisionId: id,
-        country,
-        previousIdentity,
-        reviews: plan,
-      }),
+      writeDecisionReviews(
+        asTestRaw<Parameters<typeof writeDecisionReviews>[0]>(tx),
+        {
+          decisionId: id,
+          country,
+          previousIdentity,
+          reviews: plan,
+        },
+      ),
   );
 const links = async (client: PGlite) =>
   (
@@ -146,6 +167,31 @@ test("the public NSS/KS pair converges under replay and links a later target arr
     "reviewed_decision_id",
     REVIEWED,
   );
+  const auditBeforeReplay = await client.query(
+    "SELECT actor, subject, counts FROM system_audit_runs ORDER BY created_at, id",
+  );
+  expect(auditBeforeReplay.rows).toEqual([
+    {
+      actor: "system:case-law-review-reconcile",
+      subject: expect.any(String),
+      counts: {
+        removedReviews: 0,
+        writtenReviews: 1,
+        resolvedReviews: 0,
+        extractionVersions: 1,
+      },
+    },
+    {
+      actor: "system:case-law-review-reconcile",
+      subject: expect.any(String),
+      counts: {
+        removedReviews: 0,
+        writtenReviews: 0,
+        resolvedReviews: 1,
+        extractionVersions: 0,
+      },
+    },
+  ]);
   const first = await links(client);
   const physical = await client.query(
     "SELECT xmin::text, ctid::text FROM case_law_decision_reviews",
@@ -153,6 +199,13 @@ test("the public NSS/KS pair converges under replay and links a later target arr
   await apply({ db, id: REVIEWING, plan: planned });
   await apply({ db, id: REVIEWING, plan: planned });
   expect(await links(client)).toEqual(first);
+  expect(
+    (
+      await client.query(
+        "SELECT actor, subject, counts FROM system_audit_runs ORDER BY created_at, id",
+      )
+    ).rows,
+  ).toEqual(auditBeforeReplay.rows);
   expect(
     (
       await client.query(
@@ -406,12 +459,15 @@ test.each([
             docket_family_key = ${correctedIdentity.docketFamilyKey},
             country = ${correctedIdentity.country}
           WHERE id = ${duplicate}::uuid`);
-      await writeDecisionReviews(tx, {
-        decisionId: duplicate,
-        country: "country" in changes ? changes.country : "CZE",
-        previousIdentity,
-        reviews: null,
-      });
+      await writeDecisionReviews(
+        asTestRaw<Parameters<typeof writeDecisionReviews>[0]>(tx),
+        {
+          decisionId: duplicate,
+          country: "country" in changes ? changes.country : "CZE",
+          previousIdentity,
+          reviews: null,
+        },
+      );
     });
     expect((await links(client)).at(0)).toHaveProperty(
       "reviewed_decision_id",
@@ -427,3 +483,63 @@ test.each([
     expect(await links(client)).toEqual(settled);
   },
 );
+
+test("review mutations and their aggregate audit receipt roll back together", async () => {
+  await using client = await prepare();
+  const db = drizzle({ client });
+  await insertDecision(db, { id: REVIEWING, court: "Nejvyšší správní soud" });
+  await client.exec(`CREATE FUNCTION reject_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'review audit unavailable'; END $$;
+    CREATE TRIGGER reject_review_audit BEFORE INSERT ON system_audit_runs
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_review_audit();`);
+  const rejected = await rejectionOf(
+    apply({ db, id: REVIEWING, plan: reviews() }),
+  );
+  expect(rejected).toMatchObject({
+    cause: { message: "review audit unavailable" },
+  });
+  expect(await links(client)).toEqual([]);
+  expect(
+    (await client.query("SELECT count(*)::integer AS n FROM system_audit_runs"))
+      .rows,
+  ).toEqual([{ n: 0 }]);
+  expect(
+    (
+      await client.query(
+        "SELECT review_extraction_version FROM case_law_decisions WHERE id = $1",
+        [REVIEWING],
+      )
+    ).rows,
+  ).toEqual([{ review_extraction_version: null }]);
+});
+
+test("ingestion may append review reconciliation audits but cannot impersonate another system actor", async () => {
+  await using client = await prepare();
+  const db = drizzle({ client });
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    await tx.execute(sql`INSERT INTO system_audit_runs (id, actor, subject, counts)
+      VALUES (${Bun.randomUUIDv7()}::uuid, 'system:case-law-review-reconcile', ${Bun.randomUUIDv7()}, '{}')`);
+  });
+  const denied = await rejectionOf(
+    db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await tx.execute(sql`INSERT INTO system_audit_runs (id, actor, subject, counts)
+      VALUES (${Bun.randomUUIDv7()}::uuid, 'system:case-law-coverage-refresh', ${Bun.randomUUIDv7()}, '{}')`);
+    }),
+  );
+  expect(denied).toMatchObject({ cause: { code: "42501" } });
+  expect(
+    (await client.query("SELECT actor FROM system_audit_runs")).rows,
+  ).toEqual([{ actor: "system:case-law-review-reconcile" }]);
+  for (const privilege of ["SELECT", "UPDATE", "DELETE"]) {
+    expect(
+      (
+        await client.query(
+          "SELECT has_table_privilege('stella_ingestion', 'system_audit_runs', $1) AS allowed",
+          [privilege],
+        )
+      ).rows,
+    ).toEqual([{ allowed: false }]);
+  }
+});

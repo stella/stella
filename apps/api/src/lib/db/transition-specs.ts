@@ -389,7 +389,6 @@ export const TRANSITIONS = {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
   caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
-  caseLawDecisionReviews: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },

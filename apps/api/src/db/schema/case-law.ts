@@ -1973,7 +1973,8 @@ export const caseLawDecisionReviews = p.pgTable(
     reviewedSheetNumber: p.varchar("reviewed_sheet_number", { length: 32 }),
     outcome: p.text({ enum: DECISION_REVIEW_OUTCOMES }).notNull(),
     source: p.text({ enum: DECISION_REVIEW_SOURCES }).notNull(),
-    evidenceStatus: p
+    /** Classification of the retained source evidence, recomputed from parser input. */
+    evidenceClassification: p
       .text("evidence_classification", {
         enum: DECISION_REVIEW_EVIDENCE_STATUSES,
       })
@@ -2047,7 +2048,7 @@ export const caseLawDecisionReviews = p.pgTable(
     ),
     p.check(
       "case_law_decision_reviews_evidence_classification_values",
-      sql`${t.evidenceStatus} IN (${sql.join(
+      sql`${t.evidenceClassification} IN (${sql.join(
         DECISION_REVIEW_EVIDENCE_STATUSES.map((value) => sql.raw(`'${value}'`)),
         sql`, `,
       )})`,

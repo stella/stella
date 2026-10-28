@@ -27,6 +27,99 @@ const constitutionalPair = {
 };
 
 describe("Czech appeal history", () => {
+  test.each(["Okresního soudu v Ostravě", "Okresního soudu v Opavě"])(
+    "binds a reversal to the named court when docket and date coincide: %s",
+    (court) => {
+      const reviews = extractCzechAppealReviews({
+        header:
+          "proti rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 a rozsudku Okresního soudu v Opavě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+        holding: `I. Rozsudek ${court} ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 se ruší. II. Ve zbývajícím rozsahu se ústavní stížnost odmítá.`,
+      });
+      expect(
+        reviews.map(({ reviewedCourt, outcome }) => ({
+          reviewedCourt,
+          outcome,
+        })),
+      ).toEqual([
+        {
+          reviewedCourt: "Okresní soud v Ostravě",
+          outcome:
+            court === "Okresního soudu v Ostravě" ? "overturned" : "upheld",
+        },
+        {
+          reviewedCourt: "Okresní soud v Opavě",
+          outcome:
+            court === "Okresního soudu v Opavě" ? "overturned" : "upheld",
+        },
+      ]);
+    },
+  );
+
+  test("abstains when the holding omits the court of otherwise identical targets", () => {
+    const reviews = extractCzechAppealReviews({
+      header:
+        "proti rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 a rozsudku Okresního soudu v Opavě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+      holding:
+        "I. Rozsudek ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 se ruší. II. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+    });
+    expect(reviews.map(({ outcome }) => outcome)).toEqual([
+      "unknown",
+      "unknown",
+    ]);
+  });
+
+  test("matches an explicit court even when the holding omits the decision date", () => {
+    const reviews = extractCzechAppealReviews({
+      header:
+        "proti rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 a rozsudku Okresního soudu v Opavě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+      holding:
+        "Rozsudek Okresního soudu v Opavě č. j. 25 C 20/2024-35 se ruší.",
+    });
+    expect(reviews.map(({ outcome }) => outcome)).toEqual([
+      "unknown",
+      "overturned",
+    ]);
+  });
+
+  test("a reversal without a docket cannot make its remaining rejection conclusive", () => {
+    const reviews = extractCzechAppealReviews({
+      header:
+        "proti rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 a rozsudku Okresního soudu v Opavě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+      holding:
+        "I. Rozsudek Okresního soudu v Ostravě se ruší. II. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+    });
+    expect(reviews.map(({ outcome }) => outcome)).toEqual([
+      "unknown",
+      "upheld",
+    ]);
+  });
+
+  test.each([
+    "Rozsudek Krajského soudu v Brně ze dne 16. 1. 2025, č. j. 25 A 20/2024-35 se ruší.",
+    "Rozsudek Krajského soudu v Brně se ruší.",
+  ])(
+    "does not apply a disposition expressly naming a different court: %s",
+    (holding) => {
+      expect(
+        extractCzechAppealReviews({
+          ...nssPair,
+          holding,
+        }).at(0)?.outcome,
+      ).toBe("unknown");
+    },
+  );
+
+  test("abstains when a named court falls outside the holding grammar", () => {
+    expect(
+      extractCzechAppealReviews({
+        header:
+          "proti rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+        holding:
+          "Rozsudek Okresního soudu Plzeň-město ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 se ruší. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+      }).at(0)?.outcome,
+    ).toBe("unknown");
+  });
+
   test.each([false, true])(
     "binds opposite dispositions to their own targets in one holding item (reverse order: %s)",
     (reverseOrder) => {

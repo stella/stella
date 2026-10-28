@@ -79,7 +79,7 @@ export const readDecisionReviewsWithin = async ({
         reviewedDecisionDate: caseLawDecisionReviews.reviewedDecisionDate,
         outcome: caseLawDecisionReviews.outcome,
         source: caseLawDecisionReviews.source,
-        evidenceStatus: caseLawDecisionReviews.evidenceStatus,
+        evidenceStatus: caseLawDecisionReviews.evidenceClassification,
       })
       .from(caseLawDecisionReviews)
       .where(
