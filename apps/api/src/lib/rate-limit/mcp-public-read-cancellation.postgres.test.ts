@@ -22,10 +22,6 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 describe.skipIf(!enabled)(
   "public-read cancellation with PostgreSQL and Valkey",
   () => {
-    afterAll(async () => {
-      await rootDb.$client.close();
-    });
-
     test("lease loss cancels the running backend before releasing the caller slot", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("PostgreSQL URL required");
@@ -281,3 +277,11 @@ describe.skipIf(!enabled)(
     });
   },
 );
+
+if (enabled) {
+  // Other gated suites use the same process-owned root pool after this suite.
+  afterAll(async () => {
+    const rows = await rootDb.execute(sql`SELECT 1 AS available`);
+    expect(rows.at(0)?.["available"]).toBe(1);
+  });
+}
