@@ -22,10 +22,6 @@ type PendingPageOrganizerUpload = Extract<
   { type: "pending" }
 >;
 
-export type PageOrganizerUploadOwner = ReturnType<
-  typeof createPageOrganizerUploadOwner
->;
-
 /** Owns upload identity so an obsolete async result cannot become committable. */
 export function createPageOrganizerUploadOwner() {
   let nextUploadId = 0;
