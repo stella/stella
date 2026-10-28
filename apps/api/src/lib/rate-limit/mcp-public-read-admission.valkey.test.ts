@@ -9,7 +9,11 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createRedisClient } from "@/api/lib/redis-client";
 
-import { RELEASE_SCRIPT, RENEW_SCRIPT } from "./concurrency-lease";
+import {
+  ACQUIRE_SCRIPT,
+  RELEASE_SCRIPT,
+  RENEW_SCRIPT,
+} from "./concurrency-lease";
 import { withMcpPublicReadAdmission } from "./mcp-public-read-admission";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
@@ -400,9 +404,11 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
       });
     });
 
-    test("an unreleased lease expires and completed work keeps its result", async () => {
+    test("a stale unreleased lease is reaped while completed work keeps its result", async () => {
       await withStore(async (client) => {
         const identity = caller();
+        let leaseKey: string | undefined;
+        let leaseId: string | undefined;
         const offline = new HandlerError({
           status: 503,
           code: "service_unavailable",
@@ -413,10 +419,15 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           limit: 1,
           leaseMs: 500,
           redis: {
-            send: async (command, args) =>
-              args.at(0) === RELEASE_SCRIPT
+            send: async (command, args) => {
+              if (args.at(0) === ACQUIRE_SCRIPT) {
+                leaseKey = args.at(2);
+                leaseId = args.at(7);
+              }
+              return args.at(0) === RELEASE_SCRIPT
                 ? await Promise.reject(offline)
-                : await client.send(command, args),
+                : await client.send(command, args);
+            },
           },
           run: async () => "complete",
         });
@@ -431,8 +442,10 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             run: async () => undefined,
           }),
         );
-        // real-time: Valkey expiry must free an unreleased lease without client cleanup.
-        await Bun.sleep(550);
+        if (leaseKey === undefined || leaseId === undefined) {
+          panic("Expected the unreleased lease identity");
+        }
+        await client.send("ZADD", [leaseKey, "0", leaseId]);
         expect(
           await withMcpPublicReadAdmission({
             caller: identity,
