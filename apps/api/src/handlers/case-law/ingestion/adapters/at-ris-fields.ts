@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-at: Inventory targets describe already retained source values without changing parsed decisions.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 /**
  * One field inventory for the eleven tribunals this publisher serves.
