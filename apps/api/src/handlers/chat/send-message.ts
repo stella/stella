@@ -87,6 +87,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
+  requireUserMessageContent,
   resolveBrowserClientCapability,
   validateMessage,
   validateToolCallParts,
@@ -1905,6 +1906,18 @@ const prepareValidatedIncomingMessage = async ({
       return Result.err(validatedMessageResult.error);
     }
     const validatedMessage = validatedMessageResult.value;
+    // Judged on the text the model would read, after the composer HTML is
+    // normalized, and before the thread is created or changed: a refused
+    // message leaves nothing behind and reaches no provider.
+    const contentResult = requireUserMessageContent(
+      parseMessage({
+        accessibleWorkspaceIds,
+        message: validatedMessage.message,
+      }).message,
+    );
+    if (Result.isError(contentResult)) {
+      return Result.err(contentResult.error);
+    }
 
     // Captured once and threaded through to generateThreadTitle below: the
     // generator's guard compares the thread's live title against this

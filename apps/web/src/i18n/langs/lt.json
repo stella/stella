@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
+    "sendErrorMessageEmpty": "Šioje žinutėje nėra teksto, kurį būtų galima išsiųsti. Įrašykite klausimą arba pridėkite failą ir tada išsiųskite žinutę.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
     "sendErrorNotStarted": "Pokalbis vis dar užimtas. Šiek tiek palaukite ir bandykite dar kartą.",
     "sendErrorPreparationFailed": "Nepavyko paruošti žinutės. Iš naujo atidarykite pokalbį ir bandykite dar kartą.",

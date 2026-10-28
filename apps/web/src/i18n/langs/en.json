@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "The chat could not continue. Send a new message to start again.",
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.",
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.",
+    "sendErrorMessageEmpty": "This message has no text to send. Type your question or attach a file, then send it.",
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.",
     "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.",
     "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.",

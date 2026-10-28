@@ -2,63 +2,43 @@ import { useTranslations } from "use-intl";
 
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { CopyButton } from "@stll/ui/copy-button";
 
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 
-type ProviderDiagnosticMessageProps = {
-  diagnostic: ProviderDiagnostic;
+type ProviderSetupGuidanceNoticeProps = {
+  /**
+   * Only the setup code: the provider's own wording is not shown to readers.
+   * It is untranslated, names internals ("messages.0") and offers no action;
+   * the API reports it for support instead.
+   */
+  code: ProviderDiagnostic["code"];
 };
 
-export const ProviderDiagnosticContent = ({
-  diagnostic,
-}: ProviderDiagnosticMessageProps) => {
+/**
+ * The fix for a provider refusal that names a known setup problem with the
+ * organization's own key: what to change and where. Renders nothing for any
+ * other refusal, so the surface's own translated message stands alone.
+ */
+export const ProviderSetupGuidanceNotice = ({
+  code,
+}: ProviderSetupGuidanceNoticeProps) => {
   const t = useTranslations("organization.aiConfig");
-  const guidance = providerSetupGuidance(diagnostic.code ?? undefined);
+  const guidance = providerSetupGuidance(code ?? undefined);
+  if (guidance === null) {
+    return null;
+  }
+  // Phrasing elements only: a toast renders its description inside a <p>.
   return (
-    <div className="min-w-0 space-y-2" role="alert">
-      <p
-        className="text-destructive text-sm wrap-anywhere whitespace-pre-wrap"
-        dir="auto"
+    <span className="text-foreground block space-y-1 text-sm">
+      <span className="block">{t(guidance.guidance)}</span>
+      <a
+        className="underline underline-offset-2"
+        href={sanitizeHref(guidance.url)}
+        rel="noreferrer"
+        target="_blank"
       >
-        <bdi>{diagnostic.provider}</bdi>: {diagnostic.message}
-      </p>
-      {guidance !== null && (
-        <div className="text-foreground space-y-1 text-sm">
-          <p>{t(guidance.guidance)}</p>
-          <a
-            className="underline underline-offset-2"
-            href={sanitizeHref(guidance.url)}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {t(guidance.linkLabel)}
-          </a>
-        </div>
-      )}
-    </div>
-  );
-};
-
-type ProviderDiagnosticToastProps = ProviderDiagnosticMessageProps & {
-  onCopy: () => Promise<boolean>;
-};
-
-export const ProviderDiagnosticToast = ({
-  diagnostic,
-  onCopy,
-}: ProviderDiagnosticToastProps) => {
-  const t = useTranslations("common");
-  return (
-    <div className="space-y-2">
-      <ProviderDiagnosticContent diagnostic={diagnostic} />
-      <CopyButton
-        size="xs"
-        variant="ghost"
-        label={t("copy")}
-        copiedLabel={t("copied")}
-        onCopy={onCopy}
-      />
-    </div>
+        {t(guidance.linkLabel)}
+      </a>
+    </span>
   );
 };

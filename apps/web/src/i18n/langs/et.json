@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
+    "sendErrorMessageEmpty": "Selles sõnumis pole saatmiseks teksti. Kirjuta oma küsimus või lisa fail ja saada sõnum seejärel.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
     "sendErrorNotStarted": "Vestlus on veel hõivatud. Oodake veidi ja proovige uuesti.",
     "sendErrorPreparationFailed": "Sõnumit ei õnnestunud ette valmistada. Avage vestlus uuesti ja proovige veel kord.",

@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Der Chat konnte nicht fortgesetzt werden. Senden Sie eine neue Nachricht, um neu zu beginnen.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuchen Sie es mit einer enger gefassten Anfrage erneut.",
+    "sendErrorMessageEmpty": "Diese Nachricht enthält keinen Text zum Senden. Geben Sie Ihre Frage ein oder hängen Sie eine Datei an und senden Sie die Nachricht dann.",
     "sendErrorModelUnavailable": "Das konfigurierte KI-Modell ist nicht mehr verfügbar. Bitten Sie Ihren Arbeitsbereichs-Admin, das Modell in den Organisationseinstellungen zu aktualisieren.",
     "sendErrorNotStarted": "Die Unterhaltung ist noch beschäftigt. Warten Sie einen Moment und versuchen Sie es erneut.",
     "sendErrorPreparationFailed": "Ihre Nachricht konnte nicht vorbereitet werden. Öffnen Sie den Chat erneut und versuchen Sie es noch einmal.",

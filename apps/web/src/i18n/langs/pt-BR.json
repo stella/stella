@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Não foi possível continuar o chat. Envie uma nova mensagem para começar de novo.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
+    "sendErrorMessageEmpty": "Esta mensagem não tem texto para enviar. Digite sua pergunta ou anexe um arquivo e depois envie a mensagem.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
     "sendErrorNotStarted": "A conversa ainda está ocupada. Aguarde um momento e tente novamente.",
     "sendErrorPreparationFailed": "Não foi possível preparar sua mensagem. Abra o chat novamente e tente de novo.",

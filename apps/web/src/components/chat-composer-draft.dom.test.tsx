@@ -297,3 +297,76 @@ test("a draft kept for a materialized thread is restored under that thread only"
   ]);
   expect(storedText(secondKey)).toBe("Start the review");
 });
+
+const insertHardBreak = (controller: ChatEditorController) => {
+  act(() => {
+    controller.editor?.chain().focus("end").setHardBreak().run();
+  });
+};
+
+const insertBlankText =
+  (text: string) => (controller: ChatEditorController) => {
+    act(() => {
+      controller.editor
+        ?.chain()
+        .focus("end")
+        .insertContent({ type: "text", text })
+        .run();
+    });
+  };
+
+// The editor's own emptiness check counts spaces and a line break as content,
+// so these drafts used to go out and reach the provider as an empty message.
+test.each([
+  ["spaces", insertBlankText("   ")],
+  ["a line break", insertHardBreak],
+  ["the spaces left after removing chips", insertBlankText("   ")],
+])(
+  "a draft of only %s is not sent and stays in the composer",
+  async (_label, fill) => {
+    const { controller } = await mount(firstThread);
+    fill(controller());
+    // The fault boundary: the editor itself does not call this draft empty.
+    expect(controller().editor?.isEmpty).toBe(false);
+    const originalDoc = controller().editor?.getJSON();
+    const sent: ChatInputDraft[] = [];
+
+    await act(async () =>
+      controller().submit((draft) => {
+        sent.push(draft);
+        return CHAT_SEND_SENT;
+      }),
+    );
+
+    expect(sent).toEqual([]);
+    expect(controller().editor?.getJSON()).toEqual(originalDoc);
+  },
+);
+
+test("a draft of chips alone is sent: a quoted passage is content", async () => {
+  const { controller } = await mount(firstThread);
+  act(() => {
+    controller()
+      .editor?.chain()
+      .focus("end")
+      .insertContent([
+        {
+          type: "pastedText",
+          attrs: { label: "1 Afs 2/2020", source: "paste", text: "Quoted" },
+        },
+        { type: "text", text: " " },
+      ])
+      .run();
+  });
+  const sent: ChatInputDraft[] = [];
+
+  await act(async () =>
+    controller().submit((draft) => {
+      sent.push(draft);
+      return CHAT_SEND_SENT;
+    }),
+  );
+
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.html).toContain("Quoted");
+});

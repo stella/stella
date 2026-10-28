@@ -5,6 +5,7 @@ import {
   API_FILE_SECURITY_REJECTED_ERROR_CODE,
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
+  CHAT_MESSAGE_EMPTY_ERROR_CODE,
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
   ENCRYPTED_CONTENT_ERROR_CODE,
@@ -236,6 +237,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CHAT_MESSAGE_EMPTY_ERROR_CODE]: "chat.sendErrorMessageEmpty",
   [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [MEMBER_REMOVAL_BUSY_CODE]: "errors.actionAdmission.concurrencyBusy",

@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Nie udało się kontynuować czatu. Wyślij nową wiadomość, aby zacząć od nowa.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
     "sendErrorLoopDetected": "Odpowiedź AI powtórzyła się zbyt wiele razy. Spróbuj ponownie z węższą prośbą.",
+    "sendErrorMessageEmpty": "Ta wiadomość nie zawiera tekstu do wysłania. Wpisz pytanie lub dołącz plik, a następnie ją wyślij.",
     "sendErrorModelUnavailable": "Skonfigurowany model AI nie jest już dostępny. Poproś administratora obszaru roboczego o zaktualizowanie modelu w ustawieniach organizacji.",
     "sendErrorNotStarted": "Rozmowa jest nadal zajęta. Poczekaj chwilę i spróbuj ponownie.",
     "sendErrorPreparationFailed": "Nie udało się przygotować wiadomości. Otwórz ponownie czat i spróbuj jeszcze raz.",

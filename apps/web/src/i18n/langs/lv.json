@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "Tērzēšanu neizdevās turpināt. Nosūtiet jaunu ziņojumu, lai sāktu no jauna.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
+    "sendErrorMessageEmpty": "Šajā ziņā nav teksta, ko nosūtīt. Ierakstiet savu jautājumu vai pievienojiet failu un pēc tam nosūtiet ziņu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
     "sendErrorNotStarted": "Saruna joprojām ir aizņemta. Nedaudz uzgaidiet un mēģiniet vēlreiz.",
     "sendErrorPreparationFailed": "Neizdevās sagatavot ziņojumu. Atveriet tērzēšanu vēlreiz un mēģiniet vēlreiz.",

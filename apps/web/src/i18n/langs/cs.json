@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "V chatu se nepodařilo pokračovat. Začněte znovu odesláním nové zprávy.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
     "sendErrorLoopDetected": "Odpověď AI se příliš opakovala. Zkuste to znovu s užším požadavkem.",
+    "sendErrorMessageEmpty": "Zpráva neobsahuje žádný text k odeslání. Napište dotaz nebo přiložte soubor a pak ji odešlete.",
     "sendErrorModelUnavailable": "Nastavený AI model už není dostupný. Požádejte správce pracovního prostoru, aby model aktualizoval v nastavení organizace.",
     "sendErrorNotStarted": "Konverzace je stále zaneprázdněná. Chvíli počkejte a zkuste to znovu.",
     "sendErrorPreparationFailed": "Zprávu se nepodařilo připravit. Znovu otevřete chat a zkuste to znovu.",

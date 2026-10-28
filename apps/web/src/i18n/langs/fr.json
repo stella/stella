@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "La conversation n’a pas pu continuer. Envoyez un nouveau message pour recommencer.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
     "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
+    "sendErrorMessageEmpty": "Ce message ne contient aucun texte à envoyer. Saisissez votre question ou joignez un fichier, puis envoyez-le.",
     "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
     "sendErrorNotStarted": "La conversation est encore occupée. Patientez un instant et réessayez.",
     "sendErrorPreparationFailed": "Votre message n’a pas pu être préparé. Rouvrez la conversation et réessayez.",

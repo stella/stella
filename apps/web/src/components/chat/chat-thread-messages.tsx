@@ -104,7 +104,7 @@ import {
 import {
   canForkAssistantMessage,
   canRetryAssistantMessage,
-  canRetryChatRequest,
+  finalChatRefusalKey,
 } from "@/components/chat/chat-user-actions";
 import { ConnectConnectorCard } from "@/components/chat/connect-connector-card";
 import { ContextNotice } from "@/components/chat/context-notice";
@@ -127,7 +127,7 @@ import { useSteadyValue } from "@/components/chat/use-steady-value";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { DocumentIcon } from "@/components/document-icon";
-import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
+import { ProviderSetupGuidanceNotice } from "@/components/provider-diagnostic-content";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
@@ -1110,14 +1110,17 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
-  const diagnostic = providerDiagnosticFromThrown(error);
+  const finalRefusalKey = finalChatRefusalKey(error);
+  // A provider refusal shows its typed message and, for a known setup
+  // problem, the fix; the provider's own wording is never shown.
+  const setupCode = providerDiagnosticFromThrown(error)?.code ?? null;
   const rejectedInput =
     refusal !== null &&
     (refusal.status === 400 || refusal.status === 422) &&
     !isDisplayableAPIError(refusal);
   let errorMessage = refusal?.message ?? t(chatErrorTranslationKey(error));
-  if (!canRetryChatRequest(error)) {
-    errorMessage = t("chat.sendErrorContinuationRejected");
+  if (finalRefusalKey !== undefined) {
+    errorMessage = t(finalRefusalKey);
   } else if (rejectedInput) {
     errorMessage = t("errors.api.validation");
   }
@@ -1145,11 +1148,8 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        {diagnostic !== undefined ? (
-          <ProviderDiagnosticMessage diagnostic={diagnostic} />
-        ) : (
-          <p className="text-sm">{errorMessage}</p>
-        )}
+        <p className="text-sm">{errorMessage}</p>
+        <ProviderSetupGuidanceNotice code={setupCode} />
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1166,7 +1166,7 @@ export const ChatErrorMessage = ({
               {t("chat.sendWithoutAnonymization")}
             </Button>
           )}
-          {onResend && canRetryChatRequest(error) && (
+          {onResend && finalRefusalKey === undefined && (
             <Button
               disabled={isGenerating}
               onClick={() => {

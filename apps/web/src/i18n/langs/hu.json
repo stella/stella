@@ -1690,6 +1690,7 @@
     "sendErrorContinuationRejected": "A csevegést nem sikerült folytatni. Az újrakezdéshez küldjön új üzenetet.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbálja újra szűkebb kéréssel.",
+    "sendErrorMessageEmpty": "Az üzenet nem tartalmaz elküldhető szöveget. Írja be a kérdését, vagy csatoljon egy fájlt, majd küldje el.",
     "sendErrorModelUnavailable": "A beállított AI-modell már nem érhető el. Kérje meg a munkaterület adminisztrátorát, hogy frissítse a modellt a szervezet beállításaiban.",
     "sendErrorNotStarted": "A beszélgetés még foglalt. Várjon egy kicsit, és próbálja újra.",
     "sendErrorPreparationFailed": "Nem sikerült előkészíteni az üzenetet. Nyissa meg újra a csevegést, és próbálja újra.",
