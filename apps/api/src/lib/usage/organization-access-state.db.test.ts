@@ -153,6 +153,18 @@ const strictLoads = async (
 /** The owner connection the creation hook and the operator script write through. */
 const ownerDb = () => asTestRaw<Transaction>(testDb);
 
+/**
+ * Records a creation inside a transaction, as the production creation callers
+ * do. ownerDb() is the shared test pool typed as a transaction, which the
+ * aggregate lock history already tracks, so it cannot open one itself.
+ */
+const recordCreation = async (
+  change: Parameters<typeof recordNewOrganizationAccessState>[1],
+) =>
+  await testDb.transaction(
+    async (tx) => await recordNewOrganizationAccessState(tx, change),
+  );
+
 const readState = async (organizationId: SafeId<"organization">) =>
   await testDb
     .select()
@@ -534,7 +546,7 @@ describe("with FEATURE_ORG_ACCESS_STATE off", () => {
   });
 
   test("a new organization keeps the self-managed-keys path", async () => {
-    await recordNewOrganizationAccessState(ownerDb(), {
+    await recordCreation({
       organizationId: createdOrgId,
       now: new Date(),
     });
@@ -546,7 +558,7 @@ describe("with FEATURE_ORG_ACCESS_STATE off", () => {
 
     // Recording again, even once enforcement is on, starts no evaluation.
     await withAccessStateEnforced(async () => {
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: createdOrgId,
         now: new Date(),
       });
@@ -561,7 +573,7 @@ describe("with FEATURE_ORG_ACCESS_STATE off", () => {
       state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
       origin: ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
     });
-    await recordNewOrganizationAccessState(ownerDb(), {
+    await recordCreation({
       organizationId: unenforcedReconciledOrgId,
       now: new Date(),
     });
@@ -627,7 +639,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
   test("a new organization starts one evaluation of the configured length", async () => {
     await withAccessStateEnforced(async () => {
       const now = new Date();
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: createdOrgId,
         now,
       });
@@ -639,7 +651,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await readCreationAudits(createdOrgId)).toHaveLength(0);
 
       // A replay does not restart it.
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: createdOrgId,
         now: new Date(now.getTime() + DAY_IN_MS),
       });
@@ -664,7 +676,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
             ),
           ),
       ).toHaveLength(1);
-      await recordNewOrganizationAccessState(ownerDb(), end);
+      await recordCreation(end);
       expect((await readState(createdOrgId))?.state).toBe(
         ORGANIZATION_ACCESS_STATE.evaluationEnded,
       );
@@ -703,7 +715,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await readCreationAudits(reconciledOrgId)).toHaveLength(0);
 
       const now = new Date();
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: reconciledOrgId,
         now,
       });
@@ -714,7 +726,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       });
 
       const started = await readState(reconciledOrgId);
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: reconciledOrgId,
         now: new Date(now.getTime() + DAY_IN_MS),
       });
@@ -726,7 +738,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
   test("an existing non-legacy self-managed state is left unchanged", async () => {
     await withAccessStateEnforced(async () => {
       const before = await readState(selfManagedOrgId);
-      await recordNewOrganizationAccessState(ownerDb(), {
+      await recordCreation({
         organizationId: selfManagedOrgId,
         now: new Date(),
       });
