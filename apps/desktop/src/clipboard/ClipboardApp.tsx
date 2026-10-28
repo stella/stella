@@ -39,6 +39,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ContextMenu } from "@stll/ui/context-menu";
 import {
   Dialog,
+  DIALOG_MOBILE_LAYOUT,
   DialogClose,
   DialogDescription,
   DialogFooter,
@@ -869,7 +870,7 @@ const DialogShell = ({
     >
       <DialogPopup
         backdropClassName="bg-background/50 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/92 max-w-sm rounded-[26px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] px-5 py-3"
@@ -1523,7 +1524,7 @@ const ClipboardWelcomeDialog = ({
     >
       <DialogPopup
         backdropClassName="bg-background/54 backdrop-blur-xl"
-        bottomStickOnMobile={false}
+        mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
         className="bg-popover/94 max-w-xl rounded-[28px] border-0 shadow-2xl backdrop-blur-3xl"
         showCloseButton={false}
         viewportClassName="grid-rows-[1fr_auto_1fr] p-4"

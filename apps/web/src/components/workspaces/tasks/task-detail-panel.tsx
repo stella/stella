@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouteContext } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -25,6 +25,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import {
   isListItemType,
   isTaskPriority,
@@ -60,6 +61,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -115,10 +117,7 @@ const TaskDetailPanelContent = ({
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
+  const userId = useAuthenticatedUser().id;
 
   const {
     data: task,
@@ -617,13 +616,12 @@ const TaskDetailPanelContent = ({
               />
             </span>
           ) : (
-            <button
-              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
-              onClick={startEditingName}
-              type="button"
+            <InspectorTitle
+              isEmpty={task.name === ""}
+              onEdit={startEditingName}
             >
-              {name}
-            </button>
+              {task.name === "" ? t("untitled") : task.name}
+            </InspectorTitle>
           )}
         </div>
 

@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import type { WorkspaceView } from "@/lib/types";
-import {
-  getCurrentWorkspaceViewId,
-  getWorkspaceRevealTarget,
-} from "@/lib/workspaces/reveal-navigation";
+import { getWorkspaceRevealTarget } from "@/lib/workspaces/reveal-navigation";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 const view = (
   id: string,
@@ -16,25 +14,49 @@ const someFilter: WorkspaceView["layout"]["filters"] = [
   { type: "group", combinator: "and", children: [] },
 ];
 
+const overviewId = "019a0000-0000-7000-8000-000000000401";
+const filesId = "019a0000-0000-7000-8000-000000000402";
+const otherFilesId = "019a0000-0000-7000-8000-000000000403";
+
 const folderReveal = {
+  currentView: undefined,
   entityId: "folder_1",
   fallbackFolderId: "folder_1",
-  pathname: "/chat",
   targetWorkspaceId: "ws_1",
 };
 
 describe("reveal navigation", () => {
-  test("reads the active view id from workspace paths", () => {
-    expect(getCurrentWorkspaceViewId("/workspaces/ws_1/files", "ws_1")).toBe(
-      "files",
-    );
+  test("scopes into the view on screen when the matter has no tree", () => {
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        currentView: { workspaceId: "ws_1", viewId: overviewId },
+        views: [view(overviewId, "overview")],
+      }).params,
+    ).toEqual({ workspaceId: "ws_1", viewId: overviewId });
   });
 
-  test("ignores paths outside the target workspace", () => {
-    expect(getCurrentWorkspaceViewId("/chat", "ws_1")).toBeNull();
+  test("a view on screen in another matter, or none, is not kept", () => {
     expect(
-      getCurrentWorkspaceViewId("/workspaces/ws_2/files", "ws_1"),
-    ).toBeNull();
+      [{ workspaceId: "ws_2", viewId: otherFilesId }, undefined].map(
+        (currentView) =>
+          getWorkspaceRevealTarget({
+            ...folderReveal,
+            currentView,
+            views: [
+              view(filesId, "filesystem"),
+              view(otherFilesId, "filesystem"),
+            ],
+          }).params.viewId,
+      ),
+    ).toEqual([filesId, filesId]);
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        currentView: { workspaceId: "ws_2", viewId: overviewId },
+        views: [view(overviewId, "overview")],
+      }).params.viewId,
+    ).toBe(DEFAULT_WORKSPACE_VIEW_ID);
   });
 
   test("opens the file tree, not the first view, and reveals the entity", () => {
@@ -54,20 +76,20 @@ describe("reveal navigation", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: "/workspaces/ws_1/overview",
-        views: [view("overview", "overview"), view("files", "filesystem")],
+        currentView: { workspaceId: "ws_1", viewId: overviewId },
+        views: [view(overviewId, "overview"), view(filesId, "filesystem")],
       }).params.viewId,
-    ).toBe("files");
+    ).toBe(filesId);
   });
 
   test("stays on the current tree view when there are several", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: "/workspaces/ws_1/files-2/document",
-        views: [view("files-1", "filesystem"), view("files-2", "filesystem")],
+        currentView: { workspaceId: "ws_1", viewId: otherFilesId },
+        views: [view(filesId, "filesystem"), view(otherFilesId, "filesystem")],
       }).params.viewId,
-    ).toBe("files-2");
+    ).toBe(otherFilesId);
   });
 
   test("prefers an unfiltered tree, whose filters cannot hide the entity", () => {
@@ -91,7 +113,7 @@ describe("reveal navigation", () => {
     ).toBe("filtered");
   });
 
-  test("scopes the current view into the fallback folder when there is no tree", () => {
+  test("scopes the default view into the fallback folder when there is no tree and no view on screen", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
@@ -100,7 +122,7 @@ describe("reveal navigation", () => {
       }),
     ).toEqual({
       to: "/workspaces/$workspaceId/$viewId",
-      params: { viewId: "all", workspaceId: "ws_1" },
+      params: { viewId: DEFAULT_WORKSPACE_VIEW_ID, workspaceId: "ws_1" },
       search: { folder: "folder_1" },
     });
   });
