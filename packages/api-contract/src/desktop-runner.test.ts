@@ -280,7 +280,7 @@ describe("desktop runner frames", () => {
     const [ready] = hello.harnesses;
     const [run] = hello.activeRuns;
     if (ready?.state !== "ready" || run === undefined) {
-      return panic("the first hello reports a ready harness and a run");
+      panic("the first hello reports a ready harness and a run");
     }
     const [model] = ready.models;
     for (const duplicate of [
