@@ -136,6 +136,14 @@ describe("reading the converter's layout", () => {
     expect(visibleText(footer)).not.toContain("42");
   });
 
+  test("an unstyled final number inherits the body's font shorthand, size and family alike", () => {
+    const shorthand = cheerio.load(
+      '<body style="font: 12pt Arial"><p>Koniec.</p><p>12</p></body>',
+    );
+    expect(readPlKioLayout(shorthand).pageNumbers).toEqual([]);
+    expect(visibleText(shorthand)).toContain("12");
+  });
+
   test.each([" / ", " /", "/ ", "/"])(
     "font shorthand parses line-height spacing %j and quoted families",
     (separator) => {
