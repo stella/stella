@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { encode } from "uqr";
 
+import { NEUTRAL_COLORS } from "@stll/brand";
 import { isCountryCode } from "@stll/country-codes";
 import {
   formatExchangeRate,
@@ -141,7 +142,7 @@ export const qrSvg = (payload: string, ecc: "L" | "M" = "M") => {
     }
   }
   const size = qr.size;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path fill="#000" d="${runs.join("")}"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="${NEUTRAL_COLORS.white}"/><path fill="${NEUTRAL_COLORS.black}" d="${runs.join("")}"/></svg>`;
 };
 
 /** The country's name in the invoice language; an unknown code prints as stored. */

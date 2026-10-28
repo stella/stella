@@ -30,6 +30,11 @@ import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
+import {
+  PDF_NEUTRALS,
+  pdfFillColor,
+  pdfStrokeColor,
+} from "@/api/lib/files/pdf-color";
 import type { StampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
   drawStampRows,
@@ -571,13 +576,13 @@ export const addSignatureStamp = ({
 
   const operators = [
     "q",
-    "0.35 0.35 0.35 RG",
+    pdfStrokeColor(PDF_NEUTRALS.stampBorder),
     "0.6 w",
     `0.300 0.300 ${pdfNumber(width - 0.6)} ${pdfNumber(height - 0.6)} re`,
     "S",
     "Q",
     "BT",
-    "0.1 0.1 0.1 rg",
+    pdfFillColor(PDF_NEUTRALS.stampText),
     ...text.operators,
     "ET",
   ];
