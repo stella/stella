@@ -599,7 +599,7 @@ const readAndReparseHeldRaw = async (
   return await Result.tryPromise({
     try: async () =>
       await reparseStoredRaw({
-        raw: raw.value,
+        raw: bytes,
         contentType: row.sourceRawContentType,
         caseNumber: row.caseNumber,
         sourceDocumentId: row.sourceDocumentId,
