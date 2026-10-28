@@ -155,7 +155,8 @@ export const findUnreferencedPublicAssets = async ({
   );
   return assets
     .filter((asset) => {
-      const publicPath = PUBLIC_ASSET.exec(asset)?.groups?.publicPath ?? asset;
+      const publicPath =
+        PUBLIC_ASSET.exec(asset)?.groups?.["publicPath"] ?? asset;
       const fileName = nodePath.basename(asset);
       return !consumers.some(
         ({ filePath, text }) =>
