@@ -7,6 +7,7 @@ import {
   NPM_RELEASE_WORKFLOW,
   npmReleaseGraphProblems,
   readNpmReleaseGraph,
+  renderNpmReleaseEventPolicy,
   renderNpmReleaseJobs,
   renderNpmReleaseWorkflow,
 } from "./generate-npm-release-jobs";
@@ -57,6 +58,101 @@ const fixtureGraph = () => {
     readManifest: (directory) => JSON.stringify(manifests[directory]),
   });
 };
+
+const parseEventPolicy = (source: string) =>
+  v.parse(
+    v.looseObject({ jobs: v.record(v.string(), v.string()) }),
+    JSON.parse(source),
+  );
+
+describe("generated npm release event policies", () => {
+  test("committed policy covers every generated package and summary with the original main policy", () => {
+    const source = readFileSync(
+      path.join(ROOT, ".github/ci-event-policy.json"),
+      "utf-8",
+    );
+    const graph = repositoryGraph();
+    const policy = parseEventPolicy(source);
+    expect(
+      parseEventPolicy(renderNpmReleaseEventPolicy({ source, graph })),
+    ).toEqual(policy);
+    for (const id of [
+      ...graph.map(({ directory }) => npmReleaseJobId(directory)),
+      "release-summary",
+    ]) {
+      expect(policy.jobs[`publish-npm.yml/${id}`]).toBe("main");
+    }
+    expect(policy.jobs["publish-npm.yml/release"]).toBeUndefined();
+  });
+
+  test("replacement preserves other jobs and workflow-level policy", () => {
+    const graph = fixtureGraph();
+    const source = {
+      jobs: {
+        "publish-npm.yml/release": "main",
+        "publish-npm.yml/release-trigger": "main",
+        "publish-npm.yml/pack": "main",
+        "publish-npm.yml/verify-npm": "main",
+        "other.yml/check": "pr-fast",
+      },
+      pushMain: {
+        "publish-npm.yml": { role: "publish", cancelInProgress: false },
+      },
+      periodicJobs: ["other.yml/periodic"],
+    };
+    const policy = parseEventPolicy(
+      renderNpmReleaseEventPolicy({ source: JSON.stringify(source), graph }),
+    );
+    expect(policy.jobs).toEqual({
+      ...Object.fromEntries(
+        [
+          ...graph.map(
+            ({ directory }) => `publish-npm.yml/${npmReleaseJobId(directory)}`,
+          ),
+          "publish-npm.yml/release-summary",
+        ].map((key) => [key, "main"]),
+      ),
+      "publish-npm.yml/release-trigger": "main",
+      "publish-npm.yml/pack": "main",
+      "publish-npm.yml/verify-npm": "main",
+      "other.yml/check": "pr-fast",
+    });
+    expect(policy["pushMain"]).toEqual(source.pushMain);
+    expect(policy["periodicJobs"]).toEqual(source.periodicJobs);
+  });
+
+  test("missing, extra, stale and changed package policies fail the fixed-point drift check", () => {
+    const graph = fixtureGraph();
+    const correct = parseEventPolicy(
+      renderNpmReleaseEventPolicy({
+        source: JSON.stringify({ jobs: {} }),
+        graph,
+      }),
+    );
+    const first = "publish-npm.yml/release-base";
+    const mutations = {
+      missing: Object.fromEntries(
+        Object.entries(correct.jobs).filter(([key]) => key !== first),
+      ),
+      extra: { ...correct.jobs, "publish-npm.yml/release-extra": "main" },
+      stale: { ...correct.jobs, "publish-npm.yml/release": "main" },
+      changed: { ...correct.jobs, [first]: "pr-fast" },
+    };
+    for (const [mode, jobs] of Object.entries(mutations)) {
+      const broken = { jobs };
+      expect(broken, mode).not.toEqual(correct);
+      expect(
+        parseEventPolicy(
+          renderNpmReleaseEventPolicy({
+            source: JSON.stringify(broken),
+            graph,
+          }),
+        ),
+        mode,
+      ).toEqual(correct);
+    }
+  });
+});
 
 describe("generated npm publishing dependency graph", () => {
   test("privileged jobs only delegate to the pinned workflow and summary has no release authority", () => {

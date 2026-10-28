@@ -11,6 +11,8 @@ const START = "  # npm-release-jobs:start";
 const END = "  # npm-release-jobs:end";
 const SUMMARY_NEEDS = "    # npm-release-summary-needs";
 const WORKFLOW_PATH = ".github/workflows/publish-npm.yml";
+const EVENT_POLICY_PATH = ".github/ci-event-policy.json";
+const RELEASE_EVENT_POLICY = "main";
 
 class NpmReleaseGraphError extends Error {
   override name = "NpmReleaseGraphError";
@@ -212,6 +214,53 @@ export const renderNpmReleaseWorkflow = ({
   return rendered.replace(summaryStanza, () => summary);
 };
 
+type RenderNpmReleaseEventPolicyOptions = {
+  source: string;
+  graph: readonly NpmReleasePackage[];
+};
+
+export const renderNpmReleaseEventPolicy = ({
+  source,
+  graph,
+}: RenderNpmReleaseEventPolicyOptions): string => {
+  const policy: unknown = JSON.parse(source);
+  if (!record(policy) || !record(policy["jobs"])) {
+    return panic("CI event policy must contain a jobs map");
+  }
+  // The generated jobs retain the former single release job's main policy.
+  const generated = new Map(
+    graph.map(({ directory }) => [
+      `publish-npm.yml/${npmReleaseJobId(directory)}`,
+      RELEASE_EVENT_POLICY,
+    ]),
+  );
+  generated.set("publish-npm.yml/release-summary", RELEASE_EVENT_POLICY);
+  const entries: [string, unknown][] = [];
+  let inserted = false;
+  for (const [key, value] of Object.entries(policy["jobs"])) {
+    const owned =
+      key === "publish-npm.yml/release" ||
+      (key.startsWith("publish-npm.yml/release-") &&
+        key !== "publish-npm.yml/release-trigger");
+    if (!owned) {
+      entries.push([key, value]);
+      continue;
+    }
+    if (!inserted) {
+      for (const entry of generated) {
+        entries.push(entry);
+      }
+      inserted = true;
+    }
+  }
+  if (!inserted) {
+    for (const entry of generated) {
+      entries.push(entry);
+    }
+  }
+  return `${JSON.stringify({ ...policy, jobs: Object.fromEntries(entries) }, null, 2)}\n`;
+};
+
 type NpmReleaseGraphProblemsOptions = {
   workflow: unknown;
   graph: readonly NpmReleasePackage[];
@@ -283,6 +332,12 @@ if (import.meta.main) {
       ),
   });
   const rendered = renderNpmReleaseWorkflow({ source, graph });
+  const policyFile = path.join(root, EVENT_POLICY_PATH);
+  const policySource = readFileSync(policyFile, "utf-8");
+  const renderedPolicy = renderNpmReleaseEventPolicy({
+    source: policySource,
+    graph,
+  });
   const problems = npmReleaseGraphProblems({
     workflow: Bun.YAML.parse(rendered),
     graph,
@@ -292,9 +347,14 @@ if (import.meta.main) {
   }
   if (Bun.argv.includes("--write")) {
     writeFileSync(file, rendered);
-  } else if (source !== rendered) {
+    writeFileSync(policyFile, renderedPolicy);
+  } else if (
+    source !== rendered ||
+    JSON.stringify(JSON.parse(policySource)) !==
+      JSON.stringify(JSON.parse(renderedPolicy))
+  ) {
     console.error(
-      "npm release jobs drifted; run bun scripts/generate-npm-release-jobs.ts --write",
+      "npm release jobs or event policies drifted; run bun scripts/generate-npm-release-jobs.ts --write",
     );
     process.exitCode = 1;
   }
