@@ -115,8 +115,10 @@ import { PageOrganizerSignAction } from "./page-organizer-sign";
 import type { PageOrganizerSign } from "./page-organizer-sign";
 import {
   commitCompletedUpload,
+  createPageOrganizerOperationOwner,
   createPageOrganizerUploadOwner,
 } from "./page-organizer-upload.logic";
+import type { LiveOrganizerOperation } from "./page-organizer-upload.logic";
 import {
   createPageOrganizerState,
   DEFAULT_CLEAN_SCAN_OPTIONS,
@@ -743,6 +745,7 @@ const LoadedPDFPageOrganizer = ({
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const uploadOwnerRef = useRef(createPageOrganizerUploadOwner());
+  const [operationOwner] = useState(() => createPageOrganizerOperationOwner());
   const cleanScanAbortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
@@ -794,6 +797,7 @@ const LoadedPDFPageOrganizer = ({
 
   useMountEffect(() => () => {
     isMountedRef.current = false;
+    operationOwner.revoke();
     abortRef.current?.abort();
     uploadOwnerRef.current.cancelCurrent();
     cleanScanAbortRef.current?.abort();
@@ -812,11 +816,18 @@ const LoadedPDFPageOrganizer = ({
   const pageInfoFor = (page: OrganizerPage): PageInfo | undefined =>
     pageInfoBySource.get(page.sourceId)?.at(page.sourcePageIndex);
 
-  const transform = async (requestedOutputs: string[][]) => {
+  const transform = async (
+    operationToken: LiveOrganizerOperation,
+    requestedOutputs: string[][],
+  ) => {
+    const operationRequest = operationOwner.beginRequest(operationToken);
+    if (!operationOwner.isCurrent(operationRequest)) {
+      return { type: "cancelled" } as const;
+    }
     const controller = new AbortController();
     abortRef.current = controller;
     setOperation({ type: "transforming" });
-    return await withCleanup(
+    const outputs = await withCleanup(
       async () =>
         transformPDFInWorker({
           sources: [
@@ -829,12 +840,20 @@ const LoadedPDFPageOrganizer = ({
           pages: transformPagePlanEntries(state),
           outputs: requestedOutputs,
           signal: controller.signal,
+          operation: operationToken,
+          operationRequest,
+          isOperationCurrent: (candidate, request) =>
+            operationOwner.isLive(candidate) &&
+            operationOwner.isCurrent(request),
         }),
       () => {
         abortRef.current = null;
         setOperation({ type: "idle" });
       },
     );
+    return operationOwner.isCurrent(operationRequest)
+      ? ({ type: "completed", outputs } as const)
+      : ({ type: "cancelled" } as const);
   };
 
   const reportOperationError = (error: unknown) => {
@@ -920,10 +939,19 @@ const LoadedPDFPageOrganizer = ({
   };
 
   /** Upload the edited PDF as a new version; the caller closes the editor. */
-  const saveVersion = async () => {
-    const [bytes] = await transform([plan.pages.map((page) => page.id)]);
+  const saveVersion = async (operationToken: LiveOrganizerOperation) => {
+    const transformed = await transform(operationToken, [
+      plan.pages.map((page) => page.id),
+    ]);
+    if (transformed.type === "cancelled") {
+      return transformed;
+    }
+    const [bytes] = transformed.outputs;
     if (!bytes) {
       return { type: "skipped" } as const;
+    }
+    if (!operationOwner.isLive(operationToken)) {
+      return { type: "cancelled" } as const;
     }
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
@@ -931,6 +959,10 @@ const LoadedPDFPageOrganizer = ({
     const pendingUpload = uploadOwnerRef.current.begin();
     return await withCleanup(
       async () => {
+        if (!operationOwner.isLive(operationToken)) {
+          uploadOwnerRef.current.cancel(pendingUpload);
+          return { type: "cancelled" } as const;
+        }
         const uploadResult = await uploadEntityVersion({
           workspaceId,
           entityId,
@@ -956,12 +988,20 @@ const LoadedPDFPageOrganizer = ({
         if (provisional.type !== "provisional") {
           return provisional;
         }
+        if (!operationOwner.isLive(operationToken)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
+        }
         await Promise.all([
           queryClient.invalidateQueries({
             queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
+        if (!operationOwner.isLive(operationToken)) {
+          uploadOwnerRef.current.cancelCurrent();
+          return { type: "cancelled" } as const;
+        }
         const outcome = uploadOwnerRef.current.commit(provisional);
         if (outcome.type !== "completed") {
           return outcome;
@@ -981,7 +1021,8 @@ const LoadedPDFPageOrganizer = ({
   };
 
   const handleSaveVersion = async () => {
-    if ((await saveVersion()).type === "completed") {
+    const operationToken = operationOwner.operation;
+    if ((await saveVersion(operationToken)).type === "completed") {
       onClose();
     }
   };
@@ -989,19 +1030,20 @@ const LoadedPDFPageOrganizer = ({
   /**
    * Save the edits, then resolve that exact version from the upload receipt so the
    * sign flow stamps and signs it rather than the version the editor opened.
-   * The editor closes either way once the version exists.
    */
   const saveVersionForSigning = async (
+    operationToken: LiveOrganizerOperation,
     target: PdfSignTarget,
   ): Promise<PdfSignTarget | null> => {
     const result = await Result.tryPromise({
       try: async () => {
-        const savedVersion = await saveVersion();
+        const savedVersion = await saveVersion(operationToken);
         if (savedVersion.type !== "completed") {
           return Result.ok(null);
         }
-        onClose();
-        const saved = await commitCompletedUpload(
+        const targetResult = await commitCompletedUpload(
+          operationToken,
+          operationOwner,
           savedVersion,
           async (upload) =>
             await readSavedPdfSignTarget({
@@ -1010,7 +1052,10 @@ const LoadedPDFPageOrganizer = ({
               target,
             }),
         );
-        if (saved === null) {
+        if (!operationOwner.isLive(operationToken)) {
+          return Result.ok(null);
+        }
+        if (targetResult === null) {
           return Result.err(
             new ClientOperationError({
               action: "sign-saved-pdf-version",
@@ -1018,7 +1063,7 @@ const LoadedPDFPageOrganizer = ({
             }),
           );
         }
-        return Result.ok(saved);
+        return Result.ok(targetResult);
       },
       catch: (cause) => cause,
     }).then(Result.flatten);
@@ -1159,7 +1204,11 @@ const LoadedPDFPageOrganizer = ({
             .filter((page) => selectedIds.has(page.id))
             .map((page) => page.id)
         : plan.pages.map((page) => page.id);
-    const [output] = await transform([pageIds]);
+    const transformed = await transform(operationOwner.operation, [pageIds]);
+    if (transformed.type === "cancelled") {
+      return;
+    }
+    const [output] = transformed.outputs;
     if (!output) {
       return;
     }
@@ -1472,8 +1521,15 @@ const LoadedPDFPageOrganizer = ({
             closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
             isDirty={isDirty}
+            isOperationLive={(operationToken) =>
+              operationOwner.isLive(operationToken)
+            }
+            operation={operationOwner.operation}
             saveVersion={async () =>
-              await saveVersionForSigning(pdfSign.target)
+              await saveVersionForSigning(
+                operationOwner.operation,
+                pdfSign.target,
+              )
             }
             sign={pdfSign}
           />
@@ -1617,6 +1673,7 @@ export const PDFPageOrganizer = ({
 
   return (
     <LoadedPDFPageOrganizer
+      key={`${workspaceId}:${entityId}:${fieldId}`}
       canSaveVersion={canSaveVersion}
       entityId={entityId}
       fieldId={fieldId}

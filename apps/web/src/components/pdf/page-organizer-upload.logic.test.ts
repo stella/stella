@@ -4,6 +4,7 @@ import { toSafeId } from "@/lib/safe-id";
 
 import {
   commitCompletedUpload,
+  createPageOrganizerOperationOwner,
   createPageOrganizerUploadOwner,
 } from "./page-organizer-upload.logic";
 
@@ -14,6 +15,7 @@ const receipt = (suffix: string) => ({
 
 describe("page organizer upload ownership", () => {
   test("cancelled upload resolving late preserves the pre-upload view for save and sign", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const pending = owner.begin();
     const commits: string[] = [];
@@ -22,10 +24,15 @@ describe("page organizer upload ownership", () => {
     owner.cancel(pending);
     const late = owner.prepareCompletion(pending, receipt("withdrawn"));
     if (late.type === "completed") {
-      commitCompletedUpload(late, (upload) => {
-        commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
-        visibleVersion = upload.fileId;
-      });
+      commitCompletedUpload(
+        operationOwner.operation,
+        operationOwner,
+        late,
+        (upload) => {
+          commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
+          visibleVersion = upload.fileId;
+        },
+      );
     }
 
     expect(late).toEqual({ type: "cancelled", uploadId: pending.uploadId });
@@ -34,6 +41,7 @@ describe("page organizer upload ownership", () => {
   });
 
   test("a new upload after cancellation is saved and signed", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const cancelled = owner.begin();
     owner.cancel(cancelled);
@@ -46,15 +54,21 @@ describe("page organizer upload ownership", () => {
     const commits: string[] = [];
 
     if (outcome.type === "completed") {
-      commitCompletedUpload(outcome, (upload) => {
-        commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
-      });
+      commitCompletedUpload(
+        operationOwner.operation,
+        operationOwner,
+        outcome,
+        (upload) => {
+          commits.push(`save:${upload.fileId}`, `sign:${upload.fileId}`);
+        },
+      );
     }
 
     expect(commits).toEqual(["save:file-next", "sign:file-next"]);
   });
 
   test("only the newest upload can be committed when the first resolves last", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const first = owner.begin();
     const second = owner.begin();
@@ -71,7 +85,12 @@ describe("page organizer upload ownership", () => {
 
     for (const outcome of [secondOutcome, firstOutcome]) {
       if (outcome.type === "completed") {
-        commitCompletedUpload(outcome, (upload) => commits.push(upload.fileId));
+        commitCompletedUpload(
+          operationOwner.operation,
+          operationOwner,
+          outcome,
+          (upload) => commits.push(upload.fileId),
+        );
       }
     }
 
@@ -83,6 +102,7 @@ describe("page organizer upload ownership", () => {
   });
 
   test("unmount during query invalidation prevents saving or reading the signing target", async () => {
+    const operationOwner = createPageOrganizerOperationOwner();
     const owner = createPageOrganizerUploadOwner();
     const pending = owner.begin();
     const provisional = owner.prepareCompletion(pending, receipt("dismissed"));
@@ -99,10 +119,15 @@ describe("page organizer upload ownership", () => {
       await invalidation;
       const outcome = owner.commit(provisional);
       if (outcome.type === "completed") {
-        commitCompletedUpload(outcome, (upload) => {
-          savedVersions.push(upload.fileId);
-          signingTargetReads.push(upload.fileId);
-        });
+        commitCompletedUpload(
+          operationOwner.operation,
+          operationOwner,
+          outcome,
+          (upload) => {
+            savedVersions.push(upload.fileId);
+            signingTargetReads.push(upload.fileId);
+          },
+        );
       }
       return outcome;
     };
@@ -117,5 +142,40 @@ describe("page organizer upload ownership", () => {
     });
     expect(savedVersions).toEqual([]);
     expect(signingTargetReads).toEqual([]);
+  });
+
+  test("revoked operations cannot commit a completed receipt", () => {
+    const operationOwner = createPageOrganizerOperationOwner();
+    const uploadOwner = createPageOrganizerUploadOwner();
+    const pending = uploadOwner.begin();
+    const provisional = uploadOwner.prepareCompletion(pending, receipt("late"));
+    if (provisional.type !== "provisional") {
+      throw new Error("Expected the upload to be provisional");
+    }
+    const completed = uploadOwner.commit(provisional);
+    if (completed.type !== "completed") {
+      throw new Error("Expected the upload to complete");
+    }
+    const commits: string[] = [];
+
+    operationOwner.revoke();
+    const result = commitCompletedUpload(
+      operationOwner.operation,
+      operationOwner,
+      completed,
+      (upload) => commits.push(upload.fileId),
+    );
+
+    expect(result).toBeNull();
+    expect(commits).toEqual([]);
+  });
+
+  test("only the newest transform request remains current", () => {
+    const owner = createPageOrganizerOperationOwner();
+    const first = owner.beginRequest(owner.operation);
+    const second = owner.beginRequest(owner.operation);
+
+    expect(owner.isCurrent(first)).toBe(false);
+    expect(owner.isCurrent(second)).toBe(true);
   });
 });

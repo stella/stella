@@ -1,3 +1,7 @@
+import type {
+  LiveOrganizerOperation,
+  OrganizerOperationRequest,
+} from "@/components/pdf/page-organizer-upload.logic";
 import { ClientOperationError } from "@/lib/errors/client";
 
 import {
@@ -16,11 +20,20 @@ export const transformPDFInWorker = async ({
   pages,
   outputs,
   signal,
+  operation,
+  operationRequest,
+  isOperationCurrent,
 }: Omit<PageTransformRequest, "requestId" | "sources"> & {
   sources: readonly PageTransformSource[];
   signal: AbortSignal;
+  operation: LiveOrganizerOperation;
+  operationRequest: OrganizerOperationRequest;
+  isOperationCurrent: (
+    operation: LiveOrganizerOperation,
+    request: OrganizerOperationRequest,
+  ) => boolean;
 }): Promise<ArrayBuffer[]> => {
-  if (signal.aborted) {
+  if (signal.aborted || !isOperationCurrent(operation, operationRequest)) {
     throw abortError();
   }
   const worker = new Worker(
@@ -61,6 +74,10 @@ export const transformPDFInWorker = async ({
       }
       dispose();
       if (event.data.status === "success") {
+        if (!isOperationCurrent(operation, operationRequest)) {
+          reject(abortError());
+          return;
+        }
         resolve(event.data.outputs);
       } else {
         reject(

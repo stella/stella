@@ -21,6 +21,8 @@ const { ActionCapabilitiesProvider } =
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { PageOrganizerSignAction } = await import("./page-organizer-sign");
+const { createPageOrganizerOperationOwner } =
+  await import("./page-organizer-upload.logic");
 const en = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(cleanup);
@@ -84,6 +86,7 @@ type MountOptions = {
 };
 
 const mount = ({ isDirty, saved }: MountOptions) => {
+  const operationOwner = createPageOrganizerOperationOwner();
   const events: string[] = [];
   const pending: Promise<void>[] = [];
   render(
@@ -105,6 +108,8 @@ const mount = ({ isDirty, saved }: MountOptions) => {
             }}
             disabled={false}
             isDirty={isDirty}
+            isOperationLive={operationOwner.isLive}
+            operation={operationOwner.operation}
             saveVersion={async () => {
               events.push("save");
               return await Promise.resolve(saved);
@@ -115,7 +120,7 @@ const mount = ({ isDirty, saved }: MountOptions) => {
       </IntlProvider>
     </QueryClientProvider>,
   );
-  return { events, pending };
+  return { events, operationOwner, pending };
 };
 
 test("with unsaved page edits, signing saves a version first and signs that version", async () => {
@@ -139,6 +144,19 @@ test("a save that does not produce a version signs nothing", async () => {
   const { events, pending } = mount({ isDirty: true, saved: null });
 
   fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
+  await Promise.all(pending);
+
+  expect(events).toEqual(["save"]);
+});
+
+test("a dismissed organizer cannot hand a completed save to signing", async () => {
+  const { events, operationOwner, pending } = mount({
+    isDirty: true,
+    saved: savedVersion,
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
+  operationOwner.revoke();
   await Promise.all(pending);
 
   expect(events).toEqual(["save"]);

@@ -1,5 +1,57 @@
 import type { SafeId } from "@/lib/safe-id";
 
+const organizerOperationBrand: unique symbol = Symbol("organizer-operation");
+const organizerRequestBrand: unique symbol = Symbol("organizer-request");
+
+/** An organizer-owned capability. Its runtime validity must be checked at use. */
+export type LiveOrganizerOperation = {
+  readonly [organizerOperationBrand]: true;
+};
+
+export type OrganizerOperationRequest = {
+  readonly [organizerRequestBrand]: true;
+  readonly operation: LiveOrganizerOperation;
+  readonly requestId: number;
+};
+
+export type PageOrganizerOperationOwner = ReturnType<
+  typeof createPageOrganizerOperationOwner
+>;
+
+/** Owns the capability for one mounted organizer and sequences its transforms. */
+export function createPageOrganizerOperationOwner() {
+  const operation: LiveOrganizerOperation = {
+    [organizerOperationBrand]: true,
+  };
+  let live = true;
+  let latestRequestId = 0;
+
+  return {
+    operation,
+    beginRequest(candidate: LiveOrganizerOperation): OrganizerOperationRequest {
+      return {
+        [organizerRequestBrand]: true,
+        operation: candidate,
+        requestId: ++latestRequestId,
+      };
+    },
+    isLive(candidate: LiveOrganizerOperation): boolean {
+      return live && candidate === operation;
+    },
+    isCurrent(request: OrganizerOperationRequest): boolean {
+      return (
+        live &&
+        request.operation === operation &&
+        request.requestId === latestRequestId
+      );
+    },
+    revoke(): void {
+      live = false;
+      latestRequestId += 1;
+    },
+  };
+}
+
 export type PageOrganizerUploadReceipt = {
   entityVersionId: SafeId<"entityVersion">;
   fileId: string;
@@ -110,8 +162,13 @@ export function createPageOrganizerUploadOwner() {
 }
 
 export function commitCompletedUpload<T>(
+  operation: LiveOrganizerOperation,
+  owner: PageOrganizerOperationOwner,
   upload: CompletedPageOrganizerUpload,
   commit: (upload: CompletedPageOrganizerUpload) => T,
-): T {
+): T | null {
+  if (!owner.isLive(operation)) {
+    return null;
+  }
   return commit(upload);
 }
