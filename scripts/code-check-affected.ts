@@ -129,6 +129,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
   "$TURBO_ROOT$/scripts/product-frontend-files.ts",
   "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
   "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
   "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
   "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
