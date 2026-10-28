@@ -236,6 +236,7 @@
     "@base-ui/react": "catalog:",
     "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
+    "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
