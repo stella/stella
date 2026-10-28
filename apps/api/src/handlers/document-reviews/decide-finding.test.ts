@@ -85,6 +85,7 @@ type UpdateValues = {
 
 const createHarness = (rows: StoredFinding[]) => {
   const updates: UpdateValues[] = [];
+  const decisionEvents: Record<string, unknown>[] = [];
   const auditEvents: AuditEvent[] = [];
   const { safeDb, scopedDb } = createScopedDbMock({
     select: () => ({
@@ -98,6 +99,11 @@ const createHarness = (rows: StoredFinding[]) => {
       set: (values: UpdateValues) => {
         updates.push(values);
         return { where: async () => {} };
+      },
+    }),
+    insert: () => ({
+      values: async (values: Record<string, unknown>) => {
+        decisionEvents.push(values);
       },
     }),
   });
@@ -127,12 +133,12 @@ const createHarness = (rows: StoredFinding[]) => {
     },
   });
 
-  return { auditEvents, context, updates };
+  return { auditEvents, context, decisionEvents, updates };
 };
 
 describe("decideDocumentReviewFinding", () => {
   test("records who decided and when", async () => {
-    const { auditEvents, context, updates } = createHarness(
+    const { auditEvents, context, decisionEvents, updates } = createHarness(
       storedFinding("open"),
     );
 
@@ -152,6 +158,14 @@ describe("decideDocumentReviewFinding", () => {
       decision: "accepted",
       decidedBy: USER_ID,
     });
+    expect(decisionEvents).toHaveLength(1);
+    expect(decisionEvents.at(0)).toMatchObject({
+      workspaceId: WORKSPACE_ID,
+      findingId: FINDING_ID,
+      decision: "accepted",
+      reason: null,
+      actorId: USER_ID,
+    });
 
     expect(auditEvents).toHaveLength(1);
     expect(auditEvents.at(0)).toMatchObject({
@@ -166,7 +180,7 @@ describe("decideDocumentReviewFinding", () => {
   // Reopening must withdraw the decider with the decision: the column pair is
   // constrained to agree, so writing one without the other is a failed write.
   test("clears the decider and the moment when reopened", async () => {
-    const { auditEvents, context, updates } = createHarness(
+    const { auditEvents, context, decisionEvents, updates } = createHarness(
       storedFinding("dismissed"),
     );
 
@@ -188,6 +202,7 @@ describe("decideDocumentReviewFinding", () => {
     expect(auditEvents.at(0)).toMatchObject({
       changes: { decision: { old: "dismissed", new: "open" } },
     });
+    expect(decisionEvents.at(0)).toMatchObject({ decision: null });
   });
 
   test("records an applied edit with the accepting decision", async () => {

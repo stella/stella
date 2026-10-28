@@ -54,6 +54,7 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "./document-review-finding-decision-backfill";
 import {
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   EMAIL_UNDELIVERABLE_CONSTRAINTS,
@@ -936,6 +937,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   // widens the audience set is the one that reconciles them, without an
   // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
+  DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
 ];
 
 /**

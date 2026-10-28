@@ -87,6 +87,7 @@ export type SafeIdType =
   | "documentProcessingRun"
   | "documentReferenceCounter"
   | "documentReviewFinding"
+  | "documentReviewFindingDecision"
   | "documentReviewParty"
   | "documentReviewReferencePassage"
   | "documentReviewRun"

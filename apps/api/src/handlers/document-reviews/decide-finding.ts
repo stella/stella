@@ -16,12 +16,16 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { documentReviewFindings } from "@/api/db/schema";
+import {
+  documentReviewFindingDecisions,
+  documentReviewFindings,
+} from "@/api/db/schema";
 import { decideReviewFindingBodySchema } from "@/api/handlers/document-reviews/schemas";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
@@ -29,6 +33,8 @@ import {
 } from "@/api/lib/document-review/run-contract";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+import { findingDecisionEvent } from "./finding-decision-event";
 
 const config = {
   contract: "patch",
@@ -193,6 +199,19 @@ const decideDocumentReviewFinding = createSafeHandler(
               eq(documentReviewFindings.workspaceId, workspaceId),
             ),
           );
+
+        const eventDecision = findingDecisionEvent(finding.decision, decision);
+        if (eventDecision !== undefined) {
+          await tx.insert(documentReviewFindingDecisions).values({
+            id: createSafeId<"documentReviewFindingDecision">(),
+            workspaceId,
+            findingId: params.findingId,
+            decision: eventDecision,
+            reason: null,
+            actorId: user.id,
+            createdAt: now,
+          });
+        }
 
         const changes: FieldDiffs = {};
         if (decisionChanged) {
