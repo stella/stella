@@ -10,7 +10,7 @@ import input from "./cldr49-input.json";
 
 class ExemplarInputError extends TaggedError("ExemplarInputError")<{
   message: string;
-}>() {}
+}> {}
 
 const LANGUAGE_TAG = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?$/u;
 const FIELD_NAMES = ["exemplarCharacters", "auxiliary", "punctuation"] as const;
