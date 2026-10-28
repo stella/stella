@@ -205,6 +205,8 @@ const harnessReportSchema = v.variant("state", [
 export type DesktopRunnerHarnessReport = v.InferOutput<
   typeof harnessReportSchema
 >;
+/** One harness report, for a consumer reading back reports it stored. */
+export const desktopRunnerHarnessReportSchema = harnessReportSchema;
 
 /**
  * A TanStack `StreamChunk` as it crosses the socket. Only its type is checked
