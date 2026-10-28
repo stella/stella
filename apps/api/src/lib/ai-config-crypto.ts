@@ -7,14 +7,34 @@
  * (ciphertext + IV) in organizationSettings.
  */
 
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+
+type OrgAIConfigReadFailure = "invalid-json" | "invalid-schema";
+
+/** A content-free description of an unreadable decrypted configuration. */
+export class OrgAIConfigReadError extends TaggedError("OrgAIConfigReadError")<{
+  message: string;
+  reason: OrgAIConfigReadFailure;
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
+
+const unreadableConfig = (reason: OrgAIConfigReadFailure) =>
+  new OrgAIConfigReadError({
+    message: "Decrypted organization AI configuration is unreadable",
+    reason,
+  });
 
 const standardProviderSchema = v.picklist(
   TANSTACK_AI_PROVIDERS.filter((provider) => provider !== "anthropic"),
@@ -116,8 +136,18 @@ export const decryptAIConfig = async (
   iv: Buffer,
 ): Promise<OrgAIConfig> => {
   const json = await decryptContent(organizationId, ciphertext, iv);
-  const parsed: unknown = JSON.parse(json);
-  return normalizeOrgAIConfig(v.parse(orgAIConfigSchema, parsed));
+  const decoded = Result.try({
+    try: (): unknown => JSON.parse(json),
+    catch: () => unreadableConfig("invalid-json"),
+  });
+  if (Result.isError(decoded)) {
+    throw decoded.error;
+  }
+  const parsed = v.safeParse(orgAIConfigSchema, decoded.value);
+  if (!parsed.success) {
+    throw unreadableConfig("invalid-schema");
+  }
+  return normalizeOrgAIConfig(parsed.output);
 };
 
 /**

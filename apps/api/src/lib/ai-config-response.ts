@@ -28,12 +28,11 @@ export const AI_CONFIG_UNREADABLE_ERROR_CODE = "ai_config_stored_unreadable";
  * look like "nothing configured" and prompts for re-entry, and merging an
  * update onto an empty base would drop the providers the request body omits.
  */
-export const storedAIConfigUnreadableError = (cause: unknown) =>
+export const storedAIConfigUnreadableError = (_cause?: unknown) =>
   new HandlerError({
     code: AI_CONFIG_UNREADABLE_ERROR_CODE,
     status: 503,
     message: "Stored AI configuration could not be read",
-    cause,
   });
 
 export const ownAIKeyRequiredError = () =>
