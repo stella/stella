@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { decisionReviewsSchema } from "./case-law-reviews";
+
 const legalResolveCandidateSchema = v.strictObject({
   decisionId: v.string(),
   identifier: v.string(),
@@ -46,6 +48,7 @@ const legalResolveDocumentSchema = v.variant("kind", [
     languageAlternates: v.array(legalResolveDecisionAlternateSchema),
     readerUrl: v.string(),
     text: legalResolveDecisionTextSchema,
+    appealReviews: decisionReviewsSchema,
   }),
   v.strictObject({
     kind: v.literal("provision"),

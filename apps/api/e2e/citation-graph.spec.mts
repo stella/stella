@@ -3,6 +3,7 @@ import type { FrameLocator, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import type * as v from "valibot";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages" with { type: "json" };
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
@@ -82,6 +83,7 @@ const firstCitations = [
   citation(6, "unclassified", null),
 ] satisfies CitationPage["citations"];
 const firstPage = {
+  appealReviews: noDecisionReviewFound(),
   doctrineAvailability: "unavailable",
   decisionId: SUBJECT_ID,
   direction: "cites",
@@ -89,6 +91,7 @@ const firstPage = {
   citations: firstCitations,
 } satisfies CitationPage;
 const morePage = {
+  appealReviews: noDecisionReviewFound(),
   doctrineAvailability: "unavailable",
   decisionId: SUBJECT_ID,
   direction: "cites",
@@ -101,6 +104,7 @@ const morePage = {
   ],
 } satisfies CitationPage;
 const expandedPage = {
+  appealReviews: noDecisionReviewFound(),
   doctrineAvailability: "unavailable",
   decisionId: DECISION_IDS[0],
   direction: "cites",
@@ -448,6 +452,7 @@ for (const direction of ["cites", "cited_by"] as const) {
       const subjectCitation = citation(10, "neutral", SUBJECT_ID);
       const expansionPages = [
         {
+          appealReviews: noDecisionReviewFound(),
           doctrineAvailability: "unavailable",
           decisionId: DECISION_IDS[0],
           direction,
@@ -459,6 +464,7 @@ for (const direction of ["cites", "cited_by"] as const) {
           ],
         },
         {
+          appealReviews: noDecisionReviewFound(),
           doctrineAvailability: "unavailable",
           decisionId: DECISION_IDS[1],
           direction,

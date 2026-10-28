@@ -23,6 +23,10 @@ import {
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import {
+  readDecisionReviews,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
@@ -37,6 +41,7 @@ import {
 type DecisionResolverDependencies = {
   lookup?: typeof lookupDecisionsByIdentity;
   read?: typeof readDecisionReaderSource;
+  readReviews?: typeof readDecisionReviews;
 };
 
 type ResolvedDecisionDocument = Extract<
@@ -160,10 +165,17 @@ const candidate = (row: DecisionIdentityRow) => ({
   }),
 });
 
-const resolvedDecision = async (
-  row: DecisionIdentityRow,
-  read: typeof readDecisionReaderSource,
-): Promise<LegalResolveResponse> => {
+type ResolvedDecisionOptions = {
+  row: DecisionIdentityRow;
+  read: typeof readDecisionReaderSource;
+  readReviews: typeof readDecisionReviews;
+};
+
+const resolvedDecision = async ({
+  row,
+  read,
+  readReviews,
+}: ResolvedDecisionOptions): Promise<LegalResolveResponse> => {
   const content = await read({
     decisionId: row.id,
     phase: "blocks",
@@ -197,6 +209,16 @@ const resolvedDecision = async (
       ecli: row.ecli,
       readerUrl,
       text: decisionText(content),
+      appealReviews:
+        content?.status === "read"
+          ? content.decision.appealReviews
+          : requireDecisionReviews(
+              await readReviews({
+                decisionIds: [row.id],
+                caseLawDb: caseLawPublicReadDb,
+              }),
+              row.id,
+            ),
     },
   };
 };
@@ -215,6 +237,7 @@ export const resolveDecision = async ({
   dependencies: {
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
+    readReviews = readDecisionReviews,
   } = {},
 }: ResolveDecisionOptions): Promise<LegalResolveResponse> => {
   if (identifier.trim().length === 0) {
@@ -262,7 +285,7 @@ export const resolveDecision = async ({
         const printedSheet =
           intent.kind === "docket" && intent.selector.kind === "sheet";
         return printedSheet && only !== undefined && rest.length === 0
-          ? await resolvedDecision(only, read)
+          ? await resolvedDecision({ row: only, read, readReviews })
           : { status: "not_found", reason: "no_exact_identity" };
       }
       return {
@@ -273,7 +296,11 @@ export const resolveDecision = async ({
       };
     }
     case "unique":
-      return await resolvedDecision(resolution.decision, read);
+      return await resolvedDecision({
+        row: resolution.decision,
+        read,
+        readReviews,
+      });
     case "incomplete_identifier": {
       // A bare docket of a file that can hold several decisions. When the
       // lookup finds exactly one, that is the decision: asking for a sheet
@@ -281,7 +308,7 @@ export const resolveDecision = async ({
       // exact identity never picks one of them for the caller.
       const [only, ...rest] = resolution.candidates;
       if (only !== undefined && rest.length === 0) {
-        return await resolvedDecision(only, read);
+        return await resolvedDecision({ row: only, read, readReviews });
       }
       return {
         status: "incomplete_identifier",

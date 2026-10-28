@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Resumen",
+      "appealReviews": {
+        "conflict": "Los metadatos del editor y el párrafo inicial se contradicen. Es necesario verificar el resultado de la revisión.",
+        "corpusOnly": "No se encontró ningún vínculo de revisión en el corpus disponible. Esto no demuestra que no exista un recurso.",
+        "noneFound": "No se encontró",
+        "overturned": "Revocada o modificada",
+        "partly": "Revocada parcialmente",
+        "reviewedBy": "Resoluciones revisoras",
+        "reviews": "Resoluciones revisadas",
+        "sourceHistory": "Historial procesal",
+        "sourceMetadata": "Metadatos del editor",
+        "sourceOpening": "Párrafo inicial",
+        "title": "Revisión por recurso",
+        "truncated": "Solo se muestra parte del historial de revisión.",
+        "underReview": "En revisión",
+        "unknown": "Resultado desconocido",
+        "upheld": "Se mantiene"
+      },
       "appliedVersionNotStated": "Versión aplicada no indicada",
       "appliedVersionNotStatedCompact": "Versión no indicada",
       "appliedVersionStatedAmendment": "Redacción modificada por <reference>{amendment}</reference>",

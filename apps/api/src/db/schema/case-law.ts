@@ -11,6 +11,12 @@ import {
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import {
+  DECISION_REVIEW_EVIDENCE_STATUSES,
+  DECISION_REVIEW_OUTCOMES,
+  DECISION_REVIEW_SOURCES,
+} from "@stll/api-contract/case-law-reviews";
+import type { DecisionReviewLink } from "@stll/api-contract/case-law-reviews";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   APPLIED_VERSION_BASES,
@@ -627,6 +633,8 @@ export const caseLawDecisions = p.pgTable(
      * ASTs are re-parsed lazily from sourceRaw in S3.
      */
     parserVersion: p.smallint("parser_version").default(0),
+    /** Version of the header/holding appeal extraction last completed; null means unexamined. */
+    reviewExtractionVersion: p.smallint("review_extraction_version"),
     /**
      * Raw source HTML/JSON from the court website, stored
      * verbatim for future re-parsing without re-downloading.
@@ -1941,6 +1949,111 @@ export const caseLawRemovalReconciliationItems = p.pgTable(
       sql`${t.attempts} >= 0`,
     ),
     ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Procedural review edges, independent of precedential citations and authority counts. */
+export const caseLawDecisionReviews = p.pgTable(
+  "case_law_decision_reviews",
+  {
+    reviewingDecisionId: safeUuid<"caseLawDecision">(
+      "reviewing_decision_id",
+    ).notNull(),
+    /** Null while the reviewed judgment is absent or its identity remains ambiguous. */
+    reviewedDecisionId: safeUuid<"caseLawDecision">("reviewed_decision_id"),
+    reviewedCaseNumber: p
+      .varchar("reviewed_case_number", { length: 256 })
+      .notNull(),
+    reviewedCitationKey: p
+      .varchar("reviewed_citation_key", { length: 128 })
+      .notNull(),
+    reviewedDocketFamilyKey: p.text("reviewed_docket_family_key").notNull(),
+    reviewedCourt: p.varchar("reviewed_court", { length: 512 }).notNull(),
+    reviewedDecisionDate: p.date("reviewed_decision_date"),
+    reviewedSheetNumber: p.varchar("reviewed_sheet_number", { length: 32 }),
+    outcome: p.text({ enum: DECISION_REVIEW_OUTCOMES }).notNull(),
+    source: p.text({ enum: DECISION_REVIEW_SOURCES }).notNull(),
+    evidenceStatus: p
+      .text("evidence_classification", {
+        enum: DECISION_REVIEW_EVIDENCE_STATUSES,
+      })
+      .notNull(),
+    /** Opening-formula targets retained when official metadata differs. */
+    openingEvidence: jsonb("opening_evidence")
+      .$type<
+        Pick<
+          DecisionReviewLink,
+          | "reviewedCaseNumber"
+          | "reviewedCourt"
+          | "reviewedDecisionDate"
+          | "outcome"
+        >[]
+      >()
+      .notNull(),
+    parserVersion: p.smallint("parser_version").notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.reviewingDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_reviews_reviewing_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [t.reviewedDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_decision_reviews_reviewed_fk",
+      })
+      .onDelete("set null"),
+    p
+      .uniqueIndex("case_law_decision_reviews_identity_idx")
+      .on(
+        t.reviewingDecisionId,
+        t.reviewedCourt,
+        t.reviewedCaseNumber,
+        sql`COALESCE(${t.reviewedDecisionDate}, '-infinity'::date)`,
+      ),
+    p
+      .index("case_law_decision_reviews_reviewed_idx")
+      .on(
+        t.reviewedDecisionId,
+        t.reviewingDecisionId,
+        t.reviewedCourt,
+        t.reviewedCaseNumber,
+        t.reviewedDecisionDate,
+      ),
+    p
+      .index("case_law_decision_reviews_target_idx")
+      .on(t.reviewedCourt, t.reviewedDocketFamilyKey),
+    p.check(
+      "case_law_decision_reviews_distinct",
+      sql`${t.reviewingDecisionId} IS DISTINCT FROM ${t.reviewedDecisionId}`,
+    ),
+    p.check(
+      "case_law_decision_reviews_outcome_values",
+      sql`${t.outcome} IN (${sql.join(
+        DECISION_REVIEW_OUTCOMES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_reviews_source_values",
+      sql`${t.source} IN (${sql.join(
+        DECISION_REVIEW_SOURCES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_reviews_evidence_classification_values",
+      sql`${t.evidenceStatus} IN (${sql.join(
+        DECISION_REVIEW_EVIDENCE_STATUSES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    ...publicCaseLawReaderPolicies(),
   ],
 );
 

@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Résumé",
+      "appealReviews": {
+        "conflict": "Les métadonnées de l’éditeur et le paragraphe introductif se contredisent. L’issue du recours doit être vérifiée.",
+        "corpusOnly": "Aucun lien vers un examen sur recours n’a été trouvé dans le corpus disponible. Cela ne signifie pas qu’aucun recours n’existe.",
+        "noneFound": "Aucun trouvé",
+        "overturned": "Annulée ou réformée",
+        "partly": "Partiellement annulée",
+        "reviewedBy": "Décisions de réexamen",
+        "reviews": "Décisions réexaminées",
+        "sourceHistory": "Historique de la procédure",
+        "sourceMetadata": "Métadonnées de l’éditeur",
+        "sourceOpening": "Paragraphe introductif",
+        "title": "Examen sur recours",
+        "truncated": "Seule une partie de l’historique des recours est affichée.",
+        "underReview": "Examen en cours",
+        "unknown": "Issue inconnue",
+        "upheld": "Maintenue"
+      },
       "appliedVersionNotStated": "Version appliquée non précisée",
       "appliedVersionNotStatedCompact": "Version non précisée",
       "appliedVersionStatedAmendment": "Rédaction modifiée par <reference>{amendment}</reference>",

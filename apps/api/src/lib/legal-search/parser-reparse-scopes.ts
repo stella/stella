@@ -117,27 +117,27 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 30,
+    version: 31,
     scope: {
       type: "all",
       reason:
-        "the record card's affected constitutional and other provisions are read one listed act per value, so the stored provision lists are recomputed from the stored card",
+        "Recompute procedural review links from retained publisher metadata and opening/holding evidence.",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {

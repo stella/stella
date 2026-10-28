@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import { decisionReviewsSchema } from "@stll/api-contract/case-law-reviews";
 import {
   TEXT_ABSENCE_REASONS,
   TEXT_FIELD_TYPE,
@@ -201,6 +202,7 @@ export const readDecisionSuccessResponseSchema = v.object({
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
   citationCount: v.number(),
+  appealReviews: decisionReviewsSchema,
   documentAst: v.unknown(),
   fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(

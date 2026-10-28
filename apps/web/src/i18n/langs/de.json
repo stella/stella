@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "appealReviews": {
+        "conflict": "Die Metadaten des Herausgebers und der einleitende Absatz widersprechen sich. Der Ausgang der Prüfung muss verifiziert werden.",
+        "corpusOnly": "Im verfügbaren Korpus wurde keine Verknüpfung zu einer Rechtsmittelentscheidung gefunden. Daraus folgt nicht, dass kein Rechtsmittel vorliegt.",
+        "noneFound": "Keine gefunden",
+        "overturned": "Aufgehoben oder abgeändert",
+        "partly": "Teilweise aufgehoben",
+        "reviewedBy": "Überprüfende Entscheidungen",
+        "reviews": "Überprüfte Entscheidungen",
+        "sourceHistory": "Verfahrensverlauf",
+        "sourceMetadata": "Metadaten des Herausgebers",
+        "sourceOpening": "Einleitender Absatz",
+        "title": "Rechtsmittelprüfung",
+        "truncated": "Es wird nur ein Teil des Rechtsmittelverlaufs angezeigt.",
+        "underReview": "Prüfung läuft",
+        "unknown": "Ausgang unbekannt",
+        "upheld": "Unverändert bestehen geblieben"
+      },
       "appliedVersionNotStated": "Angewandte Fassung nicht angegeben",
       "appliedVersionNotStatedCompact": "Fassung nicht angegeben",
       "appliedVersionStatedAmendment": "Fassung gemäß Änderungsgesetz <reference>{amendment}</reference>",

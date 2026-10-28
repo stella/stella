@@ -181,8 +181,8 @@ export const decisionDocketFilingYearFunctionSql = () => {
         case "encoded":
           return `WHEN ${quoteLiteral(jurisdiction)} THEN CASE
         WHEN (${filingYearRule.patterns.map(postgresPattern).join(" OR ")})
-          AND substring(folded FROM '/([0-9]{4})$')::integer > 0
-        THEN jsonb_build_object('type', 'known', 'year', substring(folded FROM '/([0-9]{4})$')::integer)
+          AND substring(folded FROM '/([0-9]{4})(?:-[0-9]+)?$')::integer > 0
+        THEN jsonb_build_object('type', 'known', 'year', substring(folded FROM '/([0-9]{4})(?:-[0-9]+)?$')::integer)
         ELSE jsonb_build_object('type', 'unparseable') END`;
         default:
           filingYearRule satisfies never;

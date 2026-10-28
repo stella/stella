@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "الملخّص",
+      "appealReviews": {
+        "conflict": "تتعارض البيانات الوصفية للناشر مع الفقرة الافتتاحية. يجب التحقق من نتيجة المراجعة.",
+        "corpusOnly": "لم يُعثر على رابط لمراجعة الطعن في مجموعة النصوص المتاحة. لا يثبت ذلك عدم وجود طعن.",
+        "noneFound": "لم يُعثر على مراجعة",
+        "overturned": "أُلغي أو عُدّل",
+        "partly": "أُلغي جزئيًا",
+        "reviewedBy": "القرارات التي أجرت المراجعة",
+        "reviews": "القرارات الخاضعة للمراجعة",
+        "sourceHistory": "السجل الإجرائي",
+        "sourceMetadata": "البيانات الوصفية للناشر",
+        "sourceOpening": "الفقرة الافتتاحية",
+        "title": "مراجعة الطعن",
+        "truncated": "يُعرض جزء فقط من سجل المراجعة.",
+        "underReview": "قيد المراجعة",
+        "unknown": "النتيجة غير معروفة",
+        "upheld": "بقي نافذًا"
+      },
       "appliedVersionNotStated": "الصيغة المطبقة غير مذكورة",
       "appliedVersionNotStatedCompact": "النسخة غير مذكورة",
       "appliedVersionStatedAmendment": "الصيغة المعدلة بموجب <reference>{amendment}</reference>",

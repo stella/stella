@@ -11,6 +11,7 @@ import {
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   countedSearchTotal,
   DECISION_SEARCH_MATCHES,
@@ -1700,6 +1701,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          appealReviews: noDecisionReviewFound(),
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -2546,6 +2548,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      appealReviews: noDecisionReviewFound(),
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,

@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Kopsavilkums",
+      "appealReviews": {
+        "conflict": "Izdevēja metadati un ievada rindkopa ir pretrunīgi. Pārskatīšanas iznākums ir jāpārbauda.",
+        "corpusOnly": "Pieejamajā korpusā nav atrasta saite uz pārskatīšanu. Tas nepierāda, ka pārsūdzība nepastāv.",
+        "noneFound": "Nav atrasta",
+        "overturned": "Atcelts vai grozīts",
+        "partly": "Daļēji atcelts",
+        "reviewedBy": "Pārskatīšanas nolēmumi",
+        "reviews": "Pārskatītie nolēmumi",
+        "sourceHistory": "Procesa vēsture",
+        "sourceMetadata": "Izdevēja metadati",
+        "sourceOpening": "Ievada rindkopa",
+        "title": "Pārskatīšana pēc pārsūdzības",
+        "truncated": "Tiek rādīta tikai daļa pārskatīšanas vēstures.",
+        "underReview": "Notiek pārskatīšana",
+        "unknown": "Iznākums nav zināms",
+        "upheld": "Atstāts spēkā"
+      },
       "appliedVersionNotStated": "Piemērotā redakcija nav norādīta",
       "appliedVersionNotStatedCompact": "Redakcija nav norādīta",
       "appliedVersionStatedAmendment": "Redakcija ar <reference>{amendment}</reference> grozījumiem",

@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 import fc from "fast-check";
 
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
@@ -95,6 +96,7 @@ const readableDecision: typeof readDecisionReaderSource = async () => ({
   status: "read",
   decision: {
     id: row().id,
+    appealReviews: noDecisionReviewFound(),
     caseNumber: row().caseNumber,
     caseNumberType: row().caseNumberType,
     courtAbbreviation: row().courtAbbreviation,
@@ -198,7 +200,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
-        dependencies: { lookup: lookupRows([]) },
+        dependencies: {
+          lookup: lookupRows([]),
+        },
       }),
     ).toEqual({ status: "not_found", reason: "no_exact_identity" });
     expect(
@@ -206,7 +210,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([row(), row()]) },
+        dependencies: {
+          lookup: lookupRows([row(), row()]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -222,13 +228,17 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
       document: {
         kind: "decision",
         decisionId: expect.any(String),
+        appealReviews: noDecisionReviewFound(),
         text: {
           status: "readable",
           blocks: decisionAst().blocks,
@@ -312,7 +322,10 @@ describe("decision legal resolution", () => {
       fc.asyncProperty(
         fc.array(
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
-          { minLength: 1, maxLength: 4 },
+          {
+            minLength: 1,
+            maxLength: 4,
+          },
         ),
         // Court-numbered paragraphs are served with their number, which the
         // extent has to count like the text does.
@@ -360,7 +373,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: licensedDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: licensedDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -377,7 +393,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008",
-      dependencies: { lookup: lookupRows([row()]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -391,7 +410,10 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([unsheeted]), read: readableDecision },
+      dependencies: {
+        lookup: lookupRows([unsheeted]),
+        read: readableDecision,
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -417,7 +439,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "22 Ad 11/2023",
-        dependencies: { lookup: lookupRows([brno, ostrava]) },
+        dependencies: {
+          lookup: lookupRows([brno, ostrava]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -456,7 +480,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "EU",
         identifier: "C-144/04",
-        dependencies: { lookup: lookupRows([opinion, judgment]) },
+        dependencies: {
+          lookup: lookupRows([opinion, judgment]),
+        },
       }),
     ).toMatchObject({
       status: "ambiguous",
@@ -501,7 +527,10 @@ describe("decision legal resolution", () => {
         admission,
         country: "EU",
         identifier: caseNumber,
-        dependencies: { lookup, read: readableDecision },
+        dependencies: {
+          lookup,
+          read: readableDecision,
+        },
       });
       expect([caseNumber, result.status]).toEqual([caseNumber, "resolved"]);
     }
@@ -517,7 +546,10 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - II.",
-        dependencies: { lookup: lookupRows([bare]), read: readableDecision },
+        dependencies: {
+          lookup: lookupRows([bare]),
+          read: readableDecision,
+        },
       }),
     ).toEqual({ status: "not_found", reason: "no_exact_identity" });
   });
@@ -530,7 +562,9 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([first, second]) },
+        dependencies: {
+          lookup: lookupRows([first, second]),
+        },
       }),
     ).toEqual({ status: "not_found", reason: "no_exact_identity" });
   });
@@ -540,7 +574,12 @@ describe("decision legal resolution", () => {
       admission,
       country: "CZE",
       identifier: "3 Afs 41/2008 - 98",
-      dependencies: { lookup: lookupRows([row()]), read: missingDecision },
+      dependencies: {
+        lookup: lookupRows([row()]),
+        read: missingDecision,
+        readReviews: async ({ decisionIds }) =>
+          new Map(decisionIds.map((id) => [id, noDecisionReviewFound()])),
+      },
     });
     expect(result).toMatchObject({
       status: "resolved",
@@ -566,7 +605,10 @@ describe("decision legal resolution", () => {
         admission,
         country: "CZE",
         identifier: "3 Afs 41/2008 - 98",
-        dependencies: { lookup: lookupRows([row()]), read },
+        dependencies: {
+          lookup: lookupRows([row()]),
+          read,
+        },
       });
       expect(result).toMatchObject({
         status: "resolved",
@@ -582,7 +624,9 @@ describe("decision legal resolution", () => {
           admission,
           country: "CZE",
           identifier,
-          dependencies: { lookup: lookupRows([row()]) },
+          dependencies: {
+            lookup: lookupRows([row()]),
+          },
         }),
       ).toEqual({ status: "not_found", reason: "no_exact_identity" });
     }

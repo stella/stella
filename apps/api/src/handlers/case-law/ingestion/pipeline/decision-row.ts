@@ -13,6 +13,7 @@ import {
   createCaseLawDecisionSlugCandidate,
 } from "@/api/handlers/case-law/decisions/slug";
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -163,6 +164,12 @@ const finishInsertedRowTx = async (
     observedAt,
     plan: { citations, identifierRows },
   } = write;
+  await writeDecisionReviews(tx, {
+    decisionId: insertedId,
+    country: write.result.country,
+    reviews: write.plan.reviews,
+  });
+
   await writeDecisionJudges(tx, write, insertedId);
 
   await announceDecisionIdentifiers(tx, write, insertedId, identifierRows);

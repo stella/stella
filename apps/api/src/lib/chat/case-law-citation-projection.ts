@@ -9,6 +9,7 @@ import {
   CITATION_TREATMENTS,
 } from "../case-law/citation-vocabulary";
 import { caseNumberTypeProjection } from "./case-law-result-projections";
+import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { contentText, passthroughId, publicUrl } from "./projection-fields";
 
 /**
@@ -18,6 +19,7 @@ import { contentText, passthroughId, publicUrl } from "./projection-fields";
  * text, withheld where the source bars derived AI use.
  */
 export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
+  appealReviews: DECISION_REVIEWS_PROJECTION,
   doctrineAvailability: v.picklist(["available", "unavailable"]),
   doctrine: v.optional(
     v.picklist(DOCTRINAL_TREATMENTS.filter((value) => value !== "not_stated")),

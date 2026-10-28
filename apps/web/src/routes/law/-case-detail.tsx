@@ -29,6 +29,7 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
 import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
+import { DecisionAppealReviews } from "@/features/case-law/components/case-viewer/decision-appeal-reviews";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
@@ -250,6 +251,12 @@ export function PublicDecisionViewer({
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
       <PublicDecisionCaseFile decision={decision} />
+      <div className="px-4 py-2">
+        <DecisionAppealReviews
+          reviews={decision.appealReviews}
+          country={decision.country}
+        />
+      </div>
       {!noDocument && <InspectorFindBar find={find} />}
       <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}

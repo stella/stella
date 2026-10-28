@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "appealReviews": {
+        "conflict": "Leidėjo metaduomenys ir įvadinė pastraipa prieštarauja vieni kitiems. Peržiūros rezultatą reikia patikrinti.",
+        "corpusOnly": "Turimame tekstyne nerasta sąsajos su peržiūra pagal skundą. Tai neįrodo, kad skundo nėra.",
+        "noneFound": "Nerasta",
+        "overturned": "Panaikinta arba pakeista",
+        "partly": "Iš dalies panaikinta",
+        "reviewedBy": "Peržiūrintys sprendimai",
+        "reviews": "Peržiūrėti sprendimai",
+        "sourceHistory": "Proceso istorija",
+        "sourceMetadata": "Leidėjo metaduomenys",
+        "sourceOpening": "Įvadinė pastraipa",
+        "title": "Peržiūra pagal skundą",
+        "truncated": "Rodoma tik dalis peržiūros istorijos.",
+        "underReview": "Peržiūrima",
+        "unknown": "Rezultatas nežinomas",
+        "upheld": "Palikta galioti"
+      },
       "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
       "appliedVersionNotStatedCompact": "Redakcija nenurodyta",
       "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",

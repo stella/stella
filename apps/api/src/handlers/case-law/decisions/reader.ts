@@ -293,6 +293,7 @@ export const readDecisionReaderSource = async ({
     decision: {
       id: decision.id,
       caseNumber: decision.caseNumber,
+      appealReviews: decision.appealReviews,
       caseNumberType: decision.caseNumberType,
       courtAbbreviation: decision.courtAbbreviation,
       courtTier: decision.courtTier,

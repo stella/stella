@@ -20,6 +20,7 @@
 
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
+import { readFileSync } from "node:fs";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -418,7 +419,9 @@ const CZ_NSS_DETAIL_PAGE = `<html><body>${CZ_NSS_FIXTURE_FIELD_IDS.map(
       fieldId,
       CZ_NSS_FIXTURE_VALUES[fieldId] ?? CZ_NSS_PLACEHOLDER_VALUE,
     ),
-).join("")}</body></html>`;
+).join(
+  "",
+)}${readFileSync(new URL("../../handlers/case-law/ingestion/adapters/__fixtures__/cz-nss-7-as-32-2025-review-table.html", import.meta.url), "utf-8")}</body></html>`;
 
 const CZ_NSS_DOCUMENT_PAGE = `<html><body>
   <p>ČESKÁ REPUBLIKA</p>

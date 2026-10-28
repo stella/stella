@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "appealReviews": {
+        "conflict": "Avaldaja metaandmed ja sissejuhatav lõik on vastuolus. Läbivaatamise tulemus vajab kontrollimist.",
+        "corpusOnly": "Olemasolevast korpusest ei leitud seost edasikaebuse läbivaatamisega. See ei tõenda, et edasikaebust ei ole.",
+        "noneFound": "Ei leitud",
+        "overturned": "Tühistatud või muudetud",
+        "partly": "Osaliselt tühistatud",
+        "reviewedBy": "Läbivaatavad lahendid",
+        "reviews": "Läbivaadatud lahendid",
+        "sourceHistory": "Menetluse ajalugu",
+        "sourceMetadata": "Avaldaja metaandmed",
+        "sourceOpening": "Sissejuhatav lõik",
+        "title": "Edasikaebuse läbivaatamine",
+        "truncated": "Kuvatud on ainult osa läbivaatamise ajaloost.",
+        "underReview": "Läbivaatamisel",
+        "unknown": "Tulemus teadmata",
+        "upheld": "Jäi jõusse"
+      },
       "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
       "appliedVersionNotStatedCompact": "Redaktsioon märkimata",
       "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",

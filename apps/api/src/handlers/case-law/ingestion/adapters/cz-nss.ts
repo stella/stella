@@ -50,6 +50,8 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { parseCzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
+import type { CzNssPublisherReviewMetadata } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-review-metadata";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import {
   readBodyText,
@@ -66,6 +68,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { czechReporterIdentifiersFromCitationLabel } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import type { CzechAppealReview } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
@@ -1055,7 +1058,7 @@ const CZ_NSS_EXCLUSION = {
   RELATED_CASE_LAW:
     "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
   PROCEEDING_HISTORY:
-    "The proceeding around the document: what was challenged, which court or authority it came from, and what became of it afterwards. The row models one decision and carries no field for the proceeding.",
+    "Proceeding fields outside the reviewed-judgment relation, including administrative challenges, related proceedings and preliminary references. These are not identities of judgments reviewed by this decision.",
   PROCEEDING_DATES:
     "Docket dates of the proceeding — opened, closed, in legal force, written out, dispatched. The row states the decision date, which is what a citation and a date filter ask for.",
   PARTY_GRID:
@@ -1104,9 +1107,10 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   datumpredkladacihorozhodnutinss: excludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  datumrozhodnutikrajskehosoudu: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
+  datumrozhodnutikrajskehosoudu: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviews" },
+  },
   datumskonceniirizeni: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_DATES),
   datumvydanirozhodnuti: {
     disposition: "stored",
@@ -1141,28 +1145,37 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   identifikacevesbirkachdelenesesit: excludedSourceField(
     CZ_NSS_EXCLUSION.REPORTER_PUBLICATION,
   ),
-  kasacnistiznostoznacenivecideleneclistu: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  kasacnistiznostoznacenivecideleneporc: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  kasacnistiznostoznacenivecidelenerejstrik: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  kasacnistiznostoznacenivecidelenerok: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  kasacnistiznostoznacenivecidelenesenat: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
-  kasacnistiznostoznacenivecivcelku: excludedSourceField(
-    CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
-  ),
+  kasacnistiznostoznacenivecideleneclistu: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviewMetadata" },
+  },
+  kasacnistiznostoznacenivecideleneporc: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviewMetadata" },
+  },
+  kasacnistiznostoznacenivecidelenerejstrik: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviewMetadata" },
+  },
+  kasacnistiznostoznacenivecidelenerok: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviewMetadata" },
+  },
+  kasacnistiznostoznacenivecidelenesenat: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviewMetadata" },
+  },
+  kasacnistiznostoznacenivecivcelku: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviews" },
+  },
   kasacniustavnistiznost: excludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  krajskysoud: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  krajskysoud: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviews" },
+  },
   napadeno: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
   nazevorganu: excludedSourceField(CZ_NSS_EXCLUSION.PARTY_GRID),
   nazevsoudusubjektu: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
@@ -1223,7 +1236,10 @@ const CZ_NSS_SOURCE_FIELD_DISPOSITIONS = {
   rozhodnutivevztahukrizeni: excludedSourceField(
     CZ_NSS_EXCLUSION.PROCEEDING_HISTORY,
   ),
-  rozhodnutonapkasst: excludedSourceField(CZ_NSS_EXCLUSION.PROCEEDING_HISTORY),
+  rozhodnutonapkasst: {
+    disposition: "stored",
+    target: { type: "metadata", key: "publisherReviews" },
+  },
   sbnsspublikovano: excludedSourceField(CZ_NSS_EXCLUSION.REPORTER_PUBLICATION),
   souladnaprejudikatura: excludedSourceField(CZ_NSS_EXCLUSION.RELATED_CASE_LAW),
   soudcezpravodaj: {
@@ -1300,6 +1316,8 @@ const listCzNssSourceFields = (parts: SourceRawParts): readonly string[] => [
  * must bind to the same shape rather than restate its keys.
  */
 export type CzNssDetailMetadata = {
+  publisherReviews?: CzechAppealReview[];
+  publisherReviewMetadata?: CzNssPublisherReviewMetadata[];
   ecli: string | undefined;
   judge: string | undefined;
   senate: string | undefined;
@@ -1364,6 +1382,7 @@ const extractDivText = ({
 export const parseCzNssDetailMetadata = (
   html: string,
 ): CzNssDetailMetadata => ({
+  ...parseCzNssPublisherReviewMetadata(html),
   ecli: extractDivText({ html, divId: "ecli" }),
   judge: extractDivText({ html, divId: "soudcezpravodaj" }),
   senate: extractDivText({ html, divId: "soudsenat" }),
@@ -1539,6 +1558,8 @@ type RowToResultOptions = {
 const detailMetadataFields = (
   detail: CzNssDetailMetadata,
 ): Record<string, unknown> => ({
+  publisherReviews: detail.publisherReviews,
+  publisherReviewMetadata: detail.publisherReviewMetadata,
   ecli: detail.ecli,
   judge: detail.judge,
   senate: detail.senate,

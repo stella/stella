@@ -40,6 +40,10 @@ import {
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identifiers";
 import {
+  readDecisionReviewsWithin,
+  requireDecisionReviews,
+} from "@/api/lib/case-law/decision-reviews";
+import {
   readDecisionTextMetadata,
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
@@ -425,6 +429,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       citationsFromPage,
       citationsToPage,
       caseFile,
+      reviews,
     ] = await Promise.all([
       // Bounded and degraded to no badge: a slow registry read must cost the
       // decision its chip, not the reader its decision.
@@ -452,6 +457,11 @@ export const readDecisionHandler = definePublicLawSharedQuery(
             countries: subject.countries,
           }),
       listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
+      readDecisionReviewsWithin({
+        tx,
+        decisionIds: [decisionId],
+        countries: subject.countries,
+      }),
     ]);
 
     if (caseFile === false) {
@@ -572,6 +582,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
+      appealReviews: requireDecisionReviews(reviews, decisionId),
       documentAst,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,

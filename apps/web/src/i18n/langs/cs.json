@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "appealReviews": {
+        "conflict": "Metadata vydavatele a úvodní odstavec si odporují. Výsledek přezkumu je nutné ověřit.",
+        "corpusOnly": "V dostupném korpusu nebyla nalezena vazba na přezkum. To neznamená, že opravný prostředek neexistuje.",
+        "noneFound": "Nenalezen",
+        "overturned": "Zrušeno nebo změněno",
+        "partly": "Částečně zrušeno",
+        "reviewedBy": "Přezkoumávající rozhodnutí",
+        "reviews": "Přezkoumávaná rozhodnutí",
+        "sourceHistory": "Procesní historie",
+        "sourceMetadata": "Metadata vydavatele",
+        "sourceOpening": "Úvodní odstavec",
+        "title": "Přezkum rozhodnutí",
+        "truncated": "Je zobrazena pouze část historie přezkumu.",
+        "underReview": "Probíhá přezkum",
+        "unknown": "Výsledek neznámý",
+        "upheld": "Ponecháno v platnosti"
+      },
       "appliedVersionNotStated": "Použité znění neuvedeno",
       "appliedVersionNotStatedCompact": "Znění neuvedeno",
       "appliedVersionStatedAmendment": "Znění podle novely <reference>{amendment}</reference>",

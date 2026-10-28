@@ -22,6 +22,10 @@ const unparseable = { type: "unparseable" } as const;
 const filingYearCases = {
   AUT: [{ caseNumber: "2 Ob 42/24a", expected: none }],
   CZE: [
+    {
+      caseNumber: "5 Tdo 1125/2023-14274",
+      expected: { type: "known", year: 2023 },
+    },
     { caseNumber: "7 Co 91/2022", expected: { type: "known", year: 2022 } },
     { caseNumber: "23 C 57/2020", expected: { type: "known", year: 2020 } },
     { caseNumber: "6 As 83/2019", expected: { type: "known", year: 2019 } },

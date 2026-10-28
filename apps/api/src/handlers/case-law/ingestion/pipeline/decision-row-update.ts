@@ -26,6 +26,7 @@ import {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { DecisionWritePlan } from "@/api/handlers/case-law/ingestion/pipeline/decision-plan";
 import { sweepRawWriteLostToErasureTx } from "@/api/handlers/case-law/ingestion/pipeline/decision-raw";
+import { writeDecisionReviews } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import {
   announceDecisionIdentifiers,
   reconcileStableProjection,
@@ -557,6 +558,13 @@ export const finishRefreshedRowTx = async (
   ) {
     await reopenMovedIdentityTx(tx, write, existing, replacedState);
   }
+
+  await writeDecisionReviews(tx, {
+    decisionId: existing.id,
+    country: write.result.country,
+    previousCountry: replacedState?.country ?? existing.country,
+    reviews: write.plan.reviews,
+  });
 
   // Citations are read out of the document, so a refresh that
   // carries no document has nothing to say about them either.

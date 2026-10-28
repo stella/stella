@@ -1458,11 +1458,13 @@ export const installPgliteDecisionDocketFilingYear = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261027160700_decision_docket_filing_year",
+      "20261028173100_czech_docket_long_sheets",
       "migration.sql",
     ),
-  ).filter((statement) =>
-    executableSql(statement).startsWith("CREATE FUNCTION"),
+  ).filter(
+    (statement) =>
+      executableSql(statement).startsWith("CREATE FUNCTION") ||
+      executableSql(statement).startsWith("CREATE OR REPLACE FUNCTION"),
   );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));

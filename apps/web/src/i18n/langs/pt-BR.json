@@ -1204,6 +1204,23 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "appealReviews": {
+        "conflict": "Os metadados do editor e o parágrafo inicial são conflitantes. O resultado da revisão precisa ser verificado.",
+        "corpusOnly": "Nenhum vínculo de revisão foi encontrado no corpus disponível. Isso não comprova a inexistência de recurso.",
+        "noneFound": "Nenhuma encontrada",
+        "overturned": "Anulada ou reformada",
+        "partly": "Parcialmente anulada",
+        "reviewedBy": "Decisões revisoras",
+        "reviews": "Decisões revisadas",
+        "sourceHistory": "Histórico processual",
+        "sourceMetadata": "Metadados do editor",
+        "sourceOpening": "Parágrafo inicial",
+        "title": "Revisão em recurso",
+        "truncated": "Apenas parte do histórico de revisão é exibida.",
+        "underReview": "Em revisão",
+        "unknown": "Resultado desconhecido",
+        "upheld": "Mantida"
+      },
       "appliedVersionNotStated": "Versão aplicada não informada",
       "appliedVersionNotStatedCompact": "Versão não informada",
       "appliedVersionStatedAmendment": "Redação alterada por <reference>{amendment}</reference>",

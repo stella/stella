@@ -64,6 +64,15 @@ type DecisionIdentity = Omit<
 
 const identity = {
   kind: "decision",
+  appealReviews: {
+    status: "none_found" as const,
+    basis: "available_corpus" as const,
+    reason: "no_link_in_corpus" as const,
+    reviewedBy: [],
+    reviews: [],
+    reviewedByTruncated: false,
+    reviewsTruncated: false,
+  },
   decisionId: "00000000-0000-4000-8000-0000000d0041",
   identifier: "ECLI:CZ:NS:2026:1.CDO.1.2026.1",
   country: "CZE",
@@ -183,7 +192,12 @@ describe("legal resolve MCP and HTTP envelopes stay identical", () => {
             v.parse(legalResolveResponseSchema, response),
           );
           expect(wire.content).toEqual([
-            { type: "text", text: JSON.stringify(response) },
+            {
+              type: "text",
+              text: JSON.stringify(
+                v.parse(legalResolveResponseSchema, response),
+              ),
+            },
           ]);
           if (
             response.status === "resolved" &&

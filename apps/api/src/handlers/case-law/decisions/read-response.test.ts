@@ -60,6 +60,15 @@ const decisionWithText = (text: string) => {
     decisionDate: text,
     decisionType: text,
     citationCount: 17,
+    appealReviews: {
+      status: "none_found" as const,
+      basis: "available_corpus" as const,
+      reason: "no_link_in_corpus" as const,
+      reviewedBy: [],
+      reviews: [],
+      reviewedByTruncated: false,
+      reviewsTruncated: false,
+    },
     documentAst: {
       version: 1,
       source: {

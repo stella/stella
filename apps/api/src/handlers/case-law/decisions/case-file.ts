@@ -250,6 +250,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "analysis",
   // Parser bookkeeping does not describe a case-file document.
   "parserVersion",
+  // Procedural review extraction version is internal bookkeeping.
+  "reviewExtractionVersion",
   // Raw publisher bytes are not returned in a document list.
   "sourceRaw",
   // Internal object-storage address for publisher bytes.
