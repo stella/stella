@@ -1210,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Stated: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Wording effective on {date}} until {Wording effective through {date}} from {Wording effective from {date}} other {Wording effective on {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Stated: {date}} until {Stated: until {date}} from {Stated: from {date}} other {Stated: {date}}}",
+      "caseFileDocuments": "Documents in this case file",
       "caseFileMayHoldOthers": "This case file may contain other decisions as well.",
       "citedBy": "Cited by",
       "citedDecisionPassage": "Passage in the decision",

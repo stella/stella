@@ -1210,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
+      "caseFileDocuments": "Dokumente dieser Gerichtsakte",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "citedDecisionPassage": "Textstelle in der Entscheidung",

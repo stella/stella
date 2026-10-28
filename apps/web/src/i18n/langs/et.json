@@ -1210,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
+      "caseFileDocuments": "Selle kohtuasja dokumendid",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "citedDecisionPassage": "Lõik lahendis",
