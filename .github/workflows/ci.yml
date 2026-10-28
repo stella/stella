@@ -895,6 +895,7 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -1019,6 +1020,7 @@ jobs:
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
           )
+        id: consumer-setup-bun-for-dependency-scope
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
@@ -1796,6 +1798,7 @@ jobs:
     steps:
       - &checkout_input_sha
         name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -3242,6 +3245,7 @@ jobs:
     steps:
       - &full_checkout_input_sha
         name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -3385,6 +3389,7 @@ jobs:
       - name: Install UI browser test runtime
         timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
+        id: consumer-install-ui-browser-test-runtime
         uses: ./.github/actions/setup-playwright
         with:
           # The pinned image includes both desktop engines and screenshot fonts.
@@ -4652,6 +4657,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -4676,6 +4682,7 @@ jobs:
           cp .env.example .env
 
       - name: Build web
+        id: consumer-build-web
         uses: ./.github/actions/build-e2e-web
 
       - name: Upload production E2E web build
@@ -4978,6 +4985,7 @@ jobs:
       - name: Prepare environment
         run: cp apps/web/.env.example apps/web/.env
       - name: Build web
+        id: consumer-build-web
         uses: ./.github/actions/build-e2e-web
       - name: Upload production E2E web build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -5013,6 +5021,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5043,6 +5052,7 @@ jobs:
 
       - name: Prepare merge-base network budget
         timeout-minutes: 5
+        id: consumer-prepare-merge-base-network-budget
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -5144,6 +5154,7 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 7
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5198,6 +5209,7 @@ jobs:
       - name: Prepare merge-base network budget
         timeout-minutes: 2
         if: matrix.shard == 'network-baseline'
+        id: consumer-prepare-merge-base-network-budget
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -5402,6 +5414,7 @@ jobs:
 
       - name: Verify Firefox and WebKit in the pinned image
         timeout-minutes: 4
+        id: consumer-verify-firefox-and-webkit-in-the-pinned-image
         uses: ./.github/actions/setup-playwright
         with:
           browsers: firefox webkit
@@ -5536,6 +5549,7 @@ jobs:
       - name: Install Playwright browsers
         timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
+        id: consumer-install-playwright-browsers
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
@@ -5706,6 +5720,7 @@ jobs:
 
       - name: Install Playwright browsers
         timeout-minutes: 4
+        id: consumer-install-playwright-browsers
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
@@ -6158,6 +6173,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -6247,6 +6263,7 @@ jobs:
 
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
+        id: consumer-exercise-windows-desktop-release-build
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "true"
@@ -6467,6 +6484,7 @@ jobs:
     steps:
       - &desktop_rust_checkout
         name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -6588,6 +6606,7 @@ jobs:
       - name: Install cargo-deny
         timeout-minutes: 10
         if: matrix.os == 'macos'
+        id: consumer-install-cargo-deny
         uses: ./.github/actions/cargo-deny
 
       # Licenses, bans and sources read only the resolved dependency graph.
@@ -6966,10 +6985,12 @@ jobs:
           bun-version-file: "package.json"
       - name: Install Safe Chain
         timeout-minutes: 2
+        id: consumer-install-safe-chain
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
         timeout-minutes: 2
         if: ${{ !cancelled() }}
+        id: consumer-install-osv-scanner
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures
         timeout-minutes: 2

@@ -530,6 +530,7 @@ jobs:
       # Attestation tooling comes from the workflow revision, after building,
       # so it cannot alter the pinned source or its Docker context.
       - name: Checkout attestation tooling
+        id: source-checkout-attestation-tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -541,6 +542,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Attest image provenance
+        id: consumer-attest-image-provenance
         uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -572,6 +574,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -599,6 +602,7 @@ jobs:
       # Attestation tooling comes from the workflow revision, after building,
       # so it cannot alter the pinned source or its Docker context.
       - name: Checkout attestation tooling
+        id: source-checkout-attestation-tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -610,6 +614,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Attest web image provenance
+        id: consumer-attest-web-image-provenance
         uses: ./.workflow-actions/.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
@@ -666,6 +671,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout workflow actions
+        id: source-checkout-workflow-actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -686,6 +692,7 @@ jobs:
       # skipped by `needs` instead of blocking on a commit that will never
       # be served.
       - name: Deploy to staging
+        id: consumer-deploy-to-staging
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -739,6 +746,7 @@ jobs:
       # were a separate job, a newer promotion could start while this smoke
       # still measures the previous commit.
       - name: Checkout deployed source
+        id: source-checkout-deployed-source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -778,6 +786,7 @@ jobs:
 
       - name: Verify image-provided Chromium
         timeout-minutes: 4
+        id: consumer-verify-image-provided-chromium
         uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke

@@ -364,6 +364,7 @@ jobs:
 
     steps:
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.release_sha }}
@@ -433,6 +434,7 @@ jobs:
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
 
       - name: Attest image provenance
+        id: consumer-attest-image-provenance
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -572,6 +574,7 @@ jobs:
 
       - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
+        id: source-checkout-workflow-tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.workflow_sha }}
@@ -1093,11 +1096,13 @@ jobs:
       # cut before the action existed: checking out that release first would
       # leave `uses: ./...` unresolvable and fail before dispatching.
       - name: Checkout workflow source
+        id: source-checkout-workflow-source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Promote to production
+        id: consumer-promote-to-production
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -1110,12 +1115,14 @@ jobs:
       # Swap the workspace to the release being promoted: the verification
       # script must come from that revision, not from the workflow's.
       - name: Checkout release verification script
+        id: source-checkout-release-verification-script
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.release_sha }}
           persist-credentials: false
 
       - name: Setup Bun
+        id: consumer-setup-bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: "package.json"

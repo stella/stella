@@ -64,6 +64,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout the deployed commit
+        id: source-checkout-the-deployed-commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.staging-commit.outputs.commit }}
@@ -139,6 +140,7 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout the deployed commit
+        id: source-checkout-the-deployed-commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.staging-commit.outputs.commit }}
@@ -226,6 +228,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout the deployed commit
+        id: source-checkout-the-deployed-commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.deployed.outputs.commit }}

@@ -92,6 +92,7 @@ jobs:
 
     steps:
       - name: Checkout verified source
+        id: source-checkout-verified-source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve.outputs.source_sha }}
@@ -159,6 +160,7 @@ jobs:
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.source_sha }}
 
       - name: Attest image provenance
+        id: consumer-attest-image-provenance
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}

@@ -81,6 +81,7 @@ jobs:
 
       - name: Checkout tested revision
         timeout-minutes: 2
+        id: source-checkout-tested-revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -126,6 +127,7 @@ jobs:
 
       - name: Start dev-runtime infrastructure and mock API
         timeout-minutes: 6
+        id: consumer-start-dev-runtime-infrastructure-and-mock-api
         uses: ./.github/actions/setup-e2e-stack
 
       - name: Apply the local dev seed

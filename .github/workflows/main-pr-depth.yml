@@ -60,6 +60,7 @@ jobs:
           echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
 
       - name: Checkout trusted release proof tooling
+        id: source-checkout-trusted-release-proof-tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -74,6 +75,7 @@ jobs:
       # Bun runs the release queue history check the health gate needs before
       # a merge-group receipt may stand in for the heavy statuses.
       - name: Setup Bun
+        id: consumer-setup-bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .release-proof/package.json

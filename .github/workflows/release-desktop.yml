@@ -287,6 +287,7 @@ jobs:
           echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
 
       - name: Checkout
+        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pinned to the SHA resolved by the resolve job; never to
@@ -365,6 +366,7 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
+        id: consumer-build-and-sign-windows-artifacts
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "false"
