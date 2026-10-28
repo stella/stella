@@ -122,6 +122,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "correspondence_drop_logs",
   "correspondence_filers",
   "desktop_presence",
+  "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
   "document_processing_runs",

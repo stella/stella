@@ -13,6 +13,7 @@ import {
 import { desktopRunnerEvents, desktopRunnerRuns } from "@/api/db/schema";
 import type { HttpServer } from "@/api/http/context";
 import { apiWebSocketHandler } from "@/api/http/websocket";
+import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
   createDesktopRunnerControl,
   type DesktopRunnerControl,
@@ -36,13 +37,19 @@ import type { MintRunToken } from "@/api/lib/desktop-runner/session";
 import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
+import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
 import {
   createTestIds,
   setupRlsTestData,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import {
+  getTestDb,
+  releaseTestDb,
+  withQueryLogger,
+} from "@/api/tests/security/test-utils";
 
 const ids = createTestIds();
 const owner = { userId: ids.userA1, organizationId: ids.orgA };
@@ -350,8 +357,17 @@ const ofRun = (runId: string) => (message: DesktopRunnerServerMessage) => {
     case "upgrade_required":
     case "reconnect":
       return false;
-    default:
+    case "run.start":
+    case "run.input":
+    case "run.approval":
+    case "run.interrupt":
+    case "run.cancel":
+    case "run.token":
+    case "ack":
       return message.runId === runId;
+    default:
+      message satisfies never;
+      return panic("Unknown desktop runner server message");
   }
 };
 
@@ -807,5 +823,47 @@ describe("routing and delivery across API tasks", () => {
       draining.server,
     );
     expect(refused?.status).toBe(503);
+  });
+});
+
+describe("upgrade scaling", () => {
+  test("opening a socket reads the same however many runs the account's desktops hold", async () => {
+    // Credentials on a counted connection, so the upgrade's reads are measured.
+    const counted = await createRlsDesktopCredentials(
+      withQueryLogger(db, queryCountLogger),
+      ids,
+    );
+    const gateway = createDesktopRunnerGateway({
+      db: gatewayDb,
+      doorbell: createLocalDoorbell(),
+      instanceId: "api-scaling",
+      authorize: authorizeRunnerWith(counted.authorizeDesktopAccount),
+      mintRunToken,
+      now,
+      random: () => 0.5,
+      timing: TIMING,
+    });
+    const fixture = {
+      gateway,
+      signRequest: async () =>
+        await upgradeRequest(first, Bun.randomUUIDv7(), counted.a),
+    };
+    const small = await desktopRunnerUpgradeScalingScenario.measure(fixture);
+
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(first, desktopId);
+    await desktop.hello();
+    for (let index = 0; index < 20; index += 1) {
+      expect(
+        (
+          await control.startRun(startInput(desktopId, Bun.randomUUIDv7()))
+        ).unwrap(),
+      ).toEqual({ type: "assigned" });
+    }
+    await desktop.close();
+    const large = await desktopRunnerUpgradeScalingScenario.measure(fixture);
+
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
   });
 });

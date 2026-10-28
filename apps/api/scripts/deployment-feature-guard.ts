@@ -109,6 +109,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],
   [
+    "/v1/desktop/runner",
+    "The desktop runner socket authenticates the desktop account and device on every deployment; runs reach it only when the API assigns them",
+  ],
+  [
     "/v1/tasks",
     "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
   ],

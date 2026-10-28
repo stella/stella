@@ -19,6 +19,7 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
@@ -55,6 +56,7 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
+  desktopRunnerUpgradeScalingScenario,
   clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,
