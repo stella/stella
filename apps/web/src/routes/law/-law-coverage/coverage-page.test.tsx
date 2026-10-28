@@ -156,6 +156,7 @@ const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
   totals: {
+    addedLastWeek: 12,
     searchable: 4_200_000,
     stored: { decisions: 4_500_000, asOf: COUNTED_AT },
   },

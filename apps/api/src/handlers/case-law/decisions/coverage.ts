@@ -189,6 +189,7 @@ type CaseLawCoverage = {
    * decision twice and imply that an in-preparation country can be searched.
    */
   totals: {
+    addedLastWeek: number | null;
     searchable: number;
     stored: { decisions: number; asOf: string | null };
   };
@@ -418,6 +419,24 @@ const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
   return total;
 };
 
+const searchableCoverageTotals = (
+  countries: readonly CaseLawCoverageCountry[],
+) => {
+  const searchable = countries.filter(
+    (country) =>
+      country.availability === CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE,
+  );
+  return {
+    searchable: searchable.reduce(
+      (total, country) => total + country.searchable,
+      0,
+    ),
+    addedLastWeek: sumOfKnown(
+      searchable.map((country) => country.addedLastWeek),
+    ),
+  };
+};
+
 /** A part of the answer that can fail without failing the page. */
 export type CaseLawCoveragePart =
   | "arrivals"
@@ -595,7 +614,6 @@ export const loadCaseLawCoverage = async ({
   }
 
   const countries: CaseLawCoverageCountry[] = [];
-  let searchableTotal = 0;
   let storedTotal = 0;
   let storedAsOf: string | null = null;
 
@@ -652,7 +670,6 @@ export const loadCaseLawCoverage = async ({
     }
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
-    searchableTotal += searchable;
     const searchableSources = entry.sources.filter(
       ({ decisionYearFrom, decisionYearTo }) =>
         decisionYearFrom !== null && decisionYearTo !== null,
@@ -702,7 +719,7 @@ export const loadCaseLawCoverage = async ({
   return Result.ok({
     generatedAt: now.toISOString(),
     totals: {
-      searchable: searchableTotal,
+      ...searchableCoverageTotals(countries),
       stored: { decisions: storedTotal, asOf: storedAsOf },
     },
     countries,

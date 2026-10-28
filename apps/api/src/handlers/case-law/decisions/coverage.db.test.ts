@@ -924,6 +924,7 @@ test(
     // The two populations are reported apart and never summed, and the total
     // count states the oldest of the counts behind it.
     expect(coverage.value.totals).toEqual({
+      addedLastWeek: 2,
       searchable: 3,
       stored: {
         decisions: 5,
@@ -1025,6 +1026,7 @@ test(
       null,
     ]);
     expect(cze?.addedLastWeek).toBeNull();
+    expect(coverage.value.totals.addedLastWeek).toBeNull();
   },
   DB_TEST_TIMEOUT_MS,
 );
