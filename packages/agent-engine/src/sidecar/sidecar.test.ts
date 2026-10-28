@@ -436,7 +436,7 @@ describe("harness sidecar over stdio", () => {
         (message): message is SidecarMessage =>
           message.type === "run.event" &&
           message.runId === runId &&
-          message.chunk["type"] === "TOOL_CALL_START",
+          message.chunk.type === "TOOL_CALL_START",
       );
       sidecar.send({ type, runId });
       expect(await sidecar.waitFor(is("run.finished", runId))).toMatchObject({
