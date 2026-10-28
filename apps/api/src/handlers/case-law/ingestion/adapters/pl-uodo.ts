@@ -61,7 +61,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1866,12 +1865,24 @@ type PlUodoPublisherRecord = Readonly<
 >;
 
 const PL_UODO_SOURCE_FIELDS = {
-  type: legacyExcludedSourceField(
-    "the record format's own name; every record the search returns carries the same value",
-  ),
-  version: legacyExcludedSourceField(
-    "the version of the record format, not a fact about the document",
-  ),
+  type: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["type"],
+      reason: "The publisher record format and revision are retained verbatim",
+    },
+  },
+  version: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["version"],
+      reason: "The publisher record format and revision are retained verbatim",
+    },
+  },
   id: metadataField("portalEventId"),
   time: {
     disposition: "stored",

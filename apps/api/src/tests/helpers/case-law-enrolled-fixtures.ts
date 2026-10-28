@@ -1093,13 +1093,21 @@ const PL_NCOURT_CONTENT = `<?xml version='1.0' encoding='UTF-8'?>
   </xBlock>
 </xPart>`;
 
+const PL_NCOURT_LISTING_XML = `<judgement>${Object.entries(
+  PL_NCOURT_LISTING_ROW,
+)
+  .map(([name, value]) => `<${name}>${value}</${name}>`)
+  .join("")}</judgement>`;
+
 /** Built from the three payloads directly, as the crawl hands them over. */
 export const plNcourtFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    excerpt: PL_NCOURT_LISTING_XML,
+    "xPart@xml:space": PL_NCOURT_CONTENT,
+  },
   buildDecision: async () => {
     const built = assemblePlNcourtDecision({
-      listingXml: `<judgement>${Object.entries(PL_NCOURT_LISTING_ROW)
-        .map(([name, value]) => `<${name}>${value}</${name}>`)
-        .join("")}</judgement>`,
+      listingXml: PL_NCOURT_LISTING_XML,
       detailXml: PL_NCOURT_DETAIL,
       contentXml: PL_NCOURT_CONTENT,
     });
@@ -2503,7 +2511,7 @@ const plKisField = (dataType: string, key: string, value: unknown) => ({
 });
 
 /** The detail the service serves for that row: dictionary ids, and the HTML. */
-const PL_KIS_DETAIL = JSON.stringify({
+const PL_KIS_DETAIL_RECORD = {
   id: 705_415,
   versionId: 759_101,
   nazwa: "Zmiana wiążącej informacji stawkowej",
@@ -2541,10 +2549,17 @@ const PL_KIS_DETAIL = JSON.stringify({
     ],
   },
   informacjaTytulDto: [],
-});
+};
+const PL_KIS_DETAIL = JSON.stringify(PL_KIS_DETAIL_RECORD);
 
 /** Built through the adapter's own envelope writer from the row and the detail. */
 export const plKisFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    POZIOM_DOSTEPU_WYBRANEJ_TRESCI: PL_KIS_DETAIL_RECORD.dokument.fields,
+    "informacja/id": 705_415,
+    "informacja/nazwa": "Zmiana wiążącej informacji stawkowej",
+    "informacja/informacjaTytulDto": [],
+  },
   buildDecision: async () => {
     const row = { ...PL_KIS_LISTING_ROW };
     const built = await assemblePlKisDecision({
@@ -2622,6 +2637,7 @@ const plUodoUnionRow = (
 export const plUodoFixture = (
   documentUrl = PL_UODO_BODY,
 ): EnrolledAdapterFixture => ({
+  rawFieldValues: { type: "PublicDocument", version: "4.3" },
   buildDecision: async () => {
     const listed = await readGzipJson(PL_UODO_LISTING);
     const rows: unknown[] = Array.isArray(listed) ? listed : [];
@@ -2721,6 +2737,19 @@ const PL_UOKIK_SOURCE_ID = "pl-uokik-inventory-fixture";
  * the pipeline closes it.
  */
 export const plUokikFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "listing.@position": "13911",
+    "listing.@siblings": "22253",
+    "listing.entrydata": [
+      {
+        "@columnnumber": "0",
+        "@name": "$7",
+        text: {
+          "0": "[<B>Numer decyzji: </B>DOK-9/2011<BR><b>]Data decyzji:      [</B>28.11.2011<BR>][<A HREF=/bp/dec_prez.nsf/0/2520D55B0F17A317C1257EC6007B9773?OpenDocument   title='opis dokumentu'>Inco-Veritas S.A. z siedzibą w Warszawie</A>][<BR>]Pozostałe[<BR>]",
+        },
+      },
+    ],
+  },
   buildDecision: async () => {
     const view = await readGzipJson(PL_UOKIK_VIEW_2011);
     const listed: unknown[] =

@@ -65,7 +65,6 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
-  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -966,22 +965,50 @@ const PL_KIS_SOURCE_FIELDS = {
   DATA_REJESTRACJI: metadataField("registeredAt"),
   KOMENTARZE_BIP: metadataField("bipComments"),
   KOM_BIP_OPIS: metadataField("bipCommentNote"),
-  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: legacyExcludedSourceField(
-    "which of the service's editor groups may see a part of the document; it says nothing about the document",
-  ),
+  POZIOM_DOSTEPU_WYBRANEJ_TRESCI: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["dokument", "fields"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   WYNIK_ANALIZY: metadataField("analysisResultId"),
-  [`${TOP_PREFIX}id`]: legacyExcludedSourceField(
-    "the same id ID_INFORMACJI states, which keys the row",
-  ),
+  [`${TOP_PREFIX}id`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["id"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   [`${TOP_PREFIX}versionId`]: metadataField("versionId"),
-  [`${TOP_PREFIX}nazwa`]: legacyExcludedSourceField(
-    "the category's name, which KATEGORIA_INFORMACJI states",
-  ),
+  [`${TOP_PREFIX}nazwa`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["nazwa"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
   [`${TOP_PREFIX}szablonId`]: metadataField("templateId"),
   [`${TOP_PREFIX}wersjaSzablonuId`]: metadataField("templateVersionId"),
-  [`${TOP_PREFIX}informacjaTytulDto`]: legacyExcludedSourceField(
-    "an empty list on every document observed; the title is TEZA",
-  ),
+  [`${TOP_PREFIX}informacjaTytulDto`]: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["informacjaTytulDto"],
+      reason:
+        "The original detail response retains the publisher value, including its keyed field collection and empty values",
+    },
+  },
 } as const satisfies Record<keyof PlKisPublisherRecord, SourceFieldDisposition>;
 
 const KNOWN_FIELDS: ReadonlySet<string> = new Set(SOURCE_FIELDS);
