@@ -31,12 +31,14 @@ export const Route = createFileRoute(
       },
       context: { allowMissingThread: true },
     });
+    // A thread that is not saved yet is a valid draft: /chat/new and
+    // "Build with AI" navigate to fresh ids before the first message.
+    // Only malformed or inaccessible ids become not-found.
     await loadRouteResource({
       ids: [params.workspaceId, params.threadId],
       load: async () =>
         context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
         (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
-      exists: (thread) => thread.threadExists,
     });
   },
 });
