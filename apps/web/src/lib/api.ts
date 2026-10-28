@@ -2,6 +2,7 @@ import { createApiClient } from "@stll/api-client";
 import type { ApiClientOptions } from "@stll/api-client";
 import type { ConnectConnectorDecision } from "@stll/api-contract/chat-connector";
 import { INTERNAL_UI_TRANSPORT_ROUTES } from "@stll/api-contract/internal-ui-transport";
+import { fetchWithTimeout } from "@stll/fetch";
 
 import type { WebRoutes } from "@/generated/api-routes.gen";
 import { getTranslator } from "@/i18n/translator";
@@ -52,7 +53,15 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
-  timeoutMs: WEB_API_REQUEST_TIMEOUT_MS,
+  fetcher: async (url, { timeoutMs, signal, ...init }) =>
+    await fetchWithTimeout(url, {
+      ...init,
+      signal: signal ?? undefined,
+      timeout: {
+        type: "headers",
+        ms: timeoutMs ?? WEB_API_REQUEST_TIMEOUT_MS,
+      },
+    }),
   async onRequest() {
     await waitForSimulatedApiDelay();
   },

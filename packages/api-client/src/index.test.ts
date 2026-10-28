@@ -168,11 +168,6 @@ afterAll(async () => {
 
 const origin = server.url.href;
 
-const abortError = (signal: AbortSignal): Error => {
-  const reason: unknown = signal.reason;
-  return reason instanceof Error ? reason : new Error("Request aborted");
-};
-
 const client = (options?: ApiClientOptions) =>
   createApiClient<TestRoutes>(origin, options).v1;
 
@@ -295,54 +290,6 @@ describe("createApiClient", () => {
       "same-origin",
     ]);
     expect(seen.at(1)?.cache).toBe("no-store");
-  });
-
-  test("aborts a hung request at the configured timeout", async () => {
-    const api = client({
-      timeoutMs: 60_000,
-      fetcher: async (_url, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          init.signal?.addEventListener(
-            "abort",
-            () => reject(abortError(init.signal ?? AbortSignal.abort())),
-            {
-              once: true,
-            },
-          );
-        }),
-    });
-
-    expect(
-      await rejectionOf(api.items.get({ fetch: { timeoutMs: 5 } })),
-    ).toMatchObject({
-      name: "TimeoutError",
-    });
-  });
-
-  test("caller abort remains effective when a timeout is configured", async () => {
-    const controller = new AbortController();
-    const api = client({
-      timeoutMs: 60_000,
-      fetcher: async (_url, init) =>
-        await new Promise<Response>((_resolve, reject) => {
-          if (init.signal?.aborted) {
-            reject(abortError(init.signal));
-            return;
-          }
-          init.signal?.addEventListener(
-            "abort",
-            () => reject(abortError(init.signal ?? AbortSignal.abort())),
-            {
-              once: true,
-            },
-          );
-        }),
-    });
-    const pending = api.items.get({ fetch: { signal: controller.signal } });
-    const reason = new Error("caller stopped request");
-    controller.abort(reason);
-
-    expect(await rejectionOf(pending)).toBe(reason);
   });
 
   test("computes client headers per request; request headers win", async () => {

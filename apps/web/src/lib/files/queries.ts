@@ -190,10 +190,10 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
   queryOptions({
     queryKey: filesKeys.emailHtmlByFieldId(props),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        ["email-html"]({ fieldId: props.fieldId })
-        .get({ fetch: { signal } });
+      const fileRoutes = api.files({ workspaceId: props.workspaceId });
+      const response = await fileRoutes["email-html"]({
+        fieldId: props.fieldId,
+      }).get({ fetch: { signal } });
 
       const data = unwrapApiResponse(response);
 
@@ -232,12 +232,14 @@ export const officeCitationOptions = ({
       workspaceId,
     }),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["office-citation"]({ entityId: toSafeId<"entity">(entityId) })({
-          fieldId: toSafeId<"field">(fieldId),
-        })({ blockId })
-        .get({ fetch: { signal } });
+      const fileRoutes = api.files({
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      });
+      const response = await fileRoutes["office-citation"]({
+        entityId: toSafeId<"entity">(entityId),
+      })({
+        fieldId: toSafeId<"field">(fieldId),
+      })({ blockId }).get({ fetch: { signal } });
       return unwrapApiResponse(response);
     },
     retry: shouldRetryAPIRequest,
@@ -294,22 +296,23 @@ export const saveEmailAttachment = async ({
   fieldId: string;
   parentId: string | null;
   sourceWorkspaceId: string;
-}) =>
-  await invokeAppOnlyWrite("files.email-attachment.save", async () =>
+}) => {
+  const fileRoutes = api.files({ workspaceId: sourceWorkspaceId });
+  return await invokeAppOnlyWrite("files.email-attachment.save", async () =>
     parseSuccessBody(
       EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
       unwrapApiResponse(
-        await api
-          .files({ workspaceId: sourceWorkspaceId })
-          ["email-attachment"]({ fieldId })({ attachmentId })
-          .save.post(
-            { destinationWorkspaceId, parentId },
-            { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
-          ),
+        await fileRoutes["email-attachment"]({ fieldId })({
+          attachmentId,
+        }).save.post(
+          { destinationWorkspaceId, parentId },
+          { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
+        ),
       ),
       "Invalid email attachment save response",
     ),
   );
+};
 
 /**
  * The file's own embedded properties (DOCX Author and Company, PDF Producer,
@@ -321,17 +324,18 @@ const readDocumentProperties = async ({
   workspaceId,
   fieldId,
   signal,
-}: FileOptionsProps & { signal: AbortSignal }) =>
-  parseSuccessBody(
+}: FileOptionsProps & { signal: AbortSignal }) => {
+  const fileRoutes = api.files({ workspaceId });
+  return parseSuccessBody(
     DOCUMENT_PROPERTIES_RESULT_SCHEMA,
     unwrapApiResponse(
-      await api
-        .files({ workspaceId })
-        ["document-properties"]({ fieldId })
-        .get({ fetch: { signal } }),
+      await fileRoutes["document-properties"]({ fieldId }).get({
+        fetch: { signal },
+      }),
     ),
     "Invalid document properties response",
   );
+};
 
 /**
  * Shared by the metadata panel's subscriber and the document route loader.
@@ -360,15 +364,13 @@ export const updateDocumentProperty = async ({
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
 }): Promise<void> => {
+  const fileRoutes = api.files({ workspaceId });
   await invokeAppOnlyWrite("files.document-properties.update", async () =>
     unwrapApiResponse(
-      await api
-        .files({ workspaceId })
-        ["document-properties"]({ fieldId })
-        .patch(
-          { [propertyKey]: value },
-          { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
-        ),
+      await fileRoutes["document-properties"]({ fieldId }).patch(
+        { [propertyKey]: value },
+        { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
+      ),
     ),
   );
 };

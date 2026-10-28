@@ -171,10 +171,11 @@ export type ApiClientOptions = {
   readonly onScopedResponse?: ScopedResponseObserver;
   /** Fetch settings every request starts from; credentials default to `include`. */
   readonly fetch?: RequestInit;
-  /** Maximum request duration in milliseconds; a per-request value overrides it. */
-  readonly timeoutMs?: number;
   /** Sends the request; `globalThis.fetch` when absent. */
-  readonly fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+  readonly fetcher?: (
+    url: string,
+    init: RequestInit & { readonly timeoutMs?: number },
+  ) => Promise<Response>;
   /** Headers every request carries, or a function computing them per request. */
   readonly headers?:
     | HeaderValues
@@ -410,7 +411,7 @@ const send = async (
 
   const headers = new Headers(clientFetch?.headers);
   setHeaders(headers, options.fetch?.headers);
-  const init: RequestInit = {
+  const init: RequestInit & { readonly timeoutMs?: number } = {
     ...clientFetch,
     ...options.fetch,
     credentials:
@@ -419,14 +420,6 @@ const send = async (
     headers,
     ...(encoded.body === undefined ? {} : { body: encoded.body }),
   };
-  const timeoutMs = options.fetch?.timeoutMs ?? config.options.timeoutMs;
-  if (timeoutMs !== undefined) {
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
-    init.signal =
-      init.signal === undefined || init.signal === null
-        ? timeoutSignal
-        : AbortSignal.any([init.signal, timeoutSignal]);
-  }
   setHeaders(
     headers,
     typeof clientHeaders === "function"
