@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { parseSource, Visitor, walk } from "./syntax-tree";
+import {
+  isObjectLiteralProperty,
+  parseSource,
+  Visitor,
+  walk,
+} from "./syntax-tree";
 
 test("walks in source order with ancestors and can skip a subtree", () => {
   const parsed = parseSource(
@@ -56,6 +61,30 @@ test("parses TypeScript-only syntax and keeps comments", () => {
     "tail",
   ]);
   expect(parsed.module.staticExports).toHaveLength(1);
+});
+
+test("tells object literal entries from destructuring entries", () => {
+  const parsed = parseSource(
+    "fixture.ts",
+    "const { a, b: c = 1 } = { a: 1, b, d() {} };\n({ e } = f);\n",
+  );
+  const entries: string[] = [];
+  walk(parsed.program, (node, ancestors) => {
+    if (node.type === "Property" && node.key.type === "Identifier") {
+      entries.push(
+        `${node.key.name}:${isObjectLiteralProperty(node, ancestors.at(-1))}`,
+      );
+    }
+    return undefined;
+  });
+  expect(entries).toEqual([
+    "a:false",
+    "b:false",
+    "a:true",
+    "b:true",
+    "d:true",
+    "e:false",
+  ]);
 });
 
 test("refuses a file that does not parse", () => {

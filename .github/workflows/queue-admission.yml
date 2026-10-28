@@ -98,7 +98,7 @@ jobs:
         run: |
           needs_file=$(mktemp)
           printf '%s\n' '{"ci-plan":{"outputs":{"package_checks_required":"true","root_checks":""}}}' > "$needs_file"
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-rest --only \
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-rest --only \
             "Workspace hygiene,Test dependency malware scanners,Generated files manifest guard,Generated source artifact contract,Generated artifact formatting invariants"
 
       - name: Check parser versions

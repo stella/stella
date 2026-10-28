@@ -85,6 +85,22 @@ test("runtime imports select a handler test, a changed test itself and workspace
   });
 });
 
+test("import graph roots with and without a trailing separator are equivalent", () => {
+  withRepository((root) => {
+    const starts = ["apps/api/src/handler.test.ts"];
+    const plain = buildImportGraph(root, starts);
+    const trailing = buildImportGraph(`${root}${path.sep}`, starts);
+    expect([...trailing.closure(starts[0] ?? "")].toSorted()).toEqual(
+      [...plain.closure(starts[0] ?? "")].toSorted(),
+    );
+    for (const file of plain.closure(starts[0] ?? "")) {
+      expect(trailing.dependencies(file), file).toEqual(
+        plain.dependencies(file),
+      );
+    }
+  });
+});
+
 const ruleCases = {
   manifest: "packages/example/package.json",
   lockfile: "bun.lock",

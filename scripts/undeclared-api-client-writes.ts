@@ -8,14 +8,20 @@
 // here; the ratchet keeps each file's count from growing. The capability-request
 // lint rule checks the shape of the declared writes and shares its client
 // definition (`.oxlint-plugins/api-client-chain.ts`).
-import ts from "typescript6";
-
 import {
   API_CLIENT_CLIENT_MODULES,
   API_CLIENT_WRITE_METHODS,
 } from "../.oxlint-plugins/api-client-chain.ts";
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
-import { parseSource } from "./parse-memo";
+import {
+  type CallExpression,
+  type Expression,
+  type IdentifierReference,
+  type Node,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+import { parseSyntax } from "./parse-memo";
 
 const INVOKE_CAPABILITY = "invokeCapability";
 const USE_CAPABILITY_MUTATION = "useCapabilityMutation";
@@ -23,48 +29,50 @@ const USE_CAPABILITY_MUTATION = "useCapabilityMutation";
 // in its file name, whether aliased or relative.
 const MAY_IMPORT_CLIENT = /["'](?:[^"']*\/)?api["']/u;
 
-const clientImports = (source: ts.SourceFile, file: string): Set<string> => {
+const clientImports = (program: Program, file: string): Set<string> => {
   const names = new Set<string>();
-  for (const statement of source.statements) {
+  for (const statement of program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type" ||
       !API_CLIENT_CLIENT_MODULES.includes(
-        canonicalModuleId(statement.moduleSpecifier.text, file),
+        canonicalModuleId(statement.source.value, file),
       )
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-      bindings === undefined ||
-      !ts.isNamedImports(bindings)
     ) {
       continue;
     }
     // Every value the client module exports is counted, not a list of client
     // names: a client added under a new name (a per-domain client) is a client
     // all the same, and the merge-base is measured by this same code.
-    for (const element of bindings.elements) {
-      if (!element.isTypeOnly) {
-        names.add(element.name.text);
+    for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === "ImportSpecifier" &&
+        specifier.importKind !== "type"
+      ) {
+        names.add(specifier.local.name);
       }
     }
   }
   return names;
 };
 
-const chainRoot = (expression: ts.Expression): ts.Identifier | null => {
-  if (ts.isIdentifier(expression)) {
+const chainRoot = (expression: Expression): IdentifierReference | null => {
+  if (expression.type === "Identifier") {
     return expression;
   }
+  if (expression.type === "MemberExpression") {
+    return chainRoot(expression.object);
+  }
+  if (expression.type === "CallExpression") {
+    return chainRoot(expression.callee);
+  }
+  if (expression.type === "AwaitExpression") {
+    return chainRoot(expression.argument);
+  }
+  // An optional chain (`api?.items`) is wrapped as a whole.
   if (
-    ts.isPropertyAccessExpression(expression) ||
-    ts.isElementAccessExpression(expression) ||
-    ts.isCallExpression(expression) ||
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAwaitExpression(expression)
+    expression.type === "ParenthesizedExpression" ||
+    expression.type === "ChainExpression"
   ) {
     return chainRoot(expression.expression);
   }
@@ -72,25 +80,22 @@ const chainRoot = (expression: ts.Expression): ts.Identifier | null => {
 };
 
 // Same-file `const` names whose initializer is rooted at a client import.
-const clientNames = (source: ts.SourceFile, file: string): Set<string> => {
-  const names = clientImports(source, file);
+const clientNames = (program: Program, file: string): Set<string> => {
+  const names = clientImports(program, file);
   if (names.size === 0) {
     return names;
   }
   // Any declared alias counts, reassignable or not: an over-count only keeps
   // a write visible, and both trees are measured the same way.
   const aliases: { name: string; root: string }[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const root =
-        node.initializer === undefined ? null : chainRoot(node.initializer);
+  walk(program, (node) => {
+    if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+      const root = node.init === null ? null : chainRoot(node.init);
       if (root !== null) {
-        aliases.push({ name: node.name.text, root: root.text });
+        aliases.push({ name: node.id.name, root: root.name });
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   let grew = true;
   while (grew) {
     grew = false;
@@ -104,44 +109,49 @@ const clientNames = (source: ts.SourceFile, file: string): Set<string> => {
   return names;
 };
 
-const isFunctionLike = (node: ts.Node): boolean =>
-  ts.isArrowFunction(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isFunctionDeclaration(node) ||
-  ts.isMethodDeclaration(node);
+// Plain functions and methods; constructors and accessors leave a write to
+// the function around them.
+const isFunctionLike = (node: Node, parent: Node | undefined): boolean =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  (node.type === "FunctionExpression" &&
+    !(
+      (parent?.type === "MethodDefinition" && parent.kind !== "method") ||
+      (parent?.type === "Property" && parent.kind !== "init")
+    ));
 
-const calleeName = (call: ts.CallExpression): string | null =>
-  ts.isIdentifier(call.expression) ? call.expression.text : null;
+const calleeName = (call: CallExpression): string | null =>
+  call.callee.type === "Identifier" ? call.callee.name : null;
 
-// Whether `fn` is the callback that receives the declared capability request.
-const isCapabilityCallback = (fn: ts.Node): boolean => {
-  const parent = fn.parent;
+// Whether `fn`, whose nearest ancestors are `parents` (nearest last), is the
+// callback that receives the declared capability request.
+const isCapabilityCallback = (fn: Node, parents: readonly Node[]): boolean => {
+  const parent = parents.at(-1);
   if (
-    ts.isCallExpression(parent) &&
+    parent?.type === "CallExpression" &&
     calleeName(parent) === INVOKE_CAPABILITY &&
     parent.arguments.at(1) === fn
   ) {
     return true;
   }
-  const property = ts.isMethodDeclaration(fn) ? fn : parent;
+  // `mutationFn: (request) => ...` and `mutationFn(request) { ... }` alike.
   if (
-    !(ts.isPropertyAssignment(property) || ts.isMethodDeclaration(property)) ||
-    !ts.isIdentifier(property.name) ||
-    property.name.text !== "mutationFn"
+    parent?.type !== "Property" ||
+    parent.computed ||
+    parent.key.type !== "Identifier" ||
+    parent.key.name !== "mutationFn"
   ) {
     return false;
   }
-  const options = property.parent;
+  const options = parents.at(-2);
+  const call = parents.at(-3);
   return (
-    ts.isObjectLiteralExpression(options) &&
-    ts.isCallExpression(options.parent) &&
-    calleeName(options.parent) === USE_CAPABILITY_MUTATION &&
-    options.parent.arguments.at(0) === options
+    options?.type === "ObjectExpression" &&
+    call?.type === "CallExpression" &&
+    calleeName(call) === USE_CAPABILITY_MUTATION &&
+    call.arguments.at(0) === options
   );
 };
-
-const nearestFunction = (node: ts.Node): ts.Node | null =>
-  ts.findAncestor(node.parent, isFunctionLike) ?? null;
 
 export const countUndeclaredApiClientWrites = (
   content: string,
@@ -150,45 +160,57 @@ export const countUndeclaredApiClientWrites = (
   if (!MAY_IMPORT_CLIENT.test(content)) {
     return 0;
   }
-  const source = parseSource({ fileName: file, text: content });
-  const clients = clientNames(source, file);
+  const { program } = parseSyntax({ fileName: file, text: content });
+  const clients = clientNames(program, file);
   if (clients.size === 0) {
     return 0;
   }
   let count = 0;
   // `client.items.post(...)` and `client.items["post"](...)` alike.
-  const writeTarget = (callee: ts.Expression): ts.Expression | null => {
-    if (ts.isPropertyAccessExpression(callee)) {
-      return API_CLIENT_WRITE_METHODS.has(callee.name.text)
-        ? callee.expression
+  const writeTarget = (callee: Expression): Expression | null => {
+    if (callee.type !== "MemberExpression") {
+      return null;
+    }
+    const { property } = callee;
+    if (!callee.computed) {
+      return property.type === "Identifier" &&
+        API_CLIENT_WRITE_METHODS.has(property.name)
+        ? callee.object
         : null;
     }
-    if (
-      ts.isElementAccessExpression(callee) &&
-      ts.isStringLiteralLike(callee.argumentExpression) &&
-      API_CLIENT_WRITE_METHODS.has(callee.argumentExpression.text)
+    let method: string | null | undefined;
+    if (property.type === "Literal" && typeof property.value === "string") {
+      method = property.value;
+    } else if (
+      property.type === "TemplateLiteral" &&
+      property.expressions.length === 0
     ) {
-      return callee.expression;
+      method = property.quasis.at(0)?.value.cooked;
     }
-    return null;
-  };
-  const visit = (node: ts.Node) => {
-    const target = ts.isCallExpression(node)
-      ? writeTarget(node.expression)
+    return typeof method === "string" && API_CLIENT_WRITE_METHODS.has(method)
+      ? callee.object
       : null;
-    if (target !== null) {
-      const root = chainRoot(target);
-      const fn = nearestFunction(node);
-      if (
-        root !== null &&
-        clients.has(root.text) &&
-        (fn === null || !isCapabilityCallback(fn))
-      ) {
-        count += 1;
-      }
-    }
-    ts.forEachChild(node, visit);
   };
-  visit(source);
+  walk(program, (node, ancestors) => {
+    const target =
+      node.type === "CallExpression" ? writeTarget(node.callee) : null;
+    if (target === null) {
+      return;
+    }
+    const root = chainRoot(target);
+    if (root === null || !clients.has(root.name)) {
+      return;
+    }
+    const fnIndex = ancestors.findLastIndex((ancestor, index) =>
+      isFunctionLike(ancestor, ancestors[index - 1]),
+    );
+    const fn = ancestors[fnIndex];
+    if (
+      fn === undefined ||
+      !isCapabilityCallback(fn, ancestors.slice(0, fnIndex))
+    ) {
+      count += 1;
+    }
+  });
   return count;
 };

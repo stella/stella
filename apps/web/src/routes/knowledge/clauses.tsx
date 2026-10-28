@@ -18,10 +18,11 @@ import {
   clausesOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { ClauseDetailView } from "@/routes/knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/knowledge/-components/clause-list";
@@ -162,7 +163,7 @@ function RouteComponent() {
   const categoriesDataQuery = useQuery(
     clauseCategoriesOptions(activeOrganizationId),
   );
-  const categoriesDataView = useQueryView(categoriesDataQuery);
+  const categoriesDataView = queryView(categoriesDataQuery);
   useQueryViewError(categoriesDataView, "RouteComponent:query");
   const categoriesData =
     categoriesDataView.type === "items" ? categoriesDataView.items : undefined;

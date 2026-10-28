@@ -20,6 +20,7 @@
 //
 // Modes:
 //   bun scripts/dependency-audit.ts                 report current high/critical advisories
+//   bun scripts/dependency-audit.ts --assess        typed table and full-tree gate
 //   bun scripts/dependency-audit.ts --check         full-tree gate: exit 1 on a new high/critical advisory
 //   bun scripts/dependency-audit.ts --check-diff REF PR gate: audit only resolutions changed since REF
 //   bun scripts/dependency-audit.ts --release       release gate: apply baseline with stricter acceptance metadata
@@ -32,8 +33,8 @@
 //   4 unexpected error.
 //
 // A baseline entry may be temporary: `expiresOn` and `untilPatched` make the
-// acceptance of a still-reported advisory lapse (and --check fail) after a
-// date or once a patched release is published; see
+// acceptance lapse when its owning file changes after expiry, or once a
+// patched release is published; routine date expiry warns. See
 // scripts/dependency-audit-acceptance.ts.
 
 import { panic, Result } from "better-result";
@@ -50,6 +51,13 @@ import {
   type LapsedAcceptance,
   lapsedAcceptances,
 } from "./dependency-audit-acceptance";
+import {
+  assessAdvisories,
+  AuditAssessmentError,
+  printAssessments,
+  readInstallableVersions,
+  readReleaseAgePolicy,
+} from "./dependency-audit-assessment";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -79,6 +87,7 @@ export type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
   reason: string;
   expiresOn?: string;
   untilPatched?: unknown;
+  affectedPaths?: string[];
 };
 
 export type Baseline = {
@@ -146,6 +155,9 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
     package: asText(value["package"]),
     title: asText(value["title"]),
     reason,
+    ...(Array.isArray(value["affectedPaths"])
+      ? { affectedPaths: value["affectedPaths"].map(asText) }
+      : {}),
     // Present but malformed terms are kept as read, so the entry lapses
     // instead of silently becoming permanent.
     ...(expiresOn === undefined ? {} : { expiresOn: asText(expiresOn) }),
@@ -357,15 +369,31 @@ const formatAcceptanceTerm = (acceptance: BaselineEntry): string => {
   return acceptance.untilPatched === true ? "until patched" : "accepted";
 };
 
-const report = (advisories: Advisory[]): void => {
-  if (advisories.length === 0) {
-    console.info("No high/critical advisories.");
-    return;
-  }
-  console.info(`${advisories.length} high/critical advisory(ies):`);
-  for (const advisory of advisories) {
-    console.info(formatAdvisory(advisory));
-  }
+const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
+  const [baseline, lockfile, manifest, policy] = await Promise.all([
+    readBaseline(),
+    Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
+    Bun.file(path.resolve(REPO_ROOT, "package.json")).json(),
+    readRootReleaseAgePolicy(),
+  ]);
+  const now = new Date();
+  const versions = new Map(
+    await Promise.all(
+      [...new Set(advisories.map(({ package: name }) => name))].map(
+        async (name) =>
+          [name, await readInstallableVersions(name, policy, now)] as const,
+      ),
+    ),
+  );
+  printAssessments(
+    assessAdvisories({
+      advisories,
+      accepted: baseline.accepted,
+      lockfile,
+      manifest,
+      versions,
+    }),
+  );
 };
 
 const saveBaseline = async (
@@ -400,14 +428,19 @@ export const pruneBaseline = async (
   );
 };
 
-const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
-  const existing = await readBaseline();
-  const existingById = new Map(existing.accepted.map((e) => [e.id, e]));
+export const writeBaseline = async (
+  advisories: Advisory[],
+  baselinePath: string = BASELINE_PATH,
+): Promise<void> => {
+  const existing = await readBaseline(baselinePath);
+  const existingById = new Map(
+    existing.accepted.map((entry) => [advisoryKey(entry), entry]),
+  );
   const baseline: Baseline = {
     note: existing.note,
     auditLevel: "high",
     accepted: advisories.map(({ id, severity, package: pkg, title }) => {
-      const kept = existingById.get(id);
+      const kept = existingById.get(advisoryKey({ id, package: pkg }));
       return {
         id,
         owner: kept?.owner ?? "TODO: owner",
@@ -416,13 +449,16 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
         title,
         reason: kept?.reason ?? "TODO: document why this is accepted.",
         ...(kept?.expiresOn === undefined ? {} : { expiresOn: kept.expiresOn }),
+        ...(kept?.affectedPaths === undefined
+          ? {}
+          : { affectedPaths: kept.affectedPaths }),
         ...(kept?.untilPatched === undefined
           ? {}
           : { untilPatched: kept.untilPatched }),
       };
     }),
   };
-  await saveBaseline(baseline);
+  await saveBaseline(baseline, baselinePath);
   console.info(
     `Wrote ${advisories.length} advisory(ies) to ${repoRelativePath(REPO_ROOT, BASELINE_PATH)}. Replace all TODO placeholders before committing the baseline.`,
   );
@@ -451,35 +487,41 @@ export const diffAgainstBaseline = (
   };
 };
 
-// The npm registry's `latest` dist-tag for a package, or undefined when the
-// lookup fails; an `untilPatched` acceptance then lapses (fail closed).
+const readRootReleaseAgePolicy = async () =>
+  readReleaseAgePolicy(
+    await Bun.file(path.resolve(REPO_ROOT, "bunfig.toml")).text(),
+  );
+
+// The newest stable release Bun would install now, or undefined when the
+// lookup fails; an `untilPatched` acceptance then lapses (fail closed). A
+// patch still in quarantine is not installable, so it lapses nothing yet.
 const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
-  const response = await Result.tryPromise(async () =>
-    fetch(`https://registry.npmjs.org/${pkg.replaceAll("/", "%2f")}/latest`, {
-      signal: AbortSignal.timeout(15_000),
-    }),
+  const installable = await Result.tryPromise(async () =>
+    readInstallableVersions(pkg, await readRootReleaseAgePolicy(), new Date()),
   );
-  if (Result.isError(response) || !response.value.ok) {
+  if (Result.isError(installable)) {
     return undefined;
   }
-  const body = await Result.tryPromise(async (): Promise<unknown> =>
-    response.value.json(),
-  );
-  if (Result.isError(body) || !isRecord(body.value)) {
-    return undefined;
-  }
-  const version = asText(body.value["version"]);
-  return version === "" ? undefined : version;
+  return installable.value
+    .filter((version) => !version.includes("-"))
+    .toSorted(Bun.semver.order)
+    .at(-1);
 };
 
-const checkLapsedAcceptances = async (
-  advisories: Advisory[],
-  baseline: Baseline,
-  today: string,
-  latestVersion: (
-    pkg: string,
-  ) => Promise<string | undefined> = fetchLatestVersion,
-): Promise<LapsedAcceptance[]> => {
+type CheckLapsedAcceptancesOptions = {
+  advisories: Advisory[];
+  baseline: Baseline;
+  today: string;
+  enforceDateExpiry: boolean;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
+};
+const checkLapsedAcceptances = async ({
+  advisories,
+  baseline,
+  today,
+  enforceDateExpiry,
+  latestVersion = fetchLatestVersion,
+}: CheckLapsedAcceptancesOptions): Promise<LapsedAcceptance[]> => {
   const packages = new Set(
     baseline.accepted
       .filter(({ untilPatched }) => untilPatched === true)
@@ -496,6 +538,7 @@ const checkLapsedAcceptances = async (
     accepted: baseline.accepted,
     current: advisories,
     today,
+    enforceDateExpiry,
     latestVersion: (pkg) => latest.get(pkg),
   });
   if (lapsed.length === 0) {
@@ -557,6 +600,8 @@ const warnBeforeExpiry = ({
 
 type CheckOptions = {
   baseline?: Baseline;
+  /** Defaults to true for API callers; scheduled CLI audits opt out. */
+  enforceDateExpiry?: boolean;
   latestVersion?: (pkg: string) => Promise<string | undefined>;
   now?: () => Date;
   packages?: ReadonlySet<string>;
@@ -595,12 +640,13 @@ const checkResult = async (
     options.warningFormat ??
     (process.env["GITHUB_ACTIONS"] === "true" ? "github" : "plain");
   warnBeforeExpiry({ advisories, baseline, today, format: warningFormat });
-  const lapsed = await checkLapsedAcceptances(
+  const lapsed = await checkLapsedAcceptances({
     advisories,
     baseline,
     today,
-    options.latestVersion,
-  );
+    enforceDateExpiry: options.enforceDateExpiry ?? true,
+    latestVersion: options.latestVersion,
+  });
   const lapsedKeys = new Set(lapsed.map(advisoryKey));
 
   for (const advisory of advisories) {
@@ -724,23 +770,32 @@ const gitFile = async (revision: string, file: string): Promise<string> => {
 };
 
 const checkDiff = async (baseRevision: string): Promise<number> => {
-  const [baseLockfile, headLockfile] = await Promise.all([
-    gitFile(baseRevision, "bun.lock"),
-    Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
-  ]);
+  const [baseLockfile, headLockfile, baseBaseline, headBaseline] =
+    await Promise.all([
+      gitFile(baseRevision, "bun.lock"),
+      Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
+      gitFile(baseRevision, BASELINE_PATHS.dependencyAudit),
+      Bun.file(BASELINE_PATH).text(),
+    ]);
+  const baselineChanged = baseBaseline !== headBaseline;
   const changes = dependencyChanges(baseLockfile, headLockfile);
   const packages = auditablePackages(changes);
   console.info(
     `Lockfile diff: ${changes.added.length} added, ${changes.changed.length} changed, ${changes.removed.length} removed dependency package(s); ${packages.size} added or changed name(s) are registry-resolved.`,
   );
-  if (packages.size === 0) {
+  if (packages.size === 0 && !baselineChanged) {
     console.info("No added or changed registry resolutions to audit.");
     return 0;
   }
-  const advisories = (await collectGatedAdvisories()).filter(
-    ({ package: pkg }) => packages.has(pkg),
-  );
-  return check(advisories, { packages });
+  const currentAdvisories = await collectGatedAdvisories();
+  const advisories = baselineChanged
+    ? currentAdvisories
+    : currentAdvisories.filter(({ package: pkg }) => packages.has(pkg));
+  await assessCurrent(advisories);
+  return check(advisories, {
+    ...(baselineChanged ? {} : { packages }),
+    enforceDateExpiry: baselineChanged,
+  });
 };
 
 export const checkRelease = async (
@@ -944,11 +999,10 @@ const main = async (): Promise<number> => {
 
   const advisories = await collectGatedAdvisories();
 
-  if (arg === "--check") {
-    return check(advisories);
+  await assessCurrent(advisories);
+  if (arg === "--check" || arg === "--assess") {
+    return check(advisories, { enforceDateExpiry: false });
   }
-
-  report(advisories);
   return 0;
 };
 
@@ -959,10 +1013,13 @@ export const runDependencyAuditCli = async (
     return await run();
   } catch (error) {
     console.error(errorMessage(error));
-    if (error instanceof BaselineError) {
-      return 2;
-    }
-    if (error instanceof AuditCommandError) {
+    // 2 means lapsed acceptances, which remediation may still fix; an
+    // unreadable baseline is a command failure that must stop it.
+    if (
+      error instanceof BaselineError ||
+      error instanceof AuditCommandError ||
+      error instanceof AuditAssessmentError
+    ) {
       return 3;
     }
     return 4;
