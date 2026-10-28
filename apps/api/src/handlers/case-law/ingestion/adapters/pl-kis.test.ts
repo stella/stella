@@ -1538,7 +1538,7 @@ test("newsletter HTML uses the declared body field through fetch and replay with
   try {
     const built = await plKisAdapter.reconciliation.buildDecision(row);
     if (built.type !== "built") {
-      return panic("Newsletter capture did not build");
+      panic("Newsletter capture did not build");
     }
     expect(stub.calls).toHaveLength(1);
     expect(stub.calls.at(0)?.url).not.toContain("/eksport/");
