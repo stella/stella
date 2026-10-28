@@ -11,6 +11,7 @@ import {
 
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const NativeBroadcastChannel = globalThis.BroadcastChannel;
@@ -78,9 +79,18 @@ const FileHeader = () => {
         ribbonLabelContextMenuOpenAt: () => undefined,
         tab,
       })}
-      actions={
-        <button aria-label={englishMessages.common.download} type="button" />
-      }
+      actions={[
+        {
+          id: "download",
+          requires: AVAILABLE_EVERYWHERE,
+          render: () => (
+            <button
+              aria-label={englishMessages.common.download}
+              type="button"
+            />
+          ),
+        },
+      ]}
     />
   );
 };

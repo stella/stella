@@ -7,9 +7,12 @@ import { Panic, panic, Result } from "better-result";
 import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { captureError } from "@/api/lib/analytics/capture";
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
@@ -48,6 +51,7 @@ import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
+  MCP_PUBLIC_CORPUS_CLASS,
 } from "@/api/mcp/static-tool-definitions";
 import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import type {
@@ -61,6 +65,7 @@ import {
   confirmationUnavailableResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
+  internalFailureResult,
   MCP_INTERNAL_ERROR_HINT,
   McpOutputContractError,
   notFoundResult,
@@ -684,6 +689,11 @@ const internalErrorResult = ({
       }),
     );
   }
+  if (publicReadTimeoutError(error) !== null) {
+    return serializeToolResult(
+      internalFailureResult(error, "mcp.internalErrorResult"),
+    );
+  }
   if (contractViolation !== undefined) {
     observeFailure(contractViolation, {
       sink: MCP_OUTPUT_CONTRACT_SINK,
@@ -710,28 +720,41 @@ const internalErrorResult = ({
   );
 };
 
+const corpusBudgetByTool: ReadonlyMap<string, number> = new Map(
+  Object.entries(MCP_PUBLIC_CORPUS_CLASS).map(([name, corpusClass]) => [
+    name,
+    PUBLIC_READ_STATEMENT_TIMEOUT_MS[corpusClass],
+  ]),
+);
+
 export const handleMcpToolCall = async ({
   args,
   context,
   mode = "default",
   toolName,
   dependencies,
-}: McpToolCallArgs): Promise<CallToolResult> =>
-  await runWithStatementCeiling({
-    kind: "mcp",
-    key: toolName,
-    run: async () =>
-      observeMcpToolCall({
-        context,
-        mode,
-        toolName,
-        run: async () =>
-          await dispatchMcpToolCall({
-            args,
-            context,
-            mode,
-            toolName,
-            ...(dependencies === undefined ? {} : { dependencies }),
-          }),
-      }),
-  });
+}: McpToolCallArgs): Promise<CallToolResult> => {
+  const run = async () =>
+    await runWithStatementCeiling({
+      kind: "mcp",
+      key: toolName,
+      run: async () =>
+        observeMcpToolCall({
+          context,
+          mode,
+          toolName,
+          run: async () =>
+            await dispatchMcpToolCall({
+              args,
+              context,
+              mode,
+              toolName,
+              ...(dependencies === undefined ? {} : { dependencies }),
+            }),
+        }),
+    });
+  const budgetMs = corpusBudgetByTool.get(toolName);
+  return await (budgetMs === undefined
+    ? run()
+    : runWithPublicReadStatementTimeout(budgetMs, run));
+};

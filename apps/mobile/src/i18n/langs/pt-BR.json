@@ -8,7 +8,22 @@
   "chat": {
     "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
     "emptyTitle": "Ainda não há conversas",
-    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui."
+    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar suas conversas.",
+    "retry": "Tentar novamente",
+    "untitled": "Conversa sem título",
+    "loadMoreFailed": "Carregar mais",
+    "loadOlderFailed": "Carregar mensagens anteriores",
+    "toolUsed": "Usado: {tool}",
+    "threadTitle": "Conversa",
+    "threadLoadFailed": "Não foi possível carregar esta conversa.",
+    "threadEmptyDescription": "Esta conversa ainda não tem mensagens.",
+    "sections": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "week": "Últimos 7 dias",
+      "earlier": "Anteriores"
+    }
   },
   "tasks": {
     "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
@@ -21,6 +36,36 @@
     "emptyDescription": "Seus casos recentes aparecerão aqui.",
     "loadFailed": "Não foi possível carregar seus casos.",
     "retry": "Tente novamente"
+  },
+  "matter": {
+    "documents": "Documentos",
+    "tasks": "Tarefas",
+    "emptyTitle": "Nada por aqui ainda",
+    "emptyDescription": "Os documentos e tarefas deste caso aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar este caso.",
+    "loadMoreFailed": "Não foi possível carregar mais itens.",
+    "loadMore": "Carregar mais",
+    "retry": "Tentar novamente",
+    "untitled": "Sem título",
+    "updated": "Atualizado {time}",
+    "kind": {
+      "folder": "Pasta",
+      "document": "Documento",
+      "task": "Tarefa"
+    },
+    "status": {
+      "open": "Aberta",
+      "in_progress": "Em andamento",
+      "in_review": "Em revisão",
+      "done": "Concluída",
+      "cancelled": "Cancelada"
+    }
+  },
+  "entity": {
+    "type": "Tipo",
+    "reference": "Referência",
+    "currentVersion": "Versão atual",
+    "loadFailed": "Não foi possível carregar este item."
   },
   "signIn": {
     "title": "Entre no stella",

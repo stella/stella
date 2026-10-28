@@ -24,6 +24,7 @@ import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
@@ -86,7 +87,7 @@ import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import {
@@ -232,6 +233,7 @@ export const apiRoutes = mount([
       ratesRoute,
       expensesRoute,
       invoicesRoute,
+      clientInvoicesRoute,
       sellerProfilesRoute,
       numberSeriesRoute,
       vatRateRoute,
@@ -268,6 +270,7 @@ export const apiRoutes = mount([
       entityViewsRoute,
       listsRoute,
       tasksRoute,
+      myTasksRoute,
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
