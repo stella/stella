@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Un flux de travail attend votre approbation",
     "flowRunCompleted": "Un flux de travail est terminé",
     "flowRunFailed": "Un flux de travail a échoué",
-    "mention": "Vous avez été mentionné dans un commentaire",
-    "reportExportFailed": "L’export de votre rapport n’a pas pu être terminé",
-    "reportExportSucceeded": "L’export de votre rapport est prêt"
+    "mention": "Vous avez été mentionné dans un commentaire"
   },
   "reportExportStatus": {
     "action": "Ouvrir stella",

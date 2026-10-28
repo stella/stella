@@ -40,8 +40,6 @@ type Messages = {
     "flowRunCompleted": "A workflow finished";
     "flowRunFailed": "A workflow failed";
     "mention": "You were mentioned in a comment";
-    "reportExportFailed": "Your report export could not be completed";
-    "reportExportSucceeded": "Your report export is ready";
   };
   "reportExportStatus": {
     "action": "Open stella";

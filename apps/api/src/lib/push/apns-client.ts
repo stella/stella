@@ -16,7 +16,7 @@ import type { ApnsProviderToken } from "@/api/lib/push/apns-provider-token";
  * The two APNs gateways. A device's token belongs to exactly one, decided by
  * how the app was signed, and the registration says which.
  */
-export const APNS_ORIGINS = {
+const APNS_ORIGINS = {
   production: "https://api.push.apple.com",
   sandbox: "https://api.sandbox.push.apple.com",
 } as const satisfies Record<ApnsEnvironment, string>;
@@ -55,7 +55,7 @@ export type ApnsHttpResponse = { status: number; body: string };
 /** The wire under the client; tests hand in a fake gateway. */
 export type ApnsTransport = {
   post: (
-    request: ApnsHttpRequest,
+    apnsRequest: ApnsHttpRequest,
   ) => Promise<Result<ApnsHttpResponse, ApnsTransportError>>;
   close: () => void;
 };
@@ -93,13 +93,13 @@ export const createHttp2ApnsTransport = ({
   };
 
   const post = async (
-    request: ApnsHttpRequest,
+    apnsRequest: ApnsHttpRequest,
   ): Promise<Result<ApnsHttpResponse, ApnsTransportError>> =>
     await new Promise((resolve) => {
-      const stream = sessionFor(request.origin).request({
-        ...request.headers,
+      const stream = sessionFor(apnsRequest.origin).request({
+        ...apnsRequest.headers,
         ":method": "POST",
-        ":path": request.path,
+        ":path": apnsRequest.path,
         "content-type": "application/json",
       });
       let status = 0;
@@ -128,7 +128,7 @@ export const createHttp2ApnsTransport = ({
       }, timeoutMs);
       stream.setEncoding("utf-8");
       stream.on("response", (headers) => {
-        status = Number(headers[":status"] ?? 0);
+        status = headers[":status"] ?? 0;
       });
       stream.on("data", (chunk: string) => {
         body += chunk;
@@ -145,7 +145,7 @@ export const createHttp2ApnsTransport = ({
           ),
         ),
       );
-      stream.end(request.body);
+      stream.end(apnsRequest.body);
     });
 
   return {

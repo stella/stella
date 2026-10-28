@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Przepływ pracy czeka na Twoje zatwierdzenie",
     "flowRunCompleted": "Przepływ pracy został zakończony",
     "flowRunFailed": "Przepływ pracy nie powiódł się",
-    "mention": "Wspomniano o Tobie w komentarzu",
-    "reportExportFailed": "Nie udało się ukończyć eksportu raportu",
-    "reportExportSucceeded": "Eksport raportu jest gotowy"
+    "mention": "Wspomniano o Tobie w komentarzu"
   },
   "reportExportStatus": {
     "action": "Otwórz stella",

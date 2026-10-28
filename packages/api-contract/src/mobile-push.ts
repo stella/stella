@@ -120,8 +120,12 @@ export const MOBILE_PUSH_KINDS = [
   NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
 ] as const satisfies readonly NotificationKind[];
 
+const MOBILE_PUSH_KIND_SET: ReadonlySet<NotificationKind> = new Set(
+  MOBILE_PUSH_KINDS,
+);
+
 export const isMobilePushKind = (kind: NotificationKind): boolean =>
-  (MOBILE_PUSH_KINDS as readonly NotificationKind[]).includes(kind);
+  MOBILE_PUSH_KIND_SET.has(kind);
 
 /** The key the stella data sits under in an APNs payload, beside `aps`. */
 export const MOBILE_PUSH_DATA_KEY = "stella" as const;

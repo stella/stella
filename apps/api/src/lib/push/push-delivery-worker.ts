@@ -6,13 +6,13 @@ import * as v from "valibot";
 import { isMobilePushKind } from "@stll/api-contract/mobile-push";
 
 import { notifications } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
-import { errorTag } from "@/api/lib/errors/utils";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   createApnsClient,
   createHttp2ApnsTransport,
@@ -44,6 +44,15 @@ import {
 
 const WORKER_CONCURRENCY = 10;
 
+const REJECTED_SINK = failureSink({
+  event: "push_delivery.rejected",
+  expected: [],
+});
+const FAILED_SINK = failureSink({
+  event: "push_delivery.failed",
+  expected: [],
+});
+
 /** Who a notification is for, read from its row. */
 export type PushRecipient = {
   userId: SafeId<"user">;
@@ -67,7 +76,10 @@ export type PushDeliveryDeps = {
     notification: PushNotificationPointer;
     unreadCount: number;
   } | null>;
-  listDevices: (recipient: PushRecipient) => Promise<DeliverableDevice[]>;
+  /** The recipient's devices, or an overflow past the per-person cap. */
+  listDevices: (
+    recipient: PushRecipient,
+  ) => Promise<BoundedReadResult<DeliverableDevice>>;
   removeDevices: (
     recipient: PushRecipient,
     devices: readonly DeliverableDevice[],
@@ -83,7 +95,8 @@ export type PushDeliveryResult =
         | "not_found"
         | "not_unread"
         | "not_pushed"
-        | "no_devices";
+        | "no_devices"
+        | "too_many_devices";
     }
   | {
       status: "sent";
@@ -131,7 +144,11 @@ export const deliverPushNotification = async (
     return { status: "skipped", reason: "not_pushed" };
   }
   const alreadyDelivered = new Set(data.deliveredTokens);
-  const devices = (await deps.listDevices(recipient)).filter(
+  const listed = await deps.listDevices(recipient);
+  if (listed.type === "overflow") {
+    return { status: "skipped", reason: "too_many_devices" };
+  }
+  const devices = listed.rows.filter(
     (device) => !alreadyDelivered.has(device.token),
   );
   if (devices.length === 0) {
@@ -179,12 +196,12 @@ export const deliverPushNotification = async (
 };
 
 /** Some devices are worth another attempt; BullMQ backs off and retries. */
-export class PushDeliveryRetryError extends TaggedError(
-  "PushDeliveryRetryError",
-)<{ message: string }> {}
+class PushDeliveryRetryError extends TaggedError("PushDeliveryRetryError")<{
+  message: string;
+}> {}
 
 /** APNs refused an alert in a way a retry would not change. */
-export class PushDeliveryRejectedError extends TaggedError(
+class PushDeliveryRejectedError extends TaggedError(
   "PushDeliveryRejectedError",
 )<{ message: string; reason: string; status: number }> {}
 
@@ -253,17 +270,19 @@ const reportRejections = (
   if (first === undefined) {
     return;
   }
-  captureError(
+  observeFailure(
     new PushDeliveryRejectedError({
       message: "APNs refused a push alert",
       reason: first.reason,
       status: first.status,
     }),
-    handlerErrorContext("lib.initPushDeliveryWorker.rejected", {
-      reason: first.reason,
-      status: String(first.status),
-      notificationId: job.data.notificationId,
-    }),
+    {
+      sink: REJECTED_SINK,
+      ctx: {
+        entityId: job.data.notificationId,
+        queue: PUSH_DELIVERY_QUEUE_NAME,
+      },
+    },
   );
 };
 
@@ -291,6 +310,11 @@ export const initPushDeliveryWorker = ({ db }: BullMqWorkerContext) => {
       }
       const result = await deliverPushNotification(job.data, deps);
       if (result.status !== "sent") {
+        if (result.reason === "too_many_devices") {
+          logger.warn("push_delivery.too_many_devices", {
+            notificationId: job.data.notificationId,
+          });
+        }
         return;
       }
       reportRejections(job, result.rejected);
@@ -325,13 +349,9 @@ export const initPushDeliveryWorker = ({ db }: BullMqWorkerContext) => {
       });
       return;
     }
-    captureError(
-      error,
-      handlerErrorContext("lib.initPushDeliveryWorker", { notificationId }),
-    );
-    logger.error("push_delivery.failed", {
-      "error.type": errorTag(error),
-      notificationId,
+    observeFailure(error, {
+      sink: FAILED_SINK,
+      ctx: { entityId: notificationId, queue: PUSH_DELIVERY_QUEUE_NAME },
     });
   });
   worker.on(

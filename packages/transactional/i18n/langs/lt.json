@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Darbo eiga laukia jūsų patvirtinimo",
     "flowRunCompleted": "Darbo eiga baigta",
     "flowRunFailed": "Darbo eiga nepavyko",
-    "mention": "Jus paminėjo komentare",
-    "reportExportFailed": "Jūsų ataskaitos eksporto nepavyko užbaigti",
-    "reportExportSucceeded": "Jūsų ataskaitos eksportas paruoštas"
+    "mention": "Jus paminėjo komentare"
   },
   "reportExportStatus": {
     "action": "Atidaryti stella",

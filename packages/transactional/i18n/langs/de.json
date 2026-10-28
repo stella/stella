@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Ein Workflow wartet auf Ihre Freigabe",
     "flowRunCompleted": "Ein Workflow wurde abgeschlossen",
     "flowRunFailed": "Ein Workflow ist fehlgeschlagen",
-    "mention": "Sie wurden in einem Kommentar erwähnt",
-    "reportExportFailed": "Ihr Berichtsexport konnte nicht abgeschlossen werden",
-    "reportExportSucceeded": "Ihr Berichtsexport ist bereit"
+    "mention": "Sie wurden in einem Kommentar erwähnt"
   },
   "reportExportStatus": {
     "action": "stella öffnen",

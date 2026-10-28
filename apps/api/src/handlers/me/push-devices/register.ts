@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { pushDeviceRegistrationSchema } from "@stll/api-contract/mobile-push";
 import type { PushDeviceRegistrationResponse } from "@stll/api-contract/mobile-push";
@@ -6,7 +6,6 @@ import type { PushDeviceRegistrationResponse } from "@stll/api-contract/mobile-p
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { registerPushDevice } from "@/api/lib/push/push-devices";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -48,12 +47,8 @@ const registerPushDeviceEndpoint = createSafeRootHandler(
       ),
     );
     if (row === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "The device could not be registered",
-        }),
-      );
+      // The upsert targets the caller's own row, which RETURNING always yields.
+      return panic("Push device upsert returned no row");
     }
     return Result.ok({
       device: {

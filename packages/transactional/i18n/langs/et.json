@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Töövoog ootab teie kinnitust",
     "flowRunCompleted": "Töövoog on lõpetatud",
     "flowRunFailed": "Töövoog ebaõnnestus",
-    "mention": "Teid mainiti kommentaaris",
-    "reportExportFailed": "Teie aruande eksporti ei saanud lõpule viia",
-    "reportExportSucceeded": "Teie aruande eksport on valmis"
+    "mention": "Teid mainiti kommentaaris"
   },
   "reportExportStatus": {
     "action": "Ava stella",

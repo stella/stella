@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Pracovný postup čaká na vaše schválenie",
     "flowRunCompleted": "Pracovný postup bol dokončený",
     "flowRunFailed": "Pracovný postup zlyhal",
-    "mention": "Niekto vás spomenul v komentári",
-    "reportExportFailed": "Export vášho reportu sa nepodarilo dokončiť",
-    "reportExportSucceeded": "Export vášho reportu je pripravený"
+    "mention": "Niekto vás spomenul v komentári"
   },
   "reportExportStatus": {
     "action": "Otvoriť stella",

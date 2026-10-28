@@ -133,6 +133,16 @@ const ownerDb = () =>
       Parameters<typeof deletePushDevices>[0]
   >(testDb);
 
+/** Delivery's device list, in tests that stay within the per-person cap. */
+const deliverable = async (
+  recipient: Parameters<typeof listDeliverableDevices>[1],
+) => {
+  const listed = await listDeliverableDevices(ownerDb(), recipient);
+  return listed.type === "complete"
+    ? listed.rows
+    : expect.unreachable("the devices fit within the per-person cap");
+};
+
 const clear = async () => {
   await testDb
     .delete(pushDevices)
@@ -352,11 +362,11 @@ describe("delivery's view of devices", () => {
       registration({ token: tokenOf(2) }),
     );
 
-    const a1 = await listDeliverableDevices(ownerDb(), {
+    const a1 = await deliverable({
       userId: ids.userA1,
       organizationId: ids.orgA,
     });
-    const a2 = await listDeliverableDevices(ownerDb(), {
+    const a2 = await deliverable({
       userId: ids.userA2,
       organizationId: ids.orgA,
     });
@@ -364,11 +374,33 @@ describe("delivery's view of devices", () => {
     expect(a2.map(({ token }) => token)).toEqual([tokenOf(1)]);
   });
 
+  test("devices past the per-person cap are reported, not partly alerted", async () => {
+    await testDb.insert(pushDevices).values(
+      Array.from({ length: PUSH_DEVICES_PER_USER_MAX + 1 }, (_, index) => ({
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+        platform: "ios" as const,
+        token: tokenOf(index + 10),
+        environment: "production" as const,
+        bundleId: "app.stll.mobile" as const,
+        appVersion: "1.0.0",
+        locale: "en",
+      })),
+    );
+
+    expect(
+      await listDeliverableDevices(ownerDb(), {
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+      }),
+    ).toEqual({ type: "overflow", cap: PUSH_DEVICES_PER_USER_MAX });
+  });
+
   test("a device signed in to another organization is not alerted for this one", async () => {
     await register({ userId: ids.userA1, organizationId: ids.orgB });
 
     expect(
-      await listDeliverableDevices(ownerDb(), {
+      await deliverable({
         userId: ids.userA1,
         organizationId: ids.orgA,
       }),
@@ -381,7 +413,7 @@ describe("delivery's view of devices", () => {
       { userId: ids.userA1, organizationId: ids.orgA },
       registration({ token: tokenOf(2) }),
     );
-    const [first, second] = await listDeliverableDevices(ownerDb(), {
+    const [first, second] = await deliverable({
       userId: ids.userA1,
       organizationId: ids.orgA,
     });

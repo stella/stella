@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { MOBILE_PUSH_DATA_KEY } from "@stll/api-contract/mobile-push";
+import {
+  MOBILE_PUSH_DATA_KEY,
+  PUSH_DEVICES_PER_USER_MAX,
+} from "@stll/api-contract/mobile-push";
 
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { ApnsAlert, ApnsOutcome } from "@/api/lib/push/apns-client";
@@ -58,7 +61,7 @@ const harness = ({
   visible = true,
   pointer = notification,
 }: {
-  devices?: readonly DeliverableDevice[];
+  devices?: readonly DeliverableDevice[] | "overflow";
   answers?: Map<string, ApnsOutcome>;
   owner?: PushRecipient | null;
   visible?: boolean;
@@ -72,7 +75,12 @@ const harness = ({
       await Promise.resolve(
         visible ? { notification: pointer, unreadCount: 4 } : null,
       ),
-    listDevices: async () => await Promise.resolve([...devices]),
+    listDevices: async () =>
+      await Promise.resolve(
+        devices === "overflow"
+          ? { type: "overflow" as const, cap: PUSH_DEVICES_PER_USER_MAX }
+          : { type: "complete" as const, rows: [...devices] },
+      ),
     removeDevices: async (_recipient, gone) => {
       removed.push([...gone]);
       return await Promise.resolve(gone.length);
@@ -230,11 +238,12 @@ describe("push delivery", () => {
     expect(removed).toEqual([[]]);
   });
 
-  test("nothing is sent for a notification that is gone, read, or out of reach", async () => {
+  test("nothing is sent for a notification that is gone, read, out of reach, or past the device cap", async () => {
     for (const [setup, reason] of [
       [{ owner: null }, "not_found"],
       [{ visible: false }, "not_unread"],
       [{ devices: [] }, "no_devices"],
+      [{ devices: "overflow" }, "too_many_devices"],
     ] as const) {
       const { deps, sent } = harness(setup);
       expect(

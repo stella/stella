@@ -20,6 +20,8 @@ import type { Transaction } from "@/api/db/root";
 import { pushDevices } from "@/api/db/schema";
 import type { PushDeviceRow } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
+import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -65,16 +67,21 @@ export const registerPushDevice = async (
     })
     .returning();
 
-  const kept = tx
-    .select({ token: pushDevices.token })
-    .from(pushDevices)
-    .where(eq(pushDevices.userId, userId))
-    .orderBy(desc(pushDevices.lastSeenAt), desc(pushDevices.token))
-    .limit(PUSH_DEVICES_PER_USER_MAX);
   await tx
     .delete(pushDevices)
     .where(
-      and(eq(pushDevices.userId, userId), notInArray(pushDevices.token, kept)),
+      and(
+        eq(pushDevices.userId, userId),
+        notInArray(
+          pushDevices.token,
+          tx
+            .select({ token: pushDevices.token })
+            .from(pushDevices)
+            .where(eq(pushDevices.userId, userId))
+            .orderBy(desc(pushDevices.lastSeenAt), desc(pushDevices.token))
+            .limit(PUSH_DEVICES_PER_USER_MAX),
+        ),
+      ),
     );
   return row;
 };
@@ -111,6 +118,10 @@ const laterClaim = alias(pushDevices, "later_claim");
  * Telling the two apart needs both people's rows, so this reads through the
  * owner connection; the recipient and organization it is given come from the
  * notification row, never from the job.
+ *
+ * Registration keeps a person to {@link PUSH_DEVICES_PER_USER_MAX} devices,
+ * but two registrations racing each other can leave more until the next one
+ * trims them; the read then reports the overflow instead of a partial list.
  */
 export const listDeliverableDevices = async (
   db: Pick<Transaction, "select">,
@@ -118,37 +129,39 @@ export const listDeliverableDevices = async (
     organizationId,
     userId,
   }: { organizationId: SafeId<"organization">; userId: SafeId<"user"> },
-): Promise<DeliverableDevice[]> =>
-  await db
-    .select({
-      token: pushDevices.token,
-      environment: pushDevices.environment,
-      bundleId: pushDevices.bundleId,
-      locale: pushDevices.locale,
-      seenToken: timestampCasToken(pushDevices.lastSeenAt),
-    })
-    .from(pushDevices)
-    .where(
-      and(
-        eq(pushDevices.userId, userId),
-        eq(pushDevices.organizationId, organizationId),
-        notExists(
-          db
-            .select({ token: laterClaim.token })
-            .from(laterClaim)
-            .where(
-              and(
-                eq(laterClaim.token, pushDevices.token),
-                ne(laterClaim.userId, pushDevices.userId),
-                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement; no JS Date is bound
-                gt(laterClaim.lastSeenAt, pushDevices.lastSeenAt),
+): Promise<BoundedReadResult<DeliverableDevice>> =>
+  await readBounded(
+    db
+      .select({
+        token: pushDevices.token,
+        environment: pushDevices.environment,
+        bundleId: pushDevices.bundleId,
+        locale: pushDevices.locale,
+        seenToken: timestampCasToken(pushDevices.lastSeenAt),
+      })
+      .from(pushDevices)
+      .where(
+        and(
+          eq(pushDevices.userId, userId),
+          eq(pushDevices.organizationId, organizationId),
+          notExists(
+            db
+              .select({ token: laterClaim.token })
+              .from(laterClaim)
+              .where(
+                and(
+                  eq(laterClaim.token, pushDevices.token),
+                  ne(laterClaim.userId, pushDevices.userId),
+                  // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement; no JS Date is bound
+                  gt(laterClaim.lastSeenAt, pushDevices.lastSeenAt),
+                ),
               ),
-            ),
+          ),
         ),
-      ),
-    )
-    .orderBy(desc(pushDevices.lastSeenAt))
-    .limit(PUSH_DEVICES_PER_USER_MAX);
+      )
+      .orderBy(desc(pushDevices.lastSeenAt)),
+    PUSH_DEVICES_PER_USER_MAX,
+  );
 
 /**
  * Remove devices APNs called dead. Each is removed only if it has not been

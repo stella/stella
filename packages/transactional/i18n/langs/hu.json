@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Egy munkafolyamat a jóváhagyására vár",
     "flowRunCompleted": "Egy munkafolyamat befejeződött",
     "flowRunFailed": "Egy munkafolyamat sikertelen",
-    "mention": "Megemlítették Önt egy hozzászólásban",
-    "reportExportFailed": "A jelentés exportálását nem sikerült befejezni",
-    "reportExportSucceeded": "A jelentés exportálása elkészült"
+    "mention": "Megemlítették Önt egy hozzászólásban"
   },
   "reportExportStatus": {
     "action": "stella megnyitása",

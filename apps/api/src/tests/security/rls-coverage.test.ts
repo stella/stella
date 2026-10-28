@@ -563,6 +563,12 @@ describe("policy coverage", () => {
     // Its nullable matter pointer does not admit the row; the dedicated timer
     // assertion covers owner policies and the restrictive membership check.
     "time_timers",
+    // A push device belongs to the person who registered it, wherever they
+    // sign in: re-registering a phone from another organization updates the
+    // same (user, token) row, and signing out removes it from any of them, so
+    // the organization is a routing column for delivery, never a permission.
+    // The dedicated assertion below covers the user-only policies.
+    "push_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -1104,6 +1110,22 @@ describe("policy coverage", () => {
     const updatePolicy = tablePolicies.find((p) => p.command === "w");
     expect(updatePolicy?.check_expr).toContain(SETTING_USER_ID);
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
+  });
+
+  test("push devices admit only the person who registered them", async () => {
+    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+      (p) => p.table_name === "push_devices",
+    );
+    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+      new Set(["r", "a", "w", "d"]),
+    );
+    for (const policy of tablePolicies) {
+      expect(policy.permissive).toBe(true);
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
+    }
   });
 
   test("user_files policies derive full scope from the owning thread", async () => {

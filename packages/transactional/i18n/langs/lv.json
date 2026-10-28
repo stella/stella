@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "Darbplūsma gaida jūsu apstiprinājumu",
     "flowRunCompleted": "Darbplūsma ir pabeigta",
     "flowRunFailed": "Darbplūsma neizdevās",
-    "mention": "Jūs tikāt pieminēts komentārā",
-    "reportExportFailed": "Jūsu pārskata eksportu neizdevās pabeigt",
-    "reportExportSucceeded": "Jūsu pārskata eksports ir gatavs"
+    "mention": "Jūs tikāt pieminēts komentārā"
   },
   "reportExportStatus": {
     "action": "Atvērt stella",

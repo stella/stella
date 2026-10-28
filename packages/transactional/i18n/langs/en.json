@@ -36,9 +36,7 @@
     "flowRunAwaitingApproval": "A workflow is waiting for your approval",
     "flowRunCompleted": "A workflow finished",
     "flowRunFailed": "A workflow failed",
-    "mention": "You were mentioned in a comment",
-    "reportExportFailed": "Your report export could not be completed",
-    "reportExportSucceeded": "Your report export is ready"
+    "mention": "You were mentioned in a comment"
   },
   "reportExportStatus": {
     "action": "Open stella",

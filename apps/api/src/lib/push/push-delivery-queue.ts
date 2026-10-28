@@ -10,7 +10,7 @@ import { isMobilePushConfigured } from "@/api/lib/push/apns-config";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export const PUSH_DELIVERY_QUEUE_NAME = "push-notifications";
-export const PUSH_DELIVERY_JOB_NAME = "deliver";
+const PUSH_DELIVERY_JOB_NAME = "deliver";
 
 /** Jobs per `addBulk`, so a firm-wide announcement is a few round trips. */
 const ENQUEUE_BATCH_SIZE = 100;
@@ -36,7 +36,7 @@ export type PushDeliveryJobData = {
  * Finished jobs are kept for a day, which is what makes a second enqueue of
  * the same notification a no-op.
  */
-export const PUSH_DELIVERY_JOB_ATTEMPTS = 5;
+const PUSH_DELIVERY_JOB_ATTEMPTS = 5;
 
 const getQueue = createLazyBullMqQueue<PushDeliveryJobData>({
   name: PUSH_DELIVERY_QUEUE_NAME,
