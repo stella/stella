@@ -1392,10 +1392,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/statutes/statute-filters.logic.ts::STATUTE_FILTER_KEYS::domain:[\"type\",\"validity\"]::1",
-    "reason": "Existing STATUTE_FILTER_KEYS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
     "reason": "Existing FontField UI validation or presentation bound; contract migration pending."
   },

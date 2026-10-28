@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Pokaż tylko cytowaną część",
     "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
+    "sortNeedsYear": "Aby sortować według tej kolumny, wybierz rok w filtrach.",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
       "current": "Obowiązujący",

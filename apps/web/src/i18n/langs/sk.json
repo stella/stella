@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Zobraziť len citovanú časť",
     "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
+    "sortNeedsYear": "Na zoradenie podľa tohto stĺpca vyberte vo filtroch rok.",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",

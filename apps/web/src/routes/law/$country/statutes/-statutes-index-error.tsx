@@ -5,8 +5,6 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
-
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
@@ -14,8 +12,10 @@ import {
   statuteFacetsOptions,
   statuteKeys,
 } from "@/features/statutes/queries/statutes";
-import { activeStatuteFilterCount } from "@/features/statutes/statute-filters.logic";
-import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
+import {
+  activeStatuteFilterCount,
+  withStatuteFilter,
+} from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
   STATUTE_MAX_QUERY_LENGTH,
@@ -25,23 +25,6 @@ import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { PublicLawListFailure } from "@/routes/law/-components/public-law-list-failure";
-
-const withFilter = (
-  search: StatutesIndexSearch,
-  key: StatuteFilterKey,
-  value: string | undefined,
-): StatutesIndexSearch => {
-  if (key === "type") {
-    return { ...search, page: undefined, type: value };
-  }
-  return {
-    ...search,
-    page: undefined,
-    validity: LEGISLATION_LIST_VALIDITIES.find(
-      (validity) => validity === value,
-    ),
-  };
-};
 
 /** Keeps statute search and filters available after a route-level failure. */
 export const PublicStatutesIndexError = ({ error }: ErrorComponentProps) => {
@@ -92,12 +75,16 @@ export const PublicStatutesIndexError = ({ error }: ErrorComponentProps) => {
           recoverSearch(
             changeStatutesIndexQuery({
               country: params.country,
-              previous: withFilter(search, key, value),
+              previous: withStatuteFilter(search, key, value),
               query,
             }),
           )
         }
-        selection={{ type: search.type, validity: search.validity }}
+        selection={{
+          type: search.type,
+          validity: search.validity,
+          year: search.year,
+        }}
         types={facetsView.type === "items" ? facetsView.items.documentType : []}
       />
       <PublicLawListFailure

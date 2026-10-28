@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Csak az idézett rész megjelenítése",
     "showFullProvision": "A teljes rendelkezés megjelenítése",
     "showInText": "Megjelenítés a szövegben",
+    "sortNeedsYear": "Az oszlop szerinti rendezéshez válasszon évet a szűrőkben.",
     "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {
       "current": "Hatályos",

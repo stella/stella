@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Näita ainult viidatud osa",
     "showFullProvision": "Näita kogu sätet",
     "showInText": "Näita tekstis",
+    "sortNeedsYear": "Selle veeru järgi sortimiseks valige filtrites aasta.",
     "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
       "current": "Kehtiv",

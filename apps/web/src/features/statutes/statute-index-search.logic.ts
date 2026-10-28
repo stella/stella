@@ -3,6 +3,10 @@ import * as v from "valibot";
 
 import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import {
+  STATUTE_LIST_SORTS,
+  statuteListSortIsBounded,
+} from "@stll/api-contract/statute-list-sort";
 import { readStatuteQueryScope } from "@stll/api-contract/statute-query-capability";
 import {
   parseStatuteQuery,
@@ -48,6 +52,9 @@ export const statutesIndexSearchSchema = routeSearchSchema({
     v.optional(v.picklist(LEGISLATION_LIST_VALIDITIES)),
     undefined,
   ),
+  // A column order; read only alongside a year (`statuteListSortIsBounded`).
+  // An order this build does not know reads as the default order.
+  sort: v.fallback(v.optional(v.picklist(STATUTE_LIST_SORTS)), undefined),
 });
 
 export type StatutesIndexSearch = v.InferOutput<
@@ -83,7 +90,11 @@ type ChangeStatutesIndexQueryOptions = {
   query: string;
 };
 
-/** Full-text has no validity or publication year filter; queries invalidate list cursors. */
+/**
+ * Full-text has no validity or publication year filter; queries invalidate
+ * list cursors. A column order lasts only while a year bounds the list, so
+ * every change that drops the year drops the order with it.
+ */
 export const changeStatutesIndexQuery = ({
   country,
   previous,
@@ -91,13 +102,15 @@ export const changeStatutesIndexQuery = ({
 }: ChangeStatutesIndexQueryOptions): StatutesIndexSearch => {
   const q = query.trim() || undefined;
   const intent = readStatuteIntent(country, q);
+  const year = intent.type === "text" ? undefined : previous.year;
   return {
     page: undefined,
     pageSize: previous.pageSize,
     ...(previous.asOf === undefined ? {} : { asOf: previous.asOf }),
     q,
     type: previous.type,
-    year: intent.type === "text" ? undefined : previous.year,
+    year,
     validity: intent.type === "text" ? undefined : previous.validity,
+    sort: statuteListSortIsBounded({ year }) ? previous.sort : undefined,
   };
 };

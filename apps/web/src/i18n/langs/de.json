@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
     "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
+    "sortNeedsYear": "Wählen Sie in den Filtern ein Jahr, um nach dieser Spalte zu sortieren.",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
       "current": "In Kraft",

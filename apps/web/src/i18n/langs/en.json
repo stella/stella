@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Show cited part only",
     "showFullProvision": "Show full provision",
     "showInText": "Show in the text",
+    "sortNeedsYear": "Choose a year in Filters to sort by this column.",
     "statedWindow": "Dates stated by the publisher: {range}",
     "status": {
       "current": "In force",

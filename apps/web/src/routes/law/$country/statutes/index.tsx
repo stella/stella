@@ -12,11 +12,9 @@ import {
   notFound,
   redirect,
 } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
@@ -68,7 +66,10 @@ import {
 } from "@/features/statutes/queries/statutes";
 import type { StatuteListItem } from "@/features/statutes/queries/statutes";
 import { STATUTE_VALIDITY_LABEL_KEYS } from "@/features/statutes/statute-columns.logic";
-import { activeStatuteFilterCount } from "@/features/statutes/statute-filters.logic";
+import {
+  activeStatuteFilterCount,
+  withStatuteFilter,
+} from "@/features/statutes/statute-filters.logic";
 import type { StatuteFilterKey } from "@/features/statutes/statute-filters.logic";
 import {
   changeStatutesIndexQuery,
@@ -77,6 +78,7 @@ import {
   type StatutesIndexSearch,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
+import { statuteColumnOrder } from "@/features/statutes/statute-order.logic";
 import {
   useStatuteColumnPreferences,
   useStatuteFind,
@@ -119,33 +121,8 @@ const NO_TYPES: readonly FacetSourceBucket[] = [];
 const FILTER_KIND_LABEL_KEYS = {
   type: "common.type",
   validity: "common.status",
+  year: "workspaces.views.calendar.year",
 } as const satisfies Record<StatuteFilterKey, TranslationKey>;
-
-/**
- * The URL with one facet set or unset. Written out per key rather than by a
- * computed property, so a filter key that is not in the search schema cannot
- * be navigated to.
- */
-const withFilter = (
-  previous: StatutesIndexSearch,
-  key: StatuteFilterKey,
-  value: string | undefined,
-): StatutesIndexSearch => {
-  switch (key) {
-    case "type":
-      return { ...previous, type: value };
-    case "validity":
-      return {
-        ...previous,
-        validity: LEGISLATION_LIST_VALIDITIES.find(
-          (validity) => validity === value,
-        ),
-      };
-    default:
-      key satisfies never;
-      return panic(`Unhandled statute filter: ${String(key)}`);
-  }
-};
 
 const createStatutesIndexPath = (
   country: string,
@@ -441,7 +418,7 @@ const useStatuteListFilterChips = ({
   if (search.year !== undefined) {
     chips.push({
       id: "filter:year",
-      kind: t("workspaces.views.calendar.year"),
+      kind: t(FILTER_KIND_LABEL_KEYS.year),
       onRemove: () => onRemove("year"),
       value: search.year,
     });
@@ -466,6 +443,32 @@ const useStatuteListFilterChips = ({
   return chips;
 };
 
+/**
+ * The headers' part in the list's order. A header orders the list only while
+ * a year bounds it; the address keeps the order, and a new order starts again
+ * at page one, since the cursors were cut for the old one.
+ */
+const useStatuteListOrder = ({
+  sort,
+  year,
+}: Pick<StatutesIndexSearch, "sort" | "year">) => {
+  const t = useTranslations();
+  const navigate = Route.useNavigate();
+  return statuteColumnOrder({
+    sort,
+    year,
+    needsYearReason: t("statutes.sortNeedsYear"),
+    onSortChange: (next) => {
+      detached(
+        navigate({
+          search: (previous) => ({ ...previous, page: undefined, sort: next }),
+        }),
+        "statutes.sort-navigate",
+      );
+    },
+  });
+};
+
 function PublicStatuteList({
   routeState,
 }: {
@@ -475,10 +478,11 @@ function PublicStatuteList({
   const queryClient = useQueryClient();
   const country = Route.useParams({ select: (params) => params.country });
   const search = Route.useSearch({
-    select: ({ page, pageSize, q, type, validity, year }) => ({
+    select: ({ page, pageSize, q, sort, type, validity, year }) => ({
       page,
       pageSize,
       q,
+      sort,
       type,
       validity,
       year,
@@ -580,6 +584,7 @@ function PublicStatuteList({
     surfaceKey: country,
   });
   const columnGroups = useStatuteColumnGroups();
+  const order = useStatuteListOrder(search);
 
   // A pending debounced query write holds text the URL has not seen yet;
   // it is folded in first so a filter change cannot drop the edit. Every such
@@ -602,7 +607,7 @@ function PublicStatuteList({
 
   const selectFacet = (key: StatuteFilterKey, value: string | undefined) => {
     detached(
-      searchNavigation((previous) => withFilter(previous, key, value)),
+      searchNavigation((previous) => withStatuteFilter(previous, key, value)),
       "statutes.filter-navigate",
     );
   };
@@ -723,7 +728,7 @@ function PublicStatuteList({
             <StatuteFilterPopover
               activeFilterCount={activeStatuteFilterCount(search)}
               onSelect={selectFacet}
-              selection={{ type: search.type, validity: search.validity }}
+              selection={search}
               types={facets?.documentType ?? NO_TYPES}
             />
           }
@@ -758,7 +763,7 @@ function PublicStatuteList({
         {dataView.type !== "error" && (
           <PublicLawResultsBoundary
             resetOn={data}
-            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}`}
+            searchKey={`${country}:${search.q ?? ""}:${search.type ?? ""}:${search.validity ?? ""}:${search.year ?? ""}:${search.sort ?? ""}`}
           >
             <StatuteTable
               emptyState={
@@ -773,6 +778,7 @@ function PublicStatuteList({
               isRefreshing={rows === "stale"}
               layout={layout}
               onLayoutChange={setLayout}
+              order={order}
               statutes={find.rows}
             />
           </PublicLawResultsBoundary>

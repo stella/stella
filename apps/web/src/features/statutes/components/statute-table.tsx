@@ -8,7 +8,7 @@
  * the table read one column set.
  */
 
-import { useMemo } from "react";
+import { createContext, use, useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
@@ -17,6 +17,8 @@ import { useTranslations } from "use-intl";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+import { STATUTE_LIST_SORT_KEY_KINDS } from "@stll/api-contract/statute-list-sort";
+import type { StatuteListSortKey } from "@stll/api-contract/statute-list-sort";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
@@ -35,6 +37,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
 import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
+import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -44,6 +47,7 @@ import { SELECT_COLUMN_SIZE } from "@/components/workspaces/table/table-schema";
 import type {
   StatuteRowData,
   TableCellContext,
+  TableColumn,
   TableColumnDef,
   TableHeaderContext,
 } from "@/components/workspaces/table/types";
@@ -58,6 +62,7 @@ import {
   STATUTE_COLUMN_LABEL_KEYS,
   STATUTE_COLUMN_MIN_SIZE,
   STATUTE_COLUMN_MODEL,
+  STATUTE_COLUMN_SORT_KEYS,
   STATUTE_VALIDITY_LABEL_KEYS,
 } from "@/features/statutes/statute-columns.logic";
 import type {
@@ -65,6 +70,8 @@ import type {
   StatuteTableLayout,
 } from "@/features/statutes/statute-columns.logic";
 import { statuteTabId } from "@/features/statutes/statute-inspector.logic";
+import { statuteTableSorting } from "@/features/statutes/statute-order.logic";
+import type { StatuteColumnOrder } from "@/features/statutes/statute-order.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import { EM_DASH, formatValidityDate } from "@/lib/statutes/statute-format";
@@ -96,6 +103,8 @@ type StatuteTableProps = {
   isRefreshing?: boolean | undefined;
   layout: StatuteTableLayout;
   onLayoutChange: (layout: StatuteTableLayout) => void;
+  /** The order the rows were read in, as the headers state and change it. */
+  order: StatuteColumnOrder;
   statutes: readonly StatuteListItem[];
 };
 
@@ -108,6 +117,7 @@ export const StatuteTable = ({
   isRefreshing = false,
   layout,
   onLayoutChange,
+  order,
   statutes,
 }: StatuteTableProps) => {
   const columns = useStatuteTableColumns();
@@ -123,21 +133,63 @@ export const StatuteTable = ({
   const rowHost = useStatuteRowHost();
 
   return (
-    <PublicLawTable
-      columns={columns}
-      emptyState={emptyState}
-      expectedRowCount={expectedRowCount}
-      findHighlight={findHighlight}
-      firstRowNumber={firstRowNumber}
-      getRowId={statuteRowId}
-      isLoading={isLoading}
-      isRefreshing={isRefreshing}
-      layout={layout}
-      onLayoutChange={onLayoutChange}
-      rowHost={rowHost}
-      rows={rows}
-      // Statutes are ordered by the list, never by a column.
-      sorting={null}
+    <StatuteOrderDirectionsScope value={order.directions}>
+      <PublicLawTable
+        columns={columns}
+        emptyState={emptyState}
+        expectedRowCount={expectedRowCount}
+        findHighlight={findHighlight}
+        firstRowNumber={firstRowNumber}
+        getRowId={statuteRowId}
+        isLoading={isLoading}
+        isRefreshing={isRefreshing}
+        layout={layout}
+        onLayoutChange={onLayoutChange}
+        rowHost={rowHost}
+        rows={rows}
+        sorting={statuteTableSorting(order)}
+      />
+    </StatuteOrderDirectionsScope>
+  );
+};
+
+/**
+ * Which ways a header may order the list. Through a context rather than the
+ * column definitions, as the decision table does: it changes with the
+ * filters while the columns do not, and rebuilding the definitions loops a
+ * controlled table.
+ */
+const StatuteOrderDirectionsContext = createContext<SortDirectionOffers | null>(
+  null,
+);
+
+export const StatuteOrderDirectionsScope =
+  StatuteOrderDirectionsContext.Provider;
+
+const StatuteOrderedHeader = ({
+  column,
+  icon,
+  label,
+  sortKey,
+}: {
+  column: TableColumn<StatuteRowData>;
+  icon: LucideIcon;
+  label: string;
+  sortKey: StatuteListSortKey;
+}) => {
+  const directions =
+    use(StatuteOrderDirectionsContext) ??
+    panic("An ordered statute header rendered outside an order scope");
+  return (
+    <MetadataPopover
+      column={column}
+      icon={icon}
+      label={label}
+      sort={{
+        type: "ordered",
+        kind: STATUTE_LIST_SORT_KEY_KINDS[sortKey],
+        directions,
+      }}
     />
   );
 };
@@ -225,25 +277,34 @@ const statuteColumnDef = (
   label: string,
 ): TableColumnDef<StatuteRowData> => {
   const model = STATUTE_COLUMN_MODEL[column];
+  const sortKey = STATUTE_COLUMN_SORT_KEYS[column];
   return {
     id: column,
     size: model.size,
     minSize: STATUTE_COLUMN_MIN_SIZE,
-    // Statutes are ordered by the list, never by a column.
-    enableSorting: false,
+    // The API orders the rows; a header only asks it for another order.
+    enableSorting: sortKey !== null,
     enableHiding: model.hide,
     enableResizing: true,
     enablePinning: true,
     ...(model.emphasis === "metadata" ? { meta: { muted: true } } : {}),
     accessorFn: (row) => row.statute[STATUTE_ACCESSORS[column]],
-    header: ({ header }: TableHeaderContext<unknown, StatuteRowData>) => (
-      <MetadataPopover
-        column={header.column}
-        icon={STATUTE_COLUMN_ICONS[column]}
-        label={label}
-        sort={UNORDERED_COLUMN}
-      />
-    ),
+    header: ({ header }: TableHeaderContext<unknown, StatuteRowData>) =>
+      sortKey === null ? (
+        <MetadataPopover
+          column={header.column}
+          icon={STATUTE_COLUMN_ICONS[column]}
+          label={label}
+          sort={UNORDERED_COLUMN}
+        />
+      ) : (
+        <StatuteOrderedHeader
+          column={header.column}
+          icon={STATUTE_COLUMN_ICONS[column]}
+          label={label}
+          sortKey={sortKey}
+        />
+      ),
     cell: ({ row }: TableCellContext<unknown, StatuteRowData>) => (
       <StatuteCell column={column} statute={row.original.statute} />
     ),

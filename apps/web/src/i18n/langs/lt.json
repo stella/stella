@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Rodyti tik cituojamą dalį",
     "showFullProvision": "Rodyti visą nuostatą",
     "showInText": "Rodyti tekste",
+    "sortNeedsYear": "Norėdami rūšiuoti pagal šį stulpelį, filtruose pasirinkite metus.",
     "statedWindow": "Leidėjo nurodytos datos: {range}",
     "status": {
       "current": "Galiojantis",

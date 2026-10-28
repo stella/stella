@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Afficher seulement la partie citée",
     "showFullProvision": "Afficher toute la disposition",
     "showInText": "Afficher dans le texte",
+    "sortNeedsYear": "Choisissez une année dans les filtres pour trier selon cette colonne.",
     "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {
       "current": "En vigueur",

@@ -78,6 +78,61 @@ test("publication year reaches the public statute list request", async () => {
   }
 });
 
+describe("a column order in the list address", () => {
+  const readRequests = async (search: Record<string, unknown>) => {
+    const requests: URL[] = [];
+    const fetch = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (input: Parameters<typeof globalThis.fetch>[0]) => {
+          requests.push(
+            new URL(input instanceof Request ? input.url : String(input)),
+          );
+          return Response.json({ items: [], nextCursor: null });
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    const queryClient = new QueryClient();
+    try {
+      await queryClient.infiniteQuery(
+        statutesInfiniteOptions(
+          createStatuteListFilters(
+            "cze",
+            v.parse(statutesIndexSearchSchema, search),
+          ),
+        ),
+      );
+      return requests;
+    } finally {
+      fetch.mockRestore();
+      queryClient.clear();
+    }
+  };
+
+  test("reaches the request with the year that bounds it", async () => {
+    const requests = await readRequests({
+      year: 2012,
+      sort: "amendments-desc",
+    });
+    expect(requests.at(0)?.searchParams.get("sort")).toBe("amendments-desc");
+    expect(requests.at(0)?.searchParams.get("year")).toBe("2012");
+  });
+
+  test("is left out without a year, so the list reads its default order", async () => {
+    const requests = await readRequests({ sort: "amendments-desc" });
+    expect(requests).toHaveLength(1);
+    expect(requests.at(0)?.searchParams.has("sort")).toBe(false);
+  });
+
+  test("an order this build does not know reads as the default order", () => {
+    const search = v.parse(statutesIndexSearchSchema, {
+      year: 2012,
+      sort: "popularity-desc",
+    });
+    expect(search.sort).toBeUndefined();
+  });
+});
+
 describe("public statute full-text loader", () => {
   for (const cause of ["enter", "preload", "stay"] as const) {
     test(`${cause} returns the server shell without starting API queries`, async () => {

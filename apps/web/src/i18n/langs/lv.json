@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Rādīt tikai citēto daļu",
     "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
+    "sortNeedsYear": "Lai kārtotu pēc šīs kolonnas, filtros izvēlieties gadu.",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
       "current": "Spēkā",

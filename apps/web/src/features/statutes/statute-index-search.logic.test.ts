@@ -6,6 +6,10 @@ import { lawYearSearchSchema } from "@stll/api-contract/law-year";
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
 
 import {
+  statuteFilterYear,
+  withStatuteFilter,
+} from "@/features/statutes/statute-filters.logic";
+import {
   changeStatutesIndexQuery,
   readStatuteIntent,
   statutesIndexSearchSchema,
@@ -137,5 +141,54 @@ describe("statute publication year search", () => {
         query: "",
       }).year,
     ).toBeUndefined();
+  });
+});
+
+describe("a column order across filter changes", () => {
+  const sorted = v.parse(statutesIndexSearchSchema, {
+    page: 2,
+    year: 2012,
+    sort: "citedBy-desc",
+  });
+
+  test("lasts while the year does, and starts again at page one", () => {
+    for (const query of ["89/2012", ""]) {
+      const next = changeStatutesIndexQuery({
+        country: "cze",
+        previous: sorted,
+        query,
+      });
+      expect(next.sort).toBe("citedBy-desc");
+      expect(next.page).toBeUndefined();
+    }
+  });
+
+  test("goes with the year: removed, cleared, or left behind by full-text", () => {
+    const withoutYear = [
+      withStatuteFilter(sorted, "year", undefined),
+      { ...sorted, year: undefined },
+    ];
+    for (const previous of withoutYear) {
+      expect(
+        changeStatutesIndexQuery({ country: "cze", previous, query: "" }).sort,
+      ).toBeUndefined();
+    }
+    expect(
+      changeStatutesIndexQuery({
+        country: "cze",
+        previous: sorted,
+        query: "contractual obligations",
+      }).sort,
+    ).toBeUndefined();
+  });
+
+  test("a year typed in the filters keeps only a real act year", () => {
+    expect(withStatuteFilter(sorted, "year", "1964").year).toBe("1964");
+    for (const typed of ["12", "20120", undefined]) {
+      expect(withStatuteFilter(sorted, "year", typed).year).toBeUndefined();
+    }
+    expect(statuteFilterYear(2012)).toBe("2012");
+    expect(statuteFilterYear(999)).toBeUndefined();
+    expect(statuteFilterYear(null)).toBeUndefined();
   });
 });

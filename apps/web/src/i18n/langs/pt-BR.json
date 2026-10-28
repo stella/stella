@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Mostrar apenas a parte citada",
     "showFullProvision": "Mostrar o dispositivo completo",
     "showInText": "Mostrar no texto",
+    "sortNeedsYear": "Escolha um ano nos filtros para ordenar por esta coluna.",
     "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
       "current": "Em vigor",

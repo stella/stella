@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
     "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
+    "sortNeedsYear": "اختر سنة في عوامل التصفية للفرز حسب هذا العمود.",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
       "current": "نافذ",

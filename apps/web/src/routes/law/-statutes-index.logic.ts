@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { statuteListSortIsBounded } from "@stll/api-contract/statute-list-sort";
+
 import {
   publicLawPageIndex,
   publicLawPageNumber,
@@ -25,7 +27,12 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 
-/** What the list asks the corpus for: the entry, narrowed by the filters. */
+/**
+ * What the list asks the corpus for: the entry, narrowed by the filters, in
+ * the column order the address names while a year bounds it. An address
+ * carrying an order but no year (edited by hand) reads the default order
+ * rather than a request the API refuses.
+ */
 export const createStatuteListFilters = (
   country: string,
   search: StatutesIndexSearch,
@@ -34,6 +41,9 @@ export const createStatuteListFilters = (
   ...(search.type === undefined ? {} : { documentType: search.type }),
   ...(search.validity === undefined ? {} : { validity: search.validity }),
   ...(search.year === undefined ? {} : { year: search.year }),
+  ...(search.sort === undefined || !statuteListSortIsBounded(search)
+    ? {}
+    : { sort: search.sort }),
 });
 
 /**

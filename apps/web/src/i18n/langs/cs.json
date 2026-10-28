@@ -5354,6 +5354,7 @@
     "showCitedPartOnly": "Zobrazit jen citovanou část",
     "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
+    "sortNeedsYear": "Pro řazení podle tohoto sloupce zvolte ve filtrech rok.",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",
