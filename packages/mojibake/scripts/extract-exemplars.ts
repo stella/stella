@@ -99,7 +99,10 @@ export const validateSupplement = ({
     version !== input.version ||
     supplement["version"] !== version ||
     provenance["version"] !== version ||
-    provenance["sourceCommit"] !== input.sourceCommit
+    provenance["sourceCommit"] !== input.sourceCommit ||
+    JSON.stringify(provenance["sources"]) !== JSON.stringify(input.sources) ||
+    JSON.stringify(provenance["converterOptions"]) !==
+      JSON.stringify(input.converterOptions)
   ) {
     return panic(
       "CLDR supplement must match the pinned npm and source release",
