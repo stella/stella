@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "paragraph text and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; none has feature storage of its own",
+        "paragraph text, anonymization markers and heading identities are recomputed from stored markup; empty title runs no longer carry their font into body paragraphs, and none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
