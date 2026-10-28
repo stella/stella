@@ -785,7 +785,6 @@ const isKanbanCardDragSurfaceInteractiveTarget = (
 };
 
 const getKanbanCardDragSurfaceAttributes = ({
-  "aria-describedby": _describedBy,
   "aria-disabled": _disabled,
   "aria-pressed": _pressed,
   "aria-roledescription": _roleDescription,

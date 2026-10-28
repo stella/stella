@@ -306,6 +306,7 @@ export const KanbanSubgroupBoard = <TRow,>({
   useEffect(() => {
     if (
       dragOverBandId === undefined ||
+      isDragging === false ||
       dragOverBandId === previousDragOverBandId.current
     ) {
       return;
@@ -326,7 +327,7 @@ export const KanbanSubgroupBoard = <TRow,>({
         peek.slotDragOver(dragOverBandId);
       }
     }
-  }, [dragOverBandId, peek, peekingBandId]);
+  }, [dragOverBandId, isDragging, peek, peekingBandId]);
   useEffect(() => {
     if (isDragging === false) {
       previousDragOverBandId.current = null;

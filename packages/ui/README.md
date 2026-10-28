@@ -122,7 +122,7 @@ import {
 } from "@stll/ui/kanban";
 
 const Card = ({ id }: { id: string }) => {
-  const { activator, setNodeRef } = useKanbanSortable({
+  const { activator, setNodeRef, style } = useKanbanSortable({
     activation: { type: "handle" },
     id,
   });
@@ -130,7 +130,7 @@ const Card = ({ id }: { id: string }) => {
     return null;
   }
   return (
-    <article ref={setNodeRef}>
+    <article ref={setNodeRef} style={style}>
       <KanbanDragHandle bindings={activator.bindings} label="Move card" />
     </article>
   );
@@ -146,6 +146,39 @@ const Card = ({ id }: { id: string }) => {
       dropTarget: { id: "column", position: { column: 0, lane: 0 } },
       getRowId: (id) => id,
     }}
+  />
+</KanbanSortableBoard>;
+```
+
+For collapsed subgroup bands, the host maps each registered drop target to its
+band and clears the drag state on both drop and cancellation. Populate
+`bandIdByDropTargetId` from the same cell/slot registrations that supply the
+sortable target IDs (including folded-band slots).
+
+```tsx
+const [dragState, setDragState] = useState<
+  { type: "idle" } | { type: "dragging"; bandId: string | null }
+>({ type: "idle" });
+
+<KanbanSortableBoard
+  onDragStart={() => setDragState({ type: "dragging", bandId: null })}
+  onDragOver={({ over }) => {
+    setDragState({
+      type: "dragging",
+      bandId:
+        over === null ? null : (bandIdByDropTargetId.get(over.id) ?? null),
+    });
+  }}
+  onDragEnd={(event) => {
+    setDragState({ type: "idle" });
+    handleDragEnd(event);
+  }}
+  onDragCancel={() => setDragState({ type: "idle" })}
+>
+  <KanbanSubgroupBoard
+    {...boardProps}
+    isDragging={dragState.type === "dragging"}
+    dragOverBandId={dragState.type === "dragging" ? dragState.bandId : null}
   />
 </KanbanSortableBoard>;
 ```

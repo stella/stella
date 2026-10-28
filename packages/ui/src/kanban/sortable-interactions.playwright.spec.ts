@@ -380,6 +380,7 @@ test("exposes explicit whole-item and 44px handle activation surfaces", async ({
     handle.locator("xpath=ancestor::*[@data-sortable-item]"),
   ).toHaveCSS("touch-action", "auto");
   await expect(wholeItem).toHaveCSS("touch-action", "auto");
+  await expect(wholeItem).toHaveAccessibleDescription(/space bar/iu);
   await wholeItem.focus();
   await page.keyboard.press("Space");
   await expect(page.locator("[data-overlay]")).toHaveText("whole-item");

@@ -50,8 +50,8 @@ const BoardChromeFixture = () => {
   // screen. It is what gives a finger its way to the hover-revealed actions.
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const externalDrag = new URLSearchParams(location.search).has("externalDrag");
-  const [dragState, setDragState] = useState<"idle" | "over-band">("idle");
-  const dragOverBandId = dragState === "over-band" ? band.id : null;
+  const [dragState, setDragState] = useState<"idle" | "over-band" | "ended-over-band">("idle");
+  const dragOverBandId = dragState === "idle" ? null : band.id;
 
   useEffect(() => {
     document.documentElement.dataset["kanbanBoardChromeReady"] = "true";
@@ -71,6 +71,9 @@ const BoardChromeFixture = () => {
           </button>
           <button type="button" onClick={() => setDragState("idle")}>
             End host drag
+          </button>
+          <button type="button" onClick={() => setDragState("ended-over-band")}>
+            End host drag retaining target
           </button>
         </div>
       ) : null}
