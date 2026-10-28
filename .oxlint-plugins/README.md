@@ -332,6 +332,7 @@ invariant more accurately:
 - `oxc/no-accumulating-spread` prevents quadratic spread accumulation in loops and reducers.
 - `@stll/oxlint-config/no-raw-colors` owns semantic color-token enforcement; it is external to this directory.
 - The shared `stella-lowercase` plugin owns lowercase-copy checks.
+- [`require-valibot-message`](./require-valibot-message.ts) (`require-valibot-message`): requires translated messages on user-facing Valibot validators owned by web form schemas.
 
 ## Suppressions
 

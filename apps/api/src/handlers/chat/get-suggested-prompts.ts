@@ -10,6 +10,7 @@ import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcrip
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -154,6 +155,10 @@ const getSuggestedPrompts = createSafeRootHandler(
       session,
       user,
     } = ctx;
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok<SuggestedPromptsResult>({ prompts: [] });
+    }
+
     if (
       Result.isError(
         requireTanStackAIAvailableForTask({

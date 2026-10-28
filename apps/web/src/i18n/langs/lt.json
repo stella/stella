@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Dabar",
       "currentSession": "Dabartinis",
       "device": "Įrenginys",
       "deviceOnOs": "{browser} / {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "modelRefused": "Modelis atsisakė atsakyti",
+    "nothingFound": "Nieko nerasta",
     "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
     "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
     "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
@@ -1189,7 +1192,7 @@
       "searchEveryWord": "Ieškoti visų žodžių"
     },
     "seo": {
-      "collectionName": "Stella teismų praktika",
+      "collectionName": "stella teismų praktika",
       "description": "Vieša teismų praktikos duomenų bazė su indeksuojamais teismų sprendimais ir teisės šaltiniais.",
       "homeDescription": "Vieša teisės duomenų bazė: teismų sprendimai ir konsoliduoti teisės aktai, ieškomi pagal identifikatorių arba žodžius.",
       "scopedDescription": "Vieša teismų praktikos duomenų bazė ({scope}) su indeksuojamais teismų sprendimais ir teisės šaltiniais."
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "Nurodyta: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Nurodyta: {date}} until {Nurodyta: iki {date}} from {Nurodyta: nuo {date}} other {Nurodyta: {date}}}",
+      "caseFileDocuments": "Šios bylos dokumentai",
       "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "citedDecisionPassage": "Sprendimo ištrauka",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+      "unnamed": "{count, plural, one {dar #} few {dar #} many {dar #} other {dar #}}"
     },
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
@@ -2210,6 +2214,7 @@
     "moveDown": "Perkelti žemyn",
     "moveUp": "Perkelti aukštyn",
     "name": "Pavadinimas",
+    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "newMatter": "Nauja byla",
     "newRow": "Nauja eilutė",
     "next": "Toliau",
@@ -2468,10 +2473,10 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
-    "deleteContact": "Ištrinti klientą",
+    "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
-    "editContact": "Redaguoti klientą",
+    "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",
       "personal": "Asmeninis",
@@ -2484,7 +2489,7 @@
     "extractProcuracao": {
       "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
       "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
-      "fileHint": "Stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
+      "fileHint": "stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
       "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
@@ -2529,6 +2534,7 @@
       "rowLabel": "Klientas {index}",
       "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
+      "skippedInFileDuplicate": "Praleista: kartoja ankstesnę failo eilutę",
       "skippedInvalidRow": "Praleista: eilutė neatitinka importo taisyklių",
       "skippedInvalidTaxId": "Praleista: neteisingas mokesčių mokėtojo kodas",
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "Jei nurodomas adresas, adreso 1 eilutė yra privaloma.",
         "display_name_required": "Nepavyko sukurti rodomo pavadinimo.",
+        "in_file_duplicate": "Ankstesnės šio failo eilutės dublikatas",
         "invalid_email": "El. pašto adresas netinkamas.",
         "invalid_phone": "Telefono numeris netinkamas.",
         "invalid_tags": "Žymos turi būti tekstinės reikšmės.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
-      "validateFailed": "Nepavyko patikrinti šių kontaktų."
+      "validateFailed": "Nepavyko patikrinti šių kontaktų.",
+      "warning": {
+        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
+        "possible_in_file_duplicate": "Galimas {row} eilutės dublikatas; sutampa tik vardas."
+      }
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
     "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",
@@ -3295,7 +3306,6 @@
       "simple": "Supaprastintas žymėjimas"
     },
     "moreFormatting": "Daugiau formatavimo",
-    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "nextChange": "Kitas keitimas",
     "numberedList": "Numeruotas sąrašas",
     "parseError": "Nepavyko apdoroti dokumento. Jis gali būti sugadintas arba nepalaikomo formato.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
-      "title": "DI konfigūracija",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "Dviejų veiksnių autentifikavimas"
       },
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
-      "wordEditShortcut": "Word redagavimo žyma",
+      "wordEditShortcut": "Inicialai Word pakeitimams",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",
       "wordEditShortcutPlaceholder": "pvz., JK"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "Išsaugotas stilių rinkinys",
     "sourceDocument": "Šaltinio DOCX",
     "stellaDescription": "Išsamus neutralus stella teisinių dokumentų formatavimas",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stilių rinkiniai",
     "untitledDocument": "Dokumentas be pavadinimo"
   },
   "success": {
     "aiConfigDeleted": "DI konfigūracija pašalinta",
     "aiConfigUpdated": "DI konfigūracija atnaujinta",
-    "clientUpdated": "Klientas atnaujintas",
-    "contactCreated": "Klientas sukurtas",
-    "contactDeleted": "Klientas ištrintas",
+    "clientUpdated": "Kontaktas atnaujintas",
+    "contactCreated": "Kontaktas sukurtas",
+    "contactDeleted": "Kontaktas ištrintas",
     "documentCreated": "Dokumentas sukurtas",
     "folderCreated": "Aplankas sukurtas",
     "invitationCanceled": "Kvietimas atšauktas",
@@ -5988,7 +5997,11 @@
       "title": "Vertimas paruoštas"
     }
   },
+  "transportErrors": {
+    "timeout": "Užklausa truko per ilgai. Bandykite dar kartą."
+  },
   "validation": {
+    "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
     "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
     "slugRequired": "Slug yra privalomas"
@@ -6184,20 +6197,18 @@
         "notOpeningConnect": "Neatsidaro? Prijunkite stella desktop",
         "notPickedUpDescription": "stella desktop gali būti nepaleista arba neprijungta prie šios paskyros. Prijunkite ją ir bandykite dar kartą.",
         "notPickedUpTitle": "stella desktop neatidarė PDF",
+        "placementAttachmentsOnly": "Šiame rodinyje rodomi PDF priedai, todėl spaudo čia padėti negalima. Pasirašykite be spaudo.",
         "placementBox": "Spaudo vieta",
-        "placementConfirm": "Atidaryti stella desktop",
-        "placementDescription": "Pasirinkite, kaip parašas bus rodomas PDF faile.",
+        "placementDrawTooLarge": "Per didelis spaudui. Atleiskite, kad būtų naudojamas didžiausias dydis.",
+        "placementDrawTooSmall": "Per mažas spaudui. Atleiskite, kad būtų naudojamas mažiausias dydis.",
         "placementHint": "Vilkite spaudą, kad jį perkeltumėte, arba jo kampą, kad pakeistumėte dydį. Kai spaudas pažymėtas, rodyklių klavišai jį perkelia, o Shift su rodyklės klavišu keičia jo dydį.",
-        "placementInvisible": "Nematomas parašas",
-        "placementInvisibleDescription": "Parašas įrašomas į failą be jokios žymos puslapiuose.",
-        "placementPageLabel": "Spaudo puslapis",
-        "placementPageOption": "{page, number} psl. iš {count, number}",
-        "placementPreview": "{page, number} psl. peržiūra",
-        "placementPreviewFailed": "Nepavyko įkelti puslapio peržiūros.",
+        "placementModeHint": "Vilkite puslapyje, kad nupieštumėte spaudą, arba spustelėkite, kad jį padėtumėte.",
+        "placementPlaceOnLastPage": "Padėti paskutiniame puslapyje",
+        "placementRedrawHint": "Vilkite spaudą, kad jį pakoreguotumėte, arba nupieškite naują bet kuriame puslapyje.",
+        "placementSignInvisible": "Pasirašyti be spaudo",
+        "placementSignVisible": "Pasirašyti su spaudu",
         "placementTitle": "Pasirašyti PDF",
         "placementTooSmall": "Šis puslapis per mažas spaudui. Pasirinkite kitą puslapį.",
-        "placementVisible": "Matomas spaudas",
-        "placementVisibleDescription": "Rėmelis puslapyje rodo, kas ir kada pasirašė.",
         "preparingDescription": "PDF ruošiamas stella desktop.",
         "readOnlyDescription": "Šis dokumentas yra tik skaitomas.",
         "signedDescription": "Parašas išsaugotas kaip {versionNumber, number} versija.",

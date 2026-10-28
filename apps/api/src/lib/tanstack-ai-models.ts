@@ -1024,19 +1024,12 @@ const createProviderTextAdapterFactory = (
         options.apiKey === undefined
           ? options.managedOpenRouterCredential
           : undefined;
-      const staticKey = env.OPENROUTER_API_KEY?.trim()
-        ? env.OPENROUTER_API_KEY
-        : undefined;
-      if (
-        options.apiKey === undefined &&
-        staticKey === undefined &&
-        managedCredential === undefined
-      ) {
+      if (options.apiKey === undefined && managedCredential === undefined) {
         throw managedProviderUnavailable("openrouter");
       }
       const key = requireCredential(
         supportedProvider,
-        apiKey ?? staticKey ?? managedCredential?.apiKey,
+        apiKey ?? managedCredential?.apiKey,
         "OPENROUTER_API_KEY",
       );
       if (options.apiKey !== undefined) {
@@ -1047,10 +1040,10 @@ const createProviderTextAdapterFactory = (
             keySource: "byok",
           });
       }
-      const credential =
-        staticKey === undefined && managedCredential !== undefined
-          ? managedCredential
-          : { type: "static" as const, apiKey: key };
+      const credential = managedCredential ?? {
+        type: "static" as const,
+        apiKey: key,
+      };
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
@@ -1091,7 +1084,13 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "google":
       return !!env.GOOGLE_GENERATIVE_AI_API_KEY;
     case "openrouter":
-      return getManagedOpenRouterConfiguration().type !== "unavailable";
+      // Whether the deployment provisions managed OpenRouter at all: any
+      // tier's credential does. Each request still resolves only its own
+      // tier's credential at dispatch, so a tier without one refuses there.
+      return Object.values(MANAGED_MODEL_TIER).some(
+        (tier) =>
+          getManagedOpenRouterConfiguration(tier).type !== "unavailable",
+      );
     case "openai":
       return !!env.OPENAI_API_KEY;
     case "anthropic":

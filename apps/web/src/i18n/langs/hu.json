@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Most",
       "currentSession": "Jelenlegi",
       "device": "Eszköz",
       "deviceOnOs": "{browser} – {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "modelRefused": "A modell megtagadta a választ",
+    "nothingFound": "Nincs találat",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
@@ -1189,7 +1192,7 @@
       "searchEveryWord": "Minden szó keresése"
     },
     "seo": {
-      "collectionName": "Stella ítélkezési gyakorlat",
+      "collectionName": "stella ítélkezési gyakorlat",
       "description": "Nyilvános ítélkezési adatbázis indexelhető bírósági határozatokkal és jogforrásokkal.",
       "homeDescription": "Nyilvános jogi adatbázis: bírósági határozatok és egységes szerkezetű jogszabályok, azonosító vagy szavak alapján kereshetők.",
       "scopedDescription": "Nyilvános ítélkezési adatbázis ({scope}), indexelhető bírósági határozatokkal és jogforrásokkal."
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "Megadva: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {A {date} napján hatályos szöveg} until {A {date} napjáig hatályos szöveg} from {A {date} napjától hatályos szöveg} other {A {date} napján hatályos szöveg}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Megadva: {date}} until {Megadva: {date} napjáig} from {Megadva: {date} napjától} other {Megadva: {date}}}",
+      "caseFileDocuments": "Az ügy iratai",
       "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
       "citedBy": "Hivatkozik rá",
       "citedDecisionPassage": "Részlet a határozatból",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {és még #} other {és még #}}"
+      "unnamed": "{count, plural, one {még #} other {még #}}"
     },
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
@@ -2210,6 +2214,7 @@
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
@@ -2468,10 +2473,10 @@
       "value": "Mező értéke"
     },
     "datePrecision": "Dátum pontossága",
-    "deleteContact": "Ügyfél törlése",
+    "deleteContact": "Kapcsolat törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
-    "editContact": "Ügyfél szerkesztése",
+    "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {
       "other": "Egyéb",
       "personal": "Személyes",
@@ -2529,6 +2534,7 @@
       "rowLabel": "Ügyfél {index}",
       "skippedDuplicateContactId": "Kihagyva: ismétlődő névjegyazonosító",
       "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
+      "skippedInFileDuplicate": "Kihagyva: a fájl egy korábbi sorát ismétli",
       "skippedInvalidRow": "Kihagyva: a sor nem felel meg az importálási szabályoknak",
       "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "Ha van cím, a cím 1. sora kötelező.",
         "display_name_required": "Nem sikerült létrehozni a megjelenítési nevet.",
+        "in_file_duplicate": "A fájl egy korábbi sorának másolata",
         "invalid_email": "Az e-mail-cím érvénytelen.",
         "invalid_phone": "A telefonszám érvénytelen.",
         "invalid_tags": "A címkéknek szöveges értékeknek kell lenniük.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
-      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
+      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
+      "warning": {
+        "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
+        "possible_in_file_duplicate": "A(z) {row}. sor lehetséges másolata; csak a név egyezik."
+      }
     },
     "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
     "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",
@@ -3295,7 +3306,6 @@
       "simple": "Az egyszerű korrektúra"
     },
     "moreFormatting": "További formázás",
-    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "nextChange": "Következő módosítás",
     "numberedList": "Számozott lista",
     "parseError": "A dokumentumot nem sikerült feldolgozni. Lehet, hogy sérült, vagy nem támogatott formátumú.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "Válasszon legalább egy szerepkört ehhez a kulcshoz.",
       "selectModelForEachRole": "Adjon hozzá szolgáltatót, és válasszon modellt minden kategóriához.",
       "selectedProvider": "{provider}",
-      "title": "AI-konfiguráció",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "Kétfaktoros hitelesítés"
       },
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
-      "wordEditShortcut": "Word-szerkesztési rövidítés",
+      "wordEditShortcut": "Monogram a Word-módosításokhoz",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",
       "wordEditShortcutPlaceholder": "pl. KJ"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "Mentett stíluskészlet",
     "sourceDocument": "Forrás DOCX",
     "stellaDescription": "A stella teljes, semleges jogi dokumentumformázása",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stíluskészletek",
     "untitledDocument": "Névtelen dokumentum"
   },
   "success": {
     "aiConfigDeleted": "AI-konfiguráció eltávolítva",
     "aiConfigUpdated": "AI-konfiguráció frissítve",
-    "clientUpdated": "Ügyfél frissítve",
-    "contactCreated": "Ügyfél létrehozva",
-    "contactDeleted": "Ügyfél törölve",
+    "clientUpdated": "Kapcsolat frissítve",
+    "contactCreated": "Kapcsolat létrehozva",
+    "contactDeleted": "Kapcsolat törölve",
     "documentCreated": "Dokumentum létrehozva",
     "folderCreated": "Mappa létrehozva",
     "invitationCanceled": "Meghívó visszavonva",
@@ -5988,7 +5997,11 @@
       "title": "A fordítás elkészült"
     }
   },
+  "transportErrors": {
+    "timeout": "A kérés túl sokáig tartott. Próbálja újra."
+  },
   "validation": {
+    "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
     "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
     "slugRequired": "A slug kötelező"
@@ -6184,20 +6197,18 @@
         "notOpeningConnect": "Nem nyílik meg? Csatlakoztassa a stella desktopot",
         "notPickedUpDescription": "Lehet, hogy a stella desktop nem fut, vagy nincs ehhez a fiókhoz csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
         "notPickedUpTitle": "A stella desktop nem nyitotta meg a PDF-et",
+        "placementAttachmentsOnly": "Ez a nézet a PDF mellékleteit mutatja, ezért ide nem helyezhető bélyegző. Írd alá bélyegző nélkül.",
         "placementBox": "A bélyegző helye",
-        "placementConfirm": "stella desktop megnyitása",
-        "placementDescription": "Válaszd ki, hogyan jelenjen meg az aláírás a PDF-ben.",
+        "placementDrawTooLarge": "Túl nagy a bélyegzőhöz. Elengedéskor a legnagyobb méretet kapja.",
+        "placementDrawTooSmall": "Túl kicsi a bélyegzőhöz. Elengedéskor a legkisebb méretet kapja.",
         "placementHint": "Húzd a bélyegzőt az áthelyezéshez, vagy a sarkát az átméretezéshez. Ha a bélyegző ki van jelölve, a nyílbillentyűk mozgatják, a Shift és egy nyílbillentyű pedig átméretezi.",
-        "placementInvisible": "Láthatatlan aláírás",
-        "placementInvisibleDescription": "Az aláírás jelölés nélkül kerül a fájlba, egyik oldalon sem látszik.",
-        "placementPageLabel": "A bélyegző oldala",
-        "placementPageOption": "{page, number}. oldal / {count, number}",
-        "placementPreview": "{page, number}. oldal előnézete",
-        "placementPreviewFailed": "Az oldal előnézetét nem sikerült betölteni.",
+        "placementModeHint": "Húzással rajzold meg a bélyegzőt az oldalon, vagy kattintással helyezd el.",
+        "placementPlaceOnLastPage": "Elhelyezés az utolsó oldalon",
+        "placementRedrawHint": "Húzd a bélyegzőt az igazításhoz, vagy rajzolj újat bármelyik oldalon.",
+        "placementSignInvisible": "Aláírás bélyegző nélkül",
+        "placementSignVisible": "Aláírás bélyegzővel",
         "placementTitle": "PDF aláírása",
         "placementTooSmall": "Ez az oldal túl kicsi a bélyegzőhöz. Válassz másik oldalt.",
-        "placementVisible": "Látható bélyegző",
-        "placementVisibleDescription": "Egy keret az oldalon mutatja, ki és mikor írta alá.",
         "preparingDescription": "A PDF előkészítése a stella desktop számára.",
         "readOnlyDescription": "Ez a dokumentum csak olvasható.",
         "signedDescription": "Az aláírás a(z) {versionNumber, number}. verzióként lett mentve.",

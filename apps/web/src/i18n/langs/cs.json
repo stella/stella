@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Nyní",
       "currentSession": "Aktuální",
       "device": "Zařízení",
       "deviceOnOs": "{browser} na {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
+    "modelRefused": "Model odmítl odpovědět",
+    "nothingFound": "Nic nenalezeno",
     "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
     "rerunAllPage": "Spustit vše znovu (tato stránka)",
     "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "Uvedeno: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znění účinné k {date}} until {Znění účinné do {date}} from {Znění účinné od {date}} other {Znění účinné k {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Uvedeno: {date}} until {Uvedeno: do {date}} from {Uvedeno: od {date}} other {Uvedeno: {date}}}",
+      "caseFileDocuments": "Dokumenty v tomto spise",
       "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "citedDecisionPassage": "Pasáž v rozhodnutí",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
+      "unnamed": "{count, plural, one {# další} few {# další} other {# dalších}}"
     },
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
@@ -2210,6 +2214,7 @@
     "moveDown": "Posunout dolů",
     "moveUp": "Posunout nahoru",
     "name": "Název",
+    "networkError": "Chyba sítě. Zkontrolujte připojení k internetu a zkuste to znovu.",
     "newMatter": "Nový spis",
     "newRow": "Nový řádek",
     "next": "Pokračovat",
@@ -2406,7 +2411,7 @@
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentů",
     "title": "Povolit přístup",
     "unverifiedApp": "Neověřená aplikace",
-    "unverifiedExplanation": "Stella neověřila, kdo tuto aplikaci vydává.",
+    "unverifiedExplanation": "stella neověřila, kdo tuto aplikaci vydává.",
     "useAnotherAccount": "Použít jiný účet",
     "verifiedPublisher": "Ověřená aplikace od {publisher}"
   },
@@ -2468,10 +2473,10 @@
       "value": "Hodnota pole"
     },
     "datePrecision": "Přesnost data",
-    "deleteContact": "Smazat klienta",
+    "deleteContact": "Smazat kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
-    "editContact": "Upravit klienta",
+    "editContact": "Upravit kontakt",
     "emailTypes": {
       "other": "Jiný",
       "personal": "Osobní",
@@ -2484,7 +2489,7 @@
     "extractProcuracao": {
       "dropZone": "Přetáhněte sem plnou moc (.docx), nebo klikněte a vyberte soubor",
       "extracting": "Zjišťujeme zmocnitele…",
-      "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
+      "fileHint": "stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
       "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
@@ -2529,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Přeskočeno: duplicitní ID kontaktu",
       "skippedDuplicateTaxId": "Přeskočeno: duplicitní daňové identifikační číslo",
+      "skippedInFileDuplicate": "Přeskočeno: opakuje dřívější řádek souboru",
       "skippedInvalidRow": "Přeskočeno: řádek nesplňuje pravidla importu",
       "skippedInvalidTaxId": "Přeskočeno: neplatné daňové identifikační číslo",
       "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "Pokud je uvedena adresa, je nutné vyplnit její první řádek.",
         "display_name_required": "Zobrazovaný název se nepodařilo vytvořit.",
+        "in_file_duplicate": "Duplikát dřívějšího řádku v tomto souboru",
         "invalid_email": "E-mailová adresa není platná.",
         "invalid_phone": "Telefonní číslo není platné.",
         "invalid_tags": "Štítky musí být textové hodnoty.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilské CPF/CNPJ (kontrolní součet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
-      "validateFailed": "Kontakty se nepodařilo zkontrolovat."
+      "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
+      "warning": {
+        "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
+        "possible_in_file_duplicate": "Možný duplikát řádku {row}; shoduje se pouze jméno."
+      }
     },
     "invalidDateOfBirth": "Zadejte platné datum narození.",
     "invalidNationalityCodes": "Zadejte platné kódy státní příslušnosti.",
@@ -3295,7 +3306,6 @@
       "simple": "Jednoduché revize"
     },
     "moreFormatting": "Další formátování",
-    "networkError": "Chyba sítě. Zkontrolujte připojení k internetu a zkuste to znovu.",
     "nextChange": "Následující změna",
     "numberedList": "Číslovaný seznam",
     "parseError": "Dokument se nepodařilo zpracovat. Může být poškozen nebo v nepodporovaném formátu.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "Vyberte pro tento klíč alespoň jednu roli.",
       "selectModelForEachRole": "Přidejte poskytovatele a pro každou kategorii vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurace AI",
       "usingDefaults": "Používá výchozí nastavení"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "Dvoufaktorové ověření"
       },
       "wordEditIdentitySaved": "Identita pro úpravy ve Wordu aktualizována",
-      "wordEditShortcut": "Zkratka pro úpravy ve Wordu",
+      "wordEditShortcut": "Iniciály pro úpravy ve Wordu",
       "wordEditShortcutDescription": "Krátká značka pro vaše iniciály u úprav ve Wordu.",
       "wordEditShortcutPlaceholder": "např. JK"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "Uložená sada stylů",
     "sourceDocument": "Zdrojový DOCX",
     "stellaDescription": "Kompletní neutrální formátování právních dokumentů stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Sady stylů",
     "untitledDocument": "Dokument bez názvu"
   },
   "success": {
     "aiConfigDeleted": "Nastavení AI odebráno",
     "aiConfigUpdated": "Nastavení AI aktualizováno",
-    "clientUpdated": "Klient aktualizován",
-    "contactCreated": "Klient vytvořen",
-    "contactDeleted": "Klient smazán",
+    "clientUpdated": "Kontakt aktualizován",
+    "contactCreated": "Kontakt vytvořen",
+    "contactDeleted": "Kontakt smazán",
     "documentCreated": "Dokument vytvořen",
     "folderCreated": "Složka vytvořena",
     "invitationCanceled": "Pozvánka zrušena",
@@ -5988,7 +5997,11 @@
       "title": "Překlad je hotový"
     }
   },
+  "transportErrors": {
+    "timeout": "Požadavek trval příliš dlouho. Zkuste to znovu."
+  },
   "validation": {
+    "invalidEmail": "Zadejte platnou e-mailovou adresu.",
     "organizationNameRequired": "Název organizace je povinný",
     "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",
     "slugRequired": "Slug je povinný"
@@ -6184,20 +6197,18 @@
         "notOpeningConnect": "Neotevírá se? Připojte stella desktop",
         "notPickedUpDescription": "stella desktop možná neběží nebo není připojený k tomuto účtu. Připojte ho a zkuste to znovu.",
         "notPickedUpTitle": "stella desktop PDF neotevřel",
+        "placementAttachmentsOnly": "Toto zobrazení ukazuje přílohy PDF, razítko sem proto umístit nelze. Podepište bez razítka.",
         "placementBox": "Umístění razítka",
-        "placementConfirm": "Otevřít stella desktop",
-        "placementDescription": "Zvolte, jak se podpis v PDF zobrazí.",
+        "placementDrawTooLarge": "Na razítko je to příliš velké. Po uvolnění se použije největší velikost.",
+        "placementDrawTooSmall": "Na razítko je to příliš malé. Po uvolnění se použije nejmenší velikost.",
         "placementHint": "Přetažením razítko přesunete, přetažením jeho rohu změníte jeho velikost. Když je razítko vybrané, šipky ho posouvají a Shift se šipkou mění jeho velikost.",
-        "placementInvisible": "Neviditelný podpis",
-        "placementInvisibleDescription": "Podpis se uloží do souboru bez značky na kterékoli stránce.",
-        "placementPageLabel": "Stránka razítka",
-        "placementPageOption": "Stránka {page, number} z {count, number}",
-        "placementPreview": "Náhled stránky {page, number}",
-        "placementPreviewFailed": "Náhled stránky se nepodařilo načíst.",
+        "placementModeHint": "Tažením po stránce nakreslete razítko, nebo ho kliknutím umístěte.",
+        "placementPlaceOnLastPage": "Umístit na poslední stránku",
+        "placementRedrawHint": "Přetažením razítko upravíte, nebo nakreslete nové na kterékoli stránce.",
+        "placementSignInvisible": "Podepsat bez razítka",
+        "placementSignVisible": "Podepsat s razítkem",
         "placementTitle": "Podepsat PDF",
         "placementTooSmall": "Tato stránka je pro razítko příliš malá. Zvolte jinou stránku.",
-        "placementVisible": "Viditelné razítko",
-        "placementVisibleDescription": "Rámeček na stránce ukazuje, kdo a kdy podepsal.",
         "preparingDescription": "Připravuje se PDF pro stella desktop.",
         "readOnlyDescription": "Tento dokument je jen pro čtení.",
         "signedDescription": "Podpis byl uložen jako verze {versionNumber, number}.",
