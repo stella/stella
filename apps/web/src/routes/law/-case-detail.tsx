@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/button";
 import { Minimize2Icon } from "@stll/ui/icons";
 
 import { useRequireAccount } from "@/components/auth/use-require-account";
+import type { DecisionReaderAIGate } from "@/components/authenticated-decision-tools";
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import {
   CASE_DECISION_PLACEMENT,
@@ -27,12 +28,15 @@ import { registerMainDecisionReader } from "@/components/inspector/main-decision
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
+import { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { useRecordOpenedLawDocument } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { createUuid } from "@/lib/uuid";
@@ -45,10 +49,10 @@ import { PublicDecisionCaseFile } from "@/routes/law/-components/public-decision
 import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
 import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
-const AuthenticatedCaseLawWorkspace = lazy(async () => {
-  const module = await import("@/components/authenticated-case-law-workspace");
+const AuthenticatedDecisionTools = lazy(async () => {
+  const module = await import("@/components/authenticated-decision-tools");
   return {
-    default: module.AuthenticatedCaseLawWorkspace,
+    default: module.AuthenticatedDecisionTools,
   };
 });
 
@@ -251,27 +255,13 @@ export function PublicDecisionViewer({
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
         {!noDocument &&
           (authStatus.isAuthenticated ? (
-            <Suspense
-              fallback={
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                  <DecisionWorkspace
-                    aiMode="gated"
-                    decision={decision}
-                    decisionId={decisionId}
-                    initialAnchorId={initialAnchorId}
-                    landingSessionId={landingSessionId}
-                  />
-                </div>
-              }
-            >
-              <AuthenticatedCaseLawWorkspace
-                decision={decision}
-                decisionId={decisionId}
-                initialAnchorId={initialAnchorId}
-                landingSessionId={landingSessionId}
-                user={authStatus.user}
-              />
-            </Suspense>
+            <MemberDecisionWorkspace
+              decision={decision}
+              decisionId={decisionId}
+              initialAnchorId={initialAnchorId}
+              landingSessionId={landingSessionId}
+              user={authStatus.user}
+            />
           ) : (
             <GuestDecisionWorkspace
               decision={decision}
@@ -285,17 +275,56 @@ export function PublicDecisionViewer({
   );
 }
 
+type DecisionReaderProps = {
+  decision: PublicCaseLawDecision;
+  decisionId: ReturnType<typeof extractId>;
+  initialAnchorId?: string | undefined;
+  landingSessionId?: string | undefined;
+};
+
+/**
+ * A member's reader mounts once and stays mounted. The member chunk arrives
+ * after the text and mounts beside it, never around it: a provider above the
+ * reader that was not there on its first render would replace the reader,
+ * and the member would lose their scroll position, focus and selection. The
+ * chunk's arrival only hands the reader its AI gate, which turns the gated
+ * offer into the member's AI on the same reader.
+ */
+const MemberDecisionWorkspace = ({
+  user,
+  ...reader
+}: DecisionReaderProps & { user: AuthenticatedUser }) => {
+  const [aiGate, setAIGate] = useState<DecisionReaderAIGate | null>(null);
+
+  return (
+    <AuthenticatedUserProvider user={user}>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <DecisionWorkspace
+          {...reader}
+          {...(aiGate === null
+            ? { aiMode: DECISION_AI_MODE.gated }
+            : {
+                aiMode: DECISION_AI_MODE.enabled,
+                ensureAIAvailable: aiGate.ensureAIAvailable,
+              })}
+        />
+      </div>
+      <Suspense fallback={null}>
+        <AuthenticatedDecisionTools
+          decisionId={reader.decisionId}
+          ref={setAIGate}
+        />
+      </Suspense>
+    </AuthenticatedUserProvider>
+  );
+};
+
 const GuestDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
   landingSessionId,
-}: {
-  decision: PublicCaseLawDecision;
-  decisionId: ReturnType<typeof extractId>;
-  initialAnchorId?: string | undefined;
-  landingSessionId?: string | undefined;
-}) => {
+}: DecisionReaderProps) => {
   const ensureAccount = useRequireAccount();
 
   return (

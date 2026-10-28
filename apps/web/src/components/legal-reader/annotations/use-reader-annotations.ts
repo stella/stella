@@ -51,8 +51,9 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
 /** Guest migration is bounded so signing in never opens a request flood. */
@@ -135,7 +136,7 @@ export const useReaderAnnotations = (
   });
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, `useReaderAnnotations.${target.type}:query`);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
@@ -184,6 +185,7 @@ export const useReaderAnnotations = (
     const claimed = claimGuestAnnotations(storage, migrationOwner);
     if (Result.isError(claimed)) {
       captureGuestClaimFailure(claimed.error);
+
       notifyUserError(
         claimed.error,
         t("legalReader.annotations.guestMigrationFailed"),

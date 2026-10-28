@@ -24,8 +24,19 @@ import {
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 
-const openDatabase = (client: SQL, logger: Logger = queryCountLogger) =>
-  createDatabase({ client, relations: databaseRelations, logger });
+const openDatabase = (client: SQL, logger?: Logger) =>
+  createDatabase({
+    client,
+    relations: databaseRelations,
+    logger: {
+      logQuery: (query, params) => {
+        queryCountLogger.logQuery(query, params);
+        if (logger !== undefined && logger !== queryCountLogger) {
+          logger.logQuery(query, params);
+        }
+      },
+    },
+  });
 
 export type GatedTestDb = ReturnType<typeof openDatabase>;
 
@@ -98,7 +109,7 @@ type OpenClientOptions = {
   };
 };
 
-type GatedTestClientScope = {
+export type GatedTestClientScope = {
   /** Opens a client with a pool of its own, closed when the scope ends. */
   readonly openClient: (options?: OpenClientOptions) => GatedTestClient;
 };

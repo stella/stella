@@ -31,7 +31,7 @@ Message access follows the parent's current author and sharing scope.
 
 ```text
 legal_reader_answer_messages.id                      pUuid        pk,not null       reader-answers.ts:104
-legal_reader_answer_messages.answer_id               safeUuid     not null          reader-answers.ts:105
+legal_reader_answer_messages.answer_id               safeUuid     fk,not null       reader-answers.ts:105
 legal_reader_answer_messages.sequence                integer      not null          reader-answers.ts:107  Stable conversational order assigned while the parent answer is locked.
 legal_reader_answer_messages.role                    text         not null          reader-answers.ts:108
 legal_reader_answer_messages.content                 text         not null          reader-answers.ts:109

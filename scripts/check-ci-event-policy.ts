@@ -262,14 +262,10 @@ const checkCompilerProofPolicy = ({
 }: CheckCompilerProofPolicyOptions) => {
   const problems: string[] = [];
   const compilerProof = job.steps?.some((step) =>
-    /\b(?:check:typecheck-parity|typecheck-parity\.ts|stll-typecheck-parity|typecheck-command-probe(?:\.sh|\.ts))\b/u.test(
-      step.run ?? "",
-    ),
+    /\btypecheck-command-probe\.(?:sh|ts)\b/u.test(step.run ?? ""),
   );
   if (compilerProof && eventPolicy !== "dispatch-only") {
-    problems.push(
-      `${key}: compiler parity and probes require dispatch-only policy`,
-    );
+    problems.push(`${key}: compiler probes require dispatch-only policy`);
   }
   if (
     eventPolicy === "dispatch-only" &&

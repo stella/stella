@@ -15,6 +15,8 @@ import type {
   CitedDecisionTarget as ReaderCitedDecisionTarget,
 } from "@stll/decision-reader/reader-types";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { PopoverClose } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { useIsMobile } from "@stll/ui/use-mobile";
 import { cn } from "@stll/ui/utils";
@@ -24,8 +26,9 @@ import {
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
+import type { CitationOccurrences } from "@/components/legal-reader/citation-occurrences.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
@@ -41,7 +44,8 @@ import { decisionCardSummaryOptions } from "@/features/case-law/queries/decision
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
-import { useQueryView } from "@/lib/use-query-view";
+import { isPublicLawMissError } from "@/lib/public-law-api";
+import { queryView } from "@/lib/query-view.logic";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -73,9 +77,18 @@ type CitedDecisionTarget = Pick<
   | "slug"
 >;
 
+/** The decision's other mentions in the text the reader is in. */
+type CitationOccurrenceNavigation = {
+  occurrences: CitationOccurrences;
+  /** The paragraph holding the mention whose card is open. */
+  currentBlockId: string;
+  onJump: (anchorId: string) => void;
+};
+
 type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   decision: CitedDecisionTarget;
   presentation?: DecisionCitationPresentation | undefined;
+  occurrences?: CitationOccurrenceNavigation | undefined;
   /**
    * Text that already names the decision, drawn as the trigger itself in
    * place of a court badge that would repeat it.
@@ -181,6 +194,7 @@ export const CitedDecisionChip = ({
   passage,
   treatment,
   presentation,
+  occurrences,
 }: CitedDecisionChipProps) => {
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
@@ -225,7 +239,8 @@ export const CitedDecisionChip = ({
   };
 
   return (
-    <DecisionCitationChip
+    <CitationChip
+      kind="decision"
       decision={{
         decisionId: decision.id,
         court: decision.court,
@@ -238,7 +253,15 @@ export const CitedDecisionChip = ({
       label={label}
       citingText={citingText}
       onOpen={openDecision}
-      preview={<CitedDecisionCard decision={decision} treatment={treatment} />}
+      preview={
+        <>
+          <CitedDecisionCard decision={decision} treatment={treatment} />
+          {occurrences !== undefined &&
+            occurrences.occurrences.mentions > 1 && (
+              <CitationOccurrenceLinks {...occurrences} />
+            )}
+        </>
+      }
       passage={
         passage !== undefined ? (
           <CitedDecisionPreview passage={passage} />
@@ -259,7 +282,7 @@ export const CitedDecisionCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
-  const view = useQueryView(read);
+  const view = queryView(read);
 
   if (view.type === "pending") {
     return (
@@ -271,6 +294,9 @@ export const CitedDecisionCard = ({
     );
   }
   if (view.type !== "items") {
+    // A miss is an answer, not a failure: the public corpus holds no such
+    // decision, so the card says what the citation itself established.
+    const missing = view.type === "error" && isPublicLawMissError(view.error);
     return (
       <div className="flex flex-col gap-2">
         <BidiText as="div" className="text-sm font-medium">
@@ -279,7 +305,13 @@ export const CitedDecisionCard = ({
         <BidiText as="div" className="text-sm">
           {knownDecision.caseNumber}
         </BidiText>
-        <QueryViewFeedback view={view} />
+        {missing ? (
+          <span className="text-muted-foreground text-xs">
+            {t("caseLaw.citation.notInStella")}
+          </span>
+        ) : (
+          <QueryViewFeedback view={view} />
+        )}
       </div>
     );
   }
@@ -347,6 +379,69 @@ export const CitedDecisionCard = ({
           <BidiText as="span">{decision.publication}</BidiText>
         )}
       </div>
+    </div>
+  );
+};
+
+/**
+ * Where else the text names the decision, by paragraph. The reader is already
+ * in one of them, so the card repeats none of their words and only offers the
+ * way to the others.
+ */
+const CitationOccurrenceLinks = ({
+  occurrences: { mentions, paragraphs },
+  currentBlockId,
+  onJump,
+}: CitationOccurrenceNavigation) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-1 border-t pt-2 text-xs">
+      <span className="me-1">
+        {t("caseLaw.citation.mentionsInDecision", { count: mentions })}
+      </span>
+      {paragraphs.map((paragraph) => {
+        const mark =
+          paragraph.paragraphNumber === null
+            ? t("caseLaw.citation.mentionMark", {
+                number: format.number(paragraph.firstMention),
+              })
+            : t("caseLaw.citation.paragraphMark", {
+                paragraph: format.number(paragraph.paragraphNumber),
+              });
+        if (paragraph.blockId === currentBlockId) {
+          return (
+            <span
+              aria-current="location"
+              className="text-foreground px-2 font-medium whitespace-nowrap"
+              key={paragraph.blockId}
+            >
+              {mark}
+            </span>
+          );
+        }
+        return (
+          <PopoverClose
+            aria-label={
+              paragraph.paragraphNumber === null
+                ? t("caseLaw.citation.goToMention", {
+                    number: format.number(paragraph.firstMention),
+                  })
+                : t("caseLaw.citation.goToParagraph", {
+                    paragraph: format.number(paragraph.paragraphNumber),
+                  })
+            }
+            key={paragraph.blockId}
+            onClick={() => {
+              onJump(paragraph.anchorId);
+            }}
+            render={<Button size="xs" variant="muted" />}
+          >
+            {mark}
+          </PopoverClose>
+        );
+      })}
     </div>
   );
 };

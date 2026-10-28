@@ -394,7 +394,7 @@ const searchDecisions = createSafeBoundedPublicHandler(
     body: searchDecisionsBodySchema,
     response: searchDecisionsResponseSchema,
   },
-  async function* ({ body }) {
+  async function* ({ body, request }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -402,6 +402,7 @@ const searchDecisions = createSafeBoundedPublicHandler(
             body,
             caseLawDb: caseLawPublicReadDb,
             observer: "unobserved",
+            signal: request.signal,
           }),
       ),
     );
