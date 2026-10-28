@@ -156,8 +156,7 @@ export const DESKTOP_RUNNER_POLICY_REASONS = [
   "unfoldable_chunk",
   "run_limit",
 ] as const;
-type DesktopRunnerPolicyReason =
-  (typeof DESKTOP_RUNNER_POLICY_REASONS)[number];
+type DesktopRunnerPolicyReason = (typeof DESKTOP_RUNNER_POLICY_REASONS)[number];
 
 export type DesktopRunnerClose =
   | (typeof DESKTOP_RUNNER_CLOSE)[keyof typeof DESKTOP_RUNNER_CLOSE]
