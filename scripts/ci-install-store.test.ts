@@ -514,7 +514,7 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
   const save = steps.find(
     (entry) =>
       typeof entry["uses"] === "string" &&
-      entry["uses"].startsWith("actions/cache/save@"),
+      entry["uses"] === "$/.github/actions/ci-store-save",
   );
   if (save === undefined) {
     expect.unreachable("Missing main-only ci-install cache save");
@@ -541,7 +541,7 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     `\${{ steps.install-time.outputs.milliseconds }}`,
   );
   expect(restore["uses"]).toMatch(/^actions\/cache\/restore@[0-9a-f]{40}/u);
-  expect(save["uses"]).toMatch(/^actions\/cache\/save@[0-9a-f]{40}/u);
+  expect(save["uses"]).toBe("$/.github/actions/ci-store-save");
   expect(save["continue-on-error"]).toBe(true);
   expect(restoreInputs).toEqual({
     path: `\${{ steps.identity.outputs.store }}`,
