@@ -1,12 +1,12 @@
-export const matterMenuLifecycle = (isArchived: boolean) =>
+export const matterMenuLifecycle = (isArchived: boolean, canUpdate: boolean) =>
   isArchived
     ? ({
-        action: "unarchive",
+        action: canUpdate ? "unarchive" : "none",
         editing: "read-only",
         deletion: "unarchive-first",
       } as const)
     : ({
-        action: "archive",
+        action: canUpdate ? "archive" : "none",
         editing: "editable",
         deletion: "allowed",
       } as const);

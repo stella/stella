@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import {
   and,
+  count,
   eq,
   inArray,
   isNull,
@@ -12,13 +13,18 @@ import {
 import * as v from "valibot";
 
 import { member, user } from "@/api/db/auth-schema";
-import { entities, workspaceMembers } from "@/api/db/schema";
+import {
+  entities,
+  workspaceMembers,
+  workspaces as workspaceTable,
+} from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 const config = {
@@ -39,98 +45,112 @@ const readWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
     const organizationId = session.activeOrganizationId;
-    const { result, entityAggregates, memberRows } = yield* Result.await(
-      safeDb(async (tx) => {
-        const workspaceRows = await readWorkspaceListRows({
-          tx,
-          organizationId,
-          status: query.status ?? "active",
-          limit: LIMITS.workspacesCount,
-        });
+    const { result, creationCapacity, entityAggregates, memberRows } =
+      yield* Result.await(
+        safeDb(async (tx) => {
+          const [workspaceRows, countRows] = await Promise.all([
+            readWorkspaceListRows({
+              tx,
+              organizationId,
+              status: query.status ?? "active",
+              limit: LIMITS.workspacesCount,
+            }),
+            tx
+              .select({ total: count() })
+              .from(workspaceTable)
+              .where(eq(workspaceTable.organizationId, organizationId)),
+          ]);
+          const capacityDecision = workspaceCreationCapacity(
+            countRows.at(0)?.total ?? 0,
+          );
 
-        const wsIds = workspaceRows.map((w) => brandPersistedWorkspaceId(w.id));
+          const wsIds = workspaceRows.map((w) =>
+            brandPersistedWorkspaceId(w.id),
+          );
 
-        if (wsIds.length === 0) {
+          if (wsIds.length === 0) {
+            return {
+              result: workspaceRows,
+              creationCapacity: capacityDecision,
+              entityAggregates: [],
+              memberRows: [],
+            };
+          }
+
+          const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
+
+          const openTaskCondition = and(
+            eq(entities.kind, "task"),
+            or(
+              notInArray(entities.status, closedStatuses),
+              isNull(entities.status),
+            ),
+          );
+
+          const [aggregateRows, members] = await Promise.all([
+            tx
+              .select({
+                workspaceId: entities.workspaceId,
+                entityCount: sql<number>`count(*)::int`,
+                openTaskCount: sql<number>`count(*) filter (where ${openTaskCondition})::int`,
+                nextDeadline: sql<
+                  string | null
+                >`min(${entities.dueDate}) filter (where ${openTaskCondition})`,
+              })
+              .from(entities)
+              .where(inArray(entities.workspaceId, wsIds))
+              .groupBy(entities.workspaceId),
+            tx
+              .select({
+                workspaceId: workspaceMembers.workspaceId,
+                userId: workspaceMembers.userId,
+                userEmail: user.email,
+                userName: user.name,
+                userImage: user.image,
+                lastActivity: max(entities.updatedAt),
+              })
+              .from(workspaceMembers)
+              .innerJoin(
+                member,
+                and(
+                  eq(member.userId, workspaceMembers.userId),
+                  eq(member.organizationId, organizationId),
+                ),
+              )
+              .innerJoin(user, eq(user.id, workspaceMembers.userId))
+              .leftJoin(
+                entities,
+                and(
+                  eq(entities.workspaceId, workspaceMembers.workspaceId),
+                  eq(entities.lastEditedBy, workspaceMembers.userId),
+                ),
+              )
+              .where(inArray(workspaceMembers.workspaceId, wsIds))
+              .groupBy(
+                workspaceMembers.workspaceId,
+                workspaceMembers.userId,
+                user.email,
+                user.name,
+                user.image,
+              )
+              .orderBy(
+                workspaceMembers.workspaceId,
+                sql`${max(entities.updatedAt)} DESC NULLS LAST`,
+                user.name,
+              )
+              // Membership writes cap each workspace at workspaceMembersCount, so
+              // this bound holds every member of every workspace on the page.
+              .limit(wsIds.length * LIMITS.workspaceMembersCount),
+          ]);
+
           return {
             result: workspaceRows,
-            entityAggregates: [],
-            memberRows: [],
+            creationCapacity: capacityDecision,
+            entityAggregates: aggregateRows,
+            memberRows: members,
           };
-        }
-
-        const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
-
-        const openTaskCondition = and(
-          eq(entities.kind, "task"),
-          or(
-            notInArray(entities.status, closedStatuses),
-            isNull(entities.status),
-          ),
-        );
-
-        const [aggregateRows, members] = await Promise.all([
-          tx
-            .select({
-              workspaceId: entities.workspaceId,
-              entityCount: sql<number>`count(*)::int`,
-              openTaskCount: sql<number>`count(*) filter (where ${openTaskCondition})::int`,
-              nextDeadline: sql<
-                string | null
-              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`,
-            })
-            .from(entities)
-            .where(inArray(entities.workspaceId, wsIds))
-            .groupBy(entities.workspaceId),
-          tx
-            .select({
-              workspaceId: workspaceMembers.workspaceId,
-              userId: workspaceMembers.userId,
-              userEmail: user.email,
-              userName: user.name,
-              userImage: user.image,
-              lastActivity: max(entities.updatedAt),
-            })
-            .from(workspaceMembers)
-            .innerJoin(
-              member,
-              and(
-                eq(member.userId, workspaceMembers.userId),
-                eq(member.organizationId, organizationId),
-              ),
-            )
-            .innerJoin(user, eq(user.id, workspaceMembers.userId))
-            .leftJoin(
-              entities,
-              and(
-                eq(entities.workspaceId, workspaceMembers.workspaceId),
-                eq(entities.lastEditedBy, workspaceMembers.userId),
-              ),
-            )
-            .where(inArray(workspaceMembers.workspaceId, wsIds))
-            .groupBy(
-              workspaceMembers.workspaceId,
-              workspaceMembers.userId,
-              user.email,
-              user.name,
-              user.image,
-            )
-            .orderBy(
-              workspaceMembers.workspaceId,
-              sql`${max(entities.updatedAt)} DESC NULLS LAST`,
-              user.name,
-            )
-            // Membership writes cap each workspace at workspaceMembersCount, so
-            // this bound holds every member of every workspace on the page.
-            .limit(wsIds.length * LIMITS.workspaceMembersCount),
-        ]);
-
-        return {
-          result: workspaceRows,
-          entityAggregates: aggregateRows,
-          memberRows: members,
-        };
-      }),
-    );
+        }),
+      );
 
     const entityAggregateMap = new Map(
       entityAggregates.map((aggregate) => [aggregate.workspaceId, aggregate]),
@@ -193,7 +213,7 @@ const readWorkspaces = createSafeRootHandler(
       };
     });
 
-    return Result.ok({ workspaces });
+    return Result.ok({ creationCapacity, workspaces });
   },
 );
 

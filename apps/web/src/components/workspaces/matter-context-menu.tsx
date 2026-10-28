@@ -38,6 +38,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -68,6 +69,7 @@ type MatterMenuBaseCallbacks = {
   // Personal matters are creator-only until promoted; the backend
   // rejects member adds with 400, so hide the affordance here.
   isPersonal: boolean;
+  canUpdate: boolean;
 };
 
 export type MatterMenuCallbacks =
@@ -87,7 +89,7 @@ export type MatterMenuCallbacks =
  */
 export const MatterMenuItems = (props: MatterMenuCallbacks) => {
   const t = useTranslations();
-  const lifecycle = matterMenuLifecycle(props.isArchived);
+  const lifecycle = matterMenuLifecycle(props.isArchived, props.canUpdate);
 
   return (
     <>
@@ -126,7 +128,7 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
         {props.isPinned ? t("common.unpin") : t("common.pin")}
       </MenuItem>
       <MenuSeparator />
-      {props.isArchived && (
+      {lifecycle.action === "unarchive" && (
         <MenuItem onClick={props.onUnarchive}>
           <ArchiveRestoreIcon />
           {t("workspaces.unarchiveMatter")}
@@ -235,6 +237,7 @@ export const useMatterActions = (
   const unarchiveWorkspace = useUnarchiveWorkspace();
   const archiveWorkspace = useArchiveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
+  const canUpdate = usePermissions({ workspace: ["update"] });
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -301,6 +304,7 @@ export const useMatterActions = (
   };
 
   const base = {
+    canUpdate,
     isPersonal: !target.client,
     isPinned,
     onAddMember: () => setAddMemberOpen(true),

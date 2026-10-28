@@ -3,7 +3,6 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
@@ -228,9 +227,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     return <QueryViewFeedback view={dataView} />;
   }
 
-  const isLimitReached =
-    data.workspaces.length >= WORKSPACES_PER_ORGANIZATION_MAX;
-  if (isLimitReached) {
+  if (!data.creationCapacity.canCreate) {
     return null;
   }
 

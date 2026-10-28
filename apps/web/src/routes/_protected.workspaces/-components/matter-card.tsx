@@ -33,6 +33,8 @@ import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
 
+import { matterCardPreviewEnabled } from "./matter-card.logic";
+
 type OverviewData = NonNullable<
   Awaited<
     ReturnType<
@@ -68,7 +70,7 @@ export const MatterCard = ({
 
   const previewQuery = useQuery({
     ...overviewOptions(workspace.id),
-    enabled: previewEnabled,
+    enabled: matterCardPreviewEnabled(workspace.status, previewEnabled),
   });
   const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
