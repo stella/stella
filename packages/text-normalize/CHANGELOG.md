@@ -1,5 +1,11 @@
 # @stll/text-normalize
 
+## 0.4.0
+
+### Minor Changes
+
+- [#7056](https://github.com/stella/stella/pull/7056) [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `createSearchQueryMatcher` and `filterBySearchQuery` at `@stll/text-normalize/search-query-matcher`: the client-side match for user-typed queries. Both sides fold through `foldSearchMatchText`, so case, accents, `ß`/`ł`/`ø`, ligatures and Arabic variants are ignored the same way in every locale.
+
 ## 0.3.0
 
 ### Minor Changes

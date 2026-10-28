@@ -250,7 +250,9 @@ const inviteIntoOrganization = async ({
 
 /** Whether an OAuth access token opens an MCP request context. */
 const opensMcpContext = async (accessToken: string): Promise<boolean> => {
-  const session = await authenticateMcpRequest(accessToken);
+  const session = await authenticateMcpRequest(accessToken, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   if (session.isErr()) {
     return false;
   }

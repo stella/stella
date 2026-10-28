@@ -50,6 +50,10 @@ import {
   statuteSitemapShardQuery,
 } from "@/api/handlers/legislation/sitemap";
 import {
+  DECISION_DATE_BANDS,
+  type DecisionDateBand,
+} from "@/api/lib/case-law/decision-date-order";
+import {
   decisionPageSql,
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
@@ -125,11 +129,20 @@ const systemAuditPurgeCutoff = new Date(
     SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS,
 );
 
-/** One browse walk per order: each direction commits its own access path. */
+/**
+ * One browse walk per order and date band: each direction commits the access
+ * path of both ranges it reads.
+ */
 const DECISION_LIST_PLAN_IDS = {
-  newest: "case-law.decisions-list",
-  oldest: "case-law.decisions-list-oldest",
-} as const satisfies Record<DecisionListSort, string>;
+  newest: {
+    dated: "case-law.decisions-list",
+    undated: "case-law.decisions-list-undated",
+  },
+  oldest: {
+    dated: "case-law.decisions-list-oldest",
+    undated: "case-law.decisions-list-oldest-undated",
+  },
+} as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
@@ -307,21 +320,24 @@ export const QUERY_PLAN_REGISTRY = [
     },
     contract: planContracts["legislation.sitemap-index-read"],
   },
-  ...DECISION_LIST_SORTS.map((sort) => ({
-    id: DECISION_LIST_PLAN_IDS[sort],
-    class: "page" as const,
-    role: "public-law-reader" as const,
-    build: (tx: Transaction) =>
-      listDecisionsPageQuery({
-        cursor: undefined,
-        limit: LIMITS.caseLawSearchPageSizeDefault,
-        query: { country: sampleCountry },
-        sort,
-        tx,
-      }),
-    seed: "case-law" as const,
-    contract: planContracts[DECISION_LIST_PLAN_IDS[sort]],
-  })),
+  ...DECISION_LIST_SORTS.flatMap((sort) =>
+    DECISION_DATE_BANDS.map((band) => ({
+      id: DECISION_LIST_PLAN_IDS[sort][band],
+      class: "page" as const,
+      role: "public-law-reader" as const,
+      build: (tx: Transaction) =>
+        listDecisionsPageQuery({
+          band,
+          position: undefined,
+          take: LIMITS.caseLawSearchPageSizeDefault + 1,
+          query: { country: sampleCountry },
+          sort,
+          tx,
+        }),
+      seed: "case-law" as const,
+      contract: planContracts[DECISION_LIST_PLAN_IDS[sort][band]],
+    })),
+  ),
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
     class: "point",
@@ -688,6 +704,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals]: {
     type: "registered",
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary]: {
+    type: "excluded",
+    reason:
+      "SECURITY DEFINER hides the singleton lookup from EXPLAIN; coverage-summary.db.test.ts checks the one-statement budget at two corpus sizes and policy revocation.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",

@@ -4,6 +4,7 @@ import {
   type Ref,
   useCallback,
   useId,
+  useState,
 } from "react";
 
 import { Link, useLocation } from "@tanstack/react-router";
@@ -12,6 +13,8 @@ import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -31,8 +34,6 @@ import {
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
-import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
-import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
 import {
   useFormatter,
@@ -96,16 +97,7 @@ const SOURCE_COLUMNS = [
   { key: "completeness", width: "14%" },
 ] as const satisfies readonly TableColumn[];
 
-/** Court, decisions, new in seven days, last updated. */
-const COURT_COLUMNS = [
-  { key: "court", width: "46%" },
-  { key: "decisions", width: "18%" },
-  { key: "newLastWeek", width: "18%" },
-  { key: "lastUpdated", width: "18%" },
-] as const satisfies readonly TableColumn[];
-
 const SOURCE_COLUMN_COUNT = SOURCE_COLUMNS.length;
-const COURT_COLUMN_COUNT = COURT_COLUMNS.length;
 
 /** The fixed column layout every table on the page shares. */
 const TABLE_CLASS = "table-fixed";
@@ -172,7 +164,11 @@ export const CaseLawCoveragePage = ({
       </CoverageHeading>
 
       <Hero>
-        <Headline>{format.number(coverage.totals.searchable)}</Headline>
+        <Headline>
+          {coverage.totals.searchable === null
+            ? NO_VALUE
+            : format.number(coverage.totals.searchable)}
+        </Headline>
         <CoverageGlobe countries={coverage.countries} />
       </Hero>
 
@@ -188,71 +184,54 @@ export const CaseLawCoveragePage = ({
  * lead read immediately; only the numbers and the rows shimmer, so the layout
  * the reader lands on is the one that stays.
  */
-export const CaseLawCoveragePending = () => {
-  const t = useTranslations();
+export const CaseLawCoveragePending = () => (
+  <CoverageLayout>
+    <CoverageHeading>
+      <Skeleton className="h-3 w-48" />
+    </CoverageHeading>
 
-  return (
-    <CoverageLayout>
-      <CoverageHeading>
-        <Skeleton className="h-3 w-48" />
-      </CoverageHeading>
+    <Hero>
+      <Headline>
+        <Skeleton className="h-16 w-80" />
+      </Headline>
+      <Skeleton
+        className="rounded-full"
+        style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
+      />
+      <div className="flex flex-col gap-2">
+        {PENDING_ROW_KEYS.map((row) => (
+          <Skeleton className="h-4 w-44" key={row} />
+        ))}
+      </div>
+    </Hero>
 
-      <Hero>
-        <Headline>
-          <Skeleton className="h-16 w-80" />
-        </Headline>
-        <Skeleton
-          className="rounded-full"
-          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE }}
-        />
-        <div className="flex flex-col gap-2">
-          {PENDING_ROW_KEYS.map((row) => (
-            <Skeleton className="h-4 w-44" key={row} />
-          ))}
-        </div>
-      </Hero>
-
-      {PENDING_SECTION_KEYS.map((section) => (
-        <CountryCard
-          header={
-            <>
-              <Skeleton className="h-5 w-32" />
-              <Skeleton className="h-5 w-20 rounded-full" />
-            </>
-          }
-          key={section}
-        >
-          <Table className={TABLE_CLASS}>
-            <TableColumns columns={SOURCE_COLUMNS} />
-            <SourcesTableHead />
-            <TableBody>
-              {PENDING_ROW_KEYS.map((row) => (
-                <TableRow key={row}>
-                  <TableCell colSpan={SOURCE_COLUMN_COUNT}>
-                    <Skeleton className="h-4 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
-            <TableColumns columns={COURT_COLUMNS} />
-            <CourtsTableHead />
-            <TableBody>
-              {PENDING_ROW_KEYS.map((row) => (
-                <TableRow key={row}>
-                  <TableCell colSpan={COURT_COLUMN_COUNT}>
-                    <Skeleton className="h-4 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </TableBlock>
-        </CountryCard>
-      ))}
-    </CoverageLayout>
-  );
-};
+    {PENDING_SECTION_KEYS.map((section) => (
+      <CountryCard
+        header={
+          <>
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+          </>
+        }
+        key={section}
+      >
+        <Table className={TABLE_CLASS}>
+          <TableColumns columns={SOURCE_COLUMNS} />
+          <SourcesTableHead />
+          <TableBody>
+            {PENDING_ROW_KEYS.map((row) => (
+              <TableRow key={row}>
+                <TableCell colSpan={SOURCE_COLUMN_COUNT}>
+                  <Skeleton className="h-4 w-full" />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CountryCard>
+    ))}
+  </CoverageLayout>
+);
 
 // The shell bounds the page's height, so the content scrolls inside it rather
 // than moving the document. `ScrollArea` owns that scrollbar: a raw overflow
@@ -453,26 +432,6 @@ const Delta = ({ value }: { value: number | null }) => {
   );
 };
 
-type TableBlockProps = PropsWithChildren<{
-  title: string;
-}>;
-
-/** A table under its own heading, outside the caption the primitive owns. */
-const TableBlock = ({ children, title }: TableBlockProps) => {
-  const headingId = useId();
-
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium" id={headingId}>
-        {title}
-      </h3>
-      <Table aria-labelledby={headingId} className={TABLE_CLASS}>
-        {children}
-      </Table>
-    </div>
-  );
-};
-
 type CountryCardProps = PropsWithChildren<{
   /** The section's fragment, so a link from elsewhere can land on one country. */
   anchor?: string;
@@ -482,9 +441,7 @@ type CountryCardProps = PropsWithChildren<{
 }>;
 
 /**
- * One country: its name and state on the rim, its tables inside, one under
- * the other. Side by side, a source's name wraps to three lines and the
- * newest court's date is cut off before the width they would need.
+ * One country, with its name and state above the source and court rows.
  */
 const CountryCard = ({
   anchor,
@@ -562,9 +519,6 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
       headingId={headingId}
     >
       <SourcesTable sources={country.sources} />
-      {country.availability === "searchable" && (
-        <CourtsTable country={country.country} courts={country.courts} />
-      )}
     </CountryCard>
   );
 };
@@ -645,106 +599,93 @@ const SourcesTable = ({
   sources: readonly CaseLawCoverageSource[];
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const relativeTime = useRelativeTime();
 
   return (
     // No heading above it, so the table names itself for a screen reader.
     <Table aria-label={t("common.source")} className={TABLE_CLASS}>
       <TableColumns columns={SOURCE_COLUMNS} />
       <SourcesTableHead />
-      <TableBody>
-        {sources.map((source) => (
-          <TableRow key={source.adapterKey}>
-            <TableHead
-              className={"text-foreground h-auto font-normal whitespace-normal"}
-              scope="row"
-            >
-              <a
-                className="decoration-border underline underline-offset-2 hover:decoration-current"
-                href={sanitizeHref(source.publicHomeUrl)}
-                rel="noreferrer"
-              >
-                <bdi>{source.name}</bdi>
-              </a>
-              <SourceCoverageDetails source={source} />
-            </TableHead>
-            <TableCell className="text-end tabular-nums">
-              {source.storedDecisions === null
-                ? NO_VALUE
-                : format.number(source.storedDecisions)}
-            </TableCell>
-            <TableCell>
-              <CaseLawHealthSignal className="text-sm" health={source.health} />
-            </TableCell>
-            <TableCell className={"text-muted-foreground text-end"}>
-              {source.lastSyncAt === null
-                ? NO_VALUE
-                : relativeTime(source.lastSyncAt)}
-            </TableCell>
-            <TableCell className={"text-end"}>
-              <Delta value={source.addedLastWeek} />
-            </TableCell>
-            <TableCell className={"whitespace-normal"}>
-              <SourceCompleteness completeness={source.completeness} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
+      {sources.map((source) => (
+        <SourceRows key={source.adapterKey} source={source} />
+      ))}
     </Table>
   );
 };
 
-const SourceCoverageDetails = ({
-  source,
-}: {
-  source: CaseLawCoverageSource;
-}) => {
+const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
   const t = useTranslations();
-  const formatter = useFormatter();
-  const years =
-    source.decisionYearFrom === null || source.decisionYearTo === null
-      ? NO_VALUE
-      : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
-  // An unreviewed source states nothing about gaps rather than a line saying
-  // it cannot; unknown is still never shown as "no gaps recorded".
-  let gaps: string | null;
-  switch (source.knownGaps.type) {
-    case "not_reconciled":
-      gaps = null;
-      break;
-    case "reconciled": {
-      // Decisions and listing periods are different units: each keeps its
-      // own label rather than adding into one number.
-      const { missing, unlistedSlices } = source.knownGaps.summary;
-      const parts = [
-        ...(missing > 0
-          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
-          : []),
-        ...(unlistedSlices > 0
-          ? [
-              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
-            ]
-          : []),
-      ];
-      gaps =
-        parts.length === 0
-          ? t("caseLaw.coverage.noGapsRecorded")
-          : parts.join(" · ");
-      break;
-    }
-    default:
-      source.knownGaps satisfies never;
-      return panic("Unhandled case-law source gap state");
-  }
+  const format = useFormatter();
+  const relativeTime = useRelativeTime();
+  const [expanded, setExpanded] = useState(false);
+  const courtsId = useId();
+  const toggleId = useId();
+  const sourceNameId = useId();
 
   return (
-    <span className="text-muted-foreground mt-1 block text-xs">
-      {t("caseLaw.coverage.decisionYears")}: {years} ·{" "}
-      {t("caseLaw.coverage.pendingTexts")}:{" "}
-      {formatter.number(source.pendingTextCount)}
-      {gaps !== null && ` · ${gaps}`}
-    </span>
+    <>
+      <TableBody>
+        <TableRow>
+          <TableHead
+            className={"text-foreground h-auto font-normal whitespace-normal"}
+            scope="row"
+          >
+            <Button
+              aria-expanded={expanded}
+              aria-controls={courtsId}
+              aria-label={t("common.court")}
+              aria-labelledby={`${toggleId} ${sourceNameId}`}
+              id={toggleId}
+              className="me-1"
+              onClick={() => setExpanded((value) => !value)}
+              size="icon-sm"
+              variant="ghost"
+            >
+              {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            </Button>
+            <a
+              className="decoration-border underline underline-offset-2 hover:decoration-current"
+              href={sanitizeHref(source.publicHomeUrl)}
+              id={sourceNameId}
+              rel="noreferrer"
+            >
+              <bdi>{source.name}</bdi>
+            </a>
+          </TableHead>
+          <TableCell className="text-end tabular-nums">
+            {format.number(source.publishedDecisions)}
+          </TableCell>
+          <TableCell>
+            <CaseLawHealthSignal className="text-sm" health={source.health} />
+          </TableCell>
+          <TableCell className={"text-muted-foreground text-end"}>
+            {source.lastSyncAt === null
+              ? NO_VALUE
+              : relativeTime(source.lastSyncAt)}
+          </TableCell>
+          <TableCell className={"text-end"}>
+            <Delta value={source.addedLastWeek} />
+          </TableCell>
+          <TableCell className={"whitespace-normal"}>
+            <SourceCompleteness completeness={source.completeness} />
+          </TableCell>
+        </TableRow>
+      </TableBody>
+      <TableBody hidden={!expanded} id={courtsId}>
+        {source.courts.map((row) => (
+          <TableRow key={row.court ?? "other-courts"}>
+            <TableHead className="font-normal whitespace-normal" scope="row">
+              <span className="ps-8">
+                {row.court ?? t("caseLaw.corpusStatus.otherCourts")}
+              </span>
+            </TableHead>
+            <TableCell className="text-end tabular-nums">
+              {format.number(row.decisions)}
+            </TableCell>
+            <TableCell colSpan={SOURCE_COLUMN_COUNT - 2} />
+          </TableRow>
+        ))}
+      </TableBody>
+    </>
   );
 };
 
@@ -846,130 +787,4 @@ const observedInstant = (
   return date === null
     ? value
     : format.dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT);
-};
-
-type SearchableCountry = Extract<
-  CaseLawCoverageCountry,
-  { availability: "searchable" }
->;
-type CourtRow = NonNullable<SearchableCountry["courts"]>[number];
-
-/** Shared by the real table and its pending twin, so a column cannot drift. */
-const CourtsTableHead = () => {
-  const t = useTranslations();
-
-  return (
-    <TableHeader>
-      <TableRow>
-        <TableHead className={HEAD_CLASS} scope="col">
-          {t("common.court")}
-        </TableHead>
-        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
-          {t("common.decisions")}
-        </TableHead>
-        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
-          {t("caseLaw.corpusStatus.newLast7Days")}
-        </TableHead>
-        <TableHead className={cn(HEAD_CLASS, "text-end")} scope="col">
-          {t("common.lastUpdated")}
-        </TableHead>
-      </TableRow>
-    </TableHeader>
-  );
-};
-
-/**
- * The searchable index by court, in the order the API ranks them: apex courts
- * by name, the wide tiers as one row each naming their tier, and the courts
- * beyond the listed ones as the closing row. No heading rows between them: a
- * dozen rows read better as one list than as four lists of three.
- *
- * A breakdown the endpoint could not read says so in the table's place. An
- * empty table would claim the index names no court.
- */
-const CourtsTable = ({
-  country,
-  courts,
-}: {
-  country: CaseLawJurisdiction;
-  courts: SearchableCountry["courts"];
-}) => {
-  const t = useTranslations();
-
-  if (courts === null) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">
-          {t("caseLaw.coverage.courtsHeading")}
-        </h3>
-        <p className="text-muted-foreground text-xs">
-          {t("caseLaw.coverage.courtsUnavailable")}
-        </p>
-      </div>
-    );
-  }
-  return (
-    <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
-      <TableColumns columns={COURT_COLUMNS} />
-      <CourtsTableHead />
-      <TableBody>
-        {courts.map((row) => (
-          <CourtRowCells
-            country={country}
-            key={courtTierRowKey(row)}
-            row={row}
-          />
-        ))}
-      </TableBody>
-    </TableBlock>
-  );
-};
-
-const CourtRowCells = ({
-  country,
-  row,
-}: {
-  country: CaseLawJurisdiction;
-  row: CourtRow;
-}) => {
-  const format = useFormatter();
-  const relativeTime = useRelativeTime();
-  // The row for the courts beyond the listed ones carries no activity: none
-  // was read for courts the facets do not name.
-  const activity = row.type === "other-courts" ? null : row;
-
-  return (
-    <TableRow>
-      <TableHead
-        className="text-foreground h-auto max-w-56 font-normal"
-        scope="row"
-      >
-        {row.type === "court" ? (
-          <Link
-            className="decoration-border underline underline-offset-2 hover:decoration-current"
-            search={{
-              country: toCaseLawCountryParam(country),
-              court: row.court,
-            }}
-            to="/law/cases"
-          >
-            <CourtRowLabel row={row} />
-          </Link>
-        ) : (
-          <CourtRowLabel row={row} />
-        )}
-      </TableHead>
-      <TableCell className="text-end tabular-nums">
-        {format.number(row.decisions)}
-      </TableCell>
-      <TableCell className="text-end">
-        <Delta value={activity === null ? null : activity.addedLastWeek} />
-      </TableCell>
-      <TableCell className="text-muted-foreground text-end">
-        {activity === null || activity.updatedAt === null
-          ? NO_VALUE
-          : relativeTime(activity.updatedAt)}
-      </TableCell>
-    </TableRow>
-  );
 };

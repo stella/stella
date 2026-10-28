@@ -5,9 +5,9 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CheckCircle2Icon } from "@stll/ui/icons";
-import { StellaMark } from "@stll/ui/stella-mark";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { StellaAppIcon } from "../shared/StellaAppIcon";
 import { reportOnboardingFailure } from "./onboarding-telemetry";
 
 /** Mirrors `CHANGED_EVENT` in `accessibility_guide.rs`; payload-free. */
@@ -70,9 +70,7 @@ const AccessibilityGuideApp = () => {
         </>
       ) : (
         <>
-          <div className="bg-primary text-primary-foreground grid size-8 shrink-0 place-items-center rounded-lg">
-            <StellaMark className="size-4" />
-          </div>
+          <StellaAppIcon className="size-8 rounded-lg" />
           <p className="text-sm leading-snug">{t("guideWaiting")}</p>
         </>
       )}
