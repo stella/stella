@@ -8,7 +8,11 @@
 
 import * as v from "valibot";
 
-import { NOTIFICATION_ENTITY_TYPES, NOTIFICATION_KINDS } from "./notifications";
+import {
+  NOTIFICATION_ENTITY_TYPES,
+  NOTIFICATION_KIND,
+  NOTIFICATION_KINDS,
+} from "./notifications";
 import type { NotificationEntityType, NotificationKind } from "./notifications";
 
 /** Platforms a device can register for. Android joins with its own sender. */
@@ -105,6 +109,19 @@ export type PushDeviceRegistrationResponse = { device: PushDevice };
  * sign-out never fails.
  */
 export type PushDeviceRemovalResponse = { removed: boolean };
+
+/**
+ * The notifications that reach a phone: those that ask something of the
+ * person. Exports, finished or failed runs and announcements stay in the
+ * app's inbox, so a phone buzzes only when someone needs them.
+ */
+export const MOBILE_PUSH_KINDS = [
+  NOTIFICATION_KIND.MENTION,
+  NOTIFICATION_KIND.FLOW_RUN_AWAITING_APPROVAL,
+] as const satisfies readonly NotificationKind[];
+
+export const isMobilePushKind = (kind: NotificationKind): boolean =>
+  (MOBILE_PUSH_KINDS as readonly NotificationKind[]).includes(kind);
 
 /** The key the stella data sits under in an APNs payload, beside `aps`. */
 export const MOBILE_PUSH_DATA_KEY = "stella" as const;

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
+import { isMobilePushKind } from "@stll/api-contract/mobile-push";
 import type {
   NOTIFICATION_KIND,
   NotificationEntityType,
@@ -133,12 +134,16 @@ export type NotificationFanOutDb = {
 export type NotificationPing = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
-  /** Rows this write inserted; a replayed idempotency key adds none. */
+  /**
+   * Rows this write inserted that a phone takes (`MOBILE_PUSH_KINDS`); a
+   * replayed idempotency key adds none.
+   */
   notificationIds: SafeId<"notification">[];
 };
 
 type NotificationInsertRow = {
   id: SafeId<"notification">;
+  kind: NotificationKind;
   userId: string;
   organizationId: SafeId<"organization">;
 };
@@ -175,6 +180,7 @@ const insertNotifications = async (
           .onConflictDoNothing()
           .returning({
             id: notifications.id,
+            kind: notifications.kind,
             userId: notifications.userId,
             organizationId: notifications.organizationId,
           }),
@@ -186,16 +192,18 @@ const insertNotifications = async (
   // announcement does not emit a burst to the same tab; each stream keeps the
   // ids it was filed.
   const pings = new Map<string, NotificationPing>();
+  // Only the kinds a phone takes carry their ids on to push.
   for (const row of inserted) {
     const key = `${row.userId}:${row.organizationId}`;
-    const ping = pings.get(key);
-    if (ping === undefined) {
-      pings.set(key, {
+    const ping =
+      pings.get(key) ??
+      ({
         userId: brandPersistedUserId(row.userId),
         organizationId: row.organizationId,
-        notificationIds: [row.id],
-      });
-    } else {
+        notificationIds: [],
+      } satisfies NotificationPing);
+    pings.set(key, ping);
+    if (isMobilePushKind(row.kind)) {
       ping.notificationIds.push(row.id);
     }
   }

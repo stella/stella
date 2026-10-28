@@ -56,18 +56,22 @@ const harness = ({
   answers = new Map<string, ApnsOutcome>(),
   owner = recipient,
   visible = true,
+  pointer = notification,
 }: {
   devices?: readonly DeliverableDevice[];
   answers?: Map<string, ApnsOutcome>;
   owner?: PushRecipient | null;
   visible?: boolean;
+  pointer?: PushNotificationPointer;
 } = {}) => {
   const sent: ApnsAlert[] = [];
   const removed: DeliverableDevice[][] = [];
   const deps: PushDeliveryDeps = {
     readRecipient: async () => await Promise.resolve(owner),
     readAsRecipient: async () =>
-      await Promise.resolve(visible ? { notification, unreadCount: 4 } : null),
+      await Promise.resolve(
+        visible ? { notification: pointer, unreadCount: 4 } : null,
+      ),
     listDevices: async () => await Promise.resolve([...devices]),
     removeDevices: async (_recipient, gone) => {
       removed.push([...gone]);
@@ -84,6 +88,20 @@ const harness = ({
 };
 
 describe("push delivery", () => {
+  test("a kind that asks nothing of the person reaches no phone", async () => {
+    const { deps, sent } = harness({
+      pointer: {
+        ...notification,
+        kind: "report_export_succeeded",
+        entityType: "report_export",
+      },
+    });
+    expect(
+      await deliverPushNotification({ notificationId: NOTIFICATION_ID }, deps),
+    ).toEqual({ status: "skipped", reason: "not_pushed" });
+    expect(sent).toEqual([]);
+  });
+
   test("alerts every device with the kind's sentence, the badge and the collapse id", async () => {
     const devices = [device(1), device(2, { locale: "cs-CZ" })];
     const { deps, sent } = harness({ devices });

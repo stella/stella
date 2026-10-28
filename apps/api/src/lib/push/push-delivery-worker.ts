@@ -3,6 +3,8 @@ import type { Job } from "bullmq";
 import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
+import { isMobilePushKind } from "@stll/api-contract/mobile-push";
+
 import { notifications } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -76,7 +78,12 @@ export type PushDeliveryDeps = {
 export type PushDeliveryResult =
   | {
       status: "skipped";
-      reason: "invalid_job" | "not_found" | "not_unread" | "no_devices";
+      reason:
+        | "invalid_job"
+        | "not_found"
+        | "not_unread"
+        | "not_pushed"
+        | "no_devices";
     }
   | {
       status: "sent";
@@ -117,6 +124,11 @@ export const deliverPushNotification = async (
   const visible = await deps.readAsRecipient(recipient, notificationId);
   if (visible === null) {
     return { status: "skipped", reason: "not_unread" };
+  }
+  // Only kinds that ask something of the person reach a phone; a job for
+  // another kind (queued before the list narrowed) sends nothing.
+  if (!isMobilePushKind(visible.notification.kind)) {
+    return { status: "skipped", reason: "not_pushed" };
   }
   const alreadyDelivered = new Set(data.deliveredTokens);
   const devices = (await deps.listDevices(recipient)).filter(
