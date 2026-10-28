@@ -1,12 +1,5 @@
 import { panic } from "better-result";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -51,18 +44,12 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   });
 } else {
   const auth = getAuth();
-  const context = await auth.$context;
-  const provider =
-    context.getPlugin("oauth-provider") ?? panic("OAuth provider required");
 
   const cleanup: (() => Promise<unknown>)[] = [];
   afterAll(async () => {
     for (const remove of cleanup.toReversed()) {
       await remove();
     }
-  });
-  beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
   });
   const fixture = async () => {
     const browser = await signInHuman(

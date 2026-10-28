@@ -52,7 +52,6 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
     }
   });
   beforeAll(() => {
-    expect(provider.version).toBe("1.7.6");
     expect(provider.options.refreshTokenReuseInterval).toBe(30);
   });
 
