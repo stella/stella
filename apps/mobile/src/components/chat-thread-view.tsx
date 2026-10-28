@@ -235,7 +235,7 @@ const ThreadMessages = ({
               description={t("threadEmptyDescription")}
               title={t("threadTitle")}
             />
-          ) : null
+          ) : undefined
         }
         // Inverted, the footer sits above the oldest message.
         ListFooterComponent={
@@ -249,7 +249,7 @@ const ThreadMessages = ({
         }
         // And the header below the newest.
         ListHeaderComponent={
-          live === null ? null : <LiveTurnView turn={live} />
+          live === null ? undefined : <LiveTurnView turn={live} />
         }
         onEndReached={() => {
           void loadOlder();
