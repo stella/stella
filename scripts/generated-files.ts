@@ -824,6 +824,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
     "scripts/generated-source-hash.ts",
   ],
+  "harness-releases": [
+    "packages/portable-path/src/index.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "scripts/generated-artifacts.ts",
+  ],
   "us-reporters": [
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
@@ -2029,6 +2034,26 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "harness-releases",
+    outputKind: "committed",
+    outputs: ["apps/desktop/src-tauri/harness/releases.gen.json"],
+    inputs: [
+      "apps/desktop/src-tauri/harness/pins.json",
+      "scripts/generate-harness-releases.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["harness-releases"],
+    ],
+    write: ["bun", "scripts/generate-harness-releases.ts", "--write"],
+    check: null,
+    unchecked:
+      "Reads upstream release metadata over the network; desktop Rust tests bind the table to the pins",
+    autofix: false,
+    after: [],
+  },
+  {
     id: "us-reporters",
     outputKind: "committed",
     outputs: [
@@ -2079,8 +2104,15 @@ const GENERATOR_DECLARATIONS = [
     id: "mojibake-exemplars",
     outputKind: "committed",
     outputs: ["packages/mojibake/src/exemplars.generated.ts"],
-    checkInputs: ["packages/mojibake/src/unicode-set.ts"],
-    inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
+    checkInputs: [
+      "packages/mojibake/src/unicode-set.ts",
+      "packages/sha256/src/bun.ts",
+    ],
+    inputs: [
+      "packages/mojibake/scripts/extract-exemplars.ts",
+      "packages/mojibake/scripts/cldr49-input.json",
+      "packages/mojibake/data/cldr49/**",
+    ],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
     check: null,
     unchecked:
