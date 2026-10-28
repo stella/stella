@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { AVT_CLAIM_REVIEW_DECISION } from "@stll/api-contract/review-decision";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   ClaimOverrideState,
@@ -54,11 +56,15 @@ const applyEvent = (
   const decided = { decidedAt: createdAt, decidedBy: actorId };
   switch (payload.kind) {
     case "status": {
+      const decision =
+        payload.status === null
+          ? null
+          : AVT_CLAIM_REVIEW_DECISION[payload.status];
       return {
         ...review,
         ...decided,
         status: payload.status,
-        statusOrigin: payload.status === null ? null : payload.origin,
+        statusOrigin: decision === null ? null : payload.origin,
       };
     }
     case "override": {
