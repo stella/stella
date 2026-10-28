@@ -44,7 +44,9 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * with the scope it requires and the handler module that serves it.
  * `api-oauth-routes.test.ts` proves each entry: the live route serves that
  * handler, the handler is not account control, and the capability catalog
- * assigns its capability exactly this scope. Account-control routes
+ * assigns its capability exactly this scope. A realtime handler has no
+ * capability; its entry names that reason and the scope its domain carries,
+ * and the test holds the handler to that reason instead. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
@@ -61,11 +63,71 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/entities/get.ts",
   },
+  "GET /v1/tasks": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/list.ts",
+  },
+  // Writes act as the person: each handler keeps the permission and matter
+  // access checks a browser session gets, so the token reaches no further.
+  "PUT /v1/workspaces": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  "PUT /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/create.ts",
+  },
+  "GET /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/get.ts",
+  },
+  "PATCH /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/update.ts",
+  },
+  "GET /v1/chat/threads": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/list.ts",
+  },
+  "GET /v1/chat/threads/:threadId/messages": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/list.ts",
+  },
+  "GET /v1/chat/threads/:threadId/messages/older": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/older-messages/list.ts",
+  },
+  "POST /v1/chat": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/send-message.ts",
+    uncataloged: "realtime_stream",
+  },
+  "GET /v1/chat/threads/:threadId/turns/:turnId/resume": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/resume.ts",
+    exportName: "probeChatTurn",
+    uncataloged: "realtime_stream",
+  },
+  "GET /v1/chat/threads/:threadId/turns/:turnId/join": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/resume.ts",
+    exportName: "joinChatTurn",
+    uncataloged: "realtime_stream",
+  },
+  "POST /v1/chat/threads/:threadId/turns/:turnId/cancel": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/turns/cancel.ts",
+    uncataloged: "realtime_stream",
+  },
 } as const satisfies Record<
   string,
   {
     scope: ApiOAuthResourceScope;
     handler: `apps/api/src/handlers/${string}.ts`;
+    /** The named export serving the route, when it is not the default. */
+    exportName?: string;
+    /** Why the handler has no capability: its `mcp.internal` reason. */
+    uncataloged?: "realtime_stream";
   }
 >;
 

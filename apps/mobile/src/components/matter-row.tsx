@@ -1,27 +1,27 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { useFormatter } from "use-intl";
 
 import type { MatterSummary } from "@/state/matters";
 import { useAppColors } from "@/theme";
 
 /**
- * One matter: its name, then reference, client and last activity. Activity
- * is relative to when the list was loaded, so a row reads the same on every
- * render until the next refresh.
+ * One matter: its name, then reference, client and the day of its last
+ * activity. The day is a date, not "2 days ago": Hermes, the app's
+ * JavaScript engine, cannot format relative times. Tapping it opens the
+ * matter.
  */
-export const MatterRow = ({
-  loadedAt,
-  matter,
-}: {
-  loadedAt: number;
-  matter: MatterSummary;
-}) => {
+export const MatterRow = ({ matter }: { matter: MatterSummary }) => {
   const colors = useAppColors();
   const format = useFormatter();
+  const router = useRouter();
   const activity =
     matter.lastActivityAt === null || matter.lastActivityAt === undefined
       ? undefined
-      : format.relativeTime(new Date(matter.lastActivityAt), loadedAt);
+      : format.dateTime(new Date(matter.lastActivityAt), {
+          day: "numeric",
+          month: "short",
+        });
   const details = [
     matter.reference,
     matter.client?.displayName,
@@ -32,10 +32,21 @@ export const MatterRow = ({
   );
 
   return (
-    <View
-      style={[
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        router.push({
+          pathname: "/matter/[workspaceId]",
+          params: { workspaceId: matter.id, name: matter.name },
+        });
+      }}
+      style={({ pressed }) => [
         styles.row,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          opacity: pressed ? 0.7 : 1,
+        },
       ]}
     >
       <Text numberOfLines={2} style={[styles.name, { color: colors.text }]}>
@@ -49,7 +60,7 @@ export const MatterRow = ({
           {details.join(" · ")}
         </Text>
       )}
-    </View>
+    </Pressable>
   );
 };
 

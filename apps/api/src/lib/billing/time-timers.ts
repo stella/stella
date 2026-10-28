@@ -136,6 +136,31 @@ type UnexpectedTimerColumn = UnbackedProjectionKeys<
 true satisfies MissingTimerColumn extends never ? true : never;
 true satisfies UnexpectedTimerColumn extends never ? true : never;
 
+// A migrated timer runs on its original draft entry. Submitting or approving
+// that entry takes this owner lock and refuses a running timer, so under the
+// lock a resume sees whether the entry is still a draft it may run on.
+const linkedEntryIsDraft = async (
+  tx: Transaction,
+  owner: TimerOwner,
+  timer: typeof timeTimers.$inferSelect,
+) => {
+  if (timer.legacyTimeEntryId === null) {
+    return true;
+  }
+  const [entry] = await tx
+    .select({ status: timeEntries.status })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.id, timer.legacyTimeEntryId),
+        eq(timeEntries.organizationId, owner.organizationId),
+        eq(timeEntries.userId, owner.userId),
+      ),
+    )
+    .limit(1);
+  return entry === undefined || entry.status === BILLING_STATUS.DRAFT;
+};
+
 type ChangeTimerStateOptions = {
   tx: Transaction;
   owner: TimerOwner;
@@ -157,6 +182,16 @@ const changeTimerState = async ({
   }
   if (timer.state === state) {
     return Result.ok(timerItem(timer));
+  }
+  if (state === "running" && !(await linkedEntryIsDraft(tx, owner, timer))) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "timer_original_entry_changed",
+        message: "The original timer entry has changed",
+        hint: "The entry this timer runs on was submitted or approved. Confirm or discard the timer instead of resuming it.",
+      }),
+    );
   }
   const now = new Date();
   if (state === "running") {

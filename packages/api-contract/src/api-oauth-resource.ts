@@ -9,7 +9,11 @@ export const API_OAUTH_RESOURCE_PATH = "/v1" as const;
 export const API_OAUTH_RESOURCE_NAME = "stella API" as const;
 
 /** Every scope a route on this resource may require. */
-export const API_OAUTH_RESOURCE_SCOPES = ["stella:read"] as const;
+export const API_OAUTH_RESOURCE_SCOPES = [
+  "stella:read",
+  "stella:chat",
+  "stella:matters_write",
+] as const;
 
 export type ApiOAuthResourceScope = (typeof API_OAUTH_RESOURCE_SCOPES)[number];
 

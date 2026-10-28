@@ -1,3 +1,11 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "id": "apps/api/src/handlers/time-entries/suggestions/suggestions.integration.test.ts::time entry suggestions integration > an accepted suggestion's tail past midnight covers the next day's first minutes",
+      "owner": "stella",
+      "reason": "The midnight-tail case reads shared current-day fixture activity, so unrelated chat rows change its expected engagement minutes. Keep reporting failures while the fixture date is isolated.",
+      "created": "2026-10-28",
+      "expires": "2026-11-04"
+    }
+  ]
 }
