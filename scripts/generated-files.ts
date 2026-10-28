@@ -824,6 +824,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
     "scripts/generated-source-hash.ts",
   ],
+  "harness-releases": [
+    "packages/portable-path/src/index.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "scripts/generated-artifacts.ts",
+  ],
   "us-reporters": [
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
@@ -1984,6 +1989,29 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "playwright-devices",
+    outputKind: "committed",
+    outputs: ["packages/playwright-tools/src/devices.gen.ts"],
+    inputs: [
+      "scripts/generate-playwright-devices.ts",
+      "packages/playwright-tools/package.json",
+      "packages/playwright-tools/src/device-preset-generator.ts",
+      "packages/playwright-tools/src/marketing-config.ts",
+      "apps/**/playwright*.config.*",
+      "packages/**/playwright*.config.*",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
+      "packages/portable-path/src/index.ts",
+      "bunfig.toml",
+      ".prettierrc.yml",
+    ],
+    write: ["bun", "scripts/generate-playwright-devices.ts", "--write"],
+    check: ["bun", "scripts/generate-playwright-devices.ts", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "us-courts",
     outputKind: "committed",
     outputs: [
@@ -2002,6 +2030,26 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-us-courts.ts", "--write"],
     check: ["bun", "scripts/generate-us-courts.ts", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "harness-releases",
+    outputKind: "committed",
+    outputs: ["apps/desktop/src-tauri/harness/releases.gen.json"],
+    inputs: [
+      "apps/desktop/src-tauri/harness/pins.json",
+      "scripts/generate-harness-releases.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["harness-releases"],
+    ],
+    write: ["bun", "scripts/generate-harness-releases.ts", "--write"],
+    check: null,
+    unchecked:
+      "Reads upstream release metadata over the network; desktop Rust tests bind the table to the pins",
     autofix: false,
     after: [],
   },
@@ -2056,8 +2104,15 @@ const GENERATOR_DECLARATIONS = [
     id: "mojibake-exemplars",
     outputKind: "committed",
     outputs: ["packages/mojibake/src/exemplars.generated.ts"],
-    checkInputs: ["packages/mojibake/src/unicode-set.ts"],
-    inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
+    checkInputs: [
+      "packages/mojibake/src/unicode-set.ts",
+      "packages/sha256/src/bun.ts",
+    ],
+    inputs: [
+      "packages/mojibake/scripts/extract-exemplars.ts",
+      "packages/mojibake/scripts/cldr49-input.json",
+      "packages/mojibake/data/cldr49/**",
+    ],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
     check: null,
     unchecked:
