@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 4,
+  "reason": "Restore @dnd-kit/core and @dnd-kit/sortable development and peer declarations for the published Kanban keyboard, touch, and virtual-row interaction contract consumed outside this repository."
+}

@@ -4,15 +4,32 @@ import {
   type ReactNode,
   type RefObject,
   type UIEvent,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
 
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { type UniqueIdentifier, useDndContext } from "@dnd-kit/core";
+import {
+  SortableContext,
+  type SortableContextProps,
+  type SortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
+  defaultRangeExtractor,
+  type Range,
+  useVirtualizer,
+} from "@tanstack/react-virtual";
 
 import { type OptionColor, resolveOptionColor } from "../lib/option-color";
 import { cn } from "../lib/utils";
+import {
+  type KanbanVirtualScrollRequest,
+  useKanbanDropTarget,
+  type UseKanbanDropTargetOptions,
+} from "./sortable-interactions";
 import {
   KANBAN_CARD_STICKY_TOP_VAR,
   KANBAN_STICKY_TOP_CLASS,
@@ -50,6 +67,19 @@ type KanbanCellStyle = CSSProperties & {
   [KANBAN_CELL_SURFACE_VAR]?: string;
 };
 
+const retainActiveSortableIndex = (
+  range: Range,
+  activeIndex: number,
+): number[] => {
+  const indexes = defaultRangeExtractor(range);
+  if (activeIndex < 0 || indexes.includes(activeIndex)) {
+    return indexes;
+  }
+  indexes.push(activeIndex);
+  indexes.sort((left, right) => left - right);
+  return indexes;
+};
+
 export const KANBAN_VIRTUAL_CELL_PAGINATION = {
   NONE: "none",
   CURSOR: "cursor",
@@ -65,11 +95,26 @@ export type KanbanVirtualCellPagination =
       onRequestMore: () => void;
     };
 
+/**
+ * Makes a virtual cell the canonical sortable context for its rendered rows.
+ *
+ * `getRowKey` remains responsible for React and virtualizer identity. A
+ * separate sortable identifier avoids narrowing an existing React key contract
+ * merely to support dnd-kit consumers.
+ */
+export type KanbanVirtualCellSortableContext<TRow> = {
+  dropTarget: Omit<UseKanbanDropTargetOptions, "itemIds" | "navigation">;
+  getRowId: (row: TRow) => UniqueIdentifier;
+  disabled?: SortableContextProps["disabled"] | undefined;
+  strategy?: SortingStrategy | undefined;
+};
+
 export type KanbanVirtualCellProps<TRow> = {
   rows: readonly TRow[];
   getRowKey: (row: TRow) => Key;
   renderRow: (row: TRow) => ReactNode;
   pagination: KanbanVirtualCellPagination;
+  sortable?: KanbanVirtualCellSortableContext<TRow> | undefined;
   containerRef?: RefObject<HTMLDivElement | null> | undefined;
   active?: boolean | undefined;
   backgroundColor?: string | undefined;
@@ -111,6 +156,7 @@ export const KanbanVirtualCell = <TRow,>({
   getRowKey,
   renderRow,
   pagination,
+  sortable,
   containerRef,
   active = false,
   backgroundColor,
@@ -123,8 +169,13 @@ export const KanbanVirtualCell = <TRow,>({
   className,
 }: KanbanVirtualCellProps<TRow>) => {
   const internalRef = useRef<HTMLDivElement>(null);
+  const fallbackDropTargetId = useId();
   const scrollRef = internalRef;
   const requestedPageKeyRef = useRef<string | number | null>(null);
+  const itemIds = sortable ? rows.map(sortable.getRowId) : [];
+  const { active: activeDrag } = useDndContext();
+  const activeSortableIndex =
+    activeDrag === null ? -1 : itemIds.indexOf(activeDrag.id);
   const virtualizer = useVirtualizer({
     count: rows.length,
     estimateSize: () => estimateSize,
@@ -134,6 +185,24 @@ export const KanbanVirtualCell = <TRow,>({
     },
     getScrollElement: () => scrollRef.current,
     overscan,
+    rangeExtractor: (range) =>
+      retainActiveSortableIndex(range, activeSortableIndex),
+  });
+  const requestScroll = ({ itemId }: KanbanVirtualScrollRequest) => {
+    const index = itemIds.indexOf(itemId);
+    if (index !== -1) {
+      virtualizer.scrollToIndex(index, { align: "auto" });
+    }
+  };
+  const dropTarget = useKanbanDropTarget({
+    disabled: sortable?.dropTarget.disabled ?? sortable === undefined,
+    id: sortable?.dropTarget.id ?? fallbackDropTargetId,
+    itemIds,
+    navigation:
+      sortable === undefined
+        ? { type: "static" }
+        : { requestScroll, type: "virtual" },
+    position: sortable?.dropTarget.position ?? { column: -1, lane: -1 },
   });
 
   const handleScroll = ({ currentTarget }: UIEvent<HTMLDivElement>) => {
@@ -163,35 +232,14 @@ export const KanbanVirtualCell = <TRow,>({
     if (containerRef) {
       containerRef.current = element;
     }
+    dropTarget.setNodeRef(element);
   };
 
-  const accentVariants =
-    accent === undefined ? undefined : resolveOptionColor(accent);
-  const accentAlpha = active
-    ? KANBAN_CELL_ACCENT_ACTIVE_ALPHA
-    : KANBAN_CELL_ACCENT_RESTING_ALPHA;
-  const accentBackground =
-    accentVariants === undefined
-      ? undefined
-      : `color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${accentAlpha}%, var(--background))`;
-  const activeAccentRing =
-    active && accentVariants !== undefined
-      ? `0 0 0 2px color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA}%, transparent)`
-      : undefined;
-  const surface = backgroundColor ?? accentBackground;
-  const style: KanbanCellStyle | undefined =
-    surface === undefined
-      ? undefined
-      : {
-          backgroundColor: surface,
-          [KANBAN_CELL_SURFACE_VAR]: surface,
-          ...(activeAccentRing === undefined
-            ? undefined
-            : { boxShadow: activeAccentRing }),
-          ...(accentVariants === undefined
-            ? undefined
-            : { [KANBAN_CELL_ACCENT_VAR]: accentVariants.color }),
-        };
+  const { surface, style, hasAccent } = resolveKanbanCellAppearance({
+    accent,
+    active,
+    backgroundColor,
+  });
 
   const hasStickyFooter =
     footerPlacement === "sticky-start" &&
@@ -256,14 +304,11 @@ export const KanbanVirtualCell = <TRow,>({
         rows.length === 0
           ? "overflow-visible"
           : "max-h-[min(60dvh,40rem)] overflow-y-auto overscroll-y-contain",
-        active &&
-          accentVariants === undefined &&
-          "bg-primary/5 ring-primary/50 ring-2",
+        active && !hasAccent && "bg-primary/5 ring-primary/50 ring-2",
         className,
       )}
-      data-kanban-cell-accent={
-        accentVariants === undefined ? undefined : "true"
-      }
+      data-kanban-cell={sortable?.dropTarget.id}
+      data-kanban-cell-accent={hasAccent ? "true" : undefined}
       onScroll={handleScroll}
       ref={setScrollElement}
       style={style}
@@ -299,5 +344,60 @@ export const KanbanVirtualCell = <TRow,>({
     </div>
   );
 
-  return content;
+  if (sortable === undefined) {
+    return content;
+  }
+
+  return (
+    <SortableContext
+      {...(sortable.disabled === undefined
+        ? {}
+        : { disabled: sortable.disabled })}
+      id={sortable.dropTarget.id}
+      items={itemIds}
+      strategy={sortable.strategy ?? verticalListSortingStrategy}
+    >
+      {content}
+    </SortableContext>
+  );
 };
+
+function resolveKanbanCellAppearance({
+  accent,
+  active,
+  backgroundColor,
+}: {
+  accent: OptionColor | undefined;
+  active: boolean;
+  backgroundColor: string | undefined;
+}) {
+  const accentVariants =
+    accent === undefined ? undefined : resolveOptionColor(accent);
+  const accentAlpha = active
+    ? KANBAN_CELL_ACCENT_ACTIVE_ALPHA
+    : KANBAN_CELL_ACCENT_RESTING_ALPHA;
+  const accentBackground =
+    accentVariants === undefined
+      ? undefined
+      : `color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${accentAlpha}%, var(--background))`;
+  const activeAccentRing =
+    active && accentVariants !== undefined
+      ? `0 0 0 2px color-mix(in srgb, var(${KANBAN_CELL_ACCENT_VAR}) ${KANBAN_CELL_ACCENT_ACTIVE_RING_ALPHA}%, transparent)`
+      : undefined;
+  const surface = backgroundColor ?? accentBackground;
+  const style: KanbanCellStyle | undefined =
+    surface === undefined
+      ? undefined
+      : {
+          backgroundColor: surface,
+          [KANBAN_CELL_SURFACE_VAR]: surface,
+          ...(activeAccentRing === undefined
+            ? undefined
+            : { boxShadow: activeAccentRing }),
+          ...(accentVariants === undefined
+            ? undefined
+            : { [KANBAN_CELL_ACCENT_VAR]: accentVariants.color }),
+        };
+
+  return { surface, style, hasAccent: accentVariants !== undefined };
+}

@@ -49,6 +49,9 @@ const BoardChromeFixture = () => {
   // The card a tap opened, the way a host tracks the one whose detail is on
   // screen. It is what gives a finger its way to the hover-revealed actions.
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const externalDrag = new URLSearchParams(location.search).has("externalDrag");
+  const [dragState, setDragState] = useState<"idle" | "over-band">("idle");
+  const dragOverBandId = dragState === "over-band" ? band.id : null;
 
   useEffect(() => {
     document.documentElement.dataset["kanbanBoardChromeReady"] = "true";
@@ -61,9 +64,21 @@ const BoardChromeFixture = () => {
     // Narrower than the board's own columns at any viewport the suite runs
     // at, so the board always has somewhere to scroll sideways to.
     <div className="h-[420px] w-[500px]">
+      {externalDrag ? (
+        <div>
+          <button type="button" onClick={() => setDragState("over-band")}>
+            Start host drag
+          </button>
+          <button type="button" onClick={() => setDragState("idle")}>
+            End host drag
+          </button>
+        </div>
+      ) : null}
       <KanbanSubgroupBoard
+        dragOverBandId={externalDrag ? dragOverBandId : undefined}
+        isDragging={externalDrag ? dragState === "over-band" : undefined}
         className="fixture-board"
-        isBandCollapsed={() => false}
+        isBandCollapsed={() => externalDrag}
         isLaneCollapsed={() => false}
         matrix={matrix}
         renderCell={({ cell }) => (

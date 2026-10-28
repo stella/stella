@@ -332,3 +332,15 @@ test.describe("pinned chrome on a board scrolled sideways", () => {
     expect(identityBackground).not.toContain("/");
   });
 });
+
+test("host-controlled dragging peeks a collapsed band and closes it on cancellation", async ({
+  page,
+}) => {
+  await page.goto(`${fixturePath}?externalDrag`);
+  const openColumn = page.locator('[data-column-header="open"]');
+  await expect(openColumn).toHaveCount(0);
+  await page.getByRole("button", { name: "Start host drag" }).click();
+  await expect(openColumn).toBeVisible();
+  await page.getByRole("button", { name: "End host drag" }).click();
+  await expect(openColumn).toHaveCount(0);
+});
