@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "modelRefused": "Model odmietol odpovedať",
+    "nothingFound": "Nič sa nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Posunúť nadol",
     "moveUp": "Posunúť nahor",
     "name": "Názov",
+    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "newMatter": "Nový spis",
     "newRow": "Nový riadok",
     "next": "Pokračovať",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
+      "skippedInFileDuplicate": "Preskočené: opakuje skorší riadok súboru",
       "skippedInvalidRow": "Preskočené: riadok nespĺňa pravidlá importu",
       "skippedInvalidTaxId": "Preskočené: neplatné daňové identifikačné číslo",
       "skippedLimitReached": "Preskočené: dosiahnutý limit kontaktov"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Ak je uvedená adresa, jej prvý riadok je povinný.",
         "display_name_required": "Zobrazovaný názov sa nepodarilo vytvoriť.",
+        "in_file_duplicate": "Duplikát skoršieho riadka v tomto súbore",
         "invalid_email": "E-mailová adresa je neplatná.",
         "invalid_phone": "Telefónne číslo je neplatné.",
         "invalid_tags": "Značky musia byť textové hodnoty.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
-      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
+      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
+      "warning": {
+        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
+        "possible_in_file_duplicate": "Možný duplikát riadka {row}; zhoduje sa iba meno."
+      }
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
     "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
@@ -3297,7 +3306,6 @@
       "simple": "Jednoduché revízie"
     },
     "moreFormatting": "Ďalšie formátovanie",
-    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "nextChange": "Ďalšia zmena",
     "numberedList": "Číslovaný zoznam",
     "parseError": "Dokument sa nepodarilo spracovať. Môže byť poškodený alebo v nepodporovanom formáte.",
@@ -4630,7 +4638,6 @@
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurácia AI",
       "usingDefaults": "Používa predvolené nastavenia"
     },
     "invitations": {
@@ -5990,6 +5997,9 @@
       "title": "Preklad je pripravený"
     }
   },
+  "transportErrors": {
+    "timeout": "Požiadavka trvala príliš dlho. Skúste to znova."
+  },
   "validation": {
     "invalidEmail": "Zadajte platnú e-mailovú adresu.",
     "organizationNameRequired": "Názov organizácie je povinný",
@@ -6187,20 +6197,18 @@
         "notOpeningConnect": "Neotvára sa? Pripojte stella desktop",
         "notPickedUpDescription": "stella desktop možno nebeží alebo nie je pripojený k tomuto účtu. Pripojte ho a skúste to znova.",
         "notPickedUpTitle": "stella desktop PDF neotvoril",
+        "placementAttachmentsOnly": "Toto zobrazenie ukazuje prílohy PDF, preto sem pečiatku nemožno umiestniť. Podpíšte bez pečiatky.",
         "placementBox": "Umiestnenie pečiatky",
-        "placementConfirm": "Otvoriť stella desktop",
-        "placementDescription": "Zvoľte, ako sa podpis v PDF zobrazí.",
+        "placementDrawTooLarge": "Na pečiatku je to príliš veľké. Po uvoľnení sa použije najväčšia veľkosť.",
+        "placementDrawTooSmall": "Na pečiatku je to príliš malé. Po uvoľnení sa použije najmenšia veľkosť.",
         "placementHint": "Potiahnutím pečiatku presuniete, potiahnutím jej rohu zmeníte jej veľkosť. Keď je pečiatka vybraná, šípky ju posúvajú a Shift so šípkou mení jej veľkosť.",
-        "placementInvisible": "Neviditeľný podpis",
-        "placementInvisibleDescription": "Podpis sa uloží do súboru bez značky na ktorejkoľvek stránke.",
-        "placementPageLabel": "Strana pečiatky",
-        "placementPageOption": "Stránka {page, number} z {count, number}",
-        "placementPreview": "Náhľad stránky {page, number}",
-        "placementPreviewFailed": "Náhľad stránky sa nepodarilo načítať.",
+        "placementModeHint": "Ťahaním po stránke nakreslite pečiatku alebo ju kliknutím umiestnite.",
+        "placementPlaceOnLastPage": "Umiestniť na poslednú stránku",
+        "placementRedrawHint": "Potiahnutím pečiatku upravíte, alebo nakreslite novú na ktorejkoľvek stránke.",
+        "placementSignInvisible": "Podpísať bez pečiatky",
+        "placementSignVisible": "Podpísať s pečiatkou",
         "placementTitle": "Podpísať PDF",
         "placementTooSmall": "Táto stránka je na pečiatku príliš malá. Zvoľte inú stránku.",
-        "placementVisible": "Viditeľná pečiatka",
-        "placementVisibleDescription": "Rámček na stránke ukazuje, kto a kedy podpísal.",
         "preparingDescription": "Pripravuje sa PDF pre stella desktop.",
         "readOnlyDescription": "Tento dokument je len na čítanie.",
         "signedDescription": "Podpis bol uložený ako verzia {versionNumber, number}.",

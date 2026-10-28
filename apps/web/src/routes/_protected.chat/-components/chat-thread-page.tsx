@@ -131,7 +131,7 @@ export const ChatThreadPage = ({
   workspaceId,
 }: ChatThreadPageProps) => {
   const t = useTranslations();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const suggestedSkills = useSuggestedSkills();
@@ -810,6 +810,7 @@ export const ChatThreadPage = ({
                 <div className="relative isolate p-2">
                   <ComposerVeil />
                   <ChatInputSurface
+                    sendDisabled={availability !== "available"}
                     anonymized={anonymized}
                     autoFocus
                     context={{ activeOrganizationId, threadRef }}
