@@ -105,7 +105,8 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     enrolment: "invitation",
   },
   // Desktop-gated like the timeline: the desktop installs and runs agent
-  // CLIs only while this decision is enabled.
+  // CLIs only while this decision is enabled. The runner gateway refuses and
+  // closes the sockets of accounts it does not enable.
   "local-agents": {
     enrolment: "invitation",
   },

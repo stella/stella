@@ -21,6 +21,7 @@ import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
+import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
   DESKTOP_RUNNER_CLOSE,
   type DesktopRunnerClose,
@@ -85,6 +86,8 @@ type RunnerSessionContext = {
   readonly mintRunToken: MintRunToken;
   /** Whether the credential that opened a socket still authorizes it. */
   readonly isKeyLive: DesktopKeyLiveness;
+  /** Whether the socket's account still has the runner feature. */
+  readonly isRunnerEnabled: RunnerFeatureAccess;
   /** Tell the socket a newer one replaced that it is no longer current. */
   readonly ringPrevious: (holder: RunHolder) => void;
 };
@@ -444,6 +447,10 @@ const renew = async (state: SessionState) => {
   // else is renewed or minted for it.
   if (!(await state.context.isKeyLive(state.binding))) {
     close(state, DESKTOP_RUNNER_CLOSE.credentialRevoked);
+    return;
+  }
+  if (!(await state.context.isRunnerEnabled(state.binding))) {
+    close(state, DESKTOP_RUNNER_CLOSE.featureDisabled);
     return;
   }
   const now = state.context.now();

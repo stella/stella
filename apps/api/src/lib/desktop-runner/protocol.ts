@@ -16,8 +16,9 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  * except `upgradeRequired` (until it is updated) and `superseded` (another
  * socket of the same installation took over). Refusals before the upgrade are
  * HTTP answers instead: 400 without a valid installation id, 401 or 403 from
- * account and device-proof authorization, 426 without a WebSocket upgrade,
- * 503 while the task drains.
+ * account and device-proof authorization, 403 with code `feature_disabled`
+ * for an account without the runner feature, 426 without a WebSocket upgrade,
+ * 429 above the account's socket cap, 503 while the task drains.
  *
  * - `goingAway`: the API task is draining or the socket reached its maximum
  *   life; a `reconnect` frame with the delay to wait precedes it.
@@ -45,6 +46,7 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  *   none can make room.
  * - `credentialRevoked`: the device key's credential was revoked, expired or
  *   unlinked; the desktop must link again.
+ * - `featureDisabled`: the account no longer has the runner feature.
  */
 export const DESKTOP_RUNNER_CLOSE = {
   goingAway: { code: 1001, reason: "going_away" },
@@ -60,6 +62,7 @@ export const DESKTOP_RUNNER_CLOSE = {
   unknownRun: { code: 4006, reason: "unknown_run" },
   tooManyRunners: { code: 4007, reason: "too_many_runners" },
   credentialRevoked: { code: 4008, reason: "credential_revoked" },
+  featureDisabled: { code: 4009, reason: "feature_disabled" },
 } as const;
 const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
 

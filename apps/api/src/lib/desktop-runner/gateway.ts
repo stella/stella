@@ -16,6 +16,11 @@ import {
 } from "@/api/lib/business-registries/desktop/liveness";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type RunnerFeatureAccess,
+  runnerFeatureAccess,
+} from "@/api/lib/desktop-runner/feature-access";
+import {
+  DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_TIMING,
   type DesktopRunnerTiming,
@@ -85,6 +90,8 @@ export type DesktopRunnerGatewayOptions = {
   limits?: Partial<DesktopRunnerLimits>;
   /** Re-checked on every heartbeat; the owner connection's check by default. */
   isKeyLive?: DesktopKeyLiveness;
+  /** Checked on upgrade and every heartbeat; the deployment's grants by default. */
+  isRunnerEnabled?: RunnerFeatureAccess;
   /** The clock sockets schedule with; the system's by default. */
   timers?: RunnerTimers;
 };
@@ -162,6 +169,7 @@ export const createDesktopRunnerGateway = (
     random,
     mintRunToken: options.mintRunToken,
     isKeyLive: options.isKeyLive ?? desktopKeyLiveness(),
+    isRunnerEnabled: options.isRunnerEnabled ?? runnerFeatureAccess(),
     ringPrevious: options.doorbell.ring,
   };
 
@@ -264,6 +272,13 @@ export const createDesktopRunnerGateway = (
         caller.error.status,
         caller.error.message,
         caller.error.code,
+      );
+    }
+    if (!(await context.isRunnerEnabled(caller.value))) {
+      return refusal(
+        403,
+        "Desktop runners are not enabled for this account",
+        DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
       );
     }
     // Each socket holds memory on this task, so one account holds only a few.
