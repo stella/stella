@@ -30,6 +30,8 @@ const COURT_ADJECTIVES = {
   Městského: "Městský",
   Vrchního: "Vrchní",
   Nejvyššího: "Nejvyšší",
+  Okresního: "Okresní",
+  Obvodního: "Obvodní",
 } as const;
 
 const CZECH_MONTHS = {
@@ -48,7 +50,9 @@ const CZECH_MONTHS = {
 } as const;
 const czechMonthNumbers = new Map(Object.entries(CZECH_MONTHS));
 
-const COURT_SOURCE = String.raw`(?:Krajského|Městského|Vrchního|Nejvyššího)(?:\s+správního)?\s+soudu(?:\s+České\s+republiky|\s+v\s+\p{Lu}\p{L}+(?:\s+(?:nad|pod)\s+\p{Lu}\p{L}+)?(?:\s+\p{Lu}\p{L}+)?(?:\s*[-–]\s*pobočky\s+v\s+\p{Lu}\p{L}+)?)?`;
+const COURT_SEAT_SOURCE = String.raw`\s+(?:v|ve)\s+\p{Lu}\p{L}+(?:\s+(?:nad|pod)\s+\p{Lu}\p{L}+)?(?:\s+\p{Lu}\p{L}+)?(?:\s*[-–]\s*pobočky\s+v\s+\p{Lu}\p{L}+)?`;
+const DISTRICT_COMPOUND_SEAT_SOURCE = String.raw`(?:Praha(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*|\s+)(?:východ|západ)|Brno(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*|\s+)venkov)`;
+const COURT_SOURCE = String.raw`(?:(?:Krajského|Městského|Vrchního|Nejvyššího)(?:\s+správního)?\s+soudu(?:\s+České\s+republiky|${COURT_SEAT_SOURCE})?|Okresního\s+soudu(?:${COURT_SEAT_SOURCE}|\s+${DISTRICT_COMPOUND_SEAT_SOURCE})|Obvodního\s+soudu\s+pro\s+Prahu\s+(?:10|[1-9]))`;
 const DATE_SOURCE = String.raw`\d{1,2}\.\s*(?:\d{1,2}\.|${Object.keys(CZECH_MONTHS).join("|")})\s*\d{4}`;
 const DOCKET_SOURCE = String.raw`(?:(?:\d{1,3}|[IVX]+|Pl)\.?\s*)?(?:\d{1,3}\s*)?\p{L}{1,7}\.?\s*\d{1,6}\s*\/\s*\d{2}(?:\d{2})?(?:\s*[${DECISION_DASH_CLASS_SOURCE}]\s*${CZE_SHEET_NUMBER_SOURCE})?(?![\p{L}\d/]|\s*[${DECISION_DASH_CLASS_SOURCE}])`;
 const TARGET = new RegExp(
@@ -67,6 +71,13 @@ export const canonicalCzechReviewCourt = (court: string): string => {
     .replace("pobočky", "pobočka")
     .replace(/\s+České republiky$/u, "");
   const key = foldDecisionIdentifierInput(normalized);
+  const compoundDistrictSeat = new RegExp(
+    String.raw`^Okresní soud (?<seat>${DISTRICT_COMPOUND_SEAT_SOURCE})$`,
+    "u",
+  ).exec(key)?.groups?.["seat"];
+  if (compoundDistrictSeat !== undefined) {
+    return `Okresní soud ${compoundDistrictSeat.replace(/\s*-\s*|\s+/gu, "-")}`;
+  }
   // The source can name courts absent from the ECLI registry. Keep their
   // explicit names as unresolved evidence; registered names use its spelling.
   return (

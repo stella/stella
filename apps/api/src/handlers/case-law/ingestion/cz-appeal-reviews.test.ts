@@ -5,6 +5,7 @@ import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
+  canonicalCzechReviewCourt,
   extractCzechAppealReviews,
   planCzechAppealReviews,
 } from "./cz-appeal-reviews";
@@ -26,6 +27,85 @@ const constitutionalPair = {
 };
 
 describe("Czech appeal history", () => {
+  test("retains district and appellate judgments with independent constitutional review outcomes", () => {
+    const reviews = extractCzechAppealReviews({
+      header:
+        "proti rozsudku Krajského soudu v Ostravě ze dne 17. 2. 2025, č. j. 71 Co 22/2025-91 a rozsudku Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35",
+      holding:
+        "I. Rozsudek Okresního soudu v Ostravě ze dne 16. 1. 2025, č. j. 25 C 20/2024-35 se ruší. II. Ve zbývajícím rozsahu se ústavní stížnost odmítá.",
+    });
+    expect(reviews).toEqual([
+      {
+        reviewedCaseNumber: "71 Co 22/2025-91",
+        reviewedCourt: "Krajský soud v Ostravě",
+        reviewedDecisionDate: "2025-02-17",
+        outcome: "upheld",
+      },
+      {
+        reviewedCaseNumber: "25 C 20/2024-35",
+        reviewedCourt: "Okresní soud v Ostravě",
+        reviewedDecisionDate: "2025-01-16",
+        outcome: "overturned",
+      },
+    ]);
+  });
+
+  test.each([
+    ["Okresního soudu v Ostravě", "Okresní soud v Ostravě"] as const,
+    [
+      "Okresního soudu ve Žďáru nad Sázavou",
+      "Okresní soud ve Žďáru nad Sázavou",
+    ] as const,
+    ["Obvodního soudu pro Prahu 1", "Obvodní soud pro Prahu 1"] as const,
+    ["Obvodního soudu pro Prahu 10", "Obvodní soud pro Prahu 10"] as const,
+    ["Okresního soudu Praha-východ", "Okresní soud Praha-východ"] as const,
+    ["Okresního soudu Praha - západ", "Okresní soud Praha-západ"] as const,
+    ["Okresního soudu Brno‑venkov", "Okresní soud Brno-venkov"] as const,
+    ["Okresního soudu Brno – venkov", "Okresní soud Brno-venkov"] as const,
+    ["Okresního soudu Brno venkov", "Okresní soud Brno-venkov"] as const,
+  ])(
+    "retains district review targets named as %s",
+    (printedCourt, canonicalCourt) => {
+      const reviews = extractCzechAppealReviews({
+        header: `proti rozsudku ${printedCourt} ze dne 16. 1. 2025, č. j. 25 C 20/2024-35`,
+        holding: "Ústavní stížnost se zamítá.",
+      });
+      expect(reviews.at(0)?.reviewedCourt).toBe(canonicalCourt);
+      expect(reviews.at(0)?.outcome).toBe("upheld");
+      expect(canonicalCzechReviewCourt(printedCourt)).toBe(canonicalCourt);
+      expect(canonicalCzechReviewCourt(canonicalCourt)).toBe(canonicalCourt);
+    },
+  );
+
+  test("limits district seats without a preposition to their published compound names", () => {
+    for (const court of [
+      "Okresního soudu Praha-venkov",
+      "Okresního soudu Brno-východ",
+      "Okresního soudu Ostrava",
+    ]) {
+      expect(
+        extractCzechAppealReviews({
+          header: `proti rozsudku ${court} ze dne 16. 1. 2025, č. j. 25 C 20/2024-35`,
+          holding: "Ústavní stížnost se zamítá.",
+        }),
+      ).toEqual([]);
+    }
+  });
+
+  test("requires a numbered Prague district court in its published naming form", () => {
+    for (const court of [
+      "Obvodního soudu pro Prahu",
+      "Obvodního soudu pro Prahu 11",
+      "Obvodního soudu pro Jihlavu 1",
+    ]) {
+      expect(
+        extractCzechAppealReviews({
+          header: `proti rozsudku ${court} ze dne 16. 1. 2025, č. j. 25 C 20/2024-35`,
+          holding: "Ústavní stížnost se zamítá.",
+        }),
+      ).toEqual([]);
+    }
+  });
   test("keeps separate reviewed judgments with the same file number on different dates", () => {
     const reviews = extractCzechAppealReviews({
       header:

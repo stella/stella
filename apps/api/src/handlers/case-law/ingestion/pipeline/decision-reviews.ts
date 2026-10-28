@@ -63,6 +63,17 @@ export const planDecisionReviews = ({
   });
 };
 
+type WriteDecisionReviewsOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  country: string;
+  /** The identity locked before an update, or null for an insert/preserved identity. */
+  previousIdentity: Pick<
+    typeof caseLawDecisions.$inferSelect,
+    "country" | "court" | "docketFamilyKey"
+  > | null;
+  reviews: ReturnType<typeof planDecisionReviews>;
+};
+
 /**
  * Replay replaces the source decision's extracted edges, then settles both
  * its targets and references affected by this arrival/identity change.
@@ -74,16 +85,11 @@ export const writeDecisionReviews = async (
   {
     decisionId,
     country,
-    previousCountry = country,
+    previousIdentity,
     reviews,
-  }: {
-    decisionId: SafeId<"caseLawDecision">;
-    country: string;
-    previousCountry?: string;
-    reviews: ReturnType<typeof planDecisionReviews>;
-  },
+  }: WriteDecisionReviewsOptions,
 ) => {
-  if (country !== "CZE" && previousCountry !== "CZE") {
+  if (country !== "CZE" && previousIdentity?.country !== "CZE") {
     return;
   }
   if (country !== "CZE") {
@@ -169,6 +175,12 @@ export const writeDecisionReviews = async (
         ON review.reviewed_court = arrived.court
         AND review.reviewed_docket_family_key = arrived.docket_family_key
       WHERE arrived.id = ${decisionId}::uuid AND arrived.country = 'CZE'
+      UNION
+      SELECT review.*
+      FROM ${caseLawDecisionReviews} review
+      WHERE ${previousIdentity?.country === "CZE"}::boolean
+        AND review.reviewed_court = ${previousIdentity?.court ?? null}
+        AND review.reviewed_docket_family_key = ${previousIdentity?.docketFamilyKey ?? null}
     ), resolved AS (
       SELECT review.reviewing_decision_id, review.reviewed_court,
         review.reviewed_case_number, review.reviewed_decision_date,

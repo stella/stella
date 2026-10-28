@@ -36,6 +36,7 @@ import type { Transaction } from "@/api/db/root";
 import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
   billingArrangements,
+  caseLawDecisions,
   caseLawReplayBatches,
   entities,
   entityVersions,
@@ -2512,6 +2513,35 @@ export const lockCaseLawDecisionRows = async ({
     FOR UPDATE
   `);
 };
+
+type CaseLawDecisionSnapshotOptions = {
+  tx: Pick<Transaction, "select">;
+  decisionId: SafeId<"caseLawDecision">;
+  /** The storage slice supplies its document-presence policy without a dependency cycle. */
+  holdsDocument: SQL<boolean>;
+};
+
+/** Lock and read a decision's pre-refresh identity and payload state together. */
+export const lockCaseLawDecisionSnapshot = async ({
+  tx,
+  decisionId,
+  holdsDocument,
+}: CaseLawDecisionSnapshotOptions) =>
+  await tx
+    .select({
+      citationKey: caseLawDecisions.citationKey,
+      country: caseLawDecisions.country,
+      court: caseLawDecisions.court,
+      docketFamilyKey: caseLawDecisions.docketFamilyKey,
+      language: caseLawDecisions.language,
+      decisionDate: caseLawDecisions.decisionDate,
+      holdsDocument,
+      metadata: caseLawDecisions.metadata,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, decisionId))
+    .for("update")
+    .limit(1);
 
 /** Acquire one replay reservation after its checkpoint and before its decision. */
 export const lockCaseLawReplayBatch = async ({

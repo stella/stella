@@ -167,6 +167,7 @@ const finishInsertedRowTx = async (
   await writeDecisionReviews(tx, {
     decisionId: insertedId,
     country: write.result.country,
+    previousIdentity: null,
     reviews: write.plan.reviews,
   });
 

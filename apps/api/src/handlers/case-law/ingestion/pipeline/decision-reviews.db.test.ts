@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { caseLawDecisions } from "@/api/db/schema";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   planDecisionReviews,
@@ -13,6 +14,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/decision-reviews";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { rowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { lockCaseLawDecisionSnapshot } from "@/api/lib/db/aggregate-lock";
 
 const MIGRATION =
   "../../../../../drizzle/20261028173000_case_law_decision_reviews/migration.sql";
@@ -50,7 +53,16 @@ const prepare = async () => {
       id uuid PRIMARY KEY, country text NOT NULL, court text NOT NULL,
       case_number text NOT NULL, docket_family_key text, decision_date date,
       sheet_number text, ecli text, redacted_at timestamptz,
-      metadata jsonb NOT NULL DEFAULT '{}'
+      metadata jsonb NOT NULL DEFAULT '{}',
+      language text NOT NULL DEFAULT 'cs',
+      citation_key text,
+      fulltext text,
+      document_ast jsonb,
+      sections jsonb,
+      content_hash text,
+      text_s3_key text,
+      normalized_s3_key text,
+      ast_s3_key text
     );
   `);
   await client.exec(await Bun.file(new URL(MIGRATION, import.meta.url)).text());
@@ -83,14 +95,16 @@ type ApplyOptions = {
   id: SafeId<"caseLawDecision">;
   plan: ReturnType<typeof reviews>;
   country?: string;
-  previousCountry?: string;
+  previousIdentity?: Parameters<
+    typeof writeDecisionReviews
+  >[1]["previousIdentity"];
 };
 const apply = async ({
   db,
   id,
   plan,
   country = "CZE",
-  previousCountry = country,
+  previousIdentity = null,
 }: ApplyOptions) =>
   await runCitationGraphTransaction(
     (run) => db.transaction(run),
@@ -98,7 +112,7 @@ const apply = async ({
       writeDecisionReviews(tx, {
         decisionId: id,
         country,
-        previousCountry,
+        previousIdentity,
         reviews: plan,
       }),
   );
@@ -240,7 +254,11 @@ test("moving a decision out of the Czech corpus clears its review projection", a
     id: REVIEWING,
     plan: null,
     country: "SVK",
-    previousCountry: "CZE",
+    previousIdentity: {
+      country: "CZE",
+      court: "Nejvyšší správní soud",
+      docketFamilyKey: "reviewing",
+    },
   });
   expect(await links(client)).toEqual([]);
   expect(
@@ -346,3 +364,66 @@ test("reviewed judgments sharing a court and docket retain distinct dates and ta
     REVIEWED,
   );
 });
+
+test.each([
+  { correction: "court", changes: { court: "Krajský soud v Brně" } },
+  { correction: "docket", changes: { docketFamilyKey: "another-file" } },
+  { correction: "country", changes: { country: "SVK" } },
+] as const)(
+  "an ambiguous review resolves after a candidate's $correction correction",
+  async ({ changes }) => {
+    await using client = await prepare();
+    const db = drizzle({ client });
+    const planned = reviews();
+    const target = planned?.at(0) ?? panic("Review fixture must name a target");
+    const duplicate = createSafeId<"caseLawDecision">();
+    await insertDecision(db, { id: REVIEWING, court: "Nejvyšší správní soud" });
+    await insertDecision(db, {
+      id: REVIEWED,
+      family: target.reviewedDocketFamilyKey,
+    });
+    await insertDecision(db, {
+      id: duplicate,
+      family: target.reviewedDocketFamilyKey,
+    });
+    await apply({ db, id: REVIEWING, plan: planned });
+    expect((await links(client)).at(0)).toHaveProperty(
+      "reviewed_decision_id",
+      null,
+    );
+    await runCitationGraphTransaction(db.transaction.bind(db), async (tx) => {
+      const previousIdentity =
+        (
+          await lockCaseLawDecisionSnapshot({
+            tx,
+            decisionId: duplicate,
+            holdsDocument: rowHoldsDocumentFor(caseLawDecisions),
+          })
+        ).at(0) ?? panic("Correction fixture must exist");
+      const correctedIdentity = { ...previousIdentity, ...changes };
+      await tx.execute(sql`UPDATE ${caseLawDecisions}
+          SET court = ${correctedIdentity.court},
+            docket_family_key = ${correctedIdentity.docketFamilyKey},
+            country = ${correctedIdentity.country}
+          WHERE id = ${duplicate}::uuid`);
+      await writeDecisionReviews(tx, {
+        decisionId: duplicate,
+        country: "country" in changes ? changes.country : "CZE",
+        previousIdentity,
+        reviews: null,
+      });
+    });
+    expect((await links(client)).at(0)).toHaveProperty(
+      "reviewed_decision_id",
+      REVIEWED,
+    );
+    const settled = await links(client);
+    await apply({
+      db,
+      id: duplicate,
+      plan: null,
+      country: "country" in changes ? changes.country : "CZE",
+    });
+    expect(await links(client)).toEqual(settled);
+  },
+);

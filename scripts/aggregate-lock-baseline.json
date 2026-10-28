@@ -924,12 +924,6 @@
     "reason": "builder-for in apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row-update.ts",
-    "fingerprint": "60da0167e1e8232dbf418d1f799ee1496e32daf142bcd7c577eb70d889b160ae",
-    "count": 1,
-    "reason": "Pass the relation explicitly to the stored-payload owner in the existing ingestion row lock query; acquisition mode, target and count are unchanged."
-  },
-  {
     "file": "apps/api/src/handlers/case-law/ingestion/source-totals.ts",
     "fingerprint": "055cac1fb1cc155061a279e3f761531eebf27628de03fdaa0f77b143b0b24766",
     "count": 1,
