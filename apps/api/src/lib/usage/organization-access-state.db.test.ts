@@ -42,7 +42,6 @@ import {
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -687,8 +686,11 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
 
     await withAccessStateEnforced(async () => {
       const before = await readState(reconciledOrgId);
+      // testDb already carries aggregate lock history from the owner-pool
+      // fixtures, so the rollback runs in a plain transaction like the
+      // production creation callers.
       const rejection = await rejectionOf(
-        withAggregateTransaction(testDb, async (tx) => {
+        testDb.transaction(async (tx) => {
           await recordNewOrganizationAccessState(tx, {
             organizationId: reconciledOrgId,
             now: new Date(),
