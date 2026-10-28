@@ -1312,8 +1312,7 @@ describe("send message disconnect handling", () => {
             : actionAdmissionErrorFor(reason, "Admission refused");
         const refusal = actionAdmissionRefusal(refusalError);
         const admission = new AbortController();
-        const loseAdmission = () =>
-          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
+        const loseAdmission = () => admission.abort(refusalError);
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({
@@ -1388,6 +1387,7 @@ describe("send message disconnect handling", () => {
             tools: {},
           };
         });
+        const streamResponse = mock(streamChat);
         const refusedSend = createSendMessage({
           compactMessagesForContext: compactMessagesForContextMock,
           createRefRegistry: createChatRefRegistry,
@@ -1395,7 +1395,7 @@ describe("send message disconnect handling", () => {
           loadExternalMcpTools: loadTools,
           loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
           rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
-          streamResponse: streamChat,
+          streamResponse,
           uploadMessageFiles: uploadMessageFilesWithRollbackMock,
           startAdmission: async (options) => {
             expect(options.mode).toBe("concurrency-only");
@@ -1489,6 +1489,7 @@ describe("send message disconnect handling", () => {
               : { contactUrl: refusal.contactUrl }),
           },
         });
+        expect(streamResponse).not.toHaveBeenCalled();
         expect(acquisitions).toBe(1);
         expect(releases).toBe(1);
         expect(insertedMessages).toHaveLength(2);

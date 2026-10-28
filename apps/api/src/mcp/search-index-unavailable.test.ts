@@ -502,6 +502,32 @@ describe("public corpus statement budgets", () => {
     });
   });
 
+  test("a denied corpus call does not enter admission", async () => {
+    let admissions = 0;
+    const result = await handleMcpToolCall({
+      toolName: "create_reader_annotation",
+      args: {},
+      context: { ...createContext(), memberRole: "external" },
+      dependencies: {
+        admitPublicRead: async () => {
+          admissions += 1;
+          return Result.err(
+            new ActionAdmissionError({
+              reason: "busy",
+              message: "Concurrent reads in progress",
+              retryAfterMs: 1250,
+            }),
+          );
+        },
+        dispatchGatewayToolCall: async () => null,
+      },
+    });
+    expect(payloadOf(result)).toMatchObject({
+      error: { code: "permission_denied" },
+    });
+    expect(admissions).toBe(0);
+  });
+
   test("every corpus disposition runs at dispatch under its class budget", async () => {
     const corpusTools = Object.entries(LAW_MCP_TOOL_DISPOSITION)
       .filter(([, disposition]) => disposition === "corpus")
@@ -515,7 +541,7 @@ describe("public corpus statement budgets", () => {
     for (const toolName of classes.keys()) {
       await handleMcpToolCall({
         toolName,
-        args: { __budget_probe: true },
+        args: {},
         context: createContext(),
         dependencies: {
           admitPublicRead: async ({ run }) => {
@@ -554,7 +580,7 @@ describe("public corpus statement budgets", () => {
     let reached = false;
     await handleMcpToolCall({
       toolName: "search_boe_legislation",
-      args: { __budget_probe: true },
+      args: {},
       context: createContext(),
       dependencies: {
         admitPublicRead: async () => {

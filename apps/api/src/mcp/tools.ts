@@ -79,6 +79,7 @@ import {
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 import {
+  type AuthorizedMcpRequestContext,
   authorizeMcpToolContext,
   mcpToolAuthorityRefusal,
 } from "@/api/mcp/write-tool-authority";
@@ -447,6 +448,36 @@ const staticToolReferenceRefusal = async ({
   return null;
 };
 
+const undeclaredToolArgumentsResult = ({
+  args,
+  inputSchema,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  inputSchema: McpToolInputSchema;
+  toolName: string;
+}): InternalToolResult | undefined => {
+  const unknownArgs = findUndeclaredArguments({ args, inputSchema });
+  if (unknownArgs === undefined) {
+    return undefined;
+  }
+  const keys = unknownArgs.undeclared.map((entry) => entry.key);
+  return structuredErrorResult({
+    code: "validation_error",
+    message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
+    issues: unknownArgs.undeclared.map((entry) => ({
+      path: entry.key,
+      message: undeclaredArgumentMessage(entry),
+    })),
+    hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
+  });
+};
+
+// Handlers never see the mode: they return either a finished result or an
+// egress plan. The central pipeline applies anonymization (anonymized mode)
+// before windowing; this transport boundary then serializes. Both steps run
+// inside one Result so an anonymization or windowing failure is captured like
+// any handler failure.
 const dispatchMcpToolCall = async ({
   args,
   context,
@@ -478,19 +509,16 @@ const dispatchMcpToolCall = async ({
     return unavailableResult;
   }
 
-  const gatewayResult = await callGatewayTool({
+  const gatewayCall = {
     args,
     context,
     mode,
     toolName,
     ...(dependencies === undefined ? {} : { dependencies }),
-  });
-  if (gatewayResult !== undefined) {
-    return gatewayResult;
-  }
-
+  };
   if (!staticTool) {
-    return serializeForSurface(unknownToolResult(toolName));
+    const gatewayResult = await callGatewayTool(gatewayCall);
+    return gatewayResult ?? serializeForSurface(unknownToolResult(toolName));
   }
   const outputContract = resolveMcpToolOutputContract(toolName, mode);
   if (outputContract === undefined) {
@@ -525,23 +553,13 @@ const dispatchMcpToolCall = async ({
     );
   }
 
-  const unknownArgs = findUndeclaredArguments({
+  const unknownArgsResult = undeclaredToolArgumentsResult({
     args,
     inputSchema: staticTool.inputSchema,
+    toolName,
   });
-  if (unknownArgs) {
-    const keys = unknownArgs.undeclared.map((entry) => entry.key);
-    return serializeForSurface(
-      structuredErrorResult({
-        code: "validation_error",
-        message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
-        issues: unknownArgs.undeclared.map((entry) => ({
-          path: entry.key,
-          message: undeclaredArgumentMessage(entry),
-        })),
-        hint: `Remove ${keys.map((key) => `'${key}'`).join(", ")}. ${toolName} accepts only: ${unknownArgs.declared.join(", ")}.`,
-      }),
-    );
+  if (unknownArgsResult !== undefined) {
+    return serializeForSurface(unknownArgsResult);
   }
 
   const normalized = normalizeObjectInputAtBoundary({
@@ -576,88 +594,99 @@ const dispatchMcpToolCall = async ({
     return serializeForSurface(unknownToolResult(toolName));
   }
 
-  // Handlers never see the mode: they return either a finished result or an
-  // egress plan. The central pipeline applies anonymization (anonymized mode)
-  // before windowing; this transport boundary then serializes. Both steps run
-  // inside one Result so an anonymization or windowing failure is captured like
-  // any handler failure.
-  const finished = await Result.tryPromise({
-    try: async () => {
-      const referenceRefusal = await staticToolReferenceRefusal({
-        context,
-        definition: staticTool,
-        args: normalizedArgs,
-        mode,
-        toolName,
-      });
-      if (referenceRefusal !== null) {
-        return serializeForSurface(referenceRefusal);
+  return await runAuthorizedMcpToolCall({
+    context: authorizedContext,
+    mode,
+    toolName,
+    ...(dependencies === undefined ? {} : { dependencies }),
+    run: async () => {
+      const gatewayResult = await callGatewayTool(gatewayCall);
+      if (gatewayResult !== undefined) {
+        return gatewayResult;
       }
 
-      // Resolve confirmation from the registry's canonical behavior.
-      // Capability-catalog and upstream tools defer the final decision to their
-      // owning dispatch boundary because the selected target determines risk.
-      const confirmation = transportConfirmation(staticTool, normalizedArgs);
-      const requiresConfirmation = confirmation.required;
-      const unconfirmable = confirmation.required
-        ? confirmationUnavailableResult({
-            toolConfirmation: context.toolConfirmation,
-            subject: toolName,
-          })
-        : null;
-      if (unconfirmable !== null) {
-        return serializeForSurface(unconfirmable);
-      }
-      if (confirmation.required && normalizedArgs["confirm"] !== true) {
-        return serializeForSurface(
-          structuredErrorResult({
-            code: "confirmation_required",
-            message: confirmation.message,
-            hint: confirmation.hint,
-          }),
-        );
-      }
+      const finished = await Result.tryPromise({
+        try: async () => {
+          const referenceRefusal = await staticToolReferenceRefusal({
+            context,
+            definition: staticTool,
+            args: normalizedArgs,
+            mode,
+            toolName,
+          });
+          if (referenceRefusal !== null) {
+            return serializeForSurface(referenceRefusal);
+          }
 
-      const executionContext = requiresConfirmation
-        ? bindApprovedMcpAuditContext(authorizedContext)
-        : authorizedContext;
-      const response = await handler({
-        args: normalizedArgs,
-        context: executionContext,
+          // Resolve confirmation from the registry's canonical behavior.
+          // Capability-catalog and upstream tools defer the final decision to their
+          // owning dispatch boundary because the selected target determines risk.
+          const confirmation = transportConfirmation(
+            staticTool,
+            normalizedArgs,
+          );
+          const requiresConfirmation = confirmation.required;
+          const unconfirmable = confirmation.required
+            ? confirmationUnavailableResult({
+                toolConfirmation: context.toolConfirmation,
+                subject: toolName,
+              })
+            : null;
+          if (unconfirmable !== null) {
+            return serializeForSurface(unconfirmable);
+          }
+          if (confirmation.required && normalizedArgs["confirm"] !== true) {
+            return serializeForSurface(
+              structuredErrorResult({
+                code: "confirmation_required",
+                message: confirmation.message,
+                hint: confirmation.hint,
+              }),
+            );
+          }
+
+          const executionContext = requiresConfirmation
+            ? bindApprovedMcpAuditContext(authorizedContext)
+            : authorizedContext;
+          const response = await handler({
+            args: normalizedArgs,
+            context: executionContext,
+          });
+          const finalized = await finalizeToolEgress(
+            {
+              context: executionContext,
+              mode,
+              response,
+            },
+            {
+              anonymizeTextFields:
+                executionContext.testDependencies?.anonymizeTextFields,
+              loadAnonymizationAllowlistCanonicalsByWorkspace:
+                executionContext.testDependencies
+                  ?.loadAnonymizationAllowlistCanonicalsByWorkspace,
+              loadAnonymizationGazetteerEntriesByWorkspace:
+                executionContext.testDependencies
+                  ?.loadAnonymizationGazetteerEntriesByWorkspace,
+            },
+          );
+          return withInputNotes(
+            serializeForSurface(finalized, outputContract, toolName),
+            inputNotes,
+          );
+        },
+        catch: (error) => error,
       });
-      const finalized = await finalizeToolEgress(
-        {
-          context: executionContext,
+      if (Result.isError(finished)) {
+        return internalErrorResult({
           mode,
-          response,
-        },
-        {
-          anonymizeTextFields:
-            executionContext.testDependencies?.anonymizeTextFields,
-          loadAnonymizationAllowlistCanonicalsByWorkspace:
-            executionContext.testDependencies
-              ?.loadAnonymizationAllowlistCanonicalsByWorkspace,
-          loadAnonymizationGazetteerEntriesByWorkspace:
-            executionContext.testDependencies
-              ?.loadAnonymizationGazetteerEntriesByWorkspace,
-        },
-      );
-      return withInputNotes(
-        serializeForSurface(finalized, outputContract, toolName),
-        inputNotes,
-      );
+          context,
+          toolName,
+          error: finished.error,
+        });
+      }
+      return finished.value;
     },
-    catch: (error) => error,
   });
-  if (Result.isError(finished)) {
-    return internalErrorResult({
-      mode,
-      context,
-      toolName,
-      error: finished.error,
-    });
-  }
-  return finished.value;
 };
 
 const MCP_OUTPUT_CONTRACT_SINK = failureSink({
@@ -769,6 +798,25 @@ export const handleMcpToolCall = async ({
             }),
         }),
     });
+  return await run();
+};
+
+type AuthorizedMcpToolCallOptions = Pick<
+  McpToolCallArgs,
+  "toolName" | "dependencies"
+> & {
+  context: AuthorizedMcpRequestContext;
+  mode: McpMode;
+  run: () => Promise<CallToolResult>;
+};
+
+const runAuthorizedMcpToolCall = async ({
+  context,
+  mode,
+  toolName,
+  dependencies,
+  run,
+}: AuthorizedMcpToolCallOptions): Promise<CallToolResult> => {
   const budgetMs = corpusBudgetByTool.get(toolName);
   if (budgetMs === undefined) {
     return await run();
