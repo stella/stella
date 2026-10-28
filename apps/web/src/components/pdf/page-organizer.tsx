@@ -70,7 +70,7 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
   ENTITY_VERSION_UPLOAD_RESULT,
@@ -855,7 +855,7 @@ const LoadedPDFPageOrganizer = ({
 
   const handleAddPDFs = async (files: File[]) => {
     if (1 + addedSources.length + files.length > MAX_PAGE_EDITOR_SOURCES) {
-      notifyUserError(undefined, documentLimitMessage);
+      notifyUserProblem(documentLimitMessage);
       return;
     }
     const totalBytes =
@@ -863,7 +863,7 @@ const LoadedPDFPageOrganizer = ({
       addedSources.reduce((sum, source) => sum + source.bytes.byteLength, 0) +
       files.reduce((sum, file) => sum + file.size, 0);
     if (totalBytes > MAX_PAGE_EDITOR_SOURCE_BYTES) {
-      notifyUserError(undefined, tPageEditor("sourceLimit"));
+      notifyUserProblem(tPageEditor("sourceLimit"));
       return;
     }
 
@@ -903,10 +903,10 @@ const LoadedPDFPageOrganizer = ({
               return;
             }
             limitToastShown = true;
-            notifyUserError(undefined, documentLimitMessage);
+            notifyUserProblem(documentLimitMessage);
           },
           onUnsupported: () => {
-            notifyUserError(undefined, tPageEditor("unsupportedPDF"));
+            notifyUserProblem(tPageEditor("unsupportedPDF"));
           },
         }),
       () => setIsAddingPDF(false),
@@ -1111,8 +1111,7 @@ const LoadedPDFPageOrganizer = ({
         ? plan.pages.filter((page) => selectedIds.has(page.id))
         : plan.pages;
     if (pages.length > MAX_CLEAN_SCAN_PAGES) {
-      notifyUserError(
-        undefined,
+      notifyUserProblem(
         tPageEditor("cleanScan.pageLimit", {
           max: format.number(MAX_CLEAN_SCAN_PAGES),
         }),
