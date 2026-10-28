@@ -362,6 +362,7 @@ describe("image input preparation", () => {
       for (let iteration = 0; iteration < 5; iteration++) {
         // Rehydrated objects still share an attachment's content identity.
         for await (const _ of adapter.chatStream({
+          threadId: Bun.randomUUIDv7(),
           model: adapter.model,
           messages: imageMessages(first),
           logger: resolveDebugOption(false),
@@ -373,6 +374,7 @@ describe("image input preparation", () => {
       for (const bytes of [second, first, second]) {
         await adapter.structuredOutput({
           chatOptions: {
+            threadId: Bun.randomUUIDv7(),
             model: adapter.model,
             messages: imageMessages(bytes),
             logger: resolveDebugOption(false),
@@ -385,6 +387,7 @@ describe("image input preparation", () => {
       expect(sent.at(5)).not.toEqual(sent.at(0));
       const nextTurn = makeAdapter();
       for await (const _ of nextTurn.chatStream({
+        threadId: Bun.randomUUIDv7(),
         model: nextTurn.model,
         messages: imageMessages(first),
         logger: resolveDebugOption(false),
@@ -425,6 +428,7 @@ describe("image input preparation", () => {
     );
     const request = async (bytes: Uint8Array) => {
       for await (const _ of adapter.chatStream({
+        threadId: Bun.randomUUIDv7(),
         model: adapter.model,
         messages: imageMessages(bytes),
         logger: resolveDebugOption(false),
@@ -483,6 +487,7 @@ describe("image input preparation", () => {
     const adapter = withProviderImageInput(raw, "bedrock");
     for (const messages of [imageMessages(), TEXT]) {
       const chatOptions = {
+        threadId: Bun.randomUUIDv7(),
         model: raw.model,
         messages,
         logger: resolveDebugOption(false),

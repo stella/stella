@@ -23,6 +23,7 @@ import {
 
 const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
 const chatOptions = {
+  threadId: Bun.randomUUIDv7(),
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],
   logger: resolveDebugOption(false),

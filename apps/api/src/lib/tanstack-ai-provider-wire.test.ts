@@ -562,6 +562,7 @@ describe("the stream contract holds where an adapter does not", () => {
     });
     const chunks: StreamChunk[] = [];
     for await (const chunk of withProviderStreamContract(released).chatStream({
+      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [],
       model: cassette.model,
@@ -601,6 +602,7 @@ test("a cancelled structured Bedrock request never reaches the provider", async 
   const outcome = await adapter
     .structuredOutput({
       chatOptions: {
+        threadId: Bun.randomUUIDv7(),
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,
@@ -646,6 +648,7 @@ test("Gemini structured output preserves its provider HTTP status", async () => 
   const result = await Result.tryPromise(async () =>
     adapter.structuredOutput({
       chatOptions: {
+        threadId: Bun.randomUUIDv7(),
         logger: resolveDebugOption(false),
         messages: [{ content: "Reply with OK.", role: "user" }],
         model,

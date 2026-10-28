@@ -717,6 +717,7 @@ describe("TanStack text model resolution", () => {
       );
       try {
         for await (const _chunk of model.adapter.chatStream({
+          threadId: Bun.randomUUIDv7(),
           logger: resolveDebugOption(false),
           messages: [
             {
@@ -801,6 +802,7 @@ describe("TanStack text model resolution", () => {
       try {
         const chunks = [];
         for await (const chunk of model.adapter.chatStream({
+          threadId: Bun.randomUUIDv7(),
           logger: resolveDebugOption(false),
           messages: [
             {
@@ -1589,6 +1591,7 @@ describe("Anthropic workspace dispatch", () => {
           });
           const before = requests.length;
           for await (const _chunk of model.adapter.chatStream({
+            threadId: Bun.randomUUIDv7(),
             logger: resolveDebugOption(false),
             messages: [{ role: "user", content: "Fixture" }],
             model: model.adapter.model,

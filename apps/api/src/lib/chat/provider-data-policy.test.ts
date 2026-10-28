@@ -484,6 +484,7 @@ describe("provider request policy", () => {
           apiKey: expected.apiKey,
         };
         const chatOptions = {
+          threadId: Bun.randomUUIDv7(),
           model,
           logger: resolveDebugOption(false),
           messages: [{ role: "user" as const, content: REQUEST_TEXT }],
@@ -588,6 +589,7 @@ describe("provider request policy", () => {
           MODEL_DEFAULTS_LEDGER.chat.openrouter.candidate.modelId,
         );
         for await (const _chunk of model.adapter.chatStream({
+          threadId: Bun.randomUUIDv7(),
           model: model.modelId,
           logger: resolveDebugOption(false),
           messages: [{ role: "user", content: REQUEST_TEXT }],
@@ -735,6 +737,7 @@ describe("provider request policy", () => {
             "not/in-the-catalog",
           ]) {
             const chatOptions = {
+              threadId: Bun.randomUUIDv7(),
               model: invalidModel,
               messages: [{ role: "user" as const, content: REQUEST_TEXT }],
               logger: resolveDebugOption(false),
@@ -942,6 +945,7 @@ describe("provider request policy", () => {
               ...scenario.options,
             })(model);
             const chatOptions = {
+              threadId: Bun.randomUUIDv7(),
               model,
               logger: resolveDebugOption(false),
               messages: [{ role: "user" as const, content: "Reply with OK." }],

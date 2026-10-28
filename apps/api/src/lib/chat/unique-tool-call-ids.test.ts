@@ -316,6 +316,7 @@ const startedIdsInRun = async (ledger?: ToolCallIdLedger) => {
   const adapter = withProviderStreamContract(perResponseNumberingAdapter());
   const started: string[] = [];
   for await (const chunk of chat({
+    threadId: Bun.randomUUIDv7(),
     adapter:
       ledger === undefined ? adapter : withRunToolCallIds(adapter, ledger),
     agentLoopStrategy: maxIterations(4),

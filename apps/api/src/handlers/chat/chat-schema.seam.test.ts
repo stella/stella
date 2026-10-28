@@ -148,6 +148,7 @@ const streamProviderToolCall = async (
 
   const chunks: StreamChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Suggest changes." }],
     model: adapter.model,

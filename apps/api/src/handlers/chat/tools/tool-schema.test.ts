@@ -445,6 +445,7 @@ const serializeFullCoverageChatTools = (): Tool[] =>
   });
 
 const commonProviderOptions = (tools: Tool[]) => ({
+  threadId: Bun.randomUUIDv7(),
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   tools,
@@ -2013,6 +2014,7 @@ describe("chat tool schemas", () => {
     const chunks: StreamChunk[] = [];
 
     for await (const chunk of adapter.chatStream({
+      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Run the round-trip tool." }],
       model: adapter.model,
@@ -2038,6 +2040,7 @@ describe("chat tool schemas", () => {
     }
 
     for await (const chunk of adapter.chatStream({
+      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [
         { role: "user", content: "Run the round-trip tool." },

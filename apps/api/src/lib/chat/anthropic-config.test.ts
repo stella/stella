@@ -139,6 +139,7 @@ describe("Anthropic request configuration", () => {
           anthropicWorkspaceId,
         })("claude-sonnet-4-6");
         for await (const _chunk of adapter.chatStream({
+          threadId: Bun.randomUUIDv7(),
           logger: resolveDebugOption(false),
           messages: [{ role: "user", content: "Fixture" }],
           model: adapter.model,
@@ -234,6 +235,7 @@ for (const scenario of nativeReasoningCases) {
         apiKey: "sk-ant-usr-fixture",
       })(scenario.model);
       const chatOptions = {
+        threadId: Bun.randomUUIDv7(),
         logger: resolveDebugOption(false),
         messages: [{ role: "user" as const, content: "Fixture" }],
         model: adapter.model,

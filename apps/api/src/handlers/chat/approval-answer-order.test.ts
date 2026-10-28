@@ -147,6 +147,7 @@ const runRequest = async ({
     workspaceIds: [],
   });
   for await (const _chunk of chat({
+    threadId: Bun.randomUUIDv7(),
     adapter,
     agentLoopStrategy: maxIterations(4),
     messages,
@@ -400,6 +401,7 @@ const runAndStore = async ({
     },
     processor,
     source: streamChatChunks({
+      threadId: Bun.randomUUIDv7(),
       adapter,
       agentLoopStrategy: maxIterations(4),
       messages: guardProviderHistory({

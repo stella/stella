@@ -1545,7 +1545,7 @@ describe("transient visual preview fault persistence", () => {
             yield* normalizeStreamChunk({
               type: EventType.TOOL_CALL_END,
               toolCallId: "preview-call",
-              toolName: VISUAL_PREVIEW_TOOL_NAME,
+              metadata: { tanstack: { toolName: VISUAL_PREVIEW_TOOL_NAME } },
               output: partial,
               input: {},
             });
@@ -2824,6 +2824,7 @@ describe("native continuation persistence", () => {
 
   const firstContinuation = async () =>
     await continueTurn({
+      threadId: Bun.randomUUIDv7(),
       adapter: createTextReplyAdapter("Saved the draft."),
       messages: [
         userMessage,
@@ -2896,6 +2897,7 @@ describe("native continuation persistence", () => {
     });
     const resumeSecondApproval = async (firstOwningMessage: ChatMessage) =>
       await continueTurn({
+        threadId: Bun.randomUUIDv7(),
         adapter: createTextReplyAdapter("Saved the second draft."),
         messages: [
           userMessage,
@@ -2958,6 +2960,7 @@ describe("native continuation persistence", () => {
       },
     ];
     const { emitted, finish } = await continueTurn({
+      threadId: Bun.randomUUIDv7(),
       adapter: createSingleToolCallAdapter({
         arguments: '{"name":"Again","source":"@title Again"}',
         toolName: "save_playbook",
@@ -4439,6 +4442,7 @@ describe("outgoing chat stream message ids", () => {
       },
       processor: new StreamProcessor(),
       source: chat({
+        threadId: Bun.randomUUIDv7(),
         adapter,
         messages: [{ content: "Hello", role: "user" }],
       }),
@@ -5802,15 +5806,15 @@ describe("chat stream refs", () => {
           toolCallId: "tool-1",
         },
         // Shaped by the SDK's own normalizer, as `chat()` emits it: `input`
-        // and `toolName` are not spec keys on TOOL_CALL_END, so the engine
-        // moves them into `metadata.tanstack` before the chunk reaches this
+        // is not a spec key on TOOL_CALL_END, so the engine moves it
+        // into `metadata.tanstack` before the chunk reaches this
         // pipeline. An adapter that parses the whole input on END (Anthropic)
         // delivers the canonical arguments there.
         ...normalizeStreamChunk({
           type: EventType.TOOL_CALL_END,
           input: { matter_id: matterRef },
           toolCallId: "tool-1",
-          toolName: "list_matters",
+          metadata: { tanstack: { toolName: "list_matters" } },
         }),
         ...normalizeStreamChunk({
           type: EventType.RUN_FINISHED,

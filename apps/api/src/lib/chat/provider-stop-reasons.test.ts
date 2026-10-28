@@ -59,7 +59,6 @@ const toolCall: StreamChunk = {
   type: EventType.TOOL_CALL_START,
   toolCallId: "call",
   toolCallName: "mcp__external__delete",
-  toolName: "mcp__external__delete",
   timestamp: 1,
 };
 const usage = { completionTokens: 3, promptTokens: 31, totalTokens: 34 };
@@ -442,6 +441,7 @@ describe("a stop reason no table lists", () => {
 describe("an Anthropic request whose turn could pause", () => {
   type Request = Parameters<AnyTextAdapter["chatStream"]>[0];
   const request = (overrides: Partial<Request>): Request => ({
+    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",
