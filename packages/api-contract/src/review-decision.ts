@@ -12,11 +12,12 @@ export type ReviewDecisionEvent = {
   at: string;
 };
 
+/** Readonly because the fold hands every open result the same object. */
 export type CurrentReviewDecision = {
-  decision: ReviewDecision | null;
-  reason: string | null;
-  decidedBy: string | null;
-  decidedAt: string | null;
+  readonly decision: ReviewDecision | null;
+  readonly reason: string | null;
+  readonly decidedBy: string | null;
+  readonly decidedAt: string | null;
 };
 
 const OPEN_REVIEW_DECISION: CurrentReviewDecision = {
