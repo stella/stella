@@ -713,6 +713,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -739,6 +743,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -765,6 +773,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -792,6 +804,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -819,6 +835,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -847,6 +867,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -875,6 +899,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -903,6 +931,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -931,6 +963,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -958,6 +994,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -985,6 +1025,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1011,6 +1055,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1037,6 +1085,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1063,6 +1115,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1089,6 +1145,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1116,6 +1176,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1145,6 +1209,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1177,6 +1245,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1207,6 +1279,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1236,6 +1312,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1266,6 +1346,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1293,6 +1377,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1320,6 +1408,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1349,6 +1441,10 @@ jobs:
     if: >-
       always() && !cancelled()
       && needs.pack.result == 'success'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))
@@ -1405,6 +1501,10 @@ jobs:
     if: >-
       always()
       && needs.release-trigger.outputs.eligible == 'true'
+      && (github.event_name != 'workflow_run'
+      || (github.event.workflow_run.head_repository.full_name == github.repository
+      && github.event.workflow_run.path == '.github/workflows/release.yml'
+      && contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)))
       && (github.event_name == 'workflow_run'
       || (github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || inputs.publish)))

@@ -108,6 +108,13 @@ export const npmReleaseJobId = (directory: string): string =>
 const selected = (directory: string): string =>
   `contains(fromJSON(needs.pack.outputs.packages), '${directory}')`;
 
+const TRIGGERING_RUN_ORIGIN = [
+  "&& (github.event_name != 'workflow_run'",
+  "|| (github.event.workflow_run.head_repository.full_name == github.repository",
+  "&& github.event.workflow_run.path == '.github/workflows/release.yml'",
+  '&& contains(fromJSON(\'["push", "workflow_dispatch"]\'), github.event.workflow_run.event)))',
+] as const;
+
 export const renderNpmReleaseJobs = (
   graph: readonly NpmReleasePackage[],
 ): string => {
@@ -123,6 +130,7 @@ export const renderNpmReleaseJobs = (
       "    if: >-",
       "      always() && !cancelled()",
       "      && needs.pack.result == 'success'",
+      ...TRIGGERING_RUN_ORIGIN.map((line) => `      ${line}`),
       "      && (github.event_name == 'workflow_run'",
       "      || (github.ref == 'refs/heads/main'",
       "      && (github.event_name == 'push' || inputs.publish)))",
