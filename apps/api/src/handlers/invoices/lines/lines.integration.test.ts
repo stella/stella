@@ -8,8 +8,10 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import fc from "fast-check";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
+import { assertProperty } from "@stll/property-testing";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -27,7 +29,9 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import deleteExpense from "@/api/handlers/expenses/delete";
 import updateExpense from "@/api/handlers/expenses/update";
 import createInvoice from "@/api/handlers/invoices/create";
+import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
+import removeEntries from "@/api/handlers/invoices/entries/remove";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import batchUpdateTimeEntries from "@/api/handlers/time-entries/batch/update";
@@ -49,7 +53,7 @@ import {
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { LIMITS } from "@/api/lib/limits";
-import { cents } from "@/api/lib/money";
+import { cents, type CentsAmount } from "@/api/lib/money";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -424,7 +428,7 @@ describe("invoice lines", () => {
     ]);
   });
 
-  test("an entry line keeps the entry's amount and releases the entry when removed", async () => {
+  test("an entry line permits billed overrides and releases the entry when removed", async () => {
     const invoiceId = await seedInvoice();
     const expenseId = await seedExpense({ amount: 10_000, markup: 10 });
     const lineId = await expectCreated(invoiceId, {
@@ -435,7 +439,12 @@ describe("invoice lines", () => {
 
     expect(
       await runUpdate(invoiceId, lineId, { unitPriceMinor: 1 }),
-    ).toMatchObject({ code: 400 });
+    ).toMatchObject({ totals: { netAmountMinor: 1 } });
+    expect(
+      await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+    ).toMatchObject({
+      totals: { netAmountMinor: 11_000 },
+    });
     expect(
       await runUpdate(invoiceId, lineId, { vatRateBps: REDUCED_RATE }),
     ).toMatchObject({
@@ -827,6 +836,480 @@ describe("invoice lines", () => {
     ]);
   });
 
+  test("invoice line overrides preserve recorded work and reset exactly", async () => {
+    await assertProperty(
+      "invoice line overrides preserve recorded work and reset exactly",
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 480 }),
+        fc.integer({ min: 0, max: 100_000 }),
+        fc.integer({ min: 0, max: 40 }),
+        fc.integer({ min: 1, max: 1_000_000 }),
+        async (billedMinutes, unitPriceMinor, hours, recordedRateMinor) => {
+          const invoiceId = await seedInvoice();
+          const timeEntryId = await seedTimeEntry({
+            billedMinutes,
+            rateAtEntry: cents(recordedRateMinor),
+          });
+          const lineId = await expectCreated(invoiceId, {
+            source: { type: "time_entry", timeEntryId },
+            vatRateBps: STANDARD_RATE,
+            vatTreatment: "domestic_vat",
+          });
+          const sourceRows = await testDb
+            .select()
+            .from(timeEntries)
+            .where(eq(timeEntries.id, timeEntryId));
+          const recordedRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          const recorded = recordedRows.at(0);
+          expect(recorded).toBeDefined();
+          if (!recorded) {
+            throw new Error("Created line missing");
+          }
+          expect(
+            await runUpdate(invoiceId, lineId, {
+              description: "Narrative only",
+              quantity: recorded.quantity,
+              unitPriceMinor: recorded.unitPrice,
+            }),
+          ).toHaveProperty("id", lineId);
+          const narrativeRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(narrativeRows.at(0)?.netAmount).toBe(recorded.netAmount);
+          const totalsBeforeUnitEdit = await testDb.query.invoices.findFirst({
+            where: { id: { eq: invoiceId } },
+            columns: { netAmount: true, vatAmount: true, totalAmount: true },
+          });
+          if (billedMinutes === 1 && recordedRateMinor === 600_000) {
+            expect(recorded).toMatchObject({
+              quantity: "0.0167",
+              netAmount: 10_000,
+              vatAmount: 2100,
+              grossAmount: 12_100,
+            });
+          }
+          for (const unit of ["hours", null]) {
+            expect(await runUpdate(invoiceId, lineId, { unit })).toHaveProperty(
+              "id",
+              lineId,
+            );
+            expect(
+              await testDb.query.invoiceLines.findFirst({
+                where: { id: { eq: lineId } },
+              }),
+            ).toMatchObject({
+              unit,
+              quantity: recorded.quantity,
+              unitPrice: recorded.unitPrice,
+              netAmount: recorded.netAmount,
+              vatAmount: recorded.vatAmount,
+              grossAmount: recorded.grossAmount,
+              recordedUnit: recorded.unit,
+              recordedNetAmount: recorded.netAmount,
+            });
+            expect(
+              await testDb.query.invoices.findFirst({
+                where: { id: { eq: invoiceId } },
+                columns: {
+                  netAmount: true,
+                  vatAmount: true,
+                  totalAmount: true,
+                },
+              }),
+            ).toEqual(totalsBeforeUnitEdit);
+          }
+          expect(
+            await runUpdate(invoiceId, lineId, {
+              description: "Adjusted invoice narrative",
+              quantity: `${hours}.25`,
+              unitPriceMinor,
+            }),
+          ).toHaveProperty("id", lineId);
+          expect(
+            await testDb
+              .select()
+              .from(timeEntries)
+              .where(eq(timeEntries.id, timeEntryId)),
+          ).toEqual(sourceRows);
+          const editedRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(editedRows.at(0)).toMatchObject({
+            description: "Adjusted invoice narrative",
+            recordedDescription: recorded.description,
+            recordedQuantity: recorded.quantity,
+            recordedUnit: recorded.unit,
+            recordedUnitPrice: recorded.unitPrice,
+            recordedNetAmount: recorded.netAmount,
+          });
+          expect(
+            await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+          ).toHaveProperty("id", lineId);
+          const resetRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(resetRows.at(0)).toMatchObject({
+            description: recorded.description,
+            quantity: recorded.quantity,
+            unit: recorded.unit,
+            unitPrice: recorded.unitPrice,
+            netAmount: recorded.netAmount,
+          });
+          expect(
+            await testDb
+              .select()
+              .from(timeEntries)
+              .where(eq(timeEntries.id, timeEntryId)),
+          ).toEqual(sourceRows);
+        },
+      ),
+      { numRuns: 10, examples: [[1, 0, 0, 600_000]] },
+    );
+  });
+
+  test("invoice quantity overrides retain distinct high-precision decimals", async () => {
+    await assertProperty(
+      "invoice quantity overrides retain distinct high-precision decimals",
+      fc.asyncProperty(fc.integer({ min: 0, max: 9998 }), async (fraction) => {
+        const invoiceId = await seedInvoice();
+        const quantity = `99999999999999.${fraction.toString().padStart(4, "0")}`;
+        const changedQuantity = `99999999999999.${(fraction + 1).toString().padStart(4, "0")}`;
+        const lineId = await expectCreated(
+          invoiceId,
+          manual({ quantity, unitPriceMinor: 0 }, 0),
+        );
+        expect(
+          await runUpdate(invoiceId, lineId, { quantity: changedQuantity }),
+        ).toHaveProperty("id", lineId);
+        const rows = await testDb
+          .select()
+          .from(invoiceLines)
+          .where(eq(invoiceLines.id, lineId));
+        expect(rows.at(0)?.quantity).toBe(changedQuantity);
+        expect(rows.at(0)?.recordedQuantity).toBe(quantity);
+      }),
+      { numRuns: 10 },
+    );
+  });
+
+  test.each(["never-issued", "previously-issued"] as const)(
+    "%s draft content mutation boundary covers every line and entry operation",
+    async (history) => {
+      const invoiceId = await seedInvoice();
+      const lineId = await expectCreated(
+        invoiceId,
+        manual({ quantity: "1", unitPriceMinor: 12_000 }, STANDARD_RATE),
+      );
+      const attachedTime = await seedTimeEntry({ billedMinutes: 60 });
+      const attachedExpense = await seedExpense({ amount: 1000, markup: 0 });
+      await expectCreated(invoiceId, {
+        source: { type: "time_entry", timeEntryId: attachedTime },
+        vatRateBps: STANDARD_RATE,
+        vatTreatment: "domestic_vat",
+      });
+      await expectCreated(invoiceId, {
+        source: { type: "expense", expenseId: attachedExpense },
+        vatRateBps: STANDARD_RATE,
+        vatTreatment: "domestic_vat",
+      });
+      const lineTime = await seedTimeEntry({ billedMinutes: 30 });
+      const lineExpense = await seedExpense({ amount: 500, markup: 0 });
+      const addTime = await seedTimeEntry({ billedMinutes: 15 });
+      const addExpense = await seedExpense({ amount: 250, markup: 0 });
+      const timeIds = [attachedTime, lineTime, addTime];
+      const expenseIds = [attachedExpense, lineExpense, addExpense];
+      if (history === "previously-issued") {
+        expect(await runTransition(invoiceId, "finalize")).toEqual({
+          id: invoiceId,
+        });
+        expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
+          id: invoiceId,
+        });
+      }
+      const readContent = async () => ({
+        invoice: await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+        }),
+        lines: await testDb
+          .select()
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, invoiceId))
+          .orderBy(invoiceLines.id),
+        time: await testDb
+          .select()
+          .from(timeEntries)
+          .where(inArray(timeEntries.id, timeIds))
+          .orderBy(timeEntries.id),
+        expenses: await testDb
+          .select()
+          .from(expenses)
+          .where(inArray(expenses.id, expenseIds))
+          .orderBy(expenses.id),
+      });
+      const before = await readContent();
+      const auditEvents: AuditEvent[] = [];
+      const invoiceParams = { workspaceId: ids.wsA1, invoiceId };
+      const lineParams = { ...invoiceParams, lineId };
+      const mutations = [
+        {
+          name: "create manual line",
+          successKey: "id",
+          run: async () =>
+            await createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: manual(
+                  { quantity: "1", unitPriceMinor: 1000 },
+                  STANDARD_RATE,
+                ),
+              }),
+            ),
+        },
+        {
+          name: "create time line",
+          successKey: "id",
+          run: async () =>
+            await createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: {
+                  source: { type: "time_entry", timeEntryId: lineTime },
+                  vatRateBps: STANDARD_RATE,
+                  vatTreatment: "domestic_vat",
+                },
+              }),
+            ),
+        },
+        {
+          name: "create expense line",
+          successKey: "id",
+          run: async () =>
+            await createInvoiceLine.handler(
+              contextFor(createInvoiceLine.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: {
+                  source: { type: "expense", expenseId: lineExpense },
+                  vatRateBps: STANDARD_RATE,
+                  vatTreatment: "domestic_vat",
+                },
+              }),
+            ),
+        },
+        {
+          name: "update line",
+          successKey: "id",
+          run: async () =>
+            await updateInvoiceLine.handler(
+              contextFor(updateInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+                body: { description: "Revised" },
+              }),
+            ),
+        },
+        {
+          name: "reset line",
+          successKey: "id",
+          run: async () =>
+            await updateInvoiceLine.handler(
+              contextFor(updateInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+                body: { resetToRecorded: true },
+              }),
+            ),
+        },
+        {
+          name: "attach time",
+          successKey: "totalAmount",
+          run: async () =>
+            await addEntries.handler(
+              contextFor(addEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { timeEntryIds: [addTime] },
+              }),
+            ),
+        },
+        {
+          name: "attach expense",
+          successKey: "totalAmount",
+          run: async () =>
+            await addEntries.handler(
+              contextFor(addEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { expenseIds: [addExpense] },
+              }),
+            ),
+        },
+        {
+          name: "remove time",
+          successKey: "success",
+          run: async () =>
+            await removeEntries.handler(
+              contextFor(removeEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { timeEntryIds: [attachedTime] },
+              }),
+            ),
+        },
+        {
+          name: "remove expense",
+          successKey: "success",
+          run: async () =>
+            await removeEntries.handler(
+              contextFor(removeEntries.handler, {
+                params: invoiceParams,
+                auditEvents,
+                body: { expenseIds: [attachedExpense] },
+              }),
+            ),
+        },
+        {
+          name: "delete line",
+          successKey: "id",
+          run: async () =>
+            await deleteInvoiceLine.handler(
+              contextFor(deleteInvoiceLine.handler, {
+                params: lineParams,
+                auditEvents,
+              }),
+            ),
+        },
+        {
+          name: "delete invoice",
+          successKey: "deleted",
+          run: async () =>
+            await deleteInvoice.handler(
+              contextFor(deleteInvoice.handler, {
+                params: invoiceParams,
+                auditEvents,
+              }),
+            ),
+        },
+      ];
+      for (const mutation of mutations) {
+        const result = await mutation.run();
+        if (history === "previously-issued") {
+          expect(result, mutation.name).toMatchObject({
+            code: 409,
+            response: {
+              message:
+                "Issued invoice content cannot be edited; create a credit note instead",
+            },
+          });
+        } else {
+          expect(result, mutation.name).toHaveProperty(mutation.successKey);
+          expect(result, mutation.name).not.toHaveProperty("code");
+        }
+      }
+      const after = await readContent();
+      if (history === "previously-issued") {
+        expect(after).toEqual(before);
+        expect(auditEvents).toEqual([]);
+        expect(await runTransition(invoiceId, "finalize")).toEqual({
+          id: invoiceId,
+        });
+        const refinalized = await readContent();
+        expect(refinalized.invoice).toMatchObject({
+          ...before.invoice,
+          status: INVOICE_STATUS.FINALIZED,
+          updatedAt: expect.any(Date),
+        });
+        expect(refinalized.lines).toEqual(before.lines);
+        expect(refinalized.time).toEqual(before.time);
+        expect(refinalized.expenses).toEqual(before.expenses);
+      } else {
+        expect(after.invoice).toBeUndefined();
+        expect(after.lines).toEqual([]);
+        for (const row of [...after.time, ...after.expenses]) {
+          expect(row).toMatchObject({
+            invoiceId: null,
+            status: BILLING_STATUS.APPROVED,
+          });
+        }
+        expect(auditEvents.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  test("previously issued legacy content is neither materialized nor recalculated on refinalize", async () => {
+    const legacy = await seedLegacyDraft();
+    await testDb
+      .update(invoices)
+      .set({ finalizedAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(invoices.id, legacy.invoiceId));
+    const before = await testDb.query.invoices.findFirst({
+      where: { id: { eq: legacy.invoiceId } },
+    });
+    expect(
+      await runCreate(
+        legacy.invoiceId,
+        manual({ quantity: "1", unitPriceMinor: 1000 }, 0),
+      ),
+    ).toMatchObject({ code: 409 });
+    expect(await runTransition(legacy.invoiceId, "finalize")).toEqual({
+      id: legacy.invoiceId,
+    });
+    expect(
+      await testDb
+        .select()
+        .from(invoiceLines)
+        .where(eq(invoiceLines.invoiceId, legacy.invoiceId)),
+    ).toEqual([]);
+    const after = await testDb.query.invoices.findFirst({
+      where: { id: { eq: legacy.invoiceId } },
+    });
+    expect(after).toMatchObject({
+      ...before,
+      status: INVOICE_STATUS.FINALIZED,
+      updatedAt: expect.any(Date),
+    });
+  });
+
+  test("expense overrides preserve the source and can be reset", async () => {
+    const invoiceId = await seedInvoice();
+    const expenseId = await seedExpense({ amount: 12_000, markup: 15 });
+    const lineId = await expectCreated(invoiceId, {
+      source: { type: "expense", expenseId },
+      vatRateBps: STANDARD_RATE,
+      vatTreatment: "domestic_vat",
+    });
+    const before = await testDb
+      .select()
+      .from(expenses)
+      .where(eq(expenses.id, expenseId));
+    expect(
+      await runUpdate(invoiceId, lineId, {
+        description: "Billed filing fee",
+        quantity: "2",
+        unitPriceMinor: 5000,
+      }),
+    ).toHaveProperty("id", lineId);
+    expect(readLines(await runGet(invoiceId)).at(0)?.netAmount).toBe(10_000);
+    expect(
+      await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+    ).toHaveProperty("id", lineId);
+    expect(readLines(await runGet(invoiceId)).at(0)).toMatchObject({
+      description: "Court fee",
+      netAmount: 13_800,
+    });
+    expect(
+      await testDb.select().from(expenses).where(eq(expenses.id, expenseId)),
+    ).toEqual(before);
+  });
+
   test("a line patch that omits the VAT treatment keeps it", async () => {
     const invoiceId = await seedInvoice();
     const lineId = await expectCreated(invoiceId, {
@@ -1001,6 +1484,12 @@ const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
   }
   if (handler === deleteExpense.handler) {
     return "/v1/expenses/:workspaceId";
+  }
+  if (handler === removeEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
   }
   return panic("Invoice test context received an unregistered handler");
 };
@@ -1217,13 +1706,16 @@ const setStatus = async (
     .where(eq(invoices.id, invoiceId));
 };
 
+type SeedTimeEntryOptions = {
+  billedMinutes: number;
+  noCharge?: boolean;
+  rateAtEntry?: CentsAmount;
+};
 const seedTimeEntry = async ({
   billedMinutes,
   noCharge = false,
-}: {
-  billedMinutes: number;
-  noCharge?: boolean;
-}) => {
+  rateAtEntry = cents(20_000),
+}: SeedTimeEntryOptions) => {
   const id = createSafeId<"timeEntry">();
   seededTimeEntryIds.push(id);
   await testDb.insert(timeEntries).values({
@@ -1236,7 +1728,7 @@ const seedTimeEntry = async ({
     timezoneId: "UTC",
     durationMinutes: billedMinutes,
     billedMinutes,
-    rateAtEntry: cents(20_000),
+    rateAtEntry,
     currency: "USD",
     narrative: noCharge ? "Courtesy work" : "Drafted the response",
     noCharge,

@@ -16,6 +16,7 @@ import {
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
   syntheticSessionControl,
+  timeEntries,
   workObligations,
 } from "@/api/db/schema";
 import {
@@ -82,6 +83,23 @@ const UNMANAGED_REASONS = {
   coordinatedTimers:
     "Timer state and its entry projection are coordinated by the timer transaction owner pending migration.",
 } as const;
+
+// A time entry's review lifecycle: a timekeeper submits a draft, an approver
+// approves it or returns it to draft, invoicing bills an approved entry and a
+// write-off retires one. The review moves go through this spec; invoicing,
+// write-off and the matter batch actions are still direct writes in the
+// shrinking ledger.
+const TIME_ENTRY_TRANSITIONS = defineTransitions(
+  timeEntries,
+  {
+    draft: ["submitted", "approved", "written_off"],
+    submitted: ["approved", "draft", "written_off"],
+    approved: ["draft", "billed", "written_off"],
+    billed: ["approved", "written_off"],
+    written_off: ["draft"],
+  },
+  { terminal: [] },
+);
 
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
@@ -441,7 +459,7 @@ export const TRANSITIONS = {
   templatePersistenceRequests: { unmanaged: UNMANAGED_REASONS.cleanup },
   templates: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   templateVersions: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
-  timeEntries: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  timeEntries: TIME_ENTRY_TRANSITIONS,
   timeEntrySuggestions: { unmanaged: UNMANAGED_REASONS.userDecision },
   timeEntryTimerStates: { unmanaged: UNMANAGED_REASONS.projection },
   timeTimers: { unmanaged: UNMANAGED_REASONS.coordinatedTimers },

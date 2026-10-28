@@ -14,13 +14,11 @@ import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisio
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import {
-  explainRoot,
-  scanOccurrences,
-} from "@/api/tests/query-plans/plan-walker";
+import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
@@ -64,6 +62,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           "case_law_sources",
           "case_law_decisions",
           "case_law_search_documents",
+          "case_law_browse_facet_counts",
         ]) {
           await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
@@ -155,6 +154,13 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
         await db.execute(sql`ANALYZE case_law_sources`);
 
+        await refreshPgFtsBrowseFacets(db);
+        await db.execute(sql`INSERT INTO case_law_browse_facet_counts
+          (kind, country, source_id, value, total)
+          SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
+          FROM case_law_sources sources
+          CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+        await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
@@ -176,17 +182,35 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           null,
           2,
         );
-        const probes = scanOccurrences(root).filter(
-          ({ index }) => index === COVERAGE_INDEX,
+        const facetProbes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_browse_facet_counts" &&
+            node["Actual Loops"] !== 0,
+        );
+        expect(facetProbes, planEvidence).toHaveLength(2);
+        for (const probe of facetProbes) {
+          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
+            String(probe["Node Type"]),
+          );
+          expect(probe["Index Cond"], planEvidence).toContain("source_id");
+          expect(probe["Index Cond"], planEvidence).toContain("court");
+          expect(probe["Actual Rows"], planEvidence).toBe(1);
+          expect(probe["Actual Loops"], planEvidence).toBe(SOURCES);
+        }
+        const probes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_decisions" &&
+            node["Actual Loops"] !== 0,
         );
         expect(probes, planEvidence).toHaveLength(2);
         for (const probe of probes) {
           expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
-            probe.nodeType,
+            String(probe["Node Type"]),
           );
           // The endpoint limits and actual scan work are asserted below.
-          expect(probe.indexCond, planEvidence).toContain("source_id");
-          expect(probe.indexCond, planEvidence).toContain(
+          expect(probe["Index Name"], planEvidence).toBe(COVERAGE_INDEX);
+          expect(probe["Index Cond"], planEvidence).toContain("source_id");
+          expect(probe["Index Cond"], planEvidence).toContain(
             "decision_date IS NOT NULL",
           );
         }
@@ -241,6 +265,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             decisionYearFrom: firstDate.year,
             decisionYearTo: lastDate.year,
             pendingTextCount: 0,
+            courts: [{ court: "Plan court", decisions: DECISIONS_PER_SOURCE }],
           });
         }
       } finally {
