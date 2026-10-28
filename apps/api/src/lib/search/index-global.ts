@@ -661,7 +661,6 @@ const buildSearchFilterFragments = ({
     hasEditorFilter,
     hasMimeTypeFilter,
     restrictToEntities,
-    tsQuery,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -754,7 +753,6 @@ const readGlobalSearch = async (
     contactTextSearchFilter,
     caseLawTextSearchFilter,
     chatTextSearchFilter,
-    tsQuery,
     searchHeadline,
     searchScore,
     searchScoreValue,
@@ -960,6 +958,9 @@ const readGlobalSearch = async (
     selectedWorkspaceIds,
   });
 
+  const chatSourceOrder = hasSearchQuery
+    ? sql`ms.created_at, ms.message_id`
+    : sql`ms.created_at DESC, ms.message_id DESC`;
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     async () => {
@@ -980,15 +981,14 @@ const readGlobalSearch = async (
             THEN source_message.content ELSE NULL END,
           'overflow', source_message.source_bytes > ${LIMITS.searchChatCandidateSourceBytesMax}
             OR source_message.source_position > ${LIMITS.searchChatCandidateSourceMessagesMax}
-        )), '[]'::jsonb) FROM (
+        ) ORDER BY source_message.source_position), '[]'::jsonb) FROM (
           SELECT m.role, m.content,
-            sum(octet_length(m.content::text)) OVER (ORDER BY ms.created_at DESC, ms.message_id DESC) AS source_bytes,
-            row_number() OVER (ORDER BY ms.created_at DESC, ms.message_id DESC) AS source_position
+            sum(octet_length(m.content::text)) OVER (ORDER BY ${chatSourceOrder}) AS source_bytes,
+            row_number() OVER (ORDER BY ${chatSourceOrder}) AS source_position
           FROM chat_message_search_documents ms
           JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
           WHERE ms.thread_id = t.id
-            ${hasSearchQuery ? sql`AND ms.tsv @@ ${tsQuery}` : sql``}
-          ORDER BY ms.created_at DESC, ms.message_id DESC
+          ORDER BY ${chatSourceOrder}
           LIMIT ${hasSearchQuery ? LIMITS.searchChatCandidateSourceMessagesMax + 1 : LIMITS.searchChatPreviewMessageLimit}
         ) source_message) AS source_messages,
         NULL::text AS headline,

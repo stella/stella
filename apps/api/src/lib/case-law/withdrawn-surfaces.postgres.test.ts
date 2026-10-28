@@ -69,6 +69,7 @@ import { chatSearchVectorSql } from "@/api/lib/search/chat-search-text";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { readSearchPreview } from "@/api/lib/search/preview";
+import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -100,6 +101,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
   const sourceId = createSafeId<"caseLawSource">();
   const decisionId = createSafeId<"caseLawDecision">();
   const activeId = createSafeId<"caseLawDecision">();
+  const seededDecisionIds = [decisionId, activeId];
   const threadId = createSafeId<"chatThread">();
   const activeThreadId = createSafeId<"chatThread">();
   const seededThreads = [threadId, activeThreadId];
@@ -405,10 +407,10 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     await db
       .delete(caseLawIndexJobs)
-      .where(inArray(caseLawIndexJobs.decisionId, [decisionId, activeId]));
+      .where(inArray(caseLawIndexJobs.decisionId, seededDecisionIds));
     await db
       .delete(caseLawDecisions)
-      .where(inArray(caseLawDecisions.id, [decisionId, activeId]));
+      .where(inArray(caseLawDecisions.id, seededDecisionIds));
     await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
     await db.delete(organization).where(eq(organization.id, organizationId));
     await db.delete(user).where(eq(user.id, userId));
@@ -819,6 +821,85 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
   }
 
   test.each([
+    {
+      placement: "title and message",
+      title: "titlequartz",
+      messages: ["messageamber"],
+      query: "titlequartz AND messageamber",
+    },
+    {
+      placement: "two messages",
+      title: "Thread",
+      messages: ["firstquartz", "secondamber"],
+      query: "firstquartz AND secondamber",
+    },
+    {
+      placement: "a phrase across two messages",
+      title: "Thread",
+      messages: ["phrasequartz", "phraseamber"],
+      query: '"phrasequartz phraseamber"',
+    },
+  ])(
+    "chat search retains thread-level matches across $placement",
+    async ({ title, messages, query }) => {
+      const id = createSafeId<"chatThread">();
+      seededThreads.push(id);
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title,
+          titleSource: "user",
+          subjectDecisionId: activeId,
+        });
+        await tx.insert(chatMessages).values(
+          messages.map((text, index) => ({
+            id: createSafeId<"chatMessage">(),
+            threadId: id,
+            userId,
+            workspaceId,
+            role: "user" as const,
+            createdAt: new Date(Date.UTC(2026, 9, 18, 10, index)),
+            content: proveTextOnlyPersistedChatMessageContent({
+              version: 3,
+              data: [{ type: "text", content: text }],
+            }),
+          })),
+        );
+        await upsertChatThreadSearchDocument(id, tx);
+        const indexed = await tx
+          .select({
+            matches: sql<boolean>`${chatThreadSearchDocuments.tsv} @@ ${buildSearchTsQuery(query)}`,
+          })
+          .from(chatThreadSearchDocuments)
+          .where(eq(chatThreadSearchDocuments.threadId, id))
+          .limit(1);
+        expect(indexed.at(0)?.matches).toBe(true);
+      });
+      const result = await request(async () =>
+        searchGlobal(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [workspaceId],
+            selectedWorkspaceIds: [],
+            types: ["chat"],
+            editedByUserIds: [],
+            mimeTypes: [],
+            query,
+            limit: 10,
+          },
+          { scopedDb },
+        ),
+      );
+      expect(result.hits.map((hit) => hit.id)).toEqual([`chat:${id}`]);
+      expect(result.hits.at(0)?.title).toBe(title);
+    },
+  );
+
+  test.each([
     { query: "paginateplain", masked: 0, admitted: 125 },
     { query: "paginatemasked", masked: 120, admitted: 73 },
   ])(
@@ -1100,6 +1181,153 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     }
     expect(await readMessages()).toEqual(before);
   });
+
+  test.each([
+    { operation: "snapshot", deltas: 10 },
+    { operation: "snapshot", deltas: 300 },
+    { operation: "read", deltas: 10 },
+    { operation: "read", deltas: 300 },
+  ] as const)(
+    "the same log refreshes withdrawal verdicts between request-scoped $operation operations with $deltas deltas",
+    async ({ operation, deltas }) => {
+      const sourceDecisionId = createSafeId<"caseLawDecision">();
+      seededDecisionIds.push(sourceDecisionId);
+      await db.insert(caseLawDecisions).values({
+        id: sourceDecisionId,
+        sourceId,
+        sourceDocumentId: sourceDecisionId,
+        caseNumber: "Fixture",
+        country: "POL",
+        court: "Fixture",
+        language: "pl",
+        fulltext: secret,
+        contentHash: "fixture",
+      });
+      const id = createSafeId<"chatThread">();
+      seededThreads.push(id);
+      const incomingId = createSafeId<"chatMessage">();
+      const execution = {
+        id: createSafeId<"chatTurn">(),
+        executionId: Bun.randomUUIDv7(),
+      };
+      const replayRunId = Bun.randomUUIDv7();
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: own,
+          titleSource: "user",
+          subjectDecisionId: sourceDecisionId,
+        });
+        await tx.insert(chatMessages).values({
+          id: incomingId,
+          threadId: id,
+          userId,
+          workspaceId,
+          role: "user",
+          content: ownContent,
+        });
+        await tx.insert(chatTurns).values({
+          id: execution.id,
+          executionId: execution.executionId,
+          organizationId,
+          userId,
+          workspaceId,
+          threadId: id,
+          userMessageId: incomingId,
+          runId: replayRunId,
+          status: "running",
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        });
+      });
+      const log = createChatRunLog({
+        db: scopedDb,
+        organizationId,
+        runId: replayRunId,
+        execution,
+      });
+      await log.append([
+        { type: EventType.RUN_STARTED, runId: replayRunId, threadId: id },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: incomingId,
+          role: "user",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: incomingId,
+          delta: own,
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: incomingId },
+        { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
+        ...Array.from(
+          { length: deltas },
+          () =>
+            ({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId,
+              delta: secret,
+            }) as const,
+        ),
+        { type: EventType.TEXT_MESSAGE_END, messageId },
+        { type: EventType.RUN_FINISHED, runId: replayRunId, threadId: id },
+      ]);
+      await log.close();
+      const read = async () =>
+        await request(
+          async () =>
+            await runWithQueryCounter(
+              async (counter) => {
+                const entries = [];
+                if (operation === "snapshot") {
+                  entries.push(...(await log.snapshot()));
+                } else {
+                  for await (const entry of log.read(
+                    "-1",
+                    new AbortController().signal,
+                  )) {
+                    entries.push(entry);
+                  }
+                }
+                const lookups = [...counter.fingerprints]
+                  .filter(([key]) =>
+                    key.includes('from "case_law_withdrawal_status"'),
+                  )
+                  .reduce((total, [, count]) => total + count, 0);
+                expect(lookups).toBe(1);
+                return entries;
+              },
+              { detectRepeatedQueries: true },
+            ),
+        );
+      const before = await read();
+      expect(JSON.stringify(before)).toContain(secret);
+      expect(JSON.stringify(before)).toContain(own);
+      const withdrawal = await redactCaseLawDecision({
+        decisionId: sourceDecisionId,
+        scopedDb: asTestRaw<ScopedDb>(
+          async <T>(run: (tx: Transaction) => Promise<T>) =>
+            await db.transaction(async (tx) => await run(asTestRaw(tx))),
+        ),
+        sweepRaw: async () => ({ type: "swept", legacy: "none" }),
+        deleteCorpus: async (keys, options) =>
+          await deleteCorpusDocument(keys, {
+            ...options,
+            deleteObject: async () => undefined,
+          }),
+      });
+      expect(withdrawal.isOk()).toBe(true);
+      const after = await read();
+      expect(after.map(({ offset }) => offset)).toEqual(
+        before.map(({ offset }) => offset),
+      );
+      expect(JSON.stringify(after)).toContain(marker);
+      expect(JSON.stringify(after)).not.toContain(secret);
+      expect(JSON.stringify(after)).toContain(own);
+    },
+  );
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
     const id = createSafeId<"chatThread">();

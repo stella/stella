@@ -310,11 +310,9 @@ const createRunLogCopyProjection = () => {
   >({
     entries,
     log,
-    markers = shownMarkers,
   }: {
     entries: T[];
     log: RunLogHeader;
-    markers?: Set<string>;
   }) => {
     if (Array.isArray(log?.decisionReferences)) {
       for (const record of log.decisionReferences) {
@@ -382,8 +380,8 @@ const createRunLogCopyProjection = () => {
         chunk.type === EventType.TEXT_MESSAGE_CHUNK
       ) {
         const messageKey = chunk.messageId ?? "current-text-message";
-        text = markers.has(messageKey) ? "" : label;
-        markers.add(messageKey);
+        text = shownMarkers.has(messageKey) ? "" : label;
+        shownMarkers.add(messageKey);
       }
       return { ...entry, chunk: projectWithdrawnRunChunk(chunk, text) };
     });
@@ -401,13 +399,12 @@ const createRunLogReader = ({
 }): Pick<StreamDurability, "read" | "snapshot"> => {
   const needsCurrentTiming = (chunks: readonly StreamChunk[]) =>
     timingMode === "current" && chunks.some(hasRunningChunkTiming);
-  const { projectEntries, hasRead } = createRunLogCopyProjection();
-  const loadHeader = async (tx: Transaction) =>
+  const loadHeader = async (tx: Transaction, includeReferences: boolean) =>
     await readRunLogHeaderOnTx({
       tx,
       organizationId,
       runId,
-      includeReferences: !hasRead(),
+      includeReferences,
     });
   const unsettledTailAfter = (log: RunLogHeader) => {
     if (log?.closedAt !== null) {
@@ -430,9 +427,12 @@ const createRunLogReader = ({
       ? log.nextSeq - 2n
       : BigInt(log.tailTimingSeq) - 1n;
   };
-  const loadPage = async (after: bigint) =>
+  const loadPage = async (
+    after: bigint,
+    projection: ReturnType<typeof createRunLogCopyProjection>,
+  ) =>
     await db(async (tx) => {
-      const log = await loadHeader(tx);
+      const log = await loadHeader(tx, !projection.hasRead());
       if (log === undefined) {
         return { entries: [], log };
       }
@@ -451,7 +451,10 @@ const createRunLogReader = ({
         )
         .orderBy(asc(chatRunLogEntries.seq))
         .limit(READ_PAGE_SIZE);
-      const entries = await projectEntries({ entries: storedEntries, log });
+      const entries = await projection.projectEntries({
+        entries: storedEntries,
+        log,
+      });
       if (!needsCurrentTiming(entries.map(({ chunk }) => chunk))) {
         return { entries, log };
       }
@@ -469,6 +472,7 @@ const createRunLogReader = ({
 
   return {
     async *read(offset, signal) {
+      const projection = createRunLogCopyProjection();
       let after: bigint | null = 0n;
       if (offset === "now") {
         after = null;
@@ -476,7 +480,7 @@ const createRunLogReader = ({
         after = offsetSequence(offset);
       }
       if (after === null) {
-        const { log } = await loadPage(0n);
+        const { log } = await loadPage(0n, projection);
         // "Now" excludes published history; the unsettled suffix still
         // belongs to the viewer because it has not passed the tail fence.
         after =
@@ -490,7 +494,7 @@ const createRunLogReader = ({
           return;
         }
         // db-await-in-loop: tailing page walk; each read starts after the last yielded seq, a page holds at most READ_PAGE_SIZE rows, and the loop ends at the close marker, the not-found deadline, or the abort signal
-        const { entries, log } = await loadPage(after);
+        const { entries, log } = await loadPage(after, projection);
         for (const entry of entries) {
           // Final append precedes the transaction that stores the transcript
           // and closes the log. Hold an open tail terminal until that commit;
@@ -526,7 +530,8 @@ const createRunLogReader = ({
     },
     snapshot: async () =>
       await db(async (tx) => {
-        const log = await loadHeader(tx);
+        const { projectEntries } = createRunLogCopyProjection();
+        const log = await loadHeader(tx, true);
         if (log === undefined) {
           return [];
         }
@@ -563,7 +568,6 @@ const createRunLogReader = ({
               return await projectEntries({
                 entries: result,
                 log,
-                markers: new Set(),
               });
             }
             const timing = await readCurrentRunTiming({
@@ -577,7 +581,6 @@ const createRunLogReader = ({
                 chunk: refreshRunningTiming(entry.chunk, timing),
               })),
               log,
-              markers: new Set(),
             });
           }
         }
