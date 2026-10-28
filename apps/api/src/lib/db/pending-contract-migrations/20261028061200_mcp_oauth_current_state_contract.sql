@@ -1,4 +1,4 @@
--- requires: 20261027070300_mcp_oauth_current_state
+-- requires: 20261028061000_mcp_oauth_current_state
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '30s';--> statement-breakpoint
 

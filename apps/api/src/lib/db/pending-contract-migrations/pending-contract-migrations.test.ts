@@ -57,7 +57,7 @@ describe("pending contract migrations", () => {
 
   test("OAuth current-state uniqueness remains contract-only", () => {
     const contract = PENDING_CONTRACT_MIGRATIONS.find(
-      ({ name }) => name === "20261027070500_mcp_oauth_current_state_contract",
+      ({ name }) => name === "20261028061200_mcp_oauth_current_state_contract",
     );
     expect(contract).toBeDefined();
     const contractSql = readFileSync(
@@ -67,7 +67,7 @@ describe("pending contract migrations", () => {
     const expandSql = readFileSync(
       nodePath.join(
         DRIZZLE_DIR,
-        "20261027070300_mcp_oauth_current_state",
+        "20261028061000_mcp_oauth_current_state",
         "migration.sql",
       ),
       "utf-8",
