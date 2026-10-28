@@ -1,3 +1,5 @@
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+
 export const MAX_SEARCH_PREVIEW_MATCHES = 200;
 
 export type SearchMatchSummary = {
@@ -83,11 +85,14 @@ export const getCenteredSearchMatchScrollTop = ({
 
 /**
  * The scroll container's `scroll-padding-block-end` in pixels: the safe inset a
- * floating overlay reserves at its bottom edge. `auto` and unset read as 0.
+ * floating overlay reserves at its bottom edge. The computed value is `auto` or
+ * a pixel length; `auto` reads as 0.
  */
 export const readScrollPaddingBlockEnd = (scrollContainer: Element): number => {
-  const inset = Number.parseFloat(
-    getComputedStyle(scrollContainer).scrollPaddingBlockEnd,
-  );
-  return Number.isFinite(inset) ? inset : 0;
+  const inset = getComputedStyle(scrollContainer).scrollPaddingBlockEnd;
+  return inset.endsWith("px")
+    ? parseDecimalToken(inset.slice(0, -"px".length), {
+        sign: "unsigned",
+      }).unwrapOr(0)
+    : 0;
 };
