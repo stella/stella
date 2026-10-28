@@ -3,7 +3,7 @@ import path from "node:path";
 
 const REALTIME_FILE = /(?:sse|realtime)/iu;
 const DIRECT_INVALIDATION = /\.invalidateQueries\s*\(/u;
-const SCHEDULER_MODULE = "realtime-refresh.ts";
+const SCHEDULER_MODULE = "apps/web/src/lib/workspaces/realtime-refresh.ts";
 
 export type RealtimeSource = { path: string; source: string };
 
@@ -12,7 +12,7 @@ export const directRealtimeInvalidations = (sources: RealtimeSource[]) =>
     .filter(
       ({ path: filePath, source }) =>
         REALTIME_FILE.test(path.basename(filePath)) &&
-        path.basename(filePath) !== SCHEDULER_MODULE &&
+        !filePath.endsWith(SCHEDULER_MODULE) &&
         DIRECT_INVALIDATION.test(source),
     )
     .map(({ path: filePath }) => filePath);

@@ -14,7 +14,7 @@ test("realtime invalidations are owned by the refresh scheduler", () => {
   expect(
     directRealtimeInvalidations([
       {
-        path: "apps/web/src/lib/realtime-refresh.ts",
+        path: "apps/web/src/lib/workspaces/realtime-refresh.ts",
         source: "queryClient.invalidateQueries({ queryKey });",
       },
       {

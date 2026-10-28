@@ -8,7 +8,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
-import { getRealtimeRefreshScheduler } from "@/lib/realtime-refresh";
+import { getRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 const USER_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,

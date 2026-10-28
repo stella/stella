@@ -7,7 +7,7 @@ import {
 import type { QueryFunctionContext } from "@tanstack/react-query";
 import { expect, test } from "bun:test";
 
-import { createRealtimeRefreshScheduler } from "@/lib/realtime-refresh";
+import { createRealtimeRefreshScheduler } from "@/lib/workspaces/realtime-refresh";
 
 const QUERY_KEY = ["realtime-refresh-test"] as const;
 
