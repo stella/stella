@@ -824,6 +824,11 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-artifacts.ts",
     "scripts/generated-source-hash.ts",
   ],
+  "harness-releases": [
+    "packages/portable-path/src/index.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "scripts/generated-artifacts.ts",
+  ],
   "us-reporters": [
     "packages/portable-path/src/index.ts",
     "packages/scripts/src/generated-artifact-format.ts",
@@ -2002,6 +2007,26 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "scripts/generate-us-courts.ts", "--write"],
     check: ["bun", "scripts/generate-us-courts.ts", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "harness-releases",
+    outputKind: "committed",
+    outputs: ["apps/desktop/src-tauri/harness/releases.gen.json"],
+    inputs: [
+      "apps/desktop/src-tauri/harness/pins.json",
+      "scripts/generate-harness-releases.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["harness-releases"],
+    ],
+    write: ["bun", "scripts/generate-harness-releases.ts", "--write"],
+    check: null,
+    unchecked:
+      "Reads upstream release metadata over the network; desktop Rust tests bind the table to the pins",
     autofix: false,
     after: [],
   },
