@@ -23,6 +23,7 @@
     "./visual-preview": "./src/visual-preview.ts",
     "./ai-disclosure": "./src/ai-disclosure.ts",
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
+    "./review-decision": "./src/review-decision.ts",
     "./limits": "./src/limits.ts",
     "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",

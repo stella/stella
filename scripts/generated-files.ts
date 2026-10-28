@@ -928,6 +928,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/migration-lock-allowances/*.json",
       "scripts/online-ddl-lock-census.ts",
       "apps/api/src/db/online-ddl.ts",
+      "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
       "apps/api/drizzle/**/*.sql",
     ],
     checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["migration-lock-baseline"]],

@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "modelRefused": "A modell megtagadta a választ",
+    "nothingFound": "Nincs találat",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Ügyfél {index}",
       "skippedDuplicateContactId": "Kihagyva: ismétlődő névjegyazonosító",
       "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
+      "skippedInFileDuplicate": "Kihagyva: a fájl egy korábbi sorát ismétli",
       "skippedInvalidRow": "Kihagyva: a sor nem felel meg az importálási szabályoknak",
       "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Ha van cím, a cím 1. sora kötelező.",
         "display_name_required": "Nem sikerült létrehozni a megjelenítési nevet.",
+        "in_file_duplicate": "A fájl egy korábbi sorának másolata",
         "invalid_email": "Az e-mail-cím érvénytelen.",
         "invalid_phone": "A telefonszám érvénytelen.",
         "invalid_tags": "A címkéknek szöveges értékeknek kell lenniük.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
-      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
+      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
+      "warning": {
+        "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
+        "possible_in_file_duplicate": "A(z) {row}. sor lehetséges másolata; csak a név egyezik."
+      }
     },
     "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
     "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",
@@ -3297,7 +3306,6 @@
       "simple": "Az egyszerű korrektúra"
     },
     "moreFormatting": "További formázás",
-    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "nextChange": "Következő módosítás",
     "numberedList": "Számozott lista",
     "parseError": "A dokumentumot nem sikerült feldolgozni. Lehet, hogy sérült, vagy nem támogatott formátumú.",
@@ -5994,6 +6002,9 @@
       "description": "Mentve „{fileName}” néven",
       "title": "A fordítás elkészült"
     }
+  },
+  "transportErrors": {
+    "timeout": "A kérés túl sokáig tartott. Próbálja újra."
   },
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",

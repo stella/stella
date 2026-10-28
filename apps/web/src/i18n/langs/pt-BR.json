@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "modelRefused": "O modelo se recusou a responder",
+    "nothingFound": "Nada encontrado",
     "refusedBudget": "Não executado: orçamento de respostas indisponível",
     "rerunAllPage": "Executar tudo novamente (esta página)",
     "rerunColumnPage": "Executar coluna novamente (esta página)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Mover para baixo",
     "moveUp": "Mover para cima",
     "name": "Nome",
+    "networkError": "Erro de rede. Verifique sua conexão com a Internet e tente novamente.",
     "newMatter": "Novo caso",
     "newRow": "Nova linha",
     "next": "Próximo",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
       "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
+      "skippedInFileDuplicate": "Ignorado: repete uma linha anterior do arquivo",
       "skippedInvalidRow": "Ignorado: a linha não atende às regras de importação",
       "skippedInvalidTaxId": "Ignorado: CPF/CNPJ inválido",
       "skippedLimitReached": "Ignorado: limite de contatos atingido"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "A linha de endereço 1 é obrigatória quando houver um endereço.",
         "display_name_required": "Não foi possível criar um nome de exibição.",
+        "in_file_duplicate": "Duplicata de uma linha anterior neste arquivo",
         "invalid_email": "O endereço de e-mail é inválido.",
         "invalid_phone": "O número de telefone é inválido.",
         "invalid_tags": "As etiquetas devem ser valores de texto.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileiro (dígito verificador)",
       "taxIdSchemeNone": "Sem validação da identificação fiscal",
       "title": "Importar contatos",
-      "validateFailed": "Não foi possível verificar estes contatos."
+      "validateFailed": "Não foi possível verificar estes contatos.",
+      "warning": {
+        "ignored_populated_column": "A coluna “{column}” contém dados, mas será ignorada.",
+        "possible_in_file_duplicate": "Possível duplicata da linha {row}; somente o nome coincide."
+      }
     },
     "invalidDateOfBirth": "Insira uma data de nascimento válida.",
     "invalidNationalityCodes": "Insira códigos de nacionalidade válidos.",
@@ -3297,7 +3306,6 @@
       "simple": "Marcação Simples"
     },
     "moreFormatting": "Mais formatação",
-    "networkError": "Erro de rede. Verifique sua conexão com a Internet e tente novamente.",
     "nextChange": "Próxima alteração",
     "numberedList": "Lista numerada",
     "parseError": "O documento não pôde ser analisado. Ele pode estar corrompido ou em um formato não compatível.",
@@ -5994,6 +6002,9 @@
       "description": "Salvo como “{fileName}”",
       "title": "Tradução pronta"
     }
+  },
+  "transportErrors": {
+    "timeout": "A solicitação demorou muito. Tente novamente."
   },
   "validation": {
     "invalidEmail": "Insira um endereço de e-mail válido.",
