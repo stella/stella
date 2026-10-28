@@ -111,7 +111,7 @@
     "@litko/yara-x": "^0.7.5",
     "@modelcontextprotocol/server": "2.3.1",
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
-    "@openrouter/sdk": "0.13.67",
+    "@openrouter/sdk": "1.5.6",
     "@opentelemetry/api-logs": "^0.223.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.223.0",
     "@opentelemetry/resources": "^2.11.0",
