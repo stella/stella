@@ -196,7 +196,8 @@
     "queue-admission.yml/admission": "dispatch-only",
     "ci-runner-loss-retry.yml/retry": "pr-fast",
     "ci.yml/dependency-review": "pr-fast",
-    "ci.yml/dependency-audit": "pr-fast"
+    "ci.yml/dependency-audit": "pr-fast",
+    "refresh-cldr-exemplars.yml/refresh-exemplars": "pr-fast"
   },
   "pushMain": {
     "typecheck-base.yml": {
