@@ -108,6 +108,7 @@ test("a granted member sees the feature enabled without reading identity again",
     features: {
       "activity-timeline": { status: "enabled" },
       "time-billing": { status: "hidden" },
+      "local-agents": { status: "hidden" },
     },
   });
 });
@@ -132,6 +133,7 @@ test("callers outside the grant see the feature hidden", async () => {
       features: {
         "activity-timeline": { status: "hidden" },
         "time-billing": { status: "hidden" },
+        "local-agents": { status: "hidden" },
       },
     });
   }

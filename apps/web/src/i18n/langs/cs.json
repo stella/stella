@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Nyní",
       "currentSession": "Aktuální",
       "device": "Zařízení",
       "deviceOnOs": "{browser} na {os}",
@@ -997,12 +998,15 @@
       "supreme": "Nejvyšší soudy"
     },
     "coverage": {
+      "allCurrent": "Všechny zdroje jsou aktuální",
       "completeness": "Úplnost",
+      "completenessHelp": "Počet uložených rozhodnutí vůči počtu uvedenému vydavatelem, jeho seznamu nebo ručně zaznamenanému údaji.",
+      "countryNavigation": "Přejít na zemi",
       "courtsHeading": "Podle soudu",
       "decisionYears": "Roky rozhodnutí",
+      "decisionsAcross": "rozhodnutí z {count, plural, one {# jurisdikce} few {# jurisdikcí} other {# jurisdikcí}}",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
       "generatedAt": "Údaje k {date}",
-      "globeLabel": "Státy, jejichž judikaturu korpus obsahuje, na glóbu",
       "healthCurrent": "Aktuální",
       "healthDelayed": "Se zpožděním",
       "healthDisabled": "Vypnuto",
@@ -1012,10 +1016,10 @@
       "lastSync": "Poslední synchronizace",
       "notCountedYet": "Zatím nespočítáno",
       "notMeasuredYet": "Zatím neměřeno",
-      "reportedByListing": "Sečteno z výpisu vydavatele",
-      "reportedByOperator": "Zadáno ručně",
-      "reportedByPublisher": "Vlastní údaj vydavatele",
       "searchable": "Dostupné k vyhledání",
+      "sourceExceptions": "{count, plural, one {# zdroj vyžaduje pozornost} few {# zdroje vyžadují pozornost} other {# zdrojů vyžaduje pozornost}}",
+      "sourcesCurrent": "Aktuální zdroje",
+      "syncedAt": "Synchronizováno {time}",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
       "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
@@ -1206,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Uvedeno: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znění účinné k {date}} until {Znění účinné do {date}} from {Znění účinné od {date}} other {Znění účinné k {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Uvedeno: {date}} until {Uvedeno: do {date}} from {Uvedeno: od {date}} other {Uvedeno: {date}}}",
+      "caseFileDocuments": "Dokumenty v tomto spise",
       "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "citedDecisionPassage": "Pasáž v rozhodnutí",
@@ -1432,6 +1437,17 @@
         "webSearch": "Pro tuto dovednost zapněte vyhledávání na webu"
       }
     },
+    "connectConnector": {
+      "checkAction": "Ověřit připojení",
+      "description": "Asistent žádá o připojení konektoru {connector}, aby v této konverzaci mohl používat jeho nástroje.",
+      "error": "Připojení se nepodařilo zahájit. Zkuste to znovu.",
+      "notConnected": "Zatím nepřipojeno. Dokončete přihlášení a pak připojení ověřte znovu.",
+      "openTools": "Otevřít nástroje",
+      "scopes": "Požadovaný přístup: {scopes}",
+      "title": "Připojit konektor",
+      "tokenRequired": "Konektor {connector} vyžaduje přístupový token. Přidejte ho na stránce nástrojů a pak ověřte připojení.",
+      "waiting": "Dokončete přihlášení v okně, které se otevřelo."
+    },
     "contextMeter": {
       "attachments": "Připojené dokumenty",
       "autoCompact": "Při 100 % stella automaticky shrne starší zprávy, aby uvolnila místo.",
@@ -1506,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
+      "unnamed": "{count, plural, one {# další} few {# další} other {# dalších}}"
     },
     "historyTrimmed": "Starší zprávy se nepodařilo shrnout, a tak tato odpověď vychází jen z poslední části konverzace.",
     "improvePrompt": "Vylepšit zadání",
@@ -1747,6 +1763,7 @@
       "business_registry_lookup": "Vyhledávání v obchodním rejstříku",
       "compare_versions": "Porovnávání verzí",
       "configure_template_fields": "Nastavit pole vzoru",
+      "connect_connector": "Žádost o připojení konektoru",
       "counterparty_check": "Prověřování protistrany",
       "create-document": "Připravuji dokument",
       "create_matter_document": "Vytvářím dokument",
@@ -2034,6 +2051,7 @@
     "confirm": "Potvrdit",
     "confirmAction": "Opravdu?",
     "connect": "Připojit",
+    "connected": "Připojeno",
     "connectionLost": "Spojení ztraceno",
     "connectionLostDescription": "Ztratili jsme spojení se serverem. Automaticky opakujeme.",
     "convertTo": "Převést na",
@@ -2202,6 +2220,8 @@
     "noResults": "Žádné výsledky",
     "noVersions": "Žádná historie verzí",
     "none": "Žádné",
+    "notConnected": "Nepřipojeno",
+    "notNow": "Teď ne",
     "notStated": "Neuvedeno",
     "notes": "Poznámky",
     "open": "Otevřít",
@@ -2388,7 +2408,7 @@
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentů",
     "title": "Povolit přístup",
     "unverifiedApp": "Neověřená aplikace",
-    "unverifiedExplanation": "Stella neověřila, kdo tuto aplikaci vydává.",
+    "unverifiedExplanation": "stella neověřila, kdo tuto aplikaci vydává.",
     "useAnotherAccount": "Použít jiný účet",
     "verifiedPublisher": "Ověřená aplikace od {publisher}"
   },
@@ -2450,10 +2470,10 @@
       "value": "Hodnota pole"
     },
     "datePrecision": "Přesnost data",
-    "deleteContact": "Smazat klienta",
+    "deleteContact": "Smazat kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
-    "editContact": "Upravit klienta",
+    "editContact": "Upravit kontakt",
     "emailTypes": {
       "other": "Jiný",
       "personal": "Osobní",
@@ -2466,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Přetáhněte sem plnou moc (.docx), nebo klikněte a vyberte soubor",
       "extracting": "Zjišťujeme zmocnitele…",
-      "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
+      "fileHint": "stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
       "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
@@ -4610,7 +4630,6 @@
       "selectAtLeastOneRole": "Vyberte pro tento klíč alespoň jednu roli.",
       "selectModelForEachRole": "Přidejte poskytovatele a pro každou kategorii vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurace AI",
       "usingDefaults": "Používá výchozí nastavení"
     },
     "invitations": {
@@ -5038,7 +5057,7 @@
         "title": "Dvoufaktorové ověření"
       },
       "wordEditIdentitySaved": "Identita pro úpravy ve Wordu aktualizována",
-      "wordEditShortcut": "Zkratka pro úpravy ve Wordu",
+      "wordEditShortcut": "Iniciály pro úpravy ve Wordu",
       "wordEditShortcutDescription": "Krátká značka pro vaše iniciály u úprav ve Wordu.",
       "wordEditShortcutPlaceholder": "např. JK"
     },
@@ -5049,7 +5068,6 @@
       "cliInstallLabel": "Instalace",
       "cliLoginLabel": "Přihlášení",
       "cliTitle": "Příkazový řádek",
-      "connected": "Připojeno",
       "connectedAgo": "Připojeno {time}",
       "connectedAppsDescription": "Aplikace, do kterých jste se přihlásili účtem stella. Ty, které už nepoužíváte, odpojte.",
       "connectedAppsEmpty": "Zatím nic. Nastavte výše Claude nebo ChatGPT a objeví se tady.",
@@ -5072,7 +5090,6 @@
       "mcpTitle": "Server MCP",
       "mcpUrlLabel": "Adresa URL serveru",
       "noMatches": "Hledanému výrazu „{query}“ neodpovídá žádné připojení",
-      "notConnected": "Nepřipojeno",
       "permissionCount": "{count, plural, one {# oprávnění} few {# oprávnění} many {# oprávnění} other {# oprávnění}}",
       "privateCredentialOnly": "Pouze soukromé přihlašovací údaje",
       "searchPlaceholder": "Hledat připojení",
@@ -5193,7 +5210,6 @@
       "usageLimitDescriptionNoEntitlement": "Funkce AI vyžadují aktivní oprávnění k využití pro tuto organizaci.",
       "usageLimitDescriptionUsageLimitExceeded": "Tuto akci nelze spustit při aktuálním stavu využití organizace.",
       "usageLimitNeeded": "Potřeba",
-      "usageLimitNotNow": "Teď ne",
       "usageLimitTitleEntitlementInactive": "Oprávnění k využití není aktivní",
       "usageLimitTitleNoEntitlement": "Je vyžadováno oprávnění k využití",
       "usageLimitTitleUsageLimitExceeded": "Limit využití AI byl dosažen",
@@ -5434,16 +5450,16 @@
     "savedDescription": "Uložená sada stylů",
     "sourceDocument": "Zdrojový DOCX",
     "stellaDescription": "Kompletní neutrální formátování právních dokumentů stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Sady stylů",
     "untitledDocument": "Dokument bez názvu"
   },
   "success": {
     "aiConfigDeleted": "Nastavení AI odebráno",
     "aiConfigUpdated": "Nastavení AI aktualizováno",
-    "clientUpdated": "Klient aktualizován",
-    "contactCreated": "Klient vytvořen",
-    "contactDeleted": "Klient smazán",
+    "clientUpdated": "Kontakt aktualizován",
+    "contactCreated": "Kontakt vytvořen",
+    "contactDeleted": "Kontakt smazán",
     "documentCreated": "Dokument vytvořen",
     "folderCreated": "Složka vytvořena",
     "invitationCanceled": "Pozvánka zrušena",
@@ -5980,6 +5996,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Zadejte platnou e-mailovou adresu.",
     "organizationNameRequired": "Název organizace je povinný",
     "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",
     "slugRequired": "Slug je povinný"

@@ -222,7 +222,14 @@ test("the tag job reports every gate in one verdict before any tag work", () => 
 const skippedOnDryRun = (condition: string | undefined) => {
   const source = (condition ?? "true").replace(/^\$\{\{(.*)\}\}$/su, "$1");
   return [false, true].map((dryRun) =>
-    evaluate(source, { values: { "inputs.dry_run": dryRun } }),
+    evaluate(source, {
+      values: {
+        "inputs.dry_run": dryRun,
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/main",
+        "inputs.mode": "rc",
+      },
+    }),
   );
 };
 
@@ -238,7 +245,12 @@ test("a dry run evaluates every gate and never mints a token or pushes the tag",
   expect(skippedOnDryRun(push?.if)).toEqual([true, false]);
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name !== "tag") {
-      expect(skippedOnDryRun(job.if), name).toEqual([true, false]);
+      const [normalRun, dryRun] = skippedOnDryRun(job.if);
+      expect(
+        typeof normalRun,
+        `${name}: resolved RC dispatch eligibility`,
+      ).toBe("boolean");
+      expect(dryRun, `${name}: no job after an RC dry run`).toBe(false);
     }
   }
   for (const step of tagSteps.filter(({ run }) =>

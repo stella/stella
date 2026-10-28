@@ -34,6 +34,8 @@
     "./capability-request": "./src/capability-request.ts",
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./chat-connector": "./src/chat-connector.ts",
+    "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./visual-theme": "./src/visual-theme.ts",
@@ -73,6 +75,7 @@
     "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-paragraph-range": "./src/decision-paragraph-range.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
+    "./decision-docket-filing-year.fixtures": "./src/decision-docket-filing-year.fixtures.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
@@ -81,6 +84,7 @@
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
+    "./mobile-updates": "./src/mobile-updates.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-billing-drafts": "./src/desktop-billing-drafts.ts",
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
@@ -154,6 +158,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/aho-corasick": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/errors": "workspace:*",

@@ -24,6 +24,7 @@ export const publicRouteExceptions: Record<string, string> = {
 const absentText = { type: "absent", reason: "not_published" } as const;
 
 const decision = {
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   citationCount: 0,
