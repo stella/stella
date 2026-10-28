@@ -1,9 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
+import { fetchWithTimeout } from "@stll/fetch";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
 
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
+import { detached } from "@/lib/detached";
 // Recover from code that a deploy removed. Vite dispatches
 // `vite:preloadError` on the window when a lazily imported module fails to
 // load — typically a stale chunk after a deploy, or a dev HMR / dep-reoptimize
@@ -18,6 +20,7 @@ import { requireBrowserStorage } from "@/lib/account/browser-storage";
 
 const RELOAD_COOLDOWN_MS = 10_000;
 const STORAGE_KEY = "stella:preload-reload-at";
+const VERSION_MANIFEST_PATH = "/version.json";
 
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
@@ -56,6 +59,46 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
       isHtmlModuleResponseError(message))
   );
 };
+
+export type FailedChunkLoadClassification =
+  { type: "offline" } | { type: "network-error" } | { type: "build-skew" };
+
+type VersionManifest = { commit: string };
+
+const isVersionManifest = (value: unknown): value is VersionManifest =>
+  typeof value === "object" &&
+  value !== null &&
+  "commit" in value &&
+  typeof value.commit === "string";
+
+/** A chunk-shaped error is only build skew after the current build is confirmed. */
+export const classifyFailedChunkLoad =
+  async (): Promise<FailedChunkLoadClassification> => {
+    if (!navigator.onLine) {
+      return { type: "offline" };
+    }
+
+    return fetchWithTimeout(VERSION_MANIFEST_PATH, {
+      cache: "no-store",
+      timeoutMs: 8000,
+    })
+      .then(async (response): Promise<FailedChunkLoadClassification> => {
+        if (!response.ok) {
+          return { type: "network-error" };
+        }
+        const manifest: unknown = await response.json();
+        if (!isVersionManifest(manifest)) {
+          return { type: "network-error" };
+        }
+        return manifest.commit !== __APP_COMMIT_SHA__
+          ? { type: "build-skew" }
+          : { type: "network-error" };
+      })
+      .catch((error: unknown) => {
+        error satisfies unknown;
+        return { type: "network-error" };
+      });
+  };
 
 // The single-reload guard relies on sessionStorage persisting across the
 // reload. sessionStorage can throw (private mode, sandboxed iframe, storage
@@ -103,17 +146,42 @@ export const reloadForStaleDeployment = (): boolean => {
 };
 
 /** Route lazy imports and Vite preload failures share this recovery owner. */
-export const recoverFromStaleDeploymentLoad = (error: unknown): boolean =>
-  isStaleDeploymentLoadError(error) && reloadForStaleDeployment();
+export const recoverFromStaleDeploymentLoad = async (
+  error: unknown,
+  retry: () => void = () => window.location.reload(),
+): Promise<FailedChunkLoadClassification | null> => {
+  if (!isStaleDeploymentLoadError(error)) {
+    return null;
+  }
+  const classification = await classifyFailedChunkLoad();
+  switch (classification.type) {
+    case "build-skew":
+      reloadForStaleDeployment();
+      break;
+    case "offline":
+    case "network-error":
+      window.addEventListener("online", retry, { once: true });
+      break;
+    default:
+      classification satisfies never;
+      panic(`Unhandled failed chunk classification: ${String(classification)}`);
+  }
+  return classification;
+};
 
 // Typed as Event: the WindowEventMap augmentation for "vite:preloadError" is
 // not guaranteed in scope, and we only need preventDefault() + the reload.
 export const installPreloadErrorRecovery = (): void => {
   window.addEventListener("vite:preloadError", (event: Event) => {
     const error = "payload" in event ? event.payload : undefined;
-    if (recoverFromStaleDeploymentLoad(error)) {
-      // Cancel Vite's default rethrow; the reload fetches the fresh chunk.
+    if (isStaleDeploymentLoadError(error)) {
+      // Keep the current document while the asynchronous probe decides whether
+      // this is transport failure or confirmed build skew.
       event.preventDefault();
+      detached(
+        recoverFromStaleDeploymentLoad(error),
+        "preload-error-recovery.classify",
+      );
     }
   });
 };

@@ -3,7 +3,7 @@ import { panic } from "better-result";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { APIError } from "@/lib/errors/api";
 import { AuthClientError } from "@/lib/errors/auth";
-import { isStaleDeploymentLoadError } from "@/lib/preload-error-recovery";
+import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 /** Network errors that indicate a transient connectivity
@@ -22,11 +22,8 @@ export type RouteErrorRecovery =
   { type: "reload-page" } | { type: "retry-route" };
 
 export const resolveRouteErrorRecovery = (
-  error: unknown,
-): RouteErrorRecovery =>
-  isStaleDeploymentLoadError(error)
-    ? { type: "reload-page" }
-    : { type: "retry-route" };
+  _error: unknown,
+): RouteErrorRecovery => ({ type: "retry-route" });
 
 type RecoverRouteErrorOptions = {
   error: unknown;
@@ -41,6 +38,11 @@ export const recoverRouteError = async ({
   reloadPage,
   retryRoute,
 }: RecoverRouteErrorOptions): Promise<void> => {
+  const chunkRecovery = await recoverFromStaleDeploymentLoad(error, retryRoute);
+  if (chunkRecovery?.type === "build-skew") {
+    await recordRetryStarted("reload-page");
+    return;
+  }
   const recovery = resolveRouteErrorRecovery(error);
   const retryDispatch = recordRetryStarted(recovery.type);
   switch (recovery.type) {

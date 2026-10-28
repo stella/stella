@@ -9,6 +9,8 @@ import {
   describe,
   expect,
   jest,
+  mock,
+  spyOn,
   test,
 } from "bun:test";
 
@@ -62,6 +64,7 @@ afterEach(async () => {
     cleanup();
   });
   sessionArea().clear();
+  mock.restore();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -215,6 +218,9 @@ describe("RecoverableViewerBoundary", () => {
   });
 
   test("a stale build that already reloaded once fails instead of looping", async () => {
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ commit: "new-build" })),
+    );
     sessionArea().setItem(
       RELOAD_GUARD_KEY,
       String(Temporal.Now.instant().epochMilliseconds),
