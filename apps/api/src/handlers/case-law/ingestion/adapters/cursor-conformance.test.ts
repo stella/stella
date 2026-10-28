@@ -413,6 +413,13 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    disposition: "exercised",
+    exhaustedSource: () =>
+      xmlResponse('<feed xmlns="http://www.w3.org/2005/Atom"/>'),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     disposition: "exercised",
     // The search answers a window it holds nothing for with an empty list and

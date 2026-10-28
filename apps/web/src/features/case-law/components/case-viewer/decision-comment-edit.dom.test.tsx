@@ -1,6 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -15,32 +23,35 @@ const unexpectedRequests: string[] = [];
 // An answer may be held open, to look at the reader while a write is in
 // flight.
 const answers: (Response | Promise<Response>)[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      const text = await request.text();
-      requests.push({
-        method: request.method,
-        path: pathname,
-        body: text === "" ? null : JSON.parse(text),
-      });
-      const answer = answers.shift();
-      if (answer === undefined) {
-        unexpectedRequests.push(`${request.method} ${pathname}`);
-        return panic(
-          `Unexpected network request: ${request.method} ${pathname}`,
-        );
-      }
-      return answer;
-    },
-    { preconnect: () => undefined },
-  ),
-);
+// Each test answers through its own fetch spy, restored after it.
+beforeEach(() => {
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        const text = await request.text();
+        requests.push({
+          method: request.method,
+          path: pathname,
+          body: text === "" ? null : JSON.parse(text),
+        });
+        const answer = answers.shift();
+        if (answer === undefined) {
+          unexpectedRequests.push(`${request.method} ${pathname}`);
+          return panic(
+            `Unexpected network request: ${request.method} ${pathname}`,
+          );
+        }
+        return answer;
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { useRef } = await import("react");
@@ -138,6 +149,9 @@ afterEach(() => {
     client.clear();
   }
   clients.length = 0;
+  // After unmounting, so a request a component makes on its way out still
+  // reaches the spy.
+  mock.restore();
   const unexpected = unexpectedRequests.splice(0);
   const unused = answers.splice(0);
   requests.length = 0;
@@ -145,7 +159,6 @@ afterEach(() => {
   expect(unused).toHaveLength(0);
 });
 afterAll(async () => {
-  fetchBoundary.mockRestore();
   await unregisterDomEnvironment();
 });
 

@@ -54,6 +54,7 @@ const coordination = ({
         acquisitions += 1;
         throw new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Coordination offline",
         });
       }

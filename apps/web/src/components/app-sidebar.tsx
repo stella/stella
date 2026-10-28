@@ -77,6 +77,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -120,7 +121,7 @@ import {
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -147,10 +148,10 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
@@ -197,8 +198,19 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const router = useRouter();
+  // On compact layouts the sidebar is a sheet over the page, so a navigation
+  // started from it would land behind it. Close it once the new location
+  // resolves, whichever item (link, button or matter sub-row) started it.
+  useMountEffect(() =>
+    router.subscribe("onResolved", ({ hrefChanged }) => {
+      if (hrefChanged) {
+        setOpenMobile(false);
+      }
+    }),
+  );
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
@@ -262,7 +274,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const inboxView = useQueryView(inboxQuery);
+  const inboxView = queryView(inboxQuery);
   // This badge decorates an always-available inbox link; hide it when the count cannot be read.
   const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
@@ -273,7 +285,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     }),
     enabled: mounted,
   });
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
     groupedThreadsView.type === "items"
@@ -714,6 +726,14 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
                                 )}
                               </kbd>
                             </SidebarMenuBadge>
+                          );
+                        }
+                        if (item.id === "timesheets") {
+                          return (
+                            <PendingApprovalsNavBadge
+                              organizationId={user.activeOrganizationId}
+                              userId={user.id}
+                            />
                           );
                         }
                         if (item.id === "inbox" && openInboxCount > 0) {
@@ -1508,6 +1528,7 @@ const MatterItem = ({
               <MenuTrigger
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+                tooltip={t("common.actions")}
               >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>

@@ -54,8 +54,9 @@ import { useLawHistory } from "@/features/law-search-history/law-search-history-
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
@@ -68,10 +69,11 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
@@ -259,7 +261,7 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 function LawHome() {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
@@ -314,7 +316,7 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
+  const shelfView = queryView(shelfQuery);
   useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
