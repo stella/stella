@@ -113,13 +113,13 @@ export const uploadDocument = async ({
         source,
       }),
     );
-    const sent = await putBytes(fetch, file.uri, presigned.value);
+    const sent = await putBytes(fetch, file.uri, presigned);
     if (Result.isError(sent)) {
       // Best effort: an upload left open expires on its own.
       await requestApi({
         fetch,
         method: "POST",
-        path: `${uploadsPath(matterId)}/${encodeURIComponent(presigned.value.uploadId)}/abort`,
+        path: `${uploadsPath(matterId)}/${encodeURIComponent(presigned.uploadId)}/abort`,
         schema: v.unknown(),
         source,
       });
@@ -129,7 +129,7 @@ export const uploadDocument = async ({
       requestApi({
         fetch,
         method: "POST",
-        path: `${uploadsPath(matterId)}/${encodeURIComponent(presigned.value.uploadId)}/finalize`,
+        path: `${uploadsPath(matterId)}/${encodeURIComponent(presigned.uploadId)}/finalize`,
         schema: finalizedSchema,
         source,
       }),
