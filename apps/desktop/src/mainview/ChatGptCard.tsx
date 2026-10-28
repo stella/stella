@@ -48,7 +48,7 @@ export const ChatGptCard = ({
           {offerNewAccount ? (
             <Button
               onClick={() => {
-                onSignIn(true);
+                onSignIn({ newAccount: true });
               }}
               variant="outline"
             >
@@ -59,7 +59,7 @@ export const ChatGptCard = ({
           status.state === "connected" ? null : (
             <Button
               onClick={() => {
-                onSignIn(false);
+                onSignIn({ newAccount: false });
               }}
             >
               {t("continueWithChatGpt")}
@@ -67,6 +67,21 @@ export const ChatGptCard = ({
           )}
         </div>
       </div>
+      {status.state === "signing_in" || status.accounts.length === 0 ? null : (
+        <div className="flex flex-wrap justify-end gap-2">
+          {status.accounts.map((account) => (
+            <Button
+              key={account.id}
+              onClick={() => {
+                onSignIn({ account: account.id, newAccount: false });
+              }}
+              variant="outline"
+            >
+              {t("continueAs", { email: account.email })}
+            </Button>
+          ))}
+        </div>
+      )}
       {status.state === "signing_in" ? (
         <ChatGptPasteCallback onComplete={onComplete} />
       ) : null}
@@ -82,13 +97,16 @@ export const ChatGptCard = ({
   );
 };
 
+/** Which account a sign-in is for: the saved one, a new one, or `account`. */
+type ChatGptSignIn = { newAccount: boolean; account?: string };
+
 export type ChatGptNotice =
   "actionFailed" | "pasteRejected" | "revocationUnconfirmed";
 
 type ChatGptCardProps = {
   status: ChatGptStatus;
   notice: ChatGptNotice | null;
-  onSignIn: (newAccount: boolean) => void;
+  onSignIn: (request: ChatGptSignIn) => void;
   onCancel: () => void;
   onComplete: (url: string) => Promise<boolean>;
   onDisconnect: () => void;

@@ -114,8 +114,13 @@ export const AgentSubscriptionsSection = ({
       onManageUsage={() => {
         void run(async () => invoke("chatgpt_auth_open_usage"));
       }}
-      onSignIn={(newAccount) => {
-        void run(async () => invoke("chatgpt_auth_start", { newAccount }));
+      onSignIn={({ account, newAccount }) => {
+        void run(async () =>
+          invoke("chatgpt_auth_start", {
+            account: account ?? null,
+            newAccount,
+          }),
+        );
       }}
       status={status}
     />,

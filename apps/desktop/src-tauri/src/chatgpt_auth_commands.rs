@@ -76,11 +76,12 @@ pub async fn chatgpt_auth_start(
   app: AppHandle,
   gates: State<'_, FeatureGates>,
   new_account: bool,
+  account: Option<String>,
 ) -> Result<ChatGptStatus, ChatGptCommandError> {
-  let intent = if new_account {
-    SignInIntent::NewAccount
-  } else {
-    SignInIntent::SameAccount
+  let intent = match account {
+    Some(client_id) => SignInIntent::Account(client_id),
+    None if new_account => SignInIntent::NewAccount,
+    None => SignInIntent::SameAccount,
   };
   let auth = auth(&app, &gates)?;
   auth.start(intent);

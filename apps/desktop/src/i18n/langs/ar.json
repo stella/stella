@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "استخدم خطة ChatGPT الخاصة بك لطلبات الذكاء الاصطناعي في stella. يُحتسب الاستخدام من خطة ChatGPT، بشكل منفصل عن اشتراكك في stella.",
     "continueWithChatGpt": "المتابعة باستخدام ChatGPT",
+    "continueAs": "المتابعة باسم {email}",
     "useDifferentAccount": "استخدام حساب آخر",
     "signingIn": "أكمل تسجيل الدخول في المتصفح.",
     "cancel": "إلغاء",

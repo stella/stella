@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Izmantojiet savu ChatGPT plānu MI pieprasījumiem stellā. Lietojums tiek uzskaitīts jūsu ChatGPT plānā, atsevišķi no stellas abonementa.",
     "continueWithChatGpt": "Turpināt ar ChatGPT",
+    "continueAs": "Turpināt kā {email}",
     "useDifferentAccount": "Izmantot citu kontu",
     "signingIn": "Pabeidziet pierakstīšanos pārlūkprogrammā.",
     "cancel": "Atcelt",

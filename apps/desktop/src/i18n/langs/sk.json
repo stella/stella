@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Používajte svoj plán ChatGPT na požiadavky na AI v stelle. Využitie sa započítava do plánu ChatGPT, oddelene od predplatného stelly.",
     "continueWithChatGpt": "Pokračovať s ChatGPT",
+    "continueAs": "Pokračovať ako {email}",
     "useDifferentAccount": "Použiť iný účet",
     "signingIn": "Dokončite prihlásenie v prehliadači.",
     "cancel": "Zrušiť",

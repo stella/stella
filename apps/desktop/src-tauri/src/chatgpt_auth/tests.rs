@@ -26,6 +26,9 @@ use super::{
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const ISSUED_CLIENT: &str = "oaiapp_IssuedFixture";
+const OTHER_CLIENT: &str = "oaiapp_OtherFixture";
+/// Where the fake keeps the client an authorization request was issued.
+const ISSUED: &str = "issued_client";
 const ALL_SCOPES: &str =
   "chatgpt.tokens.use.direct email offline_access openid profile resource.invoke";
 
@@ -48,7 +51,12 @@ struct FakeState {
   token_requests: Vec<HashMap<String, String>>,
   revocations: Vec<HashMap<String, String>>,
   /// Refresh token the endpoint currently accepts.
-  live_refresh: Option<String>,
+  /// Refresh tokens the endpoint accepts, with the client each belongs to.
+  live_refresh: HashMap<String, String>,
+  /// The client ID the next registration is issued.
+  next_client: String,
+  /// Errors the next code exchanges return.
+  code_errors: VecDeque<&'static str>,
   issued: u32,
   refresh_errors: VecDeque<&'static str>,
   /// The scopes a renewal grants.
@@ -80,7 +88,9 @@ impl FakeOpenAi {
       authorizations: HashMap::new(),
       token_requests: Vec::new(),
       revocations: Vec::new(),
-      live_refresh: None,
+      live_refresh: HashMap::new(),
+      next_client: ISSUED_CLIENT.into(),
+      code_errors: VecDeque::new(),
       issued: 0,
       refresh_errors: VecDeque::new(),
       refresh_scope: ALL_SCOPES.into(),
@@ -163,15 +173,19 @@ async fn token(
       });
       if !verifier_matches
         || form.get("redirect_uri") != authorization.get("redirect_uri")
-        || form.get("client_id").map(String::as_str) != Some(ISSUED_CLIENT)
+        || form.get("client_id") != authorization.get(ISSUED)
       {
         return oauth_error(StatusCode::BAD_REQUEST, "invalid_grant");
       }
+      if let Some(error) = fake.code_errors.pop_front() {
+        return oauth_error(StatusCode::BAD_REQUEST, error);
+      }
+      let client_id = authorization[ISSUED].clone();
       let now = chrono::Utc::now().timestamp();
       let claims = json!({
         "iss": fake.base,
         "sub": fake.grant.subject,
-        "aud": [ISSUED_CLIENT],
+        "aud": [client_id],
         "nonce": authorization["nonce"],
         "email": fake.grant.email,
         "iat": now,
@@ -185,7 +199,7 @@ async fn token(
       };
       fake.issued += 1;
       let refresh = format!("refresh-{}", fake.issued);
-      fake.live_refresh = Some(refresh.clone());
+      fake.live_refresh.insert(refresh.clone(), client_id);
       Json(json!({
         "access_token": format!("access-{}", fake.issued),
         "refresh_token": refresh,
@@ -200,15 +214,16 @@ async fn token(
       if let Some(error) = fake.refresh_errors.pop_front() {
         return oauth_error(StatusCode::BAD_REQUEST, error);
       }
-      if form.get("client_id").map(String::as_str) != Some(ISSUED_CLIENT) {
-        return oauth_error(StatusCode::UNAUTHORIZED, "invalid_client");
-      }
-      if form.get("refresh_token") != fake.live_refresh.as_ref() {
+      let presented = form.get("refresh_token").cloned().unwrap_or_default();
+      let Some(client_id) = fake.live_refresh.remove(&presented) else {
         return oauth_error(StatusCode::BAD_REQUEST, "refresh_token_reused");
+      };
+      if form.get("client_id") != Some(&client_id) {
+        return oauth_error(StatusCode::UNAUTHORIZED, "invalid_client");
       }
       fake.issued += 1;
       let refresh = format!("refresh-{}", fake.issued);
-      fake.live_refresh = Some(refresh.clone());
+      fake.live_refresh.insert(refresh.clone(), client_id);
       Json(json!({
         "access_token": format!("access-{}", fake.issued),
         "refresh_token": refresh,
@@ -227,8 +242,10 @@ async fn revoke(
   Form(form): Form<HashMap<String, String>>,
 ) -> StatusCode {
   let mut fake = state.lock().unwrap();
+  if let Some(token) = form.get("token") {
+    fake.live_refresh.remove(token);
+  }
   fake.revocations.push(form);
-  fake.live_refresh = None;
   fake.revoke_status
 }
 
@@ -337,11 +354,17 @@ impl Harness {
       .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
     assert_eq!(url.path(), "/api/accounts/authorize");
-    let params: HashMap<String, String> = url
+    let mut params: HashMap<String, String> = url
       .query_pairs()
       .map(|(key, value)| (key.into_owned(), value.into_owned()))
       .collect();
     self.fake.with(|fake| {
+      let issued = if params["client_id"] == oauth::DYNAMIC_CLIENT_ID {
+        fake.next_client.clone()
+      } else {
+        params["client_id"].clone()
+      };
+      params.insert(ISSUED.into(), issued);
       fake
         .authorizations
         .insert(params["state"].clone(), params.clone());
@@ -359,7 +382,7 @@ impl Harness {
       params["redirect_uri"], params["state"]
     );
     if issue_client {
-      url.push_str(&format!("&client_id={ISSUED_CLIENT}"));
+      url.push_str(&format!("&client_id={}", params[ISSUED]));
     }
     url
   }
@@ -392,6 +415,17 @@ impl Harness {
 
   fn record(&self) -> store::ChatGptRecord {
     self.vault.record.lock().unwrap().clone()
+  }
+
+  fn active(&self) -> store::ChatGptRegistration {
+    self.record().active().unwrap().clone()
+  }
+
+  fn session(&self) -> Option<store::ChatGptSession> {
+    self
+      .record()
+      .active()
+      .and_then(|active| active.session.clone())
   }
 }
 
@@ -429,11 +463,10 @@ async fn first_sign_in_registers_verifies_and_stores_the_connection() {
   assert_eq!(exchange["redirect_uri"], params["redirect_uri"]);
   assert!(!exchange.contains_key("client_secret"));
 
-  let record = harness.record();
-  let registration = record.registration.unwrap();
+  let registration = harness.active();
   assert_eq!(registration.client_id, ISSUED_CLIENT);
-  assert_eq!(registration.subject.as_deref(), Some("subject-1"));
-  let session = record.session.unwrap();
+  assert_eq!(registration.subject, "subject-1");
+  let session = registration.session.unwrap();
   assert_eq!(session.access_token, "access-1");
   assert_eq!(session.refresh_token.as_deref(), Some("refresh-1"));
   assert!(session.grants(oauth::PLAN_USAGE_SCOPE));
@@ -480,9 +513,9 @@ async fn a_sign_in_without_plan_usage_is_a_typed_failure() {
       reason: ChatGptFailure::PlanUsageNotGranted
     }
   );
-  let record = harness.record();
-  assert!(record.session.is_none());
-  assert!(!record.registration.as_ref().unwrap().plan_usage_granted);
+  let registration = harness.active();
+  assert!(registration.session.is_none());
+  assert!(!registration.plan_usage_granted);
   assert_eq!(
     harness.auth.access(None).await,
     Err(AccessError::NotConnected)
@@ -599,7 +632,7 @@ async fn an_id_token_from_another_key_is_refused() {
       reason: ChatGptFailure::Verification
     }
   );
-  assert!(harness.record().session.is_none());
+  assert!(harness.session().is_none());
 }
 
 #[tokio::test]
@@ -635,7 +668,13 @@ async fn cancelling_returns_to_the_saved_state_and_closes_the_listener() {
 
 fn expire(harness: &Harness) {
   let mut record = harness.vault.record.lock().unwrap();
-  record.session.as_mut().unwrap().expires_at = now_ms() - 1;
+  record
+    .active_mut()
+    .unwrap()
+    .session
+    .as_mut()
+    .unwrap()
+    .expires_at = now_ms() - 1;
 }
 
 #[tokio::test]
@@ -665,7 +704,7 @@ async fn renewal_rotates_and_persists_the_refresh_token_once() {
   assert_eq!(refreshes[0]["resource"], oauth::RESOURCE);
   assert!(!refreshes[0].contains_key("scope"));
 
-  let session = harness.record().session.unwrap();
+  let session = harness.session().unwrap();
   assert_eq!(session.access_token, "access-2");
   assert_eq!(session.refresh_token.as_deref(), Some("refresh-2"));
   assert!(session.expires_at > now_ms() + 3_000_000);
@@ -685,7 +724,7 @@ async fn a_temporary_renewal_failure_keeps_the_tokens() {
     Err(AccessError::Unavailable)
   );
   assert_eq!(
-    harness.record().session.unwrap().refresh_token.as_deref(),
+    harness.session().unwrap().refresh_token.as_deref(),
     Some("refresh-1")
   );
   assert_eq!(harness.auth.access(None).await.as_deref(), Ok("access-2"));
@@ -704,9 +743,9 @@ async fn an_unusable_refresh_token_requires_a_new_sign_in() {
     harness.auth.access(None).await,
     Err(AccessError::NeedsReconnect)
   );
-  let record = harness.record();
-  assert!(record.session.is_none());
-  assert!(record.registration.unwrap().reconnect_required);
+  let registration = harness.active();
+  assert!(registration.session.is_none());
+  assert!(registration.reconnect_required);
   assert_eq!(
     harness.auth.status().await.state,
     ChatGptState::NeedsReconnect {
@@ -749,9 +788,9 @@ async fn disconnect_revokes_and_wipes_the_tokens_but_keeps_the_registration() {
   assert_eq!(revocation["client_id"], ISSUED_CLIENT);
   assert_eq!(*harness.cleared_harness.lock().unwrap(), 1);
 
-  let record = harness.record();
-  assert!(record.session.is_none());
-  assert_eq!(record.registration.unwrap().client_id, ISSUED_CLIENT);
+  let registration = harness.active();
+  assert!(registration.session.is_none());
+  assert_eq!(registration.client_id, ISSUED_CLIENT);
   assert_eq!(harness.auth.status().await.state, ChatGptState::SignedOut);
   assert_eq!(
     harness.auth.access(None).await,
@@ -777,7 +816,7 @@ async fn an_unconfirmed_revocation_still_signs_out_locally() {
     .with(|fake| fake.revoke_status = StatusCode::SERVICE_UNAVAILABLE);
   assert_eq!(harness.auth.disconnect().await, Ok(false));
   assert_eq!(harness.fake.with(|fake| fake.revocations.len()), 3);
-  assert!(harness.record().session.is_none());
+  assert!(harness.session().is_none());
 }
 
 #[tokio::test]
@@ -785,9 +824,10 @@ async fn a_new_account_registers_a_new_client() {
   let mut harness = Harness::new(Duration::from_secs(30)).await;
   harness.sign_in(SignInIntent::SameAccount).await;
   harness.settled().await;
-  harness
-    .fake
-    .with(|fake| fake.grant.subject = "subject-2".into());
+  harness.fake.with(|fake| {
+    fake.grant.subject = "subject-2".into();
+    fake.next_client = OTHER_CLIENT.into();
+  });
   let params = harness.sign_in(SignInIntent::NewAccount).await;
   assert_eq!(params["client_id"], oauth::DYNAMIC_CLIENT_ID);
   assert!(!params.contains_key("id_token_hint"));
@@ -795,10 +835,31 @@ async fn a_new_account_registers_a_new_client() {
     harness.settled().await,
     ChatGptState::Connected { .. }
   ));
+  let active = harness.active();
+  assert_eq!(active.client_id, OTHER_CLIENT);
+  assert_eq!(active.subject, "subject-2");
+}
+
+#[tokio::test]
+async fn an_issued_client_stays_bound_to_its_first_account() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  let saved = harness.record();
+  // A registration that comes back with an already bound client ID but
+  // another account is refused, and its tokens are revoked.
+  harness
+    .fake
+    .with(|fake| fake.grant.subject = "subject-2".into());
+  harness.sign_in(SignInIntent::NewAccount).await;
   assert_eq!(
-    harness.record().registration.unwrap().subject.as_deref(),
-    Some("subject-2")
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::DifferentAccount
+    }
   );
+  assert_eq!(harness.record(), saved);
+  assert_eq!(revoked(&harness), ["refresh-2"]);
 }
 
 #[tokio::test]
@@ -853,7 +914,7 @@ async fn a_renewal_without_plan_usage_revokes_and_deletes_the_tokens() {
   );
   // The renewed refresh token was revoked, not kept.
   assert_eq!(revoked(&harness), ["refresh-2"]);
-  assert!(harness.record().session.is_none());
+  assert!(harness.session().is_none());
   let after_restart = |status: ChatGptStatus| {
     assert_eq!(
       status,
@@ -862,6 +923,7 @@ async fn a_renewal_without_plan_usage_revokes_and_deletes_the_tokens() {
           email: Some("person@example.com".into())
         },
         session_stored: false,
+        accounts: Vec::new(),
       }
     );
   };
@@ -890,7 +952,7 @@ async fn a_rejected_client_loses_its_tokens_and_registers_anew() {
     Err(AccessError::ClientRejected)
   );
   assert_eq!(revoked(&harness), ["refresh-1"]);
-  assert!(harness.record().session.is_none());
+  assert!(harness.session().is_none());
   harness.restart();
   let status = harness.auth.status().await;
   assert!(!status.session_stored);
@@ -926,6 +988,8 @@ async fn stored_tokens_always_offer_disconnect() {
     .record
     .lock()
     .unwrap()
+    .active_mut()
+    .unwrap()
     .session
     .as_mut()
     .unwrap()
@@ -937,11 +1001,144 @@ async fn stored_tokens_always_offer_disconnect() {
     ChatGptStatus {
       state: ChatGptState::SignedOut,
       session_stored: true,
+      accounts: Vec::new(),
     }
   );
   assert_eq!(harness.auth.disconnect().await, Ok(true));
   assert_eq!(revoked(&harness), ["refresh-1"]);
   assert!(!harness.auth.status().await.session_stored);
+}
+
+#[tokio::test]
+async fn each_account_keeps_its_own_registration_and_tokens() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  let first = harness.active();
+
+  // Another account registers its own client; the first keeps its tokens.
+  harness.fake.with(|fake| {
+    fake.grant.subject = "subject-2".into();
+    fake.grant.email = "other@example.com".into();
+    fake.next_client = OTHER_CLIENT.into();
+  });
+  let params = harness.sign_in(SignInIntent::NewAccount).await;
+  assert_eq!(params["client_id"], oauth::DYNAMIC_CLIENT_ID);
+  assert!(matches!(
+    harness.settled().await,
+    ChatGptState::Connected { .. }
+  ));
+  let record = harness.record();
+  assert_eq!(record.active.as_deref(), Some(OTHER_CLIENT));
+  assert_eq!(record.registration(ISSUED_CLIENT), Some(&first));
+  assert!(revoked(&harness).is_empty());
+  assert_eq!(
+    harness.auth.status().await.accounts,
+    [ChatGptAccount {
+      id: ISSUED_CLIENT.into(),
+      email: "person@example.com".into(),
+    }]
+  );
+
+  // Switching back reuses the first client; no new registration.
+  harness.fake.with(|fake| {
+    fake.grant.subject = "subject-1".into();
+    fake.grant.email = "person@example.com".into();
+  });
+  let params = harness
+    .sign_in(SignInIntent::Account(ISSUED_CLIENT.into()))
+    .await;
+  assert_eq!(params["client_id"], ISSUED_CLIENT);
+  assert!(!params.contains_key("agent_name_hint"));
+  assert!(matches!(
+    harness.settled().await,
+    ChatGptState::Connected { .. }
+  ));
+  let record = harness.record();
+  assert_eq!(record.registrations.len(), 2);
+  assert_eq!(record.active.as_deref(), Some(ISSUED_CLIENT));
+  // The first account's replaced refresh token was revoked; the other
+  // account's tokens are untouched.
+  assert_eq!(revoked(&harness), ["refresh-1"]);
+  assert!(record.registration(OTHER_CLIENT).unwrap().session.is_some());
+}
+
+#[tokio::test]
+async fn an_expired_registration_code_never_lets_another_account_in() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  let first = harness.record();
+
+  // A new registration's code expires before the exchange.
+  harness.fake.with(|fake| {
+    fake.next_client = OTHER_CLIENT.into();
+    fake.code_errors.push_back("invalid_grant");
+  });
+  harness.sign_in(SignInIntent::NewAccount).await;
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::CodeExpired
+    }
+  );
+  let record = harness.record();
+  assert_eq!(record.pending_client.as_deref(), Some(OTHER_CLIENT));
+  assert_eq!(record.registrations, first.registrations);
+  assert_eq!(record.active, first.active);
+
+  // A sign-in to the saved account still expects that account.
+  harness
+    .fake
+    .with(|fake| fake.grant.subject = "subject-2".into());
+  let params = harness.sign_in(SignInIntent::SameAccount).await;
+  assert_eq!(params["client_id"], ISSUED_CLIENT);
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::DifferentAccount
+    }
+  );
+  assert_eq!(harness.record().registrations, first.registrations);
+  // The tokens issued to the wrong account were revoked, not kept.
+  assert_eq!(revoked(&harness), ["refresh-2"]);
+
+  // The retry of the new registration reuses its issued client.
+  let params = harness.sign_in(SignInIntent::NewAccount).await;
+  assert_eq!(params["client_id"], OTHER_CLIENT);
+  assert!(!params.contains_key("login_hint"));
+  assert!(matches!(
+    harness.settled().await,
+    ChatGptState::Connected { .. }
+  ));
+  let record = harness.record();
+  assert_eq!(record.pending_client, None);
+  assert_eq!(
+    record.registration(OTHER_CLIENT).unwrap().subject,
+    "subject-2"
+  );
+  assert_eq!(record.registration(ISSUED_CLIENT), first.active());
+}
+
+#[tokio::test]
+async fn a_sign_in_without_plan_usage_revokes_old_and_new_tokens() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  harness.fake.with(|fake| {
+    fake.grant.scope = "email offline_access openid profile resource.invoke".into();
+  });
+  harness.sign_in(SignInIntent::SameAccount).await;
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::PlanUsageNotGranted
+    }
+  );
+  assert!(harness.session().is_none());
+  let mut dropped = revoked(&harness);
+  dropped.sort();
+  assert_eq!(dropped, ["refresh-1", "refresh-2"]);
 }
 
 #[test]
@@ -953,6 +1150,10 @@ fn statuses_serialize_without_tokens() {
         plan: None
       },
       session_stored: true,
+      accounts: vec![ChatGptAccount {
+        id: OTHER_CLIENT.into(),
+        email: "other@example.com".into(),
+      }],
     })
     .unwrap(),
     json!({
@@ -960,6 +1161,7 @@ fn statuses_serialize_without_tokens() {
       "email": "person@example.com",
       "plan": null,
       "sessionStored": true,
+      "accounts": [{ "id": OTHER_CLIENT, "email": "other@example.com" }],
     })
   );
   assert_eq!(
@@ -968,30 +1170,38 @@ fn statuses_serialize_without_tokens() {
         reason: ChatGptFailure::PlanUsageNotGranted
       },
       session_stored: false,
+      accounts: Vec::new(),
     })
     .unwrap(),
     json!({
       "state": "failed",
       "reason": "plan_usage_not_granted",
       "sessionStored": false,
+      "accounts": [],
     })
   );
   let record = store::ChatGptRecord {
-    registration: None,
-    session: Some(store::ChatGptSession {
+    registrations: vec![store::ChatGptRegistration {
       client_id: ISSUED_CLIENT.into(),
-      issuer: "https://issuer.test".into(),
       subject: "subject-1".into(),
       email: None,
       plan: None,
-      id_token: "id-token-secret".into(),
-      access_token: "access-secret".into(),
-      refresh_token: Some("refresh-secret".into()),
-      expires_at: 0,
-      earliest_refresh_at: None,
-      scopes: vec![oauth::PLAN_USAGE_SCOPE.into()],
-      saved_at: 0,
-    }),
+      plan_usage_granted: true,
+      reconnect_required: false,
+      client_rejected: false,
+      session: Some(store::ChatGptSession {
+        issuer: "https://issuer.test".into(),
+        id_token: "id-token-secret".into(),
+        access_token: "access-secret".into(),
+        refresh_token: Some("refresh-secret".into()),
+        expires_at: 0,
+        earliest_refresh_at: None,
+        scopes: vec![oauth::PLAN_USAGE_SCOPE.into()],
+        saved_at: 0,
+      }),
+    }],
+    active: Some(ISSUED_CLIENT.into()),
+    pending_client: None,
   };
   let shown = serde_json::to_string(&stored_status(&record)).unwrap();
   for secret in ["secret", ISSUED_CLIENT, "subject-1"] {

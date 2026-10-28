@@ -14,35 +14,34 @@ use serde::{Deserialize, Serialize};
 
 use crate::local_store::EncryptedJsonFile;
 
-/// The account registration an issued client ID belongs to. It outlives a
-/// sign-out: a later sign-in to the same account reuses the client ID.
+/// One issued client ID and the verified account it belongs to, with that
+/// account's own tokens. A registration exists only once a sign-in verified
+/// its account, and it outlives a sign-out: a later sign-in to the same
+/// account reuses the client ID.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChatGptRegistration {
   /// The issued `oaiapp_…` client ID; never `dynamic_agent_client`.
   pub client_id: String,
-  /// The verified ID-token subject, once a sign-in completed.
-  pub subject: Option<String>,
+  /// The verified ID-token subject this client ID is bound to.
+  pub subject: String,
   pub email: Option<String>,
+  pub plan: Option<String>,
   /// The last sign-in did not grant ChatGPT plan usage, so the next one asks
   /// for consent again.
   pub plan_usage_granted: bool,
   /// The tokens stopped working; the user has to sign in again.
   pub reconnect_required: bool,
   /// OpenAI no longer accepts this client; the next sign-in registers anew.
-  #[serde(default)]
   pub client_rejected: bool,
+  pub session: Option<ChatGptSession>,
 }
 
-/// One signed-in token set.
+/// One signed-in token set, always held by the registration it was issued to.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChatGptSession {
-  pub client_id: String,
   pub issuer: String,
-  pub subject: String,
-  pub email: Option<String>,
-  pub plan: Option<String>,
   /// Kept for `id_token_hint` on the next sign-in to this account.
   pub id_token: String,
   pub access_token: String,
@@ -65,16 +64,73 @@ impl ChatGptSession {
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChatGptRecord {
-  pub registration: Option<ChatGptRegistration>,
-  pub session: Option<ChatGptSession>,
+  /// One per issued client ID.
+  pub registrations: Vec<ChatGptRegistration>,
+  /// The client ID of the registration runs use.
+  pub active: Option<String>,
+  /// A client issued by a registration whose code exchange failed. Only the
+  /// retry of that registration uses it; it never stands for an account.
+  pub pending_client: Option<String>,
+}
+
+impl ChatGptRecord {
+  pub(crate) fn registration(&self, client_id: &str) -> Option<&ChatGptRegistration> {
+    self
+      .registrations
+      .iter()
+      .find(|registration| registration.client_id == client_id)
+  }
+
+  pub(crate) fn active(&self) -> Option<&ChatGptRegistration> {
+    self.registration(self.active.as_deref()?)
+  }
+
+  pub(crate) fn active_mut(&mut self) -> Option<&mut ChatGptRegistration> {
+    let active = self.active.as_deref()?;
+    self
+      .registrations
+      .iter_mut()
+      .find(|registration| registration.client_id == active)
+  }
+
+  /// Stores `registration` in place of the one with its client ID, leaving
+  /// every other registration and its tokens untouched.
+  pub(crate) fn put(&mut self, registration: ChatGptRegistration) {
+    match self
+      .registrations
+      .iter_mut()
+      .find(|current| current.client_id == registration.client_id)
+    {
+      Some(current) => *current = registration,
+      None => self.registrations.push(registration),
+    }
+  }
+
+  pub(crate) fn has_session(&self) -> bool {
+    self
+      .registrations
+      .iter()
+      .any(|registration| registration.session.is_some())
+  }
 }
 
 // Tokens and identities never reach a log through `{:?}`.
+impl fmt::Debug for ChatGptRegistration {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.debug_struct("ChatGptRegistration")
+      .field("signed_in", &self.session.is_some())
+      .field("plan_usage_granted", &self.plan_usage_granted)
+      .field("reconnect_required", &self.reconnect_required)
+      .field("client_rejected", &self.client_rejected)
+      .finish_non_exhaustive()
+  }
+}
+
 impl fmt::Debug for ChatGptRecord {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("ChatGptRecord")
-      .field("registered", &self.registration.is_some())
-      .field("signed_in", &self.session.is_some())
+      .field("registrations", &self.registrations.len())
+      .field("signed_in", &self.has_session())
       .finish()
   }
 }
@@ -254,13 +310,22 @@ mod tests {
     }
   }
 
-  fn session(access_token: &str, refresh_token: &str) -> ChatGptSession {
-    ChatGptSession {
+  fn registration(access_token: &str, refresh_token: &str) -> ChatGptRegistration {
+    ChatGptRegistration {
       client_id: "oaiapp_fixture".into(),
-      issuer: "https://issuer.invalid".into(),
       subject: "subject-1".into(),
       email: Some("person@example.com".into()),
       plan: None,
+      plan_usage_granted: true,
+      reconnect_required: false,
+      client_rejected: false,
+      session: Some(session(access_token, refresh_token)),
+    }
+  }
+
+  fn session(access_token: &str, refresh_token: &str) -> ChatGptSession {
+    ChatGptSession {
+      issuer: "https://issuer.invalid".into(),
       id_token: "id-token-fixture".into(),
       access_token: access_token.into(),
       refresh_token: Some(refresh_token.into()),
@@ -303,8 +368,9 @@ mod tests {
     assert_eq!(vault.load().unwrap(), ChatGptRecord::default());
 
     let record = ChatGptRecord {
-      registration: None,
-      session: Some(session("access-secret", "refresh-secret")),
+      registrations: vec![registration("access-secret", "refresh-secret")],
+      active: Some("oaiapp_fixture".into()),
+      pending_client: None,
     };
     vault.save(&record).unwrap();
     let raw = std::fs::read_to_string(&path).unwrap();
@@ -330,17 +396,26 @@ mod tests {
   }
 
   #[test]
+  fn storing_a_registration_leaves_the_others_untouched() {
+    let mut record = ChatGptRecord::default();
+    record.put(registration("access-a", "refresh-a"));
+    let mut other = registration("access-b", "refresh-b");
+    other.client_id = "oaiapp_other".into();
+    other.subject = "subject-2".into();
+    record.put(other.clone());
+    let mut replaced = registration("access-c", "refresh-c");
+    replaced.email = None;
+    record.put(replaced.clone());
+    assert_eq!(record.registrations, [replaced, other]);
+    assert!(record.has_session());
+  }
+
+  #[test]
   fn debug_output_names_no_token_or_identity() {
     let record = ChatGptRecord {
-      registration: Some(ChatGptRegistration {
-        client_id: "oaiapp_fixture".into(),
-        subject: Some("subject-1".into()),
-        email: Some("person@example.com".into()),
-        plan_usage_granted: true,
-        reconnect_required: false,
-        client_rejected: false,
-      }),
-      session: Some(session("access-secret", "refresh-secret")),
+      registrations: vec![registration("access-secret", "refresh-secret")],
+      active: Some("oaiapp_fixture".into()),
+      pending_client: Some("oaiapp_pending".into()),
     };
     let debug = format!("{record:?}");
     for secret in [
@@ -350,6 +425,7 @@ mod tests {
       "person@example.com",
       "subject-1",
       "oaiapp_fixture",
+      "oaiapp_pending",
     ] {
       assert!(!debug.contains(secret), "{debug}");
     }

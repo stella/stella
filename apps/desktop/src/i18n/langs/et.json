@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Kasutage stella AI-päringuteks oma ChatGPT paketti. Kasutus arvestatakse teie ChatGPT paketist, stella tellimusest eraldi.",
     "continueWithChatGpt": "Jätka ChatGPT-ga",
+    "continueAs": "Jätka kontoga {email}",
     "useDifferentAccount": "Kasuta teist kontot",
     "signingIn": "Lõpetage sisselogimine brauseris.",
     "cancel": "Tühista",

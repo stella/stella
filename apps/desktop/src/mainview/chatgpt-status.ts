@@ -25,7 +25,11 @@ export type ChatGptFailure = (typeof CHATGPT_FAILURES)[number];
 export type ChatGptStatus = ChatGptState & {
   /** Tokens are stored on this computer, so Disconnect is offered. */
   sessionStored: boolean;
+  /** Other accounts signed in before, to switch back to. */
+  accounts: ChatGptAccount[];
 };
+
+type ChatGptAccount = { id: string; email: string };
 
 type ChatGptState =
   | { state: "signed_out" }
@@ -43,8 +47,18 @@ const isOptionalString = (value: unknown) =>
 const isFailure = (value: unknown): value is ChatGptFailure =>
   CHATGPT_FAILURES.some((failure) => failure === value);
 
+const isAccount = (value: unknown): value is ChatGptAccount =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  typeof value["email"] === "string";
+
 export const isChatGptStatus = (value: unknown): value is ChatGptStatus => {
-  if (!isRecord(value) || typeof value["sessionStored"] !== "boolean") {
+  if (
+    !isRecord(value) ||
+    typeof value["sessionStored"] !== "boolean" ||
+    !Array.isArray(value["accounts"]) ||
+    !value["accounts"].every(isAccount)
+  ) {
     return false;
   }
   switch (value["state"]) {

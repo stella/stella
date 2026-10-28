@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Use your ChatGPT plan for AI requests in stella. Usage counts toward your ChatGPT plan, separately from your stella subscription.",
     "continueWithChatGpt": "Continue with ChatGPT",
+    "continueAs": "Continue as {email}",
     "useDifferentAccount": "Use a different account",
     "signingIn": "Finish signing in in your browser.",
     "cancel": "Cancel",

@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Naudokite savo ChatGPT planą DI užklausoms stelloje. Naudojimas skaičiuojamas pagal jūsų ChatGPT planą, atskirai nuo stellos prenumeratos.",
     "continueWithChatGpt": "Tęsti su ChatGPT",
+    "continueAs": "Tęsti kaip {email}",
     "useDifferentAccount": "Naudoti kitą paskyrą",
     "signingIn": "Baikite prisijungti naršyklėje.",
     "cancel": "Atšaukti",

@@ -25,19 +25,37 @@ describe("ChatGPT connection status", () => {
 
   test("accepts the shapes the native side sends", () => {
     for (const status of [
-      { sessionStored: false, state: "signed_out" },
-      { sessionStored: true, state: "signed_out" },
-      { sessionStored: false, state: "signing_in" },
+      { accounts: [], sessionStored: false, state: "signed_out" },
+      { accounts: [], sessionStored: true, state: "signed_out" },
+      {
+        accounts: [{ email: "person@example.com", id: "oaiapp_x" }],
+        sessionStored: false,
+        state: "signed_out",
+      },
+      { accounts: [], sessionStored: false, state: "signing_in" },
       {
         email: "person@example.com",
         plan: null,
+        accounts: [],
         sessionStored: true,
         state: "connected",
       },
-      { email: null, plan: "plus", sessionStored: true, state: "connected" },
-      { email: null, sessionStored: false, state: "needs_reconnect" },
+      {
+        email: null,
+        plan: "plus",
+        accounts: [],
+        sessionStored: true,
+        state: "connected",
+      },
+      {
+        email: null,
+        accounts: [],
+        sessionStored: false,
+        state: "needs_reconnect",
+      },
       {
         reason: "plan_usage_not_granted",
+        accounts: [],
         sessionStored: true,
         state: "failed",
       },
@@ -51,10 +69,27 @@ describe("ChatGPT connection status", () => {
       null,
       "connected",
       { state: "signed_out" },
-      { sessionStored: "yes", state: "signed_out" },
-      { email: 1, plan: null, sessionStored: true, state: "connected" },
-      { reason: "unknown", sessionStored: false, state: "failed" },
-      { sessionStored: true, state: "token", token: "secret" },
+      { accounts: [], sessionStored: "yes", state: "signed_out" },
+      { sessionStored: true, state: "signed_out" },
+      {
+        accounts: [{ email: null, id: "oaiapp_x" }],
+        sessionStored: true,
+        state: "signed_out",
+      },
+      {
+        email: 1,
+        plan: null,
+        accounts: [],
+        sessionStored: true,
+        state: "connected",
+      },
+      {
+        reason: "unknown",
+        accounts: [],
+        sessionStored: false,
+        state: "failed",
+      },
+      { accounts: [], sessionStored: true, state: "token", token: "secret" },
     ]) {
       expect(isChatGptStatus(value)).toBe(false);
     }

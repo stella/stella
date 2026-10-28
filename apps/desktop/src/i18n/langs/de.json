@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Nutzen Sie Ihren ChatGPT-Tarif für KI-Anfragen in stella. Die Nutzung wird auf Ihren ChatGPT-Tarif angerechnet, getrennt von Ihrem stella-Abonnement.",
     "continueWithChatGpt": "Weiter mit ChatGPT",
+    "continueAs": "Weiter als {email}",
     "useDifferentAccount": "Anderes Konto verwenden",
     "signingIn": "Schließen Sie die Anmeldung in Ihrem Browser ab.",
     "cancel": "Abbrechen",

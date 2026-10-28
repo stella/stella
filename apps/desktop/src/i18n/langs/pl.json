@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Korzystaj ze swojego planu ChatGPT przy zapytaniach do AI w stelli. Wykorzystanie jest liczone w ramach planu ChatGPT, niezależnie od subskrypcji stelli.",
     "continueWithChatGpt": "Kontynuuj z ChatGPT",
+    "continueAs": "Kontynuuj jako {email}",
     "useDifferentAccount": "Użyj innego konta",
     "signingIn": "Dokończ logowanie w przeglądarce.",
     "cancel": "Anuluj",

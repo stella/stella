@@ -624,6 +624,7 @@
     "chatGpt": "ChatGPT",
     "description": "Utilisez votre forfait ChatGPT pour les requêtes d’IA dans stella. L’utilisation est décomptée de votre forfait ChatGPT, indépendamment de votre abonnement stella.",
     "continueWithChatGpt": "Continuer avec ChatGPT",
+    "continueAs": "Continuer en tant que {email}",
     "useDifferentAccount": "Utiliser un autre compte",
     "signingIn": "Terminez la connexion dans votre navigateur.",
     "cancel": "Annuler",
