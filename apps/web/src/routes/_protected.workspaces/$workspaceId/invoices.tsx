@@ -149,7 +149,7 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
       id: "totalAmount",
       header: () => t("billing.invoices.totalAmount"),
       cell: (invoice) =>
-        formatCurrencyAmount(invoice.totalAmount, invoice.currency),
+        formatCurrencyAmount(invoice.matterShare, invoice.currency),
       headClassName: "text-end",
       cellClassName: "text-end tabular-nums",
       skeletonCell: () => <Skeleton className="ms-auto h-4 w-20" />,

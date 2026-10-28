@@ -904,7 +904,7 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_changes_required", ({ p }) =>
       bool(
         p([
-          "scripts/dependency-audit.ts",
+          "scripts/dependency-audit*",
           "scripts/check-trusted-dependencies.ts",
           "scripts/retry.sh",
           "bun.lock",

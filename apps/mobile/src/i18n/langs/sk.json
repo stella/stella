@@ -8,7 +8,34 @@
   "chat": {
     "description": "Majte rozpracovanú prácu poruke a pokračujte z akéhokoľvek zariadenia.",
     "emptyTitle": "Zatiaľ žiadne konverzácie",
-    "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna."
+    "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna.",
+    "noMatchesTitle": "Žiadne zodpovedajúce konverzácie",
+    "noMatchesDescription": "Žiadny názov konverzácie ani spisu neobsahuje „{search}“.",
+    "search": "Hľadať konverzácie",
+    "loadFailed": "Vaše konverzácie sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "untitled": "Konverzácia bez názvu",
+    "loadMoreFailed": "Načítať ďalšie",
+    "loadOlderFailed": "Načítať staršie správy",
+    "toolUsed": "Použité: {tool}",
+    "threadTitle": "Konverzácia",
+    "threadLoadFailed": "Túto konverzáciu sa nepodarilo načítať.",
+    "threadEmptyDescription": "Táto konverzácia zatiaľ nemá žiadne správy.",
+    "sections": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "week": "Posledných 7 dní",
+      "earlier": "Skôr"
+    },
+    "newChat": "Nová konverzácia",
+    "composerPlaceholder": "Opýtajte sa stelly",
+    "send": "Odoslať",
+    "stop": "Zastaviť",
+    "sendFailed": "Správu sa nepodarilo odoslať. Skúste to znova.",
+    "answerWorking": "Pracujem…",
+    "answerStopped": "Zastavené.",
+    "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
+    "answerFailed": "Odpoveď sa nepodarilo dokončiť."
   },
   "tasks": {
     "description": "Pozrite sa, čo si vyžaduje pozornosť, bez otvárania celého pracovného priestoru.",
@@ -21,6 +48,36 @@
     "emptyDescription": "Tu sa zobrazia vaše nedávne spisy.",
     "loadFailed": "Vaše spisy sa nepodarilo načítať.",
     "retry": "Skúsiť znova"
+  },
+  "matter": {
+    "documents": "Dokumenty",
+    "tasks": "Úlohy",
+    "emptyTitle": "Zatiaľ tu nič nie je",
+    "emptyDescription": "Tu sa zobrazia dokumenty a úlohy tohto spisu.",
+    "loadFailed": "Spis sa nepodarilo načítať.",
+    "loadMoreFailed": "Ďalšie položky sa nepodarilo načítať.",
+    "loadMore": "Načítať ďalšie",
+    "retry": "Skúsiť znova",
+    "untitled": "Bez názvu",
+    "updated": "Upravené {time}",
+    "kind": {
+      "folder": "Priečinok",
+      "document": "Dokument",
+      "task": "Úloha"
+    },
+    "status": {
+      "open": "Otvorená",
+      "in_progress": "Rozpracovaná",
+      "in_review": "Na kontrolu",
+      "done": "Hotová",
+      "cancelled": "Zrušená"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Spisová značka",
+    "currentVersion": "Aktuálna verzia",
+    "loadFailed": "Položku sa nepodarilo načítať."
   },
   "signIn": {
     "title": "Prihláste sa do aplikácie stella",

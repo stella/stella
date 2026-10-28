@@ -34,8 +34,9 @@ import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /** A mark with where it sits on the file the viewer shows. */
 export type DocumentMark = DocumentAnnotation & { placement: MarkPlacement };
@@ -115,7 +116,7 @@ export const useDocumentMarks = ({
   });
   const available =
     user !== null && entityId !== "" && pageSource === "document";
-  const view = useQueryView(useQuery({ ...options, enabled: available }));
+  const view = queryView(useQuery({ ...options, enabled: available }));
   useQueryViewError(view, "useDocumentMarks:query");
   const rows = available && view.type === "items" ? view.items : [];
 
@@ -123,7 +124,7 @@ export const useDocumentMarks = ({
     file,
     pageNumbers: [...new Set(rows.map((row) => row.pageNumber))],
   });
-  const pagesView = useQueryView(useQuery(pagesOptions));
+  const pagesView = queryView(useQuery(pagesOptions));
   useQueryViewError(pagesView, "useDocumentMarks:pages");
   const pages = pagesView.type === "items" ? pagesView.items : undefined;
 

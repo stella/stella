@@ -9,6 +9,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  pdfSigningBaseVersionChanged,
   preflightPdfSigning,
   STAMP_LABEL_MAX_LENGTH,
 } from "@/api/lib/files/pdf-signing/handoff-preflight";
@@ -99,24 +100,12 @@ const stampRequestSchema = v.optional(
 
 const createPdfSigningHandoffBodySchema = v.object({
   entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
   location: signingAnnotationSchema,
   propertyId: resourceIdSchema("property"),
   reason: signingAnnotationSchema,
   stamp: stampRequestSchema,
 });
-
-/**
- * The document gained a version between the checks against its bytes and
- * opening the exchange; nothing was stored, and a new attempt checks the
- * new version.
- */
-const baseVersionChanged = () =>
-  new HandlerError({
-    status: 409,
-    code: "pdf_signing_base_version_changed",
-    message: "The document changed while signing was being prepared.",
-    hint: "Try again: the new version will be checked.",
-  });
 
 const config = {
   contract: "patch",
@@ -133,7 +122,7 @@ const config = {
 const createPdfSigningHandoff = createSafeHandler(
   config,
   async function* ({
-    body: { entityId, location, propertyId, reason, stamp },
+    body: { entityId, fieldId, location, propertyId, reason, stamp },
     recordAuditEvent,
     safeDb,
     session,
@@ -147,6 +136,7 @@ const createPdfSigningHandoff = createSafeHandler(
     const preflighted = yield* Result.await(
       preflightPdfSigning({
         entityId,
+        fieldId,
         location: sanitizeSigningAnnotation(location),
         organizationId: session.activeOrganizationId,
         propertyId,
@@ -190,6 +180,9 @@ const createPdfSigningHandoff = createSafeHandler(
             }),
           };
         }
+        if (current.fieldId !== fieldId) {
+          return { error: pdfSigningBaseVersionChanged() };
+        }
         if (current.target.status === "rejected") {
           return {
             error: new HandlerError({
@@ -201,7 +194,7 @@ const createPdfSigningHandoff = createSafeHandler(
         }
 
         if (current.baseVersionId !== preflighted.baseVersionId) {
-          return { error: baseVersionChanged() };
+          return { error: pdfSigningBaseVersionChanged() };
         }
         const opened = await openPdfSigningSession({
           now: new Date(),
@@ -226,7 +219,7 @@ const createPdfSigningHandoff = createSafeHandler(
           },
         });
         if (opened.status === "version-changed") {
-          return { error: baseVersionChanged() };
+          return { error: pdfSigningBaseVersionChanged() };
         }
         if (opened.status === "in-progress") {
           return {

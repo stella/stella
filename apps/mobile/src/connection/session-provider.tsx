@@ -3,6 +3,7 @@ import { createContext, use, useState } from "react";
 import { panic, Result } from "better-result";
 
 import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
+import { mobileRedirectUri } from "@stll/api-contract/mobile-client";
 
 import { epochMilliseconds } from "@/connection/clock";
 import { TokenError } from "@/connection/errors";
@@ -11,15 +12,12 @@ import {
   deviceSessionStore,
   openDeviceAuthSession,
 } from "@/connection/platform";
-import { createAccessTokenSource } from "@/connection/session";
-import type {
-  AccessToken,
-  AccessTokenSource,
-  StoredSession,
-} from "@/connection/session";
+import { restoredSource, sourceFor } from "@/connection/restored-session";
+import type { AccessTokenSource } from "@/connection/session";
 import { signIn as signInToServer } from "@/connection/sign-in";
 import type { SignInError } from "@/connection/sign-in";
 import { revokeRefreshToken } from "@/connection/tokens";
+import { APP_VARIANT } from "@/env";
 
 export type SessionState =
   | {
@@ -35,39 +33,21 @@ type SessionContextValue = {
     serverUrlInput: string,
   ) => Promise<Result<void, SignInError>>;
   readonly signOut: () => Promise<void>;
-  /** The server refused the session; the person has to sign in again. */
-  readonly end: () => void;
+  /**
+   * The server refused `source`'s session; the person has to sign in again.
+   * A source left over from an earlier sign-in ends nothing.
+   */
+  readonly end: (source: AccessTokenSource) => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-/**
- * The session a previous run kept, read once as the app starts. A keychain
- * that cannot be read (the device locked during a background launch) starts
- * signed out; signing in writes a fresh session over whatever was there.
- */
-const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
-  async () => await deviceSessionStore.read(),
-).then((read) => (Result.isOk(read) ? read.value : undefined));
-
-const sourceFor = (
-  session: StoredSession,
-  initialAccess: AccessToken | undefined,
-): AccessTokenSource =>
-  createAccessTokenSource({
-    fetch,
-    initialAccess,
-    now: epochMilliseconds,
-    session,
-    store: deviceSessionStore,
-  });
-
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
-  const restored = use(restoredSession);
+  const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
     restored === undefined
       ? { status: "signed-out", ended: false }
-      : { status: "signed-in", source: sourceFor(restored, undefined) },
+      : { status: "signed-in", source: restored },
   );
 
   const value: SessionContextValue = {
@@ -78,6 +58,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         fetch,
         now: epochMilliseconds,
         openAuthSession: openDeviceAuthSession,
+        redirectUri: mobileRedirectUri(APP_VARIANT),
         resourceFor: apiOAuthResourceUrl,
         serverUrlInput,
         // Plain http to a simulator host is for development builds only.
@@ -138,8 +119,12 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ).unwrapOr(undefined);
       setState({ status: "signed-out", ended: false });
     },
-    end: () => {
-      setState({ status: "signed-out", ended: true });
+    end: (source) => {
+      setState((current) =>
+        current.status === "signed-in" && current.source === source
+          ? { status: "signed-out", ended: true }
+          : current,
+      );
     },
   };
 

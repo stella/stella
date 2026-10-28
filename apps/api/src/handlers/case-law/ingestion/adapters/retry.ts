@@ -1,3 +1,4 @@
+// parser-output-unchanged: one-request reads honor the existing rate-limit redirect predicate and preserve its typed source stop.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
 // parser-output-unchanged: excluding the native timeout option only narrows the request type.
@@ -89,11 +90,15 @@ export const fetchPublisher = async (
     return await retryPublisherRequest(url, init);
   }
   const response = await fetchPublisherRequest(url, init);
-  if (isStopStatus(init.refusalMode, response.status)) {
+  if (
+    isStopStatus(init.refusalMode, response.status) ||
+    init.isRateLimitRedirect?.(response)
+  ) {
     const retryAfter = response.headers.get("Retry-After");
     await response.body?.cancel();
     throw new AdapterFetchError({
       message: `Publisher request refused: ${response.status}`,
+      stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
       adapterKey: init.adapterKey,
       cursor: null,
       httpStatus: response.status,
@@ -108,6 +113,7 @@ type PublisherRateLimitRefusalErrorOptions = {
   publisherKey: PublisherGateId;
   status: number;
   cooldownUntilEpochMs: number;
+  retryAfter?: string | null;
   adapterKey: AdapterKey;
 };
 
@@ -121,6 +127,7 @@ export class PublisherRateLimitRefusalError extends AdapterFetchError {
     publisherKey,
     status,
     cooldownUntilEpochMs,
+    retryAfter,
     adapterKey,
     cursor,
   }: PublisherRateLimitRefusalErrorOptions) {
@@ -129,6 +136,7 @@ export class PublisherRateLimitRefusalError extends AdapterFetchError {
       adapterKey,
       cursor,
       httpStatus: status,
+      ...(typeof retryAfter === "string" ? { retryAfter } : {}),
       stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
     });
     this.name = "PublisherRateLimitRefusalError";
@@ -265,11 +273,12 @@ const fetchPublisherRequest = async (
         response.status === 429 ||
         _isRateLimitRedirect?.(response)
       ) {
+        const retryAfter = response.headers.get("Retry-After");
         const refusalNow = Temporal.Now.instant().epochMilliseconds;
         const delay = Math.ceil(
           publisherRetryDelay({
             attempt: 0,
-            retryAfter: response.headers.get("Retry-After"),
+            retryAfter,
             now: refusalNow,
             random: Math.random(),
             retryAfterMaxMs: MAX_DATE_EPOCH_MS - refusalNow,
@@ -297,6 +306,7 @@ const fetchPublisherRequest = async (
           new PublisherRateLimitRefusalError({
             publisherKey: gateId,
             status: response.status,
+            retryAfter,
             cooldownUntilEpochMs,
             adapterKey,
             cursor: null,
@@ -593,10 +603,11 @@ export const retryPublisherRequest = async (
           (fetched.value.status === 401 || fetched.value.status === 403)) ||
         init.isRateLimitRedirect?.(fetched.value))
     ) {
+      const retryAfter = fetched.value.headers.get("Retry-After");
       const delay = Math.ceil(
         publisherRetryDelay({
           attempt,
-          retryAfter: fetched.value.headers.get("Retry-After"),
+          retryAfter,
           now: runtime.now(),
           random: runtime.random(),
           ...(controls === undefined
@@ -614,6 +625,7 @@ export const retryPublisherRequest = async (
         cursor: null,
         publisherKey: gateId,
         status: fetched.value.status,
+        retryAfter,
         cooldownUntilEpochMs,
         adapterKey: init.adapterKey,
       });
