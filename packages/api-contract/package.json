@@ -158,7 +158,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/uuid-codec": "workspace:*",
     "@valibot/to-json-schema": "^1.8.0",
     "better-result": "catalog:",

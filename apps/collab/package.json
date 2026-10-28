@@ -20,7 +20,7 @@
     "@stll/errors": "workspace:*",
     "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
     "crossws": "^0.4.15",

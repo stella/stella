@@ -106,7 +106,7 @@
     "@stll/start-runtime": "workspace:^",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/ui": "workspace:*",
     "@stll/user-agent": "workspace:*",
     "@stll/workspace-ui": "workspace:*",

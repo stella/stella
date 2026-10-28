@@ -28,7 +28,7 @@
     "@stll/concurrency": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "@stll/ui": "workspace:*",
     "@tauri-apps/api": "^2.12.4",
     "better-result": "catalog:",

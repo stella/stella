@@ -32,7 +32,7 @@
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "oxc-parser": "catalog:",
     "oxc-transform-react": "catalog:"

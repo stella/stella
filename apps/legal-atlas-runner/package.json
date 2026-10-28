@@ -40,7 +40,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
     "@stll/scripts": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "drizzle-orm": "catalog:"
   },

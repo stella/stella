@@ -26,7 +26,7 @@
     "@stll/fuzzy-search": "catalog:",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
-    "@stll/time": "0.4.1",
+    "@stll/time": "0.4.2",
     "better-result": "catalog:",
     "saxes": "catalog:"
   },
