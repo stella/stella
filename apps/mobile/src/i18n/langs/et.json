@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Server",
-    "signOut": "Logi välja"
+    "signOut": "Logi välja",
+    "deleteAccount": "Kustuta konto",
+    "deleteAccountHint": "Avab teie konto veebis, kus saate selle koos kõigega, mis on teie oma, kustutada."
   },
   "header": {
     "search": "Otsing"

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Compte",
     "server": "Serveur",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "deleteAccount": "Supprimer le compte",
+    "deleteAccountHint": "Ouvre votre compte sur le web, où vous pouvez le supprimer avec tout ce qui vous appartient."
   },
   "header": {
     "search": "Rechercher"

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "الحساب",
     "server": "الخادم",
-    "signOut": "تسجيل الخروج"
+    "signOut": "تسجيل الخروج",
+    "deleteAccount": "حذف الحساب",
+    "deleteAccountHint": "يفتح حسابك على الويب، حيث يمكنك حذفه مع كل ما يخصك."
   },
   "header": {
     "search": "بحث"

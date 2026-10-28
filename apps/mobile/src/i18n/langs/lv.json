@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konts",
     "server": "Serveris",
-    "signOut": "Atslēgties"
+    "signOut": "Atslēgties",
+    "deleteAccount": "Dzēst kontu",
+    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu."
   },
   "header": {
     "search": "Meklēt"

@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Účet",
     "server": "Server",
-    "signOut": "Odhlásit se"
+    "signOut": "Odhlásit se",
+    "deleteAccount": "Smazat účet",
+    "deleteAccountHint": "Otevře váš účet na webu, kde ho můžete smazat i se vším, co je vaše."
   },
   "header": {
     "search": "Hledat"

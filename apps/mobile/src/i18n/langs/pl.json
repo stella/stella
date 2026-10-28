@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Serwer",
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "deleteAccount": "Usuń konto",
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
   },
   "header": {
     "search": "Szukaj"

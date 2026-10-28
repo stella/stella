@@ -142,6 +142,49 @@ const appConfigBase = ({
     // The app's only cryptography is HTTPS and the platform keychain, which
     // are exempt; declaring it spares every TestFlight upload the question.
     config: { usesNonExemptEncryption: false },
+    // What the App Store's privacy report and review read. The app tracks no
+    // one and carries no analytics; it keeps the account's email and name and
+    // what the person writes, scans and uploads, all to run the app. The
+    // reasons are the platform APIs React Native and Expo call for the app
+    // itself: settings it stores, file dates and free disk space it reads
+    // for its own files, and the system clock it measures time with.
+    privacyManifests: {
+      NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: [],
+      NSPrivacyCollectedDataTypes: [
+        ...[
+          "NSPrivacyCollectedDataTypeEmailAddress",
+          "NSPrivacyCollectedDataTypeName",
+          "NSPrivacyCollectedDataTypeOtherUserContent",
+        ].map((type) => ({
+          NSPrivacyCollectedDataType: type,
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: [
+            "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+          ],
+        })),
+      ],
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+          NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+          NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+          NSPrivacyAccessedAPITypeReasons: ["E174.1", "85F4.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType:
+            "NSPrivacyAccessedAPICategorySystemBootTime",
+          NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+        },
+      ],
+    },
     infoPlist: {
       // The document camera (modules/document-scanner) scans paper into a
       // matter's documents.

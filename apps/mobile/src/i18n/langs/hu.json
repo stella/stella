@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Fiók",
     "server": "Szerver",
-    "signOut": "Kijelentkezés"
+    "signOut": "Kijelentkezés",
+    "deleteAccount": "Fiók törlése",
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
   },
   "header": {
     "search": "Keresés"

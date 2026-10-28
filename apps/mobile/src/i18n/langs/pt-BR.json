@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Conta",
     "server": "Servidor",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "deleteAccount": "Excluir conta",
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
   },
   "header": {
     "search": "Pesquisar"

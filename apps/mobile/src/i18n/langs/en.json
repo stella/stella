@@ -151,7 +151,9 @@
   "settings": {
     "accountTitle": "Account",
     "server": "Server",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account",
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
   },
   "header": {
     "search": "Search"
