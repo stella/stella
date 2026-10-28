@@ -172,7 +172,9 @@ const readRolePrivilegeCensus = async (
              'table:' || policy.schemaname || '.' || policy.tablename ||
              ':POLICY:' || policy.policyname || ':COMMAND:' || policy.cmd ||
              ':ROLES:' || array_to_string(policy.roles, ',') ||
-             ':PERMISSIVE:' || policy.permissive
+             ':PERMISSIVE:' || policy.permissive ||
+             ':USING:' || COALESCE(policy.qual, 'NULL') ||
+             ':WITH_CHECK:' || COALESCE(policy.with_check, 'NULL')
       FROM pg_catalog.pg_policies policy
       JOIN application_schemas schema ON schema.nspname = policy.schemaname
       JOIN application_relations relation
@@ -349,11 +351,53 @@ describePostgres("database role privilege census", () => {
         );
         const mutated = await readRolePrivilegeCensus(database);
         expect(() => assertCensus(expected, mutated)).toThrow(
-          `stella table:public.account_audit_logs:POLICY:${policy}:COMMAND:SELECT:ROLES:stella:PERMISSIVE:PERMISSIVE`,
+          `stella table:public.account_audit_logs:POLICY:${policy}:COMMAND:SELECT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:false:WITH_CHECK:NULL`,
         );
       } finally {
         await database.unsafe(
           `DROP POLICY IF EXISTS "${policy}" ON public.account_audit_logs`,
+        );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a changed row-level security USING predicate", async () => {
+    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCensus(expected, baseline);
+      try {
+        await database.unsafe(
+          `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (true)`,
+        );
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCensus(expected, mutated)).toThrow(
+          "POLICY:account_audit_logs_select:COMMAND:SELECT:ROLES:public:PERMISSIVE:PERMISSIVE:USING:true:WITH_CHECK:NULL",
+        );
+      } finally {
+        await database.unsafe(
+          `ALTER POLICY account_audit_logs_select ON public.account_audit_logs USING (user_id = (SELECT current_setting('app.user_id', true)))`,
+        );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a changed row-level security WITH CHECK predicate", async () => {
+    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCensus(expected, baseline);
+      try {
+        await database.unsafe(
+          `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (true)`,
+        );
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCensus(expected, mutated)).toThrow(
+          "POLICY:account_audit_logs_insert:COMMAND:INSERT:ROLES:stella:PERMISSIVE:PERMISSIVE:USING:NULL:WITH_CHECK:true",
+        );
+      } finally {
+        await database.unsafe(
+          `ALTER POLICY account_audit_logs_insert ON public.account_audit_logs WITH CHECK (user_id = (SELECT current_setting('app.user_id', true)))`,
         );
       }
     });
