@@ -2215,7 +2215,7 @@ jobs:
 
       - name: npm release jobs match the package dependency graph
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
-        run: bun scripts/generate-npm-release-jobs.ts --check
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/generate-npm-release-jobs.ts --check
 
       - name: Load merge base measurement
         timeout-minutes: 6

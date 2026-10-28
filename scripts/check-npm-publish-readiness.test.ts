@@ -192,7 +192,13 @@ describe("anonymous npm publishing census", () => {
     const result = await checkPublishReadiness({
       name: NAME,
       fetchImpl: async (url, options) => {
-        requests.push(String(url));
+        if (typeof url === "string") {
+          requests.push(url);
+        } else if (url instanceof URL) {
+          requests.push(url.href);
+        } else {
+          requests.push(url.url);
+        }
         expect(options?.headers).toBeUndefined();
         return Response.json(
           requests.length === 1 ? evidence.packument : evidence.attestations,

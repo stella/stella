@@ -69,7 +69,7 @@ export const readNpmReleaseGraph = ({
         continue;
       }
       if (!record(entries)) {
-        panic(`Invalid ${group} for packages/${directory}`);
+        return panic(`Invalid ${group} for packages/${directory}`);
       }
       for (const dependency of Object.keys(entries)) {
         const target = names.get(dependency);
@@ -253,8 +253,8 @@ export const npmReleaseGraphProblems = ({
     const required = ["pack", ...dependencies.map(npmReleaseJobId)];
     if (
       !Array.isArray(needs) ||
-      JSON.stringify([...needs].toSorted()) !==
-        JSON.stringify(required.toSorted())
+      needs.length !== required.length ||
+      !required.every((dependency) => needs.includes(dependency))
     ) {
       problems.push(
         `Incorrect npm release dependencies: ${id} needs ${required.join(", ")}`,

@@ -61,7 +61,9 @@ fi
           cwd: root,
           env: {
             ...process.env,
-            PATH: `${path.join(root, "bin")}:${process.env["PATH"]}`,
+            PATH: [path.join(root, "bin"), process.env["PATH"]]
+              .filter((entry) => entry !== undefined)
+              .join(path.delimiter),
             PACK_TEST_MODE: mode,
           },
           encoding: "utf-8",

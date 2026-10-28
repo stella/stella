@@ -66,7 +66,17 @@ export const summarizeNpmRelease = ({
             detail:
               blocked.length === 0
                 ? "Selected publishing transaction did not run."
-                : `Selected dependencies did not publish: ${blocked.map((dependency) => `@stll/${dependency} (${results[npmReleaseJobId(dependency)]})`).join(", ")}.`,
+                : `Selected dependencies did not publish: ${blocked
+                    .map((dependency) => {
+                      const dependencyResult =
+                        results[npmReleaseJobId(dependency)];
+                      assert.ok(
+                        dependencyResult,
+                        `Missing publish result for @stll/${dependency}`,
+                      );
+                      return `@stll/${dependency} (${dependencyResult})`;
+                    })
+                    .join(", ")}.`,
           };
         }
         default:

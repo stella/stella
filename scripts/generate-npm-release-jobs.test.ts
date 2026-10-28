@@ -166,17 +166,19 @@ describe("generated npm publishing dependency graph", () => {
   test("each privileged job delegates one exact artifact and contains no repository steps", () => {
     const graph = repositoryGraph();
     const jobs = v.parse(
-      v.record(
-        v.string(),
-        v.looseObject({
-          uses: v.string(),
-          with: v.record(v.string(), v.unknown()),
-          permissions: v.record(v.string(), v.string()),
-          steps: v.optional(v.unknown()),
-        }),
-      ),
-      Bun.YAML.parse(`jobs:\n${renderNpmReleaseJobs(graph)}`).jobs,
-    );
+      v.object({
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            uses: v.string(),
+            with: v.record(v.string(), v.unknown()),
+            permissions: v.record(v.string(), v.string()),
+            steps: v.optional(v.unknown()),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(`jobs:\n${renderNpmReleaseJobs(graph)}`),
+    ).jobs;
     for (const { directory } of graph) {
       const job = jobs[npmReleaseJobId(directory)];
       expect(job?.uses).toBe(NPM_RELEASE_WORKFLOW);
