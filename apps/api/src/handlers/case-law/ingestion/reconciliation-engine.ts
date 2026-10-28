@@ -2313,6 +2313,7 @@ type SourceReconciliationWorkUnitOptions = Omit<
 };
 
 type SourceReconciliationUnitOutcome =
+  | Extract<FulltextRecoveryUnitOutcome, { type: "failed" }>
   | ReconciliationUnitOutcome
   | {
       type: "fulltext-worked";
@@ -2349,6 +2350,8 @@ export const runSourceReconciliationWorkUnit = async ({
       return { type: "leased" };
     case "aborted":
       return { type: "aborted" };
+    case "failed":
+      return fulltext;
     case "worked":
       logger.info("case_law.fulltext_reconciliation.unit", {
         source: registration.key,

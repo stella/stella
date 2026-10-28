@@ -19,6 +19,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.text-policy";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
+  FULLTEXT_RECOVERY_LIMITS,
+  textFailureFromError,
+} from "@/api/lib/case-law/fulltext-state";
+import type { ClaimedDecisionTextWork } from "@/api/lib/case-law/fulltext-state-store";
+import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
@@ -29,12 +34,6 @@ import type {
   SourceAdapter,
 } from "@/api/lib/legal-search/ingestion-types";
 
-import {
-  FULLTEXT_RECOVERY_LIMITS,
-  textFailureFromError,
-} from "./fulltext-state";
-import type { ClaimedDecisionTextWork } from "./fulltext-state-store";
-
 export type PublisherTextRecoveryOutcome =
   | {
       type: "built";
@@ -43,6 +42,7 @@ export type PublisherTextRecoveryOutcome =
     }
   | { type: "built-supplement"; supplement: DecisionSupplement }
   | { type: "continued"; recovery: DecisionTextRecovery }
+  | { type: "superseded" }
   | { type: "failed"; cause: DecisionTextFailure };
 
 const refused = (code: string): PublisherTextRecoveryOutcome => ({
@@ -95,12 +95,14 @@ const corroboratesHeldDocument = (
   return Boolean(row.documentUrl && candidate.documentUrl === row.documentUrl);
 };
 
+export type CheckpointOutcome = "applied" | "superseded";
+
 type PublisherTextRecoveryOptions = {
   adapter: SourceAdapter;
   row: ClaimedDecisionTextWork;
   recovery: DecisionTextRecovery;
   signal: AbortSignal;
-  checkpoint: (recovery: DecisionTextRecovery) => Promise<void>;
+  checkpoint: (recovery: DecisionTextRecovery) => Promise<CheckpointOutcome>;
 };
 
 /** Listing and build calls retain their adapter-owned robots, request and document gates. */
@@ -194,6 +196,9 @@ export const recoverFromPublisherListing = async ({
       if (Result.isError(matchedCheckpoint)) {
         return { type: "failed", cause: matchedCheckpoint.error };
       }
+      if (matchedCheckpoint.value === "superseded") {
+        return { type: "superseded" };
+      }
       const built = await Result.tryPromise({
         try: async () => {
           signal.throwIfAborted();
@@ -251,6 +256,9 @@ export const recoverFromPublisherListing = async ({
     });
     if (Result.isError(saved)) {
       return { type: "failed", cause: saved.error };
+    }
+    if (saved.value === "superseded") {
+      return { type: "superseded" };
     }
     if (page >= listed.value.totalPages) {
       return refused("listing_identity_not_found");

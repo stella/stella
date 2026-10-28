@@ -672,5 +672,93 @@ describe.serial(
         expect(publisherCalls).toBe(phase === "publisher_listing" ? 1 : 0);
       },
     );
+    test.each([
+      ["next-page", "revision"],
+      ["next-page", "erasure"],
+      ["build", "revision"],
+      ["build", "erasure"],
+    ] as const)(
+      "superseded %s checkpoint after %s prevents all further publisher I/O",
+      async (target, change) => {
+        const id = await seed();
+        const pages: number[] = [];
+        const source = registration({
+          list: async ({ page }) => {
+            pages.push(page);
+            if (change === "erasure") {
+              await db
+                .update(caseLawDecisions)
+                .set({
+                  redactedAt: clock,
+                  fulltext: null,
+                  sections: null,
+                  documentAst: null,
+                  contentHash: null,
+                })
+                .where(eq(caseLawDecisions.id, id));
+            } else {
+              await db
+                .update(caseLawDecisions)
+                .set({
+                  fulltext: "New source observation",
+                  sourceHash: "b".repeat(64),
+                  sourceObservationOrder: 2n,
+                })
+                .where(eq(caseLawDecisions.id, id));
+            }
+            return {
+              totalPages: 6,
+              items:
+                target === "build"
+                  ? [
+                      {
+                        identity: {
+                          type: "document",
+                          sourceDocumentId: documentId,
+                        },
+                        payload: {},
+                      },
+                    ]
+                  : [],
+            };
+          },
+          build: async () => ({ type: "built", decision: candidate() }),
+        });
+        await run({ registration: source });
+        expect(pages).toEqual([0]);
+        expect(publisherCalls).toBe(1);
+        expect(builds).toBe(0);
+        const held = await rowOf(id);
+        if (change === "erasure") {
+          expect(held.textState).toBeNull();
+        } else {
+          expect(held.sourceHash).toBe("b".repeat(64));
+          expect(held.fulltext).toBe("New source observation");
+          expect(held.textState?.status).not.toBe("stored");
+        }
+      },
+    );
+    test("a failed unit reports the original invariant error and releases its source lease", async () => {
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.CZ_NSS })
+        .where(eq(caseLawSources.id, sourceId));
+      const outcome = await run();
+      expect(outcome).toMatchObject({
+        type: "failed",
+        error: {
+          _tag: "Panic",
+          message: "Full-text worker source does not match its adapter",
+        },
+      });
+      const source = (
+        await db
+          .select({ token: caseLawSources.ingestionLeaseToken })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+      ).at(0);
+      expect(source?.token).toBeNull();
+      expect(publisherCalls).toBe(0);
+    });
   },
 );

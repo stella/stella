@@ -20,6 +20,11 @@ import {
   PL_UOKIK_DOCUMENT_ABSENCE,
   PL_UOKIK_DOCUMENT_ABSENCE_KEY,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.text-policy";
+import type { CheckpointOutcome } from "@/api/handlers/case-law/ingestion/fulltext-publisher-recovery";
+import {
+  recoverFromPublisherListing,
+  terminalPublisherTextState,
+} from "@/api/handlers/case-law/ingestion/fulltext-publisher-recovery";
 import {
   processDecision,
   processStoredDecision,
@@ -34,10 +39,6 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import type { ProcessDecisionOptions } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { eligibleDecisionTextSql } from "@/api/lib/case-law/fulltext-eligibility-sql";
-import {
-  recoverFromPublisherListing,
-  terminalPublisherTextState,
-} from "@/api/lib/case-law/fulltext-publisher-recovery";
 import {
   FULLTEXT_RECOVERY_KIND,
   fulltextPolicyForSource,
@@ -58,7 +59,6 @@ import {
   settleDecisionTextWork,
 } from "@/api/lib/case-law/fulltext-state-store";
 import type { ClaimedDecisionTextWork } from "@/api/lib/case-law/fulltext-state-store";
-import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
@@ -167,7 +167,8 @@ export type FulltextRecoveryUnitOutcome =
   | { type: "worked"; summary: FulltextRecoverySummary }
   | { type: "idle" }
   | { type: "leased" }
-  | { type: "aborted" };
+  | { type: "aborted" }
+  | { type: "failed"; error: unknown };
 
 type FulltextRecoveryUnitOptions = {
   sourceId: SafeId<"caseLawSource">;
@@ -213,7 +214,7 @@ const createRecoveryAttempt = ({
   const checkpoint = async (
     recovery: DecisionTextRecovery,
     delayMs = FULLTEXT_RECOVERY_LIMITS.CLAIM_MS,
-  ): Promise<void> => {
+  ): Promise<CheckpointOutcome> => {
     await lease.beforeDatabaseMark();
     const state = pendingDecisionText({
       now: now(),
@@ -229,15 +230,16 @@ const createRecoveryAttempt = ({
       observationOrder,
     });
     if (!applied) {
-      throw new ConcurrentModificationError({
-        message: "Full-text recovery claim was superseded",
-      });
+      return "superseded";
     }
-    const snapshot = await currentState();
-    if (snapshot === undefined) {
-      throw new ConcurrentModificationError({
-        message: "Full-text row was removed during checkpoint",
-      });
+    const snapshot = await currentState(state);
+    if (
+      snapshot === undefined ||
+      snapshot.sourceObservationOrder !== observationOrder ||
+      (observationOrder === row.sourceObservationOrder &&
+        snapshot.sourceHash !== row.sourceHash)
+    ) {
+      return "superseded";
     }
     row = {
       ...row,
@@ -245,6 +247,7 @@ const createRecoveryAttempt = ({
       sourceHash: snapshot.sourceHash,
       sourceObservationOrder: snapshot.sourceObservationOrder,
     };
+    return "applied";
   };
   const fail = async (
     cause: DecisionTextFailure,
@@ -276,7 +279,7 @@ const createRecoveryAttempt = ({
       observationOrder,
     });
   };
-  const currentState = async () =>
+  const currentState = async (expected?: DecisionTextState) =>
     await scopedDb(async (tx) =>
       (
         await tx
@@ -290,6 +293,12 @@ const createRecoveryAttempt = ({
             and(
               eq(caseLawDecisions.id, row.id),
               eligibleDecisionTextSql(caseLawDecisions),
+              expected === undefined
+                ? undefined
+                : sql`${caseLawDecisions.textState} = ${JSON.stringify(expected)}::text::jsonb`,
+              expected === undefined
+                ? undefined
+                : sql`${caseLawDecisions.sourceObservationOrder} IS NOT DISTINCT FROM ${observationOrder}`,
             ),
           )
           .limit(1)
@@ -337,7 +346,9 @@ const createRecoveryAttempt = ({
         rawKey === null
           ? row.textState.recovery
           : ({ type: DECISION_TEXT_RECOVERY.STORED_RAW_RETRY } as const);
-      await checkpoint(recovery, policy.retryFloorMs);
+      if ((await checkpoint(recovery, policy.retryFloorMs)) === "superseded") {
+        return "superseded";
+      }
       summary.continued += 1;
       return "retry";
     }
@@ -514,7 +525,12 @@ const recoverSupplement = async ({
           ownedOrders.has(stored.sourceObservationOrder)))
     ) {
       attempt.adoptOwnedOrder(stored.sourceObservationOrder);
-      await attempt.checkpoint(recovery, attempt.policy.retryFloorMs);
+      if (
+        (await attempt.checkpoint(recovery, attempt.policy.retryFloorMs)) ===
+        "superseded"
+      ) {
+        return "complete";
+      }
     }
     summary.continued += 1;
     return "complete";
@@ -533,57 +549,88 @@ const recoverSupplement = async ({
   return "continue";
 };
 
+type HeldRawParser = NonNullable<
+  RecoveryAttempt["adapter"]["reparseStoredRaw"]
+>;
+
+const readAndReparseHeldRaw = async (
+  attempt: RecoveryAttempt,
+  reparseStoredRaw: HeldRawParser,
+) => {
+  const { row, lease, readRaw } = attempt;
+  const acquired = await Result.tryPromise({
+    try: async () => {
+      if (row.sourceRawS3Key === null) {
+        return Result.ok(
+          row.sourceRaw === null
+            ? null
+            : new TextEncoder().encode(row.sourceRaw),
+        );
+      }
+      return await lease.beforeRemoteEffect(
+        async () =>
+          await readRaw(row.sourceRawS3Key ?? panic("Raw pointer disappeared")),
+      );
+    },
+    catch: (error) =>
+      textFailureFromError({
+        error,
+        phase: "storage",
+        timeoutMs: FULLTEXT_RECOVERY_LIMITS.ATTEMPT_TIMEOUT_MS,
+      }),
+  });
+  if (acquired.isErr()) {
+    return Result.err(acquired.error);
+  }
+  const raw = acquired.value;
+  if (raw.isErr()) {
+    return Result.err(
+      textFailureFromError({
+        error: raw.error,
+        phase: "storage",
+        timeoutMs: FULLTEXT_RECOVERY_LIMITS.ATTEMPT_TIMEOUT_MS,
+      }),
+    );
+  }
+  const bytes = raw.value;
+  if (bytes === null) {
+    return Result.ok(null);
+  }
+  return await Result.tryPromise({
+    try: async () =>
+      await reparseStoredRaw({
+        raw: raw.value,
+        contentType: row.sourceRawContentType,
+        caseNumber: row.caseNumber,
+        sourceDocumentId: row.sourceDocumentId,
+        language: row.language,
+        court: row.court,
+        ecli: row.ecli,
+        decisionDate: row.decisionDate,
+        decisionType: row.decisionType,
+        sourceUrl: row.sourceUrl,
+        documentUrl: row.documentUrl,
+        metadata: row.metadata ?? {},
+      }),
+    catch: (error) =>
+      textFailureFromError({
+        error,
+        phase: "parser",
+        timeoutMs: FULLTEXT_RECOVERY_LIMITS.ATTEMPT_TIMEOUT_MS,
+      }),
+  });
+};
+
 const replayHeldRaw = async (
   attempt: RecoveryAttempt,
 ): Promise<RecoveryPhaseOutcome> => {
-  const { row, adapter, lease, readRaw, signal, now, persist, fail } = attempt;
+  const { row, adapter, signal, now, persist, fail } = attempt;
   const reparseStoredRaw = adapter.reparseStoredRaw;
   if (
     reparseStoredRaw !== undefined &&
     (row.sourceRawS3Key !== null || row.sourceRaw !== null)
   ) {
-    let replayPhase: "storage" | "parser" = "storage";
-    const replay = await Result.tryPromise({
-      try: async () => {
-        const acquired =
-          row.sourceRawS3Key === null
-            ? Result.ok(new TextEncoder().encode(row.sourceRaw ?? ""))
-            : await lease.beforeRemoteEffect(
-                async () =>
-                  await readRaw(
-                    row.sourceRawS3Key ?? panic("Raw pointer disappeared"),
-                  ),
-              );
-        if (acquired.isErr()) {
-          throw acquired.error;
-        }
-        const raw = acquired.value;
-        if (raw === null) {
-          return null;
-        }
-        replayPhase = "parser";
-        return await reparseStoredRaw({
-          raw,
-          contentType: row.sourceRawContentType,
-          caseNumber: row.caseNumber,
-          sourceDocumentId: row.sourceDocumentId,
-          language: row.language,
-          court: row.court,
-          ecli: row.ecli,
-          decisionDate: row.decisionDate,
-          decisionType: row.decisionType,
-          sourceUrl: row.sourceUrl,
-          documentUrl: row.documentUrl,
-          metadata: row.metadata ?? {},
-        });
-      },
-      catch: (error) =>
-        textFailureFromError({
-          error,
-          phase: replayPhase,
-          timeoutMs: FULLTEXT_RECOVERY_LIMITS.ATTEMPT_TIMEOUT_MS,
-        }),
-    });
+    const replay = await readAndReparseHeldRaw(attempt, reparseStoredRaw);
     signal.throwIfAborted();
     if (replay.isOk() && replay.value?.type === "parsed") {
       const candidate = replay.value.result;
@@ -747,8 +794,12 @@ const recoverPublisherDocument = async (
   });
   signal.throwIfAborted();
   switch (publisher.type) {
+    case "superseded":
+      return;
     case "continued":
-      await checkpoint(publisher.recovery, 0);
+      if ((await checkpoint(publisher.recovery, 0)) === "superseded") {
+        return;
+      }
       summary.continued += 1;
       return;
     case "failed":
@@ -763,27 +814,29 @@ const recoverPublisherDocument = async (
     case "built": {
       // Companions settle first; a failed companion must not leave the main
       // row complete and suppress the replay that would discover it again.
-      for (const companion of publisher.companions ?? []) {
-        await lease.beforeDatabaseMark();
-        const written = await processDecision(
-          {
-            input: companion,
-            sourceId,
-            scopedDb,
-            observedAt: now(),
-            observationOrder: await nextOrder(),
-            signal,
-            refresh: DECISION_REFRESH.ALWAYS,
-            ...(corpus === undefined ? {} : { corpus }),
-          },
-          resolver,
-        );
-        if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
-          await fail({
-            kind: DECISION_TEXT_FAILURE.STORAGE,
-            code: "companion_write_pending",
-          });
-          return;
+      if (publisher.companions !== undefined) {
+        for (const companion of publisher.companions) {
+          await lease.beforeDatabaseMark();
+          const written = await processDecision(
+            {
+              input: companion,
+              sourceId,
+              scopedDb,
+              observedAt: now(),
+              observationOrder: await nextOrder(),
+              signal,
+              refresh: DECISION_REFRESH.ALWAYS,
+              ...(corpus === undefined ? {} : { corpus }),
+            },
+            resolver,
+          );
+          if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+            await fail({
+              kind: DECISION_TEXT_FAILURE.STORAGE,
+              code: "companion_write_pending",
+            });
+            return;
+          }
         }
       }
       const persisted = await persist(publisher.decision, null);
@@ -871,10 +924,14 @@ const runRecoveryPhases = async (attempt: RecoveryAttempt): Promise<void> => {
       await fail(storageFailure);
       return;
     }
-    await checkpoint(
-      attempt.row.textState.recovery,
-      FULLTEXT_RECOVERY_LIMITS.MAX_RETRY_MS,
-    );
+    if (
+      (await checkpoint(
+        attempt.row.textState.recovery,
+        FULLTEXT_RECOVERY_LIMITS.MAX_RETRY_MS,
+      )) === "superseded"
+    ) {
+      return;
+    }
     summary.continued += 1;
     return;
   }
@@ -927,83 +984,100 @@ export const runDecisionFulltextRecoveryUnit = async ({
     AbortSignal.timeout(FULLTEXT_RECOVERY_LIMITS.ATTEMPT_TIMEOUT_MS),
   ]);
   try {
-    if (lease.source.adapterKey !== registration.key) {
-      return panic("Full-text worker source does not match its adapter");
-    }
-    const after = lease.source.config?.[SOURCE_RECOVERY_AFTER];
-    if (after !== undefined) {
-      if (
-        typeof after !== "string" ||
-        !Number.isFinite(new Date(after).getTime())
-      ) {
-        return panic("Invalid full-text source recovery schedule");
-      }
-      if (new Date(after).getTime() > now().getTime()) {
-        return { type: "idle" };
-      }
-    }
-    const summary = {
-      adopted: 0,
-      rechecked: 0,
-      verified: 0,
-      recovered: 0,
-      failed: 0,
-      continued: 0,
-    };
-    await lease.beforeDatabaseMark();
-    summary.rechecked = await scheduleStaleDecisionTextProof({
-      scopedDb,
-      sourceId,
-      now: now(),
+    const attempted = await Result.tryPromise({
+      try: async (): Promise<FulltextRecoveryUnitOutcome> => {
+        if (lease.source.adapterKey !== registration.key) {
+          return panic("Full-text worker source does not match its adapter");
+        }
+        const after = lease.source.config?.[SOURCE_RECOVERY_AFTER];
+        if (after !== undefined) {
+          if (
+            typeof after !== "string" ||
+            !Number.isFinite(new Date(after).getTime())
+          ) {
+            return panic("Invalid full-text source recovery schedule");
+          }
+          if (new Date(after).getTime() > now().getTime()) {
+            return { type: "idle" };
+          }
+        }
+        const summary = {
+          adopted: 0,
+          rechecked: 0,
+          verified: 0,
+          recovered: 0,
+          failed: 0,
+          continued: 0,
+        };
+        await lease.beforeDatabaseMark();
+        summary.rechecked = await scheduleStaleDecisionTextProof({
+          scopedDb,
+          sourceId,
+          now: now(),
+        });
+        let rows = await claimDecisionTextWork({
+          scopedDb,
+          sourceId,
+          now: now(),
+        });
+        if (rows.length === 0) {
+          summary.adopted = await adoptLegacyDecisionTextStates({
+            scopedDb,
+            sourceId,
+            now: now(),
+          });
+          rows = await claimDecisionTextWork({
+            scopedDb,
+            sourceId,
+            now: now(),
+          });
+        }
+        for (const row of rows) {
+          unitSignal.throwIfAborted();
+          await recoverHeldDecision({
+            row,
+            registration,
+            publisherAccess,
+            scopedDb,
+            sourceId,
+            now,
+            signal: unitSignal,
+            lease,
+            summary,
+            ...seams,
+          });
+        }
+        await lease.beforeDatabaseMark();
+        await scopedDb(async (tx) => {
+          // audit: skip - bounded public source recovery pacing after durable item claims.
+          await tx
+            .update(caseLawSources)
+            .set({
+              config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${SOURCE_RECOVERY_AFTER}}`}::text[], to_jsonb(${new Date(now().getTime() + SOURCE_RECOVERY_INTERVAL_MS).toISOString()}::text))`,
+              updatedAt: sql`${caseLawSources.updatedAt}`,
+            })
+            .where(
+              and(
+                eq(caseLawSources.id, sourceId),
+                eq(caseLawSources.ingestionLeaseToken, lease.leaseToken),
+              ),
+            );
+        });
+        return rows.length === 0 &&
+          summary.adopted === 0 &&
+          summary.rechecked === 0
+          ? { type: "idle" }
+          : { type: "worked", summary };
+      },
+      catch: (error) => error,
     });
-    let rows = await claimDecisionTextWork({ scopedDb, sourceId, now: now() });
-    if (rows.length === 0) {
-      summary.adopted = await adoptLegacyDecisionTextStates({
-        scopedDb,
-        sourceId,
-        now: now(),
-      });
-      rows = await claimDecisionTextWork({ scopedDb, sourceId, now: now() });
+    if (attempted.isErr()) {
+      if (unitSignal.aborted) {
+        return { type: "aborted" };
+      }
+      return { type: "failed", error: attempted.error };
     }
-    for (const row of rows) {
-      unitSignal.throwIfAborted();
-      await recoverHeldDecision({
-        row,
-        registration,
-        publisherAccess,
-        scopedDb,
-        sourceId,
-        now,
-        signal: unitSignal,
-        lease,
-        summary,
-        ...seams,
-      });
-    }
-    await lease.beforeDatabaseMark();
-    await scopedDb(async (tx) => {
-      // audit: skip - bounded public source recovery pacing after durable item claims.
-      await tx
-        .update(caseLawSources)
-        .set({
-          config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${SOURCE_RECOVERY_AFTER}}`}::text[], to_jsonb(${new Date(now().getTime() + SOURCE_RECOVERY_INTERVAL_MS).toISOString()}::text))`,
-          updatedAt: sql`${caseLawSources.updatedAt}`,
-        })
-        .where(
-          and(
-            eq(caseLawSources.id, sourceId),
-            eq(caseLawSources.ingestionLeaseToken, lease.leaseToken),
-          ),
-        );
-    });
-    return rows.length === 0 && summary.adopted === 0 && summary.rechecked === 0
-      ? { type: "idle" }
-      : { type: "worked", summary };
-  } catch (error) {
-    if (unitSignal.aborted) {
-      return { type: "aborted" };
-    }
-    throw error;
+    return attempted.value;
   } finally {
     await lease.release();
   }

@@ -13,6 +13,12 @@ import {
   PL_UOKIK_DOCUMENT_ABSENCE_KEY,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik.text-policy";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { pendingDecisionText } from "@/api/lib/case-law/fulltext-state";
+import type { ClaimedDecisionTextWork } from "@/api/lib/case-law/fulltext-state-store";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
@@ -23,13 +29,10 @@ import type {
   SourceAdapter,
 } from "@/api/lib/legal-search/ingestion-types";
 
-import { absentDecisionTextFields, TEXT_ABSENCE_REASON } from "./decision-text";
 import {
   recoverFromPublisherListing,
   terminalPublisherTextState,
 } from "./fulltext-publisher-recovery";
-import { pendingDecisionText } from "./fulltext-state";
-import type { ClaimedDecisionTextWork } from "./fulltext-state-store";
 
 const now = new Date("2026-10-28T12:00:00.000Z");
 const rowOf = (overrides: Partial<ClaimedDecisionTextWork> = {}) =>
@@ -135,7 +138,7 @@ const recover = async (adapter: SourceAdapter, row = rowOf()) =>
     row,
     recovery: start,
     signal: new AbortController().signal,
-    checkpoint: async () => {},
+    checkpoint: async () => "applied",
   });
 
 describe("publisher text recovery uses durable bounded source listings", () => {
@@ -150,6 +153,7 @@ describe("publisher text recovery uses durable bounded source listings", () => {
         signal: new AbortController().signal,
         checkpoint: async (next) => {
           cursor = next;
+          return "applied";
         },
       });
     expect(await call()).toEqual({
@@ -174,6 +178,7 @@ describe("publisher text recovery uses durable bounded source listings", () => {
           throw new TypeError("checkpoint unavailable");
         }
         cursor = next;
+        return "applied";
       },
     });
     expect(failed).toMatchObject({
@@ -196,6 +201,7 @@ describe("publisher text recovery uses durable bounded source listings", () => {
         signal: new AbortController().signal,
         checkpoint: async (next) => {
           cursor = next;
+          return "applied";
         },
       }),
     ).toMatchObject({ type: "built" });
@@ -210,7 +216,7 @@ describe("publisher text recovery uses durable bounded source listings", () => {
         row: rowOf({ decisionDate: "2026-02-01" }),
         recovery: { type: "publisher_listing", slice: "2014", page: 2 },
         signal: new AbortController().signal,
-        checkpoint: async () => {},
+        checkpoint: async () => "applied",
       }),
     ).toMatchObject({ type: "built" });
     expect(source.listed).toEqual([2]);
@@ -244,6 +250,7 @@ describe("publisher text recovery uses durable bounded source listings", () => {
         checkpoint: async (next) => {
           expect(source.built).toEqual([]);
           saved.push(next);
+          return "applied";
         },
       }),
     ).toMatchObject({ type: "built" });
@@ -251,6 +258,34 @@ describe("publisher text recovery uses durable bounded source listings", () => {
       { type: "publisher_listing", slice: "2014", page: 0 },
     ]);
     expect(source.built).toEqual(["held-document"]);
+  });
+  test("a superseded matched-page checkpoint prevents the document build", async () => {
+    const source = fake();
+    expect(
+      await recoverFromPublisherListing({
+        adapter: source.adapter,
+        row: rowOf(),
+        recovery: start,
+        signal: new AbortController().signal,
+        checkpoint: async () => "superseded",
+      }),
+    ).toEqual({ type: "superseded" });
+    expect(source.listed).toEqual([0]);
+    expect(source.built).toEqual([]);
+  });
+  test("a superseded empty-page checkpoint stops before the next publisher read", async () => {
+    const source = fake({ pages: [[], [item()]] });
+    expect(
+      await recoverFromPublisherListing({
+        adapter: source.adapter,
+        row: rowOf(),
+        recovery: start,
+        signal: new AbortController().signal,
+        checkpoint: async () => "superseded",
+      }),
+    ).toEqual({ type: "superseded" });
+    expect(source.listed).toEqual([0]);
+    expect(source.built).toEqual([]);
   });
   test("a rejected matched-page checkpoint prevents the document build", async () => {
     const source = fake();

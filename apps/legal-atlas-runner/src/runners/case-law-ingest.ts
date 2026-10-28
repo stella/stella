@@ -1577,6 +1577,10 @@ export const runCaseLawIngest = async (
               }),
           );
           switch (outcome.type) {
+            case "failed": {
+              const error = outcome.error;
+              throw error;
+            }
             case "fulltext-worked":
               return {
                 turn: RECONCILIATION_TURN.WORKED,
