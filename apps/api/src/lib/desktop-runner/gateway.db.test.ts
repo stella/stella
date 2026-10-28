@@ -100,6 +100,9 @@ type HeldCommit = {
 };
 const commitGate: { next: HeldCommit | null } = { next: null };
 
+/** Reads the gateway makes outside a transaction, as a socket's delivery does. */
+const directReads = { count: 0 };
+
 /** Resolves when the gateway writes outside a transaction, as a socket's release does. */
 const directUpdates: { next: PromiseWithResolvers<undefined> | null } = {
   next: null,
@@ -170,8 +173,12 @@ beforeAll(async () => {
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
   const updateRows = db.update.bind(db);
+  const selectRows = db.select.bind(db);
   gatewayDb = asTestRaw<DesktopRunnerDb>({
-    select: db.select.bind(db),
+    select: (...fields: Parameters<typeof db.select>) => {
+      directReads.count += 1;
+      return selectRows(...fields);
+    },
     insert: db.insert.bind(db),
     update: (table: Parameters<typeof db.update>[0]) => {
       const observed = directUpdates.next;
@@ -1254,5 +1261,56 @@ describe("what one run may store", () => {
     await first.gateway.sweep();
     expect(await runState(runId)).toBeNull();
     expect(await storedSeqs(runId)).toEqual([]);
+  });
+});
+
+describe("sweep delivery", () => {
+  test("a sweep reads the queues of only the sockets that have commands queued", async () => {
+    const sweeping = await startInstance("api-sweep", sharedDoorbell);
+    const idle: FakeDesktop[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const desktop = await openDesktop(sweeping, Bun.randomUUIDv7());
+      await desktop.hello();
+      idle.push(desktop);
+    }
+    const { runId, desktop: busy } = await acceptedRun(sweeping);
+    // Queued without a ring, so only the sweep can deliver it.
+    const silent = createDesktopRunnerControl({
+      db: gatewayDb,
+      doorbell: {
+        ring: () => undefined,
+        listen: async () =>
+          await Promise.resolve(async () => await Promise.resolve()),
+      },
+      now,
+      timing: TIMING,
+    });
+    const inputId = Bun.randomUUIDv7();
+    expect(
+      (
+        await silent.sendInput({
+          owner,
+          runId,
+          inputId,
+          message: { role: "user", content: "One more thing." },
+        })
+      ).unwrap(),
+    ).toEqual({ type: "queued" });
+    directReads.count = 0;
+    await sweeping.gateway.sweep();
+    // One read finds the socket; its delivery reads its runner and one page.
+    expect(directReads.count).toBe(3);
+    expect(
+      (
+        await busy.receive(
+          "run.input",
+          (message) =>
+            message.type === "run.input" && message.inputId === inputId,
+        )
+      ).inputId,
+    ).toBe(inputId);
+    for (const desktop of [...idle, busy]) {
+      await desktop.close();
+    }
   });
 });

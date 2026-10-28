@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/desktop-runner/gateway.ts",
+  "delta": 1,
+  "reason": "A sweep delivers to the sockets one query found with queued commands, one after another, so deliveries never burst; each socket reads only its own queue."
+}
