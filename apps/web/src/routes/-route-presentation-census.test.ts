@@ -9,6 +9,12 @@ type RouteSource = {
   source: string;
 };
 
+type RouteNode = {
+  id: string;
+  routeSymbol: string;
+  parentSymbol: string;
+};
+
 type RouteExemption = {
   reason: string;
   fields?: readonly ("title" | "breadcrumb")[];
@@ -16,6 +22,27 @@ type RouteExemption = {
 
 const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
   {
+    "/": { reason: "The entry route redirects into the appropriate shell." },
+    "/_protected/admin/": {
+      reason: "The administration layout owns the redirect title.",
+      fields: ["title"],
+    },
+    "/_protected/chat/": {
+      reason: "The chat layout owns the landing title.",
+      fields: ["title"],
+    },
+    "/_protected/settings/": {
+      reason: "The settings layout owns the redirect title.",
+      fields: ["title"],
+    },
+    "/_protected/workspaces/$workspaceId/": {
+      reason: "The matter layout owns the default-view redirect title.",
+      fields: ["title"],
+    },
+    "/_protected/workspaces/$workspaceId/$viewId/": {
+      reason: "The matter layout owns the selected view title.",
+      fields: ["title"],
+    },
     "/_protected/admin/catalogue": { reason: "Redirects to Knowledge tools." },
     "/_protected/verify/$code": {
       reason: "Completes verification and redirects.",
@@ -56,6 +83,22 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/law/$country/statutes/$slug/v/$version": {
       reason: "The public law reader owns its document breadcrumb.",
     },
+    "/law/": { reason: "The public law shell owns its breadcrumb." },
+    "/law/$country/statutes/": {
+      reason: "The public law shell owns its statutes breadcrumb.",
+      fields: ["breadcrumb"],
+    },
+    "/law/$country/statutes/$slug/": {
+      reason: "The public law reader owns its document breadcrumb.",
+      fields: ["breadcrumb"],
+    },
+    "/law/cases/": {
+      reason: "The public law shell owns its cases breadcrumb.",
+      fields: ["breadcrumb"],
+    },
+    "/law/cases/research/": {
+      reason: "Redirects to the public case-law search.",
+    },
     "/law/cases/research/$tableId": {
       reason: "The public law shell owns research presentation.",
     },
@@ -71,6 +114,11 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     },
     "/tools/contribute": {
       reason: "The public tools shell owns its breadcrumb.",
+    },
+    "/tools/": { reason: "The public tools shell owns its breadcrumb." },
+    "/tools/$slug": {
+      reason: "The public tools shell owns its detail breadcrumb.",
+      fields: ["breadcrumb"],
     },
     "/_protected/chat/workspaces/$workspaceId/$threadId": {
       reason: "The live chat name supplies the document title.",
@@ -118,6 +166,18 @@ const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
     "/knowledge/company-formats/$registry/$companyId": {
       reason: "The embedded company-format preview does not render app chrome.",
     },
+    "/knowledge/": {
+      reason: "The Knowledge layout owns the landing title.",
+      fields: ["title"],
+    },
+    "/knowledge/templates": {
+      reason: "The templates view supplies its live heading within Knowledge.",
+      fields: ["title"],
+    },
+    "/knowledge/templates_/catalogue/": {
+      reason: "The public catalogue owns its breadcrumb.",
+      fields: ["breadcrumb"],
+    },
     "/law/$country/cases/$court/$language/$slug": {
       reason: "The public law reader owns its document breadcrumb.",
       fields: ["breadcrumb"],
@@ -158,16 +218,31 @@ test("every user-facing leaf route declares a title and breadcrumb decision", as
 test("the census rejects a fixture leaf without presentation metadata", () => {
   const routeTree = `
     import { Route as FixtureRouteImport } from './routes/fixture'
+    import { Route as EscapedRouteImport } from './routes/fixture_.download'
     '/fixture': {
       id: '/fixture'
       fullPath: '/fixture'
       preLoaderRoute: typeof FixtureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fixture_/download': {
+      id: '/fixture_/download'
+      fullPath: '/fixture/download'
+      preLoaderRoute: typeof EscapedRouteImport
+      parentRoute: typeof rootRouteImport
     }
   `;
   const sources = [
     {
       path: "fixture",
       source: `createFileRoute(\n  "/fixture",\n)({ component: FixturePage })`,
+    },
+    {
+      path: "fixture_.download",
+      source: `createFileRoute("/fixture_/download")({
+        head: () => ({ meta: [{ title: "Download" }] }),
+        staticData: { presentation: routePresentation({ type: "none" }) },
+      })`,
     },
   ];
 
@@ -183,6 +258,7 @@ test("the census rejects a generated leaf whose source cannot be resolved", () =
       id: '/missing'
       fullPath: '/missing'
       preLoaderRoute: typeof MissingRouteImport
+      parentRoute: typeof rootRouteImport
     }
   `;
 
@@ -200,14 +276,14 @@ export function findMissingRoutePresentation({
   routeTree,
   sources,
 }: CensusInput): string[] {
-  const paths = routePaths(routeTree);
-  const fullPaths = [...paths.values()];
+  const nodes = routeNodes(routeTree);
+  const parentSymbols = new Set(nodes.map(({ parentSymbol }) => parentSymbol));
   const sourcePaths = routeSourcePaths(routeTree);
   const sourcesByPath = new Map(sources.map((source) => [source.path, source]));
   const missing: string[] = [];
 
-  for (const [id, fullPath] of paths) {
-    if (!isLeafPath(fullPath, fullPaths)) {
+  for (const { id, routeSymbol } of nodes) {
+    if (parentSymbols.has(routeSymbol)) {
       continue;
     }
     const sourcePath = sourcePaths.get(id);
@@ -271,25 +347,24 @@ function routeSourcePaths(routeTree: string): Map<string, string> {
   return paths;
 }
 
-function routePaths(routeTree: string): Map<string, string> {
-  const paths = new Map<string, string>();
-  const declaration =
-    /'([^']+)': \{\s+id: '[^']+'\s+(?:path: '[^']+'\s+)?fullPath: '([^']+)'/gu;
+function routeNodes(routeTree: string): RouteNode[] {
+  const nodes: RouteNode[] = [];
+  const declaration = /'([^']+)': \{([\s\S]*?)\n\s*\}/gu;
   for (const match of routeTree.matchAll(declaration)) {
     const id = match[1];
-    const fullPath = match[2];
-    if (id !== undefined && fullPath !== undefined) {
-      paths.set(id, fullPath);
+    const body = match[2];
+    const preLoaderSymbol = body?.match(/preLoaderRoute: typeof (\w+)/u)?.[1];
+    const parentSymbol = body?.match(/parentRoute: typeof (\w+)/u)?.[1];
+    const routeSymbol = preLoaderSymbol?.replace(/Import$/u, "");
+    if (
+      id !== undefined &&
+      routeSymbol !== undefined &&
+      parentSymbol !== undefined
+    ) {
+      nodes.push({ id, routeSymbol, parentSymbol });
     }
   }
-  return paths;
-}
-
-function isLeafPath(pathname: string, paths: readonly string[]): boolean {
-  const prefix = pathname.endsWith("/") ? pathname : `${pathname}/`;
-  return !paths.some(
-    (candidate) => candidate !== pathname && candidate.startsWith(prefix),
-  );
+  return nodes;
 }
 
 async function readRouteSources(directory: string): Promise<RouteSource[]> {

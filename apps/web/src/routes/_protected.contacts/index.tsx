@@ -112,13 +112,7 @@ type ContactFilter = "all" | ContactType;
 const EMPTY_CONTACTS: ContactItem[] = [];
 
 export const Route = createFileRoute("/_protected/contacts/")({
-  staticData: {
-    presentation: routePresentation({
-      type: "label",
-      labelKey: "navigation.contacts",
-      to: "/contacts",
-    }),
-  },
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: async ({ context }) => {
     await ensureRouteInfiniteQueryData(
       context.queryClient,

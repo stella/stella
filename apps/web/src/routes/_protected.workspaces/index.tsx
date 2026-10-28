@@ -79,13 +79,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/_protected/workspaces/")({
-  staticData: {
-    presentation: routePresentation({
-      type: "label",
-      labelKey: "common.matters",
-      to: "/workspaces",
-    }),
-  },
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     // Prime the workspaces query the page suspends on so the fetch starts

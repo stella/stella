@@ -117,6 +117,7 @@ import {
 } from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { routePresentation } from "@/lib/route-presentation";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -127,6 +128,7 @@ import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-st
 import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {

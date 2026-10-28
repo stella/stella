@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { KnowledgeLandingSkeleton } from "@/features/knowledge/views/knowledge-landing-view";
+import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicKnowledgeLanding } from "@/routes/knowledge/-public/public-knowledge-landing";
@@ -21,6 +22,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/knowledge/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
   component: KnowledgeLanding,
 });

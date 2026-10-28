@@ -26,11 +26,18 @@ const todayIn = (timezoneId: string) =>
 export const Route = createFileRoute("/_protected/time_/approvals")({
   validateSearch: timeApprovalsSearchSchema,
   staticData: {
-    presentation: routePresentation({
-      type: "label",
-      labelKey: "billing.approval.title",
-      to: "/time/approvals",
-    }),
+    presentation: routePresentation(
+      {
+        type: "label",
+        labelKey: "billing.approval.title",
+        to: "/time/approvals",
+      },
+      {
+        type: "label",
+        labelKey: "billing.timesheets",
+        to: "/time",
+      },
+    ),
   },
   loaderDeps: ({ search }) => ({
     date: search.date,

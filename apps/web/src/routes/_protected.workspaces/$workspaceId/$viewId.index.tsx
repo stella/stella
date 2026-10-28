@@ -13,6 +13,7 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
 import {
@@ -72,6 +73,7 @@ const searchSchema = routeSearchSchema({
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/",
 )({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   component: RouteComponent,
   validateSearch: searchSchema,
   loader: async ({ context, params }) => {

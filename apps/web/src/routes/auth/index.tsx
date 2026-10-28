@@ -13,6 +13,7 @@ import {
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
+import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
 
 const DevQuickStartButton = import.meta.env.DEV
@@ -28,6 +29,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/auth/")({
+  staticData: { presentation: routePresentation({ type: "none" }) },
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
     if (context.session) {
