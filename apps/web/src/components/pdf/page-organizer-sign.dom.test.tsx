@@ -9,6 +9,8 @@ import type {
 } from "@/components/inspector/pdf-sign-action";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import type { PageOrganizerOperationOwner } from "./page-organizer-upload.logic";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { cleanup, fireEvent, render, screen } =
@@ -42,6 +44,7 @@ const savedVersion = {
   ...openVersion,
   fieldId: "b0123344-5566-7788-9900-aabbccddeeff",
 } satisfies PdfSignTarget;
+let operationOwnerForFlow: PageOrganizerOperationOwner | null = null;
 
 /**
  * The sign flow with stella desktop ready: `start` places the stamp on the
@@ -71,6 +74,14 @@ const readyFlow = (events: string[], pending: Promise<void>[]) =>
         })(),
       );
     },
+    transferToSigning: (request, target, reveal) => {
+      if (!operationOwnerForFlow?.isCurrent(request)) {
+        return false;
+      }
+      events.push(`sign ${target.fieldId}`);
+      reveal?.();
+      return true;
+    },
     requiredDialog: {
       action: "sign-pdf",
       onClose: () => undefined,
@@ -87,6 +98,7 @@ type MountOptions = {
 
 const mount = ({ isDirty, saved }: MountOptions) => {
   const operationOwner = createPageOrganizerOperationOwner();
+  operationOwnerForFlow = operationOwner;
   const events: string[] = [];
   const pending: Promise<void>[] = [];
   render(
@@ -103,12 +115,12 @@ const mount = ({ isDirty, saved }: MountOptions) => {
           })}
         >
           <PageOrganizerSignAction
+            beginRequest={operationOwner.beginRequest}
             closeEditor={() => {
               events.push("close editor");
             }}
             disabled={false}
             isDirty={isDirty}
-            isOperationLive={operationOwner.isLive}
             operation={operationOwner.operation}
             saveVersion={async () => {
               events.push("save");

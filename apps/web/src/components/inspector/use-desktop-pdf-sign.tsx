@@ -119,6 +119,8 @@ type UseDesktopPdfSignOptions = {
 };
 
 export type PdfSignRequest = {
+  authority?: (() => boolean) | undefined;
+  cancelAuthority?: (() => void) | undefined;
   target: PdfSignableFile;
   /** Omitting `stamp` signs without a visible mark on any page. */
   stamp?: PdfSigningStamp | undefined;
@@ -160,6 +162,9 @@ export const useDesktopPdfSign = ({
   const retryAction = (request: PdfSignRequest, toastId: string) => ({
     label: t("common.retry"),
     onClick: () => {
+      if (request.authority?.() === false) {
+        return;
+      }
       stellaToast.close(toastId);
       detachedUserAction(sign(request), {
         context: "use-desktop-pdf-sign.retry",
@@ -208,9 +213,12 @@ export const useDesktopPdfSign = ({
   };
 
   const signWithToast = async (
-    { stamp, target }: PdfSignRequest,
+    { authority, cancelAuthority, stamp, target }: PdfSignRequest,
     toastId: string,
   ) => {
+    if (authority?.() === false) {
+      return;
+    }
     const started = await Result.tryPromise(
       async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
@@ -230,6 +238,10 @@ export const useDesktopPdfSign = ({
       return;
     }
 
+    if (authority?.() === false) {
+      return;
+    }
+
     const session = {
       sessionId: started.value.sessionId,
       workspaceId: target.workspaceId,
@@ -238,6 +250,7 @@ export const useDesktopPdfSign = ({
     // later read does not describe it as cancelled in stella desktop.
     const browserCancel = { settled: false };
     const cancel = async () => {
+      cancelAuthority?.();
       const snapshot = await cancelPdfSigningSession(session);
       if (
         snapshot.status !== "cancelled" ||
@@ -256,6 +269,9 @@ export const useDesktopPdfSign = ({
       });
     };
 
+    if (authority?.() === false) {
+      return;
+    }
     launchPdfSigningDeepLink(started.value.deepLinkUrl);
     stellaToast.update(toastId, {
       action: {
@@ -361,7 +377,10 @@ export const useDesktopPdfSign = ({
       }
       case "expired": {
         notifyExpired({
-          retry: retryAction({ stamp, target }, toastId),
+          retry: retryAction(
+            { authority, cancelAuthority, stamp, target },
+            toastId,
+          ),
           stage: outcome.stage,
           toastId,
         });

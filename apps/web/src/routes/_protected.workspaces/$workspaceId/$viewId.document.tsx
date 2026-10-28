@@ -866,7 +866,6 @@ function RouteComponentInner({
   const isDocxFile = activeMimeType === DOCX_MIME;
   // Signing from the page editor outlives it: saving first replaces the
   // version, which remounts the editor, and the signing must go on.
-  const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -883,6 +882,7 @@ function RouteComponentInner({
     isCurrentVersion: activeFileField !== undefined,
     workspaceId,
   });
+  const editorPdfSignFlow = usePdfSignFlow(pdfSignTarget?.fieldId);
   const downloadRenditions = getEntityFileDownloadRenditions({
     entityData: entity,
     fieldId,

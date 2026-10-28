@@ -85,10 +85,12 @@ const mount = () => {
   );
   act(() => {
     beginPdfSignPlacement({
+      cancel: () => undefined,
       confirm: (stamp) => {
         confirmed.push(stamp);
       },
       fieldId: FIELD_ID,
+      isCurrent: () => true,
     });
   });
   const surface =

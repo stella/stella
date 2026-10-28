@@ -32,11 +32,13 @@ export type PdfSignPlacementNotice = "page_too_small";
  * stamp, or `undefined` to sign without a visible mark.
  */
 export type PdfSignPlacementSession = {
+  cancel: () => void;
   confirm: (stamp: PdfSigningStamp | undefined) => void;
   draft: StampDraft | null;
   drawing: StampDrawing | null;
   fieldId: string;
   notice: PdfSignPlacementNotice | null;
+  isCurrent: () => boolean;
 };
 
 type PdfSignPlacementState = {
@@ -60,16 +62,34 @@ const updateSession = (
 
 /** Start placing the stamp on `fieldId`'s pages; replaces any other placement. */
 export const beginPdfSignPlacement = ({
+  cancel,
   confirm,
   fieldId,
-}: Pick<PdfSignPlacementSession, "confirm" | "fieldId">) => {
+  isCurrent,
+}: Pick<
+  PdfSignPlacementSession,
+  "cancel" | "confirm" | "fieldId" | "isCurrent"
+>) => {
+  if (!isCurrent()) {
+    return;
+  }
   usePdfSignPlacementStore.setState({
-    session: { confirm, draft: null, drawing: null, fieldId, notice: null },
+    session: {
+      cancel,
+      confirm,
+      draft: null,
+      drawing: null,
+      fieldId,
+      isCurrent,
+      notice: null,
+    },
   });
 };
 
 export const endPdfSignPlacement = () => {
+  const { session } = usePdfSignPlacementStore.getState();
   usePdfSignPlacementStore.setState({ session: null });
+  session?.cancel();
 };
 
 /** Finish placement with `stamp` (or none) and hand it to whoever started it. */
@@ -78,8 +98,10 @@ export const confirmPdfSignPlacement = (stamp: PdfSigningStamp | undefined) => {
   if (session === null) {
     return;
   }
-  endPdfSignPlacement();
-  session.confirm(stamp);
+  usePdfSignPlacementStore.setState({ session: null });
+  if (session.isCurrent()) {
+    session.confirm(stamp);
+  }
 };
 
 export const setPdfSignDraft = (draft: StampDraft) => {

@@ -2,6 +2,9 @@ import type { SafeId } from "@/lib/safe-id";
 
 const organizerOperationBrand: unique symbol = Symbol("organizer-operation");
 const organizerRequestBrand: unique symbol = Symbol("organizer-request");
+const consumeOrganizerRequestBrand: unique symbol = Symbol(
+  "consume-organizer-request",
+);
 const uploadOwnerBrand: unique symbol = Symbol("upload-owner");
 
 export type LiveOrganizerOperation = {
@@ -11,7 +14,13 @@ export type OrganizerOperationRequest = {
   readonly [organizerRequestBrand]: true;
   readonly operation: LiveOrganizerOperation;
   readonly requestId: number;
+  readonly [consumeOrganizerRequestBrand]: () => boolean;
 };
+
+/** Atomically consumes a still-current organizer request for another owner. */
+export const consumeOrganizerOperationRequest = (
+  request: OrganizerOperationRequest,
+): boolean => request[consumeOrganizerRequestBrand]();
 export type PageOrganizerOperationOwner = ReturnType<
   typeof createPageOrganizerOperationOwner
 >;
@@ -28,31 +37,39 @@ export function createPageOrganizerOperationOwner() {
     }
     controllers.delete(requestId);
   };
+  const isCurrent = (request: OrganizerOperationRequest): boolean =>
+    live &&
+    request.operation === operation &&
+    request.requestId === latestRequestId;
   return {
     operation,
     beginRequest(candidate: LiveOrganizerOperation): OrganizerOperationRequest {
       abort(latestRequestId);
-      return {
+      const requestId = ++latestRequestId;
+      let consumed = false;
+      const request: OrganizerOperationRequest = {
         [organizerRequestBrand]: true,
         operation: candidate,
-        requestId: ++latestRequestId,
+        requestId,
+        [consumeOrganizerRequestBrand]: () => {
+          if (consumed || !isCurrent(request)) {
+            return false;
+          }
+          consumed = true;
+          return true;
+        },
       };
+      return request;
     },
     isLive(candidate: LiveOrganizerOperation): boolean {
       return live && candidate === operation;
     },
-    isCurrent(request: OrganizerOperationRequest): boolean {
-      return (
-        live &&
-        request.operation === operation &&
-        request.requestId === latestRequestId
-      );
-    },
+    isCurrent,
     ownController(
       request: OrganizerOperationRequest,
       controller: AbortController,
     ): void {
-      if (!this.isCurrent(request)) {
+      if (!isCurrent(request)) {
         controller.abort();
         return;
       }

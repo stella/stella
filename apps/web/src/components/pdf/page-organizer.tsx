@@ -1538,8 +1538,8 @@ const LoadedPDFPageOrganizer = ({
             closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
             isDirty={isDirty}
-            isOperationLive={(operationToken) =>
-              operationOwner.isLive(operationToken)
+            beginRequest={(operationToken) =>
+              operationOwner.beginRequest(operationToken)
             }
             operation={operationOwner.operation}
             saveVersion={async () =>
