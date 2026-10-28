@@ -2531,6 +2531,7 @@
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Omitido: ID de contacto duplicado",
       "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
+      "skippedInFileDuplicate": "Omitido: repite una fila anterior del archivo",
       "skippedInvalidRow": "Omitido: la fila no cumple las reglas de importación",
       "skippedInvalidTaxId": "Omitido: identificación fiscal no válida",
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"

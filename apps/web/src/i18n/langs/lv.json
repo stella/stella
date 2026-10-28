@@ -2531,6 +2531,7 @@
       "rowLabel": "Klients {index}",
       "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
+      "skippedInFileDuplicate": "Izlaists: atkārto agrāku faila rindu",
       "skippedInvalidRow": "Izlaists: rinda neatbilst importa noteikumiem",
       "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"

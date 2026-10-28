@@ -2531,6 +2531,7 @@
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
       "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
+      "skippedInFileDuplicate": "Ignorado: repete uma linha anterior do arquivo",
       "skippedInvalidRow": "Ignorado: a linha não atende às regras de importação",
       "skippedInvalidTaxId": "Ignorado: CPF/CNPJ inválido",
       "skippedLimitReached": "Ignorado: limite de contatos atingido"

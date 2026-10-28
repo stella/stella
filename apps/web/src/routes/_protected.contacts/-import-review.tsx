@@ -127,6 +127,7 @@ const IMPORT_ISSUE_LABELS = {
 const IMPORT_SKIP_REASON_LABELS = {
   duplicate_contact_id: "contacts.import.skippedDuplicateContactId",
   duplicate_tax_id: "contacts.import.skippedDuplicateTaxId",
+  in_file_duplicate: "contacts.import.skippedInFileDuplicate",
   invalid_row: "contacts.import.skippedInvalidRow",
   invalid_tax_id: "contacts.import.skippedInvalidTaxId",
   contacts_limit_reached: "contacts.import.skippedLimitReached",

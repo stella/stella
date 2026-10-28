@@ -2531,6 +2531,7 @@
       "rowLabel": "العميل {index}",
       "skippedDuplicateContactId": "تم التخطي: معرّف جهة اتصال مكرر",
       "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
+      "skippedInFileDuplicate": "تم التخطي: يكرر صفًا سابقًا في الملف",
       "skippedInvalidRow": "تم التخطي: الصف لم يستوفِ قواعد الاستيراد",
       "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",
       "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"

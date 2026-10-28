@@ -2,8 +2,6 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
-
 import {
   type ContactImportReceiptResult,
   contactImportRequests,
@@ -11,13 +9,11 @@ import {
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import {
+  contactImportSkipReason,
   importedTaxIdentifiers,
   validateContactImportCandidates,
 } from "@/api/handlers/contacts/contact-import-file";
-import type {
-  ContactImportCandidate,
-  ContactImportIssue,
-} from "@/api/handlers/contacts/contact-import-file";
+import type { ContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
 import { fingerprintContactImport } from "@/api/handlers/contacts/contact-import-receipt";
 import {
   contactImportCandidateSchema,
@@ -55,13 +51,6 @@ const importContactsBodySchema = v.object({
   ),
 });
 
-type ImportSkipReason =
-  ContactImportReceiptResult["results"][number] extends infer R
-    ? R extends { status: "skipped"; reason: infer Reason }
-      ? Reason
-      : never
-    : never;
-
 type ImportResultRow = ContactImportReceiptResult["results"][number];
 
 type ValidatedImportRow = {
@@ -71,20 +60,6 @@ type ValidatedImportRow = {
   /** Normalized digits under `br_cpf_cnpj`; null when no scheme dedupes. */
   dedupeTaxId: string | null;
 };
-
-const TAX_ID_ISSUE_CODES: ReadonlySet<ContactImportIssue["code"]> = new Set([
-  CONTACT_IMPORT_ISSUE_CODE.INVALID_TAX_ID,
-  CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED,
-]);
-
-// A row the validator rejects is skipped, never partially stored; tax-id
-// problems keep their own reason so the receipt says which rule failed.
-const skipReasonForIssues = (
-  issues: readonly ContactImportIssue[],
-): Extract<ImportSkipReason, "invalid_row" | "invalid_tax_id"> =>
-  issues.some(({ code }) => TAX_ID_ISSUE_CODES.has(code))
-    ? "invalid_tax_id"
-    : "invalid_row";
 
 const config = {
   contract: "patch",
@@ -150,7 +125,7 @@ const importContacts = createSafeRootHandler(
             resultByIndex.set(index, {
               index,
               status: "skipped",
-              reason: skipReasonForIssues(issues),
+              reason: contactImportSkipReason(issues),
             });
             continue;
           }

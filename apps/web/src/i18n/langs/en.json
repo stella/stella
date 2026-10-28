@@ -2531,6 +2531,7 @@
       "rowLabel": "Client {index}",
       "skippedDuplicateContactId": "Skipped: duplicate contact ID",
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID",
+      "skippedInFileDuplicate": "Skipped: repeats an earlier row in the file",
       "skippedInvalidRow": "Skipped: the row failed the import rules",
       "skippedInvalidTaxId": "Skipped: invalid tax ID",
       "skippedLimitReached": "Skipped: contacts limit reached"

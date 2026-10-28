@@ -1177,6 +1177,39 @@ export const validateContactImportCandidates = ({
   return markInFileDuplicates(validatedRows);
 };
 
+const TAX_ID_ISSUE_CODES: ReadonlySet<ContactImportIssueCode> = new Set([
+  CONTACT_IMPORT_ISSUE_CODE.INVALID_TAX_ID,
+  CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED,
+]);
+
+/**
+ * Why a row the validator rejects is skipped (it is never partially stored).
+ * Tax-id problems and repeats of an earlier row keep their own reason so the
+ * receipt says which rule failed; a repeat found by its tax id stays
+ * `duplicate_tax_id`, and a repeat that also breaks another rule is
+ * `invalid_row`.
+ */
+export const contactImportSkipReason = (
+  issues: readonly ContactImportIssue[],
+):
+  | "duplicate_tax_id"
+  | "in_file_duplicate"
+  | "invalid_row"
+  | "invalid_tax_id" => {
+  if (issues.some(({ code }) => TAX_ID_ISSUE_CODES.has(code))) {
+    return "invalid_tax_id";
+  }
+  const repeats = issues.filter(
+    ({ code }) => code === CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE,
+  );
+  if (repeats.length === 0 || repeats.length < issues.length) {
+    return "invalid_row";
+  }
+  return repeats.some(({ field }) => field === "tax_id")
+    ? "duplicate_tax_id"
+    : "in_file_duplicate";
+};
+
 const markInFileDuplicates = (
   rows: ContactImportPreviewRow[],
 ): ContactImportPreviewRow[] => {
@@ -1185,7 +1218,7 @@ const markInFileDuplicates = (
     const decision = earlierRows
       .map((earlier) => decideInFileDuplicate(earlier, row))
       .find(({ kind }) => kind !== "distinct");
-    const validatedRow = {
+    const validatedRow: ContactImportPreviewRow = {
       contact: row.contact,
       issues:
         decision?.kind !== "duplicate"
@@ -1194,7 +1227,7 @@ const markInFileDuplicates = (
               ...row.issues,
               {
                 code: CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE,
-                field: null,
+                field: decision.by === "taxId" ? "tax_id" : null,
                 rowNumber: row.rowNumber,
                 duplicateOfRowNumber: decision.of.rowNumber,
               },

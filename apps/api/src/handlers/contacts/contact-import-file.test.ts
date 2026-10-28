@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -20,6 +20,7 @@ import {
 } from "@/api/db/schema-validators";
 import {
   assertContactImportHeaderAliases,
+  contactImportSkipReason,
   decideInFileDuplicate,
   importedTaxIdentifiers,
   inspectContactImportDocument,
@@ -1071,5 +1072,32 @@ describe("imported tax identifiers", () => {
       taxId: null,
       vatId: null,
     });
+  });
+});
+
+describe("contact import skip reasons", () => {
+  test("a repeated row keeps a duplicate reason, by tax id when that matched", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        { ...person("Jane Doe"), emails: [email("jane@example.com")] },
+        { ...person("Jane D."), emails: [email("jane@example.com")] },
+        { ...person("Acme Holding"), taxId: "12345678" },
+        { ...person("Acme"), taxId: "12345678" },
+        {
+          ...person("Jane Doe"),
+          emails: [email("jane@example.com"), email("not an email")],
+        },
+      ],
+      rowNumbers: [2, 3, 4, 5, 6],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(0)?.issues).toEqual([]);
+    expect(rows.at(2)?.issues).toEqual([]);
+    expect(
+      [1, 3, 4].map((index) =>
+        contactImportSkipReason(rows.at(index)?.issues ?? panic("row")),
+      ),
+    ).toEqual(["in_file_duplicate", "duplicate_tax_id", "invalid_row"]);
   });
 });
