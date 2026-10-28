@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -21,7 +22,6 @@ import {
   EMPTY_AST,
   encodeSourceRawEnvelope,
   excludedSourceSurface,
-  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -325,9 +325,16 @@ const CZ_NS_SOURCE_FIELD_DISPOSITIONS = {
     disposition: "stored",
     target: { type: "textField", key: "legalSentence" },
   },
-  "Senátní značka": legacyExcludedSourceField(
-    "The same docket under the label this court prints for its insolvency senate register. The row's docket is the one the listing entry states, which is what the document was fetched by.",
-  ),
+  "Senátní značka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The detail page retains the senate docket exactly as labelled, independently of the listing docket",
+    },
+  },
   /**
    * The deciding court, which is not always this publisher's own. Stored as
    * the row's court, through `czDecisionCourt`: where the decision's ECLI

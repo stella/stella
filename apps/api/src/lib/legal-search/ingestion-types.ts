@@ -1,3 +1,4 @@
+// parser-output-unchanged: Adds nested inventory addresses without changing result construction.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -1352,7 +1353,12 @@ export type SourceFieldTarget =
       readonly reason: string;
     }
   /** `metadata[key]` on the stored row. */
-  | { readonly type: "metadata"; readonly key: string }
+  | {
+      readonly type: "metadata";
+      readonly key: string;
+      /** Exact nested publisher value; an aggregate object cannot certify its children. */
+      readonly path?: readonly string[];
+    }
   /** A publisher-authored field represented by the decision text contract. */
   | { readonly type: "textField"; readonly key: DecisionTextFieldKey }
   /** A field of the ingestion result itself, spelled as the contract does. */

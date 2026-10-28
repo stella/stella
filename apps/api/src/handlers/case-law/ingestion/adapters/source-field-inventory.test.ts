@@ -63,6 +63,7 @@ import { sourceExclusionCensus } from "@/api/lib/legal-search/source-exclusion-c
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   CASE_LAW_CONFORMANCE_FIXTURES,
   plCourtsFixture,
@@ -143,6 +144,20 @@ const isPresent = (value: unknown): boolean => {
   return Array.isArray(value) ? value.length > 0 : true;
 };
 
+const nestedMetadataValue = (
+  value: unknown,
+  path: readonly string[],
+): unknown => {
+  let current = value;
+  for (const key of path) {
+    if (!isRecord(current) || !Object.hasOwn(current, key)) {
+      return undefined;
+    }
+    current = current[key];
+  }
+  return current;
+};
+
 /** What the row holds where a disposition says the field is stored. */
 const storedValueOf = (
   decision: IngestionResult,
@@ -155,7 +170,9 @@ const storedValueOf = (
         target,
       );
     case "metadata":
-      return decision.metadata[target.key];
+      return target.path === undefined
+        ? decision.metadata[target.key]
+        : nestedMetadataValue(decision.metadata[target.key], target.path);
     case "textField":
       return storeTextField(decision.textFields[target.key]);
     case "result":
@@ -179,7 +196,7 @@ const describeTarget = (target: SourceFieldTarget): string => {
     case "raw":
       return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":
-      return `metadata.${target.key}`;
+      return `metadata.${target.key}${target.path === undefined ? "" : `.${target.path.join(".")}`}`;
     case "textField":
       return `textFields.${target.key}`;
     case "result":
@@ -368,6 +385,20 @@ describe("every adapter accounts for the fields its source states", () => {
         const disposition: SourceFieldDisposition | undefined =
           sourceFields.fields[field];
         if (disposition?.disposition !== "stored") {
+          return [];
+        }
+        if (
+          disposition.target.type === "metadata" &&
+          disposition.target.path !== undefined
+        ) {
+          expect(
+            Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+            `${key}: missing source value oracle for nested metadata ${field}`,
+          ).toBe(true);
+          expect(
+            storedValueOf(decision, disposition.target),
+            `${key}: publisher value ${field} changed`,
+          ).toEqual(evidence.rawFieldValues?.[field]);
           return [];
         }
         if (disposition.target.type === "raw") {
