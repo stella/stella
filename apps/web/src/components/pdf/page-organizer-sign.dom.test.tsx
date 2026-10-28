@@ -100,7 +100,9 @@ const mount = ({ isDirty, saved }: MountOptions) => {
           })}
         >
           <PageOrganizerSignAction
-            closeEditor={() => events.push("close editor")}
+            closeEditor={() => {
+              events.push("close editor");
+            }}
             disabled={false}
             isDirty={isDirty}
             saveVersion={async () => {

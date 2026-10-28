@@ -41,10 +41,13 @@ export type PdfSignPlacementSession = {
 
 type PdfSignPlacementState = {
   session: PdfSignPlacementSession | null;
+  /** How many mounted viewers show each file, by field id. */
+  viewers: Readonly<Record<string, number>>;
 };
 
 export const usePdfSignPlacementStore = create<PdfSignPlacementState>()(() => ({
   session: null,
+  viewers: {},
 }));
 
 const updateSession = (
@@ -125,7 +128,13 @@ export const cancelPdfSignDrawing = (pointerId: number) => {
   );
 };
 
-const mountedViewers = new Map<string, number>();
+const countViewer = (fieldId: string, change: 1 | -1) => {
+  usePdfSignPlacementStore.setState(({ viewers }) => {
+    const { [fieldId]: current = 0, ...others } = viewers;
+    const next = current + change;
+    return { viewers: next > 0 ? { ...others, [fieldId]: next } : others };
+  });
+};
 
 /**
  * Count a viewer showing `fieldId`. Placement ends once the last viewer of
@@ -134,19 +143,12 @@ const mountedViewers = new Map<string, number>();
  * commit keeps the placement.
  */
 export const attachPdfSignViewer = (fieldId: string) => {
-  mountedViewers.set(fieldId, (mountedViewers.get(fieldId) ?? 0) + 1);
+  countViewer(fieldId, 1);
   return () => {
-    const remaining = (mountedViewers.get(fieldId) ?? 1) - 1;
-    if (remaining > 0) {
-      mountedViewers.set(fieldId, remaining);
-    } else {
-      mountedViewers.delete(fieldId);
-    }
+    countViewer(fieldId, -1);
     queueMicrotask(() => {
-      if (
-        !mountedViewers.has(fieldId) &&
-        usePdfSignPlacementStore.getState().session?.fieldId === fieldId
-      ) {
+      const { session, viewers } = usePdfSignPlacementStore.getState();
+      if (viewers[fieldId] === undefined && session?.fieldId === fieldId) {
         endPdfSignPlacement();
       }
     });

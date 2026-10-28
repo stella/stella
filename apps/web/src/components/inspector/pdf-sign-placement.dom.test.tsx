@@ -76,7 +76,11 @@ const mount = () => {
   const lastPagePlacements: string[] = [];
   render(
     <IntlProvider locale="en" messages={en} timeZone="UTC">
-      <Viewer onPlaceOnLastPage={() => lastPagePlacements.push("last")} />
+      <Viewer
+        onPlaceOnLastPage={() => {
+          lastPagePlacements.push("last");
+        }}
+      />
     </IntlProvider>,
   );
   act(() => {
