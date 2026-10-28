@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Teraz",
       "currentSession": "Bieżąca",
       "device": "Urządzenie",
       "deviceOnOs": "{browser} na {os}",
@@ -1209,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Wskazano: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Wskazano: {date}} until {Wskazano: do {date}} from {Wskazano: od {date}} other {Wskazano: {date}}}",
+      "caseFileDocuments": "Dokumenty w aktach tej sprawy",
       "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
       "citedDecisionPassage": "Fragment orzeczenia",
@@ -1520,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
+      "unnamed": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
     },
     "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",
@@ -2469,10 +2471,10 @@
       "value": "Wartość pola"
     },
     "datePrecision": "Dokładność daty",
-    "deleteContact": "Usuń klienta",
+    "deleteContact": "Usuń kontakt",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
-    "editContact": "Edytuj klienta",
+    "editContact": "Edytuj kontakt",
     "emailTypes": {
       "other": "Inny",
       "personal": "Prywatny",
@@ -2485,7 +2487,7 @@
     "extractProcuracao": {
       "dropZone": "Upuść tutaj pełnomocnictwo (.docx) lub kliknij, aby wybrać plik",
       "extracting": "Wyodrębnianie mocodawcy(-ów)…",
-      "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
+      "fileHint": "stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
       "fileTooLarge": "Plik pełnomocnictwa nie może przekraczać 50 MB.",
       "invalidFileType": "Wybierz plik .docx.",
       "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
@@ -4628,7 +4630,6 @@
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",
-      "title": "Konfiguracja AI",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
     "invitations": {
@@ -5056,7 +5057,7 @@
         "title": "Uwierzytelnianie dwuskładnikowe"
       },
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
-      "wordEditShortcut": "Skrót do edycji w programie Word",
+      "wordEditShortcut": "Inicjały do zmian w Wordzie",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",
       "wordEditShortcutPlaceholder": "np. JK"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Zapisany zestaw stylów",
     "sourceDocument": "Źródłowy DOCX",
     "stellaDescription": "Kompletne, neutralne formatowanie dokumentów prawnych stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Zestawy stylów",
     "untitledDocument": "Dokument bez tytułu"
   },
   "success": {
     "aiConfigDeleted": "Konfiguracja AI usunięta",
     "aiConfigUpdated": "Konfiguracja AI zaktualizowana",
-    "clientUpdated": "Klient zaktualizowany",
-    "contactCreated": "Klient utworzony",
-    "contactDeleted": "Klient usunięty",
+    "clientUpdated": "Kontakt zaktualizowany",
+    "contactCreated": "Kontakt utworzony",
+    "contactDeleted": "Kontakt usunięty",
     "documentCreated": "Dokument utworzony",
     "folderCreated": "Folder utworzony",
     "invitationCanceled": "Zaproszenie anulowane",
@@ -5992,6 +5993,7 @@
     "timeout": "Żądanie trwało zbyt długo. Spróbuj ponownie."
   },
   "validation": {
+    "invalidEmail": "Wpisz prawidłowy adres e-mail.",
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
     "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
     "slugRequired": "Slug jest wymagany"

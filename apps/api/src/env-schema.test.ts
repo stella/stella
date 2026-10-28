@@ -498,3 +498,15 @@ test("monitoring session keys accept a bounded digest configuration", () => {
     expect(v.safeParse(schema, invalid).success).toBe(false);
   }
 });
+
+test("deployment environment is optional and accepts only declared deployment kinds", () => {
+  const schema = envApiServerSchema.DEPLOY_ENVIRONMENT;
+  for (const kind of ["production", "staging", "development"] as const) {
+    expect(v.parse(schema, kind)).toBe(kind);
+  }
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  for (const invalid of ["", "test", "prod"] as const) {
+    expect(v.safeParse(schema, invalid).success).toBe(false);
+  }
+  expect(schema).toBe(envBaseServerSchema.DEPLOY_ENVIRONMENT);
+});

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, TransactionRollbackError } from "drizzle-orm";
 import {
   boolean,
   getTableConfig,
@@ -301,7 +301,12 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
-  const transaction = new Proxy(database, {
+  const transactionHandle = Object.assign(database, {
+    rollback() {
+      throw new TransactionRollbackError();
+    },
+  });
+  const transaction = new Proxy(transactionHandle, {
     get: (target, property, receiver) => {
       if (property === "transaction") {
         // Each savepoint is its own handle, as the driver's are, so the

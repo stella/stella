@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Praegu",
       "currentSession": "Praegune",
       "device": "Seade",
       "deviceOnOs": "{browser} operatsioonisüsteemis {os}",
@@ -1189,7 +1190,7 @@
       "searchEveryWord": "Otsi kõiki sõnu"
     },
     "seo": {
-      "collectionName": "Stella kohtupraktika",
+      "collectionName": "stella kohtupraktika",
       "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
       "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
       "scopedDescription": "Avalik kohtupraktika andmebaas ({scope}) indekseeritavate kohtulahendite ja õiguse allikatega."
@@ -1209,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
+      "caseFileDocuments": "Selle kohtuasja dokumendid",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "citedDecisionPassage": "Lõik lahendis",
@@ -1520,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+      "unnamed": "{count, plural, one {veel #} other {veel #}}"
     },
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
@@ -2469,10 +2471,10 @@
       "value": "Välja väärtus"
     },
     "datePrecision": "Kuupäeva täpsus",
-    "deleteContact": "Kustuta klient",
+    "deleteContact": "Kustuta kontakt",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
-    "editContact": "Muuda klienti",
+    "editContact": "Muuda kontakti",
     "emailTypes": {
       "other": "Muu",
       "personal": "Isiklik",
@@ -2485,7 +2487,7 @@
     "extractProcuracao": {
       "dropZone": "Lohista volikiri (.docx) siia või klõpsa faili valimiseks",
       "extracting": "Tuvastame volitaja(id)…",
-      "fileHint": "Stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
+      "fileHint": "stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
       "fileTooLarge": "Volikirja fail peab olema kuni 50 MB.",
       "invalidFileType": "Palun valige .docx-fail.",
       "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
@@ -4628,7 +4630,6 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {
@@ -5056,7 +5057,7 @@
         "title": "Kahefaktoriline autentimine"
       },
       "wordEditIdentitySaved": "Wordi muudatuste isik uuendatud",
-      "wordEditShortcut": "Wordi muudatuste lühend",
+      "wordEditShortcut": "Wordi muudatuste initsiaalid",
       "wordEditShortcutDescription": "Lühike silt teie initsiaalide jaoks Wordi muudatustes.",
       "wordEditShortcutPlaceholder": "nt JK"
     },
@@ -5442,17 +5443,17 @@
     "saveFailed": "Stiilikomplekti ei saanud salvestada",
     "savedDescription": "Salvestatud stiilikomplekt",
     "sourceDocument": "Lähte-DOCX",
-    "stellaDescription": "Stella täielik neutraalne juriidiliste dokumentide vorming",
-    "stellaStyle": "Stella Style",
+    "stellaDescription": "stella täielik neutraalne juriidiliste dokumentide vorming",
+    "stellaStyle": "stella Style",
     "title": "Stiilikomplektid",
     "untitledDocument": "Pealkirjata dokument"
   },
   "success": {
     "aiConfigDeleted": "AI seadistus eemaldatud",
     "aiConfigUpdated": "AI seadistus uuendatud",
-    "clientUpdated": "Klient uuendatud",
-    "contactCreated": "Klient loodud",
-    "contactDeleted": "Klient kustutatud",
+    "clientUpdated": "Kontakt uuendatud",
+    "contactCreated": "Kontakt loodud",
+    "contactDeleted": "Kontakt kustutatud",
     "documentCreated": "Dokument loodud",
     "folderCreated": "Kaust loodud",
     "invitationCanceled": "Kutse tühistatud",
@@ -5992,6 +5993,7 @@
     "timeout": "Päring võttis liiga kaua aega. Proovi uuesti."
   },
   "validation": {
+    "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
     "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
     "slugRequired": "Slug on kohustuslik"
