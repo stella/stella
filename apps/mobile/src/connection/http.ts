@@ -7,19 +7,20 @@ export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
- * `fetch` that aborts after `REQUEST_TIMEOUT_MS`. Built on a controller and a
- * timer rather than `AbortSignal.timeout`, which not every React Native
- * runtime provides.
+ * `fetch` that aborts after `timeoutMs`, `REQUEST_TIMEOUT_MS` unless a slow
+ * transfer names a longer one. Built on a controller and a timer rather than
+ * `AbortSignal.timeout`, which not every React Native runtime provides.
  */
 export const fetchWithTimeout = async (
   fetch: Fetch,
   input: string,
   init: RequestInit = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> => {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } finally {

@@ -5,10 +5,10 @@ import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, RefreshControl, ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { useChanged, useRevision } from "@/components/changes";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { RetryButton } from "@/components/retry-button";
 import { TimerCard } from "@/components/timer-card";
-import { useTimersView } from "@/components/timers-view";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useNow } from "@/components/use-now";
 import type { AccessTokenSource } from "@/connection/session";
@@ -32,7 +32,7 @@ type TimersLoad = {
  */
 const TimersScreen = () => {
   const { state } = useSession();
-  const { revision } = useTimersView();
+  const revision = useRevision("timers");
   const t = useTranslations("timers");
   const router = useRouter();
   const plusGlyph = useGlyphImage("plus");
@@ -118,7 +118,7 @@ const LoadedTimers = ({
   source: AccessTokenSource;
 }) => {
   const colors = useAppColors();
-  const { timersChanged } = useTimersView();
+  const changed = useChanged();
   const { matterNames, timers } = use(load);
   const now = useNow(
     Result.isOk(timers) &&
@@ -146,7 +146,9 @@ const LoadedTimers = ({
       <TimersBody
         matterNames={matterNames}
         now={now}
-        onChanged={timersChanged}
+        onChanged={() => {
+          changed("timers");
+        }}
         onReload={onReload}
         source={source}
         timers={timers}

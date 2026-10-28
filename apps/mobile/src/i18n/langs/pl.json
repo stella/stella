@@ -109,7 +109,10 @@
       "in_review": "Do przeglądu",
       "done": "Zakończone",
       "cancelled": "Anulowane"
-    }
+    },
+    "add": "Dodaj",
+    "scanDocument": "Zeskanuj dokument",
+    "newTask": "Nowe zadanie"
   },
   "entity": {
     "type": "Typ",
@@ -190,5 +193,16 @@
     "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
     "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
     "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
+  },
+  "scan": {
+    "title": "Zeskanuj dokument",
+    "upload": "Prześlij",
+    "name": "Nazwa dokumentu",
+    "defaultName": "Skan {day}",
+    "pages": "{count, plural, one {# strona} few {# strony} many {# stron} other {# strony}}",
+    "matterTitle": "Sprawa",
+    "uploadFailed": "Nie udało się przesłać skanu. Spróbuj ponownie.",
+    "failedTitle": "Skanowanie nie powiodło się",
+    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
   }
 }

@@ -109,7 +109,10 @@
       "in_review": "En revisión",
       "done": "Hecha",
       "cancelled": "Cancelada"
-    }
+    },
+    "add": "Añadir",
+    "scanDocument": "Escanear un documento",
+    "newTask": "Nueva tarea"
   },
   "entity": {
     "type": "Tipo",
@@ -190,5 +193,16 @@
     "unavailable": "El registro de tiempo no está activado en su organización.",
     "startFailed": "No se pudo iniciar el temporizador. Inténtelo de nuevo.",
     "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo."
+  },
+  "scan": {
+    "title": "Escanear un documento",
+    "upload": "Subir",
+    "name": "Nombre del documento",
+    "defaultName": "Escaneo {day}",
+    "pages": "{count, plural, one {# página} other {# páginas}}",
+    "matterTitle": "Asunto",
+    "uploadFailed": "No se pudo subir el escaneo. Inténtelo de nuevo.",
+    "failedTitle": "Error al escanear",
+    "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo."
   }
 }

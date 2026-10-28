@@ -109,7 +109,10 @@
       "in_review": "Em revisão",
       "done": "Concluída",
       "cancelled": "Cancelada"
-    }
+    },
+    "add": "Adicionar",
+    "scanDocument": "Digitalizar um documento",
+    "newTask": "Nova tarefa"
   },
   "entity": {
     "type": "Tipo",
@@ -190,5 +193,16 @@
     "unavailable": "O controle de horas não está ativado na sua organização.",
     "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
     "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente."
+  },
+  "scan": {
+    "title": "Digitalizar um documento",
+    "upload": "Enviar",
+    "name": "Nome do documento",
+    "defaultName": "Digitalização {day}",
+    "pages": "{count, plural, one {# página} other {# páginas}}",
+    "matterTitle": "Caso",
+    "uploadFailed": "Não foi possível enviar a digitalização. Tente novamente.",
+    "failedTitle": "Falha na digitalização",
+    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
   }
 }

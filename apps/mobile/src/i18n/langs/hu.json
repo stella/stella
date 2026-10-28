@@ -109,7 +109,10 @@
       "in_review": "Ellenőrzésre vár",
       "done": "Kész",
       "cancelled": "Visszavonva"
-    }
+    },
+    "add": "Hozzáadás",
+    "scanDocument": "Dokumentum szkennelése",
+    "newTask": "Új feladat"
   },
   "entity": {
     "type": "Típus",
@@ -190,5 +193,16 @@
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
     "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
+  },
+  "scan": {
+    "title": "Dokumentum szkennelése",
+    "upload": "Feltöltés",
+    "name": "Dokumentum neve",
+    "defaultName": "Szkennelés {day}",
+    "pages": "{count, plural, other {# oldal}}",
+    "matterTitle": "Ügy",
+    "uploadFailed": "A szkennelt dokumentumot nem sikerült feltölteni. Próbálja újra.",
+    "failedTitle": "A szkennelés nem sikerült",
+    "failed": "A kamera nem tudta menteni a szkennelést. Próbálja újra."
   }
 }

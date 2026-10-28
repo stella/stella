@@ -6,8 +6,8 @@ import { Stack, useRouter } from "expo-router";
 import { ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
-import { useMattersView } from "@/components/matters-view";
 import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
@@ -32,7 +32,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
   const tabs = useTranslations("tabs");
   const router = useRouter();
   const { end } = useSession();
-  const { matterAdded } = useMattersView();
+  const changed = useChanged();
   // One id for the sheet, so pressing Create again after a failure
   // retries the same matter rather than opening another.
   const [matterId] = useState(randomUUID);
@@ -54,7 +54,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
-        matterAdded();
+        changed("matters");
         router.replace({
           pathname: "/matter/[workspaceId]",
           params: { name: name.trim(), workspaceId: created.value },

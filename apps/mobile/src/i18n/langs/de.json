@@ -109,7 +109,10 @@
       "in_review": "In Prüfung",
       "done": "Erledigt",
       "cancelled": "Abgebrochen"
-    }
+    },
+    "add": "Hinzufügen",
+    "scanDocument": "Dokument scannen",
+    "newTask": "Neue Aufgabe"
   },
   "entity": {
     "type": "Typ",
@@ -190,5 +193,16 @@
     "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
     "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
     "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
+  },
+  "scan": {
+    "title": "Dokument scannen",
+    "upload": "Hochladen",
+    "name": "Dokumentname",
+    "defaultName": "Scan {day}",
+    "pages": "{count, plural, one {# Seite} other {# Seiten}}",
+    "matterTitle": "Akte",
+    "uploadFailed": "Der Scan konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
+    "failedTitle": "Scan fehlgeschlagen",
+    "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut."
   }
 }

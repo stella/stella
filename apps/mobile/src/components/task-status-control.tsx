@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
 
-import { useTasksView } from "@/components/tasks-view";
+import { useChanged } from "@/components/changes";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
@@ -80,7 +80,7 @@ const LoadedTaskStatus = ({
   const matter = useTranslations("matter");
   const format = useFormatter();
   const { end } = useSession();
-  const { tasksChanged } = useTasksView();
+  const changed = useChanged();
   const loaded = use(load);
   const [status, setStatus] = useState(
     Result.isOk(loaded) ? (loaded.value.status ?? TASK_STATUS.OPEN) : null,
@@ -107,7 +107,7 @@ const LoadedTaskStatus = ({
       });
       if (Result.isOk(saved)) {
         setStatus(next);
-        tasksChanged();
+        changed("tasks");
         return;
       }
       if (saved.error._tag === "SignedOutError") {

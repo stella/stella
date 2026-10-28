@@ -5,9 +5,9 @@ import { Stack, useRouter } from "expo-router";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { useTimersView } from "@/components/timers-view";
 import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
@@ -35,7 +35,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const colors = useAppColors();
   const router = useRouter();
   const { end } = useSession();
-  const { timersChanged } = useTimersView();
+  const changed = useChanged();
   const [description, setDescription] = useState("");
   const [matterId, setMatterId] = useState<string | null>(null);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
@@ -58,7 +58,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(started)) {
-        timersChanged();
+        changed("timers");
         router.back();
         return;
       }

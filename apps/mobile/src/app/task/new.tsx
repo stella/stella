@@ -5,9 +5,9 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
+import { useChanged } from "@/components/changes";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
-import { useTasksView } from "@/components/tasks-view";
 import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
@@ -47,7 +47,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const ui = useUiColors();
   const router = useRouter();
   const { end } = useSession();
-  const { tasksChanged } = useTasksView();
+  const changed = useChanged();
   const timeZone = useTimeZone() ?? "UTC";
   const params = useLocalSearchParams<{ matterId?: string }>();
   const [name, setName] = useState("");
@@ -82,7 +82,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
-        tasksChanged();
+        changed("tasks");
         router.back();
         return;
       }

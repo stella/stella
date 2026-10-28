@@ -3,8 +3,8 @@ import { Suspense, useState, useTransition } from "react";
 import { Result } from "better-result";
 import { ActivityIndicator } from "react-native";
 
+import { useRevision } from "@/components/changes";
 import { LoadedMatters } from "@/components/loaded-matters";
-import { useMattersView } from "@/components/matters-view";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -17,7 +17,7 @@ import { useAppColors } from "@/theme";
  * refresh, and afresh after a matter is opened from the header's "+".
  */
 export const MattersList = ({ source }: { source: AccessTokenSource }) => {
-  const { revision } = useMattersView();
+  const revision = useRevision("matters");
   return <MattersLoader key={revision} source={source} />;
 };
 

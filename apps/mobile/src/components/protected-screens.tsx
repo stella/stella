@@ -2,14 +2,13 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import type { NativeStackHeaderItem } from "expo-router/native-stack";
 import { useTranslations } from "use-intl";
 
+import { ChangesProvider } from "@/components/changes";
 import {
   HeaderSearchProvider,
   useHeaderSearch,
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
-import { TasksViewProvider } from "@/components/tasks-view";
-import { TimersViewProvider } from "@/components/timers-view";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
@@ -23,11 +22,9 @@ export const ProtectedScreens = () => {
   return (
     <HeaderSearchProvider activeTab={activeTab}>
       <MattersViewProvider>
-        <TasksViewProvider>
-          <TimersViewProvider>
-            <Screens />
-          </TimersViewProvider>
-        </TasksViewProvider>
+        <ChangesProvider>
+          <Screens />
+        </ChangesProvider>
       </MattersViewProvider>
     </HeaderSearchProvider>
   );
@@ -144,6 +141,15 @@ const Screens = () => {
             ...pushedScreen,
             presentation: "formSheet",
             sheetAllowedDetents: [0.5, 1],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen
+          name="scan"
+          options={{
+            ...pushedScreen,
+            presentation: "formSheet",
+            sheetAllowedDetents: [0.75, 1],
             sheetGrabberVisible: true,
           }}
         />

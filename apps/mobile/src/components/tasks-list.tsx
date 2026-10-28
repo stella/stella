@@ -3,8 +3,8 @@ import { Suspense, useState, useTransition } from "react";
 import { Result } from "better-result";
 import { ActivityIndicator } from "react-native";
 
+import { useRevision } from "@/components/changes";
 import { LoadedTasks } from "@/components/loaded-tasks";
-import { useTasksView } from "@/components/tasks-view";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -17,7 +17,7 @@ import { useAppColors } from "@/theme";
  * refresh, and afresh after a task is added from the header's "+".
  */
 export const TasksList = ({ source }: { source: AccessTokenSource }) => {
-  const { revision } = useTasksView();
+  const revision = useRevision("tasks");
   return <TasksLoader key={revision} source={source} />;
 };
 

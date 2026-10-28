@@ -109,7 +109,10 @@
       "in_review": "Peržiūrima",
       "done": "Atlikta",
       "cancelled": "Atšaukta"
-    }
+    },
+    "add": "Pridėti",
+    "scanDocument": "Nuskenuoti dokumentą",
+    "newTask": "Nauja užduotis"
   },
   "entity": {
     "type": "Tipas",
@@ -190,5 +193,16 @@
     "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
     "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
     "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
+  },
+  "scan": {
+    "title": "Nuskenuoti dokumentą",
+    "upload": "Įkelti",
+    "name": "Dokumento pavadinimas",
+    "defaultName": "Skenavimas {day}",
+    "pages": "{count, plural, one {# puslapis} few {# puslapiai} other {# puslapių}}",
+    "matterTitle": "Byla",
+    "uploadFailed": "Nepavyko įkelti skenavimo. Bandykite dar kartą.",
+    "failedTitle": "Skenuoti nepavyko",
+    "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
   }
 }

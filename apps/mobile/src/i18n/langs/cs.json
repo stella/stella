@@ -109,7 +109,10 @@
       "in_review": "Ke kontrole",
       "done": "Hotový",
       "cancelled": "Zrušený"
-    }
+    },
+    "add": "Přidat",
+    "scanDocument": "Naskenovat dokument",
+    "newTask": "Nový úkol"
   },
   "entity": {
     "type": "Typ",
@@ -190,5 +193,16 @@
     "unavailable": "Vaše organizace nemá zapnuté vykazování času.",
     "startFailed": "Časovač se nepodařilo spustit. Zkuste to znovu.",
     "changeFailed": "Časovač se nepodařilo změnit. Zkuste to znovu."
+  },
+  "scan": {
+    "title": "Naskenovat dokument",
+    "upload": "Nahrát",
+    "name": "Název dokumentu",
+    "defaultName": "Sken {day}",
+    "pages": "{count, plural, one {# strana} few {# strany} other {# stran}}",
+    "matterTitle": "Spis",
+    "uploadFailed": "Sken se nepodařilo nahrát. Zkuste to znovu.",
+    "failedTitle": "Skenování selhalo",
+    "failed": "Fotoaparát sken neuložil. Zkuste to znovu."
   }
 }

@@ -135,6 +135,12 @@ const appConfigBase = ({
     // The app's only cryptography is HTTPS and the platform keychain, which
     // are exempt; declaring it spares every TestFlight upload the question.
     config: { usesNonExemptEncryption: false },
+    infoPlist: {
+      // The document camera (modules/document-scanner) scans paper into a
+      // matter's documents.
+      NSCameraUsageDescription:
+        "stella scans paper documents with the camera to add them to a matter.",
+    },
   },
   android: {
     package: VARIANT_CONFIG[variant].identifier,

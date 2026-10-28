@@ -109,7 +109,10 @@
       "in_review": "In review",
       "done": "Done",
       "cancelled": "Cancelled"
-    }
+    },
+    "add": "Add",
+    "scanDocument": "Scan a document",
+    "newTask": "New task"
   },
   "entity": {
     "type": "Type",
@@ -190,5 +193,16 @@
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
     "changeFailed": "The timer could not be changed. Try again."
+  },
+  "scan": {
+    "title": "Scan a document",
+    "upload": "Upload",
+    "name": "Document name",
+    "defaultName": "Scan {day}",
+    "pages": "{count, plural, one {# page} other {# pages}}",
+    "matterTitle": "Matter",
+    "uploadFailed": "The scan could not be uploaded. Try again.",
+    "failedTitle": "Scan failed",
+    "failed": "The camera could not save the scan. Try again."
   }
 }

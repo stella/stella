@@ -109,7 +109,10 @@
       "in_review": "Ülevaatusel",
       "done": "Tehtud",
       "cancelled": "Tühistatud"
-    }
+    },
+    "add": "Lisa",
+    "scanDocument": "Skanni dokument",
+    "newTask": "Uus ülesanne"
   },
   "entity": {
     "type": "Tüüp",
@@ -190,5 +193,16 @@
     "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
     "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
     "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
+  },
+  "scan": {
+    "title": "Skanni dokument",
+    "upload": "Laadi üles",
+    "name": "Dokumendi nimi",
+    "defaultName": "Skann {day}",
+    "pages": "{count, plural, one {# lehekülg} other {# lehekülge}}",
+    "matterTitle": "Asi",
+    "uploadFailed": "Skanni ei õnnestunud üles laadida. Proovige uuesti.",
+    "failedTitle": "Skannimine ebaõnnestus",
+    "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
   }
 }
