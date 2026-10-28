@@ -3,7 +3,7 @@
 # With CARGO_NET_OFFLINE=true it only verifies that both are already present.
 set -euo pipefail
 
-readonly WASM_BINDGEN_VERSION="0.2.126"
+readonly WASM_BINDGEN_VERSION="0.2.129"
 CRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly CRATE_DIR
 
