@@ -758,7 +758,9 @@ const ResultFailure = ({
       {error.failure.retryable && (
         <Button
           variant="outline"
-          onClick={() => bridge.detached(bridge.retry(), "retry case-law read")}
+          onClick={() =>
+            bridge.detached(bridge.retry(), "caseLawResults.retry")
+          }
         >
           {t("retry")}
         </Button>
