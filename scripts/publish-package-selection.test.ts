@@ -172,10 +172,10 @@ describe("publish package selection", () => {
 
     expect(workflow).toContain("artifact_run_id:");
     expect(workflow).toContain(
-      `run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || github.run_id }}`,
+      `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
     );
     expect(workflow).toContain(
-      "run: node .release-tooling/.github/actions/npm-independent-release/verify-artifact-run.mjs",
+      "uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
     );
   });
 

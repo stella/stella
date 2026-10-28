@@ -11,7 +11,6 @@ const source = readFileSync(
 const stepSchema = v.object({
   id: v.optional(v.string()),
   run: v.optional(v.string()),
-  with: v.optional(v.record(v.string(), v.unknown())),
 });
 const readWorkflow = (text: string) =>
   v.parse(
@@ -19,10 +18,10 @@ const readWorkflow = (text: string) =>
       jobs: v.object({
         "release-trigger": v.object({ steps: v.array(stepSchema) }),
         pack: v.object({ if: v.string(), steps: v.array(stepSchema) }),
-        release: v.object({
+        "release-cli": v.object({
           if: v.string(),
-          steps: v.array(stepSchema),
-          environment: v.string(),
+          uses: v.string(),
+          with: v.record(v.string(), v.unknown()),
           permissions: v.record(v.string(), v.string()),
         }),
       }),
@@ -72,29 +71,20 @@ test("RC runs publish no npm version or dist-tag", () => {
     expect(workflow.jobs.pack.if).toContain(
       "needs.release-trigger.outputs.eligible == 'true'",
     );
-    expect(workflow.jobs.release.if).toContain(
+    expect(workflow.jobs["release-cli"].if).toContain(
       "needs.pack.result == 'success'",
     );
-    const batch = readFileSync(
-      new URL("publish-npm-batch.ts", import.meta.url),
-      "utf-8",
-    );
-    expect(batch).toContain('DIST_TAG: "latest"');
+    expect(workflow.jobs["release-cli"].with["dist-tag"]).toBeUndefined();
     expect(source).not.toContain("'next'");
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
 });
 
-test("stable npm source must equal the final tag and its RC SHA through pinned publishing transactions", () => {
-  const transaction = workflow.jobs.release.steps.find(
-    ({ with: inputs }) => inputs?.["path"] === ".release-tooling",
+test("stable npm source must equal the final tag and its RC SHA through the unchanged publisher", () => {
+  expect(workflow.jobs["release-cli"].uses).toBe(
+    "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
   );
-  expect(transaction?.with?.["repository"]).toBe("stella/.github");
-  expect(transaction?.with?.["ref"]).toBe(
-    "5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-  );
-  expect(workflow.jobs.release.environment).toBe("release-app");
   const validation = requiredRun(workflow.jobs.pack.steps, "release-source");
   expect(validation).toContain('if [[ "$source_sha" != "$release_sha" ]]');
   expect(validation).toContain('git tag --points-at "$release_sha"');
@@ -102,7 +92,7 @@ test("stable npm source must equal the final tag and its RC SHA through pinned p
     `[[ "$(git rev-parse "refs/tags/\${rc_tag}^{commit}")" == "$source_sha" ]]`,
   );
   expect(validation).not.toContain("merge-base --is-ancestor");
-  expect(workflow.jobs.release.permissions).toEqual({
+  expect(workflow.jobs["release-cli"].permissions).toEqual({
     actions: "read",
     contents: "write",
     "id-token": "write",

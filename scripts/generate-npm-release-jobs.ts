@@ -1,0 +1,291 @@
+#!/usr/bin/env bun
+
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
+
+export const NPM_RELEASE_WORKFLOW =
+  "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8";
+const START = "  # npm-release-jobs:start";
+const END = "  # npm-release-jobs:end";
+const SUMMARY_NEEDS = "    # npm-release-summary-needs";
+const WORKFLOW_PATH = ".github/workflows/publish-npm.yml";
+
+class NpmReleaseGraphError extends Error {
+  override name = "NpmReleaseGraphError";
+  readonly _tag = "NpmReleaseGraphError";
+}
+
+const panic = (message: string): never => {
+  throw new NpmReleaseGraphError(message);
+};
+
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type NpmReleasePackage = {
+  directory: string;
+  dependencies: readonly string[];
+};
+
+type ReadNpmReleaseGraphOptions = {
+  directories?: readonly string[];
+  readManifest: (directory: string) => string;
+};
+
+export const readNpmReleaseGraph = ({
+  directories = ALL_PACKAGE_ORDER,
+  readManifest,
+}: ReadNpmReleaseGraphOptions): readonly NpmReleasePackage[] => {
+  const names = new Map(
+    directories.map((directory) => [`@stll/${directory}`, directory]),
+  );
+  if (
+    directories.some((directory) => !/^[a-z0-9][a-z0-9-]*$/u.test(directory))
+  ) {
+    panic("Invalid directory in npm publishing inventory");
+  }
+  if (names.size !== directories.length) {
+    panic("Duplicate package in npm publishing inventory");
+  }
+  const graph = directories.map((directory) => {
+    const manifest: unknown = JSON.parse(readManifest(directory));
+    if (
+      !record(manifest) ||
+      manifest["name"] !== `@stll/${directory}` ||
+      manifest["private"] === true
+    ) {
+      return panic(`Invalid public manifest for packages/${directory}`);
+    }
+    const dependencies = new Set<string>();
+    for (const group of [
+      "dependencies",
+      "optionalDependencies",
+      "peerDependencies",
+    ]) {
+      const entries = manifest[group];
+      if (entries === undefined) {
+        continue;
+      }
+      if (!record(entries)) {
+        panic(`Invalid ${group} for packages/${directory}`);
+      }
+      for (const dependency of Object.keys(entries)) {
+        const target = names.get(dependency);
+        if (target !== undefined) {
+          dependencies.add(target);
+        }
+      }
+    }
+    return {
+      directory,
+      dependencies: directories.filter((dependency) =>
+        dependencies.has(dependency),
+      ),
+    };
+  });
+  const pending = new Map(graph.map((pkg) => [pkg.directory, pkg]));
+  while (pending.size > 0) {
+    const ready = [...pending.values()].filter(({ dependencies }) =>
+      dependencies.every((dependency) => !pending.has(dependency)),
+    );
+    if (ready.length === 0) {
+      panic(
+        `Dependency cycle in npm publishing inventory: ${[...pending.keys()].join(", ")}`,
+      );
+    }
+    for (const { directory } of ready) {
+      pending.delete(directory);
+    }
+  }
+  return graph;
+};
+
+export const npmReleaseJobId = (directory: string): string =>
+  `release-${directory}`;
+
+const selected = (directory: string): string =>
+  `contains(fromJSON(needs.pack.outputs.packages), '${directory}')`;
+
+export const renderNpmReleaseJobs = (
+  graph: readonly NpmReleasePackage[],
+): string => {
+  const jobs = graph.map(({ directory, dependencies }) => {
+    const lines = [
+      `  ${npmReleaseJobId(directory)}:`,
+      `    name: Publish @stll/${directory}`,
+      "    needs:",
+      "      - pack",
+      ...dependencies.map(
+        (dependency) => `      - ${npmReleaseJobId(dependency)}`,
+      ),
+      "    if: >-",
+      "      always() && !cancelled()",
+      "      && needs.pack.result == 'success'",
+      "      && (github.event_name == 'workflow_run'",
+      "      || (github.ref == 'refs/heads/main'",
+      "      && (github.event_name == 'push' || inputs.publish)))",
+      `      && ${selected(directory)}`,
+      ...dependencies.map(
+        (dependency) =>
+          `      && (!${selected(dependency)} || needs.${npmReleaseJobId(dependency)}.result == 'success')`,
+      ),
+      "    permissions:",
+      "      actions: read",
+      "      contents: write",
+      "      id-token: write",
+      `    uses: ${NPM_RELEASE_WORKFLOW} # release job environment input`,
+      "    with:",
+      "      environment: release-app",
+      `      artifact-pattern: npm-tarball-${directory}`,
+      `      artifact-run-id: \${{ inputs.artifact_run_id || '' }}`,
+      `      package-files: packages/${directory}/package.json`,
+      `      source-ref: \${{ needs.pack.outputs.source_sha }}`,
+      "    secrets:",
+      `      RELEASE_APP_ID: \${{ secrets.STELLA_RELEASE_APP_ID }}`,
+      `      RELEASE_APP_PRIVATE_KEY: \${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}`,
+    ];
+    return lines.join("\n");
+  });
+  return [
+    START,
+    "  # Generated by scripts/generate-npm-release-jobs.ts; do not edit.",
+    ...jobs,
+    END,
+  ].join("\n\n");
+};
+
+type RenderNpmReleaseWorkflowOptions = {
+  source: string;
+  graph: readonly NpmReleasePackage[];
+};
+
+export const renderNpmReleaseWorkflow = ({
+  source,
+  graph,
+}: RenderNpmReleaseWorkflowOptions): string => {
+  const start = source.indexOf(START);
+  const end = source.indexOf(END);
+  if (
+    start === -1 ||
+    end < start ||
+    source.includes(START, start + START.length) ||
+    source.includes(END, end + END.length)
+  ) {
+    return panic(
+      "publish-npm.yml must contain exactly one npm release jobs region",
+    );
+  }
+  const rendered =
+    source.slice(0, start) +
+    renderNpmReleaseJobs(graph) +
+    source.slice(end + END.length);
+  const needs = [
+    "release-trigger",
+    "pack",
+    ...graph.map(({ directory }) => npmReleaseJobId(directory)),
+  ];
+  const summary = `${SUMMARY_NEEDS}\n    needs:\n${needs.map((job) => `      - ${job}`).join("\n")}`;
+  const summaryStart = rendered.indexOf(SUMMARY_NEEDS);
+  if (
+    summaryStart === -1 ||
+    rendered.includes(SUMMARY_NEEDS, summaryStart + SUMMARY_NEEDS.length)
+  ) {
+    return panic(
+      "publish-npm.yml must contain exactly one npm release summary needs marker",
+    );
+  }
+  const summaryStanza =
+    /^ {4}# npm-release-summary-needs\n {4}needs:[^\n]*(?:\n      - [^\n]+)*/mu;
+  if (!summaryStanza.test(rendered)) {
+    return panic(
+      "npm release summary needs marker must precede its needs stanza",
+    );
+  }
+  return rendered.replace(summaryStanza, () => summary);
+};
+
+type NpmReleaseGraphProblemsOptions = {
+  workflow: unknown;
+  graph: readonly NpmReleasePackage[];
+};
+
+/** Catch jobs outside the generated region as well as missing dependency edges. */
+export const npmReleaseGraphProblems = ({
+  workflow,
+  graph,
+}: NpmReleaseGraphProblemsOptions): readonly string[] => {
+  if (!record(workflow) || !record(workflow["jobs"])) {
+    return ["publish-npm.yml has no jobs map"];
+  }
+  const jobs = workflow["jobs"];
+  const expected = new Set(
+    graph.map(({ directory }) => npmReleaseJobId(directory)),
+  );
+  const problems: string[] = [];
+  for (const [id, job] of Object.entries(jobs)) {
+    const releaseJob =
+      (id.startsWith("release-") &&
+        id !== "release-trigger" &&
+        id !== "release-summary") ||
+      (record(job) && job["uses"] === NPM_RELEASE_WORKFLOW);
+    if (releaseJob && !expected.has(id)) {
+      problems.push(`Unexpected npm release job: ${id}`);
+    }
+  }
+  for (const { directory, dependencies } of graph) {
+    const id = npmReleaseJobId(directory);
+    const job = jobs[id];
+    if (!record(job)) {
+      problems.push(`Missing npm release job: ${id}`);
+      continue;
+    }
+    const needs = job["needs"];
+    const required = ["pack", ...dependencies.map(npmReleaseJobId)];
+    if (
+      !Array.isArray(needs) ||
+      JSON.stringify([...needs].toSorted()) !==
+        JSON.stringify(required.toSorted())
+    ) {
+      problems.push(
+        `Incorrect npm release dependencies: ${id} needs ${required.join(", ")}`,
+      );
+    }
+    if (job["uses"] !== NPM_RELEASE_WORKFLOW || "steps" in job) {
+      problems.push(
+        `npm release job must call the pinned reusable workflow: ${id}`,
+      );
+    }
+  }
+  return problems;
+};
+
+if (import.meta.main) {
+  const root = path.resolve(import.meta.dirname, "..");
+  const file = path.join(root, WORKFLOW_PATH);
+  const source = readFileSync(file, "utf-8");
+  const graph = readNpmReleaseGraph({
+    readManifest: (directory) =>
+      readFileSync(
+        path.join(root, "packages", directory, "package.json"),
+        "utf-8",
+      ),
+  });
+  const rendered = renderNpmReleaseWorkflow({ source, graph });
+  const problems = npmReleaseGraphProblems({
+    workflow: Bun.YAML.parse(rendered),
+    graph,
+  });
+  if (problems.length > 0) {
+    panic(problems.join("\n"));
+  }
+  if (Bun.argv.includes("--write")) {
+    writeFileSync(file, rendered);
+  } else if (source !== rendered) {
+    console.error(
+      "npm release jobs drifted; run bun scripts/generate-npm-release-jobs.ts --write",
+    );
+    process.exitCode = 1;
+  }
+}

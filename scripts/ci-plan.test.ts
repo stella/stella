@@ -3505,6 +3505,10 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     ["Route tree drift guard", "route_tree_required"],
     ["Workspace package export map guard", "published_exports_required"],
     [
+      "npm release jobs match the package dependency graph",
+      "published_exports_required",
+    ],
+    [
       "Rebuild every npm package to verify identical tarball bytes",
       "published_exports_required",
     ],

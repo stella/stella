@@ -405,17 +405,17 @@ describe("API deployment health receipt", () => {
     expect(workflow).toContain("bash scripts/check-desktop-release-policy.sh");
   });
 
-  test("package releases retain the pinned shared release transaction without caches", async () => {
+  test("package releases use the latest-safe shared workflow", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
-    expect(workflow).toContain("repository: stella/.github");
-    expect(workflow).toContain("ref: 5764ab66e4df84cfd2e642c7d7e4678261e668f8");
-    expect(workflow).toContain("ref: 42bd6a23099a2dc219dd1af9c55f8f0506fcfffd");
-    expect(workflow).toContain(
-      "run: node .publish-tooling/scripts/publish-npm-batch.ts",
-    );
+    const releasePin =
+      /stella\/\.github\/\.github\/workflows\/npm-independent-release\.yml@(?<sha>[0-9a-f]{40}) # release job environment input/u.exec(
+        workflow,
+      )?.groups?.["sha"];
+
+    expect(releasePin).toBeDefined();
     // What the pack job builds is published, so it restores no shared cache.
     expect(workflow).not.toContain("setup-bun-cached");
     expect(workflow).not.toMatch(/actions\/cache(\/save)?@|rust-cache@/u);
