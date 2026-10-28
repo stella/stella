@@ -416,6 +416,7 @@ export const PublicStatuteViewer = ({
             onScreenBlocks={ast === null ? null : ast.blocks}
             provision={comparison.provision}
             show={comparison.show ?? STATUTE_COMPARE_SHOW.changed}
+            textScale={textScale}
             versions={versions}
           />
         </Suspense>

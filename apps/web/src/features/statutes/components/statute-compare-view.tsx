@@ -23,6 +23,8 @@ import { Skeleton } from "@stll/ui/skeleton";
 import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
+import { ZoomControls } from "@/components/inspector/zoom-controls";
+import type { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import {
   StatuteBlock,
   StatuteMasthead,
@@ -106,7 +108,11 @@ type StatuteCompareViewProps = {
   provision: string | undefined;
   show: StatuteCompareShow;
   onNavigate: CompareNavigate;
+  /** The reader's own text size, so the comparison reads at the same size. */
+  textScale: ReaderTextScale;
 };
+
+type ReaderTextScale = ReturnType<typeof useWebReaderTextScale>;
 
 /**
  * Two consolidations of one act side by side: the older wording on the left
@@ -120,6 +126,7 @@ export const StatuteCompareView = ({
   onScreenBlocks,
   provision,
   show,
+  textScale,
   versions,
 }: StatuteCompareViewProps) => {
   const t = useTranslations();
@@ -157,6 +164,7 @@ export const StatuteCompareView = ({
     older: resolved.older,
     onClose: close,
     statuteLists: statuteListSchemeFor(onScreen.country),
+    textScale,
   };
 
   // Both consolidations are the same act from the same publisher, so its
@@ -198,6 +206,7 @@ type CompareFrame = {
   onClose: () => void;
   /** The act's publisher scheme, which both sides' anchors nest lists in. */
   statuteLists: StatuteListScheme;
+  textScale: ReaderTextScale;
 };
 
 type OrderSidesOptions = {
@@ -392,7 +401,8 @@ type CompareFrameLayoutProps = {
 
 /**
  * The comparison's chrome stays put and only the rows scroll: the column
- * heads are what make a row far down the act legible.
+ * heads are what make a row far down the act legible. One row: each version
+ * heads its own column, and the controls end the newer one's.
  */
 const CompareFrameLayout = ({
   actions,
@@ -401,40 +411,60 @@ const CompareFrameLayout = ({
   title,
 }: CompareFrameLayoutProps) => {
   const t = useTranslations();
+  const { textScale } = frame;
 
   return (
     // Pinned to the reader pane rather than sized by percentage: the pane's
     // height is not definite for every ancestor chain, and an unbounded frame
     // lets the page scroll around the list's own scroll area.
     <section aria-label={title} className="absolute inset-0 flex flex-col">
-      <div className="mx-auto flex w-full flex-col px-4 md:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-4 pb-2">
-          <h2 className="text-sm font-medium text-balance">{title}</h2>
-          <div className="flex flex-wrap items-center gap-3">
-            {actions}
-            <Button onClick={frame.onClose} size="sm" variant="ghost">
-              <XIcon className="size-3.5" />
-              {t("statutes.compareClose")}
-            </Button>
+      <h2 className="sr-only">{title}</h2>
+      <div className="px-4 md:px-8">
+        <div className="grid items-center gap-x-8 border-b py-1.5 md:grid-cols-2">
+          {/* Stacked, every cell names its own version instead. */}
+          <div className="min-w-0 max-md:hidden">
+            <StatuteValidityIndicator
+              expression={frame.older}
+              status={frame.older.status}
+              validFrom={frame.older.versionValidFrom}
+              validTo={frame.older.versionValidTo}
+            />
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0 max-md:hidden">
+              <StatuteValidityIndicator
+                expression={frame.newer}
+                status={frame.newer.status}
+                validFrom={frame.newer.versionValidFrom}
+                validTo={frame.newer.versionValidTo}
+              />
+            </div>
+            <div className="ms-auto flex shrink-0 items-center gap-1">
+              {actions}
+              <ZoomControls
+                atMax={textScale.atMax}
+                atMin={textScale.atMin}
+                level={textScale.level}
+                onReset={textScale.reset}
+                onZoom={textScale.zoom}
+              />
+              <Button
+                aria-label={t("statutes.compareClose")}
+                onClick={frame.onClose}
+                size="icon-xs"
+                title={t("statutes.compareClose")}
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
-        {/* Stacked, every cell names its own version instead. */}
-        <div className="hidden grid-cols-2 gap-x-8 border-b py-2 md:grid">
-          <StatuteValidityIndicator
-            expression={frame.older}
-            status={frame.older.status}
-            validFrom={frame.older.versionValidFrom}
-            validTo={frame.older.versionValidTo}
-          />
-          <StatuteValidityIndicator
-            expression={frame.newer}
-            status={frame.newer.status}
-            validFrom={frame.newer.versionValidFrom}
-            validTo={frame.newer.versionValidTo}
-          />
-        </div>
       </div>
-      {children}
+      {/* The rows, and only the rows, take the reader's text size. */}
+      <div className="flex min-h-0 flex-1 flex-col" {...textScale.rootProps}>
+        {children}
+      </div>
     </section>
   );
 };
