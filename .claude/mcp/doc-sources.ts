@@ -286,6 +286,10 @@ export const DOC_SOURCES = {
     dependencies: ["lefthook"],
     url: "https://lefthook.dev/llms.txt",
   },
+  AgentDevice: {
+    dependencies: ["agent-device"],
+    url: "https://agent-device.dev/llms.txt",
+  },
 } as const satisfies Record<string, DocSource>;
 
 const NO_LLMS_TXT_CHECKED_AT = "2026-10-25T00:00:00.000Z";
