@@ -1,13 +1,36 @@
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import {
+  entityFeatureGateGraphSql,
+  entityFeatureGatePropagationSql,
+} from "../src/db/entity-feature-gate-metadata";
 import type { EntityFeatureGateDescriptor } from "../src/db/entity-feature-gate-metadata";
 import type { EffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
-import { createPolicyStatementsOf } from "../src/tests/helpers/lock-taking-sql";
 
 const breakpoint = "\n--> statement-breakpoint\n";
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+
+/**
+ * A policy's CREATE POLICY statement, spelled as `online-ddl` spells it. The
+ * generator writes migration text and must not load the online DDL runner;
+ * a test pins this to `online-ddl`'s rendering.
+ */
+type GatePolicy = ReturnType<typeof entityFeaturePolicyDefinitions>[number];
+
+export const createPolicyStatement = ({
+  tableName,
+  name,
+  as,
+  for: command,
+  role,
+  using,
+  withCheck,
+}: GatePolicy): string =>
+  `CREATE POLICY ${quote(name)} ON "public".${quote(tableName)} AS ${as.toUpperCase()} FOR ${command.toUpperCase()} TO ${quote(role)}${
+    using === undefined ? "" : ` USING (${using})`
+  }${withCheck === undefined ? "" : ` WITH CHECK (${withCheck})`};`;
 
 const checkStatements = ({ tableName }: EntityFeatureGateDescriptor) => [
   `DO $check$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.${tableName}'::regclass AND conname = 'entity_feature_gate_states_check') THEN ALTER TABLE public.${quote(tableName)} ADD CONSTRAINT entity_feature_gate_states_check CHECK (entity_feature_gate IN ('pending', 'open', 'legal-lists', 'missing')) NOT VALID; END IF; END $check$;`,
@@ -50,12 +73,60 @@ const propagationTriggers = (table: string) => [
   ),
 ];
 
+/**
+ * Routines the gate role owns: the gate migration created them under
+ * `SET LOCAL ROLE stella_entity_gate`, and only an owner may replace a
+ * routine or change its privileges.
+ */
+const GATE_ROLE_ROUTINES: ReadonlySet<string> = new Set([
+  "entity_feature_gate_value",
+  "entity_feature_gate_write",
+  "entity_feature_gate_propagate",
+  "entity_feature_gate_repair_missing",
+  "entity_feature_gate_backfill",
+]);
+
+/** A routine's replacement statements, run as the role that owns it. */
+export const routineReplacementSql = (
+  name: string,
+  statements: readonly string[],
+): string[] =>
+  GATE_ROLE_ROUTINES.has(name)
+    ? ["SET LOCAL ROLE stella_entity_gate;", ...statements, "RESET ROLE;"]
+    : [...statements];
+
+/** The routines derived from the census, by name. */
+export const entityFeatureGateRoutines = (
+  descriptors: readonly EntityFeatureGateDescriptor[],
+) =>
+  [
+    ["entity_feature_gate_graph", entityFeatureGateGraphSql(descriptors)],
+    [
+      "entity_feature_gate_propagate",
+      entityFeatureGatePropagationSql(descriptors),
+    ],
+  ] as const;
+
 /** Additive DDL needed when the schema census contains gates absent from history. */
-export const entityFeatureGateTableSql = async (
+export const entityFeatureGateTableSql = (
   tables: readonly PgTable[],
   descriptors: readonly EntityFeatureGateDescriptor[],
   effective: EffectiveEntityFeatureGateDefinitions,
-): Promise<string[]> => {
+): string[] => {
+  const statements = entityFeatureGateRoutines(descriptors).flatMap(
+    ([name, sql]) => {
+      if (effective.functions.get(name) === sql) {
+        return [];
+      }
+      const signature = `${name}()`;
+      return routineReplacementSql(name, [
+        sql,
+        ...(effective.revokes.has(signature)
+          ? []
+          : [`REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC;`]),
+      ]);
+    },
+  );
   // Each piece is checked on its own: a table's schema migration may already
   // have created its visibility policy (`entityFeaturePolicies` declares it)
   // without the gate triggers or the gate role's grants.
@@ -64,16 +135,17 @@ export const entityFeatureGateTableSql = async (
   const hasTrigger = (table: string, name: string) =>
     effective.triggers.has(`${table}.${name}`);
   const missing = descriptors.filter(
-    ({ tableName }) =>
+    ({ tableName, refs }) =>
       !has(tableName, "workspace_entity_feature") ||
       !has(tableName, "entity_feature_gate_maintenance") ||
       !hasTrigger(tableName, "entity_feature_gate_write") ||
-      !hasTrigger(tableName, "entity_feature_gate_repair_missing") ||
+      (refs.length > 0 &&
+        !hasTrigger(tableName, "entity_feature_gate_repair_missing")) ||
       !effective.grants.has(tableName),
   );
   const missingNames = new Set(missing.map(({ tableName }) => tableName));
   // The checks are idempotent DO blocks, so a table missing any piece gets them.
-  const statements = missing.flatMap(checkStatements);
+  statements.push(...missing.flatMap(checkStatements));
   for (const policyName of [
     "workspace_entity_feature",
     "entity_feature_gate_maintenance",
@@ -82,14 +154,18 @@ export const entityFeatureGateTableSql = async (
       ({ tableName }) =>
         missingNames.has(tableName) && !has(tableName, policyName),
     );
-    statements.push(...(await createPolicyStatementsOf(policies)));
+    statements.push(...policies.map(createPolicyStatement));
   }
   for (const descriptor of missing) {
     for (const [name, timing] of [
       ["entity_feature_gate_write", "BEFORE INSERT OR UPDATE"],
       ["entity_feature_gate_repair_missing", "AFTER INSERT OR UPDATE"],
     ] as const) {
-      if (!hasTrigger(descriptor.tableName, name)) {
+      if (
+        !hasTrigger(descriptor.tableName, name) &&
+        (name !== "entity_feature_gate_repair_missing" ||
+          descriptor.refs.length > 0)
+      ) {
         statements.push(trigger(descriptor.tableName, name, timing));
       }
     }

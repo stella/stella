@@ -17,17 +17,17 @@ import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
-import { entityFeatureGateTableSql } from "../../scripts/entity-feature-gate-ddl";
+import {
+  entityFeatureGateRoutines,
+  entityFeatureGateTableSql,
+  routineReplacementSql,
+} from "../../scripts/entity-feature-gate-ddl";
 import {
   entityFeatureGateChecks,
   entityFeatureGateColumns,
   entityFeatureWorkspaceGateColumns,
 } from "./entity-feature-gate-columns";
-import {
-  entityFeatureGateGraphSql,
-  entityFeatureGateMetadata,
-  entityFeatureGatePropagationSql,
-} from "./entity-feature-gate-metadata";
+import { entityFeatureGateMetadata } from "./entity-feature-gate-metadata";
 import { readEffectiveEntityFeatureGateDefinitions } from "./entity-feature-gate-migrations";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { entityFeaturePolicies } from "./entity-feature-policies";
@@ -130,15 +130,15 @@ describe.skipIf(!runPostgresTests)(
         );
         const descriptors = entityFeatureGateMetadata(tables);
         const effective = await readEffectiveEntityFeatureGateDefinitions();
-        const originalRoutines = [
-          entityFeatureGateGraphSql(originalDescriptors),
-          entityFeatureGatePropagationSql(originalDescriptors),
-        ];
-        const generated = [
-          entityFeatureGateGraphSql(descriptors),
-          entityFeatureGatePropagationSql(descriptors),
-          ...(await entityFeatureGateTableSql(tables, descriptors, effective)),
-        ];
+        // Restored as their owners, the way the generator replaces them.
+        const originalRoutines = entityFeatureGateRoutines(
+          originalDescriptors,
+        ).flatMap(([name, sql]) => routineReplacementSql(name, [sql]));
+        const generated = entityFeatureGateTableSql(
+          tables,
+          descriptors,
+          effective,
+        );
 
         const organizationId = mintAuthProviderId<"organization">();
         const workspaceId = createSafeId<"workspace">();

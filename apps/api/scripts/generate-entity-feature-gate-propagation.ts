@@ -1,11 +1,7 @@
 import { is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
-import {
-  entityFeatureGateGraphSql,
-  entityFeatureGateMetadata,
-  entityFeatureGatePropagationSql,
-} from "../src/db/entity-feature-gate-metadata";
+import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadata";
 import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import * as schema from "../src/db/schema";
 import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
@@ -13,19 +9,7 @@ import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
 const tables = Object.values(schema).filter((table) => is(table, PgTable));
 const descriptors = entityFeatureGateMetadata(tables);
 const effective = await readEffectiveEntityFeatureGateDefinitions();
-const definitions = [
-  ["entity_feature_gate_graph", entityFeatureGateGraphSql(descriptors)],
-  [
-    "entity_feature_gate_propagate",
-    entityFeatureGatePropagationSql(descriptors),
-  ],
-] as const;
-const changed = definitions.flatMap(([name, sql]) =>
-  effective.functions.get(name) === sql ? [] : [sql],
-);
-changed.push(
-  ...(await entityFeatureGateTableSql(tables, descriptors, effective)),
-);
+const changed = entityFeatureGateTableSql(tables, descriptors, effective);
 
 if (changed.length > 0) {
   const drizzle = new URL("../drizzle/", import.meta.url);
