@@ -30,16 +30,28 @@ import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
-import type { StampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
-import { drawStampRows } from "@/api/lib/files/pdf-signing/stamp-glyphs";
+import { STAMP_BRAND_BLUE } from "@/api/lib/files/pdf-signing/stamp-colors";
+import {
+  boldStampFonts,
+  type StampFonts,
+} from "@/api/lib/files/pdf-signing/stamp-font";
+import {
+  drawStampRows,
+  pdfNumber,
+} from "@/api/lib/files/pdf-signing/stamp-glyphs";
 import {
   FIRST_STRONG_ISOLATE,
   layoutStampColumns,
   layoutStampRow,
   LEFT_TO_RIGHT_ISOLATE,
   POP_DIRECTIONAL_ISOLATE,
+  type StampDetailLine,
+  type StampWeight,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
-import { drawStampMark } from "@/api/lib/files/pdf-signing/stamp-mark";
+import {
+  drawStampMark,
+  STELLA_MARK_ASPECT,
+} from "@/api/lib/files/pdf-signing/stamp-mark";
 import {
   stampTextCheck,
   stampValue,
@@ -365,7 +377,10 @@ export const stampLines = ({
       ...(location === null
         ? []
         : [`${stamp.labels.location}: ${isolated(location)}`]),
-    ],
+    ].map((text, index): StampDetailLine => ({
+      text,
+      signer: signerName !== "" && index === 1,
+    })),
   };
 };
 
@@ -376,6 +391,36 @@ const nextFieldName = (pdf: PDF) => {
     index += 1;
   }
   return `${STAMP_FIELD_PREFIX}${index}`;
+};
+
+/**
+ * A vertical rule in the brand blue with round caps. The path is inset by
+ * half the stroke at each end, so its caps end at `top` and `bottom`.
+ */
+const drawStampRule = ({
+  bottom,
+  top,
+  width,
+  x,
+}: {
+  bottom: number;
+  top: number;
+  width: number;
+  x: number;
+}) => {
+  const middle = (top + bottom) / 2;
+  const upper = Math.max(middle, top - width / 2);
+  const lower = Math.min(middle, bottom + width / 2);
+  return [
+    "q",
+    `${STAMP_BRAND_BLUE} RG`,
+    `${pdfNumber(width)} w`,
+    "1 J",
+    `${pdfNumber(x)} ${pdfNumber(upper)} m`,
+    `${pdfNumber(x)} ${pdfNumber(lower)} l`,
+    "S",
+    "Q",
+  ];
 };
 
 /** Counter-rotates the appearance so the stamp reads upright on screen. */
@@ -419,7 +464,11 @@ export const addSignatureStamp = ({
 
   // Never draw a blank glyph or an unshaped script: see `stamp-text.ts`.
   const check = stampTextCheck(fonts);
-  if (![lines.name, ...lines.details].every((line) => check.canDraw(line))) {
+  if (
+    ![lines.name, ...lines.details.map(({ text }) => text)].every((line) =>
+      check.canDraw(line),
+    )
+  ) {
     return Result.err(
       new PdfSigningStampError({
         message:
@@ -429,17 +478,25 @@ export const addSignatureStamp = ({
     );
   }
   const laidOut = new Map<string, ReturnType<typeof layoutStampRow>>();
-  const layoutRow = (text: string) => {
-    let row = laidOut.get(text);
+  const bold = boldStampFonts(fonts);
+  const layoutRow = (text: string, weight: StampWeight) => {
+    const key = `${weight}:${text}`;
+    let row = laidOut.get(key);
     if (row === undefined) {
-      row = layoutStampRow({ direction: stamp.direction, fonts, text });
-      laidOut.set(text, row);
+      row = layoutStampRow({
+        direction: stamp.direction,
+        fonts: weight === "bold" ? bold : fonts,
+        text,
+      });
+      laidOut.set(key, row);
     }
     return row;
   };
   const layout = layoutStampColumns({
+    direction: stamp.direction,
     height,
     lines,
+    mark: { aspect: STELLA_MARK_ASPECT },
     unit: 1 / pageUserUnit(page.dict),
     layoutRow,
     width,
@@ -455,9 +512,9 @@ export const addSignatureStamp = ({
   }
   const text = drawStampRows({ pdf, rows: layout.rows });
   const operators = [
-    ...drawStampMark(layout.details),
+    ...(layout.rule === null ? [] : drawStampRule(layout.rule)),
+    ...(layout.mark === null ? [] : drawStampMark(layout.mark)),
     "BT",
-    "0.1 0.1 0.1 rg",
     ...text.operators,
     "ET",
   ];

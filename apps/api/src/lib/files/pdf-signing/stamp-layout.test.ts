@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
+import {
+  STAMP_DETAIL_COLOR,
+  STAMP_NAME_COLOR,
+} from "@/api/lib/files/pdf-signing/stamp-colors";
+import {
+  boldStampFonts,
+  loadStampFonts,
+} from "@/api/lib/files/pdf-signing/stamp-font";
 import {
   FIRST_STRONG_ISOLATE,
   layoutStampColumns,
@@ -10,6 +17,7 @@ import {
   STAMP_UNITS_PER_EM,
   type StampRow,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
+import { STELLA_MARK_ASPECT } from "@/api/lib/files/pdf-signing/stamp-mark";
 
 const ARABIC_NAME = "محمد عبد الله";
 
@@ -88,7 +96,7 @@ describe("laying out a stamp row", () => {
   });
 });
 
-describe("the stamp's two columns", () => {
+describe("the stamp columns", () => {
   const fitColumns = async (
     name: string,
     {
@@ -104,20 +112,31 @@ describe("the stamp's two columns", () => {
     } = {},
   ) => {
     const fonts = await loadStampFonts();
+    const bold = boldStampFonts(fonts);
     return layoutStampColumns({
+      direction,
       height,
       width,
       unit,
+      mark: { aspect: STELLA_MARK_ASPECT },
       lines: {
         name,
         details: [
-          "Digitally signed by",
-          `${FIRST_STRONG_ISOLATE}${name}${POP_DIRECTIONAL_ISOLATE}`,
-          "Date: 2026.10.08",
-          "12:50:57 +02'00'",
+          { text: "Digitally signed by", signer: false },
+          {
+            text: `${FIRST_STRONG_ISOLATE}${name}${POP_DIRECTIONAL_ISOLATE}`,
+            signer: true,
+          },
+          { text: "Date: 2026.10.08", signer: false },
+          { text: "12:50:57 +02'00'", signer: false },
         ],
       },
-      layoutRow: (text) => layoutStampRow({ direction, fonts, text }),
+      layoutRow: (text, weight) =>
+        layoutStampRow({
+          direction,
+          fonts: weight === "bold" ? bold : fonts,
+          text,
+        }),
     });
   };
   const fit = async (...args: Parameters<typeof fitColumns>) =>
@@ -142,6 +161,9 @@ describe("the stamp's two columns", () => {
   };
   const texts = (rows: readonly PositionedStampRow[]) =>
     rows.map(({ row }) => runTexts(row).join(""));
+  const faceKeys = (row: PositionedStampRow | undefined) => [
+    ...new Set(row?.row.runs.map(({ face }) => face.key)),
+  ];
   /** Both columns, the name rows first, as the layout returns them. */
   const columns = (rows: readonly PositionedStampRow[], nameWords: number) => ({
     name: rows.slice(0, nameWords),
@@ -156,13 +178,20 @@ describe("the stamp's two columns", () => {
     }
     return { top: extent(first).top, bottom: extent(last).bottom };
   };
+  const capHeight = (row: PositionedStampRow) =>
+    Math.max(
+      ...row.row.runs.map(
+        ({ face: { font } }) => font.capHeight / font.unitsPerEm,
+      ),
+    ) * row.fontSize;
 
-  test("fills the box: one name word per line in the left half, details beside it, both centred", async () => {
-    const rows = await fit("Jan Kubica");
-    expect(rows).not.toBeNull();
-    if (rows === null) {
+  test("sets the name bold in the left half, then a rule, then the details, all centred", async () => {
+    const laidOut = await fitColumns("Jan Kubica");
+    expect(laidOut).not.toBeNull();
+    if (laidOut === null) {
       return;
     }
+    const { rows, mark, rule } = laidOut;
     const { name, details } = columns(rows, 2);
     expect(texts(name)).toEqual(["Jan", "Kubica"]);
     expect(texts(details)).toEqual([
@@ -171,8 +200,17 @@ describe("the stamp's two columns", () => {
       "Date: 2026.10.08",
       "12:50:57 +02'00'",
     ]);
-    const size = name.at(0)?.fontSize ?? 0;
-    expect(size).toBeGreaterThan(details.at(0)?.fontSize ?? Infinity);
+
+    // Bold and near-black for the name, in both columns; grey for the rest.
+    for (const row of [...name, details.at(1)]) {
+      expect(faceKeys(row)).toEqual(["DejaVuSansBold"]);
+      expect(row?.color).toBe(STAMP_NAME_COLOR);
+    }
+    for (const row of [details.at(0), details.at(2), details.at(3)]) {
+      expect(faceKeys(row)).toEqual(["DejaVuSans"]);
+      expect(row?.color).toBe(STAMP_DETAIL_COLOR);
+    }
+
     for (const row of rows) {
       const { top, bottom, right } = extent(row);
       expect(right).toBeLessThanOrEqual(234.001);
@@ -192,54 +230,60 @@ describe("the stamp's two columns", () => {
         Math.abs(nameSpan.top - nameSpan.bottom - 68),
       ),
     ).toBeLessThan(0.001);
-    // The details start one padding right of the widest name row.
-    for (const row of details) {
-      expect(row.x).toBeCloseTo(nameRight + 6);
+
+    // The details are about 0.4 of the name size, in half points.
+    const nameSize = name.at(0)?.fontSize ?? 0;
+    const size = details.at(0)?.fontSize ?? 0;
+    expect(details.every((row) => row.fontSize === size)).toBe(true);
+    expect((size * 2) % 1).toBe(0);
+    expect(size).toBeGreaterThanOrEqual(6);
+    expect(size).toBeLessThanOrEqual(nameSize * 0.4 + 0.001);
+
+    // The rule: one padding after the name, 1.5 pt, spanning the details.
+    const detailsSpan = span(details);
+    expect(rule).not.toBeNull();
+    expect(rule?.width).toBeCloseTo(1.5);
+    expect(rule?.x).toBeCloseTo(nameRight + 6 + 0.75);
+    expect(rule?.top).toBeCloseTo(detailsSpan.top);
+    expect(rule?.bottom).toBeCloseTo(detailsSpan.bottom);
+    const column = (rule?.x ?? 0) + 0.75 + 6;
+    for (const row of details.slice(1)) {
+      expect(row.x).toBeCloseTo(column);
     }
+
+    // The mark: one cap height, on the first row baseline, before its text.
+    const [lead] = details;
+    expect(mark).not.toBeNull();
+    if (mark === null || lead === undefined) {
+      return;
+    }
+    expect(mark.x).toBeCloseTo(column);
+    expect(mark.y).toBeCloseTo(lead.y);
+    expect(mark.height).toBeCloseTo(capHeight(lead));
+    expect(mark.width).toBeCloseTo(mark.height * STELLA_MARK_ASPECT);
+    expect(lead.x).toBeCloseTo(mark.x + mark.width + 0.4 * size);
+
     // Each column is centred vertically in the box.
-    for (const column of [name, details]) {
-      const { top, bottom } = span(column);
-      expect((top + bottom) / 2).toBeCloseTo(40);
+    for (const block of [nameSpan, detailsSpan]) {
+      expect((block.top + block.bottom) / 2).toBeCloseTo(40);
     }
   });
 
-  test("sizes the details to fill the box, with no fixed cap", async () => {
-    const laidOut = await fitColumns("Jan Kubica", { width: 380, height: 100 });
-    expect(laidOut).not.toBeNull();
-    if (laidOut === null) {
+  test("keeps the details at 0.4 of the name size where the box has room", async () => {
+    const rows = await fit("Jan Kubica", { width: 380, height: 100 });
+    expect(rows).not.toBeNull();
+    if (rows === null) {
       return;
     }
-    const { rows } = laidOut;
     const { name, details } = columns(rows, 2);
-    expect(details).toHaveLength(4);
-    const fontSize = details.at(0)?.fontSize ?? 0;
-    expect(fontSize).toBeGreaterThan(10);
-    expect(details.every((row) => row.fontSize === fontSize)).toBe(true);
-    expect((fontSize * 2) % 1).toBe(0);
-    // With four unwrapped rows chosen, the same rows one half point larger
-    // must overflow the width or the height, or that size would have won.
-    const nameRight = Math.max(...name.map((row) => extent(row).right));
-    const detailsWidth = 380 - 6 - (nameRight + 6);
-    const next = fontSize + 0.5;
-    const widest = Math.max(
-      ...details.map(({ row }) => (row.width * next) / STAMP_UNITS_PER_EM),
-    );
-    const { top, bottom } = span(details);
-    const nextHeight = ((top - bottom) * next) / fontSize;
-    expect(widest > detailsWidth || nextHeight > 88).toBe(true);
+    const nameSize = name.at(0)?.fontSize ?? 0;
+    expect(details.at(0)?.fontSize).toBe(Math.floor(nameSize * 0.4 * 2) / 2);
     for (const row of rows) {
       const edges = extent(row);
       expect(edges.right).toBeLessThanOrEqual(374.001);
       expect(edges.bottom).toBeGreaterThanOrEqual(5.999);
       expect(edges.top).toBeLessThanOrEqual(94.001);
     }
-    expect((top + bottom) / 2).toBeCloseTo(50);
-    // The details box, which the mark fills, spans the column inside the
-    // padding.
-    expect(laidOut.details.x).toBeCloseTo(nameRight + 6);
-    expect(laidOut.details.width).toBeCloseTo(detailsWidth);
-    expect(laidOut.details.y).toBeCloseTo(6);
-    expect(laidOut.details.height).toBeCloseTo(88);
   });
 
   test("shrinks a long name and refuses an unbreakable word below the readable size", async () => {
@@ -254,32 +298,47 @@ describe("the stamp's two columns", () => {
   });
 
   test("keeps physical layout identical on pages with a UserUnit", async () => {
-    const normal = await fit("Jan Kubica");
-    const scaled = await fit("Jan Kubica", { width: 24, height: 8, unit: 0.1 });
+    const normal = await fitColumns("Jan Kubica");
+    const scaled = await fitColumns("Jan Kubica", {
+      width: 24,
+      height: 8,
+      unit: 0.1,
+    });
     expect(normal).not.toBeNull();
     expect(scaled).not.toBeNull();
     if (normal === null || scaled === null) {
       return;
     }
-    expect(scaled).toHaveLength(normal.length);
-    for (const [index, row] of normal.entries()) {
-      const other = scaled.at(index);
+    expect(scaled.rows).toHaveLength(normal.rows.length);
+    for (const [index, row] of normal.rows.entries()) {
+      const other = scaled.rows.at(index);
       expect((other?.fontSize ?? 0) * 10).toBeCloseTo(row.fontSize);
       expect((other?.x ?? 0) * 10).toBeCloseTo(row.x);
       expect((other?.y ?? 0) * 10).toBeCloseTo(row.y);
     }
+    for (const key of ["x", "y", "width", "height"] as const) {
+      expect((scaled.mark?.[key] ?? 0) * 10).toBeCloseTo(
+        normal.mark?.[key] ?? Number.NaN,
+      );
+    }
+    for (const key of ["x", "top", "bottom", "width"] as const) {
+      expect((scaled.rule?.[key] ?? 0) * 10).toBeCloseTo(
+        normal.rule?.[key] ?? Number.NaN,
+      );
+    }
   });
 
-  test("preserves whole shaped RTL words in both columns", async () => {
-    const rows = await fit(ARABIC_NAME, {
+  test("preserves whole shaped RTL words and puts the mark at the row start", async () => {
+    const laidOut = await fitColumns(ARABIC_NAME, {
       width: 400,
       height: 120,
       direction: "rtl",
     });
-    expect(rows).not.toBeNull();
-    if (rows === null) {
+    expect(laidOut).not.toBeNull();
+    if (laidOut === null) {
       return;
     }
+    const { rows, mark } = laidOut;
     const words = ARABIC_NAME.split(" ");
     const { name, details } = columns(rows, words.length);
     expect(texts(name)).toEqual(words);
@@ -294,5 +353,15 @@ describe("the stamp's two columns", () => {
         ),
       ),
     ).toBe(true);
+    // A right-to-left row starts on the right: the mark follows its text.
+    const [lead] = details;
+    expect(mark).not.toBeNull();
+    if (mark === null || lead === undefined) {
+      return;
+    }
+    expect(lead.x).toBeCloseTo(details.at(1)?.x ?? Number.NaN);
+    expect(mark.x).toBeCloseTo(extent(lead).right + 0.4 * lead.fontSize);
+    expect(mark.y).toBeCloseTo(lead.y);
+    expect(mark.x + mark.width).toBeLessThanOrEqual(394.001);
   });
 });

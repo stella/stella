@@ -1,3 +1,4 @@
+import { STAMP_BRAND_BLUE } from "@/api/lib/files/pdf-signing/stamp-colors";
 import { pdfNumber } from "@/api/lib/files/pdf-signing/stamp-glyphs";
 
 /**
@@ -10,6 +11,8 @@ import { pdfNumber } from "@/api/lib/files/pdf-signing/stamp-glyphs";
  */
 export const STELLA_MARK_WIDTH = 40;
 export const STELLA_MARK_HEIGHT = 41;
+/** Width over height, for laying the mark out beside text. */
+export const STELLA_MARK_ASPECT = STELLA_MARK_WIDTH / STELLA_MARK_HEIGHT;
 const STELLA_MARK_PATH = [
   "6.580 29.700 m",
   "16.690 35.950 l",
@@ -70,15 +73,8 @@ const STELLA_MARK_PATH = [
 ] as const;
 
 /**
- * Pale stella blue, opaque: no transparency group, so the mark prints as it
- * shows and the stamp stays PDF/A-friendly.
- */
-export const STELLA_MARK_FILL = "0.85 0.91 0.96 rg";
-
-/**
- * The mark centred in `box` and as large as it fits, as content operators
- * in the appearance space of the stamp. Draw it before the text, so the text
- * sits on top.
+ * The mark, solid in the brand blue, centred in `box` and as large as it
+ * fits, as content operators in the appearance space of the stamp.
  */
 export const drawStampMark = (box: {
   x: number;
@@ -97,7 +93,7 @@ export const drawStampMark = (box: {
   const bottom = box.y + (box.height - STELLA_MARK_HEIGHT * scale) / 2;
   return [
     "q",
-    STELLA_MARK_FILL,
+    `${STAMP_BRAND_BLUE} rg`,
     `${pdfNumber(scale)} 0 0 ${pdfNumber(scale)} ${pdfNumber(left)} ${pdfNumber(bottom)} cm`,
     ...STELLA_MARK_PATH,
     "Q",

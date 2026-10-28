@@ -399,7 +399,12 @@ export const drawStampRows = ({
     ]),
   );
   const operators: string[] = [];
-  for (const { fontSize, row, x, y } of rows) {
+  let fill: string | null = null;
+  for (const { color, fontSize, row, x, y } of rows) {
+    if (color !== fill) {
+      operators.push(`${color} rg`);
+      fill = color;
+    }
     let pen = x;
     for (const run of row.runs) {
       const face =
