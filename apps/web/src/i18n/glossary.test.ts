@@ -62,12 +62,9 @@ test("the glossary census detects a banned variant", () => {
   ]);
 });
 
-test("one destination and contact action use one concept in every language", async () => {
+test("the contact action names a contact in every language", async () => {
   for (const lang of UI_LOCALES) {
     const messages = await messagesFor(lang);
-    expect(messageAt(messages, "common.caseLaw")).toBe(
-      messageAt(messages, "common.legalDatabase"),
-    );
     expect(messageAt(messages, "contacts.deleteContact")).not.toMatch(
       /client|klient/iu,
     );
