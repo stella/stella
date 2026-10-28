@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
@@ -10,10 +9,8 @@ import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import { detached } from "@/lib/detached";
 // Recover from code that a deploy removed. Vite dispatches
 // `vite:preloadError` on the window when a lazily imported module fails to
-// load — typically a stale chunk after a deploy, or a dev HMR / dep-reoptimize
-// race. Left unhandled this blanks the screen mid-navigation, before the
-// router's error boundary can render. Viewers hit the same class when a
-// worker script (PDF.js) from the previous build is gone.
+// load — typically a stale chunk after a deploy, or a transient network error.
+// Viewers hit the same class when a worker script (PDF.js) cannot load.
 //
 // Strategy: reload once to fetch the fresh chunk. If another stale load fails
 // within a short cooldown, stop reloading and let the error reach an error
@@ -25,7 +22,6 @@ const STORAGE_KEY = "stella:preload-reload-at";
 const VERSION_MANIFEST_PATH = "/version.json";
 const VERSION_MANIFEST_MAX_BYTES = 1024;
 const VERSION_MANIFEST_IDLE_TIMEOUT_MS = 8000;
-const INITIAL_RUNTIME_RETRY_DELAYS_MS = [250, 1000] as const;
 
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
@@ -66,7 +62,7 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 };
 
 export type FailedChunkLoadClassification =
-  { type: "offline" } | { type: "network-error" } | { type: "build-skew" };
+  { type: "build-skew" } | { type: "not-skew" };
 
 type StaleDeploymentReloadOutcome =
   | { type: "started" }
@@ -85,7 +81,7 @@ const isVersionManifest = (value: unknown): value is VersionManifest =>
 export const classifyFailedChunkLoad =
   async (): Promise<FailedChunkLoadClassification> => {
     if (!navigator.onLine) {
-      return { type: "offline" };
+      return { type: "not-skew" };
     }
 
     return fetchWithTimeout(VERSION_MANIFEST_PATH, {
@@ -94,26 +90,26 @@ export const classifyFailedChunkLoad =
     })
       .then(async (response): Promise<FailedChunkLoadClassification> => {
         if (!response.ok || !response.body) {
-          return { type: "network-error" };
+          return { type: "not-skew" };
         }
         const bytes = await readCappedBytes(
           response.body,
           VERSION_MANIFEST_MAX_BYTES,
         );
         if (bytes === null) {
-          return { type: "network-error" };
+          return { type: "not-skew" };
         }
         const manifest: unknown = JSON.parse(new TextDecoder().decode(bytes));
         if (!isVersionManifest(manifest)) {
-          return { type: "network-error" };
+          return { type: "not-skew" };
         }
         return manifest.commit !== __APP_COMMIT_SHA__
           ? { type: "build-skew" }
-          : { type: "network-error" };
+          : { type: "not-skew" };
       })
       .catch((error: unknown) => {
         error satisfies unknown;
-        return { type: "network-error" };
+        return { type: "not-skew" };
       });
   };
 
@@ -162,114 +158,21 @@ const reloadForStaleDeployment = (): StaleDeploymentReloadOutcome => {
   return { type: "started" };
 };
 
-type FailedChunkRecovery =
-  | { type: "reload"; outcome: StaleDeploymentReloadOutcome }
-  | { type: "retry-when-online" }
-  | { type: "retry-now" };
-
-export type FailedChunkRecoveryDecision = {
-  classification: FailedChunkLoadClassification;
-  recovery: FailedChunkRecovery;
-};
-
-type InitialRuntimeLoadOutcome = { type: "loaded" } | { type: "reloading" };
-
-type InitialRuntimeLoadOptions = {
-  load: () => Promise<unknown>;
-  retryDelaysMs?: readonly number[] | undefined;
-  wait?: ((delayMs: number) => Promise<void>) | undefined;
-  waitUntilOnline?: (() => Promise<void>) | undefined;
-};
-
-const waitForOnline = async (): Promise<void> =>
-  new Promise((resolve) => {
-    window.addEventListener("online", () => resolve(), { once: true });
-  });
-
-/**
- * Load the entry runtime through a finite recovery state machine. Offline
- * startup waits for the one signal that can make progress; online transport
- * failures retry with bounded backoff and then reject to the startup error UI.
- */
-export const loadInitialRuntimeWithRecovery = async ({
-  load,
-  retryDelaysMs = INITIAL_RUNTIME_RETRY_DELAYS_MS,
-  wait = sleep,
-  waitUntilOnline = waitForOnline,
-}: InitialRuntimeLoadOptions): Promise<InitialRuntimeLoadOutcome> => {
-  let retryAttempt = 0;
-  let retriedAfterOffline = false;
-  for (;;) {
-    const result = await Result.tryPromise(load);
-    if (result.isOk()) {
-      return { type: "loaded" };
-    }
-    const loadError = result.error.cause;
-    if (!isStaleDeploymentLoadError(loadError)) {
-      throw loadError;
-    }
-
-    const classification = await classifyFailedChunkLoad();
-    switch (classification.type) {
-      case "build-skew": {
-        const reload = reloadForStaleDeployment();
-        switch (reload.type) {
-          case "started":
-            return { type: "reloading" };
-          case "refused-cooldown":
-          case "refused-storage":
-            throw loadError;
-          default:
-            reload satisfies never;
-            return panic(`Unhandled reload outcome: ${String(reload)}`);
-        }
-      }
-      case "offline":
-        if (retriedAfterOffline) {
-          throw loadError;
-        }
-        retriedAfterOffline = true;
-        await waitUntilOnline();
-        break;
-      case "network-error": {
-        const delayMs = retryDelaysMs.at(retryAttempt);
-        if (delayMs === undefined) {
-          throw loadError;
-        }
-        retryAttempt += 1;
-        await wait(delayMs);
-        break;
-      }
-      default:
-        classification satisfies never;
-        return panic(
-          `Unhandled failed chunk classification: ${String(classification)}`,
-        );
-    }
-  }
-};
-
 /** Route lazy imports and Vite preload failures share this recovery owner. */
 export const recoverFromStaleDeploymentLoad = async (
   error: unknown,
-  retry: () => void,
-): Promise<FailedChunkRecoveryDecision | null> => {
+): Promise<FailedChunkLoadClassification | null> => {
   if (!isStaleDeploymentLoadError(error)) {
     return null;
   }
   const classification = await classifyFailedChunkLoad();
   switch (classification.type) {
     case "build-skew":
-      return {
-        classification,
-        recovery: { type: "reload", outcome: reloadForStaleDeployment() },
-      };
-    case "offline":
-      window.addEventListener("online", retry, { once: true });
-      return { classification, recovery: { type: "retry-when-online" } };
-    case "network-error":
-      retry();
-      return { classification, recovery: { type: "retry-now" } };
+      return reloadForStaleDeployment().type === "started"
+        ? classification
+        : { type: "not-skew" };
+    case "not-skew":
+      return classification;
     default:
       classification satisfies never;
       return panic(
@@ -279,15 +182,12 @@ export const recoverFromStaleDeploymentLoad = async (
 };
 
 // Typed as Event: the WindowEventMap augmentation for "vite:preloadError" is
-// not guaranteed in scope, and we only need preventDefault() + the reload.
+// not guaranteed in scope.
 export const installPreloadErrorRecovery = (): void => {
   window.addEventListener("vite:preloadError", (event: Event) => {
     const error = "payload" in event ? event.payload : undefined;
     if (isStaleDeploymentLoadError(error)) {
-      const recovery = recoverFromStaleDeploymentLoad(error, () => undefined);
-      // Keep the current document while the asynchronous probe decides whether
-      // this is transport failure or confirmed build skew.
-      event.preventDefault();
+      const recovery = recoverFromStaleDeploymentLoad(error);
       detached(recovery, "preload-error-recovery.classify");
     }
   });

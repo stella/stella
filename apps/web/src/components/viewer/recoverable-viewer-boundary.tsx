@@ -136,18 +136,24 @@ class ViewerErrorBoundary extends Component<
     error: Error,
     generation: number,
   ): Promise<void> => {
-    const classification = await recoverFromStaleDeploymentLoad(
-      error,
-      this.remount,
-    );
-    if (
-      classification?.recovery.type === "reload" &&
-      classification.recovery.outcome.type === "started"
-    ) {
-      this.setState({ type: "reloading", generation });
+    const classification = await recoverFromStaleDeploymentLoad(error);
+    if (classification === null) {
+      this.fail({ error, failure: "exhausted" });
       return;
     }
-    this.fail({ error, failure: "exhausted" });
+    switch (classification.type) {
+      case "build-skew":
+        this.setState({ type: "reloading", generation });
+        return;
+      case "not-skew":
+        this.fail({ error, failure: "exhausted" });
+        return;
+      default:
+        classification satisfies never;
+        return panic(
+          `Unhandled failed chunk classification: ${String(classification)}`,
+        );
+    }
   };
 
   // React merges this into the current state, so the attempt and generation

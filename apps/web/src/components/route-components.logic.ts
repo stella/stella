@@ -38,26 +38,22 @@ export const recoverRouteError = async ({
   reloadPage,
   retryRoute,
 }: RecoverRouteErrorOptions): Promise<void> => {
-  const chunkRecovery = await recoverFromStaleDeploymentLoad(error, retryRoute);
-  if (chunkRecovery !== null) {
-    switch (chunkRecovery.recovery.type) {
-      case "reload":
-        if (chunkRecovery.recovery.outcome.type === "started") {
-          await recordRetryStarted("reload-page");
-          return;
-        }
-        break;
-      case "retry-now":
-      case "retry-when-online":
-        await recordRetryStarted("retry-route");
+  const classification = await recoverFromStaleDeploymentLoad(error);
+  if (classification !== null) {
+    switch (classification.type) {
+      case "build-skew":
+        await recordRetryStarted("reload-page");
         return;
+      case "not-skew":
+        break;
       default:
-        chunkRecovery.recovery satisfies never;
+        classification satisfies never;
         return panic(
-          `Unhandled failed chunk recovery: ${String(chunkRecovery.recovery)}`,
+          `Unhandled failed chunk classification: ${String(classification)}`,
         );
     }
   }
+
   const recovery = resolveRouteErrorRecovery(error);
   const retryDispatch = recordRetryStarted(recovery.type);
   switch (recovery.type) {
