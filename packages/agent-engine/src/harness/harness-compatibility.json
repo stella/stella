@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-28T00:00:00Z",
+  "compatibility": [
+    {
+      "harness": "codex",
+      "desktopRange": ">=0.0.1",
+      "recommendedVersion": "0.165.0",
+      "recommendedRange": ">=0.165.0",
+      "ranges": [
+        { "range": ">=0.165.0", "status": "supported" },
+        { "range": "<0.165.0", "status": "unsupported" }
+      ]
+    }
+  ]
+}

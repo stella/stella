@@ -27,11 +27,14 @@
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-persistence": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "temporal-polyfill": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
   }
 }
