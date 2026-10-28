@@ -179,3 +179,51 @@ describe("page organizer upload ownership", () => {
     expect(owner.isCurrent(second)).toBe(true);
   });
 });
+
+test("a newer request aborts every controller owned by the superseded request", () => {
+  const owner = createPageOrganizerOperationOwner();
+  const first = owner.beginRequest(owner.operation);
+  const transform = new AbortController();
+  const upload = new AbortController();
+  owner.ownController(first, transform);
+  owner.ownController(first, upload);
+
+  owner.beginRequest(owner.operation);
+
+  expect(transform.signal.aborted).toBe(true);
+  expect(upload.signal.aborted).toBe(true);
+});
+
+test("a receipt is single-use and bound to its request and upload owner", () => {
+  const operationOwner = createPageOrganizerOperationOwner();
+  const uploadOwner = createPageOrganizerUploadOwner();
+  const otherUploadOwner = createPageOrganizerUploadOwner();
+  const request = operationOwner.beginRequest(operationOwner.operation);
+  const pending = uploadOwner.begin(request);
+  const provisional = uploadOwner.prepareCompletion(pending, receipt("bound"));
+  if (provisional.type !== "provisional") {
+    throw new Error("Expected provisional upload");
+  }
+  const completed = uploadOwner.commit(provisional);
+  if (completed.type !== "completed") {
+    throw new Error("Expected completed upload");
+  }
+  const commits: string[] = [];
+
+  expect(
+    otherUploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBeNull();
+  expect(
+    uploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBe(1);
+  expect(
+    uploadOwner.consume(request, operationOwner, completed, ({ fileId }) =>
+      commits.push(fileId),
+    ),
+  ).toBeNull();
+  expect(commits).toEqual(["file-bound"]);
+});

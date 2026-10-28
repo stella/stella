@@ -114,11 +114,10 @@ import { PageOrganizerCrop } from "./page-organizer-crop";
 import { PageOrganizerSignAction } from "./page-organizer-sign";
 import type { PageOrganizerSign } from "./page-organizer-sign";
 import {
-  commitCompletedUpload,
   createPageOrganizerOperationOwner,
   createPageOrganizerUploadOwner,
 } from "./page-organizer-upload.logic";
-import type { LiveOrganizerOperation } from "./page-organizer-upload.logic";
+import type { OrganizerOperationRequest } from "./page-organizer-upload.logic";
 import {
   createPageOrganizerState,
   DEFAULT_CLEAN_SCAN_OPTIONS,
@@ -817,14 +816,15 @@ const LoadedPDFPageOrganizer = ({
     pageInfoBySource.get(page.sourceId)?.at(page.sourcePageIndex);
 
   const transform = async (
-    operationToken: LiveOrganizerOperation,
+    operationRequest: OrganizerOperationRequest,
     requestedOutputs: string[][],
   ) => {
-    const operationRequest = operationOwner.beginRequest(operationToken);
+    const operationToken = operationRequest.operation;
     if (!operationOwner.isCurrent(operationRequest)) {
       return { type: "cancelled" } as const;
     }
     const controller = new AbortController();
+    operationOwner.ownController(operationRequest, controller);
     abortRef.current = controller;
     setOperation({ type: "transforming" });
     const outputs = await withCleanup(
@@ -847,8 +847,11 @@ const LoadedPDFPageOrganizer = ({
             operationOwner.isCurrent(request),
         }),
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(operationRequest, controller);
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
     return operationOwner.isCurrent(operationRequest)
@@ -939,8 +942,8 @@ const LoadedPDFPageOrganizer = ({
   };
 
   /** Upload the edited PDF as a new version; the caller closes the editor. */
-  const saveVersion = async (operationToken: LiveOrganizerOperation) => {
-    const transformed = await transform(operationToken, [
+  const saveVersion = async (request: OrganizerOperationRequest) => {
+    const transformed = await transform(request, [
       plan.pages.map((page) => page.id),
     ]);
     if (transformed.type === "cancelled") {
@@ -950,16 +953,17 @@ const LoadedPDFPageOrganizer = ({
     if (!bytes) {
       return { type: "skipped" } as const;
     }
-    if (!operationOwner.isLive(operationToken)) {
+    if (!operationOwner.isCurrent(request)) {
       return { type: "cancelled" } as const;
     }
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
+    operationOwner.ownController(request, uploadController);
     abortRef.current = uploadController;
-    const pendingUpload = uploadOwnerRef.current.begin();
+    const pendingUpload = uploadOwnerRef.current.begin(request);
     return await withCleanup(
       async () => {
-        if (!operationOwner.isLive(operationToken)) {
+        if (!operationOwner.isCurrent(request)) {
           uploadOwnerRef.current.cancel(pendingUpload);
           return { type: "cancelled" } as const;
         }
@@ -988,7 +992,7 @@ const LoadedPDFPageOrganizer = ({
         if (provisional.type !== "provisional") {
           return provisional;
         }
-        if (!operationOwner.isLive(operationToken)) {
+        if (!operationOwner.isCurrent(request)) {
           uploadOwnerRef.current.cancelCurrent();
           return { type: "cancelled" } as const;
         }
@@ -998,7 +1002,7 @@ const LoadedPDFPageOrganizer = ({
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
-        if (!operationOwner.isLive(operationToken)) {
+        if (!operationOwner.isCurrent(request)) {
           uploadOwnerRef.current.cancelCurrent();
           return { type: "cancelled" } as const;
         }
@@ -1014,15 +1018,21 @@ const LoadedPDFPageOrganizer = ({
         return outcome;
       },
       () => {
-        abortRef.current = null;
-        setOperation({ type: "idle" });
+        operationOwner.releaseController(request, uploadController);
+        if (abortRef.current === uploadController) {
+          abortRef.current = null;
+          setOperation({ type: "idle" });
+        }
       },
     );
   };
 
   const handleSaveVersion = async () => {
-    const operationToken = operationOwner.operation;
-    if ((await saveVersion(operationToken)).type === "completed") {
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    if (
+      (await saveVersion(request)).type === "completed" &&
+      operationOwner.isCurrent(request)
+    ) {
       onClose();
     }
   };
@@ -1032,17 +1042,17 @@ const LoadedPDFPageOrganizer = ({
    * sign flow stamps and signs it rather than the version the editor opened.
    */
   const saveVersionForSigning = async (
-    operationToken: LiveOrganizerOperation,
+    request: OrganizerOperationRequest,
     target: PdfSignTarget,
   ): Promise<PdfSignTarget | null> => {
     const result = await Result.tryPromise({
       try: async () => {
-        const savedVersion = await saveVersion(operationToken);
+        const savedVersion = await saveVersion(request);
         if (savedVersion.type !== "completed") {
           return Result.ok(null);
         }
-        const targetResult = await commitCompletedUpload(
-          operationToken,
+        const targetResult = await uploadOwnerRef.current.consume(
+          request,
           operationOwner,
           savedVersion,
           async (upload) =>
@@ -1052,7 +1062,7 @@ const LoadedPDFPageOrganizer = ({
               target,
             }),
         );
-        if (!operationOwner.isLive(operationToken)) {
+        if (!operationOwner.isCurrent(request)) {
           return Result.ok(null);
         }
         if (targetResult === null) {
@@ -1204,7 +1214,8 @@ const LoadedPDFPageOrganizer = ({
             .filter((page) => selectedIds.has(page.id))
             .map((page) => page.id)
         : plan.pages.map((page) => page.id);
-    const transformed = await transform(operationOwner.operation, [pageIds]);
+    const request = operationOwner.beginRequest(operationOwner.operation);
+    const transformed = await transform(request, [pageIds]);
     if (transformed.type === "cancelled") {
       return;
     }
@@ -1212,7 +1223,13 @@ const LoadedPDFPageOrganizer = ({
     if (!output) {
       return;
     }
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     await authorizePDFOrganizerExport({ fieldId, workspaceId });
+    if (!operationOwner.isCurrent(request)) {
+      return;
+    }
     downloadOutput({
       baseName:
         selectedIds.size > 0 ? `${baseName} - selected pages` : baseName,
@@ -1527,7 +1544,7 @@ const LoadedPDFPageOrganizer = ({
             operation={operationOwner.operation}
             saveVersion={async () =>
               await saveVersionForSigning(
-                operationOwner.operation,
+                operationOwner.beginRequest(operationOwner.operation),
                 pdfSign.target,
               )
             }
