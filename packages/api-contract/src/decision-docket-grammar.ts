@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] POL.parse is used only as a null check; filingYear is not projected, and the explicit whitespace class equals ECMAScript whitespace.
 // parser-output-unchanged: [pl-uokik] BP extends only GBR and the division-list export leaves the POL grammar used by this adapter unchanged.
 // parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
