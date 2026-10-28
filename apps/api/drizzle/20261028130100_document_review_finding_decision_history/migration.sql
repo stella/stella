@@ -13,7 +13,7 @@ CREATE TABLE "document_review_finding_decisions" (
     CHECK ("decision" IS NULL OR "decision" IN ('accepted', 'rejected')),
   CONSTRAINT "document_review_finding_decisions_reason_length_check"
     CHECK ("reason" IS NULL OR char_length("reason") <= 2000),
-  CONSTRAINT "document_review_finding_decisions_finding_id_document_review_findings_id_fk"
+  CONSTRAINT "document_review_finding_decisions_finding_fk"
     FOREIGN KEY ("finding_id") REFERENCES "document_review_findings"("id") ON DELETE CASCADE,
   CONSTRAINT "document_review_finding_decisions_actor_id_user_id_fk"
     FOREIGN KEY ("actor_id") REFERENCES "user"("id") ON DELETE SET NULL

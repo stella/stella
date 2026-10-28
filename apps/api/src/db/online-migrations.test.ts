@@ -1661,6 +1661,11 @@ const createHarness = ({
           }
           // Its resource seed and its client walk: nothing stored yet, and no
           // registration to link, so both converge on the first pass.
+          // The finding decision backfill's probe: no decided finding is
+          // without history, so its completion holds.
+          if (query.includes("document_review_finding_decisions event")) {
+            return [];
+          }
           if (
             query.includes("oauth_resource") ||
             query.includes("oauth_client")

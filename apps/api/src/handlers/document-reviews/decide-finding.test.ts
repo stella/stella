@@ -95,9 +95,10 @@ const createHarness = (
     select: () => ({
       from: (table: unknown) => ({
         where: () => ({
+          // Awaiting the history array yields it, as awaiting a query would.
           limit: () =>
             table === documentReviewFindingDecisions
-              ? Promise.resolve(history)
+              ? history
               : { for: async () => rows },
         }),
       }),
@@ -111,9 +112,7 @@ const createHarness = (
     insert: () => ({
       values: (values: Record<string, unknown> | Record<string, unknown>[]) => {
         decisionEvents.push(...[values].flat());
-        return Object.assign(Promise.resolve(), {
-          onConflictDoNothing: async () => {},
-        });
+        return { onConflictDoNothing: async () => {} };
       },
     }),
   });

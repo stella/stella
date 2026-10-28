@@ -379,9 +379,7 @@ export const documentReviewFindingDecisions = p.pgTable(
   {
     id: pUuid<"documentReviewFindingDecision">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
-    findingId: safeUuid<"documentReviewFinding">("finding_id")
-      .notNull()
-      .references(() => documentReviewFindings.id, { onDelete: "cascade" }),
+    findingId: safeUuid<"documentReviewFinding">("finding_id").notNull(),
     decision: p.text("decision").$type<ReviewDecision | null>(),
     reason: p.text("reason"),
     actorId: p
@@ -392,6 +390,14 @@ export const documentReviewFindingDecisions = p.pgTable(
       .default(sql`clock_timestamp()`),
   },
   (table) => [
+    // Named here: the derived name is longer than Postgres keeps.
+    p
+      .foreignKey({
+        name: "document_review_finding_decisions_finding_fk",
+        columns: [table.findingId],
+        foreignColumns: [documentReviewFindings.id],
+      })
+      .onDelete("cascade"),
     p
       .index("document_review_finding_decisions_finding_created_idx")
       .on(table.findingId, table.createdAt),
