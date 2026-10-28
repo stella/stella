@@ -859,9 +859,9 @@ in raw envelopes before projecting fields. Live fields absent from the mapping
 stay in raw storage and raise a per-source drift signal. Do not filter raw
 publisher records at write time.
 
-The legacy exclusion census exists only to separate contract enforcement from
-source migrations. Remove entries as their source migrates; never add entries
-or call `legacyExcludedSourceField` in new code. The exact census and snapshots
-make every remaining exclusion visible in review. Source flips bump the parser
-version and backfill through normal stored-raw reparse; missing historical raw
-surfaces require a re-crawl, not an invented backfill.
+The census snapshot lists every registered source and its justified exclusions,
+including sources with no exclusions. A new exclusion changes that reviewable
+contract. There is no free-text or migration-only exclusion constructor.
+Structured projection changes bump the parser version and backfill through
+normal stored-raw reparse. Reclassifying bytes already retained in raw changes
+no stored data; missing historical raw surfaces require a re-crawl.
