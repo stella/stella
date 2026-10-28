@@ -4,17 +4,50 @@ import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 import * as v from "valibot";
 
-import { retryDecision, runnerLost } from "./ci-runner-loss";
+import { INSTALL_STALL_TITLE } from "./ci-install";
+import { installStalled, retryDecision, runnerLost } from "./ci-runner-loss";
 
 const lost = {
+  id: 1,
   name: "test",
   conclusion: "failure",
   steps: [{ conclusion: "cancelled" }],
 };
 const failed = {
+  id: 2,
   name: "lint",
   conclusion: "failure",
   steps: [{ conclusion: "failure" }],
+};
+const installSteps = [
+  { conclusion: "success", status: "completed" },
+  { conclusion: "failure", status: "completed" },
+  { conclusion: "skipped", status: "completed" },
+];
+const stalled = {
+  id: 3,
+  name: "policy",
+  conclusion: "failure",
+  steps: installSteps,
+  annotations: [
+    { title: "" },
+    { title: INSTALL_STALL_TITLE },
+    { title: "install-budget" },
+  ],
+};
+// An install step failure without the stall annotation is a real failure.
+const installFailed = {
+  id: 4,
+  name: "build",
+  conclusion: "failure",
+  steps: installSteps,
+  annotations: [{ title: "" }],
+};
+const aggregate = {
+  id: 5,
+  name: "ci-result",
+  conclusion: "failure",
+  steps: [],
 };
 
 test("runnerLost identifies failures without a failed step", () => {
@@ -48,11 +81,62 @@ test("runnerLost identifies failures without a failed step", () => {
   }
 });
 
-test("retryDecision retries runner loss once but preserves real failures", () => {
-  const aggregate = { name: "ci-result", conclusion: "failure", steps: [] };
-  expect(retryDecision([lost, aggregate], 1).retry).toBe(true);
-  expect(retryDecision([lost, aggregate], 2).retry).toBe(false);
-  expect(retryDecision([lost, failed, aggregate], 1).retry).toBe(false);
+test("installStalled requires the stall annotation on the only failed step", () => {
+  expect(installStalled(stalled)).toBe(true);
+  expect(installStalled(installFailed)).toBe(false);
+  expect(installStalled({ ...stalled, annotations: undefined })).toBe(false);
+  // A second failed step is not explained by the stall.
+  expect(
+    installStalled({
+      ...stalled,
+      steps: [...installSteps, { conclusion: "failure", status: "completed" }],
+    }),
+  ).toBe(false);
+  expect(
+    installStalled({
+      ...stalled,
+      steps: [...installSteps, { conclusion: null, status: "in_progress" }],
+    }),
+  ).toBe(false);
+  for (const conclusion of ["cancelled", "success"]) {
+    expect(installStalled({ ...stalled, conclusion })).toBe(false);
+  }
+});
+
+const fixtures = [
+  { jobs: [lost], attempt: 1, retry: true },
+  { jobs: [lost, aggregate], attempt: 1, retry: true },
+  { jobs: [lost], attempt: 2, retry: false },
+  { jobs: [lost, failed, aggregate], attempt: 1, retry: false },
+  { jobs: [stalled, aggregate], attempt: 1, retry: true },
+  { jobs: [stalled, lost, aggregate], attempt: 1, retry: true },
+  { jobs: [stalled], attempt: 2, retry: false },
+  { jobs: [stalled, failed, aggregate], attempt: 1, retry: false },
+  { jobs: [installFailed, aggregate], attempt: 1, retry: false },
+  { jobs: [stalled, installFailed, aggregate], attempt: 1, retry: false },
+  {
+    jobs: [{ id: 6, name: "ok", conclusion: "success", steps: [] }],
+    attempt: 1,
+    retry: false,
+  },
+];
+
+test("retryDecision retries runner loss or install stalls once but preserves real failures", () => {
+  for (const { jobs, attempt, retry } of fixtures) {
+    expect(
+      retryDecision(jobs, attempt).retry,
+      jobs.map(({ name }) => name).join(","),
+    ).toBe(retry);
+  }
+  expect(retryDecision([stalled, aggregate], 1).reason).toBe(
+    "install stalled for policy",
+  );
+  expect(retryDecision([stalled, lost, aggregate], 1).reason).toBe(
+    "runner lost for test; install stalled for policy",
+  );
+  expect(retryDecision([stalled, failed, aggregate], 1).reason).toBe(
+    "lint contains a failed step that is not an install stall",
+  );
 });
 
 test("the retry workflow agrees with retryDecision", async () => {
@@ -80,28 +164,27 @@ test("the retry workflow agrees with retryDecision", async () => {
     ),
   );
   const step = workflow.jobs.retry.steps.find(
-    ({ name }) => name === "Retry jobs after runner loss",
+    ({ name }) => name === "Retry jobs after runner loss or install stall",
   );
   if (step === undefined) {
     panic("Missing runner loss retry step");
   }
   const script = step.with.script;
   const executable = new Script(`(async () => { ${script} })()`);
-  const fixtures = [
-    { jobs: [lost], attempt: 1 },
-    {
-      jobs: [lost, { name: "ci-result", conclusion: "failure", steps: [] }],
-      attempt: 1,
-    },
-    { jobs: [lost], attempt: 2 },
-    { jobs: [lost, failed], attempt: 1 },
-    { jobs: [{ name: "ok", conclusion: "success", steps: [] }], attempt: 1 },
-  ];
   for (const fixture of fixtures) {
     let retried = false;
+    let summary = "";
     await executable.runInNewContext({
       github: {
-        paginate: async () => fixture.jobs,
+        // The jobs API lists no annotations; the check-runs API serves them.
+        paginate: async (
+          route: string,
+          { check_run_id }: { check_run_id?: number },
+        ) =>
+          route.endsWith("/annotations")
+            ? (fixture.jobs.find(({ id }) => id === check_run_id)
+                ?.annotations ?? [])
+            : fixture.jobs.map((job) => ({ ...job, annotations: undefined })),
         rest: {
           actions: {
             reRunWorkflowFailedJobs: async () => {
@@ -114,9 +197,20 @@ test("the retry workflow agrees with retryDecision", async () => {
         repo: { owner: "owner", repo: "repo" },
         payload: { workflow_run: { id: 1, run_attempt: fixture.attempt } },
       },
-      core: { summary: { addRaw: () => ({ write: async () => undefined }) } },
+      core: {
+        summary: {
+          addRaw: (text: string) => {
+            summary = text;
+            return { write: async () => undefined };
+          },
+        },
+      },
     });
-    expect(retried).toBe(retryDecision(fixture.jobs, fixture.attempt).retry);
+    const decision = retryDecision(fixture.jobs, fixture.attempt);
+    expect(retried).toBe(decision.retry);
+    expect(summary).toBe(
+      `${decision.retry ? "Retried failed jobs" : "Did not retry"}: ${decision.reason}.\n`,
+    );
   }
 });
 

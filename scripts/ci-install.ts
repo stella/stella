@@ -57,6 +57,8 @@ const CONSOLE_TAIL_BYTES = 4096;
 // 120.039 s, censored by the old killer. Five times that upper-bound observation
 // rounds up to 610 s; this is conservative until timestamped progress is retained.
 export const INSTALL_STALL_MS = 610_000;
+// The annotation title of a killed stall; the CI runner-loss retry matches it.
+export const INSTALL_STALL_TITLE = "install-stall";
 
 export type InstallRestoreOutcome = "hit" | "cold";
 
@@ -219,7 +221,7 @@ export const runLoggedInstall = async ({
         ),
       kill: () => {
         summary(
-          `::error title=install-stall::kind=infra class=install-stall ${telemetry()} idle_ms=${watchdog.idleMs()} pid=${child.pid}\n`,
+          `::error title=${INSTALL_STALL_TITLE}::kind=infra class=install-stall ${telemetry()} idle_ms=${watchdog.idleMs()} pid=${child.pid}\n`,
         );
         child.kill("SIGKILL");
       },

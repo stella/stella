@@ -1,5 +1,5 @@
 {
   "kind": "ordinary",
-  "qualifier": "Retries jobs after verified runner loss and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment.",
-  "reviewedDigest": "05d302b4407439fdc03ff8142b9fdabc59d15960bd67b2807abbb9f386a0a2d2"
+  "qualifier": "Retries jobs after verified runner loss or annotated install stalls and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment.",
+  "reviewedDigest": "de917631eb67d7c1b2c87d72372a4e5ee2b906810ae2f429e8fad3193d392acb"
 }
