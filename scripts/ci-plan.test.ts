@@ -3095,6 +3095,34 @@ test("jobs that need ci-plan never hand its outputs over in the environment", ()
   expect(offenders).toEqual([]);
 });
 
+test("ci-plan environment values never embed unbounded step outputs", () => {
+  // Step outputs cross the process boundary through the runner environment.
+  // Whole output objects and file lists can exceed the OS argument limit before
+  // the shell starts, so consumers must receive a file path instead.
+  const unbounded =
+    /toJSON\(\s*steps\.[^)]+\.outputs\s*\)|steps\.[^.]+\.outputs\.(?:changed_files|docs_changed_files|api_test_files|specs)/u;
+  const plan = v.parse(
+    v.object({ steps: v.array(v.unknown()) }),
+    ciJobs["ci-plan"],
+  );
+  const offenders = flattenWorkflowSteps(plan.steps).flatMap((step) => {
+    const parsed = v.parse(
+      v.looseObject({
+        name: v.optional(v.string()),
+        env: v.optional(v.record(v.string(), v.unknown())),
+      }),
+      step,
+    );
+    return Object.entries(parsed.env ?? {})
+      .filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string" && unbounded.test(entry[1]),
+      )
+      .map(([key]) => `${parsed.name ?? "unnamed step"}: ${key}`);
+  });
+  expect(offenders).toEqual([]);
+});
+
 test("ci-result's outcome step reads its inputs from the step written right before it", () => {
   // The harness runs RESULT_INPUTS_RUN before the outcome script, so the
   // workflow must declare exactly that script, immediately before it.
@@ -6722,8 +6750,8 @@ test("a crashed API planner widens the real workflow outputs", () => {
   );
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-fallback-"));
   const output = nodePath.join(directory, "output");
-  try {
-    const result = Bun.spawnSync(
+  const runStep = (runnerTemp: Record<string, string>) =>
+    Bun.spawnSync(
       [
         "bash",
         "-e",
@@ -6738,12 +6766,26 @@ test("a crashed API planner widens the real workflow outputs", () => {
           PACKAGE_CHECKS_REQUIRED: "true",
           API_SCOPE_UNKNOWN: "false",
           PLANNER_CALLED: nodePath.join(directory, "called"),
+          ...runnerTemp,
         },
         stdout: "pipe",
         stderr: "pipe",
       },
     );
+  try {
+    // Without the runner's temporary directory the handoff file would land
+    // at the filesystem root, so the step refuses before planning.
+    const unset = runStep({});
+    expect(unset.exitCode).not.toBe(0);
+    expect(unset.stderr.toString()).toContain(
+      "RUNNER_TEMP must name the runner temporary directory",
+    );
+    expect(existsSync(nodePath.join(directory, "called"))).toBe(false);
+    const result = runStep({ RUNNER_TEMP: directory });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(
+      readFileSync(nodePath.join(directory, "api-test-files"), "utf-8"),
+    ).toBe("");
     expect(readFileSync(nodePath.join(directory, "called"), "utf-8")).toBe(
       "invoked\n",
     );
@@ -6802,6 +6844,16 @@ test.each([
     const selected = matrix === '{"shard":[1]}';
     const specs = selected ? '["apps/web/e2e/specs/guides.spec.ts"]' : "[]";
     try {
+      const selectedPlan = nodePath.join(directory, "selection.json");
+      if (matrix) {
+        writeFileSync(
+          selectedPlan,
+          JSON.stringify({
+            matrix: JSON.parse(matrix),
+            specs: JSON.parse(specs),
+          }),
+        );
+      }
       const result = Bun.spawnSync(
         [
           "bash",
@@ -6820,9 +6872,8 @@ test.each([
             ROUTE_SMOKE_REQUIRED: "false",
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
-            SELECTED_MATRIX: matrix,
             SELECTED_MODE: "selected",
-            SELECTED_SPECS: specs,
+            SELECTED_PLAN_PATH: selectedPlan,
             SELECTOR_OUTCOME: outcome,
           },
           stdout: "pipe",
@@ -6927,9 +6978,8 @@ test.each([
             ROUTE_SMOKE_REQUIRED: routeSmokeRequired,
             EVENT_NAME: event,
             GITHUB_OUTPUT: output,
-            SELECTED_MATRIX: "",
             SELECTED_MODE: "",
-            SELECTED_SPECS: "",
+            SELECTED_PLAN_PATH: nodePath.join(directory, "missing.json"),
             SELECTOR_OUTCOME: "skipped",
           },
           stdout: "pipe",
@@ -7048,6 +7098,11 @@ test("API planning only loads dependencies after installation and emits install-
       ],
     ]) {
       writeFileSync(output, "");
+      const selectedFiles = nodePath.join(directory, "api-test-files");
+      writeFileSync(
+        selectedFiles,
+        selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+      );
       const result = Bun.spawnSync(
         ["bash", "-e", "-c", plan?.run ?? panic("Missing output planner")],
         {
@@ -7060,7 +7115,7 @@ test("API planning only loads dependencies after installation and emits install-
             SELECTED_REQUIRED: selectedRequired,
             SELECTED_MATRIX: selected,
             SELECTED_SHARDS: shards,
-            SELECTED_FILES: selected ? "src/a.test.ts\nsrc/b.test.ts" : "",
+            SELECTED_FILES_PATH: selectedFiles,
           },
           stdout: "pipe",
           stderr: "pipe",
@@ -7963,6 +8018,11 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
     const directory = mkdtempSync(nodePath.join(tmpdir(), "armed-coverage-"));
     try {
       const output = nodePath.join(directory, "output");
+      const changedScope = nodePath.join(directory, "changed-scope.json");
+      writeFileSync(
+        changedScope,
+        JSON.stringify({ mobile_build_required: planned }),
+      );
       const child = Bun.spawnSync(["bash", "-euc", script], {
         env: {
           PATH: Bun.env["PATH"] ?? "",
@@ -7975,7 +8035,7 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
           HEAVY_PROOF_JOBS: JSON.stringify(required),
           ARMED_PROOF_JOBS: JSON.stringify(proven),
           ARMED_JOB_SCOPES: JSON.stringify(scopes),
-          CHANGED_SCOPE: JSON.stringify({ mobile_build_required: planned }),
+          CHANGED_SCOPE_PATH: changedScope,
           MERGE_GROUP_HEAVY_KEEP: "[]",
         },
       });
@@ -7986,6 +8046,60 @@ test("armed reuse covers every selected queue-only suite of the group", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  }
+});
+
+test("a 5000-file change reaches the suites step through a file, not the environment", () => {
+  const plan = v.parse(
+    v.object({ steps: v.array(v.unknown()) }),
+    ciJobs["ci-plan"],
+  );
+  const script = v.parse(
+    v.object({ run: v.string() }),
+    flattenWorkflowSteps(plan.steps).find((step) => step["id"] === "suites"),
+  ).run;
+  // Linux refuses any single environment string over 128 KiB (E2BIG) before
+  // the shell starts, so a list this long must never travel as a variable.
+  const singleStringLimit = 128 * 1024;
+  const changedFiles = Array.from(
+    { length: 5000 },
+    (_, index) =>
+      `.github/ci-job-classification-decisions/candidate%3A.github%2Fworkflows%2Fexample-${index}.yml%2Fjob/${index.toString(16).padStart(64, "0")}.json`,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "large-change-"));
+  try {
+    const output = nodePath.join(directory, "output");
+    const changedScope = nodePath.join(directory, "changed-scope.json");
+    const scope = JSON.stringify({
+      mobile_build_required: "true",
+      changed_files: JSON.stringify(changedFiles),
+    });
+    expect(Buffer.byteLength(scope)).toBeGreaterThan(singleStringLimit);
+    writeFileSync(changedScope, scope);
+    const env = {
+      PATH: Bun.env["PATH"] ?? "",
+      GITHUB_OUTPUT: output,
+      RUN_REQUIRED: "true",
+      NORMAL_REUSED: "false",
+      SUITE_DEPTH: "full",
+      EVENT_NAME: "merge_group",
+      ARMED_PROOF: "complete",
+      HEAVY_PROOF_JOBS: JSON.stringify(["mobile-build"]),
+      ARMED_PROOF_JOBS: JSON.stringify(["mobile-build"]),
+      ARMED_JOB_SCOPES: JSON.stringify({
+        "mobile-build": "mobile_build_required",
+      }),
+      CHANGED_SCOPE_PATH: changedScope,
+      MERGE_GROUP_HEAVY_KEEP: "[]",
+    };
+    for (const value of Object.values(env)) {
+      expect(Buffer.byteLength(value)).toBeLessThan(singleStringLimit);
+    }
+    const child = Bun.spawnSync(["bash", "-euc", script], { env });
+    expect(child.exitCode, child.stderr.toString()).toBe(0);
+    expect(readFileSync(output, "utf-8")).toContain("heavy_proof=false");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
