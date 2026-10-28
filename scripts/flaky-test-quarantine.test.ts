@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { expiryInstant } from "./dated-waivers";
@@ -17,6 +17,7 @@ import {
   serializeRegistry,
   splitTestId,
 } from "./flaky-test-quarantine";
+import { QUARANTINE_ACTION, unownedBunTestSteps } from "./flaky-test-workflow";
 
 const committed = readFileSync(
   path.join(REPOSITORY_ROOT, REGISTRY_FILE),
@@ -154,4 +155,41 @@ test("the cache digest changes with the registry", () => {
   expect(quarantineDigest(read(committed))).not.toBe(
     quarantineDigest(read(serializeRegistry({ entries: [entry()] }))),
   );
+});
+
+describe("workflow quarantine ownership", () => {
+  test("every Bun test step is preceded by the shared quarantine action", () => {
+    const workflows = path.join(REPOSITORY_ROOT, ".github/workflows");
+    const violations = readdirSync(workflows)
+      .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+      .flatMap((file) => {
+        const workflowPath = `.github/workflows/${file}`;
+        const source = readFileSync(
+          path.join(REPOSITORY_ROOT, workflowPath),
+          "utf-8",
+        );
+        return unownedBunTestSteps(Bun.YAML.parse(source), workflowPath);
+      });
+
+    expect(violations).toEqual([]);
+  });
+
+  test("reports a Postgres package test without the shared owner", () => {
+    const fixture = {
+      jobs: {
+        postgres: {
+          steps: [
+            { uses: "actions/checkout@v4" },
+            { run: "bun run test:postgres" },
+          ],
+        },
+      },
+    };
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([
+      "fixture.yml: jobs.postgres.steps[1]",
+    ]);
+
+    fixture.jobs.postgres.steps.splice(1, 0, { uses: QUARANTINE_ACTION });
+    expect(unownedBunTestSteps(fixture, "fixture.yml")).toEqual([]);
+  });
 });

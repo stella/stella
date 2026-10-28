@@ -283,6 +283,25 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test("matches tests inside an enabled Postgres-gated suite", () => {
+    const name = "Postgres gate > quarantined case";
+    const result = run({
+      names: [name],
+      source: `import { describe, test } from "bun:test";
+const runPostgresTests = true;
+describe.skipIf(!runPostgresTests)("Postgres gate", () => {
+  test("quarantined case", () => {
+    throw new TypeError("fixture failure");
+  });
+});`,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.records).toContainEqual(
+      expect.objectContaining({ id: `${FIXTURE}::${name}`, type: "failed" }),
+    );
+  });
+
   test("reused describe.each registrars restart row IDs for each suite", () => {
     const names = [
       "outer > first 0 alpha > case",

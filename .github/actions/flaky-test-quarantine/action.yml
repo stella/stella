@@ -1,0 +1,7 @@
+name: Configure flaky-test quarantine
+description: Loads the repository quarantine for Bun tests and reports its outcomes.
+runs:
+  using: node24
+  main: main.mjs
+  post: post.mjs
+  post-if: always()

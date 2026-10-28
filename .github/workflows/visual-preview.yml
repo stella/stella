@@ -74,6 +74,9 @@ jobs:
         timeout-minutes: 2
         if: steps.scope.outputs.required == 'true'
         run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test renderer validation
         if: steps.scope.outputs.required == 'true'
         run: bun --filter @stll/visual-preview test

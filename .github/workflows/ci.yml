@@ -1619,6 +1619,9 @@ jobs:
 
       # Parser versions must advance whenever an adapter's parser inputs
       # change. The guard needs no dependency installation.
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: "parser-version-guard: Check parser version guard"
         if: >-
           !cancelled()
@@ -1816,6 +1819,9 @@ jobs:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run protocol and malformed-stream tests
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
@@ -2295,6 +2301,9 @@ jobs:
           path: ${{ runner.temp }}/web-api-types.patch
           retention-days: 14
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Typecheck-cost baseline guard
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2653,6 +2662,9 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_006 != 'true') }}
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Standalone lockfile guard
         env:
           CI_CHECK_KIND: STATIC
@@ -2961,6 +2973,9 @@ jobs:
             echo "TURBO_SCM_BASE=$COMPARISON_BASE" >> "$GITHUB_ENV"
           fi
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
@@ -2990,10 +3005,6 @@ jobs:
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
           API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
           API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
-          # Quarantined tests (scripts/flaky-test-quarantine.json) still run;
-          # the preload records their failures instead of failing the run.
-          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
-          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3044,8 +3055,6 @@ jobs:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
           SHARD: web
-          BUN_OPTIONS: --preload=${{ github.workspace }}/scripts/flaky-test-quarantine-preload.ts
-          FLAKY_TEST_QUARANTINE_REPORT_DIR: ${{ runner.temp }}/flaky-test-quarantine
         run: |
           args=()
           if [[ -n "$AFFECTED_FLAG" ]]; then
@@ -3087,17 +3096,6 @@ jobs:
           ${{ needs.ci-plan.outputs.changed_files }}
           CHANGED_FILES_JSON
           CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
-
-      # Annotates each quarantined outcome and writes its recent history to the
-      # job summary; reporting only, so it never changes the job's verdict.
-      - name: Report quarantined tests
-        if: >-
-          !cancelled()
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bun scripts/flaky-test-history.ts job-summary --reports "$RUNNER_TEMP/flaky-test-quarantine" --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload quarantined test outcomes
         if: >-
@@ -3406,6 +3404,9 @@ jobs:
           # Verify launches without downloading browsers or invoking apt.
           browsers: chromium webkit
           dependency-mode: preinstalled
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test UI browser interactions
         if: matrix.suite == 'ui' && steps.ui-browser-tests.outputs.required == 'true'
@@ -3931,6 +3932,9 @@ jobs:
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Postgres-gated API suites
         id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
@@ -4118,6 +4122,9 @@ jobs:
 
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Run Valkey-gated API suites
         if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')) }}
         working-directory: apps/api
@@ -4173,6 +4180,9 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test migration safety rules and historical findings
         run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
@@ -5096,6 +5106,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 6
@@ -5244,6 +5257,9 @@ jobs:
 
       # Route count times per-route render time on a loaded runner: the slowest
       # passing runs take about 3 minutes and a slow runner about 4.5.
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Check route network baseline
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 8
@@ -5443,6 +5459,9 @@ jobs:
         with:
           browsers: firefox webkit
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Test browser stack redaction
         timeout-minutes: 2
         env:
@@ -5574,6 +5593,9 @@ jobs:
         timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Run Vite dependency canary
         timeout-minutes: 3
@@ -5746,6 +5768,9 @@ jobs:
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check landing islands
         timeout-minutes: 2
@@ -6354,6 +6379,9 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
 
       - name: Test dev runner and process tree cleanup
         shell: pwsh
