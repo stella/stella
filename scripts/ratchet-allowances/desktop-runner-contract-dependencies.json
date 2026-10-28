@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The desktop runner contract validates run events against TanStack's AG-UI event vocabulary, so @stll/api-contract declares @tanstack/ai from the shared catalog. No new package resolves."
+}
