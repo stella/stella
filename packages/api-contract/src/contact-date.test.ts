@@ -64,7 +64,7 @@ describe("contact birth date boundary", () => {
   });
 
   test("the year turns at the earliest time zone, not at UTC", () => {
-    // 12:00 UTC on 31 December is already 1 January in the rule's zone.
+    // On the last UTC day of a year, the rule's zone is already in the next one.
     const lastUtcDay = Temporal.Instant.from("2026-12-31T12:00:00Z");
     expect(
       isValidContactBirthDate({ precision: "year", year: 2027 }, lastUtcDay),
