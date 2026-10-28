@@ -479,11 +479,6 @@
     "owner": "pricing",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/usage/organization-access-state.db.test.ts": {
-    "count": 6,
-    "owner": "pricing",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/version.test.ts": {
     "count": 7,
     "owner": "guards",

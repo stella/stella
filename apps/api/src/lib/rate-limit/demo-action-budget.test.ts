@@ -200,13 +200,13 @@ describe("demo account daily action budget", () => {
       execution: "background-job",
       actionKind: "workflow.background",
       policy,
-      redis: { send: async () => await Promise.resolve(0) },
+      redis: { send: async () => await Promise.resolve([0, 1250]) },
       demoActionBudget: tracked.budget,
       run: async () => await Promise.resolve("unreachable"),
     });
     expect(Result.isError(refusedBeforeStart)).toBe(true);
     expect(refusedBeforeStart).toMatchObject({
-      error: { reason: "busy" },
+      error: { reason: "busy", retryAfterMs: 1250 },
     });
 
     expect(tracked.increments()).toBe(3);
@@ -242,7 +242,8 @@ describe("demo account daily action budget", () => {
   });
 
   test("refunds an attempt refused before its work starts", async () => {
-    const { budget } = demoBudget();
+    const tracked = demoBudget();
+    const { budget } = tracked;
     for (
       let index = 0;
       index <= DEMO_ACCOUNT_DAILY_ACTION_BUDGET.max;
@@ -255,14 +256,17 @@ describe("demo account daily action budget", () => {
         execution: "background-job",
         actionKind: "workflow.background",
         policy,
-        redis: { send: async () => await Promise.resolve(0) },
+        redis: { send: async () => await Promise.resolve([0, 1250]) },
         demoActionBudget: budget,
         run: async () => await Promise.resolve("served"),
       });
       if (Result.isOk(busy)) {
         throw new Error("Expected a busy refusal");
       }
-      expect(busy.error).toMatchObject({ reason: "busy" });
+      expect(busy.error).toMatchObject({ reason: "busy", retryAfterMs: 1250 });
+      expect(tracked.count()).toBe(0);
+      expect(tracked.increments()).toBe(index + 1);
+      expect(tracked.completions()).toBe(index + 1);
     }
     await exhaustWith(budget, disabledAction);
     expectDailyRefusal(await disabledAction(budget));

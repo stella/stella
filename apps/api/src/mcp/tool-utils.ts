@@ -688,7 +688,7 @@ export const oauthScopeRecoveryHint = ({
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
@@ -704,6 +704,7 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  retryAfterMs,
   contactUrl,
 }: {
   code: McpErrorCode;
@@ -711,6 +712,7 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
   const requestId = getRequestId();
@@ -720,6 +722,7 @@ export const structuredErrorResult = ({
     ...(hint === undefined ? {} : { hint }),
     ...(issues === undefined || issues.length === 0 ? {} : { issues }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(requestId === undefined ? {} : { requestId }),
   } as const;

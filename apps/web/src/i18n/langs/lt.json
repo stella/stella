@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Dabar",
       "currentSession": "Dabartinis",
       "device": "Įrenginys",
       "deviceOnOs": "{browser} / {os}",
@@ -997,12 +998,15 @@
       "supreme": "Aukščiausieji teismai"
     },
     "coverage": {
+      "allCurrent": "Visi šaltiniai atnaujinti",
       "completeness": "Išsamumas",
+      "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi.",
+      "countryNavigation": "Pereiti prie šalies",
       "courtsHeading": "Pagal teismą",
       "decisionYears": "Sprendimų metai",
+      "decisionsAcross": "sprendimai iš {count, plural, one {# jurisdikcijos} few {# jurisdikcijų} other {# jurisdikcijų}}",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "generatedAt": "Duomenys {date}",
-      "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
       "healthDelayed": "Vėluoja",
       "healthDisabled": "Išjungta",
@@ -1012,10 +1016,10 @@
       "lastSync": "Paskutinis sinchronizavimas",
       "notCountedYet": "Dar nesuskaičiuota",
       "notMeasuredYet": "Dar neišmatuota",
-      "reportedByListing": "Suskaičiuota pagal skelbėjo sąrašą",
-      "reportedByOperator": "Įvesta rankiniu būdu",
-      "reportedByPublisher": "Paties skelbėjo skaičius",
       "searchable": "Prieinami paieškai",
+      "sourceExceptions": "{count, plural, one {# šaltiniui reikia dėmesio} few {# šaltiniams reikia dėmesio} other {# šaltinių reikia dėmesio}}",
+      "sourcesCurrent": "Atnaujinti šaltiniai",
+      "syncedAt": "Sinchronizuota {time}",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
       "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
@@ -1186,7 +1190,7 @@
       "searchEveryWord": "Ieškoti visų žodžių"
     },
     "seo": {
-      "collectionName": "Stella teismų praktika",
+      "collectionName": "stella teismų praktika",
       "description": "Vieša teismų praktikos duomenų bazė su indeksuojamais teismų sprendimais ir teisės šaltiniais.",
       "homeDescription": "Vieša teisės duomenų bazė: teismų sprendimai ir konsoliduoti teisės aktai, ieškomi pagal identifikatorių arba žodžius.",
       "scopedDescription": "Vieša teismų praktikos duomenų bazė ({scope}) su indeksuojamais teismų sprendimais ir teisės šaltiniais."
@@ -1206,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Nurodyta: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Nurodyta: {date}} until {Nurodyta: iki {date}} from {Nurodyta: nuo {date}} other {Nurodyta: {date}}}",
+      "caseFileDocuments": "Šios bylos dokumentai",
       "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "citedDecisionPassage": "Sprendimo ištrauka",
@@ -1432,6 +1437,17 @@
         "webSearch": "Norėdami naudoti šį įgūdį, įjunkite paiešką internete"
       }
     },
+    "connectConnector": {
+      "checkAction": "Patikrinti ryšį",
+      "description": "Asistentas prašo prijungti jungtį {connector}, kad šiame pokalbyje galėtų naudoti jos įrankius.",
+      "error": "Nepavyko pradėti jungimo. Bandykite dar kartą.",
+      "notConnected": "Dar neprijungta. Užbaikite prisijungimą ir patikrinkite dar kartą.",
+      "openTools": "Atidaryti įrankius",
+      "scopes": "Prašoma prieiga: {scopes}",
+      "title": "Prijungti jungtį",
+      "tokenRequired": "Jungčiai {connector} reikia prieigos rakto. Pridėkite jį įrankių puslapyje, tada patikrinkite ryšį.",
+      "waiting": "Užbaikite prisijungimą atsidariusiame lange."
+    },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",
       "autoCompact": "Pasiekus 100%, stella automatiškai apibendrina senesnes žinutes, kad atlaisvintų vietos.",
@@ -1506,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+      "unnamed": "{count, plural, one {dar #} few {dar #} many {dar #} other {dar #}}"
     },
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
@@ -1747,6 +1763,7 @@
       "business_registry_lookup": "Ieškoma įmonių registre",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
+      "connect_connector": "Prašoma prijungti jungtį",
       "counterparty_check": "Tikrinama priešinga šalis",
       "create-document": "Ruošiamas dokumentas",
       "create_matter_document": "Kuriamas dokumentas",
@@ -2034,6 +2051,7 @@
     "confirm": "Patvirtinti",
     "confirmAction": "Ar tikrai?",
     "connect": "Prijungti",
+    "connected": "Prijungta",
     "connectionLost": "Ryšys nutrūko",
     "connectionLostDescription": "Praradome ryšį su serveriu. Bandoma automatiškai iš naujo.",
     "convertTo": "Konvertuoti į",
@@ -2202,6 +2220,8 @@
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
     "none": "Nėra",
+    "notConnected": "Neprijungta",
+    "notNow": "Ne dabar",
     "notStated": "Nenurodyta",
     "notes": "Pastabos",
     "open": "Atidaryti",
@@ -2450,10 +2470,10 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
-    "deleteContact": "Ištrinti klientą",
+    "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
-    "editContact": "Redaguoti klientą",
+    "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",
       "personal": "Asmeninis",
@@ -2466,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
       "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
-      "fileHint": "Stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
+      "fileHint": "stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
       "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
@@ -5038,7 +5058,7 @@
         "title": "Dviejų veiksnių autentifikavimas"
       },
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
-      "wordEditShortcut": "Word redagavimo žyma",
+      "wordEditShortcut": "Inicialai Word pakeitimams",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",
       "wordEditShortcutPlaceholder": "pvz., JK"
     },
@@ -5049,7 +5069,6 @@
       "cliInstallLabel": "Diegimas",
       "cliLoginLabel": "Prisijungimas",
       "cliTitle": "Komandinės eilutės sąsaja",
-      "connected": "Prijungta",
       "connectedAgo": "Prijungta {time}",
       "connectedAppsDescription": "Programos, į kurias prisijungėte su stella paskyra. Atjunkite tas, kurių nebenaudojate.",
       "connectedAppsEmpty": "Kol kas nieko. Nustatykite Claude arba ChatGPT aukščiau ir jis atsiras čia.",
@@ -5072,7 +5091,6 @@
       "mcpTitle": "MCP serveris",
       "mcpUrlLabel": "Serverio URL",
       "noMatches": "Užklausą „{query}“ atitinkančių ryšių nėra",
-      "notConnected": "Neprijungta",
       "permissionCount": "{count, plural, one {# leidimas} few {# leidimai} many {# leidimo} other {# leidimų}}",
       "privateCredentialOnly": "Tik privatūs prisijungimo duomenys",
       "searchPlaceholder": "Ieškoti ryšių",
@@ -5187,7 +5205,6 @@
       "usageLimitDescriptionNoEntitlement": "DI funkcijoms šioje organizacijoje reikia aktyvios naudojimo teisės.",
       "usageLimitDescriptionUsageLimitExceeded": "Šio veiksmo negalima vykdyti esant dabartinei organizacijos naudojimo būsenai.",
       "usageLimitNeeded": "Reikia",
-      "usageLimitNotNow": "Ne dabar",
       "usageLimitTitleEntitlementInactive": "Naudojimo teisė neaktyvi",
       "usageLimitTitleNoEntitlement": "Reikalinga naudojimo teisė",
       "usageLimitTitleUsageLimitExceeded": "Pasiektas DI naudojimo limitas",
@@ -5428,16 +5445,16 @@
     "savedDescription": "Išsaugotas stilių rinkinys",
     "sourceDocument": "Šaltinio DOCX",
     "stellaDescription": "Išsamus neutralus stella teisinių dokumentų formatavimas",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stilių rinkiniai",
     "untitledDocument": "Dokumentas be pavadinimo"
   },
   "success": {
     "aiConfigDeleted": "DI konfigūracija pašalinta",
     "aiConfigUpdated": "DI konfigūracija atnaujinta",
-    "clientUpdated": "Klientas atnaujintas",
-    "contactCreated": "Klientas sukurtas",
-    "contactDeleted": "Klientas ištrintas",
+    "clientUpdated": "Kontaktas atnaujintas",
+    "contactCreated": "Kontaktas sukurtas",
+    "contactDeleted": "Kontaktas ištrintas",
     "documentCreated": "Dokumentas sukurtas",
     "folderCreated": "Aplankas sukurtas",
     "invitationCanceled": "Kvietimas atšauktas",
@@ -5974,6 +5991,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
     "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
     "slugRequired": "Slug yra privalomas"

@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Praegu",
       "currentSession": "Praegune",
       "device": "Seade",
       "deviceOnOs": "{browser} operatsioonisüsteemis {os}",
@@ -997,12 +998,15 @@
       "supreme": "Riigikohtud"
     },
     "coverage": {
+      "allCurrent": "Kõik allikad on ajakohased",
       "completeness": "Täielikkus",
+      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga.",
+      "countryNavigation": "Vali riik",
       "courtsHeading": "Kohtute kaupa",
       "decisionYears": "Lahendite aastad",
+      "decisionsAcross": "lahendit {count, plural, one {# jurisdiktsioonist} other {# jurisdiktsioonist}}",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
       "generatedAt": "Andmed seisuga {date}",
-      "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
       "healthDelayed": "Hilineb",
       "healthDisabled": "Välja lülitatud",
@@ -1012,10 +1016,10 @@
       "lastSync": "Viimane sünkroonimine",
       "notCountedYet": "Veel loendamata",
       "notMeasuredYet": "Veel mõõtmata",
-      "reportedByListing": "Loetud avaldaja nimekirja põhjal",
-      "reportedByOperator": "Käsitsi sisestatud",
-      "reportedByPublisher": "Avaldaja enda loend",
       "searchable": "Otsitavad",
+      "sourceExceptions": "{count, plural, one {# allikas vajab tähelepanu} other {# allikat vajab tähelepanu}}",
+      "sourcesCurrent": "Ajakohased allikad",
+      "syncedAt": "Sünkroonitud {time}",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
       "unavailable": "Kaetuse andmed ei ole praegu saadaval."
@@ -1186,7 +1190,7 @@
       "searchEveryWord": "Otsi kõiki sõnu"
     },
     "seo": {
-      "collectionName": "Stella kohtupraktika",
+      "collectionName": "stella kohtupraktika",
       "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
       "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
       "scopedDescription": "Avalik kohtupraktika andmebaas ({scope}) indekseeritavate kohtulahendite ja õiguse allikatega."
@@ -1206,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
+      "caseFileDocuments": "Selle kohtuasja dokumendid",
       "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "citedDecisionPassage": "Lõik lahendis",
@@ -1432,6 +1437,17 @@
         "webSearch": "Selle oskuse kasutamiseks lülitage veebiotsing sisse"
       }
     },
+    "connectConnector": {
+      "checkAction": "Kontrolli ühendust",
+      "description": "Assistent palub ühendada konnektori {connector}, et kasutada selles vestluses selle tööriistu.",
+      "error": "Ühendamist ei õnnestunud alustada. Proovi uuesti.",
+      "notConnected": "Veel pole ühendatud. Lõpeta sisselogimine ja kontrolli uuesti.",
+      "openTools": "Ava tööriistad",
+      "scopes": "Taotletud juurdepääs: {scopes}",
+      "title": "Konnektori ühendamine",
+      "tokenRequired": "Konnektor {connector} vajab juurdepääsutõendit. Lisa see tööriistade lehel ja kontrolli seejärel ühendust.",
+      "waiting": "Lõpeta sisselogimine avanenud aknas."
+    },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
       "autoCompact": "100% juures teeb stella vanematest sõnumitest automaatselt kokkuvõtte, et ruumi vabastada.",
@@ -1506,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+      "unnamed": "{count, plural, one {veel #} other {veel #}}"
     },
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
@@ -1747,6 +1763,7 @@
       "business_registry_lookup": "Äriregistrist otsimine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
+      "connect_connector": "Konnektori ühendamise palve",
       "counterparty_check": "Vastaspoole kontrollimine",
       "create-document": "Dokumendi ettevalmistamine",
       "create_matter_document": "Dokumendi loomine",
@@ -2034,6 +2051,7 @@
     "confirm": "Kinnita",
     "confirmAction": "Olete kindel?",
     "connect": "Ühenda",
+    "connected": "Ühendatud",
     "connectionLost": "Ühendus katkes",
     "connectionLostDescription": "Kaotasime ühenduse serveriga. Proovime automaatselt uuesti.",
     "convertTo": "Teisenda",
@@ -2202,6 +2220,8 @@
     "noResults": "Tulemused puuduvad",
     "noVersions": "Versiooniajalogu pole",
     "none": "Puudub",
+    "notConnected": "Pole ühendatud",
+    "notNow": "Mitte praegu",
     "notStated": "Pole märgitud",
     "notes": "Märkused",
     "open": "Ava",
@@ -2450,10 +2470,10 @@
       "value": "Välja väärtus"
     },
     "datePrecision": "Kuupäeva täpsus",
-    "deleteContact": "Kustuta klient",
+    "deleteContact": "Kustuta kontakt",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
-    "editContact": "Muuda klienti",
+    "editContact": "Muuda kontakti",
     "emailTypes": {
       "other": "Muu",
       "personal": "Isiklik",
@@ -2466,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Lohista volikiri (.docx) siia või klõpsa faili valimiseks",
       "extracting": "Tuvastame volitaja(id)…",
-      "fileHint": "Stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
+      "fileHint": "stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
       "fileTooLarge": "Volikirja fail peab olema kuni 50 MB.",
       "invalidFileType": "Palun valige .docx-fail.",
       "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
@@ -5038,7 +5058,7 @@
         "title": "Kahefaktoriline autentimine"
       },
       "wordEditIdentitySaved": "Wordi muudatuste isik uuendatud",
-      "wordEditShortcut": "Wordi muudatuste lühend",
+      "wordEditShortcut": "Wordi muudatuste initsiaalid",
       "wordEditShortcutDescription": "Lühike silt teie initsiaalide jaoks Wordi muudatustes.",
       "wordEditShortcutPlaceholder": "nt JK"
     },
@@ -5049,7 +5069,6 @@
       "cliInstallLabel": "Installimine",
       "cliLoginLabel": "Sisselogimine",
       "cliTitle": "Käsurea liides",
-      "connected": "Ühendatud",
       "connectedAgo": "Ühendatud {time}",
       "connectedAppsDescription": "Rakendused, kuhu oled stella kontoga sisse loginud. Katkesta ühendus nendega, mida enam ei kasuta.",
       "connectedAppsEmpty": "Veel mitte midagi. Seadista ülal Claude või ChatGPT ja see ilmub siia.",
@@ -5072,7 +5091,6 @@
       "mcpTitle": "MCP-server",
       "mcpUrlLabel": "Serveri URL",
       "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
-      "notConnected": "Ühendamata",
       "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
       "privateCredentialOnly": "Ainult privaatne mandaat",
       "searchPlaceholder": "Otsi ühendusi",
@@ -5187,7 +5205,6 @@
       "usageLimitDescriptionNoEntitlement": "AI-funktsioonid vajavad selles organisatsioonis aktiivset kasutusõigust.",
       "usageLimitDescriptionUsageLimitExceeded": "Seda toimingut ei saa organisatsiooni praeguse kasutusolekuga käivitada.",
       "usageLimitNeeded": "Vajalik",
-      "usageLimitNotNow": "Mitte praegu",
       "usageLimitTitleEntitlementInactive": "Kasutusõigus ei ole aktiivne",
       "usageLimitTitleNoEntitlement": "Kasutusõigus on nõutav",
       "usageLimitTitleUsageLimitExceeded": "AI kasutuslimiit on täis",
@@ -5427,17 +5444,17 @@
     "saveFailed": "Stiilikomplekti ei saanud salvestada",
     "savedDescription": "Salvestatud stiilikomplekt",
     "sourceDocument": "Lähte-DOCX",
-    "stellaDescription": "Stella täielik neutraalne juriidiliste dokumentide vorming",
-    "stellaStyle": "Stella Style",
+    "stellaDescription": "stella täielik neutraalne juriidiliste dokumentide vorming",
+    "stellaStyle": "stella Style",
     "title": "Stiilikomplektid",
     "untitledDocument": "Pealkirjata dokument"
   },
   "success": {
     "aiConfigDeleted": "AI seadistus eemaldatud",
     "aiConfigUpdated": "AI seadistus uuendatud",
-    "clientUpdated": "Klient uuendatud",
-    "contactCreated": "Klient loodud",
-    "contactDeleted": "Klient kustutatud",
+    "clientUpdated": "Kontakt uuendatud",
+    "contactCreated": "Kontakt loodud",
+    "contactDeleted": "Kontakt kustutatud",
     "documentCreated": "Dokument loodud",
     "folderCreated": "Kaust loodud",
     "invitationCanceled": "Kutse tühistatud",
@@ -5974,6 +5991,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
     "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",
     "slugRequired": "Slug on kohustuslik"

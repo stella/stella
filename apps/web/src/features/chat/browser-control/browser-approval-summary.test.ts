@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_TARGET_METADATA,
+  type BrowserControlCommand,
+} from "@stll/api-contract/browser-control";
 
 import { getBrowserApprovalDetails } from "./browser-approval-summary";
+
+const ABSENT_TARGET_METADATA = {
+  type: BROWSER_CONTROL_TARGET_METADATA.absent,
+} as const;
 
 describe("browser action approval summary", () => {
   test("shows the exact website, the click target and its link destination", () => {
@@ -10,8 +17,14 @@ describe("browser action approval summary", () => {
       action: "click",
       page: { revision: "revision-1", url: "https://example.com/cases" },
       target: {
-        context: "2026-42 Smith v. Jones Open case 2026-42",
-        href: "https://example.com/cases/2026-42",
+        context: {
+          type: BROWSER_CONTROL_TARGET_METADATA.present,
+          value: "2026-42 Smith v. Jones Open case 2026-42",
+        },
+        href: {
+          type: BROWSER_CONTROL_TARGET_METADATA.present,
+          value: "https://example.com/cases/2026-42",
+        },
         name: "Open case 2026-42",
         ref: "e:0:0.1",
         role: "link",
@@ -28,7 +41,13 @@ describe("browser action approval summary", () => {
 
   test("shows values and keys before approval", () => {
     const page = { revision: "revision-1", url: "https://example.com/search" };
-    const target = { name: "Search", ref: "e:0:0.2", role: "textbox" };
+    const target = {
+      context: ABSENT_TARGET_METADATA,
+      href: ABSENT_TARGET_METADATA,
+      name: "Search",
+      ref: "e:0:0.2",
+      role: "textbox",
+    };
     expect(
       getBrowserApprovalDetails({
         action: "fill",

@@ -50,6 +50,7 @@
     "workspaces.views.filter"
   ],
   "duplicateValues": [
+    "account.sessions.activeNow",
     "account.sessions.currentSession",
     "agentClaim.error",
     "appearance.calendar",
@@ -93,6 +94,7 @@
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
     "chat.tool.delete_clause",
+    "chat.tool.delete_contact",
     "chat.tool.delete_matter",
     "chat.tool.run_playbook",
     "chat.toolCall.field",
@@ -101,6 +103,7 @@
     "clauses.titleLabel",
     "clauses.versionRestored",
     "consent.error",
+    "contacts.deleteContact",
     "contacts.emailTypes.other",
     "contacts.emailTypes.personal",
     "contacts.fields.vatPayerUnknown",
@@ -133,6 +136,7 @@
     "folio.deleted",
     "folio.markupView.original",
     "guides.status.skipped",
+    "inbox.evidence.current",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",

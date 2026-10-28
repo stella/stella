@@ -295,13 +295,19 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
     }
+    // Advisory fences report their physical identity and acquisition.
+    if (query.includes("AS key1")) {
+      return { rows: [{ acquired: true, key1: 1, key2: 2 }] };
+    }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
   const transaction = new Proxy(database, {
     get: (target, property, receiver) => {
       if (property === "transaction") {
+        // Each savepoint is its own handle, as the driver's are, so the
+        // aggregate lock history of the enclosing transaction stays open.
         return async (run: (savepoint: typeof database) => Promise<unknown>) =>
-          await run(transaction);
+          await run(new Proxy(transaction, {}));
       }
       if (property === "delete") {
         return (table: PgTable) =>

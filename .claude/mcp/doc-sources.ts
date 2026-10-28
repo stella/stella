@@ -209,7 +209,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node"],
+    dependencies: ["posthog-js"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -273,15 +273,6 @@ export const DOC_SOURCES = {
   OxlintTailwind: {
     dependencies: ["oxlint-tailwindcss"],
     url: "https://oxlint-tailwindcss.pages.dev/llms.txt",
-  },
-  OpenTelemetry: {
-    dependencies: [
-      "@opentelemetry/api-logs",
-      "@opentelemetry/exporter-logs-otlp-http",
-      "@opentelemetry/resources",
-      "@opentelemetry/sdk-logs",
-    ],
-    url: "https://opentelemetry.io/llms.txt",
   },
   GeminiAPI: {
     dependencies: ["@google/genai"],
