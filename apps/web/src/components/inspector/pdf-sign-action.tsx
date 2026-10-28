@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 import { SignatureIcon } from "@stll/ui/icons";
 import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 
+import { openInspectorFilePreview } from "@/components/inspector/inspector-actions";
 import {
   beginPdfSignPlacement,
   endPdfSignPlacement,
@@ -21,6 +22,7 @@ import type {
 } from "@/features/desktop/desktop-action-gate.logic";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import type { WorkspaceEntity } from "@/lib/types";
 
 export type PdfSignTarget = PdfSignableFile;
 
@@ -114,6 +116,40 @@ export const usePdfSignFlow = (): PdfSignFlow => {
     },
     requiredDialog: gate.requiredDialog,
   };
+};
+
+type PdfSignFromListOptions = {
+  entity: WorkspaceEntity;
+  /** `null` when the row offers no signing. */
+  target: PdfSignTarget | null;
+  workspaceId: string;
+};
+
+/**
+ * Signing offered on a list row. The stamp is placed on the page, so `sign`
+ * shows the file in the inspector beside the list and places it there. The
+ * list stays on screen, and with it the row that holds this flow, so the
+ * row's action reads as signing until stella desktop settles the exchange.
+ */
+export const usePdfSignFromList = ({
+  entity,
+  target,
+  workspaceId,
+}: PdfSignFromListOptions) => {
+  const flow = usePdfSignFlow();
+  const sign = () => {
+    if (target === null) {
+      return;
+    }
+    flow.start(target, () => {
+      openInspectorFilePreview({
+        entity,
+        fieldId: target.fieldId,
+        workspaceId,
+      });
+    });
+  };
+  return { flow, sign };
 };
 
 /** What stella desktop needs before it can sign: install, update or connect. */

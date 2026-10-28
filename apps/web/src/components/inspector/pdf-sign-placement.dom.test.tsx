@@ -1,15 +1,27 @@
+import type { ReactNode } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
+import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import type { PdfSigningStamp } from "@/components/inspector/pdf-signing-stamp.logic";
+import { toSafeId } from "@/lib/safe-id";
+import type { WorkspaceEntity } from "@/lib/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
-const { act, cleanup, fireEvent, render, screen } =
+const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
+const { stellaToast, ToastProvider } = await import("@stll/ui/toast");
+const { usePdfSignFromList } =
+  await import("@/components/inspector/pdf-sign-action");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
 const { PdfSignPlacementControls, PdfSignPlacementPage } =
   await import("@/components/inspector/pdf-sign-placement");
 const { beginPdfSignPlacement, endPdfSignPlacement, usePdfSignPlacementStore } =
@@ -18,9 +30,16 @@ const { STAMP_LIMITS_PT } =
   await import("@/components/inspector/pdf-signing-stamp.logic");
 const en = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(() => {
+const initialInspectorTabs = useInspectorTabsStore.getState();
+
+afterEach(async () => {
+  await act(async () => {
+    stellaToast.close();
+  });
   cleanup();
   endPdfSignPlacement();
+  useInspectorTabsStore.setState(initialInspectorTabs, true);
+  mock.restore();
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -221,4 +240,186 @@ test("the keyboard way to place a stamp is offered until one is drawn", () => {
   drag(surface, { x: 100, y: 200 }, { x: 300, y: 260 });
   fireEvent.pointerUp(surface, { pointerId: POINTER });
   expect(queryButton(strings.placementPlaceOnLastPage)).toBeNull();
+});
+
+const WORKSPACE_ID = "b0123344-5566-7788-9900-aabbccddeeff";
+const ENTITY_ID = "c0123344-5566-7788-9900-aabbccddeeff";
+const PROPERTY_ID = "d0123344-5566-7788-9900-aabbccddeeff";
+
+const signTarget = {
+  entityId: ENTITY_ID,
+  fieldId: FIELD_ID,
+  propertyId: PROPERTY_ID,
+  workspaceId: WORKSPACE_ID,
+} satisfies PdfSignTarget;
+
+const contract = {
+  entityId: toSafeId<"entity">(ENTITY_ID),
+  kind: "document",
+  name: "Share purchase agreement",
+  parentId: null,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  createdBy: null,
+  createdByUserId: null,
+  createdByImage: null,
+  createdByDeletedAt: null,
+  updatedAt: null,
+  version: 1,
+  currentVersionReference: null,
+  status: null,
+  priority: null,
+  listItemType: null,
+  dueDate: null,
+  agendaKind: "task",
+  startAt: null,
+  endAt: null,
+  occurredAt: null,
+  remindAt: null,
+  allDay: false,
+  timeZone: null,
+  location: null,
+  onlineMeetingUrl: null,
+  availability: null,
+  sensitivity: null,
+  organizer: null,
+  attendees: null,
+  recurrence: null,
+  agendaSource: "manual",
+  externalSource: null,
+  externalId: null,
+  externalChangeKey: null,
+  externalICalUid: null,
+  readOnly: false,
+  sortOrder: null,
+  activeEditBy: null,
+  cellMetadata: {},
+  assignees: [],
+  fields: {
+    [toSafeId<"property">(PROPERTY_ID)]: {
+      id: toSafeId<"field">(FIELD_ID),
+      propertyId: toSafeId<"property">(PROPERTY_ID),
+      entityId: toSafeId<"entity">(ENTITY_ID),
+      content: {
+        type: "file",
+        version: 1,
+        id: "e0123344-5566-7788-9900-aabbccddeeff",
+        fileName: "share-purchase-agreement.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 1,
+        encrypted: false,
+        sha256Hex: "a".repeat(64),
+        pdfFileId: null,
+      },
+    },
+  },
+} satisfies WorkspaceEntity;
+
+/** The list row's sign action, held by the row as the row menu holds it. */
+const ListRow = () => {
+  const { flow, sign } = usePdfSignFromList({
+    entity: contract,
+    target: signTarget,
+    workspaceId: WORKSPACE_ID,
+  });
+  return (
+    <button data-row-sign="" onClick={sign} type="button">
+      {flow.actionLabel}
+    </button>
+  );
+};
+
+/** The inspector beside the list: the active file tab's preview, placing. */
+const InspectorPreview = () => {
+  const activeTab = useInspectorTabsStore((state) =>
+    state.tabs.find((tab) => tab.id === state.activeId),
+  );
+  const previewedFieldId =
+    activeTab?.type === "pdf" && activeTab.facet === "preview"
+      ? activeTab.id
+      : null;
+  const isPlacing = usePdfSignPlacementStore(
+    (state) =>
+      previewedFieldId !== null && state.session?.fieldId === previewedFieldId,
+  );
+  if (!isPlacing) {
+    return null;
+  }
+  return (
+    <>
+      <PdfSignPlacementControls showsOwnPages />
+      <PdfSignPlacementPage page={A4} pageIndex={0} />
+    </>
+  );
+};
+
+const rowSign = () =>
+  document.querySelector<HTMLElement>("[data-row-sign]") ??
+  panic("The row's sign action is missing");
+
+test("signing from a list row places the stamp in the inspector and the row reads as signing until the exchange settles", async () => {
+  const handoff = Promise.withResolvers<Response>();
+  const handoffRequests: string[] = [];
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("pdf-signing-handoffs")) {
+          handoffRequests.push(url);
+          return await handoff.promise;
+        }
+        return Response.json(null);
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const Providers = ({ children }: { children: ReactNode }) => (
+    <IntlProvider locale="en" messages={en} timeZone="UTC">
+      <QueryClientProvider client={client}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    </IntlProvider>
+  );
+  render(
+    <Providers>
+      <ListRow />
+      <InspectorPreview />
+    </Providers>,
+  );
+  expect(rowSign().textContent).toBe(strings.placementTitle);
+
+  fireEvent.click(rowSign());
+
+  // The file opens in the inspector, on its preview, in placement.
+  const inspector = useInspectorTabsStore.getState();
+  const tab = inspector.tabs.find((candidate) => candidate.id === FIELD_ID);
+  expect(inspector.activeId).toBe(FIELD_ID);
+  expect(tab?.type === "pdf" ? tab.facet : null).toBe("preview");
+  expect(usePdfSignPlacementStore.getState().session?.fieldId).toBe(FIELD_ID);
+  expect(button(strings.placementSignInvisible)).toBeDefined();
+
+  fireEvent.click(button(strings.placementSignInvisible));
+
+  // The row that started it holds the exchange for its whole length.
+  await waitFor(() => expect(handoffRequests).toHaveLength(1));
+  expect(rowSign().textContent).toBe(strings.signingLabel);
+  expect(queryButton(strings.placementSignInvisible)).toBeNull();
+
+  await act(async () => {
+    handoff.resolve(
+      Response.json(
+        {
+          code: "pdf_signing_not_a_pdf",
+          message: "Only PDF files can be signed.",
+        },
+        { status: 422 },
+      ),
+    );
+  });
+  await waitFor(() =>
+    expect(rowSign().textContent).toBe(strings.placementTitle),
+  );
+  client.clear();
 });

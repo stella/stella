@@ -71,7 +71,7 @@ import {
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
   PdfSignRequiredDialog,
-  usePdfSignFlow,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -500,7 +500,6 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
@@ -509,25 +508,11 @@ export const RowActions = ({
     isCurrentVersion: true,
     workspaceId,
   });
-  // The stamp is placed on the page, so signing opens the document.
-  const signPdf = () => {
-    if (pdfSignTarget === null) {
-      return;
-    }
-    pdfSignFlow.start(pdfSignTarget, () => {
-      detached(
-        navigate({
-          to: "/workspaces/$workspaceId/$viewId/document",
-          params: viewParams,
-          search: {
-            entity: pdfSignTarget.entityId,
-            field: pdfSignTarget.fieldId,
-          },
-        }),
-        "row-actions.sign-navigate",
-      );
-    });
-  };
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
+    workspaceId,
+  });
   const openCopyToMatterDialog = () => {
     setCopyToMatterEntities(
       toCopyToMatterEntities(bulkTargets, getAncestorIds),
