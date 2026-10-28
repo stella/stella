@@ -12,6 +12,7 @@ import * as schema from "../src/db/schema";
 import { createPolicyStatementsOf } from "../src/tests/helpers/lock-taking-sql";
 import {
   createPolicyStatement,
+  entityFeatureGatePieces,
   entityFeatureGateTableSql,
 } from "./entity-feature-gate-ddl";
 
@@ -105,28 +106,102 @@ test("a dropped maintenance grant is restored", async () => {
 
 // The gate migration created the row-gate routines as the gate role, and
 // only a routine's owner may replace it or change its privileges.
-test("a missing gate-role routine is recreated as its owner, with its revoke", async () => {
+// One test per piece state; each piece is judged and repaired on its own.
+
+test("present: every piece of today's schema is present", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const pieces = entityFeatureGatePieces(tables, descriptors, effective);
+  expect(pieces.length).toBeGreaterThan(0);
+  expect(pieces.filter(({ state }) => state !== "present")).toEqual([]);
+});
+
+test("absent: a missing gate-role routine is recreated as its owner", async () => {
   const effective = await readEffectiveEntityFeatureGateDefinitions();
   const functions = new Map(effective.functions);
   functions.delete("entity_feature_gate_propagate");
-  const statements = entityFeatureGateTableSql(tables, descriptors, {
+  expect(
+    entityFeatureGateTableSql(tables, descriptors, { ...effective, functions }),
+  ).toEqual(
+    expect.arrayContaining([
+      "SET LOCAL ROLE stella_entity_gate;",
+      expect.stringMatching(
+        /^CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)/u,
+      ),
+      "RESET ROLE;",
+    ]),
+  );
+});
+
+test("stale: a changed routine is replaced, as its owner when the gate role owns it", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const functions = new Map(effective.functions);
+  functions.set(
+    "entity_feature_gate_graph",
+    "CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() older",
+  );
+  functions.set(
+    "entity_feature_gate_propagate",
+    "CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate() older",
+  );
+  const pieces = entityFeatureGatePieces(tables, descriptors, {
     ...effective,
     functions,
   });
-  const create = statements.findIndex((statement) =>
-    statement.startsWith(
-      "CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate()",
-    ),
+  const graph = pieces.find(
+    ({ id }) => id === "routine:entity_feature_gate_graph",
   );
-  expect(create).toBeGreaterThan(0);
-  expect(statements.at(create - 1)).toBe("SET LOCAL ROLE stella_entity_gate;");
-  expect(statements.slice(create + 1, create + 3)).toEqual(
-    effective.revokes.has("entity_feature_gate_propagate()")
-      ? ["RESET ROLE;"]
-      : [
-          "REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;",
-          "RESET ROLE;",
-        ],
+  const propagate = pieces.find(
+    ({ id }) => id === "routine:entity_feature_gate_propagate",
+  );
+  expect(graph?.state).toBe("stale");
+  expect(graph?.repair).toHaveLength(1);
+  expect(propagate?.state).toBe("stale");
+  expect(propagate?.repair.at(0)).toBe("SET LOCAL ROLE stella_entity_gate;");
+  expect(propagate?.repair.at(-1)).toBe("RESET ROLE;");
+});
+
+test("over-granted: an unchanged routine PUBLIC may execute again is revoked as its owner", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const revokes = new Set(effective.revokes);
+  revokes.delete("entity_feature_gate_propagate()");
+  expect(
+    entityFeatureGateTableSql(tables, descriptors, { ...effective, revokes }),
+  ).toEqual([
+    "SET LOCAL ROLE stella_entity_gate;",
+    "REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;",
+    "RESET ROLE;",
+  ]);
+});
+
+test("disabled: a disabled trigger is enabled, never created again", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const key = "legal_list_item_sources.entity_feature_gate_write";
+  const triggers = new Map(effective.triggers);
+  triggers.delete(key);
+  expect(
+    entityFeatureGateTableSql(tables, descriptors, {
+      ...effective,
+      triggers,
+      disabledTriggers: new Set([key]),
+    }),
+  ).toEqual([
+    'ALTER TABLE public."legal_list_item_sources" ENABLE TRIGGER entity_feature_gate_write;',
+  ]);
+});
+
+test("absent index: a complete table that lost only a gate index gets that index back", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const key = [...effective.indexes.keys()].at(0) ?? "";
+  expect(key).not.toBe("");
+  const indexes = new Map(effective.indexes);
+  indexes.delete(key);
+  const statements = entityFeatureGateTableSql(tables, descriptors, {
+    ...effective,
+    indexes,
+  });
+  expect(statements).toHaveLength(1);
+  expect(statements.at(0)).toContain(
+    `INDEX CONCURRENTLY "${key.slice(key.indexOf(".") + 1)}"`,
   );
 });
 

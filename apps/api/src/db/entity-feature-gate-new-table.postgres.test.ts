@@ -28,7 +28,11 @@ import {
   entityFeatureWorkspaceGateColumns,
 } from "./entity-feature-gate-columns";
 import { entityFeatureGateMetadata } from "./entity-feature-gate-metadata";
-import { readEffectiveEntityFeatureGateDefinitions } from "./entity-feature-gate-migrations";
+import {
+  effectiveEntityFeatureGateDefinitions,
+  readEffectiveEntityFeatureGateDefinitions,
+  readEntityFeatureGateMigrationTexts,
+} from "./entity-feature-gate-migrations";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { entityFeaturePolicies } from "./entity-feature-policies";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -233,6 +237,30 @@ describe.skipIf(!runPostgresTests)(
             });
             expect(rows).toHaveLength(visible ? 1 : 0);
           }
+
+          // A disabled gate trigger still exists, so the repair enables it
+          // rather than creating it again, and the gate works afterwards.
+          const disable = `ALTER TABLE public.${FIXTURE_TABLE} DISABLE TRIGGER entity_feature_gate_write;`;
+          await client.unsafe(disable);
+          const repair = entityFeatureGateTableSql(
+            tables,
+            descriptors,
+            effectiveEntityFeatureGateDefinitions([
+              ...(await readEntityFeatureGateMigrationTexts()),
+              generated.join(`\n${breakpoint}\n`),
+              disable,
+            ]),
+          );
+          expect(repair).toEqual([
+            `ALTER TABLE public."${FIXTURE_TABLE}" ENABLE TRIGGER entity_feature_gate_write;`,
+          ]);
+          await applyStatements(client, repair);
+          const [state] = await client.unsafe(
+            `SELECT tgenabled AS enabled FROM pg_trigger
+              WHERE tgrelid = 'public.${FIXTURE_TABLE}'::regclass
+                AND tgname = 'entity_feature_gate_write'`,
+          );
+          expect(state?.enabled).toBe("O");
         } finally {
           await client.unsafe(
             `DROP TABLE IF EXISTS public.${FIXTURE_TABLE} CASCADE`,

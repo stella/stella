@@ -7,6 +7,8 @@ export type EffectiveEntityFeatureGateDefinitions = {
   functions: ReadonlyMap<string, string>;
   policies: ReadonlyMap<string, string>;
   triggers: ReadonlyMap<string, string>;
+  /** Triggers that exist but are disabled: enabling them restores them. */
+  disabledTriggers: ReadonlySet<string>;
   indexes: ReadonlyMap<string, string>;
   grants: ReadonlyMap<string, string>;
   revokes: ReadonlySet<string>;
@@ -463,12 +465,24 @@ export const effectiveEntityFeatureGateDefinitions = (
     }
   }
   const { functions, policies, triggers, indexes, grants, revokes } = state;
-  return { functions, policies, triggers, indexes, grants, revokes };
+  const disabledTriggers = new Set(
+    [...state.knownTriggers.keys()].filter((key) => !triggers.has(key)),
+  );
+  return {
+    functions,
+    policies,
+    triggers,
+    disabledTriggers,
+    indexes,
+    grants,
+    revokes,
+  };
 };
 
-export const readEffectiveEntityFeatureGateDefinitions = async (
+/** Every migration's text, in application order. */
+export const readEntityFeatureGateMigrationTexts = async (
   drizzleUrl = new URL("../../drizzle/", import.meta.url),
-) => {
+): Promise<string[]> => {
   const entries = (await readdir(drizzleUrl, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map(({ name }) => name)
@@ -480,5 +494,12 @@ export const readEffectiveEntityFeatureGateDefinitions = async (
       migrations.push(await file.text());
     }
   }
-  return effectiveEntityFeatureGateDefinitions(migrations);
+  return migrations;
 };
+
+export const readEffectiveEntityFeatureGateDefinitions = async (
+  drizzleUrl = new URL("../../drizzle/", import.meta.url),
+) =>
+  effectiveEntityFeatureGateDefinitions(
+    await readEntityFeatureGateMigrationTexts(drizzleUrl),
+  );
