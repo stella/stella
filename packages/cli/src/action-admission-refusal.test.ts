@@ -97,6 +97,7 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
     const refusal = {
       ...metadata,
       hint: "Server recovery guidance",
+      ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
       contactUrl: "https://example.invalid/contact",
     };
     const contract = ACTION_ADMISSION_REFUSALS[refusal.code];
@@ -108,6 +109,11 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
     };
     expect(errorEnvelope({ error: fixture })).toMatchObject(refusal);
     expect(readCliActionAdmissionRefusal({ error: fixture })).toEqual(refusal);
+    if (refusal.retryAfterMs !== undefined) {
+      expect(actionAdmissionRefusalLines(refusal)).toContain(
+        `retry-after-ms: ${refusal.retryAfterMs}`,
+      );
+    }
     expect(
       await readHttpActionAdmissionRefusal(Response.json(fixture)),
     ).toEqual(refusal);
@@ -118,6 +124,9 @@ for (const code of Object.keys(EXPECTED_EXITS)) {
           message: fixture.message,
           hint: fixture.hint,
           contactUrl: fixture.contactUrl,
+          ...(fixture.retryAfterMs === undefined
+            ? {}
+            : { retryAfterMs: fixture.retryAfterMs }),
         }),
       ),
     ).toEqual(refusal);

@@ -16,6 +16,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -386,6 +387,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
     "no-rendered-error-translation/no-rendered-error-translation",
   ]),
+  fixtureRuleOverride("require-valibot-message.fixture.ts", [
+    "require-valibot-message/require-valibot-message",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -532,6 +536,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
+    "public-law-read-boundary/require-owned-public-read-transport",
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
@@ -1196,6 +1201,8 @@ const bunNativeFiles = [
 const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
 
 const config = defineConfig({
+  // Oxlint does not inherit `env` through `extends`.
+  env: core.env,
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
@@ -1839,6 +1846,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -1849,6 +1857,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
+    "./.oxlint-plugins/require-valibot-message.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -2034,6 +2043,7 @@ const config = defineConfig({
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
+    "./.oxlint-plugins/no-lazy-wrapped-content.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
     "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
@@ -2858,7 +2868,7 @@ const config = defineConfig({
             // same file still fails.
             allowedFiles: [
               {
-                path: "apps/web/src/components/globe.tsx",
+                path: "apps/web/src/routes/onboarding/-components/globe.tsx",
                 reason:
                   "Decorative globe canvas fades in once after it draws; nothing waits on it.",
                 utilities: ["duration-700"],
@@ -2966,6 +2976,16 @@ const config = defineConfig({
       },
     },
     {
+      // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
+      // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
+      // fresh array instead (apps/mobile/src/architecture.test.ts).
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
+    },
+    {
       // Two guards contradict each other in apps/web; this override picks one.
       //
       // React Compiler: bails out of any component or hook containing a logical
@@ -3056,6 +3076,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
@@ -3836,6 +3861,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
+      },
+    },
+    {
+      // React mounts a Suspense boundary's content in place of its fallback,
+      // so a lazy chunk mounted around content already on screen (a reader,
+      // a viewer) replaces it, DOM node, scroll position and focus included.
+      // Lazy chunks mount beside the content they add to.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-lazy-wrapped-content.fixture.tsx",
+      ],
+      rules: {
+        "no-lazy-wrapped-content/no-lazy-wrapped-content": "error",
       },
     },
     {
@@ -4873,6 +4912,26 @@ const config = defineConfig({
       },
     },
     {
+      // Tabs can remain open while another route family is active. Context
+      // belongs to shared providers, including for tabs owned outside inspector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
+        "apps/web/src/**/*inspector*.tsx",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
+        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
+        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
+        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
+        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
+        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+      ],
+      rules: {
+        "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
+          "error",
+      },
+    },
+    {
       // Field value display must stay centralized in FieldValue /
       // EditableField. These surfaces own table/kanban/inspector shell
       // behavior, but must not reimplement per-field display branches.
@@ -4954,6 +5013,7 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -4969,7 +5029,6 @@ const config = defineConfig({
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
               "apps/web/src/runtime.ts",
-              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading
@@ -6313,6 +6372,13 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}", "**/tests/**"],
+      rules: {
+        "public-law-read-boundary/require-owned-public-read-transport": "error",
+      },
+    },
+    {
       files: ["apps/api/src/lib/public-law-read-db.ts"],
       rules: {
         "public-law-read-boundary/require-configured-read-transaction": "error",
@@ -6608,6 +6674,19 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      files: [
+        "apps/web/src/lib/schema.ts",
+        "apps/web/src/lib/organization/role-assignment.logic.ts",
+        "apps/web/src/components/auth/password-sign-in-form.tsx",
+        "apps/web/src/components/auth/sign-in-panel.tsx",
+        "apps/web/src/components/organization/invite-member-dialog.tsx",
+        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+      ],
+      rules: {
+        "require-valibot-message/require-valibot-message": "error",
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

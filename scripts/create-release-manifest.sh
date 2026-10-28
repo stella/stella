@@ -16,6 +16,7 @@ IMAGE_DIGEST="$3"
 WEB_IMAGE_NAME="$4"
 WEB_IMAGE_DIGEST="$5"
 WEB_TARGET_ENVIRONMENT="$6"
+PRODUCTION_WEB_IMAGE_DIGEST="${PRODUCTION_WEB_IMAGE_DIGEST:-$WEB_IMAGE_DIGEST}"
 MIGRATIONS_DIR="apps/api/drizzle"
 
 validate_digest() {
@@ -30,6 +31,7 @@ validate_digest() {
 
 validate_digest "API image digest" "$IMAGE_DIGEST"
 validate_digest "web image digest" "$WEB_IMAGE_DIGEST"
+validate_digest "production web image digest" "$PRODUCTION_WEB_IMAGE_DIGEST"
 
 if [[ "$WEB_TARGET_ENVIRONMENT" != "production" && "$WEB_TARGET_ENVIRONMENT" != "staging" ]]; then
   echo "ERROR: web target environment must be production or staging." >&2
@@ -90,6 +92,7 @@ jq -n \
   --arg imageDigest "$IMAGE_DIGEST" \
   --arg webImageName "$WEB_IMAGE_NAME" \
   --arg webImageDigest "$WEB_IMAGE_DIGEST" \
+  --arg productionWebImageDigest "$PRODUCTION_WEB_IMAGE_DIGEST" \
   --arg webTargetEnvironment "$WEB_TARGET_ENVIRONMENT" \
   --arg migrationsPath "$MIGRATIONS_DIR" \
   --arg migrationsSha256 "$MIGRATION_SHA256" \
@@ -112,6 +115,12 @@ jq -n \
       digest: $webImageDigest,
       reference: ($webImageName + "@" + $webImageDigest),
       targetEnvironment: $webTargetEnvironment
+    },
+    productionWebImage: {
+      name: $webImageName,
+      digest: $productionWebImageDigest,
+      reference: ($webImageName + "@" + $productionWebImageDigest),
+      targetEnvironment: "production"
     },
     migrations: {
       path: $migrationsPath,

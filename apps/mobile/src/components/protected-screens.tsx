@@ -15,6 +15,7 @@ export const ProtectedScreens = () => {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="thread/[threadId]" />
         <Stack.Screen
           name="matter/[workspaceId]/index"
           options={{

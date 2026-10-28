@@ -4,6 +4,7 @@ import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { readGzipJson } from "@/api/lib/gzip-json";
 
 const FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
@@ -524,4 +525,58 @@ describe("letter spacing across inline boundaries", () => {
       ),
     ).toEqual(["Podanie bolo doručené k elektronickému podaniu."]);
   });
+});
+
+test("unpainted redaction gaps survive line trimming and paragraph projection", async () => {
+  const xhtml = await Bun.file(
+    new URL("__fixtures__/sk-us-redaction-gaps.xhtml", import.meta.url),
+  ).text();
+  const { documentAst, fulltext } = parse(xhtml);
+  expect(fulltext).toContain(
+    "s obsahom ústavnej sťažnosti anonymizované, anonymizované (ďalej",
+  );
+  expect(fulltext).toContain("zastúpeného advokátom anonymizované");
+  expect(
+    segmentDecision(fulltext)
+      .map(({ text }) => text)
+      .join("\n"),
+  ).toContain("zastúpeného advokátom anonymizované");
+  expect(
+    inlinesOf(documentAst.blocks).filter(
+      (inline) => inline.type === "text" && inline.anonymized === true,
+    ),
+  ).toHaveLength(4);
+  expect(
+    documentAst.blocks.find(
+      (block) => block.type === "heading" && block.plainText.startsWith("II."),
+    )?.plainText,
+  ).toBe("II. Relevantná právna úprava");
+  const numbered = documentAst.blocks.filter(
+    (block) => block.type === "paragraph" && block.number !== undefined,
+  );
+  expect(numbered).toHaveLength(2);
+  expect(numbered.at(0)?.plainText).toContain(
+    "o vylúčení sudcu ústavného súdu",
+  );
+});
+
+test("redaction gaps inside unknown markup survive while ordinary spacing stays whitespace", () => {
+  for (const wrapper of ["span", "mark", "custom-redaction", "b", "em"]) {
+    for (const length of [4, 10, 36, 57]) {
+      const { documentAst, fulltext } = parse(
+        `<div><span>Úvod <${wrapper}>${"&nbsp;".repeat(length)}</${wrapper}> záver.<br/></span></div>`,
+      );
+      expect(fulltext).toBe("Úvod anonymizované záver.");
+      expect(inlinesOf(documentAst.blocks)).toContainEqual({
+        type: "text",
+        text: "anonymizované",
+        anonymized: true,
+      });
+    }
+  }
+  for (const gap of [" ".repeat(40), "&nbsp;", "&nbsp;".repeat(3)]) {
+    expect(parse(`<span>Slovo${gap}slovo.</span>`).fulltext).not.toContain(
+      "anonymizované",
+    );
+  }
 });
