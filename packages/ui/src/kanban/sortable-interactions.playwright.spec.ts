@@ -136,8 +136,8 @@ const scrollWithTouch = async (
       },
     ]);
     await page.evaluate(
-      () =>
-        new Promise<void>((resolve) => {
+      async () =>
+        await new Promise<void>((resolve) => {
           requestAnimationFrame(() => resolve());
         }),
     );
