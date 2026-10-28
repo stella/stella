@@ -13,3 +13,9 @@ export const matterRouteView = (status: string) => {
       return "unavailable";
   }
 };
+
+export const matterCardDragMode = (
+  status: string,
+  canReassignClient: boolean,
+): "client-group" | "none" =>
+  status === "active" && canReassignClient ? "client-group" : "none";

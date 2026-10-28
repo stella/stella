@@ -42,7 +42,10 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { isMatterInStatusView } from "@/lib/workspaces/archived-matters.logic";
+import {
+  isMatterInStatusView,
+  matterCardDragMode,
+} from "@/lib/workspaces/archived-matters.logic";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import {
   workspacesKeys,
@@ -678,7 +681,10 @@ const MattersContentView = ({
                       {!collapsed &&
                         group.workspaces.map((workspace, i) => (
                           <MatterCard
-                            drag={canReassignClient ? "client-group" : "none"}
+                            drag={matterCardDragMode(
+                              workspace.status,
+                              canReassignClient,
+                            )}
                             focused={focusIndex === baseIndex + i}
                             hideClientName
                             key={workspace.id}

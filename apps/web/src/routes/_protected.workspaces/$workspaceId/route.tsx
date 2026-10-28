@@ -91,6 +91,8 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     return await loadWorkspaceRouteQueries({
       loadWorkspace: async () =>
         await loadWorkspaceOrRedirect(qc, workspaceOptions(wsId)),
+      shouldStartPrefetches: (workspace) =>
+        matterRouteView(workspace.status) === "active",
       startPrefetches: [
         () =>
           detached(
@@ -195,8 +197,9 @@ const ArchivedMatterView = ({
             unarchive.mutate(
               { workspaceId: workspace.id },
               {
-                onError: (error) =>
-                  notifyUserError(error, t("errors.actionFailed")),
+                onError: (error) => {
+                  notifyUserError(error, t("errors.actionFailed"));
+                },
               },
             )
           }

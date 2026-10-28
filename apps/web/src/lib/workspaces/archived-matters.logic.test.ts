@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isMatterInStatusView,
+  matterCardDragMode,
   matterRouteView,
 } from "./archived-matters.logic";
 
@@ -13,6 +14,12 @@ describe("matter status views", () => {
     expect(isMatterInStatusView("archived", "archived")).toBe(true);
     expect(isMatterInStatusView("deleting", "active")).toBe(false);
     expect(isMatterInStatusView("deleting", "archived")).toBe(false);
+  });
+
+  test("only active matters can be dragged between clients", () => {
+    expect(matterCardDragMode("active", true)).toBe("client-group");
+    expect(matterCardDragMode("archived", true)).toBe("none");
+    expect(matterCardDragMode("active", false)).toBe("none");
   });
 
   test("archived matter URLs resolve to a read-only view", () => {

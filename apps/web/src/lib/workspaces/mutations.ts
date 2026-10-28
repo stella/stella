@@ -8,6 +8,7 @@ import { panic } from "better-result";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import {
   shouldRetryAPIRequest,
@@ -196,13 +197,13 @@ export const useArchiveWorkspace = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .archive.post({});
+      await invokeCapability("matters.archive", async (request) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .archive.post({}, request);
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+        return unwrapApiResponse(response);
+      });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -210,7 +211,10 @@ export const useArchiveWorkspace = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useArchiveWorkspace:failure",
+        scope: { type: "handler", handlerId: "useArchiveWorkspace:failure" },
+      });
     },
   });
 };
