@@ -1026,6 +1026,50 @@ export const readPendingCommands = async (
   };
 };
 
+type SessionsWithCommandsOptions = {
+  instanceId: string;
+  /** How far back, on the database's clock, a queued command still counts. */
+  windowMs: number;
+  limit: number;
+};
+
+/**
+ * The sockets this API task holds whose open runs had a command queued within
+ * the window: the ones a lost doorbell ring may have left waiting.
+ */
+export const readSessionsWithQueuedCommands = async (
+  db: Pick<DesktopRunnerDb, "select">,
+  { instanceId, windowMs, limit }: SessionsWithCommandsOptions,
+): Promise<string[]> =>
+  (
+    await db
+      .select({ sessionId: runner.sessionId })
+      .from(runner)
+      .innerJoin(
+        runs,
+        and(
+          eq(runs.userId, runner.userId),
+          eq(runs.organizationId, runner.organizationId),
+          eq(runs.desktopId, runner.desktopId),
+          eq(runs.deviceJkt, runner.deviceJkt),
+        ),
+      )
+      .innerJoin(
+        desktopRunnerCommands,
+        eq(desktopRunnerCommands.runId, runs.runId),
+      )
+      .where(
+        and(
+          eq(runner.instanceId, instanceId),
+          eq(runner.connection, "connected"),
+          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          sql`${desktopRunnerCommands.createdAt} >= now() - ${windowMs}::double precision * interval '1 millisecond'`,
+        ),
+      )
+      .groupBy(runner.sessionId)
+      .limit(limit)
+  ).map(({ sessionId }) => sessionId);
+
 type ReadyRunnersOptions = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;

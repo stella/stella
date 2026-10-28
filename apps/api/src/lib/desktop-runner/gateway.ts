@@ -32,6 +32,7 @@ import {
   expireAbandonedRuns,
   expireRunLeases,
   pruneEndedRuns,
+  readSessionsWithQueuedCommands,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -90,6 +91,10 @@ export type DesktopRunnerGatewayOptions = {
 
 /** Leases expired per sweep, so one sweep stays one short transaction. */
 const EXPIRY_BATCH = 100;
+/** Sockets a sweep delivers to, at most; a ring reaches the rest. */
+const SWEEP_DELIVERY_BATCH = 500;
+/** Beyond two sweep intervals, so a command queued between sweeps is seen twice. */
+const SWEEP_WINDOW_MARGIN_MS = 5000;
 /** How long a draining task asks a refused desktop to wait before retrying. */
 const DRAINING_RETRY_AFTER_S = 5;
 
@@ -184,9 +189,24 @@ export const createDesktopRunnerGateway = (
       // Retention catches up on the next sweep.
       observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
     }
-    await Promise.all(
-      [...sessions.values()].map(async (session) => await session.deliver()),
+    // Only sockets with commands queued in the window, one after another:
+    // a sweep catches lost rings without touching every idle socket.
+    const queued = await Result.tryPromise(
+      async () =>
+        await readSessionsWithQueuedCommands(options.db, {
+          instanceId: options.instanceId,
+          windowMs: 2 * timing.sweepIntervalMs + SWEEP_WINDOW_MARGIN_MS,
+          limit: SWEEP_DELIVERY_BATCH,
+        }),
     );
+    if (queued.isErr()) {
+      observeFailure(queued.error, { sink: LEASE_SWEEP_SINK });
+      return;
+    }
+    for (const sessionId of queued.value) {
+      // db-await-in-loop: one socket's delivery per iteration; each reads its own queue page by page
+      await sessions.get(sessionId)?.deliver();
+    }
   };
 
   const scheduleSweep = () => {
