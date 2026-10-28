@@ -65,22 +65,23 @@ test("only same-origin checkout declarations establish a nested mount", () => {
   ).toThrow("ambiguous");
 });
 
-test("a repeated metadata node cannot silently inherit another caller's mount", () => {
-  for (const [first, second] of [
-    [null, ".tooling"],
-    [".tooling", null],
-    [".tooling", ".other"],
-  ]) {
-    const mounts = new Map<string, string | null>();
-    const mount = first ?? null;
-    recordMetadataMount({ mounts, identity: "action", mount });
-    recordMetadataMount({ mounts, identity: "action", mount });
-    expect(() =>
-      recordMetadataMount({
-        mounts,
-        identity: "action",
-        mount: second ?? null,
-      }),
-    ).toThrow("conflicting");
+test("leaf metadata can share mounts but context-dependent edges cannot", () => {
+  const mounts = new Map<string, string>();
+  const leaf = { dependencies: {}, relocatedActions: {} };
+  for (const mount of [null, ".tooling", ".other"]) {
+    recordMetadataMount({ mounts, identity: "leaf", mount, document: leaf });
   }
+  const document = {
+    dependencies: { "./.tooling/action": "action" },
+    relocatedActions: {},
+  } as const;
+  recordMetadataMount({
+    mounts,
+    identity: "parent",
+    mount: ".tooling",
+    document,
+  });
+  expect(() =>
+    recordMetadataMount({ mounts, identity: "parent", mount: null, document }),
+  ).toThrow("conflicting");
 });

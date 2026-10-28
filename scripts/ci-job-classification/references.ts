@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { AdmissionError } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -214,19 +215,38 @@ export const resolveLocalMetadataPath = ({
 
 /** A single source node cannot silently acquire the first caller's workspace context. */
 type MetadataMountOptions = {
-  mounts: Map<string, string | null>;
+  mounts: Map<string, string>;
   identity: string;
   mount: string | null;
+  document: Pick<ParsedDocument, "dependencies" | "relocatedActions">;
 };
 export const recordMetadataMount = ({
   mounts,
   identity,
   mount,
+  document,
 }: MetadataMountOptions) => {
-  if (mounts.has(identity) && mounts.get(identity) !== mount) {
+  const context = JSON.stringify(
+    Object.entries(document.dependencies)
+      .filter(
+        ([reference]) =>
+          reference.startsWith("./") || reference.startsWith("$/"),
+      )
+      .toSorted(([left], [right]) => compareCodeUnit(left, right))
+      .map(([reference, kind]) => [
+        reference,
+        resolveLocalMetadataPath({
+          reference,
+          kind,
+          relocations: document.relocatedActions[reference] ?? [],
+          inheritedMount: mount,
+        }),
+      ]),
+  );
+  if (mounts.has(identity) && mounts.get(identity) !== context) {
     throw new AdmissionError({
       message: `conflicting checkout metadata context: ${identity}`,
     });
   }
-  mounts.set(identity, mount);
+  mounts.set(identity, context);
 };

@@ -220,6 +220,45 @@ const pairSuppliers = ({
   return { replacements, copies };
 };
 
+type SnapshotMergeOptions = {
+  root: string;
+  previous: Snapshots;
+  documents: Map<string, Record<string, string>>;
+  origins: Map<string, Snapshot["origin"]>;
+};
+const mergeSnapshotDocuments = ({
+  root,
+  previous,
+  documents,
+  origins,
+}: SnapshotMergeOptions) => {
+  const retained = Object.fromEntries(
+    Object.entries(previous).filter(([, snapshot]) =>
+      documents.has(sourceIdentity(snapshot.origin)),
+    ),
+  );
+  for (const identity of [...documents.keys()].toSorted(compareCodeUnit)) {
+    const origin = origins.get(identity);
+    if (!origin) {
+      throw new AdmissionError({ message: "Snapshot origin disappeared" });
+    }
+    const exact = Object.entries(retained).find(([, snapshot]) =>
+      sameMetadataOrigin({ caller: origin, target: snapshot.origin }),
+    );
+    const supplier =
+      exact?.[0] ?? nextSupplierKey(root, { ...previous, ...retained });
+    retained[supplier] = {
+      origin,
+      documents: Object.fromEntries(
+        Object.entries(documents.get(identity) ?? {}).toSorted(
+          ([left], [right]) => compareCodeUnit(left, right),
+        ),
+      ),
+    };
+  }
+  return retained;
+};
+
 type VisitDocumentOptions = {
   identity: string;
   origin: Snapshot["origin"];
@@ -247,7 +286,7 @@ export const writeSnapshots = ({
   const documents = new Map<string, Record<string, string>>();
   const origins = new Map<string, Snapshot["origin"]>();
   const visited = new Set<string>();
-  const mounts = new Map<string, string | null>();
+  const mounts = new Map<string, string>();
 
   const existingFor = (origin: Snapshot["origin"]) =>
     Object.entries(previous).find(([, snapshot]) =>
@@ -310,16 +349,21 @@ export const writeSnapshots = ({
     mount = null,
   }: VisitDocumentOptions) => {
     const visitKey = `${identity}:${file}`;
-    recordMetadataMount({ mounts, identity: visitKey, mount });
-    if (visited.has(visitKey)) {
-      return;
-    }
-    visited.add(visitKey);
     const text = read(file);
     const parsed = parseDocument(text);
     if (parsed.isErr()) {
       throw parsed.error;
     }
+    recordMetadataMount({
+      mounts,
+      identity: visitKey,
+      mount,
+      document: parsed.value,
+    });
+    if (visited.has(visitKey)) {
+      return;
+    }
+    visited.add(visitKey);
     origins.set(identity, origin);
     const collected = documents.get(identity) ?? {};
     collected[file] = text;
@@ -355,15 +399,20 @@ export const writeSnapshots = ({
   const readCandidate = (file: string) =>
     readFileSync(path.resolve(root, file), "utf-8");
   const visitCandidate = (file: string, mount: string | null = null) => {
-    recordMetadataMount({ mounts, identity: `candidate:${file}`, mount });
-    if (candidateVisited.has(file)) {
-      return;
-    }
-    candidateVisited.add(file);
     const parsed = parseDocument(readCandidate(file));
     if (parsed.isErr()) {
       throw parsed.error;
     }
+    recordMetadataMount({
+      mounts,
+      identity: `candidate:${file}`,
+      mount,
+      document: parsed.value,
+    });
+    if (candidateVisited.has(file)) {
+      return;
+    }
+    candidateVisited.add(file);
     for (const [reference, kind] of Object.entries(parsed.value.dependencies)) {
       if (reference.startsWith("./") || reference.startsWith("$/")) {
         const relative = reference.slice(2);
@@ -390,30 +439,12 @@ export const writeSnapshots = ({
     visitCandidate(file);
   }
 
-  const retained = Object.fromEntries(
-    Object.entries(previous).filter(([, snapshot]) =>
-      documents.has(sourceIdentity(snapshot.origin)),
-    ),
-  );
-  for (const identity of [...documents.keys()].toSorted(compareCodeUnit)) {
-    const origin = origins.get(identity);
-    if (!origin) {
-      throw new AdmissionError({ message: "Snapshot origin disappeared" });
-    }
-    const exact = Object.entries(retained).find(([, snapshot]) =>
-      sameMetadataOrigin({ caller: origin, target: snapshot.origin }),
-    );
-    const supplier =
-      exact?.[0] ?? nextSupplierKey(root, { ...previous, ...retained });
-    retained[supplier] = {
-      origin,
-      documents: Object.fromEntries(
-        Object.entries(documents.get(identity) ?? {}).toSorted(
-          ([left], [right]) => compareCodeUnit(left, right),
-        ),
-      ),
-    };
-  }
+  const retained = mergeSnapshotDocuments({
+    root,
+    previous,
+    documents,
+    origins,
+  });
   const refreshBase = base ?? gitBase(root);
   const moves = pinMoves(root, refreshBase);
   const { replacements, copies } = pairSuppliers({ previous, retained, moves });

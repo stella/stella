@@ -167,6 +167,24 @@ const verifyReference = ({
   return targetMount;
 };
 
+const verifyWorkflowInventory = (
+  metadata: PublicMetadata,
+  reader: MetadataReader,
+) => {
+  const observed = reader.workflows().toSorted();
+  unique(observed, "observed workflow");
+  if (
+    JSON.stringify(observed) !==
+    JSON.stringify(
+      metadata.workflows.map((workflow) => workflow.path).toSorted(),
+    )
+  ) {
+    reject(
+      `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
+    );
+  }
+};
+
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
 export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
   Result.try({
@@ -180,37 +198,36 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
         metadata.workflows.map((workflow) => workflow.path),
         "workflow declaration",
       );
-      const observed = reader.workflows().toSorted();
-      unique(observed, "observed workflow");
-      if (
-        JSON.stringify(observed) !==
-        JSON.stringify(
-          metadata.workflows.map((workflow) => workflow.path).toSorted(),
-        )
-      ) {
-        reject(
-          `Unclassified workflows: ${observed.filter((path) => !metadata.workflows.some((workflow) => workflow.path === path)).join(", ")}. Classify their jobs, then ${REVIEW_INSTRUCTION}`,
-        );
-      }
+      verifyWorkflowInventory(metadata, reader);
       const nodes = new Map(metadata.nodes.map((node) => [node.id, node]));
       const visited = new Set<string>();
-      const mounts = new Map<string, string | null>();
+      const mounts = new Map<string, string>();
       const active = new Set<string>();
       const classifications = { ordinary: 0, support: 0, priority: 0 };
       const parsedDocuments = new Map<string, ParsedDocument>();
       let jobCount = 0;
       let documentCount = 0;
       const visit = (id: string, mount: string | null = null): void => {
-        recordMetadataMount({ mounts, identity: id, mount });
         if (active.has(id)) {
           reject("metadata dependency cycle");
-        }
-        if (visited.has(id)) {
-          return;
         }
         const node = nodes.get(id);
         if (!node) {
           reject(`missing metadata dependency: ${id}`);
+        }
+        if (node.type === "metadata") {
+          const definition = parsedDocuments.get(id);
+          if (definition) {
+            recordMetadataMount({
+              mounts,
+              identity: id,
+              mount,
+              document: definition,
+            });
+          }
+        }
+        if (visited.has(id)) {
+          return;
         }
         active.add(id);
         if (node.type === "metadata") {
@@ -221,6 +238,12 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             throw parsed.error;
           }
           parsedDocuments.set(id, parsed.value);
+          recordMetadataMount({
+            mounts,
+            identity: id,
+            mount,
+            document: parsed.value,
+          });
           unique(
             node.jobs.map((job) => job.id),
             "callee job classification",

@@ -461,7 +461,7 @@ export const generateClassification = ({
     try: () => {
       const nodes: MetadataNodes = new Map();
       const parsedDocuments = new Map<string, ParsedDocument>();
-      const mounts = new Map<string, string | null>();
+      const mounts = new Map<string, string>();
       type VisitOptions = {
         repository: string;
         file: string;
@@ -475,13 +475,18 @@ export const generateClassification = ({
         mount = null,
       }: VisitOptions): string => {
         const id = `source-${sha256(`${repository}:${file}`)}`;
-        recordMetadataMount({ mounts, identity: id, mount });
-        if (nodes.has(id)) {
-          return id;
-        }
         const parsed = parseDocument(reader.read(repository, file));
         if (parsed.isErr()) {
           throw parsed.error;
+        }
+        recordMetadataMount({
+          mounts,
+          identity: id,
+          mount,
+          document: parsed.value,
+        });
+        if (nodes.has(id)) {
+          return id;
         }
         const references: string[] = [];
         const edges: Record<string, string> = {};
