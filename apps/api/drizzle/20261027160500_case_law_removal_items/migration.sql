@@ -3,8 +3,8 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "case_law_removal_reconciliation_items" (
   "id" uuid PRIMARY KEY,
-  "source_id" uuid NOT NULL REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
-  "decision_id" uuid NOT NULL REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
+  "source_id" uuid NOT NULL CONSTRAINT "case_law_removal_items_source_fk" REFERENCES "case_law_sources"("id") ON DELETE CASCADE,
+  "decision_id" uuid NOT NULL CONSTRAINT "case_law_removal_items_decision_fk" REFERENCES "case_law_decisions"("id") ON DELETE CASCADE,
   "kind" varchar(32) NOT NULL,
   "payload" jsonb NOT NULL,
   "attempts" integer NOT NULL DEFAULT 0,
@@ -21,5 +21,5 @@ ALTER TABLE "case_law_removal_reconciliation_items" ENABLE ROW LEVEL SECURITY;--
 ALTER TABLE "case_law_removal_reconciliation_items" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_global_access" ON "case_law_removal_reconciliation_items" FOR SELECT TO stella USING (true);--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_removal_reconciliation_items" FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
-GRANT SELECT ON "case_law_removal_reconciliation_items" TO stella;--> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE ON "case_law_removal_reconciliation_items" TO stella_ingestion;
+GRANT SELECT ON TABLE "case_law_removal_reconciliation_items" TO stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "case_law_removal_reconciliation_items" TO stella_ingestion;

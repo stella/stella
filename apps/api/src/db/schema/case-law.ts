@@ -1898,12 +1898,8 @@ export const caseLawRemovalReconciliationItems = p.pgTable(
   "case_law_removal_reconciliation_items",
   {
     id: pUuid<"caseLawRemovalReconciliationItem">().primaryKey(),
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .notNull()
-      .references(() => caseLawSources.id, { onDelete: "cascade" }),
-    decisionId: safeUuid<"caseLawDecision">("decision_id")
-      .notNull()
-      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
     kind: p.varchar({ length: 32, enum: REMOVAL_RETRY_KINDS }).notNull(),
     payload: jsonb().$type<unknown>().notNull(),
     attempts: p.integer().default(0).notNull(),
@@ -1913,6 +1909,20 @@ export const caseLawRemovalReconciliationItems = p.pgTable(
     lastAttemptAt: timestamptz("last_attempt_at").notNull(),
   },
   (t) => [
+    p
+      .foreignKey({
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+        name: "case_law_removal_items_source_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_removal_items_decision_fk",
+      })
+      .onDelete("cascade"),
     p
       .uniqueIndex("case_law_removal_items_source_decision_idx")
       .on(t.sourceId, t.decisionId),

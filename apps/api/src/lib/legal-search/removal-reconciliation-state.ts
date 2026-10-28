@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 import {
   REMOVAL_SUPERSEDED_REASON,
   removalEvidenceSchema,
@@ -15,7 +17,7 @@ const activeRemovalCheckpointSchema = v.variant("status", [
   }),
   v.strictObject({
     status: v.literal("waiting"),
-    nextCycleAt: v.pipe(v.string(), v.isoTimestamp()),
+    nextCycleAt: apiDateTimeSchema,
   }),
 ]);
 
@@ -24,7 +26,7 @@ export const removalCheckpointSchema = v.variant("status", [
   v.strictObject({
     status: v.literal("paused"),
     resume: v.nullable(activeRemovalCheckpointSchema),
-    resumeAt: v.pipe(v.string(), v.isoTimestamp()),
+    resumeAt: apiDateTimeSchema,
   }),
 ]);
 

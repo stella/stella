@@ -1,10 +1,12 @@
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 const revision = {
   decisionId: v.pipe(v.string(), v.uuid()),
   sourceId: v.pipe(v.string(), v.uuid()),
-  observedAt: v.pipe(v.string(), v.isoTimestamp()),
-  sourceObservedAt: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+  observedAt: apiDateTimeSchema,
+  sourceObservedAt: v.nullable(apiDateTimeSchema),
   sourceObservationOrder: v.nullable(v.pipe(v.string(), v.regex(/^\d+$/u))),
 };
 

@@ -14,5 +14,5 @@ CREATE POLICY "case_law_sitemap_generation_owner_access" ON "case_law_sitemap_co
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass));--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "case_law_sitemap_country_generations"
   FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);--> statement-breakpoint
-REVOKE ALL ON "case_law_sitemap_country_generations" FROM stella;--> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE ON "case_law_sitemap_country_generations" TO stella_ingestion;
+REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_country_generations" FROM stella;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_sitemap_country_generations" TO stella_ingestion;
