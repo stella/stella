@@ -184,15 +184,20 @@ export const answerEntry = (
  * The body `POST /v1/chat` takes: an AG-UI run envelope whose forwarded
  * props carry the message, repeated as `data`, and named again in
  * `messages`; the server refuses an envelope whose copies disagree. The
- * phone redacts nothing itself, so the text goes as written.
+ * phone redacts nothing itself, so the text goes as written; a thread that
+ * has sent anonymized text asks the server to anonymize this message too,
+ * so continuing it from the phone does not undo its protection.
  */
 export const chatSendBody = ({
+  anonymized,
   matterId,
   messageId,
   runId,
   text,
   threadId,
 }: {
+  /** The thread has sent anonymized text before. */
+  readonly anonymized: boolean;
   /** The thread's matter; the server refuses a matter's thread sent to as global. */
   readonly matterId: string | undefined;
   readonly messageId: string;
@@ -204,7 +209,7 @@ export const chatSendBody = ({
     threadId,
     runId,
     ...(matterId === undefined ? {} : { workspaceId: matterId }),
-    sendMode: "rawOverride",
+    sendMode: anonymized ? "anonymized" : "rawOverride",
     message: {
       id: messageId,
       role: "user",
@@ -251,6 +256,13 @@ export type StreamFetch = (
 /** A stream ended: its last event id, so a dropped connection can pick up after it. */
 export type StreamEnd = { readonly lastEventId: string | undefined };
 
+/**
+ * A stream broke: why, and the last event id read before it did. The
+ * events up to it are already drawn, so a rejoin must pick up after it
+ * rather than replay them into the answer a second time.
+ */
+export type StreamBreak = StreamEnd & { readonly error: ApiError };
+
 /** Waiting longer than this for a run to answer means the connection is gone. */
 const STREAM_CONNECT_TIMEOUT_MS = 20_000;
 
@@ -279,16 +291,18 @@ const readChatStream = async ({
   readonly path: string;
   readonly signal: AbortSignal;
   readonly source: AccessTokenSource;
-}): Promise<Result<StreamEnd, ApiError>> => {
+}): Promise<Result<StreamEnd, StreamBreak>> => {
   const url = `${source.session().serverUrl}${path}`;
-  return await withAccessToken(source, async (token) => {
+  // Kept outside the request so a stream that breaks part way still reports
+  // the last event it delivered.
+  let lastId = lastEventId;
+  const ended = await withAccessToken(source, async (token) => {
     const controller = new AbortController();
     const abort = () => {
       controller.abort();
     };
     signal.addEventListener("abort", abort);
     const connectTimer = setTimeout(abort, STREAM_CONNECT_TIMEOUT_MS);
-    let lastId = lastEventId;
     const read = await Result.tryPromise({
       try: async () => {
         const response = await fetch(url, {
@@ -355,6 +369,7 @@ const readChatStream = async ({
     }
     return Result.ok({ lastEventId: lastId });
   });
+  return ended.mapError((error) => ({ error, lastEventId: lastId }));
 };
 
 const turnPath = (threadId: string, turnId: string) =>
@@ -366,6 +381,7 @@ const scopeQuery = (matterId: string | undefined) =>
 
 /** Sends one message and streams the answer to it. */
 export const sendChatMessage = async ({
+  anonymized,
   fetch,
   matterId,
   messageId,
@@ -377,6 +393,7 @@ export const sendChatMessage = async ({
   text,
   threadId,
 }: {
+  readonly anonymized: boolean;
   readonly fetch: StreamFetch;
   readonly matterId: string | undefined;
   readonly messageId: string;
@@ -387,10 +404,10 @@ export const sendChatMessage = async ({
   readonly source: AccessTokenSource;
   readonly text: string;
   readonly threadId: string;
-}): Promise<Result<StreamEnd, ApiError>> =>
+}): Promise<Result<StreamEnd, StreamBreak>> =>
   await readChatStream({
     body: JSON.stringify(
-      chatSendBody({ matterId, messageId, runId, text, threadId }),
+      chatSendBody({ anonymized, matterId, messageId, runId, text, threadId }),
     ),
     fetch,
     method: "POST",
@@ -423,7 +440,7 @@ export const joinChatTurn = async ({
   readonly source: AccessTokenSource;
   readonly threadId: string;
   readonly turnId: string;
-}): Promise<Result<StreamEnd, ApiError>> =>
+}): Promise<Result<StreamEnd, StreamBreak>> =>
   await readChatStream({
     fetch,
     lastEventId: lastEventId ?? "-1",

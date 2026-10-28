@@ -35,6 +35,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   entries: [],
   olderCursor: null,
   activeTurnId: null,
+  usedAnonymization: false,
 };
 
 /**
@@ -162,8 +163,10 @@ const ThreadMessages = ({
   const [entries, setEntries] = useState(firstPage.entries);
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
+  const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
+    anonymized,
     matterId,
     onSettled: async () => {
       const latest = await readChatThread({
@@ -174,6 +177,7 @@ const ThreadMessages = ({
       });
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
+        setAnonymized(latest.value.usedAnonymization);
         return true;
       }
       if (latest.error._tag === "SignedOutError") {

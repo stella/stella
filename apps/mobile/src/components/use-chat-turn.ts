@@ -21,6 +21,7 @@ import {
 import type {
   AnswerStatus,
   ChatEvent,
+  StreamBreak,
   StreamedAnswer,
   StreamEnd,
 } from "@/state/chat-stream";
@@ -64,12 +65,15 @@ const newConnection = (turnId: string | undefined): Connection => ({
  */
 export const useChatTurn = ({
   activeTurnId,
+  anonymized,
   matterId,
   onSettled,
   source,
   threadId,
 }: {
   activeTurnId: string | null;
+  /** The thread has sent anonymized text, so a message sent now is anonymized too. */
+  anonymized: boolean;
   matterId: string | undefined;
   onSettled: () => Promise<boolean>;
   source: AccessTokenSource;
@@ -82,10 +86,10 @@ export const useChatTurn = ({
   const { connection } = turn;
   const [sendFailed, setSendFailed] = useState(false);
 
-  const finish = async (status?: AnswerStatus) => {
+  const finish = async (opened: Connection, status?: AnswerStatus) => {
     turn.close(status);
     if (await onSettled()) {
-      turn.clear();
+      turn.clear(opened);
     }
   };
 
@@ -102,21 +106,23 @@ export const useChatTurn = ({
 
   const settle = async (
     opened: Connection,
-    read: Result<StreamEnd, ApiError>,
+    read: Result<StreamEnd, StreamBreak>,
   ) => {
     if (!current(opened)) {
       return;
     }
-    if (Result.isOk(read)) {
-      opened.lastEventId = read.value.lastEventId;
-    } else if (signedOut(read.error)) {
+    // A broken stream still names the last event it delivered, so the
+    // rejoin does not draw those events a second time.
+    const { lastEventId } = Result.isOk(read) ? read.value : read.error;
+    opened.lastEventId = lastEventId;
+    if (Result.isError(read) && signedOut(read.error.error)) {
       return;
     }
     if (turn.answer.current.status === "streaming") {
       await rejoin(opened);
       return;
     }
-    await finish();
+    await finish(opened);
   };
 
   const rejoin = async (opened: Connection): Promise<void> => {
@@ -125,7 +131,7 @@ export const useChatTurn = ({
       return;
     }
     if (known === undefined) {
-      await finish("failed");
+      await finish(opened, "failed");
       return;
     }
     if (AppState.currentState !== "active") {
@@ -154,7 +160,7 @@ export const useChatTurn = ({
         return;
       }
       case "transcript": {
-        await finish();
+        await finish(opened);
         return;
       }
       case "running": {
@@ -192,6 +198,7 @@ export const useChatTurn = ({
     void (async () => {
       const read = await sendChatMessage({
         ...thread,
+        anonymized,
         fetch: streamingFetch,
         messageId,
         onEvent: turn.applyEvent,
@@ -208,8 +215,8 @@ export const useChatTurn = ({
         current(opened)
       ) {
         turn.close();
-        turn.clear();
-        if (!signedOut(read.error)) {
+        turn.clear(opened);
+        if (!signedOut(read.error.error)) {
           setSendFailed(true);
           onRefused();
         }
@@ -295,6 +302,9 @@ function useLiveTurn(activeTurnId: string | null) {
   const [busy, setBusy] = useState(activeTurnId !== null);
   const [turnId, setTurnId] = useState(activeTurnId ?? undefined);
   const connection = useRef<Connection | null>(null);
+  // The connection whose turn is on screen. It outlives `connection`, which
+  // is let go as soon as the answer ends, while the thread is still reloading.
+  const shownFor = useRef<Connection | null>(null);
   const answer = useRef<StreamedAnswer>(EMPTY_ANSWER);
 
   const showAnswer = (next: StreamedAnswer) => {
@@ -316,6 +326,7 @@ function useLiveTurn(activeTurnId: string | null) {
       connection.current?.controller.abort();
       const opened = newConnection(undefined);
       connection.current = opened;
+      shownFor.current = opened;
       answer.current = EMPTY_ANSWER;
       setLive({ question, answer: EMPTY_ANSWER, startedAt: nowIso() });
       setBusy(true);
@@ -326,6 +337,7 @@ function useLiveTurn(activeTurnId: string | null) {
     join: (known: string): Connection => {
       const opened = newConnection(known);
       connection.current = opened;
+      shownFor.current = opened;
       return opened;
     },
     /** The server named the turn, so it can be stopped and rejoined. */
@@ -342,7 +354,15 @@ function useLiveTurn(activeTurnId: string | null) {
       setBusy(false);
       setTurnId(undefined);
     },
-    clear: () => {
+    /**
+     * Takes `opened`'s turn off the screen. A message sent while the thread
+     * was reloading has opened a newer turn, which stays.
+     */
+    clear: (opened: Connection) => {
+      if (shownFor.current !== opened) {
+        return;
+      }
+      shownFor.current = null;
       setLive(null);
     },
   };
