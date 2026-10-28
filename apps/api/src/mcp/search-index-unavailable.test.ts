@@ -16,6 +16,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -594,6 +595,31 @@ describe("public corpus statement budgets", () => {
         retryAfterMs: 1250,
         hint: "Wait for active work to finish, then retry this call.",
       },
+    });
+  });
+
+  test("a public-read lease cancellation keeps its typed admission outcome", async () => {
+    const context = createContext();
+    const result = await handleMcpToolCall({
+      toolName: "search_case_law",
+      args: { country: "CZE", queries: ["smlouva"] },
+      context: {
+        ...context,
+        testDependencies: {
+          ...context.testDependencies,
+          searchDecisionsHandler: async () =>
+            abortTransaction(
+              new ActionAdmissionError({
+                reason: "unavailable",
+                message: "Action lease was lost",
+              }),
+            ),
+        },
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(payloadOf(result)).toMatchObject({
+      error: { code: "action_admission_unavailable", retryable: true },
     });
   });
 

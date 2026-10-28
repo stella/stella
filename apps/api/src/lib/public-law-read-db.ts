@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { SQL as SqlFragment } from "drizzle-orm";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { openCancellableReservedSession } from "@/api/db/long-running-connection";
 import { stellaPublicLawReader } from "@/api/db/rls";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -12,6 +13,7 @@ import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
 import {
+  instrumentDedicatedSqlCounts,
   instrumentSqlTransactionCounts,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
@@ -19,6 +21,7 @@ import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-contex
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
+  beginPublicRead,
   getPublicReadSignal,
   getPublicReadStatementTimeoutMs,
 } from "@/api/lib/legal-search/public-read-timeout-context";
@@ -268,6 +271,22 @@ type ExternalPublicLawDatabase = {
 };
 
 let externalPublicLawDatabase: ExternalPublicLawDatabase | null = null;
+
+// Cancellation has its own bounded pool: a full read pool cannot service it.
+let cancellationClient: ReturnType<typeof createSqlClient> | undefined;
+const cancelPublicLawBackend = async (pid: number) => {
+  cancellationClient ??= instrumentDedicatedSqlCounts(
+    createSqlClient({
+      url: envBase.PUBLIC_LAW_DATABASE_URL ?? envBase.DATABASE_URL,
+      max: 1,
+      connectionTimeout: EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS,
+      idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+      connection: { statement_timeout: 5000 },
+    }),
+    "cleanup",
+  );
+  await cancellationClient.unsafe("SELECT pg_cancel_backend($1)", [pid]);
+};
 
 /**
  * The column tuples of one bound, as a relation a CTE can name. An empty bound
@@ -677,13 +696,53 @@ export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
   options?: PublicLawReadOptions,
 ): Promise<T> => {
-  getPublicReadSignal()?.throwIfAborted();
-  const isolation = options?.isolation ?? "read-committed";
-  const database = await getPublicLawDatabase();
-  return await database.transaction(async (transaction) => {
-    const tx = observePublicLawReadTransaction(transaction);
-    await configureReadTransaction(tx, isolation, publicLawReadGuards());
+  const finish = beginPublicRead();
+  try {
+    const signal = getPublicReadSignal();
+    signal?.throwIfAborted();
+    const isolation = options?.isolation ?? "read-committed";
+    const pool = await getPublicLawDatabase();
+    const reservation =
+      signal === undefined
+        ? undefined
+        : await openCancellableReservedSession({
+            reserve: async () =>
+              instrumentDedicatedSqlCounts(
+                await pool.$client.reserve({ signal }),
+              ),
+            cancelBackend: cancelPublicLawBackend,
+            signal,
+          });
+    let outcome: Result<T, unknown>;
+    try {
+      const database =
+        reservation === undefined
+          ? pool
+          : createDatabase({
+              client: runTransactionsInCallerContext(reservation.session),
+              relations: databaseRelations,
+            });
+      const read = database.transaction(async (transaction) => {
+        const tx = observePublicLawReadTransaction(transaction);
+        await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
-    return await fn(tx);
-  });
+        return await fn(tx);
+      });
+      outcome = await read.then(
+        (value) => Result.ok(value),
+        (error: unknown) => Result.err(error),
+      );
+    } finally {
+      await reservation?.close();
+    }
+    // Cancellation and the transaction have both settled before admission releases.
+    // A driver cancellation is the caller's abort, not a statement timeout.
+    signal?.throwIfAborted();
+    if (Result.isError(outcome)) {
+      return abortTransaction(outcome.error);
+    }
+    return outcome.value;
+  } finally {
+    finish();
+  }
 };

@@ -16,7 +16,7 @@ import {
   actionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
-import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
+import { runWithPublicReadScope } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
   isExternalMcpToolName,
@@ -689,6 +689,14 @@ const internalErrorResult = ({
     Panic.is(error) && McpOutputContractError.is(error.cause)
       ? error.cause
       : undefined;
+  if (ActionAdmissionError.is(error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(
+        structuredErrorResult(actionAdmissionRefusal(error)),
+        { mode, context },
+      ),
+    );
+  }
   if (isSearchIndexUnavailable(error)) {
     return serializeToolResult(
       scopeToolResultToSurface(searchIndexUnavailableResult(error), {
@@ -773,18 +781,10 @@ export const handleMcpToolCall = async ({
     caller: context,
     signal: context.request?.signal,
     run: async (signal) =>
-      await runWithPublicReadStatementTimeout({ budgetMs, signal }, run),
+      await runWithPublicReadScope({ budgetMs, signal }, run),
   });
   if (Result.isOk(admitted)) {
     return admitted.value;
-  }
-  if (ActionAdmissionError.is(admitted.error)) {
-    return serializeToolResult(
-      scopeToolResultToSurface(
-        structuredErrorResult(actionAdmissionRefusal(admitted.error)),
-        { mode, context },
-      ),
-    );
   }
   return internalErrorResult({
     mode,
