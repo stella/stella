@@ -17,14 +17,16 @@ const openFixture = async (page: Page, query = "") => {
   await expect(page.locator("[data-slot=middle-truncate]")).toBeVisible();
 };
 
-const setFrameWidth = (page: Page, width: number) =>
-  page.getByTestId("frame").evaluate(async (frame, inlineSize) => {
+const setFrameWidth = async (page: Page, width: number) =>
+  await page.getByTestId("frame").evaluate(async (frame, inlineSize) => {
     if (frame instanceof HTMLElement) {
       frame.style.inlineSize = `${String(inlineSize)}px`;
     }
     // Complete the frame that delivers resize notifications, then its paint.
     await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
     });
   }, width);
 
@@ -34,8 +36,8 @@ const setFrameWidth = (page: Page, width: number) =>
  * text itself. Flush means under a pixel: no blank slack and no half glyph
  * before the ellipsis.
  */
-const measureCut = (page: Page) =>
-  page.locator("[data-slot=middle-truncate]").evaluate((root) => {
+const measureCut = async (page: Page) =>
+  await page.locator("[data-slot=middle-truncate]").evaluate((root) => {
     const [head, tail] = root.children;
     const text = head?.firstChild;
     if (
