@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
+import { CONTACT_DATE_TIME_ZONE } from "@stll/api-contract/contact-date";
 import type { CountryCode } from "@stll/country-codes";
 import { Temporal } from "@stll/time";
 
@@ -503,7 +504,7 @@ describe("person birth date", () => {
     // Next year is always in the future, whenever this runs.
     {
       precision: "month" as const,
-      year: Temporal.Now.plainDateISO().year + 1,
+      year: Temporal.Now.plainDateISO(CONTACT_DATE_TIME_ZONE).year + 1,
       month: 1,
     },
   ])("refuses an out-of-range $precision date", (dateOfBirth) => {

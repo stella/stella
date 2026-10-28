@@ -12,10 +12,10 @@ import {
 const CURRENT_INSTANT = Temporal.Instant.from("2026-10-28T11:00:00Z");
 
 describe("contact birth date chronology", () => {
-  const today = new Date();
-  const year = today.getUTCFullYear();
-  const month = today.getUTCMonth() + 1;
-  const day = today.getUTCDate();
+  // Today as the rule sees it: the earliest time zone, never UTC.
+  const { year, month, day } = Temporal.Now.plainDateISO(
+    CONTACT_DATE_TIME_ZONE,
+  );
 
   test.each([
     { precision: "year", year: 1900 },
@@ -61,6 +61,20 @@ describe("contact birth date boundary", () => {
     { precision: "day", year: 1990, month: 1, day: 2.5 },
   ] as const)("rejects fractional $precision parts", (value) => {
     expect(isValidContactBirthDate(value, CURRENT_INSTANT)).toBe(false);
+  });
+
+  test("the year turns at the earliest time zone, not at UTC", () => {
+    // 12:00 UTC on 31 December is already 1 January in the rule's zone.
+    const lastUtcDay = Temporal.Instant.from("2026-12-31T12:00:00Z");
+    expect(
+      isValidContactBirthDate({ precision: "year", year: 2027 }, lastUtcDay),
+    ).toBe(true);
+    expect(
+      isValidContactBirthDate(
+        { precision: "day", year: 2027, month: 1, day: 2 },
+        lastUtcDay,
+      ),
+    ).toBe(false);
   });
 
   test("uses the same instant boundary on browser and API hosts", () => {

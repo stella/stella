@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CONTACT_DATE_TIME_ZONE } from "@stll/api-contract/contact-date";
 import { assertProperty } from "@stll/property-testing";
 import { foldSearchMatchText } from "@stll/text-normalize";
+import { Temporal } from "@stll/time";
 
 import {
   birthDateDraft,
@@ -54,7 +56,9 @@ describe("person date of birth precision", () => {
     expect(
       parseBirthDateDraft({
         precision: "year",
-        year: String(new Date().getUTCFullYear() + 1),
+        year: String(
+          Temporal.Now.plainDateISO(CONTACT_DATE_TIME_ZONE).year + 1,
+        ),
         month: "",
         day: "",
       }),
