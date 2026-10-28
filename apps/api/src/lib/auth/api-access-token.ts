@@ -63,6 +63,20 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/entities/get.ts",
   },
+  "GET /v1/tasks": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/list.ts",
+  },
+  // Writes act as the person: each handler keeps the permission and matter
+  // access checks a browser session gets, so the token reaches no further.
+  "PUT /v1/workspaces": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/workspaces/create.ts",
+  },
+  "PUT /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/create.ts",
+  },
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
