@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { deepStrictEqual } from "node:assert/strict";
 import * as v from "valibot";
 
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
@@ -297,8 +298,7 @@ describe("confirmed batch request", () => {
         ranges: [range("10:00", "10:06")],
       },
     ];
-    // JSON fixtures widen literal fields to string; compare as plain data.
-    expect<unknown>(
+    deepStrictEqual(
       items.map((item) =>
         confirmedBatchItem({
           item,
@@ -306,7 +306,8 @@ describe("confirmed batch request", () => {
           timezone: "Europe/Prague",
         }),
       ),
-    ).toEqual(timeEntryBatchRequest.items);
+      timeEntryBatchRequest.items,
+    );
     expect(
       v.safeParse(desktopTimeEntryBatchSchema, {
         idempotencyKey: timeEntryBatchRequest.idempotencyKey,

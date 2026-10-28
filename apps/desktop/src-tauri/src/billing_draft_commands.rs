@@ -61,9 +61,10 @@ pub async fn billing_draft_create_confirmed(
 ) -> Result<serde_json::Value, DraftError> {
   let account = linked_account(&caller, &gates, &accounts)
     .await
-    .map_err(|_| DraftError::Failed)?;
+    .map_err(|_account_error| DraftError::Failed)?;
   let review = billing_draft_submit::draft(&account, &request).await?;
-  require_account(&caller, &gates, &account).map_err(|_| DraftError::Failed)?;
+  require_account(&caller, &gates, &account)
+    .map_err(|_account_error| DraftError::Failed)?;
   drop(account);
   Ok(review)
 }
