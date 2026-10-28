@@ -653,6 +653,7 @@
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/agent-input": {
@@ -1636,6 +1637,7 @@
   ],
   "patchedDependencies": {
     "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch",
+    "@tanstack/ai-codex@1.0.0": "patches/@tanstack%2Fai-codex@1.0.0.patch",
     "@tanstack/ai-mcp@1.0.0": "patches/@tanstack%2Fai-mcp@1.0.0.patch",
     "@tanstack/ai-bedrock@1.0.0": "patches/@tanstack%2Fai-bedrock@1.0.0.patch",
     "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",

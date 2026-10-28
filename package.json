@@ -337,6 +337,7 @@
     "@better-auth/oauth-provider@1.7.12": "patches/@better-auth%2Foauth-provider@1.7.12.patch",
     "@better-auth/cimd@1.7.12": "patches/@better-auth%2Fcimd@1.7.12.patch",
     "@tanstack/ai@1.0.0": "patches/@tanstack%2Fai@1.0.0.patch",
+    "@tanstack/ai-codex@1.0.0": "patches/@tanstack%2Fai-codex@1.0.0.patch",
     "@tanstack/ai-code-mode@1.0.0": "patches/@tanstack%2Fai-code-mode@1.0.0.patch",
     "@tanstack/ai-anthropic@1.0.0": "patches/@tanstack%2Fai-anthropic@1.0.0.patch",
     "@tanstack/ai-bedrock@1.0.0": "patches/@tanstack%2Fai-bedrock@1.0.0.patch",

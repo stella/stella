@@ -1,0 +1,60 @@
+diff --git a/dist/esm/stream/sdk-types.d.ts b/dist/esm/stream/sdk-types.d.ts
+index fe348976a80..fdceb4c10c5 100644
+--- a/dist/esm/stream/sdk-types.d.ts
++++ b/dist/esm/stream/sdk-types.d.ts
+@@ -9,7 +9,8 @@
+  */
+ export interface CodexUsage {
+     input_tokens?: number;
+-    cached_input_tokens?: number;
++    cached_input_tokens?: number
++  cache_write_input_tokens?: number;
+     output_tokens?: number;
+     reasoning_output_tokens?: number;
+ }
+diff --git a/dist/esm/stream/translate.js b/dist/esm/stream/translate.js
+index 3c44f8e2369..b584b879554 100644
+--- a/dist/esm/stream/translate.js
++++ b/dist/esm/stream/translate.js
+@@ -83,7 +83,10 @@ function buildUsage(usage) {
+ 		completionTokens,
+ 		totalTokens: promptTokens + completionTokens
+ 	});
+-	if (usage.cached_input_tokens) result.promptTokensDetails = { cachedTokens: usage.cached_input_tokens };
++	if (usage.cached_input_tokens !== void 0 || usage.cache_write_input_tokens !== void 0) result.promptTokensDetails = {
++		...usage.cached_input_tokens !== void 0 && { cachedTokens: usage.cached_input_tokens },
++		...usage.cache_write_input_tokens !== void 0 && { cacheWriteTokens: usage.cache_write_input_tokens }
++	};
+ 	if (usage.reasoning_output_tokens) result.completionTokensDetails = { reasoningTokens: usage.reasoning_output_tokens };
+ 	return result;
+ }
+diff --git a/src/stream/sdk-types.ts b/src/stream/sdk-types.ts
+index 1e7d367263b..77b321ec602 100644
+--- a/src/stream/sdk-types.ts
++++ b/src/stream/sdk-types.ts
+@@ -11,6 +11,7 @@
+ export interface CodexUsage {
+   input_tokens?: number
+   cached_input_tokens?: number
++  cache_write_input_tokens?: number
+   output_tokens?: number
+   reasoning_output_tokens?: number
+ }
+diff --git a/src/stream/translate.ts b/src/stream/translate.ts
+index fac128ac0b5..a35a235dcfa 100644
+--- a/src/stream/translate.ts
++++ b/src/stream/translate.ts
+@@ -140,8 +140,11 @@ function buildUsage(usage: CodexUsage | undefined): TokenUsage | undefined {
+     completionTokens,
+     totalTokens: promptTokens + completionTokens,
+   })
+-  if (usage.cached_input_tokens) {
+-    result.promptTokensDetails = { cachedTokens: usage.cached_input_tokens }
++  if (usage.cached_input_tokens !== undefined || usage.cache_write_input_tokens !== undefined) {
++    result.promptTokensDetails = {
++      ...(usage.cached_input_tokens !== undefined && { cachedTokens: usage.cached_input_tokens }),
++      ...(usage.cache_write_input_tokens !== undefined && { cacheWriteTokens: usage.cache_write_input_tokens }),
++    }
+   }
+   if (usage.reasoning_output_tokens) {
+     result.completionTokensDetails = {

@@ -11,7 +11,7 @@ FROM node:26.12.1-bookworm-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a27
 
 # Pin the harness CLI. Bump deliberately; the pinned-content CI check and the
 # engine both assume a known codex surface.
-ARG CODEX_VERSION=0.144.1
+ARG CODEX_VERSION=0.164.0
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates git \
