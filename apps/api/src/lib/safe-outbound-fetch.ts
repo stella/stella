@@ -40,7 +40,7 @@ export type SafeOutboundFetchResponse = {
   status: number;
 };
 
-export type SafeOutboundFetchStreamResponse = {
+type SafeOutboundFetchStreamResponse = {
   body: ReadableStream<Uint8Array>;
   headers: Headers;
   ok: boolean;
