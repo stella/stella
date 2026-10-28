@@ -16,6 +16,18 @@ const id = v.uuid();`,
   ).toEqual([1, 2, 3, 4]);
 });
 
+test("rejects undefined and blank messages", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      `const email = v.email(undefined);
+const blank = v.email("");
+const spaces = v.minLength(2, "  ");
+const template = v.maxLength(9, \`\`);`,
+    ),
+  ).toEqual([1, 2, 3, 4]);
+});
+
 test("accepts validators that receive a message", async () => {
   expect(
     await lintSingleRule(
