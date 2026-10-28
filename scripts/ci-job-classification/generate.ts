@@ -370,14 +370,6 @@ const reviewJobs = ({
               : [];
           }),
       );
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: job.digest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : job.digest;
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
@@ -393,6 +385,15 @@ const reviewJobs = ({
         shape: job.shape,
         reachableDocuments: reachable,
       });
+      const surfaceDigest = privileged ? job.privilegedDigest : job.digest;
+      const digest = Object.keys(dependencyDigests).length
+        ? sha256(
+            JSON.stringify({
+              digest: surfaceDigest,
+              dependencies: dependencyDigests,
+            }),
+          )
+        : surfaceDigest;
       derivedJobs.set(key, {
         digest,
         privileged,

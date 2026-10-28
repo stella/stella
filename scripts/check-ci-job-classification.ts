@@ -53,12 +53,14 @@ const sensitiveChanges = ({
   [...new Set([...head.jobs.keys(), ...base.jobs.keys()])].flatMap((key) => {
     const current = head.jobs.get(key);
     const previous = base.jobs.get(key);
+    const headDecision = headDecisions[key];
     const previousDecision = baseDecisions[key];
     if (
       current !== undefined &&
-      previousDecision?.approvedDigests.includes(current.digest) &&
-      previousDecision.kind === headDecisions[key]?.kind &&
-      previousDecision.qualifier === headDecisions[key].qualifier
+      headDecision?.approvedDigests.includes(current.digest) &&
+      previousDecision !== undefined &&
+      previousDecision.kind === headDecision.kind &&
+      previousDecision.qualifier === headDecision.qualifier
     ) {
       return [];
     }

@@ -182,8 +182,10 @@ const AFTER =
   "jobs: {check: {steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
 
 test("an ordinary step change needs no refreshed approval", () => {
-  const ordinaryBefore = "jobs: {check: {steps: [{run: bun test one}]}}";
-  const ordinaryAfter = "jobs: {check: {steps: [{run: bun test two}]}}";
+  const ordinaryBefore =
+    "permissions: {contents: read}\njobs: {check: {steps: [{run: bun test one}]}}";
+  const ordinaryAfter =
+    "permissions: {contents: read}\njobs: {check: {steps: [{run: bun test two}]}}";
   const decisions = reviewed(ordinaryBefore, "check");
   const { root } = repository(
     { workflow: ordinaryBefore, decisions },
@@ -203,6 +205,44 @@ test("an ordinary step change needs no refreshed approval", () => {
   // A second refresh is a no-op.
   expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
 });
+
+test.each([
+  [
+    "inherited write permission",
+    "permissions: {contents: write}\njobs: {check: {steps: [{run: bun test one}]}}",
+    "permissions: {contents: write}\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "inherited secret",
+    `permissions: {contents: read}\nenv: {TOKEN: "\${{ secrets.X }}"}\njobs: {check: {steps: [{run: bun test one}]}}`,
+    `permissions: {contents: read}\nenv: {TOKEN: "\${{ secrets.X }}"}\njobs: {check: {steps: [{run: bun test two}]}}`,
+  ],
+  [
+    "default repository permissions",
+    "jobs: {check: {steps: [{run: bun test one}]}}",
+    "jobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "job condition",
+    "jobs: {check: {if: github.ref == 'refs/heads/main', steps: []}}",
+    "jobs: {check: {steps: []}}",
+  ],
+  [
+    "deployment environment",
+    "jobs: {check: {environment: staging, steps: []}}",
+    "jobs: {check: {environment: production, steps: []}}",
+  ],
+  [
+    "runner",
+    "jobs: {check: {'runs-on': ubuntu-latest, steps: []}}",
+    "jobs: {check: {'runs-on': self-hosted, steps: []}}",
+  ],
+] as const)(
+  "%s changes an effectively privileged job digest",
+  (_, before, after) => {
+    expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
+  },
+);
 
 test.each([
   [
@@ -388,6 +428,60 @@ test("pre-push fails on a change that needs review", () => {
   const result = run(root, "--pre-push");
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("Missing or changed job review");
+});
+
+test("independent privileged approvals merge without conflict", () => {
+  const baseWorkflow = `jobs:
+  x:
+    steps:
+      - run: echo x-old
+
+  y:
+    steps:
+      - run: echo y-old
+`;
+  const decisions = {
+    ...reviewed(baseWorkflow, "x"),
+    ...reviewed(baseWorkflow, "y"),
+  };
+  const { root, commitAll } = repository(
+    { workflow: baseWorkflow, decisions },
+    { workflow: baseWorkflow, decisions },
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", root, ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+
+  git("switch", "-c", "approve-x");
+  const workflowX = baseWorkflow.replace("echo x-old", "echo x-new");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowX);
+  writeDecision(root, keyOf("x"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(workflowX, "x"),
+  });
+  commitAll("approve x");
+
+  git("switch", "-c", "approve-y", "refs/remotes/origin/main");
+  const workflowY = baseWorkflow.replace("echo y-old", "echo y-new");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowY);
+  writeDecision(root, keyOf("y"), {
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    reviewedDigest: digestOf(workflowY, "y"),
+  });
+  commitAll("approve y");
+  git("merge", "--no-edit", "approve-x");
+
+  expect(run(root, "--check")).toEqual({
+    exitCode: 0,
+    stdout: "Classified 1 workflows\n",
+    stderr: "",
+  });
 });
 
 test("conflicting modes are rejected", () => {

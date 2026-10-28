@@ -23,6 +23,7 @@ const DOCUMENT = v.strictObject({
     v.string(),
     v.strictObject({
       digest: v.string(),
+      privilegedDigest: v.string(),
       shape: v.strictObject({
         document: v.record(v.string(), v.unknown()),
         job: v.record(v.string(), v.unknown()),
@@ -170,6 +171,14 @@ const hasWritePermission = (value: unknown) =>
   (isRecord(value) &&
     Object.values(value).some((permission) => permission === "write"));
 
+const hasEffectiveWritePermission = (
+  jobPermissions: unknown,
+  workflowPermissions: unknown,
+) => {
+  const effective = jobPermissions ?? workflowPermissions;
+  return effective === undefined || hasWritePermission(effective);
+};
+
 const privilegedStepSurface = (
   candidate: unknown,
   includeAll: boolean,
@@ -186,7 +195,11 @@ const privilegedStepSurface = (
     return parallel.length ? { parallel } : undefined;
   }
   if (includeAll) {
-    return project(step, "step");
+    return Object.fromEntries(
+      Object.entries(step).filter(
+        ([key]) => !["name", "timeout-minutes"].includes(key),
+      ),
+    );
   }
   const surface: JsonRecord = {};
   const uses = step["uses"];
@@ -202,10 +215,26 @@ const privilegedStepSurface = (
   return Object.keys(surface).length ? surface : undefined;
 };
 
-const privilegedJobSurface = (job: JsonRecord) => {
+const privilegedJobSurface = (
+  job: JsonRecord,
+  workflow: JsonRecord,
+  forcePrivileged = false,
+) => {
+  const inherited = Object.fromEntries(
+    ["permissions", "env", "defaults"].flatMap((key) =>
+      key in workflow ? [[key, workflow[key]]] : [],
+    ),
+  );
   const includeAllSteps =
-    hasWritePermission(job["permissions"]) || containsCredential(job);
+    forcePrivileged ||
+    hasEffectiveWritePermission(job["permissions"], workflow["permissions"]) ||
+    containsCredential(inherited) ||
+    containsCredential(job) ||
+    job["secrets"] === "inherit";
   const surface: JsonRecord = {};
+  if (includeAllSteps) {
+    Object.assign(surface, inherited);
+  }
   for (const key of ["permissions", "secrets", "uses"] as const) {
     if (key in job) {
       surface[key] = job[key];
@@ -214,6 +243,22 @@ const privilegedJobSurface = (job: JsonRecord) => {
   for (const key of ["env", "with"] as const) {
     if (containsCredential(job[key])) {
       surface[key] = job[key];
+    }
+  }
+  if (includeAllSteps) {
+    for (const key of [
+      "if",
+      "environment",
+      "needs",
+      "runs-on",
+      "concurrency",
+      "container",
+      "services",
+      "defaults",
+    ] as const) {
+      if (key in job) {
+        surface[key] = job[key];
+      }
     }
   }
   if (Array.isArray(job["steps"])) {
@@ -405,10 +450,15 @@ const parse = (text: string): ParsedDocument => {
         jobDependencies[job["uses"]] = "reusable-workflow";
       }
       addActionDependencies(jobDependencies, steps, {});
-      const jobShape = privilegedJobSurface(job);
+      const jobShape = privilegedJobSurface(job, data);
       const jobContext = { document: context, job: jobShape };
+      const privilegedJobContext = {
+        document: context,
+        job: privilegedJobSurface(job, data, true),
+      };
       jobs[id] = {
         digest: digest(jobContext),
+        privilegedDigest: digest(privilegedJobContext),
         shape: jobContext,
         dependencies: jobDependencies,
       };
