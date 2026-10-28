@@ -506,20 +506,26 @@ async fn a_callback_with_another_state_is_refused_without_an_exchange() {
   let mut harness = Harness::new(Duration::from_secs(30)).await;
   harness.auth.start(SignInIntent::SameAccount);
   let params = harness.authorization().await;
-  let forged = Harness::callback_url(&params, "forged-state", true);
-  assert_eq!(
-    harness.browser_returns(&forged).await,
-    StatusCode::BAD_REQUEST
-  );
-  assert_eq!(
-    harness.settled().await,
-    ChatGptState::Failed {
-      reason: ChatGptFailure::StateMismatch
-    }
-  );
+  for forged in [
+    Harness::callback_url(&params, "forged-state", true),
+    format!("{}?code=code-{}", params["redirect_uri"], params["state"]),
+  ] {
+    assert_eq!(
+      harness.browser_returns(&forged).await,
+      StatusCode::BAD_REQUEST
+    );
+  }
+  // The attempt is still waiting and nothing was exchanged.
+  assert_eq!(harness.auth.status().await.state, ChatGptState::SigningIn);
   assert!(harness.fake.with(|fake| fake.token_requests.is_empty()));
-  // The attempt is over: the genuine callback is no longer served.
+  // The genuine callback still completes it, once.
   let genuine = Harness::callback_url(&params, &params["state"], true);
+  assert_eq!(harness.browser_returns(&genuine).await, StatusCode::OK);
+  assert!(matches!(
+    harness.settled().await,
+    ChatGptState::Connected { .. }
+  ));
+  assert_eq!(harness.fake.with(|fake| fake.token_requests.len()), 1);
   harness.assert_refused(genuine).await;
 }
 

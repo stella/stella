@@ -523,11 +523,11 @@ impl ChatGptAuth {
       .await
       .map_err(|VaultUnavailable| ChatGptFailure::Storage)?;
     let client = select_client(&record, intent);
-    let listener = CallbackListener::bind(slot, self.0.config.page_wait)
+    let state = oauth::random_token(32);
+    let listener = CallbackListener::bind(slot, state.clone(), self.0.config.page_wait)
       .await
       .map_err(|_bind| ChatGptFailure::CallbackUnavailable)?;
     let redirect_uri = oauth::redirect_uri(listener.port());
-    let state = oauth::random_token(32);
     let nonce = oauth::random_token(32);
     let pkce = Pkce::generate();
     let url = oauth::authorization_url(&AuthorizationRequest {

@@ -251,9 +251,10 @@ pub(crate) struct DeliveredCallback {
 
 pub(crate) type CallbackSlot = Arc<Mutex<Option<oneshot::Sender<DeliveredCallback>>>>;
 
-/// A single-use loopback listener on `127.0.0.1`. The first request to the
-/// callback path takes the slot; any later one is refused. It stops when
-/// dropped.
+/// A single-use loopback listener on `127.0.0.1`. A callback is checked
+/// against the attempt's `state` before it can take the slot: one for another
+/// attempt is refused and the listener keeps waiting, and once the slot is
+/// taken every later request is refused. It stops when dropped.
 pub(crate) struct CallbackListener {
   port: u16,
   stop: Option<oneshot::Sender<()>>,
@@ -266,6 +267,7 @@ pub(crate) struct CallbackListener {
 impl CallbackListener {
   pub(crate) async fn bind(
     slot: CallbackSlot,
+    expected_state: String,
     page_wait: Duration,
   ) -> std::io::Result<Self> {
     let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await?;
@@ -273,6 +275,7 @@ impl CallbackListener {
     let state = Arc::new(ListenerState {
       slot,
       port,
+      expected_state,
       page_wait,
     });
     let router = Router::new()
@@ -329,6 +332,7 @@ impl Drop for CallbackListener {
 struct ListenerState {
   slot: CallbackSlot,
   port: u16,
+  expected_state: String,
   page_wait: Duration,
 }
 
@@ -336,12 +340,21 @@ async fn callback(
   State(state): State<Arc<ListenerState>>,
   OriginalUri(uri): OriginalUri,
 ) -> Response {
+  let url = format!("http://{CALLBACK_HOST}:{}{uri}", state.port);
+  // Checked before the slot is touched, as a pasted URL is: a request for
+  // another attempt cannot use up this one.
+  if parse_callback(&url, &redirect_uri(state.port), &state.expected_state).is_err() {
+    return (
+      StatusCode::BAD_REQUEST,
+      page_html(CallbackPage::NotConnected),
+    )
+      .into_response();
+  }
   let taken = state.slot.lock().ok().and_then(|mut slot| slot.take());
   let Some(waiting) = taken else {
     return (StatusCode::GONE, page_html(CallbackPage::NotConnected)).into_response();
   };
   let (page, outcome) = oneshot::channel();
-  let url = format!("http://{CALLBACK_HOST}:{}{uri}", state.port);
   if waiting
     .send(DeliveredCallback {
       url,
@@ -619,9 +632,10 @@ mod tests {
     let slot: CallbackSlot = Arc::new(Mutex::new(None));
     let (deliver, delivered) = oneshot::channel();
     *slot.lock().unwrap() = Some(deliver);
-    let listener = CallbackListener::bind(Arc::clone(&slot), Duration::from_secs(5))
-      .await
-      .unwrap();
+    let listener =
+      CallbackListener::bind(Arc::clone(&slot), "s".into(), Duration::from_secs(5))
+        .await
+        .unwrap();
     let port = listener.port();
     let base = format!("http://127.0.0.1:{port}");
     let client = crate::http_client::DesktopHttpClient::new(
@@ -641,6 +655,16 @@ mod tests {
         .status(),
       StatusCode::NOT_FOUND
     );
+    // Another attempt's callback is refused and does not use up this one.
+    for forged in ["state=other&code=c", "code=c"] {
+      let refused = client
+        .get(format!("{base}{CALLBACK_PATH}?{forged}"))
+        .send()
+        .await
+        .unwrap();
+      assert_eq!(refused.status(), StatusCode::BAD_REQUEST);
+      assert!(slot.lock().unwrap().is_some());
+    }
     let first = tokio::spawn({
       let client = client.clone();
       let url = format!("{base}{CALLBACK_PATH}?code=c&state=s");
