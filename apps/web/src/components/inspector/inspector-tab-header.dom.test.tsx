@@ -222,3 +222,40 @@ describe("renaming a file from the inspector header", () => {
     expect(screen.queryByText(BASE_NAME)).not.toBeNull();
   });
 });
+
+test("legal tab headers preserve an identity while clamping only the subject", async () => {
+  const { StatuteDisplayLabel } =
+    await import("@/features/statutes/components/statute-display-label");
+  render(
+    <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+      <InspectorTabHeader
+        label="Zákon č. 274/2026 Z. z."
+        labelOverflow="wrap"
+        labelContent={
+          <StatuteDisplayLabel
+            statute={{
+              country: "SVK",
+              documentType: "zákon",
+              eli: "/eli/sk/zz/2026/274",
+              title: `ktorým sa mení ${"zákon o stavebnom sporení ".repeat(40)}`,
+            }}
+          />
+        }
+        onClose={() => undefined}
+      />
+    </IntlProvider>,
+  );
+  const identity = screen.getByText("Zákon č. 274/2026 Z. z.");
+  for (
+    let element: HTMLElement | null = identity;
+    element !== null;
+    element = element.parentElement
+  ) {
+    expect(element.className).not.toMatch(
+      /overflow-hidden|text-ellipsis|line-clamp/u,
+    );
+  }
+  expect(
+    screen.getByRole("button", { name: englishMessages.common.close }),
+  ).toBeDefined();
+});
