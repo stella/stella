@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { documentReviewFindingDecisions } from "@/api/db/schema";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -83,15 +84,21 @@ type UpdateValues = {
   appliedAt?: unknown;
 };
 
-const createHarness = (rows: StoredFinding[]) => {
+const createHarness = (
+  rows: StoredFinding[],
+  history: readonly { id: string }[] = [],
+) => {
   const updates: UpdateValues[] = [];
   const decisionEvents: Record<string, unknown>[] = [];
   const auditEvents: AuditEvent[] = [];
   const { safeDb, scopedDb } = createScopedDbMock({
     select: () => ({
-      from: () => ({
+      from: (table: unknown) => ({
         where: () => ({
-          limit: () => ({ for: async () => rows }),
+          limit: () =>
+            table === documentReviewFindingDecisions
+              ? Promise.resolve(history)
+              : { for: async () => rows },
         }),
       }),
     }),
@@ -102,8 +109,11 @@ const createHarness = (rows: StoredFinding[]) => {
       },
     }),
     insert: () => ({
-      values: async (values: Record<string, unknown>) => {
-        decisionEvents.push(values);
+      values: (values: Record<string, unknown> | Record<string, unknown>[]) => {
+        decisionEvents.push(...[values].flat());
+        return Object.assign(Promise.resolve(), {
+          onConflictDoNothing: async () => {},
+        });
       },
     }),
   });
@@ -202,6 +212,28 @@ describe("decideDocumentReviewFinding", () => {
     expect(auditEvents.at(0)).toMatchObject({
       changes: { decision: { old: "dismissed", new: "open" } },
     });
+    // The dismissal predates the history, so it is recorded first under the
+    // finding's own id, then the reopening.
+    expect(decisionEvents).toHaveLength(2);
+    expect(decisionEvents.at(0)).toMatchObject({
+      findingId: FINDING_ID,
+      decision: "rejected",
+    });
+    expect(decisionEvents.at(1)).toMatchObject({ decision: null });
+  });
+
+  test("records no second baseline once a finding has history", async () => {
+    const { context, decisionEvents } = createHarness(
+      storedFinding("dismissed"),
+      [{ id: "earlier-event" }],
+    );
+
+    await decideDocumentReviewFinding.handler({
+      ...context,
+      body: { decision: "open" },
+    });
+
+    expect(decisionEvents).toHaveLength(1);
     expect(decisionEvents.at(0)).toMatchObject({ decision: null });
   });
 

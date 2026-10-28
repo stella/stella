@@ -128,6 +128,12 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
           { findingId: acceptedFinding, decision: "accepted", actorId },
           { findingId: dismissedFinding, decision: "rejected", actorId },
         ]);
+        // The backfilled baseline takes its finding's id, the key the decide
+        // handler also writes it under, so the two cannot both add it.
+        const baselines = await client<{ id: string }[]>`
+          SELECT id::text AS id FROM document_review_finding_decisions
+          WHERE finding_id = ${dismissedFinding}`;
+        expect([...baselines]).toEqual([{ id: dismissedFinding }]);
 
         await client.unsafe(`SET ROLE stella`);
         await client.unsafe(

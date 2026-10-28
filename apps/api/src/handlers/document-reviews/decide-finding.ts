@@ -25,8 +25,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  findingDecisionRows,
+  findingHasDecisionHistory,
+} from "@/api/lib/document-review/finding-decision-history";
 import {
   DOCUMENT_REVIEW_APPLICATION_STATUS,
   DOCUMENT_REVIEW_DECISION,
@@ -202,15 +205,19 @@ const decideDocumentReviewFinding = createSafeHandler(
 
         const eventDecision = findingDecisionEvent(finding.decision, decision);
         if (eventDecision !== undefined) {
-          await tx.insert(documentReviewFindingDecisions).values({
-            id: createSafeId<"documentReviewFindingDecision">(),
+          const change = {
             workspaceId,
             findingId: params.findingId,
+            previous: finding,
             decision: eventDecision,
-            reason: null,
             actorId: user.id,
-            createdAt: now,
-          });
+            at: now,
+            hasHistory: await findingHasDecisionHistory(tx, params.findingId),
+          };
+          await tx
+            .insert(documentReviewFindingDecisions)
+            .values(findingDecisionRows(change))
+            .onConflictDoNothing({ target: documentReviewFindingDecisions.id });
         }
 
         const changes: FieldDiffs = {};

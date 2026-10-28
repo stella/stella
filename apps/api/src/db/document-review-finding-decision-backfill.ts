@@ -22,7 +22,9 @@ const DECISION_SQL = sqlCaseExpression({
 });
 
 /** Existing current-state decisions gain their original actor and timestamp.
- * The anti-join is its checkpoint: a committed row cannot be selected again. */
+ * The anti-join is its checkpoint: a committed row cannot be selected again.
+ * The baseline event takes its finding's id, as the decide handler's does,
+ * so a finding changed while this runs keeps exactly one baseline. */
 export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
   name: "document-review-finding-decisions",
   readCompletion: async (connection) => {
@@ -45,10 +47,11 @@ export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
           INSERT INTO public.document_review_finding_decisions
             (id, workspace_id, finding_id, decision, reason, actor_id, created_at)
           SELECT
-            gen_random_uuid(), finding.workspace_id, finding.id, ${DECISION_SQL},
+            finding.id, finding.workspace_id, finding.id, ${DECISION_SQL},
             NULL, finding.decided_by, finding.decided_at
           FROM public.document_review_findings finding
           JOIN batch ON batch.id = finding.id
+          ON CONFLICT (id) DO NOTHING
           RETURNING finding_id`,
         [BATCH_SIZE],
       );
