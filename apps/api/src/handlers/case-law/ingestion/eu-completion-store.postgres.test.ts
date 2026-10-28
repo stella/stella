@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { createSha256 } from "@stll/sha256/node";
 import { DAY_IN_MS } from "@stll/time";
 
@@ -1182,67 +1183,80 @@ if (!databaseUrl || !enabled) {
     // index jobs over per-candidate index probes, so the scale is the point.
     test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
       const state = await fixture();
-      await db.execute(sql`
+      // The scale fixture must affect the real plan without leaving 100000
+      // decisions for row-triggered cleanup after this suite completes.
+      expect(
+        await rejectionOf(
+          db.transaction(async (tx) => {
+            await tx.execute(sql`
         INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
         SELECT md5(${state.sourceId}::text || '-' || n::text)::uuid, ${state.sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
         FROM generate_series(1, 100000) AS n
       `);
-      await db.execute(sql`
+            await tx.execute(sql`
         INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
         SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
         FROM case_law_decisions WHERE source_id = ${state.sourceId}::uuid
       `);
-      await db.execute(sql`
+            await tx.execute(sql`
         INSERT INTO case_law_index_jobs (id, decision_id, operation, status)
         SELECT md5('withdrawal-' || id::text)::uuid, id, 'withdraw', 'succeeded'
         FROM case_law_decisions WHERE source_id = ${state.sourceId}::uuid
       `);
-      await db.execute(sql`ANALYZE case_law_index_jobs`);
-      await db.execute(sql`ANALYZE case_law_decisions`);
-      await db.execute(sql`ANALYZE eu_completion_receipts`);
-      await db.transaction(async (tx) => {
-        const query = buildEuCompletionPageQuery(tx, {
-          ...state.options,
-          after: null,
-          limit: 100,
-        });
-        const page = await query;
-        expect(page).toHaveLength(100);
-        expect(page.every((row) => !row.eligible)).toBe(true);
-        const plan = explainRoot(
-          await tx.execute(
-            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.getSQL()}`,
-          ),
-        );
-        expect(plan["Actual Rows"]).toBe(100);
-        const scans = scanOccurrences(plan).filter(
-          ({ relation }) =>
-            relation === "case_law_decisions" ||
-            relation === "eu_completion_receipts" ||
-            relation === "case_law_index_jobs",
-        );
-        expect(scans.length).toBeGreaterThan(0);
-        expect(scans.every(({ nodeType }) => nodeType.includes("Index"))).toBe(
-          true,
-        );
-        expect(
-          scans.some(
-            ({ index }) => index === "case_law_decisions_source_id_page_idx",
-          ),
-        ).toBe(true);
-        expect(
-          scans.some(
-            ({ relation, index }) =>
-              relation === "case_law_index_jobs" &&
-              index === "case_law_index_jobs_decision_idx",
-          ),
-        ).toBe(true);
-        const blocks = plan["Shared Hit Blocks"];
-        if (typeof blocks !== "number") {
-          throw new TypeError("Expected EXPLAIN buffer count");
-        }
-        expect(blocks).toBeLessThan(5000);
-      });
+            await tx.execute(sql`ANALYZE case_law_index_jobs`);
+            await tx.execute(sql`ANALYZE case_law_decisions`);
+            await tx.execute(sql`ANALYZE eu_completion_receipts`);
+            const query = buildEuCompletionPageQuery(tx, {
+              ...state.options,
+              after: null,
+              limit: 100,
+            });
+            const page = await query;
+            expect(page).toHaveLength(100);
+            expect(page.every((row) => !row.eligible)).toBe(true);
+            const plan = explainRoot(
+              await tx.execute(
+                sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.getSQL()}`,
+              ),
+            );
+            expect(plan["Actual Rows"]).toBe(100);
+            const scans = scanOccurrences(plan).filter(
+              ({ relation }) =>
+                relation === "case_law_decisions" ||
+                relation === "eu_completion_receipts" ||
+                relation === "case_law_index_jobs",
+            );
+            expect(scans.length).toBeGreaterThan(0);
+            expect(
+              scans.every(({ nodeType }) => nodeType.includes("Index")),
+            ).toBe(true);
+            expect(
+              scans.some(
+                ({ index }) =>
+                  index === "case_law_decisions_source_id_page_idx",
+              ),
+            ).toBe(true);
+            expect(
+              scans.some(
+                ({ relation, index }) =>
+                  relation === "case_law_index_jobs" &&
+                  index === "case_law_index_jobs_decision_idx",
+              ),
+            ).toBe(true);
+            const blocks = plan["Shared Hit Blocks"];
+            if (typeof blocks !== "number") {
+              throw new TypeError("Expected EXPLAIN buffer count");
+            }
+            expect(blocks).toBeLessThan(5000);
+            tx.rollback();
+          }),
+        ),
+      ).toBeInstanceOf(TransactionRollbackError);
+      const retained = await db
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, state.sourceId));
+      expect(retained).toHaveLength(3);
     }, 60_000);
     test("compaction preserves latest and approval evidence forever", async () => {
       const state = await fixture();
