@@ -1139,10 +1139,7 @@ const markInFileDuplicates = (
     const decision = earlierRows
       .map((earlier) => decideInFileDuplicate(earlier, row))
       .find(({ kind }) => kind !== "distinct");
-    if (row.issues.length === 0) {
-      earlierRows.push(row);
-    }
-    return {
+    const validatedRow = {
       contact: row.contact,
       issues:
         decision?.kind !== "duplicate"
@@ -1169,6 +1166,10 @@ const markInFileDuplicates = (
             ]
           : row.warnings,
     };
+    if (validatedRow.issues.length === 0) {
+      earlierRows.push(validatedRow);
+    }
+    return validatedRow;
   });
 };
 

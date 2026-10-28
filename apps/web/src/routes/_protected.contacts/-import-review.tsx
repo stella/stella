@@ -189,6 +189,20 @@ type SeedArgs = {
   taxIdScheme: ContactImportTaxIdScheme;
 };
 
+type ValidatedImportRows = NonNullable<
+  Awaited<ReturnType<typeof api.contacts.import.validate.post>>["data"]
+>["rows"];
+
+export const toImportReviewSeedRows = (
+  rows: ValidatedImportRows,
+): ImportReviewSeedRow[] =>
+  rows.map(({ contact, issues, rowNumber, warnings }) => ({
+    candidate: contact,
+    issues,
+    rowNumber,
+    warnings,
+  }));
+
 export type ImportReview = {
   rows: ImportReviewRow[];
   isDirty: boolean;
@@ -336,12 +350,7 @@ export const useImportReview = ({
     }
     seed({
       taxIdScheme: scheme,
-      rows: result.value.rows.map(({ contact, issues, rowNumber }) => ({
-        candidate: contact,
-        issues,
-        rowNumber,
-        warnings: [],
-      })),
+      rows: toImportReviewSeedRows(result.value.rows),
     });
     return true;
   };

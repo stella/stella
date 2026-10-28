@@ -320,6 +320,55 @@ describe("contact import document", () => {
     });
   });
 
+  test("only surviving rows block later duplicate candidates", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("Jane Doe"),
+          emails: [email("shared@example.com")],
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0101",
+              type: "mobile",
+            },
+          ],
+        },
+        {
+          ...person("John Smith"),
+          emails: [email("shared@example.com")],
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0102",
+              type: "mobile",
+            },
+          ],
+        },
+        {
+          ...person("John Smith"),
+          phones: [
+            {
+              isPrimary: true,
+              number: "+1 202 555 0102",
+              type: "mobile",
+            },
+          ],
+        },
+      ],
+      rowNumbers: [2, 3, 4],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      duplicateOfRowNumber: 2,
+      field: null,
+      rowNumber: 3,
+    });
+    expect(rows.at(2)?.issues).toEqual([]);
+  });
+
   test("keeps same-name people with different birth dates distinct", () => {
     const rows = validateContactImportCandidates({
       candidates: [
