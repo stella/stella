@@ -16,6 +16,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -3069,6 +3070,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up

@@ -10,11 +10,13 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 
-import { repoRelativePath } from "../packages/portable-path/src/index";
 import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
 const STORE_CACHE_VERSION = "v4";
+
+const repoRelativePath = (from: string, to: string) =>
+  path.posix.relative(from.replaceAll("\\", "/"), to.replaceAll("\\", "/"));
 
 export type GlobalStoreMode = "enabled" | "disabled";
 
