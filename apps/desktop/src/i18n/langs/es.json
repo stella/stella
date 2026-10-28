@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Las directrices de facturación del cliente, si el asunto las tiene",
     "aiConsentServerFirm": "Las directrices de facturación de su despacho",
     "aiConsentServerHistory": "Sus entradas de tiempo anteriores del mismo asunto de los últimos 90 días",
+    "aiConsentServerMatters": "Los nombres de sus asuntos con actividad reciente",
     "aiConsentServerTitle": "Lo añade stella en el servidor",
     "aiConsentTitle": "¿Redactar las entradas de facturación con IA?",
     "aiConsistentWith": "Coherente con {count, plural, one {# entrada anterior} other {# entradas anteriores}} de este asunto",

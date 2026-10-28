@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Fakturačné pravidlá klienta, ak ich spis má",
     "aiConsentServerFirm": "Fakturačné pravidlá vašej kancelárie",
     "aiConsentServerHistory": "Vaše skoršie časové záznamy v tom istom spise za posledných 90 dní",
+    "aiConsentServerMatters": "Názvy vašich nedávno aktívnych spisov",
     "aiConsentServerTitle": "Doplní stella na serveri",
     "aiConsentTitle": "Navrhnúť fakturačné položky s AI?",
     "aiConsistentWith": "V súlade s {count, plural, one {# skoršou položkou} few {# skoršími položkami} other {# skoršími položkami}} v tomto spise",

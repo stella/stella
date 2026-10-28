@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Die Abrechnungsrichtlinien des Mandanten, falls die Akte welche hat",
     "aiConsentServerFirm": "Die Abrechnungsrichtlinien Ihrer Kanzlei",
     "aiConsentServerHistory": "Ihre früheren Zeiteinträge zur selben Akte aus den letzten 90 Tagen",
+    "aiConsentServerMatters": "Die Namen Ihrer zuletzt aktiven Akten",
     "aiConsentServerTitle": "Von stella auf dem Server ergänzt",
     "aiConsentTitle": "Abrechnungseinträge mit KI entwerfen?",
     "aiConsistentWith": "Passend zu {count, plural, one {# früheren Eintrag} other {# früheren Einträgen}} in dieser Akte",

@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Az ügyfél számlázási szabályai, ha az ügyhöz tartoznak",
     "aiConsentServerFirm": "Az iroda számlázási szabályai",
     "aiConsentServerHistory": "Az ugyanazon ügyben az elmúlt 90 napban rögzített korábbi időtételei",
+    "aiConsentServerMatters": "Legutóbb aktív ügyeinek nevei",
     "aiConsentServerTitle": "A stella a szerveren egészíti ki",
     "aiConsentTitle": "Megfogalmazza a számlázási tételeket AI-jal?",
     "aiConsistentWith": "Összhangban az ügy {count, plural, one {# korábbi tételével} other {# korábbi tételével}}",

@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Zasady rozliczeń klienta, jeśli sprawa je ma",
     "aiConsentServerFirm": "Zasady rozliczeń Twojej kancelarii",
     "aiConsentServerHistory": "Twoje wcześniejsze wpisy czasu w tej samej sprawie z ostatnich 90 dni",
+    "aiConsentServerMatters": "Nazwy Twoich ostatnio aktywnych spraw",
     "aiConsentServerTitle": "Dodawane przez stella na serwerze",
     "aiConsentTitle": "Zredagować wpisy rozliczeniowe z AI?",
     "aiConsistentWith": "Zgodne z {count, plural, one {# wcześniejszym wpisem} few {# wcześniejszymi wpisami} many {# wcześniejszymi wpisami} other {# wcześniejszymi wpisami}} w tej sprawie",

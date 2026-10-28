@@ -234,6 +234,7 @@ export const BillingDraftConsentDialog = ({
             title={t("aiConsentServerTitle")}
             items={[
               t("aiConsentServerHistory"),
+              t("aiConsentServerMatters"),
               t("aiConsentServerFirm"),
               t("aiConsentServerClient"),
             ]}

@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Kliento apmokestinimo taisyklės, jei byla jas turi",
     "aiConsentServerFirm": "Jūsų kontoros apmokestinimo taisyklės",
     "aiConsentServerHistory": "Jūsų ankstesni laiko įrašai toje pačioje byloje per pastarąsias 90 dienų",
+    "aiConsentServerMatters": "Jūsų neseniai aktyvių bylų pavadinimai",
     "aiConsentServerTitle": "stella papildo serveryje",
     "aiConsentTitle": "Parengti apmokestinimo įrašus su DI?",
     "aiConsistentWith": "Atitinka {count, plural, one {# ankstesnį įrašą} few {# ankstesnius įrašus} other {# ankstesnių įrašų}} šioje byloje",

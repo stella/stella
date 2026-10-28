@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Klienta norēķinu noteikumi, ja lietai tādi ir",
     "aiConsentServerFirm": "Jūsu biroja norēķinu noteikumi",
     "aiConsentServerHistory": "Jūsu iepriekšējie laika ieraksti tajā pašā lietā pēdējo 90 dienu laikā",
+    "aiConsentServerMatters": "Jūsu nesen aktīvo lietu nosaukumi",
     "aiConsentServerTitle": "stella pievieno serverī",
     "aiConsentTitle": "Sagatavot norēķinu ierakstus ar AI?",
     "aiConsistentWith": "Atbilst {count, plural, zero {# iepriekšējiem ierakstiem} one {# iepriekšējam ierakstam} other {# iepriekšējiem ierakstiem}} šajā lietā",

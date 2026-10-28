@@ -20,6 +20,7 @@
     "aiConsentServerClient": "إرشادات الفوترة لدى العميل، إن وُجدت للملف القانوني",
     "aiConsentServerFirm": "إرشادات الفوترة لدى مكتبك",
     "aiConsentServerHistory": "قيود وقتك السابقة في الملف القانوني نفسه خلال آخر 90 يومًا",
+    "aiConsentServerMatters": "أسماء ملفاتك القانونية النشطة مؤخرًا",
     "aiConsentServerTitle": "تضيفه stella على الخادم",
     "aiConsentTitle": "هل تريد صياغة قيود الفوترة بالذكاء الاصطناعي؟",
     "aiConsistentWith": "متّسق مع {count, plural, zero {# قيود سابقة} one {قيد سابق واحد} two {قيدين سابقين} few {# قيود سابقة} many {# قيدًا سابقًا} other {# قيد سابق}} في هذا الملف القانوني",

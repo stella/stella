@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Les règles de facturation du client, si le dossier en comporte",
     "aiConsentServerFirm": "Les règles de facturation de votre cabinet",
     "aiConsentServerHistory": "Vos entrées de temps antérieures sur le même dossier des 90 derniers jours",
+    "aiConsentServerMatters": "Les noms de vos dossiers récemment actifs",
     "aiConsentServerTitle": "Ajouté par stella sur le serveur",
     "aiConsentTitle": "Rédiger les entrées de facturation avec l’IA ?",
     "aiConsistentWith": "Cohérent avec {count, plural, one {# entrée antérieure} other {# entrées antérieures}} de ce dossier",

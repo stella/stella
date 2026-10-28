@@ -20,6 +20,7 @@
     "aiConsentServerClient": "Kliendi arveldusjuhised, kui toimikul need on",
     "aiConsentServerFirm": "Sinu büroo arveldusjuhised",
     "aiConsentServerHistory": "Sinu varasemad ajakanded samas toimikus viimase 90 päeva jooksul",
+    "aiConsentServerMatters": "Sinu hiljuti aktiivsete toimikute nimed",
     "aiConsentServerTitle": "stella lisab serveris",
     "aiConsentTitle": "Kas koostada arvelduskanded AI-ga?",
     "aiConsistentWith": "Kooskõlas {count, plural, one {# varasema kandega} other {# varasema kandega}} selles toimikus",

@@ -20,6 +20,7 @@
     "aiConsentServerClient": "The client’s billing guidelines, if the matter has any",
     "aiConsentServerFirm": "Your firm’s billing guidelines",
     "aiConsentServerHistory": "Your earlier time entries on the same matter from the last 90 days",
+    "aiConsentServerMatters": "Names of your recently active matters",
     "aiConsentServerTitle": "Added by stella on the server",
     "aiConsentTitle": "Draft billing entries with AI?",
     "aiConsistentWith": "Consistent with {count, plural, one {# earlier entry} other {# earlier entries}} on this matter",

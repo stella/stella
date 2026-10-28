@@ -20,6 +20,7 @@
     "aiConsentServerClient": "As diretrizes de faturamento do cliente, se o caso tiver",
     "aiConsentServerFirm": "As diretrizes de faturamento do seu escritório",
     "aiConsentServerHistory": "Seus lançamentos de tempo anteriores no mesmo caso dos últimos 90 dias",
+    "aiConsentServerMatters": "Os nomes dos seus casos com atividade recente",
     "aiConsentServerTitle": "Adicionado pela stella no servidor",
     "aiConsentTitle": "Redigir os lançamentos de faturamento com IA?",
     "aiConsistentWith": "Coerente com {count, plural, one {# lançamento anterior} other {# lançamentos anteriores}} neste caso",
