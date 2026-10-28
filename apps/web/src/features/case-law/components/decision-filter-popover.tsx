@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { CourtFilter } from "@stll/ui/court-filter";
 
@@ -36,6 +36,7 @@ import type {
   DecisionFilterFacets,
   DecisionTypeFacetBucket,
 } from "@/features/case-law/decision-filter-facets.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
