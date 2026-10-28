@@ -66,6 +66,7 @@ const listWorkspacesAs = async ({
     asTestRaw<Parameters<typeof readWorkspaces.handler>[0]>({
       request: new Request("https://api.example.test/handler"),
       route: "/v1/workspaces" satisfies ApiRoutePath,
+      query: {},
       memberRole: sessionMemberRole("owner"),
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
       session: { activeOrganizationId: organizationId },
