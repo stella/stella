@@ -30,7 +30,7 @@ const LEASE_SWEEP_SINK = failureSink({
 });
 
 /** Who an authenticated upgrade request belongs to. */
-export type DesktopRunnerCaller = {
+type DesktopRunnerCaller = {
   readonly userId: SafeId<"user">;
   readonly organizationId: SafeId<"organization">;
   /** Thumbprint of the device key whose single-use proof signed the request. */

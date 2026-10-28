@@ -131,7 +131,7 @@ type ClaimSessionOptions = {
   leaseMs: number;
 };
 
-export type HeldRun = {
+type HeldRun = {
   readonly runId: string;
   readonly state: DesktopRunnerRunState;
   readonly ackSeq: number;

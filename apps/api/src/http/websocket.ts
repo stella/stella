@@ -36,7 +36,7 @@ const SOCKET_IDLE_TIMEOUT_S = 120;
  * the server's: Bun closes a socket whose frame is larger with 1009 before it
  * buffers the rest.
  */
-export const API_SOCKET_MAX_PAYLOAD_BYTES = DESKTOP_RUNNER_MAX_FRAME_BYTES;
+const API_SOCKET_MAX_PAYLOAD_BYTES = DESKTOP_RUNNER_MAX_FRAME_BYTES;
 
 export const apiWebSocketHandler: WebSocketHandler<ApiSocketData> = {
   maxPayloadLength: API_SOCKET_MAX_PAYLOAD_BYTES,

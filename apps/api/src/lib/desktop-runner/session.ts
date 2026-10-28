@@ -53,7 +53,7 @@ export type MintRunToken = (
 ) => Promise<MintedAgentRunToken>;
 
 /** What every socket of one gateway shares. */
-export type RunnerSessionContext = {
+type RunnerSessionContext = {
   readonly db: DesktopRunnerDb;
   readonly instanceId: string;
   readonly timing: DesktopRunnerTiming;
@@ -274,6 +274,7 @@ const deliverPending = async (state: SessionState) => {
   }
   const { held } = state.phase;
   for (;;) {
+    // db-await-in-loop: keyset page per iteration; the page is the batch
     const pending = await readPendingCommands(state.context.db, {
       binding: state.binding,
       sessionId: state.sessionId,

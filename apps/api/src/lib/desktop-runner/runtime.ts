@@ -3,10 +3,6 @@ import { envBase } from "@/api/env-base";
 import type { HttpServer } from "@/api/http/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import {
-  createDesktopRunnerControl,
-  type DesktopRunnerControl,
-} from "@/api/lib/desktop-runner/control";
-import {
   createLocalDoorbell,
   createRedisDoorbell,
   type DesktopRunnerDoorbell,
@@ -20,7 +16,7 @@ import { createRedisClient } from "@/api/lib/redis-client";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 /**
- * This process's desktop runner gateway and control, on the owner connection:
+ * This process's desktop runner gateway, on the owner connection:
  * sockets outlive the request that opened them and leases are swept across
  * organizations, so no member-scoped connection fits. Every query names the
  * account, organization and device key it acts for.
@@ -37,7 +33,6 @@ const getDoorbell = () =>
       : createRedisDoorbell({ createClient: createRedisClient }));
 
 let gateway: DesktopRunnerGateway | null = null;
-let control: DesktopRunnerControl | null = null;
 
 /** Start accepting runner sockets in this task; called once by the server boot. */
 export const startDesktopRunnerGateway = async () => {
@@ -64,10 +59,3 @@ export const upgradeDesktopRunner = async (
   gateway === null
     ? new Response("Desktop runners are not served here", { status: 503 })
     : await gateway.upgrade(request, server);
-
-/** What later slices call to run work on a member's computer. */
-export const getDesktopRunnerControl = (): DesktopRunnerControl =>
-  (control ??= createDesktopRunnerControl({
-    db: rootDb,
-    doorbell: getDoorbell(),
-  }));
