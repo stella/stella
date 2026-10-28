@@ -146,6 +146,7 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo/fingerprint",
       "expo",
       "expo-constants",
       "expo-crypto",
