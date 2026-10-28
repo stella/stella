@@ -56,9 +56,24 @@ const CONSOLE_TAIL_BYTES = 4096;
 // Retained logs buffer installer output: the longest observed console gap was
 // 120.039 s, censored by the old killer. Five times that upper-bound observation
 // rounds up to 610 s; this is conservative until timestamped progress is retained.
-export const INSTALL_STALL_MS = 610_000;
+// Retained timestamped output showed a longest progressing gap of 120.039 s.
+// A 180 s window adds roughly 50% headroom while bounding a genuine stall.
+export const INSTALL_STALL_MS = 180_000;
 
-export type InstallRestoreOutcome = "hit" | "cold";
+export type InstallRestoreOutcome = "hit" | "cold" | "partial" | "uncached";
+
+export type InstallAttemptResult = { exitCode: number; stalled: boolean };
+
+export const retryStalledInstall = async (
+  run: (attempt: number) => Promise<InstallAttemptResult>,
+) => {
+  const first = await run(1);
+  if (!first.stalled) {
+    return { ...first, retried: false };
+  }
+  const second = await run(2);
+  return { ...second, retried: true };
+};
 
 type InstallWatchdogOptions = {
   budgetMs: number;
@@ -168,6 +183,7 @@ type LoggedInstallOptions = {
   storeKey?: string | undefined;
   progressRoots?: readonly string[];
   report?: (message: string) => void;
+  now?: () => number;
 };
 
 export const runLoggedInstall = async ({
@@ -176,7 +192,7 @@ export const runLoggedInstall = async ({
   budgetMs = installWarningBudgetMs(process.platform),
   stallMs = INSTALL_STALL_MS,
   restoreOutcome = "cold",
-  storeKey = "unavailable",
+  storeKey = "uncached:filtered-install",
   progressRoots = [
     process.env["BUN_INSTALL_CACHE_DIR"] ??
       path.join(homedir(), ".bun/install/cache"),
@@ -185,13 +201,11 @@ export const runLoggedInstall = async ({
   report = (message) => {
     process.stdout.write(message);
   },
+  now = Date.now,
 }: LoggedInstallOptions) => {
   mkdirSync(path.dirname(logFile), { recursive: true });
   const descriptor = openSync(logFile, "w+");
-  const started = Date.now();
-  let timer: ReturnType<typeof setInterval> | undefined;
-  let sampling: Promise<void> | undefined;
-  const completion = new AbortController();
+  const started = now();
   const record = (chunk: string | Uint8Array) => {
     writeSync(
       descriptor,
@@ -203,121 +217,134 @@ export const runLoggedInstall = async ({
     report(message);
   };
   try {
-    const child = Bun.spawn({
-      cmd: [...command],
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const watchdog = createInstallWatchdog({
-      budgetMs,
-      stallMs,
-      now: Date.now,
-      warn: () =>
-        summary(
-          `::warning title=install-budget::kind=infra class=${restoreOutcome === "cold" ? "install-cold-budget" : "install-budget"} ${telemetry()}\n`,
-        ),
-      kill: () => {
-        summary(
-          `::error title=install-stall::kind=infra class=install-stall ${telemetry()} idle_ms=${watchdog.idleMs()} pid=${child.pid}\n`,
-        );
-        child.kill("SIGKILL");
-      },
-    });
-    const telemetry = () =>
-      `restore=${restoreOutcome} key=${storeKey} install_ms=${Date.now() - started} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
-    summary(
-      `Install started; warning budget ${budgetMs} ms; ${telemetry()}; log ${logFile}\n`,
-    );
-    let previousStore: string | undefined;
-    let lastProbe = started;
-    const probeStore = async () => {
-      try {
-        const store = await installStoreProgress(
-          progressRoots,
-          () => !completion.signal.aborted,
-        );
-        if (completion.signal.aborted) {
-          return;
+    const runAttempt = async (
+      attempt: number,
+    ): Promise<InstallAttemptResult> => {
+      let sampling: Promise<void> | undefined;
+      const completion = new AbortController();
+      const attemptStarted = now();
+      const child = Bun.spawn({
+        cmd: [...command],
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const watchdog = createInstallWatchdog({
+        budgetMs,
+        stallMs,
+        now,
+        warn: () =>
+          summary(
+            `::warning title=install-budget::kind=infra class=${restoreOutcome === "cold" ? "install-cold-budget" : "install-budget"} ${telemetry()}\n`,
+          ),
+        kill: () => {
+          child.kill("SIGKILL");
+        },
+      });
+      const telemetry = () =>
+        `restore=${restoreOutcome} key=${storeKey} attempt=${attempt} install_ms=${now() - started} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
+      summary(
+        `Install started; warning budget ${budgetMs} ms; ${telemetry()}; log ${logFile}\n`,
+      );
+      let previousStore: string | undefined;
+      let lastProbe = attemptStarted;
+      const probeStore = async () => {
+        try {
+          const store = await installStoreProgress(
+            progressRoots,
+            () => !completion.signal.aborted,
+          );
+          if (completion.signal.aborted) {
+            return;
+          }
+          if (
+            (previousStore !== undefined &&
+              store.signature !== previousStore) ||
+            (store.newest >= attemptStarted && previousStore === undefined)
+          ) {
+            watchdog.progress();
+          }
+          previousStore = store.signature;
+          watchdog.tick();
+        } catch (error) {
+          // An unreadable store cannot prove a stall. Keep the job deadline and
+          // surface the failed probe rather than killing a progressing install.
+          if (!completion.signal.aborted) {
+            summary(
+              `::warning title=install-progress-probe::${String(error)}\n`,
+            );
+          }
+        } finally {
+          sampling = undefined;
         }
-        if (
-          (previousStore !== undefined && store.signature !== previousStore) ||
-          (store.newest >= started && previousStore === undefined)
-        ) {
+      };
+      const timer = setInterval(
+        () => {
+          if (completion.signal.aborted || sampling !== undefined) {
+            return;
+          }
+          watchdog.finish();
+          const probeInterval = Math.min(10_000, stallMs / 2);
+          if (watchdog.idleMs() < probeInterval) {
+            watchdog.tick();
+            return;
+          }
+          if (now() - lastProbe < probeInterval) {
+            return;
+          }
+          lastProbe = now();
+          sampling = probeStore();
+        },
+        Math.min(1000, stallMs / 2),
+      );
+      const output = (chunk: Uint8Array) => {
+        if (chunk.byteLength > 0) {
           watchdog.progress();
         }
-        previousStore = store.signature;
-        watchdog.tick();
-      } catch (error) {
-        // An unreadable store cannot prove a stall. Keep the job deadline and
-        // surface the failed probe rather than killing a progressing install.
-        if (!completion.signal.aborted) {
-          summary(`::warning title=install-progress-probe::${String(error)}\n`);
-        }
-      } finally {
-        sampling = undefined;
+        record(chunk);
+      };
+      // Verbose extraction can emit hundreds of thousands of lines. Keep the
+      // artifact complete without coupling install throughput to the CI console.
+      await Promise.all([
+        child.stdout.pipeTo(new WritableStream({ write: output })),
+        child.stderr.pipeTo(new WritableStream({ write: output })),
+        child.exited,
+      ]);
+      completion.abort();
+      clearInterval(timer);
+      await sampling;
+      watchdog.finish();
+      const exitCode = childExitStatus(child);
+      if (exitCode !== 0) {
+        const size = fstatSync(descriptor).size;
+        const length = Math.min(size, CONSOLE_TAIL_BYTES);
+        const tail = Buffer.alloc(length);
+        readSync(descriptor, tail, 0, length, size - length);
+        report(`Installer log tail:\n${tail.toString()}\n`);
       }
-    };
-    timer = setInterval(
-      () => {
-        if (completion.signal.aborted || sampling !== undefined) {
-          return;
-        }
-        watchdog.finish();
-        const probeInterval = Math.min(10_000, stallMs / 2);
-        if (watchdog.idleMs() < probeInterval) {
-          watchdog.tick();
-          return;
-        }
-        if (Date.now() - lastProbe < probeInterval) {
-          return;
-        }
-        lastProbe = Date.now();
-        sampling = probeStore();
-      },
-      Math.min(1000, stallMs / 2),
-    );
-    const output = (chunk: Uint8Array) => {
-      if (chunk.byteLength > 0) {
-        watchdog.progress();
+      const signal = installTerminationSignal(child.signalCode);
+      if (signal !== undefined && !watchdog.wasStalled()) {
+        summary(
+          `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${signal}\n`,
+        );
       }
-      record(chunk);
-    };
-    // Verbose extraction can emit hundreds of thousands of lines. Keep the
-    // artifact complete without coupling install throughput to the CI console.
-    await Promise.all([
-      child.stdout.pipeTo(new WritableStream({ write: output })),
-      child.stderr.pipeTo(new WritableStream({ write: output })),
-      child.exited,
-    ]);
-    completion.abort();
-    clearInterval(timer);
-    await sampling;
-    watchdog.finish();
-    const exitCode = childExitStatus(child);
-    if (exitCode !== 0) {
-      const size = fstatSync(descriptor).size;
-      const length = Math.min(size, CONSOLE_TAIL_BYTES);
-      const tail = Buffer.alloc(length);
-      readSync(descriptor, tail, 0, length, size - length);
-      report(`Installer log tail:\n${tail.toString()}\n`);
-    }
-    const signal = installTerminationSignal(child.signalCode);
-    if (signal !== undefined && !watchdog.wasStalled()) {
       summary(
-        `::error title=install-signal::kind=infra class=install-signal ${telemetry()} signal=${signal}\n`,
+        `Install finished; exit ${exitCode}; signal ${signal ?? "none"}; ${telemetry()}\n`,
+      );
+      return { exitCode, stalled: watchdog.wasStalled() };
+    };
+    const result = await retryStalledInstall(runAttempt);
+    if (result.retried && !result.stalled && result.exitCode === 0) {
+      summary(
+        `::warning title=install-stall-retried::kind=infra class=install-stall-retried restore=${restoreOutcome} key=${storeKey} install_ms=${now() - started}\n`,
+      );
+    } else if (result.stalled) {
+      summary(
+        `::error title=install-stall::kind=infra class=install-stall restore=${restoreOutcome} key=${storeKey} install_ms=${now() - started}\n`,
       );
     }
-    summary(
-      `Install finished; exit ${exitCode}; signal ${signal ?? "none"}; ${telemetry()}\n`,
-    );
-    return exitCode;
+    return result.exitCode;
   } finally {
-    completion.abort();
-    if (timer !== undefined) {
-      clearInterval(timer);
-    }
-    await sampling;
     closeSync(descriptor);
   }
 };

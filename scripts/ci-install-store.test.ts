@@ -16,6 +16,7 @@ import {
   installStorePath,
   parseGlobalStoreMode,
   parseInstallFlags,
+  pruneInstallStore,
   sealInstallStore,
   verifyInstallStore,
 } from "./ci-install-store";
@@ -201,6 +202,41 @@ test("global-store mode parsing defaults on and rejects ambiguous values", () =>
   expect(() => parseGlobalStoreMode("off")).toThrow(
     "must be 0, 1, false or true",
   );
+});
+
+test("a partial older store is pruned to the current lock before sealing", () => {
+  const root = makeRoot();
+  const store = mkdtempSync(path.join(tmpdir(), "bun-install-partial-"));
+  try {
+    for (const [directory, name, version] of [
+      ["example", "example", "1.0.0"],
+      ["old-extra", "old-extra", "9.0.0"],
+    ] as const) {
+      mkdirSync(path.join(store, directory));
+      writeFileSync(
+        path.join(store, directory, "package.json"),
+        JSON.stringify({ name, version }),
+      );
+    }
+    pruneInstallStore(store, root);
+    expect(
+      readFileSync(path.join(store, "example/package.json"), "utf-8"),
+    ).toContain("example");
+    expect(() =>
+      readFileSync(path.join(store, "old-extra/package.json"), "utf-8"),
+    ).toThrow("ENOENT");
+    const options = {
+      store,
+      key: keyFor(root),
+      globalStoreMode: "disabled" as const,
+      root,
+    };
+    sealInstallStore(options);
+    verifyInstallStore(options);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(store, { recursive: true, force: true });
+  }
 });
 
 test("install flags must be a JSON array of strings", () => {
@@ -441,7 +477,10 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
     key: `\${{ steps.identity.outputs.key }}`,
   });
   expect(saveInputs).toEqual(restoreInputs);
-  expect(restore["with"]).not.toHaveProperty("restore-keys");
+  expect(restore["with"]).toHaveProperty(
+    "restore-keys",
+    `\${{ steps.identity.outputs.restore-prefix }}`,
+  );
   const verifyEnv = v.parse(
     v.object({
       CACHE_HIT: v.string(),
@@ -711,7 +750,74 @@ test("ci-install aliases the hosted work directory before restoring the store", 
   const alias = source.indexOf(
     "Alias the hosted work directory inside job containers",
   );
-  const restore = source.indexOf("Restore exact complete install store");
+  const restore = source.indexOf(
+    "Restore exact or newest compatible complete install store",
+  );
   expect(alias).toBeGreaterThan(-1);
   expect(alias).toBeLessThan(restore);
+});
+
+test("every workflow ci-install caller is wired to the action's required key identity", () => {
+  const action = v.parse(
+    v.object({ outputs: v.object({ key: v.object({ value: v.string() }) }) }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(import.meta.dir, "../.github/actions/ci-install/action.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(action.outputs.key.value).toBe(`\${{ steps.identity.outputs.key }}`);
+  let callers = 0;
+  let containerCallers = 0;
+  for (const relative of new Bun.Glob("*.yml").scanSync(
+    path.join(import.meta.dir, "../.github/workflows"),
+  )) {
+    const workflow = v.parse(
+      v.object({
+        jobs: v.record(
+          v.string(),
+          v.looseObject({
+            container: v.optional(v.unknown()),
+            steps: v.optional(v.array(v.unknown())),
+          }),
+        ),
+      }),
+      Bun.YAML.parse(
+        readFileSync(
+          path.join(import.meta.dir, "../.github/workflows", relative),
+          "utf-8",
+        ),
+      ),
+    );
+    for (const job of Object.values(workflow.jobs)) {
+      for (const step of job.steps ?? []) {
+        if (typeof step !== "object" || step === null || Array.isArray(step)) {
+          continue;
+        }
+        const candidate = v.parse(
+          v.looseObject({
+            uses: v.optional(v.string()),
+            with: v.optional(v.record(v.string(), v.unknown())),
+          }),
+          step,
+        );
+        if (
+          ![
+            "$/.github/actions/ci-install",
+            "./.github/actions/ci-install",
+          ].includes(candidate.uses ?? "")
+        ) {
+          continue;
+        }
+        callers += 1;
+        if (job.container !== undefined) {
+          containerCallers += 1;
+        }
+        expect(candidate.with?.["flags"]).toBeString();
+      }
+    }
+  }
+  expect(callers).toBeGreaterThan(0);
+  expect(containerCallers).toBeGreaterThan(0);
 });

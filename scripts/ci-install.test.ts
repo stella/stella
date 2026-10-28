@@ -13,6 +13,7 @@ import {
   createInstallWatchdog,
   installStoreProgress,
   installWarningBudgetMs,
+  retryStalledInstall,
   runLoggedInstall,
 } from "./ci-install";
 
@@ -49,7 +50,7 @@ afterEach(() => {
   }
 });
 
-test("failed and hung installers preserve output and never retry", async () => {
+test("failed installers do not retry and stalled installers retry exactly once", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "ci-install-"));
   roots.push(root);
   const logFile = path.join(root, "logs/install.log");
@@ -84,7 +85,30 @@ test("failed and hung installers preserve output and never retry", async () => {
   expect(hung).toContain("partial output before hang");
   expect(hung).toContain("Install finished;");
   expect(hung).toContain("kind=infra class=install-stall");
-  expect(hung.match(/Install started/gu)).toHaveLength(1);
+  expect(hung.match(/Install started/gu)).toHaveLength(2);
+  expect(hung).toContain("class=install-stall");
+});
+
+test("a stalled fake child is killed, retried once, and can recover", async () => {
+  const attempts: number[] = [];
+  const result = await retryStalledInstall(async (attempt) => {
+    attempts.push(attempt);
+    return attempt === 1
+      ? { exitCode: 137, stalled: true }
+      : { exitCode: 0, stalled: false };
+  });
+  expect(attempts).toEqual([1, 2]);
+  expect(result).toEqual({ exitCode: 0, stalled: false, retried: true });
+});
+
+test("two stalled fake children produce a typed terminal stall", async () => {
+  const attempts: number[] = [];
+  const result = await retryStalledInstall(async (attempt) => {
+    attempts.push(attempt);
+    return { exitCode: 137, stalled: true };
+  });
+  expect(attempts).toEqual([1, 2]);
+  expect(result).toEqual({ exitCode: 137, stalled: true, retried: true });
 });
 
 test.each([0, 7])(
@@ -218,7 +242,7 @@ test.each(["hit", "cold"] as const)(
     expect(result).toBe(0);
     expect(messages.join("")).toContain("::warning title=install-budget::");
     expect(messages.join("")).toContain(
-      `restore=${restoreOutcome} key=${restoreOutcome === "hit" ? "test-key" : "unavailable"}`,
+      `restore=${restoreOutcome} key=${restoreOutcome === "hit" ? "test-key" : "uncached:filtered-install"}`,
     );
     expect(messages.join("")).not.toContain("class=install-stall");
   },

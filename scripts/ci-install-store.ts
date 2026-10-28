@@ -4,6 +4,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -133,6 +134,96 @@ export const completeInstallStoreKey = ({
   return `bun-complete-store-${STORE_CACHE_VERSION}-${platform}-${arch}-${revision}-${globalStoreMode}-${digest}`;
 };
 
+export const installStoreRestorePrefix = (key: string) => {
+  const separator = key.lastIndexOf("-");
+  if (separator === -1) {
+    throw new InstallStoreInvariantError("Invalid install-store key");
+  }
+  return key.slice(0, separator + 1);
+};
+
+const lockPackageIdentities = (root: string) => {
+  const lock: unknown = Bun.JSONC.parse(
+    readFileSync(path.join(root, "bun.lock"), "utf-8"),
+  );
+  if (!isRecord(lock) || !isRecord(lock["packages"])) {
+    throw new InstallStoreInvariantError("Invalid bun.lock packages");
+  }
+  const identities = new Set<string>();
+  for (const value of Object.values(lock["packages"])) {
+    if (Array.isArray(value) && typeof value[0] === "string") {
+      identities.add(value[0]);
+    }
+  }
+  return identities;
+};
+
+// A prefix restore may contain packages from the previous lock. Remove every
+// identifiable package absent from the current lock before sealing the new key.
+export const pruneInstallStore = (store: string, root: string) => {
+  const allowed = lockPackageIdentities(root);
+  const pending = [store];
+  for (const directory of pending) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (!entry.isDirectory() || entry.name === "links") {
+        continue;
+      }
+      const manifest = path.join(filename, "package.json");
+      if (!existsSync(manifest)) {
+        pending.push(filename);
+        continue;
+      }
+      const metadata: unknown = Bun.JSONC.parse(
+        readFileSync(manifest, "utf-8"),
+      );
+      if (
+        isRecord(metadata) &&
+        typeof metadata["name"] === "string" &&
+        typeof metadata["version"] === "string" &&
+        !allowed.has(`${metadata["name"]}@${metadata["version"]}`)
+      ) {
+        rmSync(filename, { recursive: true, force: true });
+      }
+    }
+  }
+};
+
+const assertInstallStoreExact = (store: string, root: string) => {
+  const before: string[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (!entry.isDirectory() || entry.name === "links") {
+        continue;
+      }
+      const manifest = path.join(filename, "package.json");
+      if (!existsSync(manifest)) {
+        visit(filename);
+        continue;
+      }
+      const metadata: unknown = Bun.JSONC.parse(
+        readFileSync(manifest, "utf-8"),
+      );
+      if (
+        isRecord(metadata) &&
+        typeof metadata["name"] === "string" &&
+        typeof metadata["version"] === "string"
+      ) {
+        before.push(`${metadata["name"]}@${metadata["version"]}`);
+      }
+    }
+  };
+  visit(store);
+  const allowed = lockPackageIdentities(root);
+  const extra = before.find((identity) => !allowed.has(identity));
+  if (extra !== undefined) {
+    throw new InstallStoreInvariantError(
+      `Install store contains package outside current lock: ${extra}`,
+    );
+  }
+};
+
 type ExtractionScratchOptions = {
   directory: string;
   entry: string;
@@ -244,6 +335,7 @@ type InstallStoreOptions = {
   store: string;
   key: string;
   globalStoreMode: GlobalStoreMode;
+  root?: string;
 };
 
 const markerContents = ({
@@ -266,6 +358,7 @@ export const sealInstallStore = (options: InstallStoreOptions) => {
 };
 
 export const verifyInstallStore = (options: InstallStoreOptions) => {
+  assertInstallStoreExact(options.store, options.root ?? process.cwd());
   const marker = path.join(options.store, MARKER);
   if (
     !existsSync(marker) ||
@@ -370,6 +463,7 @@ if (import.meta.main) {
       globalStoreMode,
     });
     console.log(`key=${key}`);
+    console.log(`restore-prefix=${installStoreRestorePrefix(key)}`);
     const temporary = process.env["RUNNER_TEMP"];
     if (temporary !== undefined) {
       const { store: storePath, alias } = installStorePath({
@@ -385,19 +479,21 @@ if (import.meta.main) {
       }
     }
   } else if (
-    (operation === "seal" || operation === "verify") &&
+    (operation === "seal" || operation === "verify" || operation === "prune") &&
     args.length === 1 &&
     args[0]
   ) {
     const options = { store, key: args[0], globalStoreMode };
-    if (operation === "seal") {
+    if (operation === "prune") {
+      pruneInstallStore(store, process.cwd());
+    } else if (operation === "seal") {
       sealInstallStore(options);
     } else {
       verifyInstallStore(options);
     }
   } else {
     throw new InstallStoreInvariantError(
-      "Usage: ci-install-store.ts key | seal <key> | verify <key>",
+      "Usage: ci-install-store.ts key | prune <key> | seal <key> | verify <key>",
     );
   }
 }
