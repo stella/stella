@@ -2,7 +2,42 @@
   "cloud": {
     "install": "bun install --frozen-lockfile --ignore-scripts",
     "services": ["postgres", "valkey"],
-    "tools": { "gitleaks": "8.30.1" },
+    "tools": {
+      "gitleaks": "8.30.1"
+    },
     "envFile": "apps/api/.env.test"
-  }
+  },
+  "typescriptAllowlist": [
+    {
+      "kind": "source-api",
+      "workspace": ".",
+      "name": "typescript6",
+      "spec": "npm:typescript@6.0.3",
+      "sources": [
+        "scripts/ratchet.ts",
+        "scripts/env-tool.ts",
+        "scripts/online-ddl-lock-census.ts"
+      ],
+      "reason": "Repository guards and generators inspect TypeScript syntax and symbols through the compiler API."
+    },
+    {
+      "kind": "source-api",
+      "workspace": "apps/api",
+      "name": "typescript6",
+      "spec": "npm:typescript@6.0.3",
+      "sources": [
+        "apps/api/scripts/generate-schema-index.ts",
+        "apps/api/scripts/lib/enumerate-safe-handlers.ts"
+      ],
+      "reason": "API schema and handler generators inspect syntax through the TypeScript compiler API."
+    },
+    {
+      "kind": "dependency",
+      "workspace": "apps/landing",
+      "name": "typescript",
+      "spec": "6.0.3",
+      "dependency": "@astrojs/check",
+      "reason": "astro check loads the TypeScript 6 language service."
+    }
+  ]
 }
