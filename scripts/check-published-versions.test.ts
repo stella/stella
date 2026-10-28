@@ -13,10 +13,8 @@ import {
   type RegistryFetch,
   versionBumpTime,
 } from "./check-npm-publish-lag";
-import {
-  checkPublishedVersions,
-  type GitRunner,
-} from "./check-published-versions";
+import { checkPublishedVersions } from "./check-published-versions";
+import type { GitRunner } from "./promoted-cli-target";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const NOW = 2_000_000_000;

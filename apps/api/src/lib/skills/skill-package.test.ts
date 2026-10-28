@@ -5,13 +5,11 @@ import JSZip from "jszip";
 import { writeZipEntry } from "@stll/docx-utils";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import type {
-  safeOutboundFetchBytes,
-  SafeOutboundFetchResponse,
-} from "@/api/lib/safe-outbound-fetch";
+import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import {

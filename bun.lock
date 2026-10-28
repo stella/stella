@@ -652,7 +652,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/fuzzy-search": "catalog:",
@@ -700,7 +700,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "@stll/text-normalize": "workspace:*",
@@ -734,6 +734,7 @@
       "name": "@stll/api-contract",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/agent-input": "workspace:*",
         "@stll/aho-corasick": "catalog:",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -777,7 +778,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.13.2",
+      "version": "0.13.3",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -829,7 +830,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.9",
+      "version": "0.2.10",
       "dependencies": {
         "@ag-ui/core": "1.0.2",
         "@stll/ai-catalog": "workspace:^",
@@ -877,7 +878,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.0.2",
+      "version": "6.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1463,7 +1464,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1496,7 +1497,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.53.0",
+      "version": "0.54.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1582,7 +1583,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.14.0",
+      "version": "0.14.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
