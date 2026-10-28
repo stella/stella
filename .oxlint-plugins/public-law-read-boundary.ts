@@ -161,10 +161,13 @@ const transactionsAreConfigured = (
   // The owner helper is a module binding; a callback-local namesake cannot
   // establish transaction configuration.
   let configurationBinding: Variable | null = null;
+  let observationBinding: Variable | null = null;
   let scope = context.sourceCode.getScope(sharedParameter);
   while (true) {
     if (scope.type === "module" || scope.type === "global") {
       configurationBinding = scope.set.get("configureReadTransaction") ?? null;
+      observationBinding =
+        scope.set.get("observePublicLawReadTransaction") ?? null;
       break;
     }
     if (scope.upper === null) {
@@ -206,9 +209,37 @@ const transactionsAreConfigured = (
       }
       const takesTransaction = (call: AstNode) => {
         const argument = unwrapExpression(firstArgument(call));
+        if (!isIdentifierReference(argument)) {
+          return false;
+        }
+        if (resolveVariable(context, argument) === transactionBinding) {
+          return true;
+        }
+        const alias = resolveVariable(context, argument);
+        const definition = alias?.defs.at(0)?.node;
+        if (
+          alias === null ||
+          observationBinding === null ||
+          !isSingleAssignment(observationBinding) ||
+          !isSingleAssignment(alias) ||
+          !isAstNode(definition) ||
+          definition.type !== "VariableDeclarator"
+        ) {
+          return false;
+        }
+        const initializer = unwrapExpression(definition.init);
+        if (initializer?.type !== "CallExpression") {
+          return false;
+        }
+        const callee = unwrapExpression(initializer.callee);
+        const observedTransaction = unwrapExpression(
+          firstArgument(initializer),
+        );
         return (
-          isIdentifierReference(argument) &&
-          resolveVariable(context, argument) === transactionBinding
+          isIdentifierReference(callee) &&
+          resolveVariable(context, callee) === observationBinding &&
+          isIdentifierReference(observedTransaction) &&
+          resolveVariable(context, observedTransaction) === transactionBinding
         );
       };
       const invokesSharedCallback = (node: unknown): node is AstNode => {

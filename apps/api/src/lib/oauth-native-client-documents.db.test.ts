@@ -57,9 +57,9 @@ const { CLI_CLIENT_METADATA_PATH, buildCliClientMetadataDocument } =
   await import("@stll/cli/client-metadata-document");
 const {
   MOBILE_CLIENT_METADATA_PATH,
-  MOBILE_REDIRECT_URI,
   MOBILE_SCOPES,
   buildMobileClientMetadataDocument,
+  mobileRedirectUri,
 } = await import("@stll/api-contract/mobile-client");
 const { apiOAuthResourceUrl } =
   await import("@stll/api-contract/api-oauth-resource");
@@ -69,6 +69,8 @@ const { readCredentialFile } =
 const api = serveForTest(apiApp);
 
 const MOBILE_CLIENT_ID = `${PUBLIC_URL}${MOBILE_CLIENT_METADATA_PATH}`;
+/** The installed app signing in here is the production build. */
+const MOBILE_REDIRECT_URI_PRODUCTION = mobileRedirectUri("production");
 
 const CLI_CLIENT_ID = `${PUBLIC_URL}${CLI_CLIENT_METADATA_PATH}`;
 /** Where the CLI is pointed: the deployment's public address. */
@@ -237,7 +239,7 @@ const mobileSignIn = async (browser: Browser) => {
   for (const [name, value] of Object.entries({
     response_type: "code",
     client_id: MOBILE_CLIENT_ID,
-    redirect_uri: MOBILE_REDIRECT_URI,
+    redirect_uri: MOBILE_REDIRECT_URI_PRODUCTION,
     code_challenge: sha256Base64Url(codeVerifier),
     code_challenge_method: "S256",
     state,
@@ -248,14 +250,16 @@ const mobileSignIn = async (browser: Browser) => {
     authorize.searchParams.set(name, value);
   }
   const callback = await consentInBrowser(browser, authorize.toString());
-  expect(`${callback.protocol}${callback.pathname}`).toBe(MOBILE_REDIRECT_URI);
+  expect(`${callback.protocol}${callback.pathname}`).toBe(
+    MOBILE_REDIRECT_URI_PRODUCTION,
+  );
   expect(callback.searchParams.get("state")).toBe(state);
   const tokens = await requestTokens(metadata.token_endpoint, {
     grant_type: "authorization_code",
     client_id: MOBILE_CLIENT_ID,
     code: callback.searchParams.get("code") ?? "",
     code_verifier: codeVerifier,
-    redirect_uri: MOBILE_REDIRECT_URI,
+    redirect_uri: MOBILE_REDIRECT_URI_PRODUCTION,
     resource,
   });
   return {

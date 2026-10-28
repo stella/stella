@@ -60,6 +60,10 @@ import { ReaderProvisionModeToggle } from "@/features/case-law/components/reader
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
 import { detached } from "@/lib/detached";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -203,28 +207,56 @@ export const CaseDecisionInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {decision !== undefined && (
-              <>
-                <ReaderProvisionModeToggle mode={provisions} size="pane" />
-                <OpenOriginalButton href={decision.sourceUrl} size="icon-xs" />
-                <DecisionInfoPopover
-                  decisionType={decision.decisionType}
-                  judges={decision.judges}
-                  metadata={decision.metadata}
-                  source={decision.source}
-                  sourceUrl={decision.sourceUrl}
-                />
-              </>
-            )}
-            {/* The text moves to the page, so the tab that held it goes. */}
-            <DecisionMainViewAction
-              onMoveToMain={onClose}
-              payload={{ ...payload, searchQuery: find.findQuery || undefined }}
-            />
-          </>
-        }
+        actions={[
+          ...(decision === undefined
+            ? []
+            : [
+                {
+                  id: "provision-mode",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <ReaderProvisionModeToggle mode={provisions} size="pane" />
+                  ),
+                },
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={decision.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+                {
+                  id: "decision-info",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <DecisionInfoPopover
+                      decisionType={decision.decisionType}
+                      judges={decision.judges}
+                      metadata={decision.metadata}
+                      source={decision.source}
+                      sourceUrl={decision.sourceUrl}
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The text moves to the page, so the tab that held it goes.
+            render: () => (
+              <DecisionMainViewAction
+                onMoveToMain={onClose}
+                payload={{
+                  ...payload,
+                  searchQuery: find.findQuery || undefined,
+                }}
+              />
+            ),
+          },
+        ]}
         label={tab.label}
         onClose={onClose}
       />

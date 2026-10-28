@@ -3,7 +3,9 @@ import type { KeyboardEvent, MouseEventHandler, ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -223,6 +225,8 @@ type ProvisionWordingProps = {
   extent: ProvisionWordingExtent;
   language: string | null;
   placement: ProvisionCardPlacement;
+  /** The cited statute's publisher scheme, which its anchors nest lists in. */
+  statuteLists: StatuteListScheme;
 };
 
 /**
@@ -236,6 +240,7 @@ const ProvisionWording = ({
   extent,
   language,
   placement,
+  statuteLists,
 }: ProvisionWordingProps) => (
   <div
     className={cn(
@@ -264,6 +269,7 @@ const ProvisionWording = ({
             block={paragraphFromPreview(block)}
             key={block.id}
             rangesByPieceId={NO_RANGES}
+            statuteLists={statuteLists}
             variant="statute"
           />
         ))}
@@ -276,10 +282,12 @@ const PassageBody = ({
   extent = "all",
   passage,
   placement = "inline",
+  statuteLists,
 }: {
   extent?: ProvisionWordingExtent;
   passage: ProvisionCardPassage;
   placement?: ProvisionCardPlacement;
+  statuteLists: StatuteListScheme;
 }) => {
   const messages = useReaderMessages();
   switch (passage.type) {
@@ -296,6 +304,7 @@ const PassageBody = ({
             extent={extent}
             language={passage.language}
             placement={placement}
+            statuteLists={statuteLists}
           />
           {passage.unavailable.map((provisionLabel) => (
             <span
@@ -341,12 +350,14 @@ const FullProvisionWording = ({
   outcome,
   passage,
   placement,
+  statuteLists,
   wordings,
 }: {
   extent: ProvisionWordingExtent;
   outcome: FullProvisionOutcome;
   passage: ProvisionCardPassage;
   placement: ProvisionCardPlacement;
+  statuteLists: StatuteListScheme;
   wordings: readonly CitedWording[];
 }) => {
   switch (outcome.type) {
@@ -357,6 +368,7 @@ const FullProvisionWording = ({
             extent={extent}
             passage={passage}
             placement={placement}
+            statuteLists={statuteLists}
           />
           <ProvisionWordingSkeleton />
         </>
@@ -368,6 +380,7 @@ const FullProvisionWording = ({
             extent={extent}
             passage={passage}
             placement={placement}
+            statuteLists={statuteLists}
           />
           <ProvisionTextUnavailable scope="full" />
         </>
@@ -378,6 +391,7 @@ const FullProvisionWording = ({
           extent={extent}
           passage={provisionCardPassage(wordings, outcome.wording)}
           placement={placement}
+          statuteLists={statuteLists}
         />
       );
     default:
@@ -462,6 +476,7 @@ export const CitedProvisionExpansion = ({
   const [expanded, setExpanded] = useState(false);
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
+  const statuteLists = statuteListSchemeFor(first.document.country);
   const passage = provisionCardPassage(wordings);
   const outcome = fullProvisionOutcome(full);
   const displaysFullText = showsFull && outcome.type === "text";
@@ -527,6 +542,7 @@ export const CitedProvisionExpansion = ({
               outcome={outcome}
               passage={passage}
               placement={placement}
+              statuteLists={statuteLists}
               wordings={wordings}
             />
           ) : (
@@ -534,6 +550,7 @@ export const CitedProvisionExpansion = ({
               extent={extent}
               passage={passage}
               placement={placement}
+              statuteLists={statuteLists}
             />
           )}
         </WordingFrame>
@@ -583,7 +600,10 @@ export const CitedProvisionPeek = ({
         language={wording?.language}
         trail={provisionTrail({ label, passage, wording })}
       />
-      <PassageBody passage={passage} />
+      <PassageBody
+        passage={passage}
+        statuteLists={statuteListSchemeFor(provision.document.country)}
+      />
     </>
   );
 };

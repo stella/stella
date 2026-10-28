@@ -508,19 +508,35 @@
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
     "approval": {
+      "approveAll": "{count, plural, one {Aprobar # registro} other {Aprobar los # registros}}",
       "approveSelected": "Aprobar {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "billedTotal": "{duration} facturado",
       "empty": "No hay nada pendiente de aprobación en este asunto.",
+      "emptyWeek": "No hay nada pendiente de aprobación esta semana. El tiempo enviado aparece aquí.",
+      "everyone": "Todos",
       "failed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
       "myTime": "Mi tiempo",
+      "pending": "{count, plural, one {# registro por aprobar} other {# registros por aprobar}}",
       "refusals": {
         "invalidEntry": "Añada una descripción y revise la fecha de trabajo; después apruebe el registro.",
         "notApprover": "Solo el aprobador asignado o un administrador puede aprobar este registro.",
         "notFound": "Este registro ya no existe. Actualice la lista.",
+        "notSubmitted": "Este registro aún no se ha enviado. Primero debe enviarlo quien lo registró.",
         "runningTimer": "Detenga el temporizador en curso antes de aprobar este registro.",
         "unpriced": "Este registro no tiene tarifa. Configure una tarifa para este asunto y después apruébelo.",
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
       },
       "returnComment": "Motivo de devolución",
+      "returnRefusals": {
+        "invalidEntry": "Revise la fecha de trabajo del registro y después devuélvalo.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede devolver este registro.",
+        "notFound": "Este registro ya no existe, por lo que no se puede devolver. Actualice la lista.",
+        "notSubmitted": "Este borrador nunca se envió, así que no hay nada que devolver.",
+        "runningTimer": "Detenga el temporizador en curso antes de devolver este registro.",
+        "timePeriodLocked": "Este mes está bloqueado, por lo que el registro no se puede devolver. Pida a un administrador que lo desbloquee.",
+        "wrongStatus": "El tiempo facturado o dado de baja no se puede devolver a quien lo registró."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
       "selectEntry": "Seleccionar registro",
       "timeEntries": "Registros de tiempo",
       "title": "Aprobaciones"
@@ -530,6 +546,17 @@
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
+    "clientComposer": {
+      "flatFeeNote": "Facture los asuntos con tarifa fija desde la página de facturas del asunto.",
+      "includeMatter": "Incluir {matterName}",
+      "invalidPeriod": "Elija una fecha de fin igual o posterior a la de inicio.",
+      "loadFailed": "No se pudo cargar el trabajo sin facturar. Inténtelo de nuevo.",
+      "matterSubtotal": "Total del asunto con IVA: {amount} · {share} de la factura",
+      "periodEnd": "Fin del período",
+      "periodStart": "Inicio del período",
+      "title": "Facturar al cliente",
+      "visibility": "Esta factura solo es visible para quienes tienen acceso a todos los asuntos incluidos y los administradores de facturación."
+    },
     "codes": {
       "activity": "Actividad",
       "activityCode": "Código de actividad",
@@ -673,6 +700,11 @@
       "invoiceDate": "Fecha de factura",
       "invoiceDetail": "Detalle de factura",
       "invoiceNumber": "Número de factura",
+      "lineOverrides": {
+        "editedRecorded": "Editado · registrado: {description}, {quantity} × {rate}",
+        "quantity": "Cantidad",
+        "resetRecorded": "Restablecer valores registrados"
+      },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
       "markPaid": "Marcar como pagada",
@@ -697,6 +729,7 @@
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
+    "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",
@@ -811,13 +844,16 @@
       "approved": "Aprobado",
       "billed": "Facturado",
       "draft": "Borrador",
+      "submitted": "Enviado",
       "written_off": "Dado de baja"
     },
     "stopTimer": "Detener",
     "suggestions": {
       "actionCount": "{count, plural, one {# acción} many {# acciones} other {# acciones}}",
       "activeVsLogged": "{active} de actividad · {logged} registrados",
+      "alreadyCovered": "Ya cubierto por tiempo registrado",
       "chatEvidence": "{count, plural, one {# mensaje} many {# mensajes} other {# mensajes}} en «{title}»",
+      "engagedTime": "{duration} de actividad",
       "keyboardHint": "Enter acepta, E edita antes de aceptar, Supr descarta",
       "privacyNote": "Solo tú puedes ver estas sugerencias. No se registra nada hasta que la aceptas.",
       "title": "Sugerencias a partir de tu actividad",
@@ -963,7 +999,6 @@
     "coverage": {
       "completeness": "Exhaustividad",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "generatedAt": "Datos a {date}",
@@ -974,20 +1009,16 @@
       "healthStalled": "Sin avance",
       "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
-      "knownGaps": "Lagunas conocidas",
       "lastSync": "Última sincronización",
-      "noGapsRecorded": "No hay lagunas registradas",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
-      "pendingTexts": "Textos pendientes",
       "reportedByListing": "Contado a partir del listado del organismo publicador",
       "reportedByOperator": "Introducido manualmente",
       "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
-      "unreadListingPeriods": "Periodos del listado no leídos"
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {
@@ -2076,7 +2107,6 @@
       "orLetUsKnowAt": "o escríbanos a",
       "viewDocumentation": "Ver documentación"
     },
-    "error": "Error",
     "expenses": "Gastos",
     "export": {
       "citations": "Citas",
@@ -2150,6 +2180,7 @@
     "lastUpdated": "Última actualización",
     "layoutResetAfterProblem": "Se ha restablecido la disposición tras un problema.",
     "legalDatabase": "Base de datos jurídica",
+    "loadFailed": "No se ha podido cargar.",
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
@@ -2239,7 +2270,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
@@ -2716,7 +2747,7 @@
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
-    "actionFailed": "Acción fallida",
+    "actionFailed": "No ha funcionado. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
@@ -3266,7 +3297,7 @@
     "saveSerializeFailedTitle": "No se pudo crear el DOCX",
     "savingDocument": "Guardando...",
     "showDetails": "Mostrar detalles",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "tableBordersAll": "Todos los bordes",
@@ -5868,6 +5899,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Trabajo interno"
+    },
+    "week": {
+      "allLogged": "Todo está registrado. La nueva actividad aparecerá aquí mientras trabajas.",
+      "days": "Días de la semana",
+      "entriesTitle": "Tiempo registrado",
+      "nextWeek": "Semana siguiente",
+      "noActivity": "Aún no hay nada que registrar. Trabaja en un asunto y tu actividad aparecerá aquí para aceptarla.",
+      "pendingCount": "{count, plural, one {# sugerencia} other {# sugerencias}}",
+      "previousWeek": "Semana anterior",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Revisa la fecha de trabajo y luego envía este registro.",
+        "narrativeRequired": "Añade una descripción y luego envía este registro.",
+        "runningTimer": "Detén el temporizador en curso y luego envía este registro.",
+        "unpriced": "Este registro no tiene tarifa. Pide una tarifa para el asunto y luego envíalo."
+      },
+      "returned": "Devuelto: {comment}",
+      "submitAndApprove": "Enviar y aprobar",
+      "submitResult": "{submitted} enviados · {approved} aprobados · {refused} por corregir",
+      "submitWeek": "Enviar semana",
+      "title": "Mi semana",
+      "totals": "{logged} registrados · {billable} facturables"
     }
   },
   "translate": {
@@ -6492,6 +6545,36 @@
       "pageEditor": {
         "addPDF": "Añadir PDF",
         "applyCrop": "Aplicar recorte",
+        "cleanScan": {
+          "applied": "Versión limpia aplicada",
+          "apply": "Aplicar",
+          "applyAll": "Aplicar todas",
+          "applyPage": "Aplicar la página limpia {number}",
+          "cleaned": "Limpia",
+          "cleaning": "Limpiando la página",
+          "contentCrop": "Recortar al contenido",
+          "description": "{count, plural, one {Revise la página limpia antes de usarla. El documento solo cambia cuando lo haga.} other {Revise cada una de las # páginas limpias antes de usarlas. El documento solo cambia cuando lo haga.}}",
+          "deskew": "Enderezar",
+          "failedEngine": "No se pudo limpiar. La página queda como está.",
+          "failedRender": "No se pudo preparar la página para limpiarla. Queda como está.",
+          "failedTimeout": "La limpieza tardó demasiado. La página queda como está.",
+          "heading": "Limpiar escaneo",
+          "output": "Modo de color",
+          "outputBinary": "Blanco y negro",
+          "outputGrayscale": "Escala de grises",
+          "pageLimit": "Puede limpiar hasta {max} páginas a la vez. Seleccione menos páginas.",
+          "preview": "Página limpia {number}",
+          "progress": "{done} de {total} páginas procesadas",
+          "reject": "Conservar original",
+          "rejectPage": "Conservar la página original {number}",
+          "rejected": "Original conservado",
+          "scope": "{count, plural, =0 {Enderezar y limpiar todas las páginas} one {Enderezar y limpiar la página seleccionada} other {Enderezar y limpiar las # páginas seleccionadas}}",
+          "unrecognized": "La página no se reconoció como un escaneo. Queda como está.",
+          "unrecognizedNoContent": "No se encontró contenido en esta página. Queda como está.",
+          "unrecognizedNoPage": "No se encontraron los bordes de la página. La página queda como está.",
+          "unrecognizedTooLarge": "La página es demasiado grande para limpiarla. Queda como está.",
+          "use": "{count, plural, =0 {Usar páginas limpias} one {Usar # página limpia} other {Usar # páginas limpias}}"
+        },
         "crop": "Recortar",
         "cropAdvanced": "Opciones avanzadas",
         "cropBottom": "Abajo (mm)",
@@ -6539,7 +6622,10 @@
         "saveVersion": "Guardar versión",
         "selectAll": "Seleccionar todo",
         "selectPage": "Seleccionar página {number}",
+        "signAfterSave": "Guarda las ediciones de páginas como una nueva versión y luego la firma",
+        "signSavedVersionMissing": "La nueva versión se guardó, pero no se pudo abrir para firmarla. Fírmela desde el visor del documento.",
         "signatureWarning": "Al editar este PDF, las firmas digitales dejarán de ser válidas.",
+        "signatureWarningWithSign": "Al editar, las firmas digitales existentes dejarán de ser válidas. Al firmar desde aquí, primero se guardan sus ediciones y se firma la nueva versión.",
         "sourceLimit": "El tamaño combinado de los archivos PDF no puede superar los 100 MB.",
         "title": "Editar páginas",
         "undo": "Deshacer edición de página",

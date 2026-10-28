@@ -173,7 +173,7 @@ const provisionAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id: documentId,
         slug: "test-act",
@@ -574,7 +574,7 @@ const citationAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id,
         slug: "test-act",

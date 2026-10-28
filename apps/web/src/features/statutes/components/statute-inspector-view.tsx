@@ -42,6 +42,10 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -119,22 +123,34 @@ export const StatuteInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {statute !== undefined && (
-              <OpenOriginalButton
-                href={statute.documentUrl ?? statute.sourceUrl}
-                size="icon-xs"
+        actions={[
+          ...(statute === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={statute.documentUrl ?? statute.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The wording moves to the page, so the tab that held it goes.
+            render: () => (
+              <StatuteMainViewAction
+                onMoveToMain={onClose}
+                payload={payload}
+                searchQuery={find.findQuery}
               />
-            )}
-            {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction
-              onMoveToMain={onClose}
-              payload={payload}
-              searchQuery={find.findQuery}
-            />
-          </>
-        }
+            ),
+          },
+        ]}
         label={tab.label}
         onClose={onClose}
       />

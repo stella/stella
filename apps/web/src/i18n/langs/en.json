@@ -508,19 +508,35 @@
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
     "approval": {
+      "approveAll": "{count, plural, one {Approve # entry} other {Approve all # entries}}",
       "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "billedTotal": "{duration} billed",
       "empty": "Nothing on this matter is waiting for approval.",
+      "emptyWeek": "Nothing is waiting for approval this week. Submitted time shows up here.",
+      "everyone": "Everyone",
       "failed": "The change was not saved. Try again.",
       "myTime": "My time",
+      "pending": "{count, plural, one {# entry to approve} other {# entries to approve}}",
       "refusals": {
         "invalidEntry": "Add a description and check the work date, then approve the entry.",
         "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
         "notFound": "This entry no longer exists. Refresh the list.",
+        "notSubmitted": "This entry has not been submitted yet. Its timekeeper submits it first.",
         "runningTimer": "Stop the running timer before approving this entry.",
         "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
         "wrongStatus": "This entry is no longer a draft. Refresh the list."
       },
       "returnComment": "Reason for returning",
+      "returnRefusals": {
+        "invalidEntry": "Check the entry's work date, then return it.",
+        "notApprover": "Only the entry's assigned approver or an administrator can return it.",
+        "notFound": "This entry no longer exists, so it cannot be returned. Refresh the list.",
+        "notSubmitted": "This draft was never submitted, so there is nothing to return.",
+        "runningTimer": "Stop the running timer before returning this entry.",
+        "timePeriodLocked": "This month is locked, so the entry cannot be returned. Ask an administrator to unlock it.",
+        "wrongStatus": "Billed or written-off time cannot be returned to its timekeeper."
+      },
+      "returnSelected": "Return {count, plural, one {# selected entry} other {# selected entries}}",
       "selectEntry": "Select entry",
       "timeEntries": "Time entries",
       "title": "Approvals"
@@ -530,6 +546,17 @@
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
+    "clientComposer": {
+      "flatFeeNote": "Bill flat-fee matters from the matter’s invoice page.",
+      "includeMatter": "Include {matterName}",
+      "invalidPeriod": "Choose an end date on or after the start date.",
+      "loadFailed": "Could not load unbilled work. Try again.",
+      "matterSubtotal": "Matter total incl. VAT: {amount} · {share} of invoice",
+      "periodEnd": "Period end",
+      "periodStart": "Period start",
+      "title": "Bill client",
+      "visibility": "This invoice is visible only to people who can access every included matter, and billing administrators."
+    },
     "codes": {
       "activity": "Activity",
       "activityCode": "Activity code",
@@ -673,6 +700,11 @@
       "invoiceDate": "Invoice date",
       "invoiceDetail": "Invoice detail",
       "invoiceNumber": "Invoice number",
+      "lineOverrides": {
+        "editedRecorded": "Edited · recorded: {description}, {quantity} × {rate}",
+        "quantity": "Quantity",
+        "resetRecorded": "Reset to recorded"
+      },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
       "markPaid": "Mark paid",
@@ -697,6 +729,7 @@
     "markNonBillableSelected": "Mark non-billable",
     "matterRequired": "Please select a matter",
     "minutes": "Minutes",
+    "moveEntryHint": "Saving moves the entry to this matter and prices it with this matter's rates.",
     "narrative": "Narrative",
     "narrativePlaceholder": "Describe the work performed...",
     "noActiveTimer": "No active timer",
@@ -811,13 +844,16 @@
       "approved": "Approved",
       "billed": "Billed",
       "draft": "Draft",
+      "submitted": "Submitted",
       "written_off": "Written off"
     },
     "stopTimer": "Stop",
     "suggestions": {
       "actionCount": "{count, plural, one {# action} other {# actions}}",
       "activeVsLogged": "{active} active · {logged} logged",
+      "alreadyCovered": "Already covered by logged time",
       "chatEvidence": "{count, plural, one {# message} other {# messages}} in “{title}”",
+      "engagedTime": "{duration} engaged",
       "keyboardHint": "Enter accepts, E edits before accepting, Delete dismisses",
       "privacyNote": "Only you can see these. Nothing is recorded until you accept it.",
       "title": "Suggested from your activity",
@@ -963,7 +999,6 @@
     "coverage": {
       "completeness": "Completeness",
       "courtsHeading": "By court",
-      "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "generatedAt": "Figures from {date}",
@@ -974,20 +1009,16 @@
       "healthStalled": "Stalled",
       "healthUnknown": "Never run",
       "inPreparation": "In preparation",
-      "knownGaps": "Known gaps",
       "lastSync": "Last sync",
-      "noGapsRecorded": "No gaps recorded",
       "notCountedYet": "Not counted yet",
       "notMeasuredYet": "Not measured yet",
-      "pendingTexts": "Pending texts",
       "reportedByListing": "Counted from the publisher's listing",
       "reportedByOperator": "Recorded by hand",
       "reportedByPublisher": "Publisher's own count",
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now.",
-      "unreadListingPeriods": "Listing periods not read"
+      "unavailable": "Coverage figures are unavailable right now."
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {
@@ -2076,7 +2107,6 @@
       "orLetUsKnowAt": "or let us know at",
       "viewDocumentation": "View documentation"
     },
-    "error": "Error",
     "expenses": "Expenses",
     "export": {
       "citations": "Citations",
@@ -2150,6 +2180,7 @@
     "lastUpdated": "Last updated",
     "layoutResetAfterProblem": "The layout was reset after a problem.",
     "legalDatabase": "Legal database",
+    "loadFailed": "Couldn't load.",
     "loadMore": "Load more",
     "loading": "Loading",
     "logTime": "Log time",
@@ -2239,7 +2270,7 @@
     "showMore": "Show more",
     "showSecretValue": "Show secret value",
     "signOut": "Sign out",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "sort": "Sort",
     "source": "Source",
     "stale": "Stale",
@@ -2716,7 +2747,7 @@
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
-    "actionFailed": "Action failed",
+    "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
       "badRequest": "The request could not be completed.",
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.",
@@ -3266,7 +3297,7 @@
     "saveSerializeFailedTitle": "Could not create DOCX",
     "savingDocument": "Saving...",
     "showDetails": "Show details",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "synced": "Synced",
     "syncing": "Syncing",
     "tableBordersAll": "All borders",
@@ -5868,6 +5899,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Internal work"
+    },
+    "week": {
+      "allLogged": "Everything here is logged. New activity shows up as you work.",
+      "days": "Days of the week",
+      "entriesTitle": "Logged time",
+      "nextWeek": "Next week",
+      "noActivity": "Nothing to log yet. Work in a matter and your activity shows up here to accept.",
+      "pendingCount": "{count, plural, one {# suggestion} other {# suggestions}}",
+      "previousWeek": "Previous week",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Check the work date, then submit this entry.",
+        "narrativeRequired": "Add a description, then submit this entry.",
+        "runningTimer": "Stop the running timer, then submit this entry.",
+        "unpriced": "This entry has no rate. Ask for a rate on the matter, then submit it."
+      },
+      "returned": "Returned: {comment}",
+      "submitAndApprove": "Submit and approve",
+      "submitResult": "{submitted} submitted · {approved} approved · {refused} to fix",
+      "submitWeek": "Submit week",
+      "title": "My week",
+      "totals": "{logged} logged · {billable} billable"
     }
   },
   "translate": {
@@ -6492,6 +6545,36 @@
       "pageEditor": {
         "addPDF": "Add PDF",
         "applyCrop": "Apply crop",
+        "cleanScan": {
+          "applied": "Cleaned version applied",
+          "apply": "Apply",
+          "applyAll": "Apply all",
+          "applyPage": "Apply cleaned page {number}",
+          "cleaned": "Cleaned",
+          "cleaning": "Cleaning page",
+          "contentCrop": "Crop to content",
+          "description": "{count, plural, one {Review the cleaned page before you use it. The document changes only when you do.} other {Review each of the # cleaned pages before you use them. The document changes only when you do.}}",
+          "deskew": "Straighten",
+          "failedEngine": "Cleaning failed. This page stays as it is.",
+          "failedRender": "This page could not be prepared for cleaning. It stays as it is.",
+          "failedTimeout": "Cleaning took too long. This page stays as it is.",
+          "heading": "Clean scan",
+          "output": "Color mode",
+          "outputBinary": "Black and white",
+          "outputGrayscale": "Grayscale",
+          "pageLimit": "Clean up to {max} pages at a time. Select fewer pages.",
+          "preview": "Cleaned page {number}",
+          "progress": "{done} of {total} pages processed",
+          "reject": "Keep original",
+          "rejectPage": "Keep original page {number}",
+          "rejected": "Original kept",
+          "scope": "{count, plural, =0 {Straighten and clean every page} one {Straighten and clean the selected page} other {Straighten and clean the # selected pages}}",
+          "unrecognized": "This page was not recognized as a scan. It stays as it is.",
+          "unrecognizedNoContent": "No content was found on this page. It stays as it is.",
+          "unrecognizedNoPage": "The page edges could not be found. This page stays as it is.",
+          "unrecognizedTooLarge": "This page is too large to clean. It stays as it is.",
+          "use": "{count, plural, =0 {Use cleaned pages} one {Use # cleaned page} other {Use # cleaned pages}}"
+        },
         "crop": "Crop",
         "cropAdvanced": "Advanced crop settings",
         "cropBottom": "Bottom (mm)",
@@ -6539,7 +6622,10 @@
         "saveVersion": "Save version",
         "selectAll": "Select every page",
         "selectPage": "Select page {number}",
+        "signAfterSave": "Saves your page edits as a new version, then signs it",
+        "signSavedVersionMissing": "The new version was saved, but it could not be opened for signing. Sign it from the document viewer.",
         "signatureWarning": "Digital signatures will be invalidated when you edit this PDF.",
+        "signatureWarningWithSign": "Editing invalidates existing digital signatures. Signing from here saves your edits first and signs the new version.",
         "sourceLimit": "The combined size of the PDFs cannot exceed 100 MB.",
         "title": "Edit pages",
         "undo": "Undo page edit",

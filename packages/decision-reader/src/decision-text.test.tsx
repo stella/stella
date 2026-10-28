@@ -10,6 +10,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 import {
   euProvisionSourceUrl,
   locateEuProvisionCitations,
@@ -408,14 +409,19 @@ test("an unresolved CJEU citation keeps its official CURIA link", () => {
   expect(markup).toMatch(/href="https:\/\/curia\.europa\.eu[^"]*"/u);
 });
 
-const permalinkFixture = (variant: "case-law" | "statute") =>
+const PERMALINK_CORPORA = {
+  "case-law": { variant: "case-law" },
+  statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+} as const;
+
+const permalinkFixture = (variant: keyof typeof PERMALINK_CORPORA) =>
   ast.blocks.map((block) => (
     <BlockRenderer
       activeMatchIndex={-1}
       block={block}
       key={block.id}
       rangesByPieceId={{}}
-      variant={variant}
+      {...PERMALINK_CORPORA[variant]}
     />
   ));
 
@@ -473,7 +479,7 @@ test("a provision card identifies unavailable parts until its full wording recov
   const provision = (part: string) =>
     ({
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -666,7 +672,7 @@ for (const response of ["error", "null", "empty"] as const) {
     const root = createRoot(container);
     const citation = {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -834,7 +840,7 @@ for (const response of ["error", "null", "empty"] as const) {
 test("a hover preview scrolls a long provision inside a viewport-bound cap, inline cards keep growing and a margin card shows a note-sized glimpse", async () => {
   const provision = {
     document: {
-      country: "cz",
+      country: "CZE",
       eli: "/eli/cz/sb/2012/89",
       id: "act",
       slug: null,
