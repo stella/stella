@@ -103,7 +103,14 @@ export const createAccessTokenSource = ({
       current = successor;
       return await refresh(true);
     }
-    if (successor === undefined || sameSession) {
+    // Only a keychain read as empty or still holding the refused token is
+    // cleared: a newer token another run stored, or a keychain that could
+    // not be read, is left as it is.
+    const refusedKept =
+      Result.isOk(kept) &&
+      (successor === undefined ||
+        (sameSession && successor.refreshToken === presented));
+    if (refusedKept) {
       (
         await Result.tryPromise(async () => {
           await store.clear();
