@@ -65,8 +65,8 @@ const sameSourceBinding = (
   left: AstNode,
   right: AstNode,
 ): boolean =>
-  left.type === "Identifier" &&
-  right.type === "Identifier" &&
+  isIdentifierReference(left) &&
+  isIdentifierReference(right) &&
   left.name === right.name &&
   resolveVariable(context, left) === resolveVariable(context, right);
 
