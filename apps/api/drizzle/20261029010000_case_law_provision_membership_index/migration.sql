@@ -1,4 +1,4 @@
--- requires: 20261028120000_keyless_organization_free_floor
+-- requires: 20261028130000_ai_cell_settlements
 SET lock_timeout = '1s';--> statement-breakpoint
 
 -- Release the migration transaction before the online build. The index lets
