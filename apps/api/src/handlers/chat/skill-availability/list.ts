@@ -21,6 +21,8 @@ import {
   resolveCallerChatSkillAvailability,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
 import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -99,6 +101,7 @@ export const createListUnavailableChatSkills = ({
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       getAccessibleWorkspaces,
       getWorkspaceAccess,
       memberRole,
@@ -110,6 +113,10 @@ export const createListUnavailableChatSkills = ({
       session,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError(undefined));
+      }
+
       const switches = [
         query.anonymized,
         query.browserExtension,

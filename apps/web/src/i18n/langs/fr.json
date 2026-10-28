@@ -4630,7 +4630,6 @@
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",
-      "title": "Configuration de l’IA",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
     "invitations": {

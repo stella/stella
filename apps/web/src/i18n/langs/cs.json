@@ -4630,7 +4630,6 @@
       "selectAtLeastOneRole": "Vyberte pro tento klíč alespoň jednu roli.",
       "selectModelForEachRole": "Přidejte poskytovatele a pro každou kategorii vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurace AI",
       "usingDefaults": "Používá výchozí nastavení"
     },
     "invitations": {

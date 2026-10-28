@@ -4630,7 +4630,6 @@
       "selectAtLeastOneRole": "Pasirinkite bent vieną vaidmenį šiam raktui.",
       "selectModelForEachRole": "Pridėkite teikėją ir kiekvienai kategorijai pasirinkite modelį.",
       "selectedProvider": "{provider}",
-      "title": "DI konfigūracija",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
     "invitations": {

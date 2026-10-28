@@ -215,7 +215,7 @@ const MatterColleagues = ({
 function ChatIndex() {
   const t = useTranslations();
   const { focusThread } = useChatEditorManager();
-  const { ensureAIAvailable } = useAIKeyGate();
+  const { availability, ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const userContext = useChatUserContext();
@@ -637,6 +637,7 @@ function ChatIndex() {
               workspaceId={draftThreadId}
             />
             <ChatInputSurface
+              sendDisabled={availability !== "available"}
               anonymized={anonymized}
               autoFocus
               context={{ activeOrganizationId, threadRef }}

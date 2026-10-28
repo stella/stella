@@ -4630,7 +4630,6 @@
       "selectAtLeastOneRole": "Atlasiet vismaz vienu lomu šai atslēgai.",
       "selectModelForEachRole": "Pievienojiet pakalpojumu sniedzēju un izvēlieties modeli katrai kategorijai.",
       "selectedProvider": "{provider}",
-      "title": "AI konfigurācija",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
     "invitations": {
