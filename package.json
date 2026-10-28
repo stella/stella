@@ -271,7 +271,7 @@
     "ajv-formats": "3.0.1",
     "better-auth": "1.7.6",
     "better-result": "3.0.1",
-    "cldr-misc-full": "48.2.0",
+    "cldr-misc-full": "49.0.0",
     "diff": "9.0.0",
     "disposable-email-domains-js": "1.26.0",
     "drizzle-kit": "1.0.0-rc.4",
