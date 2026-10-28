@@ -169,7 +169,10 @@ test("a dotted reference is not mistaken for a filename extension", async () => 
     limit: 2,
   });
 
-  expect(page.hits.map(({ id }) => id)).toEqual([titleMatchId, bodyOnlyId]);
+  expect(page.hits.map(({ id }) => id)).toEqual([
+    `entity:${titleMatchId}`,
+    `entity:${bodyOnlyId}`,
+  ]);
 });
 
 test("database title tiers outrank stronger loose matches across cursor pages", async () => {
