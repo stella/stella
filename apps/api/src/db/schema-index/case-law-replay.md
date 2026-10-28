@@ -59,7 +59,7 @@ case_law_replay_blocked.created_at           timestamptz  default,not null  case
 Recovery can charge the same reservation on a later UTC day, once per day.
 
 ```text
-case_law_replay_daily_rows.batch_id    text      not null     case-law-replay.ts:204
+case_law_replay_daily_rows.batch_id    text      fk,not null  case-law-replay.ts:204
 case_law_replay_daily_rows.budget_day  date      not null     case-law-replay.ts:205
 case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts:206
 ```
@@ -67,7 +67,7 @@ case_law_replay_daily_rows.source_id   safeUuid  fk,not null  case-law-replay.ts
 ## case_law_replay_source_progress · `caseLawReplaySourceProgress` · case-law-replay.ts:231 · rls
 
 ```text
-case_law_replay_source_progress.source_id               safeUuid     not null          case-law-replay.ts:234
+case_law_replay_source_progress.source_id               safeUuid     fk,not null       case-law-replay.ts:234
 case_law_replay_source_progress.ticks_without_progress  integer      default,not null  case-law-replay.ts:235
 case_law_replay_source_progress.last_completed_at       timestamptz  null              case-law-replay.ts:239
 case_law_replay_source_progress.completed_rows          bigint       default,not null  case-law-replay.ts:240
@@ -79,7 +79,7 @@ Independent of receipt FKs: audit history survives bounded receipt compaction.
 
 ```text
 case_law_replay_audit_events.id           text         not null          case-law-replay.ts:307
-case_law_replay_audit_events.source_id    safeUuid     null              case-law-replay.ts:308
+case_law_replay_audit_events.source_id    safeUuid     fk,null           case-law-replay.ts:308
 case_law_replay_audit_events.service_id   text         not null          case-law-replay.ts:309
 case_law_replay_audit_events.action       text         not null          case-law-replay.ts:310
 case_law_replay_audit_events.resource_id  text         not null          case-law-replay.ts:311
