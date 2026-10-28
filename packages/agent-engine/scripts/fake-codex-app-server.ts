@@ -12,7 +12,7 @@ import type { StellaMcpToolName } from "@stll/api-contract/mcp-tool-names";
  * Usage: `bun scripts/fake-codex-app-server.ts <scenario>`.
  */
 
-export type FakeStep =
+type FakeStep =
   /** Wait for the client's next request with this method and answer it. */
   | {
       expect: string;
@@ -29,7 +29,7 @@ export type FakeStep =
 const USER_AGENT = "stella/0.165.0 (Mac OS 27.0; arm64) test";
 export const FAKE_THREAD_ID = "thread-a";
 export const FAKE_RESUMED_THREAD_ID = "thread-old";
-export const FAKE_TURN_ID = "turn-1";
+const FAKE_TURN_ID = "turn-1";
 
 const signedIn = {
   account: { type: "chatgpt", email: null, planType: "plus" },

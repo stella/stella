@@ -91,7 +91,10 @@ export const startAppServer = ({
     // A write racing the process's exit fails; the exit itself is reported
     // through `handlers.exit`, so the failed write carries no extra news.
     Result.try(() => {
-      child.stdin.write(`${JSON.stringify(message)}\n`);
+      detached(
+        child.stdin.write(`${JSON.stringify(message)}\n`),
+        "codex-app-server.write",
+      );
       detached(child.stdin.flush(), "codex-app-server.flush");
     });
   };

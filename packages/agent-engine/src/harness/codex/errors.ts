@@ -34,9 +34,7 @@ export const mergeRateLimits = (
   };
 };
 
-export const usageLimitResetsAt = (
-  limits: CodexRateLimits | null,
-): string | null => {
+const usageLimitResetsAt = (limits: CodexRateLimits | null): string | null => {
   const resets: number[] = [];
   for (const window of [limits?.primary, limits?.secondary]) {
     if (

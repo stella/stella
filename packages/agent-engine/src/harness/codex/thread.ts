@@ -62,7 +62,7 @@ const threadIdOf = (raw: unknown) => {
   return parsed.success ? parsed.output.thread.id : null;
 };
 
-export type OpenedThread = {
+type OpenedThread = {
   threadId: string;
   continuation: HarnessContinuation;
 };

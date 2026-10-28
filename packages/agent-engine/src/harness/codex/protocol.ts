@@ -186,7 +186,7 @@ export const isMcpTextBlock = (
   v.is(McpContentBlock, block);
 
 /** The first item fields, read before the kind decides the full schema. */
-export const ItemEnvelopeSchema = v.object({
+const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
   item: v.object({ type: v.string(), id: v.optional(v.string()) }),

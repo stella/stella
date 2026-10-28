@@ -13,7 +13,7 @@ import { type CodexItem, type CodexItemType, isMcpTextBlock } from "./protocol";
  * here; the native item itself is never forwarded.
  */
 
-export type CodexItemHandling = "text" | "reasoning" | "tool" | "ignore";
+type CodexItemHandling = "text" | "reasoning" | "tool" | "ignore";
 
 /** What stella shows for each pinned item kind. */
 export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
@@ -70,7 +70,7 @@ export const codexItemHandling = (kind: CodexItemType): CodexItemHandling => {
   }
 };
 
-export type CodexToolItem = Extract<
+type CodexToolItem = Extract<
   CodexItem,
   { type: "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" }
 >;
