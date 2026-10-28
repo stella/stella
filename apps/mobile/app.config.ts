@@ -49,7 +49,15 @@ const VARIANT_CONFIG = {
  * App Store profile it installed for this variant. Unset locally, where Xcode
  * signs development builds automatically.
  */
-type ReleaseSigning = { profileUuid: string; teamId: string };
+type ReleaseSigning = {
+  profileUuid: string;
+  teamId: string;
+  /** The Live Activity extension's own profile; without it the release leaves the extension out. */
+  widgetsProfileUuid?: string | undefined;
+};
+
+/** The target expo-widgets adds for the widget extension. */
+const WIDGETS_TARGET = "ExpoWidgetsTarget";
 
 /**
  * Signs the app target, and only it, with the release profile. Passed to
@@ -58,24 +66,37 @@ type ReleaseSigning = { profileUuid: string; teamId: string };
  */
 const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
   config,
-  { profileUuid, teamId },
+  { profileUuid, teamId, widgetsProfileUuid },
 ) =>
   withXcodeProject(config, (mod) => {
     const project = mod.modResults;
+    const sign = (buildConfigurationList: string, profile: string) => {
+      for (const [
+        ,
+        configuration,
+      ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
+        project,
+        buildConfigurationList,
+      )) {
+        Object.assign(configuration.buildSettings, {
+          CODE_SIGN_IDENTITY: '"Apple Distribution"',
+          CODE_SIGN_STYLE: "Manual",
+          DEVELOPMENT_TEAM: teamId,
+          PROVISIONING_PROFILE_SPECIFIER: `"${profile}"`,
+        });
+      }
+    };
     const [, target] = IOSConfig.Target.findFirstNativeTarget(project);
-    for (const [
-      ,
-      configuration,
-    ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
-      project,
-      target.buildConfigurationList,
-    )) {
-      Object.assign(configuration.buildSettings, {
-        CODE_SIGN_IDENTITY: '"Apple Distribution"',
-        CODE_SIGN_STYLE: "Manual",
-        DEVELOPMENT_TEAM: teamId,
-        PROVISIONING_PROFILE_SPECIFIER: `"${profileUuid}"`,
-      });
+    sign(target.buildConfigurationList, profileUuid);
+    // Registered before the plugins, this runs after expo-widgets has added
+    // its target.
+    if (widgetsProfileUuid !== undefined) {
+      const widgets = project.pbxTargetByName(WIDGETS_TARGET) as
+        { buildConfigurationList: string } | null | undefined;
+      if (widgets === null || widgets === undefined) {
+        panic(`The widgets profile has no ${WIDGETS_TARGET} target to sign`);
+      }
+      sign(widgets.buildConfigurationList, widgetsProfileUuid);
     }
     return mod;
   });
@@ -247,7 +268,8 @@ export const appConfigFor = ({
 }): ExpoConfig => {
   const config = appConfigBase({
     ...inputs,
-    liveActivities: signing === undefined,
+    liveActivities:
+      signing === undefined || signing.widgetsProfileUuid !== undefined,
   });
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };
@@ -270,16 +292,23 @@ const readBuildNumber = (value: string | undefined): number => {
     : panic("MOBILE_BUILD_NUMBER must be a positive integer");
 };
 
-/** `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither. */
+/**
+ * `APPLE_TEAM_ID` and `MOBILE_PROFILE_UUID`: both or neither; with them,
+ * `MOBILE_WIDGETS_PROFILE_UUID` when the release also signs the Live
+ * Activity extension.
+ */
 const readSigning = (
   teamId: string | undefined,
   profileUuid: string | undefined,
+  widgetsProfileUuid: string | undefined,
 ): ReleaseSigning | undefined => {
   if (teamId === undefined && profileUuid === undefined) {
-    return undefined;
+    return widgetsProfileUuid === undefined
+      ? undefined
+      : panic("MOBILE_WIDGETS_PROFILE_UUID signs only alongside a release");
   }
   return teamId !== undefined && profileUuid !== undefined
-    ? { profileUuid, teamId }
+    ? { profileUuid, teamId, widgetsProfileUuid }
     : panic("APPLE_TEAM_ID and MOBILE_PROFILE_UUID sign a release together");
 };
 
@@ -298,6 +327,7 @@ const appConfig = ({ projectRoot }: ConfigContext): ExpoConfig =>
     signing: readSigning(
       readEnv("APPLE_TEAM_ID"),
       readEnv("MOBILE_PROFILE_UUID"),
+      readEnv("MOBILE_WIDGETS_PROFILE_UUID"),
     ),
     signingCertificatePresent: existsSync(
       path.join(projectRoot, UPDATE_SIGNING_CERTIFICATE),

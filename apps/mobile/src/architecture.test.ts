@@ -118,6 +118,28 @@ describe("the app's builds", () => {
     ).toBe(false);
   });
 
+  test("a release with the widgets profile carries the Live Activity extension", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra).toEqual({ liveActivities: true, variant: "preview" });
+    expect(signed.plugins).toContainEqual([
+      "expo-widgets",
+      {
+        bundleIdentifier: "app.stll.mobile.preview.widgets",
+        groupIdentifier: "group.app.stll.mobile.preview",
+      },
+    ]);
+  });
+
   test("no two builds share a store identity, a scheme or a name", () => {
     for (const read of [
       ({ config }: (typeof configs)[number]) => config.ios?.bundleIdentifier,
