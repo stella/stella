@@ -4,9 +4,12 @@
 import { panic, Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { LIMITER_STORE_UNAVAILABLE } from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/admission-redis";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
@@ -285,24 +288,41 @@ export const createPublisherRequestSlot = (
       catch: (error) => error,
     });
     if (Result.isError(response)) {
+      if (signal?.aborted) {
+        return Result.err(response.error);
+      }
+      const error =
+        ActionAdmissionError.is(response.error) ||
+        LimiterStoreUnavailableError.is(response.error)
+          ? response.error
+          : new LimiterStoreUnavailableError({
+              message: LIMITER_STORE_UNAVAILABLE.message,
+              operation: "command",
+              cause: response.error,
+            });
       return Result.err(
         mode === "immediate"
           ? new PublisherPacingStopped({
               message: "Publisher pacing unavailable",
               status: "pacing-unavailable",
-              cause: response.error,
+              cause: error,
             })
-          : response.error,
+          : error,
       );
     }
-    const waitMs = Number(response.value);
+    const waitMs = response.value;
     if (
-      !Number.isFinite(waitMs) ||
+      typeof waitMs !== "number" ||
+      !Number.isSafeInteger(waitMs) ||
       waitMs < 0 ||
       (replies !== undefined && !replies.includes(waitMs))
     ) {
-      const error = new PublisherGateReplyError({
-        message: `${publisher} publisher gate returned an invalid wait`,
+      const error = new LimiterStoreUnavailableError({
+        message: LIMITER_STORE_UNAVAILABLE.message,
+        operation: "command",
+        cause: new PublisherGateReplyError({
+          message: `${publisher} publisher gate returned an invalid wait`,
+        }),
       });
       return Result.err(
         mode === "immediate"

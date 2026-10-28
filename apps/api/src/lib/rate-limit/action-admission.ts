@@ -199,7 +199,7 @@ const configuredPolicy = (
     return Result.err(
       new ActionAdmissionError({
         message: "Action admission configuration is incomplete",
-        reason: "unavailable",
+        reason: "configuration_incomplete",
       }),
     );
   }
@@ -331,7 +331,7 @@ const createAdmissionExecutor = ({
           return Result.err(
             new ActionAdmissionError({
               message: "Action admission is unavailable",
-              reason: "unavailable",
+              reason: "store_unavailable",
               cause: connected.error,
             }),
           );
@@ -370,7 +370,7 @@ const createAdmissionExecutor = ({
               ? commandResult.error
               : new ActionAdmissionError({
                   message: "Action admission is unavailable",
-                  reason: "unavailable",
+                  reason: "store_unavailable",
                   cause: commandResult.error,
                 }),
           );
@@ -400,7 +400,7 @@ const createAdmissionExecutor = ({
           return Result.err(
             new ActionAdmissionError({
               message: "Action admission is unavailable",
-              reason: "unavailable",
+              reason: "configuration_incomplete",
               cause: refreshed.error,
             }),
           );
@@ -420,7 +420,7 @@ const createAdmissionExecutor = ({
               ? cause
               : new ActionAdmissionError({
                   message: "Action admission is unavailable",
-                  reason: "unavailable",
+                  reason: "store_unavailable",
                   cause,
                 }),
           );
@@ -430,7 +430,7 @@ const createAdmissionExecutor = ({
           ? error
           : new ActionAdmissionError({
               message: "Action admission is unavailable",
-              reason: "unavailable",
+              reason: "store_unavailable",
               cause: error,
             }),
     });
@@ -538,7 +538,7 @@ const admittedPeriodBudget = (period: AdmissionPeriod) => {
 const periodBudgetRefusal = (error: ActionPeriodBudgetError) =>
   new ActionAdmissionError({
     message: error.message,
-    reason: "unavailable",
+    reason: "configuration_incomplete",
     cause: error,
   });
 
@@ -565,7 +565,7 @@ const resolveAdmissionBudget = async ({
       return Result.err(
         new ActionAdmissionError({
           message: "Action service identity is missing",
-          reason: "unavailable",
+          reason: "configuration_incomplete",
         }),
       );
     }
@@ -584,7 +584,7 @@ const resolveAdmissionBudget = async ({
         return Result.err(
           new ActionAdmissionError({
             message: "Organization action scope is missing",
-            reason: "unavailable",
+            reason: "configuration_incomplete",
           }),
         );
       }
@@ -593,12 +593,20 @@ const resolveAdmissionBudget = async ({
         catch: (cause: unknown) =>
           new ActionAdmissionError({
             message: "Organization action access could not be read",
-            reason: "unavailable",
+            reason: "organization_state_unreadable",
             cause,
           }),
       });
       if (Result.isError(state)) {
         return state;
+      }
+      if (state.value.snapshot === undefined) {
+        return Result.err(
+          new ActionAdmissionError({
+            message: "Organization action state is missing",
+            reason: "organization_state_unreadable",
+          }),
+        );
       }
       nowMs = budgetNow();
       const access = resolveOrganizationAccess({
@@ -643,7 +651,7 @@ const resolveAdmissionBudget = async ({
           return Result.err(
             new ActionAdmissionError({
               message: "Organization action configuration is incomplete",
-              reason: "unavailable",
+              reason: "configuration_incomplete",
             }),
           );
         case "resolved":
@@ -720,7 +728,7 @@ const resolveQueuedBudget = async (
   return Result.err(
     new ActionAdmissionError({
       message: "Queued action admission requires a configured period budget",
-      reason: "unavailable",
+      reason: "configuration_incomplete",
     }),
   );
 };
@@ -741,6 +749,12 @@ const acquisitionRefusal = ({
   reply,
   window,
 }: AdmissionReply): ActionAdmissionError | null => {
+  if (reply === -2) {
+    return new ActionAdmissionError({
+      message: "Action lease was lost",
+      reason: "lease_lost",
+    });
+  }
   if (reply === ACTION_SERVICE_DEADLINE_EXPIRED) {
     return new ActionAdmissionError({
       message: "Organization service actions are not enabled",
@@ -765,7 +779,7 @@ const acquisitionRefusal = ({
   if (reply !== 1) {
     return new ActionAdmissionError({
       message: "Action admission returned an invalid response",
-      reason: "unavailable",
+      reason: "store_unavailable",
     });
   }
 
@@ -801,7 +815,7 @@ const reuseAdmissionScope = async <T>({
     return Result.err(
       new ActionAdmissionError({
         message: "Action service identity is incomplete",
-        reason: "unavailable",
+        reason: "configuration_incomplete",
       }),
     );
   }
@@ -817,7 +831,7 @@ const reuseAdmissionScope = async <T>({
       return Result.err(
         new ActionAdmissionError({
           message: budget.error.message,
-          reason: "unavailable",
+          reason: "configuration_incomplete",
           cause: budget.error,
         }),
       );
@@ -864,8 +878,8 @@ const createPeriodReservationScope = ({
     if (signal.aborted || executionScope.status !== "active") {
       return Result.err(
         new ActionAdmissionError({
-          message: "Action admission is unavailable",
-          reason: "unavailable",
+          message: "Action lease was lost",
+          reason: "lease_lost",
           cause: signal.reason,
         }),
       );
@@ -1086,6 +1100,15 @@ const settledAdmissionOutcome = <T>(
   return outcome;
 };
 
+const renewalRefusal = (reply: unknown) =>
+  new ActionAdmissionError({
+    message:
+      reply === 0
+        ? "Action lease was lost"
+        : "Action admission returned an invalid response",
+    reason: reply === 0 ? "lease_lost" : "store_unavailable",
+  });
+
 const withEnabledActionAdmission = async <T>({
   organizationId,
   userId,
@@ -1188,6 +1211,7 @@ const withEnabledActionAdmission = async <T>({
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
   const controller = new AbortController();
   let leaseLost: ActionAdmissionError | null = null;
+  let renewalFailure: ActionAdmissionError | null = null;
   let stopped = false;
   let cancelScheduled: () => void = () => undefined;
   let renewal: Promise<void> | null = null;
@@ -1196,10 +1220,7 @@ const withEnabledActionAdmission = async <T>({
     if (stopped || leaseLost !== null) {
       return;
     }
-    leaseLost = new ActionAdmissionError({
-      message: "Action lease was lost",
-      reason: "unavailable",
-    });
+    leaseLost = renewalFailure ?? renewalRefusal(0);
     cancelScheduled();
     controller.abort(leaseLost);
   };
@@ -1231,13 +1252,16 @@ const withEnabledActionAdmission = async <T>({
     ]);
     if (Result.isOk(result)) {
       if (result.value.reply !== 1) {
+        renewalFailure = renewalRefusal(result.value.reply);
         loseLease();
         return;
       }
+      renewalFailure = null;
       leaseDeadline = attemptAt + limits.leaseMs;
       scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
       return;
     }
+    renewalFailure = result.error;
     observeFailure(result.error, { sink: RENEW_FAILURE });
     const remaining = leaseDeadline - timing.now();
     if (remaining <= 0) {

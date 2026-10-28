@@ -256,6 +256,7 @@ export const FAILURE_TAGS = [
   "LegislationCorpusReadError",
   "LegislationFacetsError",
   "LegislationShelfError",
+  "LimiterStoreUnavailableError",
   "ListReplacementError",
   "ListVerificationAccessRevokedError",
   "ListVerificationReconcileError",

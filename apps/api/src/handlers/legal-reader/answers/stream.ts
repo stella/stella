@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, exists, sql } from "drizzle-orm";
 
-import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
   ReaderAnswerCitation,
   ReaderAnswerErrorCode,
@@ -322,8 +321,7 @@ export const streamReaderAnswer = ({
   const encoder = new TextEncoder();
   let partialContent = "";
   let connected = true;
-  let failureCode: ReaderAnswerErrorCode =
-    ACTION_ADMISSION_CODES.admissionUnavailable;
+  let failureCode: ReaderAnswerErrorCode = "internal";
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const emit = (event: ReaderAnswerStreamEvent) => {

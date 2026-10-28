@@ -13,6 +13,7 @@ export const TAGGED_FAILURE_REASON = {
   AIColumnInputRequiredError: "tagged_failure",
   AIGenerationCancelledError: "tagged_failure",
   AccountExportArchiveError: "tagged_failure",
+  LimiterStoreUnavailableError: "limiter_store_unavailable",
   ActionAdmissionError: "tagged_failure",
   ActionCallObserverError: "tagged_failure",
   ActionCostConfigError: "tagged_failure",

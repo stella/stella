@@ -113,7 +113,7 @@ describe("finite HTTP action admission", () => {
         "busy",
         "period_exhausted",
         "not_enabled",
-        "unavailable",
+        "store_unavailable",
       ] as const;
       try {
         for (const reason of reasons) {
@@ -516,7 +516,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 503,
-        response: { code: "action_admission_unavailable" },
+        response: { code: "limiter_store_unavailable" },
       });
       expect(calls).toBe(0);
     });

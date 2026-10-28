@@ -1296,7 +1296,10 @@ describe("send message disconnect handling", () => {
     daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
     not_on_plan: "not_on_plan",
-    unavailable: "unavailable",
+    store_unavailable: "store_unavailable",
+    configuration_incomplete: "configuration_incomplete",
+    organization_state_unreadable: "organization_state_unreadable",
+    lease_lost: "lease_lost",
     feature_disabled: "feature_disabled",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {

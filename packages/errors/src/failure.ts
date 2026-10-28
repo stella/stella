@@ -30,6 +30,10 @@ export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
   public_read_timeout: "transient",
+  limiter_store_unavailable: "transient",
+  organization_state_unreadable: "transient",
+  admission_lease_lost: "transient",
+  admission_configuration_incomplete: "defect",
   upstream_unavailable: "transient",
   work_capacity_unavailable: "transient",
   work_deadline_exceeded: "transient",
