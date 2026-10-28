@@ -59,7 +59,9 @@ const citationScans = (root: Record<string, unknown>) => {
   );
   expect(scans.length).toBeGreaterThan(0);
   for (const scan of scans) {
-    expect(["Index Scan", "Index Only Scan"]).toContain(scan["Node Type"]);
+    expect(["Index Scan", "Index Only Scan"]).toContain(
+      String(scan["Node Type"]),
+    );
     expect(String(scan["Index Name"])).toContain(
       "case_law_provision_citations",
     );
