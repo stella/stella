@@ -382,6 +382,7 @@ const reviewJobs = ({
       });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
+        privileged: job.privileged,
         shape: job.shape,
         reachableDocuments: reachable,
       });

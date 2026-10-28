@@ -182,10 +182,8 @@ const AFTER =
   "jobs: {check: {steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
 
 test("an ordinary step change needs no refreshed approval", () => {
-  const ordinaryBefore =
-    "permissions: {contents: read}\njobs: {check: {steps: [{run: bun test one}]}}";
-  const ordinaryAfter =
-    "permissions: {contents: read}\njobs: {check: {steps: [{run: bun test two}]}}";
+  const ordinaryBefore = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test one}]}}`;
+  const ordinaryAfter = `jobs: {check: {steps: [{env: {TOKEN: '\${{ github.token }}'}, run: gh api /repos}, {run: bun test two}]}}`;
   const decisions = reviewed(ordinaryBefore, "check");
   const { root } = repository(
     { workflow: ordinaryBefore, decisions },
@@ -218,16 +216,6 @@ test.each([
     `permissions: {contents: read}\nenv: {TOKEN: "\${{ secrets.X }}"}\njobs: {check: {steps: [{run: bun test two}]}}`,
   ],
   [
-    "default repository permissions",
-    "jobs: {check: {steps: [{run: bun test one}]}}",
-    "jobs: {check: {steps: [{run: bun test two}]}}",
-  ],
-  [
-    "job condition",
-    "jobs: {check: {if: github.ref == 'refs/heads/main', steps: []}}",
-    "jobs: {check: {steps: []}}",
-  ],
-  [
     "deployment environment",
     "jobs: {check: {environment: staging, steps: []}}",
     "jobs: {check: {environment: production, steps: []}}",
@@ -243,6 +231,88 @@ test.each([
     expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
   },
 );
+
+test.each([
+  [
+    "write permissions",
+    "permissions: {id-token: write}\njobs: {check: {steps: [{run: bun test one}]}}",
+    "permissions: {id-token: write}\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "credentials",
+    `jobs: {check: {env: {TOKEN: '\${{ secrets.DEPLOY }}'}, steps: [{run: bun test one}]}}`,
+    `jobs: {check: {env: {TOKEN: '\${{ secrets.DEPLOY }}'}, steps: [{run: bun test two}]}}`,
+  ],
+  [
+    "deployment environments",
+    "jobs: {check: {environment: staging, steps: [{run: bun test one}]}}",
+    "jobs: {check: {environment: staging, steps: [{run: bun test two}]}}",
+  ],
+  [
+    "base-branch triggers",
+    "on: pull_request_target\njobs: {check: {steps: [{run: bun test one}]}}",
+    "on: pull_request_target\njobs: {check: {steps: [{run: bun test two}]}}",
+  ],
+  [
+    "self-hosted runners",
+    "jobs: {check: {'runs-on': [self-hosted, linux], steps: [{run: bun test one}]}}",
+    "jobs: {check: {'runs-on': [self-hosted, linux], steps: [{run: bun test two}]}}",
+  ],
+  [
+    "untrusted checkouts",
+    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+  ],
+] as const)(
+  "privilege source: %s requires approval for an ordinary run change",
+  (_, before, after) => {
+    expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
+    const decisions = reviewed(before, "check");
+    const { root } = repository(
+      { workflow: before, decisions },
+      { workflow: after, decisions },
+    );
+    expect(run(root, "--check").exitCode).toBe(1);
+  },
+);
+
+test.each([
+  ["job env", "env: {DESTINATION: one}", "env: {DESTINATION: two}"],
+  [
+    "reusable workflow input",
+    "uses: acme/shared/.github/workflows/deploy.yml@v1, with: {destination: one}",
+    "uses: acme/shared/.github/workflows/deploy.yml@v1, with: {destination: two}",
+  ],
+  [
+    "strategy matrix",
+    "strategy: {matrix: {node: [20]}}",
+    "strategy: {matrix: {node: [22]}}",
+  ],
+] as const)(
+  "a write job requires approval for a changed %s",
+  (_, beforeField, afterField) => {
+    const before = `jobs: {check: {permissions: {contents: write}, ${beforeField}, steps: []}}`;
+    const after = `jobs: {check: {permissions: {contents: write}, ${afterField}, steps: []}}`;
+    const decisions = reviewed(before, "check");
+    const { root } = repository(
+      { workflow: before, decisions },
+      { workflow: after, decisions },
+    );
+    expect(run(root, "--check").exitCode).toBe(1);
+  },
+);
+
+test("pull_request_target with an untrusted checkout requires approval for every step change", () => {
+  const checkout = `{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}`;
+  const before = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo one}]}}`;
+  const after = `on: pull_request_target\njobs: {check: {steps: [${checkout}, {run: echo two}]}}`;
+  const decisions = reviewed(before, "check");
+  const { root } = repository(
+    { workflow: before, decisions },
+    { workflow: after, decisions },
+  );
+  expect(run(root, "--check").exitCode).toBe(1);
+});
 
 test.each([
   [

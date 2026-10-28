@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes release version refreshes to the version packages pull request.",
+  "reviewedDigest": "b758a0f94eaf44176b536de360d53bc64a8e5a139e7eb7b9c8680fbcd0a3a173"
+}
