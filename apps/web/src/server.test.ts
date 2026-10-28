@@ -155,3 +155,14 @@ test("a public response requires an explicit freshness policy", async () => {
   );
   expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
 });
+
+test("an unknown document path stays a direct 404 response", async () => {
+  const response = await server.fetch(
+    new Request("https://stella.test/time/invoices?status=404&type=text/html"),
+  );
+
+  expect(response.status).toBe(404);
+  expect(response.headers.get("Location")).toBeNull();
+  expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
+  expect(await response.text()).toContain("<main>Catalogue</main>");
+});

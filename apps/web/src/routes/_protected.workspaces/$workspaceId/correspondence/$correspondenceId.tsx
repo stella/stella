@@ -16,6 +16,7 @@ import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { loadRouteResource } from "@/lib/route-not-found";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
@@ -37,10 +38,17 @@ export const Route = createFileRoute(
 )({
   component: CorrespondenceDetailPage,
   loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      correspondenceByIdOptions(params.workspaceId, params.correspondenceId),
-    );
+    await loadRouteResource({
+      ids: [params.workspaceId, params.correspondenceId],
+      load: async () =>
+        await ensureRouteQueryData(
+          context.queryClient,
+          correspondenceByIdOptions(
+            params.workspaceId,
+            params.correspondenceId,
+          ),
+        ),
+    });
   },
 });
 

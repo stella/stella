@@ -34,6 +34,7 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { loadRouteResource } from "@/lib/route-not-found";
 import {
   optionalIntegerSearchSchema,
   optionalSearchStringSchema,
@@ -115,11 +116,13 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const views = await ensureRouteQueryData(
-      queryClient,
-      viewsOptions(workspaceId),
-    );
-    const activeView = views.find((view) => view.id === viewId) ?? views.at(0);
+    const views = await loadRouteResource({
+      ids: [workspaceId, viewId],
+      load: async () =>
+        await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
+      exists: (loadedViews) => loadedViews.some((view) => view.id === viewId),
+    });
+    const activeView = views.find((view) => view.id === viewId);
 
     if (!activeView) {
       return;
