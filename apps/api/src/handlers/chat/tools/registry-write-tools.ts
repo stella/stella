@@ -6,6 +6,10 @@ import {
 import { panic, Result } from "better-result";
 
 import {
+  type ResolveCurrentChatExecutionContext,
+  resolveCurrentChatRegistryContext,
+} from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
+import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
@@ -13,15 +17,12 @@ import type { RegistryWriteToolName } from "@/api/handlers/chat/tools/registry-a
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
-import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { isMemberRole } from "@/api/lib/member-roles";
-import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import {
@@ -105,56 +106,10 @@ type BuildChatWriteToolsProps = ChatRegistryContextDeps & {
   refRegistry: ChatRefRegistry;
   toolDefectMemo: ChatToolDefectMemo;
   /**
-   * The caller's membership as it stands when a tool runs (`null` once they
-   * left the organization). Defaults to the credential-boundary read.
+   * The caller's complete authority as it stands when a tool runs. Defaults
+   * to fresh membership, matter, feature, and database-scope resolution.
    */
-  resolveCurrentMembership?: (lookup: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  }) => Promise<{ role: string } | null>;
-};
-
-/**
- * Registration runs when the turn starts, but an approved write can run
- * minutes later. The member's role is read again at execution, so a
- * downgrade or a removal in between refuses the call; the credential's own
- * attenuation is kept.
- */
-const currentExecutionDeps = async (
-  contextDeps: ChatRegistryContextDeps,
-  resolveCurrentMembership: NonNullable<
-    BuildChatWriteToolsProps["resolveCurrentMembership"]
-  >,
-): Promise<Result<ChatRegistryContextDeps, ChatToolError>> => {
-  const membership = await Result.tryPromise(
-    async () =>
-      await resolveCurrentMembership({
-        organizationId: contextDeps.organizationId,
-        userId: contextDeps.userId,
-      }),
-  );
-  if (Result.isError(membership)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "transient",
-        message: "Your current access could not be confirmed. Try again.",
-        cause: membership.error,
-      }),
-    );
-  }
-  const role = membership.value?.role;
-  if (role === undefined || !isMemberRole(role)) {
-    return Result.err(
-      new ChatToolError({
-        kind: "unavailable",
-        message: "You are no longer a member of this organization.",
-      }),
-    );
-  }
-  return Result.ok({
-    ...contextDeps,
-    memberRole: withCurrentMemberRole(contextDeps.memberRole, role),
-  });
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
 };
 
 export const buildChatWriteTools = (
@@ -162,7 +117,7 @@ export const buildChatWriteTools = (
 ): ChatToolMap => {
   const {
     refRegistry,
-    resolveCurrentMembership = resolveCredentialMemberAuthorization,
+    resolveCurrentExecutionContext = resolveCredentialMemberExecutionContext,
     toolDefectMemo,
     ...contextDeps
   } = props;
@@ -224,10 +179,10 @@ export const buildChatWriteTools = (
           message: knownDefectRefusalMessage(toolName),
         });
       }
-      const executionDeps = await currentExecutionDeps(
+      const executionDeps = await resolveCurrentChatRegistryContext({
         contextDeps,
-        resolveCurrentMembership,
-      );
+        resolveCurrentExecutionContext,
+      });
       const result = Result.isError(executionDeps)
         ? executionDeps
         : await runRegistryWriteTool({

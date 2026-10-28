@@ -571,6 +571,8 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Documents in a case file, after language-version deduplication. */
+  caseLawCaseFilePageSize: 50,
   /**
    * Judges one decision may name. A bench and its dissenters are a handful of
    * people; a decision listing more of them is a parser defect, and the read

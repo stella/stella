@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Ahora",
       "currentSession": "Actual",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} en {os}",
@@ -1209,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
+      "caseFileDocuments": "Documentos de este expediente judicial",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Pasaje de la resolución",
@@ -1435,6 +1437,17 @@
         "webSearch": "Activa la búsqueda web para usar esta habilidad"
       }
     },
+    "connectConnector": {
+      "checkAction": "Comprobar conexión",
+      "description": "El asistente solicita conectar {connector} para usar sus herramientas en esta conversación.",
+      "error": "No se pudo iniciar la conexión. Inténtalo de nuevo.",
+      "notConnected": "Aún no está conectado. Termina de iniciar sesión y vuelve a comprobarlo.",
+      "openTools": "Abrir herramientas",
+      "scopes": "Acceso solicitado: {scopes}",
+      "title": "Conectar un conector",
+      "tokenRequired": "{connector} necesita un token de acceso. Añádelo en la página de herramientas y luego comprueba la conexión.",
+      "waiting": "Termina de iniciar sesión en la ventana que se abrió."
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
@@ -1509,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
+      "unnamed": "{count, plural, one {# más} many {# más} other {# más}}"
     },
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
@@ -1750,6 +1763,7 @@
       "business_registry_lookup": "Buscando en el registro de empresas",
       "compare_versions": "Comparando versiones",
       "configure_template_fields": "Configurar campos de la plantilla",
+      "connect_connector": "Solicitando conectar un conector",
       "counterparty_check": "Verificando la contraparte",
       "create-document": "Preparando documento",
       "create_matter_document": "Creando documento",
@@ -2037,6 +2051,7 @@
     "confirm": "Confirmar",
     "confirmAction": "¿Está seguro?",
     "connect": "Conectar",
+    "connected": "Conectado",
     "connectionLost": "Conexión perdida",
     "connectionLostDescription": "Se perdió la conexión con el servidor. Reintentando automáticamente.",
     "convertTo": "Convertir a",
@@ -2205,6 +2220,8 @@
     "noResults": "Sin resultados",
     "noVersions": "Sin historial de versiones",
     "none": "Ninguno",
+    "notConnected": "No conectado",
+    "notNow": "Ahora no",
     "notStated": "No indicado",
     "notes": "Notas",
     "open": "Abrir",
@@ -2453,10 +2470,10 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
-    "deleteContact": "Eliminar cliente",
+    "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
-    "editContact": "Editar cliente",
+    "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
       "personal": "Personal",
@@ -2469,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
-      "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
       "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
@@ -4613,7 +4630,6 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA",
       "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
@@ -5041,7 +5057,7 @@
         "title": "Autenticación de dos factores"
       },
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
-      "wordEditShortcut": "Abreviatura de edición en Word",
+      "wordEditShortcut": "Iniciales para ediciones de Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
       "wordEditShortcutPlaceholder": "p. ej. JK"
     },
@@ -5052,7 +5068,6 @@
       "cliInstallLabel": "Instalación",
       "cliLoginLabel": "Inicio de sesión",
       "cliTitle": "Interfaz de línea de comandos",
-      "connected": "Conectada",
       "connectedAgo": "Conectada {time}",
       "connectedAppsDescription": "Aplicaciones en las que iniciaste sesión con stella. Desconecta las que ya no uses.",
       "connectedAppsEmpty": "Aún nada. Configura Claude o ChatGPT arriba y aparecerá aquí.",
@@ -5075,7 +5090,6 @@
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL del servidor",
       "noMatches": "Ninguna conexión coincide con «{query}»",
-      "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
       "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
@@ -5190,7 +5204,6 @@
       "usageLimitDescriptionNoEntitlement": "Las funciones de IA necesitan una autorización de uso activa para esta organización.",
       "usageLimitDescriptionUsageLimitExceeded": "Esta acción no se puede ejecutar con el estado de uso actual de la organización.",
       "usageLimitNeeded": "Necesario",
-      "usageLimitNotNow": "Ahora no",
       "usageLimitTitleEntitlementInactive": "La autorización de uso no está activa",
       "usageLimitTitleNoEntitlement": "Se requiere autorización de uso",
       "usageLimitTitleUsageLimitExceeded": "Límite de uso de IA alcanzado",
@@ -5431,16 +5444,16 @@
     "savedDescription": "Conjunto de estilos guardado",
     "sourceDocument": "DOCX de origen",
     "stellaDescription": "Formato jurídico completo y neutro de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sin título"
   },
   "success": {
     "aiConfigDeleted": "Configuración de IA eliminada",
     "aiConfigUpdated": "Configuración de IA actualizada",
-    "clientUpdated": "Cliente actualizado",
-    "contactCreated": "Cliente creado",
-    "contactDeleted": "Cliente eliminado",
+    "clientUpdated": "Contacto actualizado",
+    "contactCreated": "Contacto creado",
+    "contactDeleted": "Contacto eliminado",
     "documentCreated": "Documento creado",
     "folderCreated": "Carpeta creada",
     "invitationCanceled": "Invitación cancelada",
@@ -5977,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Introduce una dirección de correo electrónico válida.",
     "organizationNameRequired": "El nombre de la organización es obligatorio",
     "slugFormat": "El slug debe contener solo letras minúsculas, números y guiones",
     "slugRequired": "El slug es obligatorio"

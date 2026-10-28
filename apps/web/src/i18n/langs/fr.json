@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Maintenant",
       "currentSession": "En cours",
       "device": "Appareil",
       "deviceOnOs": "{browser} sur {os}",
@@ -1209,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Précisé : <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Rédaction en vigueur au {date}} until {Rédaction en vigueur jusqu’au {date}} from {Rédaction en vigueur à compter du {date}} other {Rédaction en vigueur au {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Précisé : {date}} until {Précisé : jusqu’au {date}} from {Précisé : à partir du {date}} other {Précisé : {date}}}",
+      "caseFileDocuments": "Documents de ce dossier judiciaire",
       "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",
       "citedBy": "Cité par",
       "citedDecisionPassage": "Passage dans la décision",
@@ -1435,6 +1437,17 @@
         "webSearch": "Activez la recherche web pour utiliser cette compétence"
       }
     },
+    "connectConnector": {
+      "checkAction": "Vérifier la connexion",
+      "description": "L’assistant demande à connecter {connector} pour utiliser ses outils dans cette conversation.",
+      "error": "Impossible de lancer la connexion. Réessayez.",
+      "notConnected": "Pas encore connecté. Terminez la connexion, puis vérifiez à nouveau.",
+      "openTools": "Ouvrir les outils",
+      "scopes": "Accès demandé : {scopes}",
+      "title": "Connecter un connecteur",
+      "tokenRequired": "{connector} nécessite un jeton d’accès. Ajoutez-le sur la page des outils, puis vérifiez la connexion.",
+      "waiting": "Terminez la connexion dans la fenêtre qui s’est ouverte."
+    },
     "contextMeter": {
       "attachments": "Documents joints",
       "autoCompact": "À 100 %, stella résume automatiquement les anciens messages pour libérer de la place.",
@@ -1509,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
+      "unnamed": "{count, plural, one {# autre} many {# autres} other {# autres}}"
     },
     "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "improvePrompt": "Améliorer le prompt",
@@ -1750,6 +1763,7 @@
       "business_registry_lookup": "Recherche dans le registre des entreprises",
       "compare_versions": "Comparaison des versions",
       "configure_template_fields": "Configurer les champs du modèle",
+      "connect_connector": "Demande de connexion d’un connecteur",
       "counterparty_check": "Vérification de la contrepartie",
       "create-document": "Préparation du document",
       "create_matter_document": "Création du document",
@@ -2037,6 +2051,7 @@
     "confirm": "Confirmer",
     "confirmAction": "Êtes-vous sûr(e) ?",
     "connect": "Connecter",
+    "connected": "Connecté",
     "connectionLost": "Connexion perdue",
     "connectionLostDescription": "La connexion au serveur a été perdue. Nouvelle tentative automatique.",
     "convertTo": "Convertir en",
@@ -2205,6 +2220,8 @@
     "noResults": "Aucun résultat",
     "noVersions": "Aucun historique de versions",
     "none": "Aucun",
+    "notConnected": "Non connecté",
+    "notNow": "Pas maintenant",
     "notStated": "Non précisé",
     "notes": "Notes",
     "open": "Ouvrir",
@@ -2453,10 +2470,10 @@
       "value": "Valeur du champ"
     },
     "datePrecision": "Précision de la date",
-    "deleteContact": "Supprimer le client",
+    "deleteContact": "Supprimer le contact",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
-    "editContact": "Modifier le client",
+    "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
       "personal": "Personnel",
@@ -2469,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
       "extracting": "Extraction du ou des mandants…",
-      "fileHint": "Stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
+      "fileHint": "stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
       "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
@@ -4613,7 +4630,6 @@
       "selectAtLeastOneRole": "Sélectionnez au moins un rôle pour cette clé.",
       "selectModelForEachRole": "Ajoutez un fournisseur et choisissez un modèle pour chaque catégorie.",
       "selectedProvider": "{provider}",
-      "title": "Configuration de l’IA",
       "usingDefaults": "Valeurs par défaut utilisées"
     },
     "invitations": {
@@ -5041,7 +5057,7 @@
         "title": "Authentification à deux facteurs"
       },
       "wordEditIdentitySaved": "Identité d’édition Word mise à jour",
-      "wordEditShortcut": "Initiales d’édition Word",
+      "wordEditShortcut": "Initiales pour les modifications Word",
       "wordEditShortcutDescription": "Tag court pour vos initiales sur les modifications Word.",
       "wordEditShortcutPlaceholder": "p. ex. JK"
     },
@@ -5052,7 +5068,6 @@
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Connexion",
       "cliTitle": "Interface en ligne de commande",
-      "connected": "Connectée",
       "connectedAgo": "Connectée {time}",
       "connectedAppsDescription": "Applications auxquelles vous vous êtes connecté avec stella. Déconnectez celles que vous n’utilisez plus.",
       "connectedAppsEmpty": "Rien pour l’instant. Configurez Claude ou ChatGPT ci-dessus et il apparaîtra ici.",
@@ -5075,7 +5090,6 @@
       "mcpTitle": "Serveur MCP",
       "mcpUrlLabel": "URL du serveur",
       "noMatches": "Aucune connexion ne correspond à « {query} »",
-      "notConnected": "Non connectée",
       "permissionCount": "{count, plural, one {# autorisation} other {# autorisations}}",
       "privateCredentialOnly": "Identifiant privé uniquement",
       "searchPlaceholder": "Rechercher des connexions",
@@ -5190,7 +5204,6 @@
       "usageLimitDescriptionNoEntitlement": "Les fonctionnalités d’IA nécessitent un droit d’utilisation actif pour cette organisation.",
       "usageLimitDescriptionUsageLimitExceeded": "Cette action ne peut pas être exécutée avec l’état d’utilisation actuel de l’organisation.",
       "usageLimitNeeded": "Nécessaire",
-      "usageLimitNotNow": "Pas maintenant",
       "usageLimitTitleEntitlementInactive": "Le droit d’utilisation n’est pas actif",
       "usageLimitTitleNoEntitlement": "Droit d’utilisation requis",
       "usageLimitTitleUsageLimitExceeded": "Limite d’utilisation de l’IA atteinte",
@@ -5431,16 +5444,16 @@
     "savedDescription": "Jeu de styles enregistré",
     "sourceDocument": "DOCX source",
     "stellaDescription": "Mise en forme juridique complète et neutre de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Jeux de styles",
     "untitledDocument": "Document sans titre"
   },
   "success": {
     "aiConfigDeleted": "Configuration de l’IA supprimée",
     "aiConfigUpdated": "Configuration de l’IA mise à jour",
-    "clientUpdated": "Client mis à jour",
-    "contactCreated": "Client créé",
-    "contactDeleted": "Client supprimé",
+    "clientUpdated": "Contact mis à jour",
+    "contactCreated": "Contact créé",
+    "contactDeleted": "Contact supprimé",
     "documentCreated": "Document créé",
     "folderCreated": "Dossier créé",
     "invitationCanceled": "Invitation annulée",
@@ -5977,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Saisissez une adresse e-mail valide.",
     "organizationNameRequired": "Le nom de l'organisation est requis",
     "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets",
     "slugRequired": "Le slug est requis"
