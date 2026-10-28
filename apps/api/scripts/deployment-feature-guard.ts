@@ -97,6 +97,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated chat connector receipts are available on every deployment",
   ],
   [
+    "/v1/me/push-devices",
+    "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
