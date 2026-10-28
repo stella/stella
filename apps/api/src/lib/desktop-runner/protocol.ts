@@ -33,12 +33,15 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  *   desktop resends everything after its last `ack`.
  * - `upgradeRequired`: `hello` named a protocol outside the accepted range;
  *   an `upgrade_required` frame with the range precedes it.
- * - `superseded`: a newer socket of the same installation was accepted.
+ * - `superseded`: a newer socket of the same installation and device key
+ *   was accepted.
  * - `heartbeatTimeout`: pings went unanswered.
  * - `sequenceGap`: a run message skipped a position; `welcome.resume` on the
  *   next socket says where to resume.
  * - `helloTimeout`: no `hello` arrived in time.
  * - `unknownRun`: a run message for a run this socket does not hold.
+ * - `tooManyRunners`: the account holds as many installations as it may, and
+ *   none can make room.
  */
 export const DESKTOP_RUNNER_CLOSE = {
   goingAway: { code: 1001, reason: "going_away" },
@@ -52,6 +55,7 @@ export const DESKTOP_RUNNER_CLOSE = {
   sequenceGap: { code: 4004, reason: "sequence_gap" },
   helloTimeout: { code: 4005, reason: "hello_timeout" },
   unknownRun: { code: 4006, reason: "unknown_run" },
+  tooManyRunners: { code: 4007, reason: "too_many_runners" },
 } as const;
 const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
 

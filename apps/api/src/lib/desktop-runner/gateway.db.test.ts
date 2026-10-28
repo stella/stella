@@ -1,16 +1,21 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_PROTOCOL,
+  type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
-import { desktopRunnerEvents, desktopRunnerRuns } from "@/api/db/schema";
+import {
+  desktopRunnerEvents,
+  desktopRunnerRuns,
+  desktopRunners,
+} from "@/api/db/schema";
 import type { HttpServer } from "@/api/http/context";
 import { apiWebSocketHandler } from "@/api/http/websocket";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
@@ -102,6 +107,7 @@ const instances: Instance[] = [];
 const startInstance = async (
   instanceId: string,
   doorbell: DesktopRunnerDoorbell,
+  limits: Partial<DesktopRunnerLimits> = {},
 ): Promise<Instance> => {
   const gateway = createDesktopRunnerGateway({
     db: gatewayDb,
@@ -112,6 +118,7 @@ const startInstance = async (
     now,
     random: () => 0.5,
     timing: TIMING,
+    limits,
   });
   await gateway.start();
   const server = Bun.serve({
@@ -323,6 +330,50 @@ const openDesktop = async (
     },
   };
 };
+
+const helloFrame = (activeRuns: { runId: string; lastSeq: number }[] = []) => ({
+  type: "hello",
+  protocol: DESKTOP_RUNNER_PROTOCOL.current,
+  appVersion: "1.4.0",
+  sidecarVersion: "1.4.0",
+  harnesses: [],
+  activeRuns,
+});
+
+/** A runner row as a socket would have left it, for state a test sets up directly. */
+const insertRunner = async (
+  values: Pick<
+    typeof desktopRunners.$inferInsert,
+    "userId" | "organizationId" | "desktopId" | "deviceJkt" | "connection"
+  >,
+) => {
+  await db.insert(desktopRunners).values({
+    ...values,
+    sessionId: Bun.randomUUIDv7(),
+    instanceId: "api-elsewhere",
+    protocol: DESKTOP_RUNNER_PROTOCOL.current,
+    appVersion: "1.4.0",
+    sidecarVersion: "1.4.0",
+    harnesses: [],
+    connectedAt: now(),
+    lastSeenAt: now(),
+  });
+};
+
+const runnerRows = async (userId: string, organizationId: string) =>
+  await db
+    .select({
+      desktopId: desktopRunners.desktopId,
+      deviceJkt: desktopRunners.deviceJkt,
+      connection: desktopRunners.connection,
+    })
+    .from(desktopRunners)
+    .where(
+      and(
+        eq(desktopRunners.userId, userId),
+        eq(desktopRunners.organizationId, organizationId),
+      ),
+    );
 
 const startInput = (desktopId: string, runId: string) => ({
   owner,
@@ -865,5 +916,75 @@ describe("upgrade scaling", () => {
 
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
+describe("runner identity", () => {
+  test("another device key naming the same installation gets its own runner and replaces nothing", async () => {
+    const other = await createRlsDesktopCredentials(db, ids);
+    const { desktopId, runId, desktop: original } = await acceptedRun(first);
+    const intruder = await openDesktop(
+      second,
+      desktopId,
+      await upgradeRequest(second, desktopId, other.a),
+    );
+    await intruder.hello();
+    // Still the current socket of its own key: its run's commands reach it.
+    expect((await control.interruptRun({ owner, runId })).unwrap()).toEqual({
+      type: "queued",
+    });
+    await original.receive("run.interrupt", ofRun(runId));
+    const rows = (await runnerRows(owner.userId, owner.organizationId)).filter(
+      (row) => row.desktopId === desktopId,
+    );
+    expect(rows.map(({ deviceJkt }) => deviceJkt).toSorted()).toEqual(
+      [credentials.a.deviceJkt, other.a.deviceJkt].toSorted(),
+    );
+    await original.close();
+    await intruder.close();
+  });
+
+  test("an account at its installation cap is refused until a disconnected one without open runs makes room", async () => {
+    const capped = await startInstance("api-capped", sharedDoorbell, {
+      maxRunnersPerAccount: 2,
+    });
+    const [busyId, idleId, newId] = [
+      Bun.randomUUIDv7(),
+      Bun.randomUUIDv7(),
+      Bun.randomUUIDv7(),
+    ];
+    const account = { userId: owner.userId, organizationId: ids.orgB };
+    for (const desktopId of [busyId, idleId]) {
+      await insertRunner({
+        ...account,
+        desktopId,
+        deviceJkt: credentials.b.deviceJkt,
+        connection: "connected",
+      });
+    }
+    const open = async () =>
+      await openDesktop(
+        capped,
+        newId,
+        await upgradeRequest(capped, newId, credentials.b),
+      );
+    const refused = await open();
+    refused.send(helloFrame());
+    expect(await refused.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.tooManyRunners.code,
+      reason: DESKTOP_RUNNER_CLOSE.tooManyRunners.reason,
+    });
+    // A connected installation is never evicted; a disconnected idle one is.
+    await db
+      .update(desktopRunners)
+      .set({ connection: "disconnected" })
+      .where(eq(desktopRunners.desktopId, idleId));
+    const admitted = await open();
+    await admitted.hello();
+    const rows = await runnerRows(account.userId, account.organizationId);
+    expect(rows.map(({ desktopId }) => desktopId).toSorted()).toEqual(
+      [busyId, newId].toSorted(),
+    );
+    await admitted.close();
   });
 });

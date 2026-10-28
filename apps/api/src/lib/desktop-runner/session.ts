@@ -7,6 +7,7 @@ import {
   DESKTOP_RUNNER_PROTOCOL,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerDesktopMessage,
+  type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
   parseDesktopRunnerFrame,
@@ -57,6 +58,7 @@ type RunnerSessionContext = {
   readonly db: DesktopRunnerDb;
   readonly instanceId: string;
   readonly timing: DesktopRunnerTiming;
+  readonly limits: DesktopRunnerLimits;
   readonly now: () => Date;
   readonly random: () => number;
   readonly mintRunToken: MintRunToken;
@@ -437,7 +439,12 @@ const onHello = async (
     hello,
     now: context.now(),
     leaseMs: context.timing.leaseMs,
+    limits: context.limits,
   });
+  if (claim.type === "too_many_runners") {
+    close(state, DESKTOP_RUNNER_CLOSE.tooManyRunners);
+    return;
+  }
   state.claimed = true;
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);

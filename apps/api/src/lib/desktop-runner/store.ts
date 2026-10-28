@@ -19,6 +19,7 @@ import {
   type DesktopRunnerDesktopMessage,
   type DesktopRunnerHarnessReport,
   desktopRunnerHarnessReportSchema,
+  type DesktopRunnerLimits,
 } from "@stll/api-contract/desktop-runner";
 
 import type { RootDatabase, Transaction } from "@/api/db/root";
@@ -69,11 +70,18 @@ export type RunnerBinding = {
 const runner = desktopRunners;
 const runs = desktopRunnerRuns;
 
-const runnerKey = ({ userId, organizationId, desktopId }: RunnerBinding) =>
+/** A runner row is one installation under one device key. */
+const runnerKey = ({
+  userId,
+  organizationId,
+  desktopId,
+  deviceJkt,
+}: RunnerBinding) =>
   and(
     eq(runner.userId, userId),
     eq(runner.organizationId, organizationId),
     eq(runner.desktopId, desktopId),
+    eq(runner.deviceJkt, deviceJkt),
   );
 
 /** A run belongs to a socket only through the same desktop and device key. */
@@ -129,6 +137,7 @@ type ClaimSessionOptions = {
   hello: HelloMessage;
   now: Date;
   leaseMs: number;
+  limits: Pick<DesktopRunnerLimits, "maxRunnersPerAccount">;
 };
 
 type HeldRun = {
@@ -138,11 +147,64 @@ type HeldRun = {
   readonly workspaceIds: readonly SafeId<"workspace">[];
 };
 
-type ClaimSessionResult = {
-  /** The socket this one replaces, to be told it is no longer current. */
-  previous: { sessionId: string; instanceId: string } | null;
-  /** The runs the desktop listed that are bound to it, after reconciling. */
-  held: HeldRun[];
+type ClaimSessionResult =
+  | {
+      type: "claimed";
+      /** The socket this one replaces, to be told it is no longer current. */
+      previous: { sessionId: string; instanceId: string } | null;
+      /** The runs the desktop listed that are bound to it, after reconciling. */
+      held: HeldRun[];
+    }
+  /** The account holds its maximum of installations and none could go. */
+  | { type: "too_many_runners" };
+
+type AccountScope = Pick<RunnerBinding, "userId" | "organizationId">;
+
+const countRunners = async (tx: Transaction, scope: AccountScope) =>
+  (
+    await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(runner)
+      .where(
+        and(
+          eq(runner.userId, scope.userId),
+          eq(runner.organizationId, scope.organizationId),
+        ),
+      )
+  ).at(0)?.count ?? 0;
+
+/**
+ * Remove up to `count` of the account's disconnected installations that hold
+ * no open run, least recently seen first; their ended runs go with them.
+ */
+const evictIdleRunners = async (
+  tx: Transaction,
+  scope: AccountScope,
+  count: number,
+) => {
+  // audit: skip - runner socket bookkeeping; the run's caller audits the work
+  await tx.execute(sql`
+    DELETE FROM ${runner}
+    WHERE (${runner.userId}, ${runner.organizationId}, ${runner.desktopId}, ${runner.deviceJkt}) IN (
+      SELECT idle.user_id, idle.organization_id, idle.desktop_id, idle.device_jkt
+      FROM ${runner} AS idle
+      WHERE idle.user_id = ${scope.userId}
+        AND idle.organization_id = ${scope.organizationId}
+        AND idle.connection = 'disconnected'
+        AND NOT EXISTS (
+          SELECT 1 FROM ${runs} AS held
+          WHERE held.user_id = idle.user_id
+            AND held.organization_id = idle.organization_id
+            AND held.desktop_id = idle.desktop_id
+            AND held.device_jkt = idle.device_jkt
+            AND held.state IN (${sql.join(
+              DESKTOP_RUNNER_OPEN_RUN_STATES.map((state) => sql`${state}`),
+              sql`, `,
+            )})
+        )
+      ORDER BY idle.last_seen_at ASC
+      LIMIT ${count}
+    )`);
 };
 
 /**
@@ -153,7 +215,15 @@ type ClaimSessionResult = {
  */
 export const claimRunnerSession = async (
   db: DesktopRunnerDb,
-  { binding, sessionId, instanceId, hello, now, leaseMs }: ClaimSessionOptions,
+  {
+    binding,
+    sessionId,
+    instanceId,
+    hello,
+    now,
+    leaseMs,
+    limits,
+  }: ClaimSessionOptions,
 ): Promise<ClaimSessionResult> =>
   await withAggregateTransaction(db, async (tx) => {
     const [existing] = await tx
@@ -165,8 +235,20 @@ export const claimRunnerSession = async (
       .from(runner)
       .where(runnerKey(binding))
       .limit(1);
+    if (existing === undefined) {
+      const registered = await countRunners(tx, binding);
+      if (registered >= limits.maxRunnersPerAccount) {
+        await evictIdleRunners(
+          tx,
+          binding,
+          registered - limits.maxRunnersPerAccount + 1,
+        );
+        if ((await countRunners(tx, binding)) >= limits.maxRunnersPerAccount) {
+          return { type: "too_many_runners" };
+        }
+      }
+    }
     const values = {
-      deviceJkt: binding.deviceJkt,
       sessionId,
       instanceId,
       connection: "connected" as const,
@@ -184,10 +266,16 @@ export const claimRunnerSession = async (
         userId: binding.userId,
         organizationId: binding.organizationId,
         desktopId: binding.desktopId,
+        deviceJkt: binding.deviceJkt,
         ...values,
       })
       .onConflictDoUpdate({
-        target: [runner.userId, runner.organizationId, runner.desktopId],
+        target: [
+          runner.userId,
+          runner.organizationId,
+          runner.desktopId,
+          runner.deviceJkt,
+        ],
         set: values,
       });
     const heldIds = new Set(hello.activeRuns.map(({ runId }) => runId));
@@ -259,6 +347,7 @@ export const claimRunnerSession = async (
         ? heldRead.rows
         : panic("A hello lists more runs than the contract allows");
     return {
+      type: "claimed",
       previous:
         existing === undefined ||
         existing.connection === "disconnected" ||
@@ -834,6 +923,8 @@ export const insertAssignedRun = async (
           sql`${runner.lastSeenAt} >= ${options.seenSince}::timestamptz`,
         ),
       )
+      // Another device key may name the same installation; the newest wins.
+      .orderBy(desc(runner.lastSeenAt))
       .limit(1);
     if (target === undefined) {
       return { type: "no_computer" };
@@ -922,6 +1013,7 @@ export const insertRunCommand = async (
           eq(runner.userId, runs.userId),
           eq(runner.organizationId, runs.organizationId),
           eq(runner.desktopId, runs.desktopId),
+          eq(runner.deviceJkt, runs.deviceJkt),
         ),
       )
       .where(

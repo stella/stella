@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  DESKTOP_RUNNER_LIMITS,
+  type DesktopRunnerLimits,
+} from "@stll/api-contract/desktop-runner";
+
 import type { HttpServer } from "@/api/http/context";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -65,6 +70,7 @@ export type DesktopRunnerGatewayOptions = {
   now?: () => Date;
   random?: () => number;
   timing?: Partial<DesktopRunnerTiming>;
+  limits?: Partial<DesktopRunnerLimits>;
 };
 
 /** Leases expired per sweep, so one sweep stays one short transaction. */
@@ -106,6 +112,7 @@ export const createDesktopRunnerGateway = (
   options: DesktopRunnerGatewayOptions,
 ): DesktopRunnerGateway => {
   const timing = { ...DESKTOP_RUNNER_TIMING, ...options.timing };
+  const limits = { ...DESKTOP_RUNNER_LIMITS, ...options.limits };
   const now = options.now ?? (() => new Date());
   const random = options.random ?? Math.random;
   const sessions = new Map<string, RunnerSession>();
@@ -117,6 +124,7 @@ export const createDesktopRunnerGateway = (
     db: options.db,
     instanceId: options.instanceId,
     timing,
+    limits,
     now,
     random,
     mintRunToken: options.mintRunToken,

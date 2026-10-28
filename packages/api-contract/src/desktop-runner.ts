@@ -33,6 +33,19 @@ export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
 
+/**
+ * What one account may hold through runner sockets and what one run may
+ * store. The API enforces each; a desktop speaks the protocol without them.
+ */
+export type DesktopRunnerLimits = {
+  /** Installations (installation id and device key) per account and organization. */
+  readonly maxRunnersPerAccount: number;
+};
+
+export const DESKTOP_RUNNER_LIMITS = {
+  maxRunnersPerAccount: 10,
+} as const satisfies DesktopRunnerLimits;
+
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {
   hello: "hello",
   harnessStatus: "harness.status",

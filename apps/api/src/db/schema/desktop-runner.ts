@@ -43,9 +43,10 @@ const sqlValues = (values: readonly string[]) =>
   );
 
 /**
- * One row per desktop installation that has opened a runner socket: which
- * device key it holds, which socket and API task hold it now, and what each
- * harness on it reported, so routing sees what every computer can do.
+ * One row per desktop installation and device key that has opened a runner
+ * socket: which socket and API task hold it now, and what each harness on it
+ * reported, so routing sees what every computer can do. Another key naming the
+ * same installation gets its own row and never replaces this one.
  */
 export const desktopRunners = p.pgTable.withRLS(
   "desktop_runners",
@@ -78,7 +79,12 @@ export const desktopRunners = p.pgTable.withRLS(
   (table) => [
     p.primaryKey({
       name: "desktop_runners_pkey",
-      columns: [table.userId, table.organizationId, table.desktopId],
+      columns: [
+        table.userId,
+        table.organizationId,
+        table.desktopId,
+        table.deviceJkt,
+      ],
     }),
     p.check(
       "desktop_runners_connection_check",
@@ -133,11 +139,17 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p
       .foreignKey({
         name: "desktop_runner_runs_runner_fk",
-        columns: [table.userId, table.organizationId, table.desktopId],
+        columns: [
+          table.userId,
+          table.organizationId,
+          table.desktopId,
+          table.deviceJkt,
+        ],
         foreignColumns: [
           desktopRunners.userId,
           desktopRunners.organizationId,
           desktopRunners.desktopId,
+          desktopRunners.deviceJkt,
         ],
       })
       .onDelete("cascade"),
