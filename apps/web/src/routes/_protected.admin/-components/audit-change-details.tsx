@@ -71,11 +71,14 @@ export const AuditChangeDetails = ({
 };
 
 function beforeAndAfter(change: unknown) {
-  if (!isUnknownRecord(change)) {
+  if (
+    !isUnknownRecord(change) ||
+    !["old", "new", "before", "after"].some((key) => Object.hasOwn(change, key))
+  ) {
     return { before: null, after: change };
   }
   const before = change["before"] ?? change["old"] ?? null;
-  const after = change["after"] ?? change["new"] ?? change["value"] ?? null;
+  const after = change["after"] ?? change["new"] ?? null;
   return { before, after };
 }
 

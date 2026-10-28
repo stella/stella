@@ -57,22 +57,40 @@ test("visible entries without changes keep their empty marker", () => {
   ).toBeNull();
 });
 
-test("visible changes render every field as a labelled before-and-after row", () => {
+test("visible changes render old and new envelopes", () => {
   const changes = {
     amount: { old: 100, new: 200 },
-    due_date: { old: "2026-01-01", new: "2026-02-01" },
-    clientName: { old: "Northwind", new: "Contoso" },
   };
   const view = mount({ changes, changesStatus: AUDIT_CHANGES_STATUS.visible });
-  expect(view.getAllByRole("term").map((term) => term.textContent)).toEqual([
-    "Amount",
-    "Due date",
-    "Client Name",
-  ]);
-  expect(view.getAllByRole("definition")).toHaveLength(3);
+  expect(view.getByRole("term").textContent).toBe("Amount");
+  expect(view.getByRole("definition").textContent).toBe("100 → 200");
   expect(view.getByText(messages.common.details)).not.toBeNull();
   expect(view.container.querySelector("pre")?.textContent).toBe(
     JSON.stringify(changes, null, 2),
+  );
+});
+
+test("visible changes render before and after envelopes", () => {
+  const view = mount({
+    changes: {
+      due_date: { before: "2026-01-01", after: "2026-02-01" },
+    },
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  expect(view.getByRole("term").textContent).toBe("Due date");
+  expect(view.getByRole("definition").textContent).toBe(
+    "2026-01-01 → 2026-02-01",
+  );
+});
+
+test("visible changes render object-valued fields as the new value", () => {
+  const view = mount({
+    changes: { metadata: { category: "legal" } },
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  expect(view.getByRole("term").textContent).toBe("Metadata");
+  expect(view.getByRole("definition").textContent).toBe(
+    '— → {"category":"legal"}',
   );
 });
 
