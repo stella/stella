@@ -3783,6 +3783,16 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      valkey:
+        image: ${{ needs.ci-plan.outputs.valkey }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.valkey, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
       # The dev seed's own cluster and object store, on the first shard only
       # (an empty image starts no container). Migrations create cluster-wide
       # roles, so a second database beside the suites' cannot be migrated.
@@ -3919,6 +3929,7 @@ jobs:
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          REDIS_URL: redis://127.0.0.1:6379
           CI_POSTGRES_TEST_SELECTION: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.

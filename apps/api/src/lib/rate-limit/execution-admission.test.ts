@@ -66,7 +66,7 @@ const coordination = ({
           acquisitions += 1;
         }
         if (acquire && (mode === "busy" || active.size >= userConcurrency)) {
-          return 0;
+          return [0, 1000];
         }
         const counted = args.at(1) === "3";
         if (counted) {

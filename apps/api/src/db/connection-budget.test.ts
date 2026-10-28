@@ -468,7 +468,8 @@ describe("database connection budget", () => {
     expect(shared.perProcess).toBe(
       DATABASE_POOL_DEFAULTS.DATABASE_ROOT_POOL_MAX +
         DATABASE_POOL_DEFAULTS.DATABASE_RLS_POOL_MAX +
-        DEDICATED_CONNECTIONS_PER_PROCESS,
+        DEDICATED_CONNECTIONS_PER_PROCESS +
+        1,
     );
   });
 });

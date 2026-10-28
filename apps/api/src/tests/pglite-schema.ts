@@ -1430,3 +1430,21 @@ export const installPgliteInvoiceObjects = async (
     );
   }
 };
+
+/** Install filing-year semantics from the committed function migration. */
+export const installPgliteDecisionDocketFilingYear = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160700_decision_docket_filing_year",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith("CREATE FUNCTION"),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
