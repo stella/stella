@@ -331,6 +331,7 @@
     "Queue authority": ["**"],
     "Design token docs": [
       "packages/ui/src/styles/theme.css",
+      "packages/brand/src/palette.ts",
       "DESIGN.md",
       "scripts/**",
       "bunfig.toml"
