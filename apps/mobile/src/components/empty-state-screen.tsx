@@ -46,12 +46,27 @@ export const EmptyCard = ({
   </View>
 );
 
+/**
+ * The widest a column of content grows, as t3code caps its chat: on an iPad
+ * or a wide pane, lines and rows stay readable and the content centres.
+ */
+export const READABLE_MAX_WIDTH = 960;
+
 export const screenStyles = StyleSheet.create({
   content: {
+    alignSelf: "center",
     flexGrow: 1,
     gap: 20,
+    maxWidth: READABLE_MAX_WIDTH,
     padding: 16,
     paddingTop: 24,
+    width: "100%",
+  },
+  /** A block, such as the message box, kept to the content's width. */
+  readable: {
+    alignSelf: "center",
+    maxWidth: READABLE_MAX_WIDTH,
+    width: "100%",
   },
   screen: {
     flex: 1,

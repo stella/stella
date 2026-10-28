@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { screenStyles } from "@/components/empty-state-screen";
 import { TaskStatusControl } from "@/components/task-status-control";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -143,6 +144,7 @@ const LoadedEntity = ({
 
 const styles = StyleSheet.create({
   content: {
+    ...screenStyles.readable,
     gap: 20,
     padding: 24,
   },
