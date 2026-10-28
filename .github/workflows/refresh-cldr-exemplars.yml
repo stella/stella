@@ -65,7 +65,12 @@ jobs:
 
       - name: Verify committed input matches the official conversion
         run: |
-          for name in exemplars-supplement.json provenance.json; do
-            diff -u <(jq -S . "packages/mojibake/data/cldr49/$name") \
-              <(jq -S . "$RUNNER_TEMP/cldr49-input/artifact/$name")
-          done
+          bun --eval '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            for (const name of ["exemplars-supplement.json", "provenance.json"]) {
+              const committed = JSON.parse(readFileSync(`packages/mojibake/data/cldr49/${name}`, "utf8"));
+              const converted = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/cldr49-input/artifact/${name}`, "utf8"));
+              assert.equal(JSON.stringify(committed), JSON.stringify(converted), `${name} must match the official conversion`);
+            }
+          '
