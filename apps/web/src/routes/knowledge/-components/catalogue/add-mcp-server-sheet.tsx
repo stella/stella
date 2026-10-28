@@ -20,11 +20,11 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
 import { SecretInput } from "@/components/secret-input";
-import { api } from "@/lib/api";
+import { api, mcpConnectorConnection } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import { openMcpOAuthWindow } from "@/lib/mcp-oauth-channel";
@@ -98,10 +98,8 @@ export const AddMcpServerSheet = ({
 
   const connectMutation = useMutation({
     mutationFn: async (connector: CreatedConnector) => {
-      const response = await api.mcp
-        .connectors({ slug: connector.slug })
-        .connect.post({});
-      return { connector, data: unwrapApiResponse(response) };
+      const data = await mcpConnectorConnection.start(connector.slug);
+      return { connector, data };
     },
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
@@ -111,7 +109,7 @@ export const AddMcpServerSheet = ({
       if (data.type === "oauth2") {
         const openStatus = openMcpOAuthWindow(data.authorizeUrl);
         if (openStatus === "invalid") {
-          notifyUserError(undefined, t("knowledge.mcp.errorTitle"), {
+          notifyUserProblem(t("knowledge.mcp.errorTitle"), {
             description: t("knowledge.mcp.errorDescription"),
           });
           return;

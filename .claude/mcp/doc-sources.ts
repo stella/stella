@@ -146,6 +146,7 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo/fingerprint",
       "expo",
       "expo-constants",
       "expo-crypto",
@@ -208,7 +209,7 @@ export const DOC_SOURCES = {
     url: "https://turborepo.dev/llms.txt",
   },
   PostHog: {
-    dependencies: ["posthog-js", "posthog-node"],
+    dependencies: ["posthog-js"],
     url: "https://posthog.com/llms.txt",
   },
   Zustand: {
@@ -272,15 +273,6 @@ export const DOC_SOURCES = {
   OxlintTailwind: {
     dependencies: ["oxlint-tailwindcss"],
     url: "https://oxlint-tailwindcss.pages.dev/llms.txt",
-  },
-  OpenTelemetry: {
-    dependencies: [
-      "@opentelemetry/api-logs",
-      "@opentelemetry/exporter-logs-otlp-http",
-      "@opentelemetry/resources",
-      "@opentelemetry/sdk-logs",
-    ],
-    url: "https://opentelemetry.io/llms.txt",
   },
   GeminiAPI: {
     dependencies: ["@google/genai"],
@@ -538,6 +530,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   ["jszip", ["https://raw.githubusercontent.com/Stuk/jszip/HEAD/llms.txt"]],
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
+  [
+    "lightningcss",
+    [
+      "https://lightningcss.dev/llms.txt",
+      "https://raw.githubusercontent.com/parcel-bundler/lightningcss/HEAD/llms.txt",
+    ],
+  ],
   [
     "nodemailer",
     ["https://nodemailer.com/llms.txt", "https://nodemailer.com/docs/llms.txt"],

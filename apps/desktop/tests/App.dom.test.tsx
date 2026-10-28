@@ -3,7 +3,6 @@ import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { responseOrderProperty } from "@stll/property-testing/response-order";
 import type { ResponseOrder } from "@stll/property-testing/response-order";
@@ -190,8 +189,6 @@ const shownChecked = (container: HTMLElement, key: PreferenceKey) =>
 const flushAct = async (run: () => Promise<void>) => {
   await act(async () => {
     await run();
-    // Continuations of a released reply run a few microtasks after it.
-    await sleep(0);
   });
 };
 
@@ -218,7 +215,11 @@ test(
               switch (step.type) {
                 case "toggle":
                   backend.expectSave(step.outcome);
-                  fireEvent.click(toggleInput(view.container, step.key));
+                  await flushAct(async () => {
+                    fireEvent.click(toggleInput(view.container, step.key));
+                  });
+                  // Every click must issue its save before responses are released.
+                  expect(backend.unsentSaves()).toBe(0);
                   break;
                 case "release":
                   await order.releaseOne();
@@ -241,7 +242,9 @@ test(
           } finally {
             await order.settle();
             await flushAct(backend.drainPushes);
-            view.unmount();
+            await flushAct(async () => {
+              view.unmount();
+            });
             clearMocks();
           }
         },

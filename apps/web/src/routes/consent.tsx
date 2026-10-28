@@ -28,7 +28,7 @@ import {
 } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -227,7 +227,7 @@ function ConsentPage() {
     const redirectUrl = getOauthRedirectUrl(result.data);
     if (!redirectUrl) {
       setSubmission({ status: "error" });
-      notifyUserError(undefined, t("consent.error"));
+      notifyUserProblem(t("consent.error"));
       return;
     }
 

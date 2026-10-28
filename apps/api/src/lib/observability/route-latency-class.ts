@@ -267,6 +267,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/me/oauth-connections": "crud",
   "GET /v1/me/professional-use": "crud",
   "GET /v1/memories": "crud",
+  "GET /v1/mobile/updates/:variant": "crud",
   "GET /v1/my-work": "crud",
   "GET /v1/notifications": "crud",
   "GET /v1/notifications/events": "stream",
@@ -330,6 +331,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/style-sets/:styleSetId/download": "crud",
   "GET /v1/style-sets/:styleSetId/editor": "crud",
   "GET /v1/style-sets/editor/stella": "crud",
+  "GET /v1/tasks": "crud",
   "GET /v1/tasks/:workspaceId/:taskId": "crud",
   "GET /v1/tasks/:workspaceId/:taskId/links": "crud",
   "GET /v1/template-categories": "crud",
@@ -520,6 +522,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/template-thread": "crud",
   "POST /v1/chat/template-thread/rotate": "crud",
   "POST /v1/chat/threads/:threadId/export": "crud",
+  "POST /v1/chat/threads/:threadId/connectors/:toolCallId": "crud",
   "POST /v1/chat/threads/:threadId/fork": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert":

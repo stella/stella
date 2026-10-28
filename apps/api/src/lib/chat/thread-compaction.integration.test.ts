@@ -246,6 +246,14 @@ type RecordedRun = {
   queries: { params: unknown[]; query: string }[];
 };
 
+const withTestStoredContentEgress = async <T>({
+  work,
+}: {
+  signal: AbortSignal;
+  threadId: SafeId<"chatThread">;
+  work: () => Promise<T>;
+}): Promise<T> => await work();
+
 /**
  * Run the compactor with the model replaced by a recording stub, capturing
  * both what it asked the model to summarize and every statement it issued.
@@ -255,10 +263,14 @@ const runCompaction = async ({
   triggerTokens = 1,
   preserveTokens = 1,
   extractionFeatureEnabled = true,
+  beforeDispatchAuthorization,
   onSummarize,
   summary = SUMMARY_MARKDOWN,
 }: {
   threadId: SafeId<"chatThread">;
+  /** Runs after the delta read and immediately before current authority is
+   * captured for provider dispatch. */
+  beforeDispatchAuthorization?: () => Promise<void>;
   extractionFeatureEnabled?: boolean;
   /**
    * Runs while the summarizer is in flight, which is between the delta read
@@ -275,7 +287,7 @@ const runCompaction = async ({
 
   const result = await runChatThreadCompaction({
     abortSignal: AbortSignal.timeout(60_000),
-    dataWorkspaceIds: [ids.wsA1],
+    beforeDispatchAuthorization,
     extractionFeatureEnabled,
     orgAIConfig: null,
     managedAIResidency: "eu",
@@ -290,6 +302,8 @@ const runCompaction = async ({
     },
     threadId,
     triggerTokens,
+    userId: ids.userA1,
+    withStoredContentEgress: withTestStoredContentEgress,
   });
 
   if (Result.isError(result)) {
@@ -874,7 +888,6 @@ describe("chat thread compaction retry semantics", () => {
 
     const result = await runChatThreadCompaction({
       abortSignal: AbortSignal.timeout(60_000),
-      dataWorkspaceIds: [ids.wsA1],
       extractionFeatureEnabled: true,
       orgAIConfig: null,
       managedAIResidency: "eu",
@@ -887,6 +900,8 @@ describe("chat thread compaction retry semantics", () => {
       },
       threadId,
       triggerTokens: 1,
+      userId: ids.userA1,
+      withStoredContentEgress: withTestStoredContentEgress,
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -1085,7 +1100,44 @@ describe("chat thread compaction send mode", () => {
     expect(await readChain(threadId)).toEqual([]);
   });
 
-  test("keeps no checkpoint when the thread switches while summarizing", async () => {
+  test("does not dispatch when anonymization commits at the dispatch seam", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({
+      beforeDispatchAuthorization: async () => {
+        await markThreadAnonymized(threadId);
+      },
+      threadId,
+    });
+
+    expect(run.outcome.type).toBe("anonymized");
+    expect(run.prompts).toEqual([]);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("does not dispatch a delta after its tenant scope changes", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    await testDb
+      .update(chatThreads)
+      .set({ dataWorkspaceIds: [ids.wsA1] })
+      .where(eq(chatThreads.id, threadId));
+
+    const run = await runCompaction({
+      beforeDispatchAuthorization: async () => {
+        await testDb
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [] })
+          .where(eq(chatThreads.id, threadId));
+      },
+      threadId,
+    });
+
+    expect(run.outcome.type).toBe("superseded");
+    expect(run.prompts).toEqual([]);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("keeps no checkpoint when the thread switches after dispatch", async () => {
     const threadId = await seedThread({ messageCount: 6 });
 
     const run = await runCompaction({

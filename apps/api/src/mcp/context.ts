@@ -60,6 +60,7 @@ import {
   resolveCredentialMemberAuthorization,
 } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
@@ -97,11 +98,11 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {
@@ -169,6 +170,7 @@ export type McpRequestContext = {
   testDependencies?: {
     loadCapabilityEndpoint?: typeof loadCapabilityEndpoint;
     readWithdrawnCopies?: typeof readWithdrawnCopyProjection | undefined;
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */

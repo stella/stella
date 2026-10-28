@@ -1,4 +1,4 @@
 {
   "path": "/v1/desktop/feature-access",
-  "featureIds": ["activity-timeline", "time-billing"]
+  "featureIds": ["activity-timeline", "time-billing", "local-agents"]
 }

@@ -43,7 +43,7 @@ bun --filter @stll/mobile build
 ```
 
 The app intentionally shares the repository's React 19 patch release. React
-Native 0.86 supports that range, and using one copy prevents Metro and native
+Native 0.88 supports that range, and using one copy prevents Metro and native
 autolinking from seeing duplicate React runtimes. Expo's exact bundled React
 pin is therefore excluded from its package-version comparison; all native
 module versions remain checked.
@@ -59,7 +59,9 @@ stay uncommitted until a capability requires maintained native source.
 
 The `Release Mobile iOS` workflow builds `preview` or `production` on a hosted
 macOS runner from `main` and uploads it to TestFlight, numbering each build
-with its run number. Signing is explicit and CI never changes it: the Apple
+with its run number and stamping the native fingerprint
+(`bun scripts/fingerprint.ts ios`) as the build's runtime version. Signing is
+explicit and CI never changes it: the Apple
 Distribution certificate (`MOBILE_DISTRIBUTION_CERT_P12`, with its password)
 and each variant's App Store profile (`MOBILE_PROFILE_PRODUCTION`,
 `MOBILE_PROFILE_PREVIEW`) are created once by hand, and `app.config.ts` signs
@@ -67,3 +69,35 @@ the app target with the profile when `APPLE_TEAM_ID` and
 `MOBILE_PROFILE_UUID` are set. The upload authenticates with an App Store
 Connect API key of its own, with the App Manager role
 (`MOBILE_ASC_API_KEY_ID`, `MOBILE_ASC_API_ISSUER_ID`, `MOBILE_ASC_API_KEY_P8`).
+
+## Over-the-air updates
+
+`preview` and `production` builds check `api.stll.app/v1/mobile/updates/<variant>`
+on launch and run a newer JavaScript bundle from the next launch, but only one
+built for their native fingerprint and signed by the update signing key. The
+`Publish Mobile Update` workflow exports, signs and uploads an update to the
+downloads CDN; the API route relays its signed manifest unchanged. A change to
+native code needs a new TestFlight build first, which the `Mobile Fingerprint
+Check` reports on its pull request.
+
+A simulator's development client is rebuilt only when the fingerprint moved:
+
+```sh
+bun scripts/native-client.ts ensure ios <simulator-udid>
+bun scripts/native-client.ts check android <emulator-serial>
+```
+
+The signing certificate is `certs/mobile-update-signing.pem`; a build without
+it ships with updates off. To create the key pair once (the private key goes
+to the `MOBILE_UPDATE_SIGNING_KEY` secret and nowhere else):
+
+```sh
+bunx expo-updates codesigning:generate \
+  --key-output-directory "$TMPDIR/update-keys" \
+  --certificate-output-directory "$TMPDIR/update-certs" \
+  --certificate-validity-duration-years 10 \
+  --certificate-common-name "stella mobile updates"
+cp "$TMPDIR/update-certs/certificate.pem" certs/mobile-update-signing.pem
+gh secret set MOBILE_UPDATE_SIGNING_KEY < "$TMPDIR/update-keys/private-key.pem"
+rm -rf "$TMPDIR/update-keys" "$TMPDIR/update-certs"
+```

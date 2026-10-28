@@ -73,7 +73,10 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import {
+  type HeaderAction,
+  InspectorTabHeader,
+} from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
@@ -121,6 +124,7 @@ import {
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
+import { REQUIREMENT } from "@/lib/platform/requirements.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { queryView } from "@/lib/query-view.logic";
@@ -282,6 +286,8 @@ export const ChatTabPanel = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -621,6 +627,8 @@ export const ChatTabPanel = ({
           handleDeny,
           handleRequestSecret,
           continueRequestSecret,
+          handleConnectConnector,
+          continueConnectConnector,
           resolveSecretTarget,
           secretAvailabilityKey,
         }}
@@ -899,16 +907,30 @@ const ChatTabPanelChrome = ({
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
-  const actions = onMoveToMain && (
-    <Tooltip
-      content={t("inspector.moveToMain")}
-      render={
-        <Button onClick={onMoveToMain} size="icon-xs" variant="ghost">
-          <Maximize2Icon className="size-3.5" />
-        </Button>
-      }
-    />
-  );
+  const actions: HeaderAction[] =
+    onMoveToMain === undefined
+      ? []
+      : [
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            render: () => (
+              <Tooltip
+                content={t("inspector.moveToMain")}
+                render={
+                  <Button
+                    aria-label={t("inspector.moveToMain")}
+                    onClick={onMoveToMain}
+                    size="icon-xs"
+                    variant="ghost"
+                  >
+                    <Maximize2Icon className="size-3.5" />
+                  </Button>
+                }
+              />
+            ),
+          },
+        ];
 
   return (
     <div

@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Tagad",
       "currentSession": "Pašreizējā",
       "device": "Ierīce",
       "deviceOnOs": "{browser} / {os}",
@@ -997,12 +998,15 @@
       "supreme": "Augstākās tiesas"
     },
     "coverage": {
+      "allCurrent": "Visi avoti ir aktuāli",
       "completeness": "Pilnīgums",
+      "completenessHelp": "Saglabāto nolēmumu skaits attiecībā pret izdevēja norādīto kopskaitu, tā sarakstu vai reģistrētu kopskaitu.",
+      "countryNavigation": "Pāriet uz valsti",
       "courtsHeading": "Pēc tiesas",
       "decisionYears": "Nolēmumu gadi",
+      "decisionsAcross": "nolēmumi no {count, plural, zero {# jurisdikcijām} one {# jurisdikcijas} other {# jurisdikcijām}}",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "generatedAt": "Dati uz {date}",
-      "globeLabel": "Valstis, kuru judikatūru satur korpuss, uz globusa",
       "healthCurrent": "Aktuāls",
       "healthDelayed": "Aizkavējas",
       "healthDisabled": "Izslēgts",
@@ -1012,10 +1016,10 @@
       "lastSync": "Pēdējā sinhronizācija",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
-      "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
-      "reportedByOperator": "Ievadīts manuāli",
-      "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
+      "sourceExceptions": "{count, plural, zero {# avotiem jāpievērš uzmanība} one {# avotam jāpievērš uzmanība} other {# avotiem jāpievērš uzmanība}}",
+      "sourcesCurrent": "Aktuālie avoti",
+      "syncedAt": "Sinhronizēts {time}",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
       "unavailable": "Aptvēruma dati pašlaik nav pieejami."
@@ -1186,7 +1190,7 @@
       "searchEveryWord": "Meklēt visus vārdus"
     },
     "seo": {
-      "collectionName": "Stella tiesu prakse",
+      "collectionName": "stella tiesu prakse",
       "description": "Publiska tiesu prakses datubāze ar indeksējamiem tiesu nolēmumiem un tiesību avotiem.",
       "homeDescription": "Publiska juridiskā datubāze: tiesu nolēmumi un konsolidēti tiesību akti, meklējami pēc identifikatora vai vārdiem.",
       "scopedDescription": "Publiska tiesu prakses datubāze ({scope}) ar indeksējamiem tiesu nolēmumiem un tiesību avotiem."
@@ -1206,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Norādīts: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {{date} spēkā esošā redakcija} until {Līdz {date} spēkā esošā redakcija} from {No {date} spēkā esošā redakcija} other {{date} spēkā esošā redakcija}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Norādīts: {date}} until {Norādīts: līdz {date}} from {Norādīts: no {date}} other {Norādīts: {date}}}",
+      "caseFileDocuments": "Šīs lietas dokumenti",
       "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
       "citedDecisionPassage": "Fragments nolēmumā",
@@ -1433,6 +1438,17 @@
         "webSearch": "Lai izmantotu šo prasmi, ieslēdziet meklēšanu tīmeklī"
       }
     },
+    "connectConnector": {
+      "checkAction": "Pārbaudīt savienojumu",
+      "description": "Asistents lūdz pievienot savienotāju {connector}, lai šajā sarunā izmantotu tā rīkus.",
+      "error": "Neizdevās sākt pievienošanu. Mēģiniet vēlreiz.",
+      "notConnected": "Vēl nav pievienots. Pabeidziet pierakstīšanos un pārbaudiet vēlreiz.",
+      "openTools": "Atvērt rīkus",
+      "scopes": "Pieprasītā piekļuve: {scopes}",
+      "title": "Pievienot savienotāju",
+      "tokenRequired": "Savienotājam {connector} nepieciešams piekļuves tokens. Pievienojiet to rīku lapā un pēc tam pārbaudiet savienojumu.",
+      "waiting": "Pabeidziet pierakstīšanos atvērtajā logā."
+    },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
       "autoCompact": "Sasniedzot 100%, stella automātiski apkopo vecākos ziņojumus, lai atbrīvotu vietu.",
@@ -1507,7 +1523,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
+      "unnamed": "{count, plural, zero {vēl #} one {vēl #} other {vēl #}}"
     },
     "historyTrimmed": "Agrākās ziņas neizdevās apkopot, tāpēc šajā atbildē ņemta vērā tikai jaunākā sarunas daļa.",
     "improvePrompt": "Uzlabot uzvedni",
@@ -1748,6 +1764,7 @@
       "business_registry_lookup": "Meklēšana uzņēmumu reģistrā",
       "compare_versions": "Versiju salīdzināšana",
       "configure_template_fields": "Konfigurēt veidnes laukus",
+      "connect_connector": "Lūdz pievienot savienotāju",
       "counterparty_check": "Pretpuses pārbaude",
       "create-document": "Dokumenta sagatavošana",
       "create_matter_document": "Dokumenta izveide",
@@ -2035,6 +2052,7 @@
     "confirm": "Apstiprināt",
     "confirmAction": "Vai esat pārliecināts?",
     "connect": "Pievienot",
+    "connected": "Pievienots",
     "connectionLost": "Savienojums zaudēts",
     "connectionLostDescription": "Zaudējām savienojumu ar serveri. Automātiska atkārtota mēģināšana.",
     "convertTo": "Pārvērst par",
@@ -2203,6 +2221,8 @@
     "noResults": "Nav rezultātu",
     "noVersions": "Nav versiju vēstures",
     "none": "Nav",
+    "notConnected": "Nav pievienots",
+    "notNow": "Ne tagad",
     "notStated": "Nav norādīts",
     "notes": "Piezīmes",
     "open": "Atvērt",
@@ -2451,10 +2471,10 @@
       "value": "Lauka vērtība"
     },
     "datePrecision": "Datuma precizitāte",
-    "deleteContact": "Dzēst klientu",
+    "deleteContact": "Dzēst kontaktpersonu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
-    "editContact": "Rediģēt klientu",
+    "editContact": "Rediģēt kontaktpersonu",
     "emailTypes": {
       "other": "Cits",
       "personal": "Personīgais",
@@ -2467,7 +2487,7 @@
     "extractProcuracao": {
       "dropZone": "Ievelciet pilnvaru (.docx) šeit vai noklikšķiniet, lai izvēlētos failu",
       "extracting": "Iegūst pilnvarotāju(-us)…",
-      "fileHint": "Stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
+      "fileHint": "stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
       "fileTooLarge": "Pilnvaras failam jābūt ne lielākam par 50 MB.",
       "invalidFileType": "Lūdzu, izvēlieties .docx failu.",
       "noOutorganteFound": "Šajā dokumentā neizdevās identificēt nevienu pilnvaras devēju.",
@@ -5039,7 +5059,7 @@
         "title": "Divfaktoru autentifikācija"
       },
       "wordEditIdentitySaved": "Word rediģēšanas identitāte atjaunināta",
-      "wordEditShortcut": "Word rediģēšanas saīsne",
+      "wordEditShortcut": "Iniciāļi Word labojumiem",
       "wordEditShortcutDescription": "Īss apzīmējums jūsu iniciāļiem Word rediģējumos.",
       "wordEditShortcutPlaceholder": "piem., JK"
     },
@@ -5050,7 +5070,6 @@
       "cliInstallLabel": "Instalēšana",
       "cliLoginLabel": "Pieteikšanās",
       "cliTitle": "Komandrindas saskarne",
-      "connected": "Pievienots",
       "connectedAgo": "Pievienots {time}",
       "connectedAppsDescription": "Lietotnes, kurās pierakstījāties ar stella kontu. Atvienojiet tās, kuras vairs neizmantojat.",
       "connectedAppsEmpty": "Pagaidām nekā. Iestatiet augstāk Claude vai ChatGPT, un tas parādīsies šeit.",
@@ -5073,7 +5092,6 @@
       "mcpTitle": "MCP serveris",
       "mcpUrlLabel": "Servera URL",
       "noMatches": "Vaicājumam “{query}” neatbilst neviens savienojums",
-      "notConnected": "Nav pievienots",
       "permissionCount": "{count, plural, zero {# atļauju} one {# atļauja} other {# atļaujas}}",
       "privateCredentialOnly": "Tikai privāta piekļuves informācija",
       "searchPlaceholder": "Meklēt savienojumus",
@@ -5188,7 +5206,6 @@
       "usageLimitDescriptionNoEntitlement": "AI funkcijām šajā organizācijā ir nepieciešamas aktīvas lietojuma tiesības.",
       "usageLimitDescriptionUsageLimitExceeded": "Šo darbību nevar palaist ar pašreizējo organizācijas lietojuma stāvokli.",
       "usageLimitNeeded": "Nepieciešams",
-      "usageLimitNotNow": "Ne tagad",
       "usageLimitTitleEntitlementInactive": "Lietojuma tiesības nav aktīvas",
       "usageLimitTitleNoEntitlement": "Nepieciešamas lietojuma tiesības",
       "usageLimitTitleUsageLimitExceeded": "Sasniegts AI lietojuma limits",
@@ -5429,16 +5446,16 @@
     "savedDescription": "Saglabāta stilu kopa",
     "sourceDocument": "Avota DOCX",
     "stellaDescription": "Pilnīgs neitrāls stella juridisko dokumentu formatējums",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stilu kopas",
     "untitledDocument": "Dokuments bez nosaukuma"
   },
   "success": {
     "aiConfigDeleted": "AI konfigurācija noņemta",
     "aiConfigUpdated": "AI konfigurācija atjaunināta",
-    "clientUpdated": "Klients atjaunināts",
-    "contactCreated": "Klients izveidots",
-    "contactDeleted": "Klients dzēsts",
+    "clientUpdated": "Kontaktpersona atjaunināta",
+    "contactCreated": "Kontaktpersona izveidota",
+    "contactDeleted": "Kontaktpersona dzēsta",
     "documentCreated": "Dokuments izveidots",
     "folderCreated": "Mape izveidota",
     "invitationCanceled": "Uzaicinājums atcelts",
@@ -5975,6 +5992,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",
     "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises",
     "slugRequired": "Slug ir obligāts"

@@ -21,6 +21,8 @@ import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
+import { mobileUpdateScalingScenario } from "./mobile-updates";
+import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -47,6 +49,8 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  myOpenTasksScalingScenario,
+  mobileUpdateScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

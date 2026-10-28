@@ -552,6 +552,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.get` | read | stella:read | — | covered by `list_tasks` |
+| `tasks.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.update` | write | stella:matters_write | — | covered by `save_task` |
 
 ## template-packs
@@ -723,9 +724,9 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 35 |
+| auth_plumbing | 36 |
 | billing_ui | 1 |
-| chat_thread_ui | 17 |
+| chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
