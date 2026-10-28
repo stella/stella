@@ -135,6 +135,10 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"

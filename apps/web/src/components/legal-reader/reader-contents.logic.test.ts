@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { Block, HeadingLevel } from "@stll/legal-ast/document-ast";
+import { comparableHeadingTitle } from "@stll/legal-ast/source-contents";
 import { assertProperty } from "@stll/property-testing";
 
 import { readerBreadcrumbPaths } from "./reader-breadcrumb-paths";
@@ -118,7 +119,35 @@ const headingsOf = (blocks: readonly Block[]) =>
       : [],
   );
 
-/** The first section the model placed at each anchor the document has. */
+/**
+ * The block a section's row stands at: the heading at its anchor; else the
+ * heading of the same title that encloses its block or comes right after it,
+ * walking the blocks outwards to the nearest heading on each side; else its
+ * own block. A section naming a block the document lacks belongs to the first
+ * heading of its title, if any.
+ */
+const sectionRowAnchor = (
+  blocks: readonly Block[],
+  { anchorId, title }: SectionSpec,
+): string => {
+  const same = (block: Block | undefined) =>
+    block?.type === "heading" &&
+    comparableHeadingTitle(block.plainText) === comparableHeadingTitle(title);
+  const at = blocks.findIndex((block) => block.anchorId === anchorId);
+  if (at === -1) {
+    return blocks.find((block) => same(block))?.anchorId ?? anchorId;
+  }
+  if (blocks[at]?.type === "heading") {
+    return anchorId;
+  }
+  const before = blocks
+    .slice(0, at)
+    .findLast((block) => block.type === "heading");
+  const after = blocks.slice(at + 1).find((block) => block.type === "heading");
+  return [before, after].find((block) => same(block))?.anchorId ?? anchorId;
+};
+
+/** The first section placed at each row the document has. */
 const placedSections = ({
   blocks,
   sections,
@@ -128,9 +157,10 @@ const placedSections = ({
 }) => {
   const anchors = new Set(blocks.map(({ anchorId }) => anchorId));
   const placed = new Map<string, string>();
-  for (const { anchorId, title } of sections) {
-    if (anchors.has(anchorId) && !placed.has(anchorId)) {
-      placed.set(anchorId, title);
+  for (const section of sections) {
+    const rowAnchor = sectionRowAnchor(blocks, section);
+    if (anchors.has(rowAnchor) && !placed.has(rowAnchor)) {
+      placed.set(rowAnchor, section.title);
     }
   }
   return placed;
@@ -319,6 +349,52 @@ describe("reader contents", () => {
         title: "Reasons for dismissal",
         disclosure: "caseLaw",
       },
+    ]);
+  });
+
+  test("a section titled as the heading it starts under shares that heading's row", () => {
+    const blocks = documentBlocks([
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Účastníci řízení" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Odůvodnění rozsudku" },
+      { type: "paragraph" },
+      { type: "heading", level: 2, title: "Výrok" },
+      { type: "paragraph" },
+    ]);
+    const { rows } = contentsOf({
+      blocks,
+      sections: [
+        // Starts at the first passage under its heading.
+        { anchorId: "b2", title: "ÚČASTNÍCI ŘÍZENÍ" },
+        // Starts at a block the reader does not show (a contents line).
+        { anchorId: "toc-2", title: "Odůvodnění rozsudku" },
+        // Titled as a heading two headings away: it keeps its own row.
+        { anchorId: "b0", title: "Výrok" },
+      ],
+    });
+    expect(rows).toEqual([
+      {
+        type: "analysis",
+        anchorId: "b0",
+        title: "Výrok",
+        disclosure: "caseLaw",
+      },
+      {
+        type: "headingWithAnalysis",
+        anchorId: "b1",
+        title: "Účastníci řízení",
+        analysisTitle: "ÚČASTNÍCI ŘÍZENÍ",
+        disclosure: "caseLaw",
+      },
+      {
+        type: "headingWithAnalysis",
+        anchorId: "b3",
+        title: "Odůvodnění rozsudku",
+        analysisTitle: "Odůvodnění rozsudku",
+        disclosure: "caseLaw",
+      },
+      { type: "heading", anchorId: "b5", title: "Výrok" },
     ]);
   });
 });

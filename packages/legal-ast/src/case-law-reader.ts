@@ -13,6 +13,7 @@ import {
   plainTextOf,
   tableCellPieceId,
 } from "./document-ast.js";
+import { leadingSourceContentsBlockIds } from "./source-contents.js";
 
 /** Parse persisted case-law content and apply every read-time structural repair. */
 export const parseCaseLawDecisionAst = (raw: unknown): DocumentAst | null => {
@@ -67,6 +68,9 @@ export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
  * formula are part of the decision and remain visible as AST headings. The
  * case-number header is the reference line only for a docket primary; under
  * any other primary it is the docket, which nothing else shows, so it stays.
+ * A publisher's leading table of contents is navigation the reader draws from
+ * the headings itself, so its lines are left out of the view; storage keeps
+ * them.
  */
 export const visibleDecisionBlocks = (
   ast: DocumentAst | null,
@@ -75,9 +79,11 @@ export const visibleDecisionBlocks = (
 ): Block[] => {
   const docketIsReferenceLine =
     caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+  const sourceContents = leadingSourceContentsBlockIds(ast?.blocks ?? []);
   const visible: Block[] = [];
   for (const block of ast?.blocks ?? []) {
     if (
+      sourceContents.has(block.id) ||
       (docketIsReferenceLine &&
         block.type === "paragraph" &&
         block.role === "case-number") ||
