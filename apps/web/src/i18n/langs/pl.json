@@ -4628,7 +4628,6 @@
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",
-      "title": "Konfiguracja AI",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
     "invitations": {

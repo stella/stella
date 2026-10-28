@@ -419,7 +419,7 @@ test("a jurisdiction-only settings row keeps the default chat provider available
     promptCachingEnabled: true,
   });
   if (settings.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
-    return panic("Seeded settings must be readable");
+    panic("Seeded settings must be readable");
   }
   const availability = await readAIAvailability.handler(
     createTestHandlerContext<Parameters<typeof readAIAvailability.handler>[0]>({
