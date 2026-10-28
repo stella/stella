@@ -1,7 +1,7 @@
 // parser-output-unchanged: Release attribution adds a service.version attribute to telemetry records; parsed ingestion records are unchanged.
 import "@/api/lib/observability/otel";
 import type { AttributeValue } from "@opentelemetry/api";
-import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { logs, SeverityNumber } from "@opentelemetry/api";
 import { Result } from "better-result";
 
 import type { FailureGrade, FailureReason } from "@stll/errors";
