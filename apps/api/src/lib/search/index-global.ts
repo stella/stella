@@ -1065,7 +1065,21 @@ const readGlobalSearch = async (
         shouldSearchType(selected, "case-law"),
       () => database.execute(caseLawCountQuery),
     ),
-    Promise.resolve([]),
+    countWhen(
+      isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
+      () =>
+        database.execute(sql`
+        SELECT count(*)::int AS total
+        FROM chat_thread_search_documents cst
+        JOIN chat_threads t ON t.id = cst.thread_id
+        WHERE TRUE
+          AND ${chatScope}
+          AND cst.preview_generation =
+            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
+          ${chatUpdatedFilter}
+          ${chatTextSearchFilter}
+      `),
+    ),
   ] as const;
 
   const entityTypeFacetPromise = rowsWhen(
@@ -1135,7 +1149,21 @@ const readGlobalSearch = async (
     () => database.execute(caseLawCountQuery),
   );
 
-  const chatTypeFacetCountPromise = Promise.resolve([]);
+  const chatTypeFacetCountPromise = countWhen(
+    shouldCountAlternativeTypeFacet("chat"),
+    () =>
+      database.execute(sql`
+      SELECT count(*)::int AS total
+      FROM chat_thread_search_documents cst
+      JOIN chat_threads t ON t.id = cst.thread_id
+      WHERE TRUE
+        AND ${chatScope}
+        AND cst.preview_generation =
+          ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
+        ${chatUpdatedFilter}
+        ${chatTextSearchFilter}
+    `),
+  );
 
   const entityWorkspaceFacetQuery = hasSelectedEntityType(selected)
     ? sql`
@@ -1278,10 +1306,6 @@ const readGlobalSearch = async (
     rows: chatRows,
     query,
   });
-  const boundedChatSearch =
-    !restrictToEntities &&
-    shouldSearchType(selected, "chat") &&
-    (!isFirstPage || chatRows.length > 0);
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
@@ -1360,8 +1384,7 @@ const readGlobalSearch = async (
         editor: facetBuckets(editorFacetMap),
         mimeType: facetBuckets(mimeTypeFacetMap),
       },
-      totalCount: boundedChatSearch ? null : totalCount,
-      coverage: boundedChatSearch ? "bounded" : "complete",
+      totalCount,
       nextCursor: page.nextCursor,
     },
     caseLawLanguageGroups,

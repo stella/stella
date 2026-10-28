@@ -672,8 +672,8 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           searchGlobal({ ...query, query: "Dvořákové" }, { scopedDb }),
         );
         expect(hidden.hits).toEqual([]);
-        expect(hidden.totalCount).toBeNull();
-        expect(hidden.coverage).toBe("bounded");
+        expect(hidden.totalCount).toBe(1);
+        expect(hidden.facets.type).toContainEqual({ value: "chat", count: 1 });
         const authored = await request(async () =>
           searchGlobal({ ...query, query: "question" }, { scopedDb }),
         );

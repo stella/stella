@@ -141,6 +141,36 @@ describe("global search SQL scope", () => {
     ]);
   });
 
+  test.each(["chat", "matter"] as const)(
+    "retains exact chat counts and facets when selecting %s",
+    async (type) => {
+      const dialect = new PgDialect();
+      rootDbExecuteMock.mockImplementation(async (query) => {
+        const text = dialect.sqlToQuery(query).sql;
+        return text.includes("count(*)::int AS total") &&
+          text.includes("FROM chat_thread_search_documents cst")
+          ? [{ total: 7 }]
+          : [];
+      });
+      const result = await searchGlobal({
+        query: "decision",
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+        accessibleWorkspaceIds: [],
+        selectedWorkspaceIds: [],
+        types: [type],
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 10,
+      });
+      expect(result.hits).toEqual([]);
+      expect(result.totalCount).toBe(type === "chat" ? 7 : 0);
+      expect(
+        result.facets.type.find(({ value }) => value === "chat")?.count,
+      ).toBe(7);
+    },
+  );
+
   test("rechecks case-law redistribution on every projected read", async () => {
     await searchGlobal({
       query: "proportionality",

@@ -4847,7 +4847,6 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
-    "boundedResults": "Kuvatakse piiratud valik tulemusi. Rohkemate tulemuste leidmiseks täpsustage otsingut.",
     "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",

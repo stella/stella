@@ -4847,7 +4847,6 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
-    "boundedResults": "Exibindo uma seleção limitada de resultados. Refine a busca para encontrar mais.",
     "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",

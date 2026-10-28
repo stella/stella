@@ -4847,7 +4847,6 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
-    "boundedResults": "Zobrazuje sa obmedzený výber výsledkov. Ďalšie výsledky získate spresnením vyhľadávania.",
     "caseLawEmptyState": "Začnite písať a vyhľadajte v súdnych rozhodnutiach.",
     "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",

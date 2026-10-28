@@ -4847,7 +4847,6 @@
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
-    "boundedResults": "Tiek rādīta ierobežota rezultātu izlase. Precizējiet meklēšanu, lai atrastu vairāk.",
     "caseLawEmptyState": "Sāciet rakstīt, lai meklētu tiesu nolēmumus.",
     "caseLawMatchingDecisions": "{count, plural, zero {# atbilstošu nolēmumu} one {# atbilstošs nolēmums} other {# atbilstoši nolēmumi}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ atbilstošu nolēmumu} one {#+ atbilstošs nolēmums} other {#+ atbilstoši nolēmumi}}",
