@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { MatterNumberingCard } from "@/routes/_protected.admin/-components/organization/matter-numbering-card";
 
 export const Route = createFileRoute("/_protected/admin/matter-numbering")({

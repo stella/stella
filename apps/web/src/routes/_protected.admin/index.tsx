@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 
 export const Route = createFileRoute("/_protected/admin/")({
   staticData: { presentation: routePresentation({ type: "inherit" }) },

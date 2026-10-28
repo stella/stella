@@ -19,7 +19,7 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
 
 type CatalogueTemplateLoaderArgs = {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 
 import { declaredBreadcrumbs } from "./app-breadcrumbs.logic";
 

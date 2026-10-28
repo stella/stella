@@ -12,7 +12,7 @@ import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { VatRatesCard } from "@/routes/_protected.admin/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute("/_protected/admin/vat-rates")({

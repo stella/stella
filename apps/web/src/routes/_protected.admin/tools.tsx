@@ -5,7 +5,7 @@ import { SettingsPageHeader } from "@/components/settings-page-header";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { NativeToolsList } from "@/routes/_protected.admin/-components/native-tools-list";
 
 export const Route = createFileRoute("/_protected/admin/tools")({

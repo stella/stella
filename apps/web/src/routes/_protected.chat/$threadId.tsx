@@ -15,8 +15,8 @@ import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({

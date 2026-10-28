@@ -20,7 +20,7 @@ import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
 import { WorkspaceBreadcrumb } from "@/components/breadcrumbs/workspace-breadcrumb";
 import { getTranslator } from "@/i18n/i18n-store";
-import type { RouteBreadcrumb } from "@/lib/route-presentation";
+import type { RouteBreadcrumb } from "@/routes/-route-presentation";
 
 export const AppBreadcrumbs = () => {
   useTranslations();

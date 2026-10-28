@@ -12,8 +12,8 @@ import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
 import { useTimeBillingEnrolment } from "@/queries/feature-enrolments";
+import { routePresentation } from "@/routes/-route-presentation";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
   beforeLoad: () => {

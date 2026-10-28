@@ -15,8 +15,8 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
-import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import type { ToolDetailPayload } from "@/routes/knowledge/-components/catalogue/tool-detail-view";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolsCatalogue } from "@/routes/knowledge/-public/public-tools-catalogue";

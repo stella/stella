@@ -14,8 +14,8 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 /** Today in the person's own zone, which also bounds the week's activity. */
 const todayIn = (timezoneId: string) =>

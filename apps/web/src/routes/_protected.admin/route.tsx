@@ -8,10 +8,10 @@ import { detached } from "@/lib/detached";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const searchSchema = routeSearchSchema({
   q: optionalSearchStringSchema(),

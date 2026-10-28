@@ -121,10 +121,10 @@ import {
 } from "@/lib/workspaces/queries/entity-versions";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
-import { routePresentation } from "@/lib/route-presentation";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";

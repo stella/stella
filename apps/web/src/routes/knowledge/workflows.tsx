@@ -24,8 +24,8 @@ import {
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
 import { toSafeId } from "@/lib/safe-id";
+import { routePresentation } from "@/routes/-route-presentation";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
 import { FlowList } from "@/routes/knowledge/-components/flow-list";

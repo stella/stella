@@ -4,7 +4,7 @@ import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-w
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute(

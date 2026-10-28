@@ -23,9 +23,9 @@ import { queryAvailability } from "@/lib/organization/feature-access/availabilit
 import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
+import { routePresentation } from "@/routes/-route-presentation";
 import { UsagePlansCard } from "@/routes/_protected.admin/-components/organization/usage-plans-card";
 import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
 

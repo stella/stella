@@ -5,7 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { playbooksIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicPlaybooksCatalogue } from "@/routes/knowledge/-public/public-playbooks-catalogue";
 

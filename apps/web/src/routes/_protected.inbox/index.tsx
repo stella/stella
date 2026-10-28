@@ -8,8 +8,8 @@ import {
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const protectedRouteApi = getRouteApi("/_protected");
 

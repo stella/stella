@@ -3,7 +3,7 @@ import { lazy, Suspense } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { TemplateListSkeleton } from "@/features/knowledge/views/templates/template-list-view";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicTemplatesCatalogue } from "@/routes/knowledge/-public/public-templates-catalogue";
 import { templatesSearchSchema } from "@/routes/knowledge/-templates-search";

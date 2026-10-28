@@ -1,4 +1,4 @@
-import type { RouteBreadcrumb } from "@/lib/route-presentation";
+import type { RouteBreadcrumb } from "@/routes/-route-presentation";
 
 type BreadcrumbMatch = {
   routeId: string;

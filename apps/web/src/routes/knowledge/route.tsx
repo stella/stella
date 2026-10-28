@@ -3,7 +3,6 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
 import {
   APP_FRAME_SCOPE,
   MEMBER_PROVIDER_SCOPES,
@@ -12,6 +11,7 @@ import {
   loadProtectedContext,
   prefetchProtectedShell,
 } from "@/routes/-protected-guard";
+import { routePresentation } from "@/routes/-route-presentation";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
 // be readable without an account. Until that is switched on it keeps exactly

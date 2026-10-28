@@ -7,7 +7,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { NumberSeriesCard } from "@/routes/_protected.admin/-components/organization/number-series-card";
 
 export const Route = createFileRoute("/_protected/admin/number-series")({

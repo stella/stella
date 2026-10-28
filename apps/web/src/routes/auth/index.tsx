@@ -13,8 +13,8 @@ import {
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
-import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const DevQuickStartButton = import.meta.env.DEV
   ? React.lazy(async () => {

@@ -7,7 +7,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 
 // Keep the redirect outside the /chat layout (`chat_` segment): it needs no
 // composer or availability feedback before opening the new thread route.

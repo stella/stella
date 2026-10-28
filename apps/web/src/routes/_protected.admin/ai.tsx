@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { pageTitle } from "@/lib/page-title";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AIConfigCard } from "@/routes/_protected.admin/-components/organization/ai-config-card";
 
 export const Route = createFileRoute("/_protected/admin/ai")({

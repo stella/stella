@@ -18,7 +18,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 
 const todayIn = (timezoneId: string) =>
   Temporal.Now.plainDateISO(timezoneId).toString();

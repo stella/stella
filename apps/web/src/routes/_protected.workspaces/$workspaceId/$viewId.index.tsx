@@ -13,7 +13,6 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
 import {
@@ -37,6 +36,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";

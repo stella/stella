@@ -4,8 +4,8 @@ import type { Context, PropsWithChildren } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import type { RoutePresentation } from "@/lib/route-presentation";
 import type { AppFrameScope, ProviderScope } from "@/routes/-app-frame-scope";
+import type { RoutePresentation } from "@/routes/-route-presentation";
 
 declare module "@tanstack/react-router" {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- router static data uses declaration merging

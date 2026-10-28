@@ -42,7 +42,6 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import {
   workspacesKeys,
@@ -55,6 +54,7 @@ import type {
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupSection } from "@/routes/_protected.workspaces/-components/client-group-section";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";

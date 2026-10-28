@@ -15,7 +15,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
-import { routePresentation } from "@/lib/route-presentation";
+import { routePresentation } from "@/routes/-route-presentation";
 import { MemoryPanel } from "@/routes/_protected.settings/-components/account/memory/memory-panel";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 

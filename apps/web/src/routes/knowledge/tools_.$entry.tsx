@@ -20,8 +20,8 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
-import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
 
