@@ -8,7 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { parseDesktopRegistryMetadata } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 
-export type DesktopKey = {
+type DesktopKey = {
   readonly keyId: string;
   readonly userId: SafeId<"user">;
   readonly organizationId: SafeId<"organization">;

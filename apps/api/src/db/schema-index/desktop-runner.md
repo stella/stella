@@ -4,72 +4,73 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## desktop_runners · `desktopRunners` · desktop-runner.ts:50 · rls
+## desktop_runners · `desktopRunners` · desktop-runner.ts:51 · rls
 
-One row per desktop installation that has opened a runner socket: which device key it holds, which socket and API task hold it now, and what each harness on it…
+One row per desktop installation and device key that has opened a runner socket: which socket and API task hold it now, and what each harness on it reported, s…
 
 ```text
-desktop_runners.user_id          text                fk,not null  desktop-runner.ts:53
-desktop_runners.organization_id  safeOrganizationId  fk,not null  desktop-runner.ts:57
-desktop_runners.desktop_id       uuid                not null     desktop-runner.ts:61  Installation id the desktop sends when it opens the socket.
-desktop_runners.device_jkt       text                not null     desktop-runner.ts:63  RFC 7638 thumbprint of the device key that signed the socket's proof.
-desktop_runners.session_id       uuid                not null     desktop-runner.ts:65  The latest socket; an older socket of the same desktop closes itself.
-desktop_runners.instance_id      text                not null     desktop-runner.ts:67  API task holding `session_id`, the target of its doorbell.
-desktop_runners.connection       text                not null     desktop-runner.ts:68
-desktop_runners.protocol         integer             not null     desktop-runner.ts:69
-desktop_runners.app_version      varchar             not null     desktop-runner.ts:70
-desktop_runners.sidecar_version  varchar             not null     desktop-runner.ts:71
-desktop_runners.harnesses        jsonb               not null     desktop-runner.ts:73  Each harness's latest report, as the protocol defines it.
-desktop_runners.connected_at     timestamptz         not null     desktop-runner.ts:74
-desktop_runners.last_seen_at     timestamptz         not null     desktop-runner.ts:76  Renewed by the socket's heartbeat; routing ignores a stale runner.
+desktop_runners.user_id          text                fk,not null  desktop-runner.ts:54
+desktop_runners.organization_id  safeOrganizationId  fk,not null  desktop-runner.ts:58
+desktop_runners.desktop_id       uuid                not null     desktop-runner.ts:62  Installation id the desktop sends when it opens the socket.
+desktop_runners.device_jkt       text                not null     desktop-runner.ts:64  RFC 7638 thumbprint of the device key that signed the socket's proof.
+desktop_runners.session_id       uuid                not null     desktop-runner.ts:66  The latest socket; an older socket of the same desktop closes itself.
+desktop_runners.instance_id      text                not null     desktop-runner.ts:68  API task holding `session_id`, the target of its doorbell.
+desktop_runners.connection       text                not null     desktop-runner.ts:69
+desktop_runners.protocol         integer             not null     desktop-runner.ts:70
+desktop_runners.app_version      varchar             not null     desktop-runner.ts:71
+desktop_runners.sidecar_version  varchar             not null     desktop-runner.ts:72
+desktop_runners.harnesses        jsonb               not null     desktop-runner.ts:74  Each harness's latest report, as the protocol defines it.
+desktop_runners.connected_at     timestamptz         not null     desktop-runner.ts:75
+desktop_runners.last_seen_at     timestamptz         not null     desktop-runner.ts:77  Renewed by the socket's heartbeat; routing ignores a stale runner.
 ```
 
-## desktop_runner_runs · `desktopRunnerRuns` · desktop-runner.ts:101 · rls
+## desktop_runner_runs · `desktopRunnerRuns` · desktop-runner.ts:107 · rls
 
 A run assigned to one desktop.
 
 ```text
-desktop_runner_runs.run_id              uuid                not null          desktop-runner.ts:104
-desktop_runner_runs.user_id             text                fk,not null       desktop-runner.ts:105
-desktop_runner_runs.organization_id     safeOrganizationId  fk,not null       desktop-runner.ts:106
-desktop_runner_runs.desktop_id          uuid                fk,not null       desktop-runner.ts:107
-desktop_runner_runs.device_jkt          text                not null          desktop-runner.ts:109  Device key the run is bound to; a re-linked desktop does not inherit it.
-desktop_runner_runs.harness             text                not null          desktop-runner.ts:110
-desktop_runner_runs.harness_version     varchar             not null          desktop-runner.ts:111
-desktop_runner_runs.workspace_ids       text                array,not null    desktop-runner.ts:113  Workspaces the run's MCP token may reach, authorized when assigned.
-desktop_runner_runs.state               text                not null          desktop-runner.ts:114
-desktop_runner_runs.outcome             text                null              desktop-runner.ts:116  Set with `finished`: how the run ended, as the desktop reported.
-desktop_runner_runs.reject_reason       text                null              desktop-runner.ts:118  Set with `rejected`: why the desktop refused the run.
-desktop_runner_runs.harness_session_id  varchar             null              desktop-runner.ts:122  The harness session a later run on this desktop may resume.
-desktop_runner_runs.accepted_at         timestamptz         null              desktop-runner.ts:124  When the desktop accepted `run.start`; absent while it never has.
-desktop_runner_runs.ack_seq             bigint              default,not null  desktop-runner.ts:126  Highest position of the run's desktop messages persisted without a gap.
-desktop_runner_runs.lease_expires_at    timestamptz         not null          desktop-runner.ts:127
-desktop_runner_runs.created_at          timestamptz         default,not null  desktop-runner.ts:128
-desktop_runner_runs.updated_at          timestamptz         default,not null  desktop-runner.ts:129
+desktop_runner_runs.run_id              uuid                not null          desktop-runner.ts:110
+desktop_runner_runs.user_id             text                fk,not null       desktop-runner.ts:111
+desktop_runner_runs.organization_id     safeOrganizationId  fk,not null       desktop-runner.ts:112
+desktop_runner_runs.desktop_id          uuid                fk,not null       desktop-runner.ts:113
+desktop_runner_runs.device_jkt          text                fk,not null       desktop-runner.ts:115  Device key the run is bound to; a re-linked desktop does not inherit it.
+desktop_runner_runs.harness             text                not null          desktop-runner.ts:116
+desktop_runner_runs.harness_version     varchar             not null          desktop-runner.ts:117
+desktop_runner_runs.workspace_ids       text                array,not null    desktop-runner.ts:119  Workspaces the run's MCP token may reach, authorized when assigned.
+desktop_runner_runs.state               text                not null          desktop-runner.ts:120
+desktop_runner_runs.outcome             text                null              desktop-runner.ts:122  Set with `finished`: how the run ended, as the desktop reported.
+desktop_runner_runs.reject_reason       text                null              desktop-runner.ts:124  Set with `rejected`: why the desktop refused the run.
+desktop_runner_runs.harness_session_id  varchar             null              desktop-runner.ts:128  The harness session a later run on this desktop may resume.
+desktop_runner_runs.accepted_at         timestamptz         null              desktop-runner.ts:130  When the desktop accepted `run.start`; absent while it never has.
+desktop_runner_runs.ack_seq             bigint              default,not null  desktop-runner.ts:132  Highest position of the run's desktop messages persisted without a gap.
+desktop_runner_runs.message_bytes       bigint              default,not null  desktop-runner.ts:134  UTF-8 bytes of the run's stored messages, bounded per run.
+desktop_runner_runs.lease_expires_at    timestamptz         not null          desktop-runner.ts:138
+desktop_runner_runs.created_at          timestamptz         default,not null  desktop-runner.ts:139
+desktop_runner_runs.updated_at          timestamptz         default,not null  desktop-runner.ts:140
 ```
 
-## desktop_runner_commands · `desktopRunnerCommands` · desktop-runner.ts:183 · rls
+## desktop_runner_commands · `desktopRunnerCommands` · desktop-runner.ts:204 · rls
 
 Commands for a run, in the order they were queued.
 
 ```text
-desktop_runner_commands.id           bigint       generated,not null  desktop-runner.ts:186
-desktop_runner_commands.run_id       uuid         fk,not null         desktop-runner.ts:189
-desktop_runner_commands.kind         text         not null            desktop-runner.ts:193
-desktop_runner_commands.command_key  uuid         not null            desktop-runner.ts:195  The id the command is idempotent on.
-desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:197  The server message as sent, without a token.
-desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:198
+desktop_runner_commands.id           bigint       generated,not null  desktop-runner.ts:207
+desktop_runner_commands.run_id       uuid         fk,not null         desktop-runner.ts:210
+desktop_runner_commands.kind         text         not null            desktop-runner.ts:214
+desktop_runner_commands.command_key  uuid         not null            desktop-runner.ts:216  The id the command is idempotent on.
+desktop_runner_commands.payload      jsonb        not null            desktop-runner.ts:218  The server message as sent, without a token.
+desktop_runner_commands.created_at   timestamptz  default,not null    desktop-runner.ts:219
 ```
 
-## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:222 · rls
+## desktop_runner_events · `desktopRunnerEvents` · desktop-runner.ts:243 · rls
 
 The desktop messages of a run that take a position in its sequence (events, approval requests, the final message), each stored once and acknowledged only after…
 
 ```text
-desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:225
-desktop_runner_events.seq         bigint       not null          desktop-runner.ts:229
-desktop_runner_events.type        text         not null          desktop-runner.ts:230
-desktop_runner_events.request_id  uuid         null              desktop-runner.ts:232  Set on an approval request, so an answer can be matched to it.
-desktop_runner_events.message     jsonb        not null          desktop-runner.ts:234  The desktop message as validated.
-desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:235
+desktop_runner_events.run_id      uuid         fk,not null       desktop-runner.ts:246
+desktop_runner_events.seq         bigint       not null          desktop-runner.ts:250
+desktop_runner_events.type        text         not null          desktop-runner.ts:251
+desktop_runner_events.request_id  uuid         null              desktop-runner.ts:253  Set on an approval request, so an answer can be matched to it.
+desktop_runner_events.message     jsonb        not null          desktop-runner.ts:255  The desktop message as validated.
+desktop_runner_events.created_at  timestamptz  default,not null  desktop-runner.ts:256
 ```
