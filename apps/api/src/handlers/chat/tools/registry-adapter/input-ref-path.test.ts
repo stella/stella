@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { mapInputRefLeaves } from "./input-ref-path";
 
@@ -59,7 +59,8 @@ const shapeArbitrary: fc.Arbitrary<Shape> = fc
 
 describe("input ref path", () => {
   test("visits exactly the addressed leaves, each under its own location", () => {
-    fc.assert(
+    assertProperty(
+      "visits exactly the addressed leaves, each under its own location",
       fc.property(shapeArbitrary, ({ path, input, locations }) => {
         const visited: string[] = [];
         mapInputRefLeaves({
@@ -74,12 +75,13 @@ describe("input ref path", () => {
         expect(visited).toEqual(locations);
         expect(new Set(visited).size).toBe(visited.length);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("mapping there and back is the identity, and nothing off the path changes", () => {
-    fc.assert(
+    assertProperty(
+      "mapping there and back is the identity, and nothing off the path changes",
       fc.property(shapeArbitrary, ({ path, input }) => {
         const snapshot = structuredClone(input);
         const there = mapInputRefLeaves({
@@ -104,7 +106,7 @@ describe("input ref path", () => {
           JSON.stringify(snapshot).split(`"decoy":"${LEAF}"`).length,
         );
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

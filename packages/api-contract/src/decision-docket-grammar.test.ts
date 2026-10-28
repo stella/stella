@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
@@ -375,7 +375,8 @@ describe("declared decision docket grammars", () => {
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
     test(`${grammar.jurisdiction} format is a parse fixed point`, () => {
-      fc.assert(
+      assertProperty(
+        `${grammar.jurisdiction} format is a parse fixed point`,
         fc.property(
           canonicalDocketArbitraries[grammar.jurisdiction],
           (canonical) => {
@@ -387,7 +388,7 @@ describe("declared decision docket grammars", () => {
             expect(grammar.parse(formatDecisionDocket(parsed))).toEqual(parsed);
           },
         ),
-        propertyConfig(),
+        {},
       );
     });
 
@@ -500,7 +501,8 @@ describe("Slovak Constitutional Court dockets", () => {
   });
 
   test("every accepted spelling of one docket normalizes to one key", () => {
-    fc.assert(
+    assertProperty(
+      "every accepted spelling of one docket normalizes to one key",
       fc.property(
         fc.constantFrom("I", "II", "III", "IV", "PL"),
         fc.integer({ min: 1, max: 99_999 }),
@@ -522,7 +524,7 @@ describe("Slovak Constitutional Court dockets", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -541,7 +543,8 @@ describe("stored dockets", () => {
 
   for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
     test(`${grammar.jurisdiction} docket with a trailing part marker trims to the docket`, () => {
-      fc.assert(
+      assertProperty(
+        `${grammar.jurisdiction} docket with a trailing part marker trims to the docket`,
         fc.property(
           canonicalDocketArbitraries[grammar.jurisdiction],
           fc.constantFrom(...JUNK_TAILS),
@@ -570,7 +573,7 @@ describe("stored dockets", () => {
             }
           },
         ),
-        propertyConfig(),
+        {},
       );
     });
   }

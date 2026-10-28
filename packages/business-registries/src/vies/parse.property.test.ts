@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -32,7 +32,8 @@ const response = fc.record({
 test(
   "validation responses retain source dates and expose a typed status",
   () => {
-    fc.assert(
+    assertProperty(
+      "validation responses retain source dates and expose a typed status",
       fc.property(response, registryExtras, (raw, extra) => {
         const vatNumber = { country: "DE", vat: "136695976" };
         const parsed = expectRegistryOutcome(() =>
@@ -57,7 +58,7 @@ test(
             : (errorStatuses.get(raw.userError) ?? "service-unavailable");
         expect(parsed?.status.type).toBe(expected);
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -66,7 +67,8 @@ test(
 test(
   "JSON boundary rejects missing and mistyped response fields with registry errors",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "JSON boundary rejects missing and mistyped response fields with registry errors",
       fc.asyncProperty(response, async (raw) => {
         const original = await expectRegistryResponse(raw, async () =>
           validateVat("DE136695976", { observer: "unobserved" }),
@@ -89,7 +91,7 @@ test(
           ).toBe(true);
         });
       }),
-      propertyConfig({ numRuns: 5, seed: propertySeed() }),
+      { numRuns: 5, seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -98,14 +100,15 @@ test(
 test(
   "participant lookup only reads explicitly declared country rules",
   () => {
-    fc.assert(
+    assertProperty(
+      "participant lookup only reads explicitly declared country rules",
       fc.property(registryString, (country) => {
         expect(isViesParticipant(country)).toBe(
           Object.hasOwn(VAT_FORMAT_RULES, country) &&
             VAT_FORMAT_RULES[country]?.removed !== true,
         );
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),

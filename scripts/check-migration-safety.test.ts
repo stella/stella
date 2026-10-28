@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+import { assertProperty, drawPropertySamples } from "@stll/property-testing";
 
 import {
   checkMigrationSources,
@@ -900,20 +900,22 @@ DO $$ BEGIN UPDATE probe SET title = 'updated'; DROP TABLE retired; END $$;`;
       });
 
     it("never fires on unsafe SQL inside comments, literals, or identifiers", () => {
-      fc.assert(
+      assertProperty(
+        "never fires on unsafe SQL inside comments, literals, or identifiers",
         fc.property(maskedSql, (sql) => {
           expect(findingsIn(sql)).toEqual([]);
         }),
-        propertyConfig({ numRuns: 30 }),
+        { numRuns: 30 },
       );
     });
 
     it("always fires on the same unsafe SQL when it executes", () => {
-      fc.assert(
+      assertProperty(
+        "always fires on the same unsafe SQL when it executes",
         fc.property(executedSql, (sql) => {
           expect(findingsIn(sql).length).toBeGreaterThan(0);
         }),
-        propertyConfig({ numRuns: 20 }),
+        { numRuns: 20 },
       );
     });
 

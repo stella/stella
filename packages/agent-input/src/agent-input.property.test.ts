@@ -13,7 +13,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 
 import { COUNTRY_ALPHA3_BY_CODE, COUNTRY_CODES } from "@stll/country-codes";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
 
 import { normalizeBoolean } from "./boolean";
@@ -78,7 +78,8 @@ const rendered = (
 
 describe("date values", () => {
   test("every unambiguous numeric spelling round-trips to the ISO date", () => {
-    fc.assert(
+    assertProperty(
+      "every unambiguous numeric spelling round-trips to the ISO date",
       fc.property(isoDateArb, ({ iso, year, month, day }) => {
         const spellings = [
           iso,
@@ -95,12 +96,13 @@ describe("date values", () => {
           expect(valueOrNull(normalizeDateValue(spelling))).toBe(iso);
         }
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a date round-trips as every locale the field may render in writes it", () => {
-    fc.assert(
+    assertProperty(
+      "a date round-trips as every locale the field may render in writes it",
       fc.property(
         isoDateArb,
         fc.constantFrom(...READING_LOCALES),
@@ -117,12 +119,13 @@ describe("date values", () => {
           ).toBe(iso);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a day/month pair that reads two ways is always asked about", () => {
-    fc.assert(
+    assertProperty(
+      "a day/month pair that reads two ways is always asked about",
       fc.property(
         fc.integer({ min: 1, max: 12 }),
         fc.integer({ min: 1, max: 12 }),
@@ -144,12 +147,13 @@ describe("date values", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a two-digit year is never read as a date", () => {
-    fc.assert(
+    assertProperty(
+      "a two-digit year is never read as a date",
       fc.property(
         fc.integer({ min: 1, max: 28 }),
         fc.integer({ min: 1, max: 12 }),
@@ -160,18 +164,19 @@ describe("date values", () => {
           ).toBe(false);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("reading an ISO date again is a fixed point with nothing to report", () => {
-    fc.assert(
+    assertProperty(
+      "reading an ISO date again is a fixed point with nothing to report",
       fc.property(isoDateArb, ({ iso }) => {
         const first = normalizeDateValue(iso);
         expect(first.ok && first.value).toBe(iso);
         expect(first.ok && first.note).toBeUndefined();
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -180,7 +185,8 @@ describe("numbers", () => {
   const NUMBER_LOCALES = ["en-US", "en-GB", "cs", "de", "pl", "fr"] as const;
 
   test("a number formatted in a locale reads back as that number", () => {
-    fc.assert(
+    assertProperty(
+      "a number formatted in a locale reads back as that number",
       fc.property(
         fc.integer({ min: -99_999_999, max: 99_999_999 }),
         fc.integer({ min: 0, max: 2 }),
@@ -196,12 +202,13 @@ describe("numbers", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 
   test("a plain JSON number spelled as a string reads back unchanged", () => {
-    fc.assert(
+    assertProperty(
+      "a plain JSON number spelled as a string reads back unchanged",
       fc.property(
         fc.double({
           min: -1e9,
@@ -219,7 +226,7 @@ describe("numbers", () => {
           expect(valueOrNull(normalizeNumber(spelled))).toBe(value);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -230,17 +237,19 @@ describe("numbers", () => {
         fc.integer({ min: -9999, max: 9999 }),
       )
       .map(([mantissa, exponent]) => `${mantissa}e${exponent}`);
-    fc.assert(
+    assertProperty(
+      "no spelling reads as a number a field cannot carry",
       fc.property(fc.oneof(exponentialArb, fc.string()), (spelling) => {
         const read = normalizeNumber(spelling);
         expect(!read.ok || Number.isFinite(read.value)).toBe(true);
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 
   test("currency and grouping around the digits never change the value", () => {
-    fc.assert(
+    assertProperty(
+      "currency and grouping around the digits never change the value",
       fc.property(
         fc.integer({ min: 0, max: 999 }),
         fc.constantFrom("EUR", "USD", "Kč", "zł", "£", "€"),
@@ -254,7 +263,7 @@ describe("numbers", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -294,7 +303,8 @@ describe("booleans", () => {
   ] as const;
 
   test("every accepted word reads the same however it is cased or spaced", () => {
-    fc.assert(
+    assertProperty(
+      "every accepted word reads the same however it is cased or spaced",
       fc.property(
         fc.constantFrom(...TRUE_WORDS, ...FALSE_WORDS),
         (word: string) => {
@@ -304,12 +314,13 @@ describe("booleans", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a word outside the set is asked about rather than read as truthy", () => {
-    fc.assert(
+    assertProperty(
+      "a word outside the set is asked about rather than read as truthy",
       fc.property(fc.string({ minLength: 1, maxLength: 12 }), (candidate) => {
         // The reader folds diacritics, so the precondition has to fold too:
         // a generated "Áno" IS one of the accepted words.
@@ -319,14 +330,15 @@ describe("booleans", () => {
         fc.pre(!known);
         expect(normalizeBoolean(candidate).ok).toBe(false);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });
 
 describe("locales and date format specs", () => {
   test("a tag round-trips through every spelling of the same tag", () => {
-    fc.assert(
+    assertProperty(
+      "a tag round-trips through every spelling of the same tag",
       fc.property(fc.constantFrom(...READING_LOCALES), (tag: string) => {
         for (const spelling of [
           tag,
@@ -340,12 +352,13 @@ describe("locales and date format specs", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a bare style is read only when its output carries no locale", () => {
-    fc.assert(
+    assertProperty(
+      "a bare style is read only when its output carries no locale",
       fc.property(
         fc.constantFrom("long", "medium", "short", "iso", "full", "numeric"),
         fc.constantFrom("", " ", "  "),
@@ -359,12 +372,13 @@ describe("locales and date format specs", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 
   test("a spec round-trips through its canonical spelling", () => {
-    fc.assert(
+    assertProperty(
+      "a spec round-trips through its canonical spelling",
       fc.property(
         fc.constantFrom(...READING_LOCALES),
         fc.constantFrom("long", "medium", "short", "iso"),
@@ -380,7 +394,7 @@ describe("locales and date format specs", () => {
           expect(again.ok && again.note).toBeUndefined();
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });
@@ -392,7 +406,8 @@ describe("closed vocabularies", () => {
   );
 
   test("an allowed value is read however it is cased or spaced", () => {
-    fc.assert(
+    assertProperty(
+      "an allowed value is read however it is cased or spaced",
       fc.property(allowedArb, fc.nat(), (allowed, index) => {
         const value = allowed[index % allowed.length] ?? "";
         for (const spelling of manglings(value)) {
@@ -401,12 +416,13 @@ describe("closed vocabularies", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 
   test("a value the set does not carry is never read as a member", () => {
-    fc.assert(
+    assertProperty(
+      "a value the set does not carry is never read as a member",
       fc.property(
         allowedArb,
         fc.string({ minLength: 1, maxLength: 12 }),
@@ -420,7 +436,7 @@ describe("closed vocabularies", () => {
           expect(normalizeEnumValue(candidate, allowed).ok).toBe(false);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });
@@ -440,7 +456,8 @@ describe("countries", () => {
     }).of(region);
 
   test("both ISO codes of a country read as the same country", () => {
-    fc.assert(
+    assertProperty(
+      "both ISO codes of a country read as the same country",
       fc.property(countryArb, (alpha2) => {
         const alpha3 = COUNTRY_ALPHA3_BY_CODE[alpha2];
         const fromAlpha2 = normalizeCountry(alpha2);
@@ -448,7 +465,7 @@ describe("countries", () => {
         expect(fromAlpha2.ok && fromAlpha2.value).toEqual({ alpha3, alpha2 });
         expect(fromAlpha3.ok && fromAlpha3.value).toEqual({ alpha3, alpha2 });
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
@@ -458,7 +475,8 @@ describe("countries", () => {
   // other country. Asserting both under one conditional would let the codes go
   // unchecked.
   test("every case and padding of a country's codes reads as that country", () => {
-    fc.assert(
+    assertProperty(
+      "every case and padding of a country's codes reads as that country",
       fc.property(
         countryArb,
         fc.constantFrom("", " ", "  ", "\t", "\n"),
@@ -479,12 +497,13 @@ describe("countries", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a country's name is never read as a different country", () => {
-    fc.assert(
+    assertProperty(
+      "a country's name is never read as a different country",
       fc.property(countryArb, nameLocaleArb, (alpha2, locale) => {
         const name = displayName(alpha2, locale);
         fc.pre(name !== undefined);
@@ -505,12 +524,13 @@ describe("countries", () => {
           expect(read.hint).toContain("more than one country");
         }
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a canonical code is a fixed point that reports no coercion", () => {
-    fc.assert(
+    assertProperty(
+      "a canonical code is a fixed point that reports no coercion",
       fc.property(countryArb, (alpha2) => {
         const read = normalizeCountry(COUNTRY_ALPHA3_BY_CODE[alpha2]);
         expect(read.ok && read.note).toBeUndefined();
@@ -519,12 +539,13 @@ describe("countries", () => {
         const asAlpha2 = normalizeCountry(alpha2, { spelling: "alpha-2" });
         expect(asAlpha2.ok && asAlpha2.note).toBeUndefined();
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("a country's name in any read language names that country", () => {
-    fc.assert(
+    assertProperty(
+      "a country's name in any read language names that country",
       fc.property(countryArb, nameLocaleArb, (alpha2, locale) => {
         const name = displayName(alpha2, locale);
         fc.pre(name !== undefined);
@@ -536,12 +557,13 @@ describe("countries", () => {
         // The only permitted refusal is an ambiguity that names its readings.
         expect(read.hint).toContain("more than one country");
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 
   test("an absent value asks and never resolves to a country", () => {
-    fc.assert(
+    assertProperty(
+      "an absent value asks and never resolves to a country",
       fc.property(
         fc.constantFrom(undefined, null, "", " ", "   ", "\t\n"),
         (absent) => {
@@ -554,7 +576,7 @@ describe("countries", () => {
           expect(read.hint).toContain("is required");
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 
@@ -579,7 +601,8 @@ describe("countries", () => {
             return name ?? alpha2;
         }
       });
-    fc.assert(
+    assertProperty(
+      "reading a country the reader accepted again returns the same country",
       fc.property(spellingArb, (spelling) => {
         const read = normalizeCountry(spelling);
         fc.pre(read.ok);
@@ -590,12 +613,13 @@ describe("countries", () => {
         });
         expect(asAlpha2.ok && asAlpha2.value).toEqual(read.value);
       }),
-      propertyConfig({ numRuns: 400 }),
+      { numRuns: 400 },
     );
   });
 
   test("a value that names no country is never read as one", () => {
-    fc.assert(
+    assertProperty(
+      "a value that names no country is never read as one",
       fc.property(
         fc.constantFrom(
           "Atlantis",
@@ -611,19 +635,20 @@ describe("countries", () => {
           expect(normalizeCountry(candidate).ok).toBe(false);
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 
   test("a non-string is always asked about", () => {
-    fc.assert(
+    assertProperty(
+      "a non-string is always asked about",
       fc.property(
         fc.oneof(fc.integer(), fc.boolean(), fc.array(fc.string())),
         (candidate) => {
           expect(normalizeCountry(candidate).ok).toBe(false);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

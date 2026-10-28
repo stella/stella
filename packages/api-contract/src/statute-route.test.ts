@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   createStatuteIndexPath,
@@ -93,7 +93,8 @@ describe("statute public slugs", () => {
   });
 
   test("a derived slug always matches the column CHECK and the route param", () => {
-    fc.assert(
+    assertProperty(
+      "a derived slug always matches the column CHECK and the route param",
       fc.property(
         fc.integer({ min: 1, max: 999_999 }),
         fc.integer({ min: 1000, max: 2999 }),
@@ -113,12 +114,13 @@ describe("statute public slugs", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("distinct citations in one jurisdiction never share a segment", () => {
-    fc.assert(
+    assertProperty(
+      "distinct citations in one jurisdiction never share a segment",
       fc.property(
         fc.tuple(
           fc.integer({ min: 1, max: 999_999 }),
@@ -154,7 +156,7 @@ describe("statute public slugs", () => {
           expect(left).not.toBe(right);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -237,7 +239,8 @@ describe("public statute addresses", () => {
       fc.string({ maxLength: 300 }),
     );
 
-    fc.assert(
+    assertProperty(
+      "a slug-less statute's param carries its id; a stored slug is the param",
       fc.property(
         fc.uuid(),
         eliArbitrary,
@@ -257,7 +260,7 @@ describe("public statute addresses", () => {
           expect(idFromParam).toBeNull();
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -309,7 +312,8 @@ describe("reading a statute address back", () => {
   );
 
   test("reads back every path the builder writes", () => {
-    fc.assert(
+    assertProperty(
+      "reads back every path the builder writes",
       fc.property(
         fc.option(fc.string({ maxLength: 8 }), { nil: null }),
         fc.uuid(),
@@ -328,7 +332,7 @@ describe("reading a statute address back", () => {
           expect(parseStatutePath(createStatutePath(params))).toEqual(params);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -348,7 +352,8 @@ describe("reading a statute address back", () => {
   });
 
   test("a path outside the statutes route is not a statute", () => {
-    fc.assert(
+    assertProperty(
+      "a path outside the statutes route is not a statute",
       fc.property(
         fc.constantFrom("cases", "statute", "decisions", "coverage"),
         fc.stringMatching(/^[a-z]{2,3}$/u),
@@ -359,7 +364,7 @@ describe("reading a statute address back", () => {
           ).toBeNull();
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

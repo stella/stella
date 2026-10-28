@@ -13,7 +13,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { applyArabicFolds, applyArabicFoldsWithOffsets } from "./arabic.js";
 import { foldToAscii } from "./ascii-fold.js";
@@ -29,9 +29,6 @@ import { slugify } from "./slug.js";
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
 // propertySeed in @stll/property-testing.
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Characters from every script and shape these folds claim to handle:
@@ -90,7 +87,8 @@ describe("fold family (properties)", () => {
    */
   for (const [name, fold] of Object.entries(FOLDS)) {
     test(`${name} is idempotent`, () => {
-      fc.assert(
+      assertProperty(
+        `${name} is idempotent`,
         fc.property(
           fold === arabicNormalize ? sqlMirrorText : text,
           (value) => {
@@ -99,7 +97,7 @@ describe("fold family (properties)", () => {
             expect(fold(once)).toBe(once);
           },
         ),
-        config(400),
+        { numRuns: 400, seed: propertySeed() },
       );
     });
   }
@@ -126,7 +124,8 @@ describe("offset-carrying folds (properties)", () => {
    * highlight over the wrong word.
    */
   test("the variants agree on NFKC-normalized input", () => {
-    fc.assert(
+    assertProperty(
+      "the variants agree on NFKC-normalized input",
       fc.property(text, (value) => {
         const normalized = value.normalize("NFKC");
 
@@ -134,7 +133,7 @@ describe("offset-carrying folds (properties)", () => {
           applyArabicFolds(normalized),
         );
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 
@@ -160,13 +159,14 @@ describe("offset-carrying folds (properties)", () => {
   });
 
   test("foldSearchMatchTextWithOffsets agrees with foldSearchMatchText", () => {
-    fc.assert(
+    assertProperty(
+      "foldSearchMatchTextWithOffsets agrees with foldSearchMatchText",
       fc.property(text, (value) => {
         expect(foldSearchMatchTextWithOffsets(value).text).toBe(
           foldSearchMatchText(value),
         );
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 
@@ -176,7 +176,8 @@ describe("offset-carrying folds (properties)", () => {
    * is an anchor that cannot be rendered.
    */
   test("folded offsets stay inside the original and never run backwards", () => {
-    fc.assert(
+    assertProperty(
+      "folded offsets stay inside the original and never run backwards",
       fc.property(text, (value) => {
         const { text: folded, originalRanges } =
           foldSearchMatchTextWithOffsets(value);
@@ -193,7 +194,7 @@ describe("offset-carrying folds (properties)", () => {
           previousEnd = end;
         }
       }),
-      config(400),
+      { numRuns: 400, seed: propertySeed() },
     );
   });
 });
@@ -206,7 +207,8 @@ describe("findSearchMatchRanges (properties)", () => {
    * changes string length (`ß` to `ss`, `ﬁ` to `fi`).
    */
   test("every reported range folds to the query", () => {
-    fc.assert(
+    assertProperty(
+      "every reported range folds to the query",
       fc.property(text, text, (content, query) => {
         // Mirror the trim the function applies to its own query, or the
         // needle looked for is not the one it searched with.
@@ -219,13 +221,14 @@ describe("findSearchMatchRanges (properties)", () => {
           );
         }
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   /** Ranges are ordered and never overlap, so highlights cannot nest. */
   test("reported ranges are ordered and disjoint", () => {
-    fc.assert(
+    assertProperty(
+      "reported ranges are ordered and disjoint",
       fc.property(text, text, (content, query) => {
         const ranges = findSearchMatchRanges(content, query);
 
@@ -236,13 +239,14 @@ describe("findSearchMatchRanges (properties)", () => {
           previousEnd = end;
         }
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   /** A blank query matches nothing rather than everything. */
   test("a whitespace-only query reports no ranges", () => {
-    fc.assert(
+    assertProperty(
+      "a whitespace-only query reports no ranges",
       fc.property(
         text,
         fc.constantFrom("", " ", "   ", "\n"),
@@ -250,14 +254,15 @@ describe("findSearchMatchRanges (properties)", () => {
           expect(findSearchMatchRanges(content, query)).toEqual([]);
         },
       ),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });
 
 describe("slug keys (properties)", () => {
   test("are stable under repeated normalization within the budget", () => {
-    fc.assert(
+    assertProperty(
+      "are stable under repeated normalization within the budget",
       fc.property(
         text,
         fc.constantFrom("ascii", "unicode"),
@@ -276,14 +281,15 @@ describe("slug keys (properties)", () => {
           expect(once.includes(separator.repeat(2))).toBe(false);
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 });
 
 describe("search projection (properties)", () => {
   test("finds generated needles and maps every occurrence to source content", () => {
-    fc.assert(
+    assertProperty(
+      "finds generated needles and maps every occurrence to source content",
       fc.property(
         text,
         fc.nat(),
@@ -318,12 +324,13 @@ describe("search projection (properties)", () => {
           }
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
   test("keeps ranges bounded for incomplete UTF-16 needles", () => {
-    fc.assert(
+    assertProperty(
+      "keeps ranges bounded for incomplete UTF-16 needles",
       fc.property(
         text,
         fc.integer({ min: 0xd8_00, max: 0xdf_ff }),
@@ -338,7 +345,7 @@ describe("search projection (properties)", () => {
           }
         },
       ),
-      config(100),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 });

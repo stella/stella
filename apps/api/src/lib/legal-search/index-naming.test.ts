@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   CASE_LAW_INDEX_GROUP_NAMES,
@@ -72,7 +72,8 @@ test("a country outside the declaration never lands in a declared group", () => 
     const selfNamed = members.some((member) => member.toLowerCase() === group);
     expect([group, selfNamed || group.includes("_")]).toEqual([group, true]);
   }
-  fc.assert(
+  assertProperty(
+    "a country outside the declaration never lands in a declared group",
     fc.property(fc.stringMatching(/^[A-Z]{2,8}$/u), (code) => {
       const indexId = corpusIndexId("case_law_v3", code);
       const declared = Object.hasOwn(
@@ -88,7 +89,7 @@ test("a country outside the declaration never lands in a declared group", () => 
         ]);
       }
     }),
-    propertyConfig({ numRuns: 300 }),
+    { numRuns: 300 },
   );
   // The concrete near-miss: a two-letter code equal to a language tag.
   expect(corpusIndexId("case_law_v3", "PL")).toBe("case_law_v3_pl");
@@ -102,7 +103,8 @@ test("the jurisdictions of an index are the inverse of its derivation", () => {
     `^[a-z][a-z0-9_]{0,${CORPUS_INDEX_GENERATION_MAX_LENGTH - 1}}$`,
     "u",
   );
-  fc.assert(
+  assertProperty(
+    "the jurisdictions of an index are the inverse of its derivation",
     fc.property(
       fc.oneof(
         fc.constantFrom("case_law_v2", "case_law_v3", "legislation_v1"),
@@ -120,7 +122,7 @@ test("the jurisdictions of an index are the inverse of its derivation", () => {
         }
       },
     ),
-    propertyConfig({ numRuns: 300 }),
+    { numRuns: 300 },
   );
   expect(corpusIndexJurisdictions("case_law_v3", "case_law_v3_cs_sk")).toEqual([
     "CZE",
@@ -185,13 +187,14 @@ test("rejects generations outside the shared storage contract", () => {
 });
 
 test("case-law generation order is canonical and total over its domain", () => {
-  fc.assert(
+  assertProperty(
+    "case-law generation order is canonical and total over its domain",
     fc.property(fc.integer({ min: 1, max: 2_147_483_647 }), (order) => {
       const generation = `case_law_v${order}`;
       expect(isCaseLawCorpusGeneration(generation)).toBe(true);
       expect(caseLawCorpusGenerationOrder(generation)).toBe(order);
     }),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
   for (const invalid of [
     "case_law_v0",
@@ -210,7 +213,8 @@ test("generation extraction is the inverse of index construction", () => {
     `^[a-z][a-z0-9_]{0,${CORPUS_INDEX_GENERATION_MAX_LENGTH - 1}}$`,
     "u",
   );
-  fc.assert(
+  assertProperty(
+    "generation extraction is the inverse of index construction",
     fc.property(
       fc.stringMatching(generationPattern),
       fc.stringMatching(/^[a-z]{2,8}$/u),
@@ -220,7 +224,7 @@ test("generation extraction is the inverse of index construction", () => {
         expect(corpusIndexGeneration(indexId)).toBe(generation);
       },
     ),
-    propertyConfig({ numRuns: 200 }),
+    { numRuns: 200 },
   );
 });
 

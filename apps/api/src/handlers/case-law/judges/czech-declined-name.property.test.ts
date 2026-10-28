@@ -12,11 +12,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import {
-  assertProperty,
-  propertyConfig,
-  propertySeed,
-} from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   matchCzechDeclinedName,
@@ -112,9 +108,6 @@ const DECLENSIONS: Readonly<Record<string, readonly [string, string]>> = {
   "Iva Brožová": ["Ivy Brožové", "Ivou Brožovou"],
 };
 
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
-
 describe("matchCzechDeclinedName", () => {
   test("the table covers every justice the court lists", () => {
     expect(ROSTER.map(({ fullName }) => fullName).toSorted()).toEqual(
@@ -138,7 +131,8 @@ describe("matchCzechDeclinedName", () => {
     const entries = Object.entries(DECLENSIONS).flatMap(([fullName, forms]) =>
       forms.map((form) => ({ fullName, form })),
     );
-    fc.assert(
+    assertProperty(
+      "titles, spacing and word order do not move a match",
       fc.property(
         fc.constantFrom(...entries),
         fc.constantFrom("", "JUDr. ", "prof. JUDr. ", "doc. JUDr. "),
@@ -153,7 +147,7 @@ describe("matchCzechDeclinedName", () => {
           });
         },
       ),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 

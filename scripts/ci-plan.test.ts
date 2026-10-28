@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import {
   chmodSync,
@@ -18,7 +18,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
-import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
+import { assertProperty, drawPropertySamples } from "@stll/property-testing";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import {
@@ -5435,51 +5435,80 @@ test("service-suite scopes run on pull requests only for selected corpus coverag
   );
 }, 30_000);
 
-test("drawn property samples are the inputs fc.assert would run", () => {
-  // Both sides share one explicit seed: the exploratory tier leaves the
-  // default seed unset, which would give each draw an independent one.
+describe("drawn property samples match the shared runner", () => {
+  // Compare both consumers under one seed, including the exploratory tier.
   const seed = 20_261_003;
   const drawSamples = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) =>
     drawPropertySamples(arbitrary, { numRuns, seed }).map(({ value }) => value);
-  const draws = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) => {
+
+  type DrawsOptions<T> = {
+    id: string;
+    arbitrary: fc.Arbitrary<T>;
+    numRuns: number;
+  };
+  const expectDraws = <T>({ id, arbitrary, numRuns }: DrawsOptions<T>) => {
     const asserted: T[] = [];
-    fc.assert(
+    assertProperty(
+      id,
       fc.property(arbitrary, (value) => {
         asserted.push(value);
       }),
-      propertyConfig({ numRuns, seed }),
+      { numRuns, seed },
     );
-    return asserted;
+    expect(drawSamples(arbitrary, numRuns)).toEqual(asserted);
   };
-  expect(drawSamples(releaseExtraFiles, 30)).toEqual(
-    draws(releaseExtraFiles, 30),
-  );
-  expect(drawSamples(unrelatedDocNames, 30)).toEqual(
-    draws(unrelatedDocNames, 30),
-  );
-  expect(drawSamples(apiSourceSiblings, 10)).toEqual(
-    draws(apiSourceSiblings, 10),
-  );
-  expect(drawSamples(failedGatedJobs, 100)).toEqual(
-    draws(failedGatedJobs, 100),
-  );
-  expect(drawSamples(unsuccessfulFullDepthJobs, 100)).toEqual(
-    draws(unsuccessfulFullDepthJobs, 100),
-  );
-  // A tuple draws what the same arbitraries passed to fc.property separately do.
-  const separate: unknown[] = [];
-  fc.assert(
-    fc.property(
-      fc.constantFrom(...gatedJobs),
-      fc.constantFrom("failure", "timed_out", ""),
-      fc.constantFrom(...Object.values(EVENT)),
-      (job, result, event) => {
-        separate.push([job, result, event]);
-      },
-    ),
-    propertyConfig({ numRuns: 100, seed }),
-  );
-  expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
+
+  test("release files", () => {
+    expectDraws({
+      id: "release files",
+      arbitrary: releaseExtraFiles,
+      numRuns: 30,
+    });
+  });
+  test("document names", () => {
+    expectDraws({
+      id: "document names",
+      arbitrary: unrelatedDocNames,
+      numRuns: 30,
+    });
+  });
+  test("API siblings", () => {
+    expectDraws({
+      id: "API siblings",
+      arbitrary: apiSourceSiblings,
+      numRuns: 10,
+    });
+  });
+  test("failed jobs", () => {
+    expectDraws({
+      id: "failed jobs",
+      arbitrary: failedGatedJobs,
+      numRuns: 100,
+    });
+  });
+  test("full-depth jobs", () => {
+    expectDraws({
+      id: "full-depth jobs",
+      arbitrary: unsuccessfulFullDepthJobs,
+      numRuns: 100,
+    });
+  });
+  test("tuple arguments", () => {
+    const separate: unknown[] = [];
+    assertProperty(
+      "tuple arguments",
+      fc.property(
+        fc.constantFrom(...gatedJobs),
+        fc.constantFrom("failure", "timed_out", ""),
+        fc.constantFrom(...Object.values(EVENT)),
+        (job, result, event) => {
+          separate.push([job, result, event]);
+        },
+      ),
+      { numRuns: 100, seed },
+    );
+    expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
+  });
 });
 
 test("image scopes remain planned while pull requests skip execution", () => {

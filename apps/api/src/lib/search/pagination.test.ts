@@ -4,7 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
@@ -139,7 +139,8 @@ describe("global search keyset pagination", () => {
   });
 
   test("dual cursors preserve both formats for every supported position", () => {
-    fc.assert(
+    assertProperty(
+      "dual cursors preserve both formats for every supported position",
       fc.property(
         fc.integer({ min: 1, max: GLOBAL_SEARCH_RESULT_LIMIT - 1 }),
         fc.integer({ min: -8, max: 8 }),
@@ -159,7 +160,7 @@ describe("global search keyset pagination", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -229,7 +230,8 @@ describe("global search keyset pagination", () => {
       score: fc.integer({ min: 0, max: 8 }),
     });
 
-    fc.assert(
+    assertProperty(
+      "repeated pages preserve the complete deterministic order",
       fc.property(
         fc.uniqueArray(arbitraryHit, {
           minLength: 0,
@@ -249,7 +251,7 @@ describe("global search keyset pagination", () => {
           expect(pageThrough(source, limit)).toEqual(expected);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

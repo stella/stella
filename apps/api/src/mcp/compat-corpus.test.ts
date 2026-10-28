@@ -10,7 +10,7 @@ import {
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
 } from "@stll/api-contract/search";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -405,7 +405,8 @@ describe("practice jurisdictions rank the corpus countries", () => {
   };
 
   test("the ranked list is exactly the admitted countries, each once", () => {
-    fc.assert(
+    assertProperty(
+      "the ranked list is exactly the admitted countries, each once",
       fc.property(
         admittedArbitrary,
         practisedArbitrary,
@@ -415,12 +416,13 @@ describe("practice jurisdictions rank the corpus countries", () => {
           expect(ranked.toSorted()).toEqual(admitted.toSorted());
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("primary leads, then practised, then the rest, each in admitted order", () => {
-    fc.assert(
+    assertProperty(
+      "primary leads, then practised, then the rest, each in admitted order",
       fc.property(
         admittedArbitrary,
         practisedArbitrary,
@@ -440,7 +442,7 @@ describe("practice jurisdictions rank the corpus countries", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -706,7 +708,8 @@ describe("compat search reaching the public corpus", () => {
       "XX",
       "",
     );
-    await fc.assert(
+    await assertProperty(
+      "the searched countries are the admitted ones whatever the practice jurisdictions",
       fc.asyncProperty(
         fc.option(
           fc.array(
@@ -727,7 +730,7 @@ describe("compat search reaching the public corpus", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

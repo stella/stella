@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -70,7 +70,8 @@ const selectedId = (
 
 describe("the ruling written reasons belong to", () => {
   test("is always a ruling of a target type dated no later than the reasons", () => {
-    fc.assert(
+    assertProperty(
+      "is always a ruling of a target type dated no later than the reasons",
       fc.property(targetArbitrary, rulingsArbitrary, (target, candidates) => {
         const selection = selectSupplementJudgment({ target, candidates });
         if (selection.type !== "judgment") {
@@ -80,12 +81,13 @@ describe("the ruling written reasons belong to", () => {
           true,
         );
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("is the latest eligible ruling, and a tie or an undated rival is never guessed", () => {
-    fc.assert(
+    assertProperty(
+      "is the latest eligible ruling, and a tie or an undated rival is never guessed",
       fc.property(targetArbitrary, rulingsArbitrary, (target, candidates) => {
         const selection = selectSupplementJudgment({ target, candidates });
         const eligible = candidates.filter((ruling) =>
@@ -110,12 +112,13 @@ describe("the ruling written reasons belong to", () => {
           );
         }
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("does not depend on the order the docket's rulings are read in", () => {
-    fc.assert(
+    assertProperty(
+      "does not depend on the order the docket's rulings are read in",
       fc.property(
         targetArbitrary,
         rulingsArbitrary.chain((rulings) =>
@@ -137,7 +140,7 @@ describe("the ruling written reasons belong to", () => {
           );
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 

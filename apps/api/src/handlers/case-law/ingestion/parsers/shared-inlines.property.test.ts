@@ -15,20 +15,13 @@ import {
   normalizeInlineLine,
   stripInlinePrefix,
 } from "@stll/legal-ast/inline-line";
-import {
-  assertProperty,
-  propertyConfig,
-  propertySeed,
-} from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
 // propertySeed in @stll/property-testing.
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 /**
  * Text fragments mixing letters with every whitespace encoding a court
@@ -91,13 +84,14 @@ describe("inlinesToPlainText (properties)", () => {
    * inline lists without re-deriving plain text.
    */
   test("distributes over concatenation", () => {
-    fc.assert(
+    assertProperty(
+      "distributes over concatenation",
       fc.property(inlines, inlines, (left, right) => {
         expect(inlinesToPlainText([...left, ...right])).toBe(
           inlinesToPlainText(left) + inlinesToPlainText(right),
         );
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -107,7 +101,8 @@ describe("inlinesToPlainText (properties)", () => {
    * text a reader or the search index sees.
    */
   test("is unchanged by wrapping in emphasis or a link", () => {
-    fc.assert(
+    assertProperty(
+      "is unchanged by wrapping in emphasis or a link",
       fc.property(inlines, (tree) => {
         const flat = inlinesToPlainText(tree);
 
@@ -123,7 +118,7 @@ describe("inlinesToPlainText (properties)", () => {
           ]),
         ).toBe(flat);
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -137,7 +132,8 @@ describe("stripInlinePrefix (properties)", () => {
    * skipped property below for where it fails to.
    */
   test("removes exactly the first k characters of the plain text", () => {
-    fc.assert(
+    assertProperty(
+      "removes exactly the first k characters of the plain text",
       fc.property(treeAndPrefix, ([tree, k]) => {
         const stripped = inlinesToPlainText(stripInlinePrefix(tree, k));
 
@@ -145,31 +141,33 @@ describe("stripInlinePrefix (properties)", () => {
           inlinesToPlainText(tree).slice(k).trimStart(),
         );
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
   /** A non-positive prefix is documented to change nothing. */
   test("is a no-op for a non-positive prefix", () => {
-    fc.assert(
+    assertProperty(
+      "is a no-op for a non-positive prefix",
       fc.property(inlines, fc.integer({ min: -5, max: 0 }), (tree, k) => {
         expect(inlinesToPlainText(stripInlinePrefix(tree, k))).toBe(
           inlinesToPlainText(tree),
         );
       }),
-      config(200),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 
   /** Stripping at least the whole text leaves nothing behind. */
   test("empties the tree when the prefix covers all of it", () => {
-    fc.assert(
+    assertProperty(
+      "empties the tree when the prefix covers all of it",
       fc.property(inlines, fc.nat({ max: 5 }), (tree, extra) => {
         const all = inlinesToPlainText(tree).length + extra;
 
         expect(inlinesToPlainText(stripInlinePrefix(tree, all))).toBe("");
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -179,13 +177,14 @@ describe("stripInlinePrefix (properties)", () => {
    * depended on where the publisher opened an emphasis tag.
    */
   test("trims exposed leading whitespace regardless of nesting", () => {
-    fc.assert(
+    assertProperty(
+      "trims exposed leading whitespace regardless of nesting",
       fc.property(treeAndPrefix, ([tree, k]) => {
         expect(inlinesToPlainText(stripInlinePrefix(tree, k))).toBe(
           inlinesToPlainText(tree).slice(k).trimStart(),
         );
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 

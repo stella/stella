@@ -11,7 +11,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -1153,7 +1153,8 @@ describe("the batch bounds", () => {
   });
 
   test("a binary payload weighs its byte length, as a Buffer or a Uint8Array", () => {
-    fc.assert(
+    assertProperty(
+      "a binary payload weighs its byte length, as a Buffer or a Uint8Array",
       fc.property(fc.uint8Array({ maxLength: 4096 }), (bytes) => {
         const asBuffer = Buffer.from(bytes);
         // The fixture reaches the fault: a Buffer serializes as a JSON array.
@@ -1176,7 +1177,7 @@ describe("the batch bounds", () => {
           measured(new Uint8Array()) + 2 * bytes.length,
         );
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
 
     const payload = Buffer.alloc(8 * 1024 * 1024, 255);

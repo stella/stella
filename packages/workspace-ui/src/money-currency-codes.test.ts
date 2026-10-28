@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { currencyMinorUnitDigits, formatMoneyCents } from "@stll/money";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 describe("currencyMinorUnitDigits", () => {
   test("reads the exponent from the currency", () => {
@@ -52,19 +52,21 @@ const threeCharArb = fc
 
 describe("no stored code can throw", () => {
   test("the exponent lookup always answers", () => {
-    fc.assert(
+    assertProperty(
+      "the exponent lookup always answers",
       fc.property(threeCharArb, (currency) => {
         const digits = currencyMinorUnitDigits(currency);
 
         expect(Number.isInteger(digits)).toBe(true);
         expect(digits).toBeGreaterThanOrEqual(0);
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 
   test("formatting always answers with a non-empty string", () => {
-    fc.assert(
+    assertProperty(
+      "formatting always answers with a non-empty string",
       fc.property(
         threeCharArb,
         fc.integer({ min: -1_000_000, max: 1_000_000 }),
@@ -79,7 +81,7 @@ describe("no stored code can throw", () => {
           expect(formatted.length).toBeGreaterThan(0);
         },
       ),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   });
 });

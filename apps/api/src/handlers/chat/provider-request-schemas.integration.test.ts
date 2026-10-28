@@ -16,7 +16,7 @@ import {
   MCP_CHAT_TOOL_POLICY_KINDS,
 } from "@stll/api-contract";
 import type { ChatToolPolicyKind } from "@stll/api-contract";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -1240,7 +1240,8 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
     test(
       `${provider}: a turn with any user text holds to the provider's rules`,
       async () => {
-        await fc.assert(
+        await assertProperty(
+          `${provider}: a turn with any user text holds to the provider's rules`,
           fc.asyncProperty(
             fc
               .string({ minLength: 1, maxLength: 400, unit: "grapheme" })
@@ -1251,7 +1252,7 @@ describe(`chat requests: ${String(combinations.included.length)} combinations th
               ).toEqual([]);
             },
           ),
-          propertyConfig({ numRuns: 2 }),
+          { numRuns: 2 },
         );
       },
       propertyTestTimeout(CONVERSATION_TIMEOUT_MS),

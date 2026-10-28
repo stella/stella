@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import {
   clausesForTokens,
@@ -15,7 +15,8 @@ import {
 } from "./shared/property-test-helpers.test.js";
 
 test("required particulars resolve only from supplied tokens and preserve fixed clauses", () => {
-  fc.assert(
+  assertProperty(
+    "required particulars resolve only from supplied tokens and preserve fixed clauses",
     fc.property(registryString, nullableRegistryString, (token, value) => {
       const fixed = {
         template: "fixed",
@@ -35,6 +36,6 @@ test("required particulars resolve only from supplied tokens and preserve fixed 
       );
       expect(clausesForTokens(expected, tokens)).toEqual(expected);
     }),
-    propertyConfig({ seed: propertySeed() }),
+    { seed: propertySeed() },
   );
 });

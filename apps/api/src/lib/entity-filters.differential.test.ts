@@ -5,7 +5,7 @@ import fc from "fast-check";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 import type { ConditionNode } from "@stll/conditions";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
@@ -488,7 +488,8 @@ const sqlMatchIds = async (condition: ConditionNode): Promise<Set<string>> => {
 test(
   "in-memory and SQL filter evaluation agree",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "in-memory and SQL filter evaluation agree",
       fc.asyncProperty(rowsArb, conditionArb, async (rows, condition) => {
         const ids = await seedRows(rows);
         try {
@@ -502,7 +503,7 @@ test(
           await clearRows();
         }
       }),
-      propertyConfig({ numRuns: 300 }),
+      { numRuns: 300 },
     );
   },
   { timeout: propertyTestTimeout(60_000) },

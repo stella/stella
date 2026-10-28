@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { JustificationContent } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
@@ -555,7 +555,8 @@ describe("table export", () => {
   test(
     "xlsx uses the same flag color family as table metadata flags",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx uses the same flag color family as table metadata flags",
         fc.asyncProperty(fc.constantFrom(...cellFlagIds), async (flagId) => {
           const columns = buildExportColumns(tableLayout(), [
             { id: "p1", name: "AI status", tool: manualTool },
@@ -605,7 +606,7 @@ describe("table export", () => {
           );
           expect(styles).toContain(`fgColor rgb="${flagFillColors[flagId]}"`);
         }),
-        propertyConfig({ numRuns: cellFlagIds.length }),
+        { numRuns: cellFlagIds.length },
       );
     },
     propertyTestTimeout(20_000),
@@ -614,7 +615,8 @@ describe("table export", () => {
   test(
     "xlsx property: arbitrary text remains inline string data",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: arbitrary text remains inline string data",
         fc.asyncProperty(
           fc.array(fc.string({ maxLength: 80 }), {
             minLength: 1,
@@ -656,7 +658,7 @@ describe("table export", () => {
             );
           },
         ),
-        propertyConfig({ numRuns: 50 }),
+        { numRuns: 50 },
       );
       // 50 zip builds + parses brush the default 5s timeout on loaded CI
       // runners; the explicit timeout keeps the property run deterministic.
@@ -667,7 +669,8 @@ describe("table export", () => {
   test(
     "xlsx property: long arbitrary values are capped before XML output",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: long arbitrary values are capped before XML output",
         fc.asyncProperty(
           fc
             .integer({ min: 1, max: 200 })
@@ -695,7 +698,7 @@ describe("table export", () => {
             expect(sheet).not.toContain(value);
           },
         ),
-        propertyConfig({ numRuns: 20 }),
+        { numRuns: 20 },
       );
     },
     propertyTestTimeout(20_000),
@@ -704,7 +707,8 @@ describe("table export", () => {
   test(
     "xlsx property: generated column widths stay readable and bounded",
     async () => {
-      await fc.assert(
+      await assertProperty(
+        "xlsx property: generated column widths stay readable and bounded",
         fc.asyncProperty(
           fc.array(fc.string({ minLength: 1, maxLength: 40 }), {
             minLength: 1,
@@ -742,7 +746,7 @@ describe("table export", () => {
             }
           },
         ),
-        propertyConfig({ numRuns: 50 }),
+        { numRuns: 50 },
       );
       // 50 zip builds + parses can exceed Bun's default 5s timeout on loaded
       // CI runners; keep the invariant broad while making runtime deterministic.

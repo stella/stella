@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
 import { CALCULATION_KINDS } from "@stll/calculations";
 import { BUILTIN_FIELDS, conditionNodeSchema } from "@stll/conditions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
@@ -415,40 +415,44 @@ const declaredLayoutKeys = new Set([
 
 describe("conditionNodeSchema — properties", () => {
   test("the stored and wire schemas agree on every well-formed condition node", () => {
-    fc.assert(
+    assertProperty(
+      "the stored and wire schemas agree on every well-formed condition node",
       fc.property(arbFilter, (filter) => {
         expect(v.is(conditionNodeSchema, filter)).toBe(true);
         expect(v.is(tConditionNode, filter)).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 });
 
 describe("viewLayoutSchema — properties", () => {
   test("the stored and wire schemas agree on every well-formed layout", () => {
-    fc.assert(
+    assertProperty(
+      "the stored and wire schemas agree on every well-formed layout",
       fc.property(arbLayout, (layout) => {
         expect(v.is(viewLayoutSchema, layout)).toBe(true);
         expect(v.is(tViewLayoutSchema, layout)).toBe(true);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("parseViewLayout is identity on well-formed layouts", () => {
-    fc.assert(
+    assertProperty(
+      "parseViewLayout is identity on well-formed layouts",
       fc.property(arbLayout, (layout) => {
         expect(parseViewLayout(layout)).toEqual(layout as ViewLayout);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   // Both contracts are closed: the stored schema and the wire schema refuse an
   // undeclared key, so a request carrying one never reaches its handler.
   test("an undeclared extra key is refused when stored and on the wire", () => {
-    fc.assert(
+    assertProperty(
+      "an undeclared extra key is refused when stored and on the wire",
       fc.property(
         arbLayout,
         fc
@@ -460,7 +464,7 @@ describe("viewLayoutSchema — properties", () => {
           expect(v.is(tViewLayoutSchema, polluted)).toBe(false);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

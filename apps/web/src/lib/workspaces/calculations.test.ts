@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { runCalculation } from "@stll/calculations";
 import { cents } from "@stll/money";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceField, WorkspaceFieldContent } from "@/lib/types";
@@ -163,7 +163,8 @@ describe("a column's calculation reads exactly the column's cards", () => {
     field({ version: 1, type: "int", value, currency: null });
 
   test("summing the cards in each column equals summing the board", () => {
-    fc.assert(
+    assertProperty(
+      "summing the cards in each column equals summing the board",
       fc.property(
         fc.array(
           fc.array(fc.integer({ min: -500, max: 500 }), { maxLength: 8 }),
@@ -193,7 +194,7 @@ describe("a column's calculation reads exactly the column's cards", () => {
           ).toBe(expected);
         },
       ),
-      propertyConfig({ numRuns: 200 }),
+      { numRuns: 200 },
     );
   });
 });

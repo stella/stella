@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -44,7 +44,8 @@ const numericEntity = fc.oneof(
 test(
   "company pages preserve unrepresentable numeric entities and decode scalar values",
   () => {
-    fc.assert(
+    assertProperty(
+      "company pages preserve unrepresentable numeric entities and decode scalar values",
       fc.property(numericEntity, (entity) => {
         const printed = `&#${entity.hexadecimal ? "x" : ""}${entity.digits};`;
         const scalar =
@@ -64,7 +65,7 @@ test(
         expect(parsed?.name).toBe(`name${printedContent}suffix`);
         expect(parsed?.mbs).toBe("080000014");
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -73,7 +74,8 @@ test(
 test(
   "unknown named entities remain printed text",
   () => {
-    fc.assert(
+    assertProperty(
+      "unknown named entities remain printed text",
       fc.property(
         fc.constantFrom("constructor", "tostring", "hasownproperty", "unknown"),
         (name) => {
@@ -84,7 +86,7 @@ test(
           expect(parsed?.name).toBe(printed);
         },
       ),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),
@@ -93,7 +95,8 @@ test(
 test(
   "HTML and address parsing always returns domain values or registry errors",
   () => {
-    fc.assert(
+    assertProperty(
+      "HTML and address parsing always returns domain values or registry errors",
       fc.property(registryString, registryString, (html, id) => {
         const parsed = expectRegistryOutcome(() =>
           parseCompanyPage(sectionHtml("Tvrtka", html), id),
@@ -109,7 +112,7 @@ test(
           expect(typeof address.address.textAddress).toBe("string");
         }
       }),
-      propertyConfig({ seed: propertySeed() }),
+      { seed: propertySeed() },
     );
   },
   propertyTestTimeout(10_000),

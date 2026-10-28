@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { resizeRgbRegion, rgbaToRgb } from "./rgb-image";
 
@@ -58,7 +58,8 @@ describe("OCR RGB image primitives", () => {
           })
           .map((data) => ({ data, width, height })),
       );
-    fc.assert(
+    assertProperty(
+      "preserves every valid image under an identity resize",
       fc.property(image, ({ data, height, width }) => {
         expect(
           resizeRgbRegion({
@@ -70,7 +71,7 @@ describe("OCR RGB image primitives", () => {
           }),
         ).toEqual(data);
       }),
-      propertyConfig({ numRuns: 100 }),
+      { numRuns: 100 },
     );
   });
 

@@ -174,6 +174,21 @@ const ownedIconRestrictions = (
   });
 
 const RESTRICTED_IMPORT_RULES = {
+  "no-raw-property-assert": [
+    {
+      messageId: "rawPropertyAssert",
+      message:
+        "Use assertProperty with a stable test-title id from @stll/property-testing; " +
+        "pass raw run parameters so the shared runner configures them once.",
+      modules: ["fast-check"],
+      restriction: {
+        type: "exports",
+        names: new Set(["assert"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["packages/property-testing/src/index.ts"],
+    },
+  ],
   // One icon module decides what each glyph means (a skill, an AI action),
   // so a call site cannot pick a lucide glyph that means something else
   // elsewhere. See packages/ui/src/icons.ts for how to add one.

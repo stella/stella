@@ -6,7 +6,7 @@ import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
@@ -2150,7 +2150,8 @@ describe("anonymization placeholders across a thread's requests", () => {
   });
 
   test("one placeholder never names two originals in a thread", async () => {
-    await fc.assert(
+    await assertProperty(
+      "one placeholder never names two originals in a thread",
       fc.asyncProperty(
         // Each request mentions some of the people in some order.
         fc.array(fc.shuffledSubarray([...PEOPLE], { minLength: 1 }), {
@@ -2188,7 +2189,7 @@ describe("anonymization placeholders across a thread's requests", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+      { numRuns: 200, seed: propertySeed() },
     );
   });
 });

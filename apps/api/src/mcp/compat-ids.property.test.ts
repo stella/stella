@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   compatCorpusIdInputSchema,
@@ -45,16 +45,18 @@ const corpusIdSchema = compatCorpusIdInputSchema("id");
 
 describe("compat id vocabulary", () => {
   test("every minted id decodes back to what minted it", () => {
-    fc.assert(
+    assertProperty(
+      "every minted id decodes back to what minted it",
       fc.property(compatIdArbitrary, (id) => {
         expect(decodeCompatId(encodeCompatId(id))).toEqual(id);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("the declared schema admits exactly the ids the reader admits", () => {
-    fc.assert(
+    assertProperty(
+      "the declared schema admits exactly the ids the reader admits",
       fc.property(compatIdArbitrary, (id) => {
         const wire = encodeCompatId(id);
         expect(v.safeParse(idSchema, wire).success).toBe(true);
@@ -66,12 +68,13 @@ describe("compat id vocabulary", () => {
           id.kind === "document" ? null : id,
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a value outside the vocabulary is refused by the schema and the reader", () => {
-    fc.assert(
+    assertProperty(
+      "a value outside the vocabulary is refused by the schema and the reader",
       fc.property(
         fc
           .string({ maxLength: 60 })
@@ -80,7 +83,7 @@ describe("compat id vocabulary", () => {
           expect(v.safeParse(idSchema, raw).success).toBe(false);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 

@@ -3,7 +3,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -24,7 +24,8 @@ describe("MCP input contracts", () => {
 
   test("map inputs retain their declared shape", () => {
     const schema = plainRecord(v.unknown());
-    fc.assert(
+    assertProperty(
+      "map inputs retain their declared shape",
       fc.property(fc.jsonValue(), (input) => {
         const parsed = v.safeParse(schema, input);
         expect(parsed.success).toBe(isRecord(input));
@@ -32,7 +33,7 @@ describe("MCP input contracts", () => {
           expect(parsed.output).toEqual(input);
         }
       }),
-      propertyConfig({ numRuns: 100, seed: propertySeed() }),
+      { numRuns: 100, seed: propertySeed() },
     );
   });
 
@@ -93,19 +94,21 @@ describe("MCP input contracts", () => {
           },
         );
         if (definition.name === "preview_template_conditions") {
-          fc.assert(
+          assertProperty(
+            `${definition.name} wire and runtime acceptance agree`,
             property,
-            propertyConfig({
+            {
               seed: -232_809_522,
               path: "19:0:0:0:0:0:0:0:2",
               numRuns: 1,
               endOnFailure: true,
-            }),
+            },
           );
         }
-        fc.assert(
+        assertProperty(
+          `${definition.name} wire and runtime acceptance agree`,
           property,
-          propertyConfig({ numRuns: 20, seed: propertySeed() }),
+          { numRuns: 20, seed: propertySeed() },
         );
       },
       propertyTestTimeout(10_000),

@@ -22,7 +22,7 @@ import fc from "fast-check";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -46,9 +46,6 @@ import {
 } from "./detect.js";
 import { CLDR_EXEMPLARS } from "./exemplars.generated.js";
 import { UDHR_ARTICLE_1, type UdhrLanguage } from "./udhr-article-1.fixture.js";
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 const LANGUAGES = Object.keys(UDHR_ARTICLE_1).filter(
   (language): language is UdhrLanguage =>
@@ -309,19 +306,21 @@ describe("typographic punctuation in otherwise ASCII text", () => {
     ["signs and units without lowercase", signs],
   ] as const;
 
-  test.each(TEXTS)("%s, read correctly, is clean", (_, texts) => {
-    fc.assert(
+  test.each(TEXTS)("%s, read correctly, is clean", (label, texts) => {
+    assertProperty(
+      `${label}, read correctly, is clean`,
       fc.property(texts, (written) => {
         expect(checkTextEncoding(written, "en")).toEqual({ status: "clean" });
       }),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test.each(TEXTS)(
     "%s, written in UTF-8 and read as windows-1252 or Latin-1, is reported",
-    (_, texts) => {
-      fc.assert(
+    (label, texts) => {
+      assertProperty(
+        `${label}, written in UTF-8 and read as windows-1252 or Latin-1, is reported`,
         fc.property(
           texts,
           fc.constantFrom<DecodingPair>(
@@ -337,7 +336,7 @@ describe("typographic punctuation in otherwise ASCII text", () => {
             );
           },
         ),
-        config(300),
+        { numRuns: 300, seed: propertySeed() },
       );
     },
   );
@@ -393,7 +392,8 @@ describe("a native capital before a mark", () => {
   });
 
   test("in a language that writes the capital, text is clean", () => {
-    fc.assert(
+    assertProperty(
+      "in a language that writes the capital, text is clean",
       fc.property(
         fc.constantFrom(...AMBIGUOUS).chain(({ tag, sequences }) => {
           const lower = lettersOf(tag).filter((char) => /\p{Ll}/u.test(char));
@@ -463,7 +463,7 @@ describe("a native capital before a mark", () => {
           expect(checkTextEncoding(text, tag)).toEqual({ status: "clean" });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -523,7 +523,8 @@ describe("a native capital before a mark", () => {
   });
 
   test("where the language does not write the lead, the word is found", () => {
-    fc.assert(
+    assertProperty(
+      "where the language does not write the lead, the word is found",
       fc.property(
         fc.constantFrom(...FOREIGN_LEAD).chain(({ tag, ascii, foreign }) =>
           fc.record({
@@ -547,12 +548,13 @@ describe("a native capital before a mark", () => {
           );
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
   test("where the language writes the lead, a capital bound to a word is clean", () => {
-    fc.assert(
+    assertProperty(
+      "where the language writes the lead, a capital bound to a word is clean",
       fc.property(
         fc.constantFrom(...NATIVE_LEAD).chain(({ tag, ascii, native }) =>
           fc.record({
@@ -568,14 +570,15 @@ describe("a native capital before a mark", () => {
           });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
 
 describe("generated text", () => {
   test("a repair the detector proposes never writes a wrong word", () => {
-    fc.assert(
+    assertProperty(
+      "a repair the detector proposes never writes a wrong word",
       fc.property(
         fc.constantFrom(...LANGUAGES).chain((language) =>
           fc.record({
@@ -588,7 +591,7 @@ describe("generated text", () => {
           assertRoundTrip({ ...roundTrip, exact: false });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 
@@ -629,7 +632,8 @@ describe("generated text", () => {
       (name: string) => `„${name}“`,
       (name: string) => `«${name}»`,
     ];
-    fc.assert(
+    assertProperty(
+      "text in the language's own letters, symbols apart or attached as notation, and two foreign names however punctuated is clean",
       fc.property(
         fc.constantFrom(...LANGUAGES).chain((language) =>
           fc.record({
@@ -659,7 +663,7 @@ describe("generated text", () => {
           });
         },
       ),
-      config(300),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });
@@ -739,7 +743,8 @@ describe("bounded work", () => {
   test(
     "work grows linearly with the text, whatever its shape",
     () => {
-      fc.assert(
+      assertProperty(
+        "work grows linearly with the text, whatever its shape",
         fc.property(
           fc.constantFrom(...SHAPES),
           fc.oneof(
@@ -770,7 +775,7 @@ describe("bounded work", () => {
             );
           },
         ),
-        config(24),
+        { numRuns: 24, seed: propertySeed() },
       );
     },
     propertyTestTimeout(30_000),
@@ -779,7 +784,8 @@ describe("bounded work", () => {
   test(
     "distinct words examined and pair evaluations never exceed the documented bounds, at every size",
     () => {
-      fc.assert(
+      assertProperty(
+        "distinct words examined and pair evaluations never exceed the documented bounds, at every size",
         fc.property(fc.integer({ min: 0, max: 30_000 }), (wordCount) => {
           const counters: EncodingCheckCounters = {
             wordsExamined: 0,
@@ -802,7 +808,7 @@ describe("bounded work", () => {
           );
           expect(counters.codeUnits).toBeLessThanOrEqual(CODE_UNIT_BUDGET);
         }),
-        config(30),
+        { numRuns: 30, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),
@@ -811,7 +817,8 @@ describe("bounded work", () => {
   test(
     "characters classified and read back never exceed the code-unit budget, however long the words",
     () => {
-      fc.assert(
+      assertProperty(
+        "characters classified and read back never exceed the code-unit budget, however long the words",
         fc.property(
           fc.integer({ min: 1, max: 40 }),
           fc.integer({ min: 0, max: 500_000 }),
@@ -841,7 +848,7 @@ describe("bounded work", () => {
             }
           },
         ),
-        config(30),
+        { numRuns: 30, seed: propertySeed() },
       );
     },
     propertyTestTimeout(20_000),
@@ -850,7 +857,8 @@ describe("bounded work", () => {
   test(
     "past the distinct-word bound, the most frequent words are the ones weighed",
     () => {
-      fc.assert(
+      assertProperty(
+        "past the distinct-word bound, the most frequent words are the ones weighed",
         fc.property(
           fc.integer({
             min: MAX_EXAMINED_WORDS + 1,
@@ -883,7 +891,7 @@ describe("bounded work", () => {
             ).toEqual(["utf8-read-as-single-byte"]);
           },
         ),
-        config(30),
+        { numRuns: 30, seed: propertySeed() },
       );
     },
     propertyTestTimeout(15_000),
@@ -892,7 +900,8 @@ describe("bounded work", () => {
   test(
     "a distinct-word count past the bound is never called clean",
     () => {
-      fc.assert(
+      assertProperty(
+        "a distinct-word count past the bound is never called clean",
         fc.property(
           fc.integer({
             min: MAX_EXAMINED_WORDS + 1,
@@ -921,7 +930,7 @@ describe("bounded work", () => {
             });
           },
         ),
-        config(30),
+        { numRuns: 30, seed: propertySeed() },
       );
     },
     propertyTestTimeout(15_000),

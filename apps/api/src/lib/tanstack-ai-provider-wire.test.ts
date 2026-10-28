@@ -5,7 +5,7 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import {
@@ -495,7 +495,8 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
   };
   await expectSame({ every: 1 });
   const length = firstBodyOf(multibyte).length;
-  await fc.assert(
+  await assertProperty(
+    cassetteKey(cassette).replace("/", " "),
     fc.asyncProperty(
       fc.uniqueArray(fc.integer({ min: 1, max: Math.max(1, length - 1) }), {
         minLength: 1,
@@ -505,7 +506,7 @@ const checkSplit = async (cassette: ProviderWireCassette) => {
         await expectSame({ at });
       },
     ),
-    propertyConfig({ numRuns: SPLIT_RUNS, seed: SPLIT_SEED }),
+    { numRuns: SPLIT_RUNS, seed: SPLIT_SEED },
   );
 };
 

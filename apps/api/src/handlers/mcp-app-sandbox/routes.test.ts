@@ -2,7 +2,7 @@ import { afterAll, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 import { runInNewContext } from "node:vm";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import { apiApp } from "@/api/server";
@@ -184,7 +184,8 @@ describe("MCP App sandbox", () => {
   });
 
   test("never reflects query-controlled CSP or markup", async () => {
-    await fc.assert(
+    await assertProperty(
+      "never reflects query-controlled CSP or markup",
       fc.asyncProperty(fc.string(), async (query) => {
         const injectedOrigin = `https://attacker.invalid/${query}`;
         const response = await api.fetch(
@@ -197,7 +198,7 @@ describe("MCP App sandbox", () => {
           "attacker.invalid",
         );
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

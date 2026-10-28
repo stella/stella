@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { createCorpusAstCache } from "@/api/lib/legal-search/corpus-ast-cache";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
@@ -181,7 +181,8 @@ describe("a consolidation read through the AST cache", () => {
 });
 
 test("the cache never holds more than its budget, whatever the read sequence", async () => {
-  await fc.assert(
+  await assertProperty(
+    "the cache never holds more than its budget, whatever the read sequence",
     fc.asyncProperty(
       fc.integer({ min: 1, max: 50_000 }),
       fc.array(
@@ -208,6 +209,6 @@ test("the cache never holds more than its budget, whatever the read sequence", a
         }
       },
     ),
-    propertyConfig(),
+    {},
   );
 });

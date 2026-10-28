@@ -12,16 +12,13 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty, propertySeed } from "@stll/property-testing";
 
 import { collapseSpacedLetters } from "./spaced-letters.js";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
 // unseeded under the nightly sweep so it explores new inputs. See
 // propertySeed in @stll/property-testing.
-
-const config = (numRuns: number) =>
-  propertyConfig({ numRuns, seed: propertySeed() });
 
 // Czech and Slovak letters, the orthographies this function was written
 // for. Diacritics are included deliberately: they are multi-codepoint
@@ -101,13 +98,14 @@ describe("collapseSpacedLetters (properties)", () => {
    */
   for (const [gapName, gap] of Object.entries(WORD_GAPS)) {
     test(`round-trips a letter-spaced sentence with ${gapName} gaps`, () => {
-      fc.assert(
+      assertProperty(
+        `round-trips a letter-spaced sentence with ${gapName} gaps`,
         fc.property(sentence, (original) => {
           const collapsed = collapseSpacedLetters(letterSpace(original, gap));
 
           expect(words(collapsed)).toEqual(words(original));
         }),
-        config(300),
+        { numRuns: 300, seed: propertySeed() },
       );
     });
   }
@@ -119,23 +117,25 @@ describe("collapseSpacedLetters (properties)", () => {
    * the reader must reproduce verbatim.
    */
   test("changes only ASCII spaces", () => {
-    fc.assert(
+    assertProperty(
+      "changes only ASCII spaces",
       fc.property(noisyLine, (input) => {
         expect(nonSpace(collapseSpacedLetters(input))).toBe(nonSpace(input));
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
   /** Only spaces are ever removed, so the result can never grow. */
   test("never grows the text", () => {
-    fc.assert(
+    assertProperty(
+      "never grows the text",
       fc.property(noisyLine, (input) => {
         expect(collapseSpacedLetters(input).length).toBeLessThanOrEqual(
           input.length,
         );
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
@@ -146,13 +146,14 @@ describe("collapseSpacedLetters (properties)", () => {
    * disagreed. Fixed by applying the collapse to a fixpoint.
    */
   test("is idempotent", () => {
-    fc.assert(
+    assertProperty(
+      "is idempotent",
       fc.property(noisyLine, (input) => {
         const once = collapseSpacedLetters(input);
 
         expect(collapseSpacedLetters(once)).toBe(once);
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 
@@ -162,13 +163,14 @@ describe("collapseSpacedLetters (properties)", () => {
    * defensively without risking a second, different collapse.
    */
   test("is the identity on text already in normal form", () => {
-    fc.assert(
+    assertProperty(
+      "is the identity on text already in normal form",
       fc.property(noisyLine, (input) => {
         const normalized = collapseSpacedLetters(input);
 
         expect(collapseSpacedLetters(normalized)).toBe(normalized);
       }),
-      config(500),
+      { numRuns: 500, seed: propertySeed() },
     );
   });
 

@@ -8,7 +8,7 @@ import fc from "fast-check";
 import { getOutputTokenLimit } from "@stll/ai-catalog";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import {
-  propertyConfig,
+  assertProperty,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
@@ -1479,9 +1479,11 @@ const closeConversation = async ({ real }: { real: Real }) => {
 };
 
 const runConversations = async (
+  id: string,
   commands: fc.Arbitrary<Iterable<fc.AsyncCommand<Model, Real>>>,
 ) => {
-  await fc.assert(
+  await assertProperty(
+    id,
     fc.asyncProperty(commands, async (sequence) => {
       const conversation = await openConversation();
       try {
@@ -1490,7 +1492,7 @@ const runConversations = async (
         await closeConversation(conversation);
       }
     }),
-    propertyConfig({ numRuns: 25, seed: propertySeed() }),
+    { numRuns: 25, seed: propertySeed() },
   );
 };
 
@@ -2473,6 +2475,7 @@ describe("a conversation's live view", () => {
     "matches a reload and the ledger after every step of any conversation",
     async () => {
       await runConversations(
+        "matches a reload and the ledger after every step of any conversation",
         fc.commands(conversationCommands, { maxCommands: 6 }),
       );
     },
@@ -2731,6 +2734,7 @@ describe("a conversation's live view", () => {
     "matches a reload and the ledger after every action the page offers",
     async () => {
       await runConversations(
+        "matches a reload and the ledger after every action the page offers",
         fc.commands(pageActionCommandsOf(runsOf(mixedCallsArb)), {
           maxCommands: 6,
         }),
@@ -2743,6 +2747,7 @@ describe("a conversation's live view", () => {
     "matches a reload and the ledger when a new message replaces waiting cards",
     async () => {
       await runConversations(
+        "matches a reload and the ledger when a new message replaces waiting cards",
         fc.commands([...conversationCommands, supersedeCommand], {
           maxCommands: 6,
         }),

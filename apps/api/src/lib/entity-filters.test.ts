@@ -9,7 +9,7 @@ import {
 } from "@stll/api-contract";
 import { compareByLocale } from "@stll/collation";
 import type { BuiltinField, ConditionNode } from "@stll/conditions";
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -616,7 +616,8 @@ describe("applySorts (in-memory)", () => {
   });
 
   test("property: int sort with missing rows is numerically monotonic", () => {
-    fc.assert(
+    assertProperty(
+      "property: int sort with missing rows is numerically monotonic",
       fc.property(
         fc.array(fc.option(fc.integer(), { nil: undefined }), {
           minLength: 1,
@@ -657,12 +658,13 @@ describe("applySorts (in-memory)", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("property: ascending string sort is monotonic", () => {
-    fc.assert(
+    assertProperty(
+      "property: ascending string sort is monotonic",
       fc.property(
         fc.array(fc.string(), { minLength: 1, maxLength: 20 }),
         (values) => {
@@ -692,12 +694,13 @@ describe("applySorts (in-memory)", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("property: descending int sort is monotonic", () => {
-    fc.assert(
+    assertProperty(
+      "property: descending int sort is monotonic",
       fc.property(
         fc.array(fc.integer(), { minLength: 1, maxLength: 20 }),
         (values) => {
@@ -721,7 +724,7 @@ describe("applySorts (in-memory)", () => {
           expect(extracted).toEqual([...extracted].toSorted((a, b) => b - a));
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

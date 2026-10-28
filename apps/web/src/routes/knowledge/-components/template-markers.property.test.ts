@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import {
   assertNever,
   DIRECTIVE_KINDS,
@@ -109,7 +109,8 @@ const markerMeta = fc.oneof(...DIRECTIVE_KINDS.map((kind) => metaOfKind(kind)));
 
 describe("the Studio's marker writer and the grammar's scanner", () => {
   test("every directive kind the writer emits scans back to its own metadata", () => {
-    fc.assert(
+    assertProperty(
+      "every directive kind the writer emits scans back to its own metadata",
       fc.property(markerMeta, (meta) => {
         const text = formatMarker(meta);
         const [scanned, ...rest] = scanMarkers(text);
@@ -117,12 +118,13 @@ describe("the Studio's marker writer and the grammar's scanner", () => {
         expect(scanned?.meta).toEqual(meta);
         expect(scanned?.raw).toBe(text);
       }),
-      propertyConfig(),
+      {},
     );
   });
 
   test("a document the Studio writes holds no unreadable marker", () => {
-    fc.assert(
+    assertProperty(
+      "a document the Studio writes holds no unreadable marker",
       fc.property(
         fc.array(markerMeta, { minLength: 1, maxLength: 8 }),
         (metas) => {
@@ -131,12 +133,13 @@ describe("the Studio's marker writer and the grammar's scanner", () => {
           expect(scanInvalidMarkers(text)).toEqual([]);
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("renaming a value marker's path keeps its field configuration", () => {
-    fc.assert(
+    assertProperty(
+      "renaming a value marker's path keeps its field configuration",
       fc.property(fc.tuple(path, path, filters), ([from, to, chain]) => {
         const rewritten = rewriteFieldMarkerPath(
           formatMarker({ kind: "placeholder", expr: from, filters: chain }),
@@ -149,7 +152,7 @@ describe("the Studio's marker writer and the grammar's scanner", () => {
           filters: chain,
         });
       }),
-      propertyConfig(),
+      {},
     );
   });
 });

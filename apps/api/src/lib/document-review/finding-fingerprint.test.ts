@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { findingFingerprint } from "@/api/lib/document-review/finding-fingerprint";
@@ -238,7 +238,8 @@ describe("findingFingerprint", () => {
 
   // Re-extraction can rewrap a quoted passage without changing what it quotes.
   test("normalizes whitespace inside an excerpt", () => {
-    fc.assert(
+    assertProperty(
+      "normalizes whitespace inside an excerpt",
       fc.property(
         fc.stringMatching(/^[a-z]{1,12}$/u),
         fc.stringMatching(/^[a-z]{1,12}$/u),
@@ -260,14 +261,15 @@ describe("findingFingerprint", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   // Distinct evidence must not collide onto one fingerprint, or a decision
   // would carry onto a finding about different text.
   test("distinguishes any two different excerpts", () => {
-    fc.assert(
+    assertProperty(
+      "distinguishes any two different excerpts",
       fc.property(
         fc.stringMatching(/^[a-z ]{1,24}$/u),
         fc.stringMatching(/^[a-z ]{1,24}$/u),
@@ -291,7 +293,7 @@ describe("findingFingerprint", () => {
           );
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

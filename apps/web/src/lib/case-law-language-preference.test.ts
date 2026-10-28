@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 
@@ -79,7 +79,8 @@ describe("picking the language version to open", () => {
   });
 
   test("always returns one of the alternates, and the UI language whenever it is offered", () => {
-    fc.assert(
+    assertProperty(
+      "always returns one of the alternates, and the UI language whenever it is offered",
       fc.property(
         variants,
         languageTag,
@@ -104,7 +105,7 @@ describe("picking the language version to open", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });

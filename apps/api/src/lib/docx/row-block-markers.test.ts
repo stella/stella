@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -445,7 +445,8 @@ describe("row form and own-paragraph form agree", () => {
   });
 
   test("the two placements render the same rows for the same values", () => {
-    fc.assert(
+    assertProperty(
+      "the two placements render the same rows for the same values",
       fc.property(
         fc.array(item, { maxLength: 5 }),
         fc.boolean(),
@@ -465,7 +466,7 @@ describe("row form and own-paragraph form agree", () => {
           }
         },
       ),
-      propertyConfig({ numRuns: 50 }),
+      { numRuns: 50 },
     );
   });
 });

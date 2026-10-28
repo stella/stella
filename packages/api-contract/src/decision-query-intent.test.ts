@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
 import type { DecisionDocketGrammar } from "./decision-docket-grammar";
@@ -66,7 +66,8 @@ const spellingOf = (identifier: string) =>
 
 describe("reading a case-law box entry", () => {
   test("every docket spelling the courts and typists produce is an identifier", () => {
-    fc.assert(
+    assertProperty(
+      "every docket spelling the courts and typists produce is an identifier",
       fc.property(
         fc.constantFrom(...canonicalDockets).chain(spellingOf),
         (entry) => {
@@ -78,17 +79,18 @@ describe("reading a case-law box entry", () => {
           }
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 
   test("an ECLI in any spacing or case is an ECLI", () => {
-    fc.assert(
+    assertProperty(
+      "an ECLI in any spacing or case is an ECLI",
       fc.property(fc.constantFrom(...eclis).chain(spellingOf), (entry) => {
         const intent = parseDecisionQuery(entry);
         expect(intent).toMatchObject({ type: "identifier", kind: "ecli" });
       }),
-      propertyConfig(),
+      {},
     );
   });
 
@@ -125,12 +127,13 @@ describe("reading a case-law box entry", () => {
 
   test("prose is text, verbatim", () => {
     const word = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,12}$/u);
-    fc.assert(
+    assertProperty(
+      "prose is text, verbatim",
       fc.property(fc.array(word, { minLength: 2, maxLength: 6 }), (words) => {
         const text = words.join(" ");
         expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
       }),
-      propertyConfig(),
+      {},
     );
     expect(parseDecisionQuery("nájemní smlouva výpověď")).toEqual({
       type: "text",
@@ -220,7 +223,8 @@ describe("reading a reporter citation entry", () => {
   });
 
   test("no docket the corpus's grammars read is taken for a reporter citation", () => {
-    fc.assert(
+    assertProperty(
+      "no docket the corpus's grammars read is taken for a reporter citation",
       fc.property(
         fc.constantFrom(...canonicalDockets).chain(spellingOf),
         (entry) => {
@@ -229,7 +233,7 @@ describe("reading a reporter citation entry", () => {
           });
         },
       ),
-      propertyConfig(),
+      {},
     );
   });
 });
@@ -244,7 +248,8 @@ const hit = (caseNumber: string, ecli: string | null = null) => ({
 
 describe("the hits that are the named decision", () => {
   test("spacing, case, dash style and the sheet number do not change identity", () => {
-    fc.assert(
+    assertProperty(
+      "spacing, case, dash style and the sheet number do not change identity",
       fc.property(
         fc
           .constantFrom(...canonicalDockets)
@@ -256,7 +261,7 @@ describe("the hits that are the named decision", () => {
           ]);
         },
       ),
-      propertyConfig(),
+      {},
     );
     expect(
       exactDecisionMatches(identityOf("21 Cdo 470/2017-28"), [
@@ -491,7 +496,8 @@ describe("an entry finds its decision within its own jurisdiction", () => {
       );
 
     test(`${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`, () => {
-      fc.assert(
+      assertProperty(
+        `${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`,
         fc.property(
           fc.oneof(constitutionalPair, ordinaryPair),
           ([typed, stored, other]) => {
@@ -503,7 +509,7 @@ describe("an entry finds its decision within its own jurisdiction", () => {
             ).toEqual([hit(typed), hit(stored)]);
           },
         ),
-        propertyConfig(),
+        {},
       );
     });
   }

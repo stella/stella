@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -178,7 +178,8 @@ const continuationOutcome = async ({
 test(
   "a continuation is judged only by the awaited call, not historical snapshot shape",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "a continuation is judged only by the awaited call, not historical snapshot shape",
       fc.asyncProperty(inputArbitrary, async (canonicalInput) => {
         const echoedInput = nullWidenedRecord(canonicalInput);
         expect(await continuationOutcome({ canonicalInput, echoedInput })).toBe(
@@ -207,7 +208,7 @@ test(
           ).toBe(REJECTED);
         }
       }),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),
@@ -226,7 +227,8 @@ const unregisteredToolNameArbitrary = fc
 test(
   "a settled historical call is accepted whatever tools this request registers",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "a settled historical call is accepted whatever tools this request registers",
       fc.asyncProperty(
         inputArbitrary,
         unregisteredToolNameArbitrary,
@@ -240,7 +242,7 @@ test(
           ).toBe(ACCEPTED);
         },
       ),
-      propertyConfig({ numRuns: 60 }),
+      { numRuns: 60 },
     );
   },
   propertyTestTimeout(15_000),
