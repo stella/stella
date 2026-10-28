@@ -104,6 +104,15 @@ export const AUDIT_RESOURCE_TYPE = {
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
 
+export type AuditResourceKind = AuditResourceType;
+
+export type AuditResource = {
+  kind: AuditResourceKind;
+  id: string;
+  name: string | null;
+  available: boolean;
+};
+
 export const AUDIT_CHANGES_STATUS = {
   visible: "visible",
   featureUnavailable: "feature_unavailable",

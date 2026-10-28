@@ -9,7 +9,6 @@ import {
   AUDIT_ACTION_PROJECTIONS,
   AUDIT_RESOURCE_PROJECTIONS,
   projectAuditResourceLabel,
-  resourceNameFromChanges,
 } from "./audit-display-projection";
 
 test("every audit action and resource kind has a display projection", () => {
@@ -21,26 +20,26 @@ test("every audit action and resource kind has a display projection", () => {
   );
 });
 
-test("deleted and unknown resources show a kind and never an identifier", () => {
-  const uuid = "019a0000-0000-7000-8000-000000000002";
-  const label = projectAuditResourceLabel({
-    action: AUDIT_ACTION.DELETE,
-    changes: { id: uuid },
-    resourceType: "future_resource_kind",
-    deletedLabel: (kind) => `deleted ${kind}`,
-    unknownLabel: "item",
-  });
-  expect(label).toBe("deleted item");
-  expect(label).not.toContain(uuid);
+test("status-only matter rows retain their distinct current names", () => {
+  const labels = ["Northwind acquisition", "Contoso dispute"].map((name) =>
+    projectAuditResourceLabel({
+      action: AUDIT_ACTION.UPDATE,
+      resource: { kind: AUDIT_RESOURCE_TYPE.WORKSPACE, name },
+      deletedLabel: (kind) => `deleted ${kind}`,
+      kind: "matter",
+      unavailableLabel: (kind) => `${kind} (not available)`,
+    }),
+  );
+  expect(labels).toEqual(["Northwind acquisition", "Contoso dispute"]);
 });
 
-test("resource names come from display fields rather than identifiers", () => {
-  const uuid = "019a0000-0000-7000-8000-000000000002";
-  expect(
-    resourceNameFromChanges({
-      name: { old: null, new: "Court filing" },
-      id: uuid,
-    }),
-  ).toBe("Court filing");
-  expect(resourceNameFromChanges({ id: uuid })).toBeNull();
+test("a Czech matter update uses the translated resource kind", () => {
+  const label = projectAuditResourceLabel({
+    action: AUDIT_ACTION.UPDATE,
+    resource: { kind: AUDIT_RESOURCE_TYPE.WORKSPACE, name: null },
+    deletedLabel: (kind) => `smazaná položka: ${kind}`,
+    kind: "spis",
+    unavailableLabel: (kind) => `${kind} (není k dispozici)`,
+  });
+  expect(label).toBe("spis (není k dispozici)");
 });

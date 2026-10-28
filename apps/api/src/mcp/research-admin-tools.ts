@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_RESOURCE_TYPE,
+} from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -232,6 +235,12 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       action: v.string(),
       resourceType: v.string(),
       resourceId: v.string(),
+      resource: v.strictObject({
+        kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
+        id: v.string(),
+        name: v.nullable(v.string()),
+        available: v.boolean(),
+      }),
       changes: v.unknown(),
       changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
@@ -700,6 +709,7 @@ const handleListAuditLogTool: McpToolHandler<
         action: item.action,
         resourceType: item.resourceType,
         resourceId: item.resourceId,
+        resource: item.resource,
         changes: item.changes,
         changesStatus: item.changesStatus,
       })),

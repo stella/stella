@@ -5,6 +5,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { AuditResource } from "@stll/api-contract/audit-log";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
@@ -25,6 +26,7 @@ import {
 } from "@stll/ui/table";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { MatterRefLink } from "@/components/matter-ref-link";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -38,6 +40,7 @@ import { downloadFile } from "@/lib/utils";
 import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-change-details";
 import {
   AUDIT_ACTION_PROJECTIONS,
+  AUDIT_RESOURCE_PROJECTIONS,
   isAuditAction,
   projectAuditResourceLabel,
 } from "@/routes/_protected.admin/-components/audit-display-projection";
@@ -446,18 +449,10 @@ function AuditLogsTableBody({
             <bdi>{log.actor}</bdi>
           </TableCell>
           <TableCell className="text-xs font-medium">
-            <AuditActionSentence
-              action={log.action}
-              changes={log.changes}
-              resourceType={log.resourceType}
-            />
+            <AuditActionSentence action={log.action} resource={log.resource} />
           </TableCell>
           <TableCell className="text-xs">
-            <AuditResourceLabel
-              action={log.action}
-              changes={log.changes}
-              resourceType={log.resourceType}
-            />
+            <AuditResourceLabel action={log.action} resource={log.resource} />
           </TableCell>
           <AuditChangeDetails
             changes={log.changes}
@@ -471,70 +466,69 @@ function AuditLogsTableBody({
 
 function AuditActionSentence({
   action,
-  changes,
-  resourceType,
+  resource,
 }: {
   action: string;
-  changes: unknown;
-  resourceType: string;
+  resource: AuditLogResource;
 }) {
   const t = useTranslations();
-  const resource = resourceDisplayName({
-    action,
-    changes,
-    resourceType,
-    deletedLabel: (kind) =>
-      t("settings.organization.auditLogsDeletedResource", { kind }),
-    unknownLabel: t("settings.organization.auditLogsUnknownResource"),
-  });
+  const label = useAuditResourceLabel(action, resource);
   if (!isAuditAction(action)) {
-    return t("settings.organization.auditLogsSentenceActivity", { resource });
+    return t("settings.organization.auditLogsSentenceActivity", {
+      resource: label,
+    });
   }
-  return t(AUDIT_ACTION_PROJECTIONS[action], { resource });
+  return t(AUDIT_ACTION_PROJECTIONS[action], { resource: label });
 }
 
 function AuditResourceLabel({
   action,
-  changes,
-  resourceType,
+  resource,
 }: {
   action: string;
-  changes: unknown;
-  resourceType: string;
+  resource: AuditLogResource;
 }) {
   const t = useTranslations();
+  const label = useAuditResourceLabel(action, resource);
+  const shortId = resource.id.slice(0, 8);
+  const content =
+    resource.available && resource.kind === "workspace" ? (
+      <MatterRefLink
+        className="hover:underline focus-visible:underline"
+        workspaceId={resource.id}
+      >
+        <bdi>{label}</bdi>
+      </MatterRefLink>
+    ) : (
+      <bdi>{label}</bdi>
+    );
+
   return (
-    <bdi>
-      {resourceDisplayName({
-        action,
-        changes,
-        resourceType,
-        deletedLabel: (kind) =>
-          t("settings.organization.auditLogsDeletedResource", { kind }),
-        unknownLabel: t("settings.organization.auditLogsUnknownResource"),
-      })}
-    </bdi>
+    <div className="min-w-0">
+      <div className="truncate font-medium">{content}</div>
+      <div
+        aria-label={t("settings.organization.auditLogsResourceIdentifier", {
+          id: resource.id,
+        })}
+        className="text-muted-foreground font-mono"
+      >
+        <bdi>{shortId}</bdi>
+      </div>
+    </div>
   );
 }
 
-function resourceDisplayName({
-  action,
-  changes,
-  resourceType,
-  deletedLabel,
-  unknownLabel,
-}: {
-  action: string;
-  changes: unknown;
-  resourceType: string;
-  deletedLabel: (kind: string) => string;
-  unknownLabel: string;
-}) {
+type AuditLogResource = AuditResource;
+
+function useAuditResourceLabel(action: string, resource: AuditLogResource) {
+  const t = useTranslations();
   return projectAuditResourceLabel({
     action,
-    changes,
-    resourceType,
-    deletedLabel,
-    unknownLabel,
+    resource,
+    deletedLabel: (kind) =>
+      t("settings.organization.auditLogsDeletedResource", { kind }),
+    kind: t(AUDIT_RESOURCE_PROJECTIONS[resource.kind]),
+    unavailableLabel: (kind) =>
+      t("settings.organization.auditLogsUnavailableResource", { kind }),
   });
 }

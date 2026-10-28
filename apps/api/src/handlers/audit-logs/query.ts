@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -10,9 +10,9 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
-import { workspaceCheck } from "@/api/db/rls";
+import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, workspaces } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -35,7 +35,10 @@ import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedAuditLogId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 const auditLogCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,
@@ -177,6 +180,16 @@ const VALID_ACTIONS = new Set<string>(Object.values(AUDIT_ACTION));
 const VALID_RESOURCE_TYPES = new Set<string>(
   Object.values(AUDIT_RESOURCE_TYPE),
 );
+const AUDIT_RESOURCE_KIND_SCHEMA = v.picklist(
+  Object.values(AUDIT_RESOURCE_TYPE),
+);
+
+const toAuditResourceKind = (value: string) => {
+  if (VALID_RESOURCE_TYPES.has(value)) {
+    return v.parse(AUDIT_RESOURCE_KIND_SCHEMA, value);
+  }
+  return panic(`Persisted audit row has unknown resource type '${value}'`);
+};
 
 /**
  * Compliance-read filter over the org's append-only audit trail. Shared shape
@@ -280,6 +293,30 @@ export const queryAuditLogPage = async function* ({
         ]),
       );
 
+      const workspaceIds = [
+        ...new Set(
+          auditRows
+            .filter((row) => row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE)
+            .map((row) => brandPersistedWorkspaceId(row.resourceId)),
+        ),
+      ];
+      const workspaceResources =
+        workspaceIds.length > 0
+          ? await tx
+              .select({ id: workspaces.id, name: workspaces.name })
+              .from(workspaces)
+              .where(
+                and(
+                  eq(workspaces.organizationId, organizationId),
+                  inArray(workspaces.id, workspaceIds),
+                  workspaceIdCheck,
+                ),
+              )
+          : [];
+      const workspaceResourceMap = new Map(
+        workspaceResources.map((resource) => [resource.id, resource.name]),
+      );
+
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.ACCESS,
         resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
@@ -294,6 +331,21 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
+          resource: {
+            kind: toAuditResourceKind(row.resourceType),
+            id: row.resourceId,
+            name:
+              row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE
+                ? (workspaceResourceMap.get(
+                    brandPersistedWorkspaceId(row.resourceId),
+                  ) ?? null)
+                : null,
+            available:
+              row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE &&
+              workspaceResourceMap.has(
+                brandPersistedWorkspaceId(row.resourceId),
+              ),
+          },
           ...projectAuditReadChanges({
             resourceType: row.resourceType,
             changes: row.changes,
