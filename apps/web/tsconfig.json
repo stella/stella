@@ -34,6 +34,9 @@
     "public/handoff-init.js",
     "vite.config.ts",
     "vite.config.test.ts",
+    "chat-runtime-build-guard.ts",
+    "dev-route-build-guard.ts",
+    "route-tree.config.ts",
     "../../types"
   ],
   "exclude": ["node_modules"]
