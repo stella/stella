@@ -1,3 +1,4 @@
+// parser-output-unchanged: typed pacing availability and reply validation affect request scheduling only; parsed response values and persisted records are unchanged.
 // parser-output-unchanged: request scheduling and scoped fixture dependencies only; parsed response output is unchanged.
 // parser-output-unchanged: checked coordination clients and bounded immediate gate checks; response parsing and stored output are unchanged.
 // parser-output-unchanged: isolate default test gate state through a lightweight runner signal; production requests and parsed output are unchanged.
