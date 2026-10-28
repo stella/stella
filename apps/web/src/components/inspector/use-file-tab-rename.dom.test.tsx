@@ -811,11 +811,13 @@ test("download errors preserve every admission refusal for all renditions", asyn
   const { actionAdmissionOutcome } =
     await import("@/lib/errors/action-admission");
   const variants = {
+    marked: "marked",
     original: "original",
     pdf: "pdf",
     reference: "reference",
     "reference-scrubbed": "reference-scrubbed",
     scrubbed: "scrubbed",
+    withComments: "withComments",
   } as const satisfies Record<DownloadVariant, DownloadVariant>;
   for (const variant of Object.values(variants)) {
     for (const code of Object.values(ACTION_ADMISSION_CODES)) {
