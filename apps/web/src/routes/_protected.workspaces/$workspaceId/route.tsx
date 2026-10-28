@@ -20,6 +20,7 @@ import {
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
@@ -281,7 +282,7 @@ function RouteComponent() {
   return (
     <WorkflowStartConfirmationPromptProvider>
       {liveWorkspace?.name && (
-        <title>{pageTitleLiteral(liveWorkspace.name)}</title>
+        <RouteDocumentTitle routeId={Route.id} title={liveWorkspace.name} />
       )}
       <WorkspaceLifecycleCleanup
         flushActivityInvalidation={invalidateActivity.flush}

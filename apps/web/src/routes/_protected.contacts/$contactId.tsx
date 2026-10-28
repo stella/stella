@@ -18,13 +18,13 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
-import { pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/lib/route-presentation";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -166,7 +166,7 @@ function ContactDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
-      <title>{pageTitleLiteral(contact.displayName)}</title>
+      <RouteDocumentTitle routeId={Route.id} title={contact.displayName} />
       {/* Header */}
       {/* The breadcrumb already leads back to the list. The actions wrap
           under the name on narrow screens instead of running off the edge. */}

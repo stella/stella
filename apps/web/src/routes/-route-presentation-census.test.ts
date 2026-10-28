@@ -303,7 +303,7 @@ export function findMissingRoutePresentation({
       !exemptsAll &&
       !exemptFields?.includes("title") &&
       !source.includes("head:") &&
-      !source.includes("<title>")
+      !source.includes("<RouteDocumentTitle")
     ) {
       absent.push("title");
     }

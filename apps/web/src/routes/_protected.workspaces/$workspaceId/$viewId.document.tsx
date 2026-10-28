@@ -74,6 +74,7 @@ import {
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { RecoverableViewerBoundary } from "@/components/viewer/recoverable-viewer-boundary";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
@@ -673,6 +674,8 @@ function RouteComponentInner({
   currentFileFieldIdsByPropertyRef.current ??= new Map();
   const navigate = Route.useNavigate();
 
+  const documentTitle = entity.name || t("tasks.untitled");
+
   useExternalSyncEffect(() => {
     if (!(APIError.is(entityError) && entityError.status === 404)) {
       return;
@@ -996,6 +999,7 @@ function RouteComponentInner({
 
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
+      <RouteDocumentTitle routeId={Route.id} title={documentTitle} />
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
       {editorPdfSignTarget !== null && (
         <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
