@@ -497,6 +497,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+    reads: "load-governed",
   },
   {
     description: "Find raw objects no live decision owns",
