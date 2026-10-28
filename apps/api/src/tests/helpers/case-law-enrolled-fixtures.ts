@@ -1322,48 +1322,63 @@ const readGzipText = async (url: URL): Promise<string> =>
  */
 export const euEcjFixture = (
   documentUrl = new URL(`${EU_ECJ_CELEX}.en.html.gz`, EU_ECJ_PARSER_FIXTURES),
-): EnrolledAdapterFixture => ({
-  buildDecision: async () => {
-    const parts = ecjRawParts({
-      binding: { ...EU_ECJ_BINDING },
-      html: await readGzipText(documentUrl),
-      notice: await readGzipText(
+): EnrolledAdapterFixture => {
+  const rawFieldValues: Record<string, unknown> = {};
+  return {
+    rawFieldValues,
+    buildDecision: async () => {
+      const notice = await readGzipText(
         new URL("eu-ecj-notice-en.xml.gz", EU_ECJ_ADAPTER_FIXTURES),
-      ),
-      formex: await readGzipText(
+      );
+      const formex = await readGzipText(
         new URL(`${EU_ECJ_CELEX}.en.fmx.xml.gz`, EU_ECJ_PARSER_FIXTURES),
-      ),
-    });
+      );
+      const parts = ecjRawParts({
+        binding: { ...EU_ECJ_BINDING },
+        html: await readGzipText(documentUrl),
+        notice,
+        formex,
+      });
 
-    const reparsed = await euEcjAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
-      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-      caseNumber: "C-128/22",
-      sourceDocumentId: `${EU_ECJ_CELEX}:en`,
-      language: "en",
-      // What the crawl read off the ECLI before the notice stated it, so the
-      // fixture proves the notice replaces the inference rather than agreeing
-      // with a value handed to it.
-      court: "",
-      ecli: EU_ECJ_BINDING.ecli.value,
-      decisionDate: EU_ECJ_BINDING.date.value,
-      decisionType: "judgment",
-      sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
-      documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
-      metadata: {
-        celex: EU_ECJ_CELEX,
-        manifestationUri: EU_ECJ_BINDING.manifestation.value,
-        languageUri: EU_ECJ_BINDING.language.value,
-        cdmType: EU_ECJ_BINDING.type.value,
-      },
-    });
-    return reparsed?.type === "parsed"
-      ? reparsed.result
-      : panic(
-          `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
-        );
-  },
-});
+      for (const field of await euEcjAdapter.sourceFields.listSourceFields(
+        parts,
+      )) {
+        if (field.startsWith("notice.")) {
+          rawFieldValues[field] = notice;
+        }
+      }
+      rawFieldValues["formex.body"] = formex;
+
+      const reparsed = await euEcjAdapter.reparseStoredRaw?.({
+        raw: new TextEncoder().encode(encodeSourceRawEnvelope(parts)),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        caseNumber: "C-128/22",
+        sourceDocumentId: `${EU_ECJ_CELEX}:en`,
+        language: "en",
+        // What the crawl read off the ECLI before the notice stated it, so the
+        // fixture proves the notice replaces the inference rather than agreeing
+        // with a value handed to it.
+        court: "",
+        ecli: EU_ECJ_BINDING.ecli.value,
+        decisionDate: EU_ECJ_BINDING.date.value,
+        decisionType: "judgment",
+        sourceUrl: `https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:${EU_ECJ_CELEX}`,
+        documentUrl: `https://publications.europa.eu/resource/cellar/${EU_ECJ_EXPRESSION}.05`,
+        metadata: {
+          celex: EU_ECJ_CELEX,
+          manifestationUri: EU_ECJ_BINDING.manifestation.value,
+          languageUri: EU_ECJ_BINDING.language.value,
+          cdmType: EU_ECJ_BINDING.type.value,
+        },
+      });
+      return reparsed?.type === "parsed"
+        ? reparsed.result
+        : panic(
+            `eu-ecj fixture did not re-parse: ${reparsed?.type ?? "adapter has no reparseStoredRaw"}`,
+          );
+    },
+  };
+};
 
 // ── SK courts fixture ────────────────────────────────────
 
