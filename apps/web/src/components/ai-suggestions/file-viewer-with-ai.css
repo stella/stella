@@ -30,8 +30,15 @@
  * instead of resting under it. Box-sizing keeps the reserve inside the paper's
  * min-height, so a short document gains no scrollbar from it. Both slots,
  * because a decision reader draws its paper and a statute reader does not;
- * :is() keeps the reserve single on a column that is both. */
-[data-file-viewer-ai] :is(.reader-paper, [data-slot="reader-document-column"]) {
+ * :is() keeps the reserve single on a column that is both. A paper inside a
+ * column is an excerpt the column lays out (a provision's wording above its
+ * citing decisions), not the end of the scroll: the column already reserves
+ * the space, so the excerpt takes none and no gap opens under it. */
+[data-file-viewer-ai]
+  :is(
+    .reader-paper:not([data-slot="reader-document-column"] *),
+    [data-slot="reader-document-column"]
+  ) {
   padding-block-end: 8rem;
 }
 

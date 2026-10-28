@@ -54,6 +54,7 @@ import type {
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
 import type {
+  AISuggestionPreset,
   DocxEditorRef,
   FolioAIEditOperation,
   FolioAIEditSeverity,
@@ -761,6 +762,8 @@ type FileChatOverlayProps = {
    * on screen rather than about whatever the words happen to match.
    */
   activeLegal?: ActiveLegalDocument | undefined;
+  /** Chips over the empty composer, each sent as it is on a click. */
+  presets?: AISuggestionPreset[] | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   /**
@@ -839,6 +842,7 @@ export const FileChatOverlay = ({
   onDocxCommentsChange,
   onNewThread,
   onActiveDraftChatBound,
+  presets,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
   if (chatThreadId === undefined) {
@@ -885,6 +889,7 @@ export const FileChatOverlay = ({
         onDocxCommentsChange={onDocxCommentsChange}
         onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={onNewThread}
+        presets={presets}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />
@@ -1175,6 +1180,7 @@ const FileChatOverlayInner = ({
   onDocxCommentsChange,
   onActiveDraftChatBound,
   onNewThread,
+  presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -2758,7 +2764,9 @@ const FileChatOverlayInner = ({
           }}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
+          presets={presets}
           queueWhileGenerating
+          threadHasMessages={hasMessages}
           sendDisabledReason={sendDisabledReason}
           status={isGenerating ? "generating" : "idle"}
           dock={

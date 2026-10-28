@@ -22,9 +22,12 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 export const CitingDecisionItem = ({
   currentVersionValidFrom,
   decision,
+  leading = false,
 }: {
   decision: CitingDecisionRow;
   currentVersionValidFrom: string | null;
+  /** Among the decisions carrying the most authority on the provision. */
+  leading?: boolean;
 }) => {
   const t = useTranslations();
   const snippetId = useId();
@@ -113,6 +116,28 @@ export const CitingDecisionItem = ({
         />
       </div>
       <div className="text-muted-foreground text-2xs flex min-h-5 flex-wrap items-center gap-x-1.5">
+        {leading && (
+          <>
+            <Tooltip>
+              {/* Why it leads, on hover, the way the older-version fact
+                  below explains itself. */}
+              <TooltipTrigger
+                render={
+                  <button
+                    className="text-foreground decoration-foreground-placeholder hover:decoration-foreground-muted focus-visible:ring-ring relative cursor-default rounded-xs font-medium underline decoration-dotted underline-offset-2 focus-visible:ring-2 focus-visible:outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3"
+                    type="button"
+                  />
+                }
+              >
+                {t("statutes.leadingDecision")}
+              </TooltipTrigger>
+              <TooltipPopup>
+                {t("statutes.leadingDecisionsExplanation")}
+              </TooltipPopup>
+            </Tooltip>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
         {decided !== null && (
           <>
             <BidiText>{decided}</BidiText>

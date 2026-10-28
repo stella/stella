@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef } from "react";
+import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -6,16 +6,14 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { pickVersionAt } from "@stll/api-contract/statute-version";
+import type { AISuggestionPreset } from "@stll/folio-react";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
-import { InfoIcon } from "@stll/ui/icons";
+import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { Skeleton } from "@stll/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { useRequireAccount } from "@/components/auth/use-require-account";
 import {
   InspectorFindBar,
   useInspectorFind,
@@ -28,51 +26,53 @@ import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
-import {
-  CitingDecisionItem,
-  ProvisionCitingDecisions,
-} from "@/features/statutes/components/provision-citing-decisions";
+import Tooltip from "@/components/tooltip";
 import type { CitingDecisionRow } from "@/features/statutes/components/provision-citing-decisions";
+import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
 import { ProvisionHistory } from "@/features/statutes/components/provision-history";
-import { ProvisionLeadingDecisions } from "@/features/statutes/components/provision-leading-decisions";
 import { ProvisionVersionContext } from "@/features/statutes/components/provision-version-context";
 import { ProvisionWording } from "@/features/statutes/components/provision-wording";
 import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
-import { StatuteVersionSwitcher } from "@/features/statutes/components/statute-version-switcher";
+import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
 import {
   statuteCitationCountsOptions,
   topCitingDecisionsOptions,
 } from "@/features/statutes/queries/citing-decisions";
+import type { PublicStatuteVersion } from "@/features/statutes/queries/statutes";
 import {
   statuteOptions,
   statuteVersionsOptions,
 } from "@/features/statutes/queries/statutes";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import {
   readProvisionCitingSearch,
   updateProvisionCitingSearch,
 } from "@/features/statutes/statute-page-search";
-import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status";
+import {
+  resolveStatuteDisplayStatus,
+  STATUTE_STATUS_LABEL_KEYS,
+} from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  formatValidityDate,
+  formatValidityRange,
+} from "@/lib/statutes/statute-format";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 import { useQueryViewError } from "@/lib/use-query-view";
 
-// The ask actions pull the prompt builders the chat needs; the pane is read
-// far more often than it is asked a question, so they arrive on demand.
-const LazyProvisionAskActions = lazy(async () => {
-  const module =
-    await import("@/features/statutes/components/provision-ask-actions");
-  return { default: module.ProvisionAskActions };
-});
+const SUMMARIZE_PRESET_ID = "provision-summarize-case-law";
 
 /**
  * One provision of a statute, in the inspector: its wording first, landed on
- * the cited subdivision; the decisions that carry the most authority on it,
- * with the passages applying it; every citing decision; how the wording
- * changed; and a way to ask about it that starts from those passages.
+ * the cited subdivision; every decision citing it, the leading ones first;
+ * and the wordings it has had. Questions go to the chat docked at the foot of
+ * the pane, which offers a start from the leading decisions' passages.
  */
 export const ProvisionInspectorView = ({
   onClose,
@@ -127,20 +127,40 @@ export const ProvisionInspectorView = ({
   // The tab keeps its identity across versions: the reader is still looking
   // at the same provision, in another consolidation's wording.
   const switchVersion = (documentId: string) => {
-    const next = optionalArray(versions).find(
-      (version) => version.id === documentId,
-    );
+    const next = availableVersions.find((version) => version.id === documentId);
     if (next === undefined) {
       return;
     }
     const nextPayload: ProvisionViewPayload = {
       ...payload,
       documentId: next.id,
-      versionCount: optionalArray(versions).length,
+      versionCount: availableVersions.length,
       versionValidFrom: next.versionValidFrom,
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
+  // The act's page at this consolidation, where the reader's own text and its
+  // comparison live.
+  const statuteTarget = createStatuteLinkTarget({
+    country: selectedVersion?.country ?? payload.jurisdiction,
+    documentId: payload.documentId,
+    eli: selectedVersion?.eli ?? null,
+    slug: selectedVersion?.slug ?? null,
+    versionValidFrom: selectedVersion?.versionValidFrom ?? null,
+  });
+  // Comparing sets this provision's wording in another version beside the
+  // one on screen, in the comparison the act's page already draws.
+  const openComparison = (versionValidFrom: string) => {
+    detached(
+      navigate({
+        ...statuteTarget,
+        search: { compare: versionValidFrom, provision: payload.anchorId },
+      }),
+      "statutes.provision-compare",
+    );
+  };
+  // The citing list shows this read's failure and its retry; here it only
+  // seeds the chat's start, which goes without passages until it lands.
   const leadingView = queryView(
     useQuery(
       topCitingDecisionsOptions({
@@ -151,11 +171,11 @@ export const ProvisionInspectorView = ({
     ),
   );
   const leadingDecisions =
-    leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
-  const leadingCount =
-    leadingView.type === "pending" || leadingView.type === "error"
-      ? null
-      : leadingDecisions.length;
+    leadingView.type === "items" ? leadingView.items : [];
+  const summarizePreset = useProvisionSummaryPreset({
+    passages: leadingDecisions,
+    payload,
+  });
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   // The wording's own query, read here only for whether there is text to
@@ -180,6 +200,11 @@ export const ProvisionInspectorView = ({
     documentId: payload.documentId,
     title: payload.statuteTitle,
   } as const satisfies ActiveLegalDocument;
+  // Opened from a decision that applied this very consolidation, the pane
+  // says so: the version is the decision's, not merely the one picked.
+  const appliedInDecision =
+    payload.decisionContext !== undefined &&
+    payload.decisionContext.appliedDocumentId === payload.documentId;
 
   return (
     <div
@@ -187,6 +212,48 @@ export const ProvisionInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
+        actions={[
+          ...(selectedVersion === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={
+                        selectedVersion.documentUrl ?? selectedVersion.sourceUrl
+                      }
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "show-in-text",
+            requires: AVAILABLE_EVERYWHERE,
+            render: () => (
+              <Tooltip
+                content={t("statutes.showInText")}
+                render={
+                  <Button
+                    aria-label={t("statutes.showInText")}
+                    render={
+                      <Link
+                        hash={payload.highlightAnchorId ?? payload.anchorId}
+                        {...statuteTarget}
+                      />
+                    }
+                    size="icon-xs"
+                    variant="ghost"
+                  />
+                }
+              >
+                <Maximize2Icon className="size-3.5" />
+              </Tooltip>
+            ),
+          },
+        ]}
         label={tab.label}
         labelOverflow="wrap"
         labelContent={
@@ -200,19 +267,18 @@ export const ProvisionInspectorView = ({
         onClose={onClose}
       />
       <InspectorFindBar find={find} />
-      {/* The bar floats over the provision the way it floats over a PDF page;
-          the scroll area below it moves, the corner does not. */}
       <LegalReaderAIChat
         activeLegal={activeLegal}
         aiMode="enabled"
         className="min-h-0 flex-1"
+        presets={[summarizePreset]}
       >
         <ScrollArea axis="vertical" className="h-full">
           {/* The gutter and the trailing room the composer needs belong to the
               column; the text root inside it carries the reader's own scale. */}
           <div data-slot="reader-document-column">
-            {/* The floating bar owns the top corner, so the first row starts
-                below it rather than under the zoom controls. */}
+            {/* The floating bar owns the top row, so the wording starts below
+                it rather than under the version and the zoom controls. */}
             <div
               className={cn(
                 "flex flex-col gap-6 pb-4",
@@ -221,83 +287,24 @@ export const ProvisionInspectorView = ({
               ref={contentRef}
               {...textScale.rootProps}
             >
-              {/* The tab header already names the provision and the act; this
-                  zone says which consolidation is on screen, then offers
-                  another one and the way into the full text. */}
-              <div className="flex flex-col gap-2">
-                {selectedVersion !== undefined && (
-                  <div className="flex min-w-0 items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <ProvisionVersionContext
-                        decisionContext={payload.decisionContext}
-                        documentId={payload.documentId}
-                        currentVersionId={currentVersion?.id}
-                        onVersionChange={switchVersion}
-                        expression={selectedVersion}
-                        status={selectedVersion.status}
-                        validFrom={selectedVersion.versionValidFrom}
-                        validTo={selectedVersion.versionValidTo}
-                      />
-                    </div>
-                    <OpenOriginalButton
-                      className="-my-0.5"
-                      href={
-                        selectedVersion.documentUrl ?? selectedVersion.sourceUrl
-                      }
-                      size="icon-xs"
-                    />
-                  </div>
-                )}
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                  <StatuteVersionSwitcher
-                    currentVersionId={payload.documentId}
-                    onVersionChange={switchVersion}
-                    versions={availableVersions}
-                  />
-                  <Link
-                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-                    hash={payload.highlightAnchorId ?? payload.anchorId}
-                    {...createStatuteLinkTarget({
-                      country: selectedVersion?.country ?? payload.jurisdiction,
-                      documentId: payload.documentId,
-                      eli: selectedVersion?.eli ?? null,
-                      slug: selectedVersion?.slug ?? null,
-                      versionValidFrom:
-                        selectedVersion?.versionValidFrom ?? null,
-                    })}
-                  >
-                    {t("statutes.showInText")}
-                  </Link>
-                </div>
-              </div>
+              {appliedInDecision && selectedVersion !== undefined && (
+                <ProvisionVersionContext
+                  currentVersionId={currentVersion?.id}
+                  decisionContext={payload.decisionContext}
+                  documentId={payload.documentId}
+                  expression={selectedVersion}
+                  onVersionChange={switchVersion}
+                  status={selectedVersion.status}
+                  validFrom={selectedVersion.versionValidFrom}
+                  validTo={selectedVersion.versionValidTo}
+                />
+              )}
 
               <ProvisionWording
                 anchorId={payload.anchorId}
                 documentId={payload.documentId}
                 highlightAnchorId={payload.highlightAnchorId}
               />
-
-              <ProvisionSection
-                count={leadingCount}
-                explanation={t("statutes.leadingDecisionsExplanation")}
-                title={t("statutes.leadingDecisions")}
-              >
-                <ProvisionLeadingDecisions view={leadingView}>
-                  <ul className="divide-border/60 m-0 flex list-none flex-col divide-y p-0">
-                    {leadingDecisions.map((decision) => (
-                      <li key={decision.decisionId}>
-                        <CitingDecisionItem
-                          currentVersionValidFrom={
-                            selectedVersion?.versionValidFrom ??
-                            payload.versionValidFrom
-                          }
-                          decision={decision}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </ProvisionLeadingDecisions>
-              </ProvisionSection>
 
               <ProvisionSection
                 count={citingCount}
@@ -356,55 +363,163 @@ export const ProvisionInspectorView = ({
                   />
                 </ProvisionSection>
               )}
-
-              <ProvisionSection title={t("common.askAI")}>
-                <ProvisionAsk
-                  activeLegal={activeLegal}
-                  passages={leadingDecisions}
-                  payload={payload}
-                />
-              </ProvisionSection>
             </div>
           </div>
         </ScrollArea>
+        {/* One row, the way the act's own reader carries its path: which
+            version is on screen and the others to open or compare, then the
+            zoom. */}
         <FloatingZoomControls
           atMax={textScale.atMax}
           atMin={textScale.atMin}
+          className="start-2 min-w-0 justify-between text-xs"
           level={textScale.level}
           onReset={textScale.reset}
           onZoom={textScale.zoom}
-        />
+        >
+          <ProvisionVersionBar
+            onCompare={openComparison}
+            onVersionChange={switchVersion}
+            selectedVersion={selectedVersion}
+            versions={availableVersions}
+          />
+        </FloatingZoomControls>
       </LegalReaderAIChat>
     </div>
   );
 };
 
-/** One entry per decision: a decision applying the provision twice leads once. */
-const uniqueByDecision = (
-  rows: readonly CitingDecisionRow[],
-): CitingDecisionRow[] => {
-  const seen = new Set<string>();
-  const unique: CitingDecisionRow[] = [];
-  for (const row of rows) {
-    if (seen.has(row.decisionId)) {
-      continue;
-    }
-    seen.add(row.decisionId);
-    unique.push(row);
+/**
+ * The consolidation on screen as one control: its status as a dot, its
+ * window as the menu that opens another version or sets one beside it.
+ */
+const ProvisionVersionBar = ({
+  onCompare,
+  onVersionChange,
+  selectedVersion,
+  versions,
+}: {
+  onCompare: (versionValidFrom: string) => void;
+  onVersionChange: (documentId: string) => void;
+  selectedVersion: PublicStatuteVersion | undefined;
+  versions: readonly PublicStatuteVersion[];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  if (selectedVersion === undefined) {
+    return <span className="min-w-0 flex-1" />;
   }
-  return unique;
+  const ineligibleLabel = ineligibleExpressionLabelKey(selectedVersion);
+  const displayStatus = resolveStatuteDisplayStatus({
+    status: selectedVersion.status,
+    validFrom: selectedVersion.versionValidFrom,
+  });
+  let statusLabel = selectedVersion.status;
+  if (ineligibleLabel !== null) {
+    statusLabel = t(ineligibleLabel);
+  } else if (displayStatus !== null) {
+    statusLabel = t(STATUTE_STATUS_LABEL_KEYS[displayStatus]);
+  }
+  const range = formatValidityRange({
+    format,
+    openEnded: t("statutes.openEnded"),
+    validFrom: selectedVersion.versionValidFrom,
+    validTo: selectedVersion.versionValidTo,
+  });
+
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-1.5 ps-2">
+      <span
+        aria-label={statusLabel}
+        className="flex shrink-0 items-center"
+        role="img"
+        title={statusLabel}
+      >
+        <StatuteStatusDot
+          expression={selectedVersion}
+          status={selectedVersion.status}
+          validFrom={selectedVersion.versionValidFrom}
+        />
+      </span>
+      {versions.length > 1 ? (
+        <StatuteVersionMenu
+          currentVersionId={selectedVersion.id}
+          onCompare={onCompare}
+          onVersionChange={onVersionChange}
+          versions={versions}
+        />
+      ) : (
+        <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+          {ineligibleLabel === null
+            ? range
+            : t("statutes.statedWindow", { range })}
+        </span>
+      )}
+    </span>
+  );
+};
+
+/**
+ * The start the chat offers for this provision: how courts apply it, asked
+ * from the passages of its leading decisions so the answer begins with what
+ * the courts said and the case-law tools are reached for the rest. The
+ * prompt names the provision, which is what those tools look it up by.
+ */
+const useProvisionSummaryPreset = ({
+  passages,
+  payload,
+}: {
+  passages: readonly CitingDecisionRow[];
+  payload: ProvisionViewPayload;
+}): AISuggestionPreset => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const validFrom = formatValidityDate(payload.versionValidFrom, format);
+  const subject =
+    validFrom === null
+      ? t("statutes.provisionPromptSubjectUndated", {
+          eli: payload.eli,
+          provision: payload.provisionLabel,
+          statute: payload.statuteTitle,
+        })
+      : t("statutes.provisionPromptSubject", {
+          date: validFrom,
+          eli: payload.eli,
+          provision: payload.provisionLabel,
+          statute: payload.statuteTitle,
+        });
+  const passageLines = passages.flatMap((passage) => {
+    if (passage.sentenceText === null) {
+      return [];
+    }
+    const decided = formatValidityDate(passage.decisionDate, format);
+    const source =
+      decided === null
+        ? `${passage.caseNumber} (${passage.court})`
+        : `${passage.caseNumber} (${passage.court}, ${decided})`;
+    return [`- ${source}: ${passage.sentenceText}`];
+  });
+  const context =
+    passageLines.length === 0
+      ? ""
+      : t("statutes.provisionAskContextPrompt", {
+          passages: passageLines.join("\n"),
+        });
+  return {
+    id: SUMMARIZE_PRESET_ID,
+    label: t("statutes.provisionAskSummarize"),
+    prompt: `${t("statutes.provisionAskSummarizePrompt", { subject })}${context}`,
+  };
 };
 
 const ProvisionSection = ({
   children,
   title,
   count = null,
-  explanation,
 }: {
   children: ReactNode;
   title: string;
   count?: number | null;
-  explanation?: string;
 }) => {
   const format = useFormatter();
   return (
@@ -414,47 +529,8 @@ const ProvisionSection = ({
         {count === null ? null : (
           <span className="ms-2 tabular-nums">{format.number(count)}</span>
         )}
-        {explanation === undefined ? null : (
-          <Tooltip>
-            <TooltipTrigger
-              className="ms-1 inline-flex min-h-11 min-w-11 items-center justify-center"
-              aria-label={explanation}
-            >
-              <InfoIcon className="size-3" />
-            </TooltipTrigger>
-            <TooltipContent>{explanation}</TooltipContent>
-          </Tooltip>
-        )}
       </h3>
       {children}
     </section>
-  );
-};
-
-/**
- * The two ways to ask about a provision, drawn for every reader. Writing the
- * question costs nothing; sending it is what needs an account, and the gate
- * asks there, keeping the wording, the citations and the history on screen.
- */
-const ProvisionAsk = ({
-  activeLegal,
-  passages,
-  payload,
-}: {
-  activeLegal: ActiveLegalDocument;
-  passages: readonly CitingDecisionRow[];
-  payload: ProvisionViewPayload;
-}) => {
-  const ensureAccount = useRequireAccount();
-
-  return (
-    <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-      <LazyProvisionAskActions
-        activeLegal={activeLegal}
-        ensureAccount={ensureAccount}
-        passages={passages}
-        payload={payload}
-      />
-    </Suspense>
   );
 };

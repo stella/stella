@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { PROVISION_CITING_FILTER_LIMITS } from "@stll/api-contract/provision-citing-decisions";
@@ -15,7 +15,11 @@ import { Skeleton } from "@stll/ui/skeleton";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
-import { citingDecisionsInfiniteOptions } from "@/features/statutes/queries/citing-decisions";
+import { orderCitingDecisions } from "@/features/statutes/components/provision-citing-decisions.logic";
+import {
+  citingDecisionsInfiniteOptions,
+  topCitingDecisionsOptions,
+} from "@/features/statutes/queries/citing-decisions";
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -24,7 +28,6 @@ import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { PublicLawData } from "@/lib/public-law-api";
 
-export { CitingDecisionItem } from "@/features/statutes/components/citing-decision-item";
 export type CitingDecisionRow = PublicLawData<
   (typeof api.case.provisions)["citing-decisions"]["get"]
 >["items"][number];
@@ -38,6 +41,12 @@ type ProvisionCitingDecisionsProps = {
   onFiltersChange: (filters: ProvisionCitingSearch) => void;
 };
 
+/**
+ * Every decision citing the provision, as one list: the leading decisions
+ * first and marked as leading, then the rest in the order the reader picked.
+ * The two reads settle together, so a leading decision never jumps from the
+ * list's body to its head under the reader's eyes.
+ */
 export const ProvisionCitingDecisions = ({
   anchorId,
   eli,
@@ -62,13 +71,20 @@ export const ProvisionCitingDecisions = ({
       filters,
     ),
   );
-  const byDecision = new Map<string, CitingDecisionRow>();
-  for (const page of optionalArray(data?.pages)) {
-    for (const decision of page.items) {
-      byDecision.set(decision.decisionId, decision);
-    }
-  }
-  const decisions = [...byDecision.values()];
+  const leadingQuery = useQuery(
+    topCitingDecisionsOptions({ anchor: anchorId, eli, jurisdiction }),
+  );
+  // A court or year narrows the list to what matches; the leading read was
+  // not narrowed, so its decisions keep their mark but not the list's head.
+  const pinLeading =
+    filters.citingCourt === undefined && filters.citingYear === undefined;
+  const loaded = optionalArray(data?.pages).flatMap((page) => page.items);
+  const decisions = orderCitingDecisions({
+    leading: optionalArray(leadingQuery.data),
+    pinLeading,
+    rest: loaded,
+  });
+  const listPending = isPending || (pinLeading && leadingQuery.isPending);
   const snapshot = data?.pages.at(0)?.snapshot;
   return (
     <div className="flex flex-col gap-2">
@@ -144,40 +160,39 @@ export const ProvisionCitingDecisions = ({
       {snapshot?.type === "capped" && (
         <p className="text-muted-foreground text-xs">
           {t("statutes.citingDecisionsSnapshotCapped", {
-            count: format.number(decisions.length),
+            count: format.number(
+              new Set(loaded.map((decision) => decision.decisionId)).size,
+            ),
             limit: format.number(snapshot.limit),
           })}
         </p>
       )}
-      {isPending && <CitingDecisionsLoader />}
+      {listPending && <CitingDecisionsLoader />}
       {isError && (
-        <RecoverableErrorStatus
-          className="flex flex-col items-start gap-1"
-          message={t("errors.actionFailed")}
-          messageClassName="text-muted-foreground text-xs"
-          actions={
-            <Button
-              onClick={() =>
-                detached(refetch(), "statutes.citing-decisions-retry")
-              }
-              size="sm"
-              variant="ghost"
-            >
-              {t("common.retry")}
-            </Button>
+        <ReadRetry
+          onRetry={() => detached(refetch(), "statutes.citing-decisions-retry")}
+        />
+      )}
+      {/* Without the leading read the list still stands; it only loses its
+          head until the retry brings it back. */}
+      {leadingQuery.isError && (
+        <ReadRetry
+          onRetry={() =>
+            detached(leadingQuery.refetch(), "statutes.leading-decisions-retry")
           }
         />
       )}
-      {!isPending && !isError && decisions.length === 0 && (
+      {!listPending && !isError && decisions.length === 0 && (
         <p className="text-muted-foreground text-xs">{t("common.noResults")}</p>
       )}
-      {!isPending && !isError && decisions.length > 0 && (
+      {!listPending && !isError && decisions.length > 0 && (
         <ul className="divide-border/60 m-0 flex list-none flex-col divide-y p-0">
-          {decisions.map((decision) => (
+          {decisions.map(({ decision, leading }) => (
             <li key={decision.decisionId}>
               <CitingDecisionItem
                 currentVersionValidFrom={currentVersionValidFrom}
                 decision={decision}
+                leading={leading}
               />
             </li>
           ))}
@@ -196,6 +211,22 @@ export const ProvisionCitingDecisions = ({
         </Button>
       )}
     </div>
+  );
+};
+
+const ReadRetry = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations();
+  return (
+    <RecoverableErrorStatus
+      className="flex flex-col items-start gap-1"
+      message={t("errors.actionFailed")}
+      messageClassName="text-muted-foreground text-xs"
+      actions={
+        <Button onClick={onRetry} size="sm" variant="ghost">
+          {t("common.retry")}
+        </Button>
+      }
+    />
   );
 };
 
