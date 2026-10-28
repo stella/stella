@@ -636,6 +636,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2001-01-01",

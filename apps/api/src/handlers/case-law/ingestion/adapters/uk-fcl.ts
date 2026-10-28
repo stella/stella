@@ -12,6 +12,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
@@ -296,6 +297,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
         case "tip":
           return Result.ok({
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             sourceUrl,
             nextCursor: JSON.stringify(
               reached
@@ -312,6 +314,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           if (listed.next !== null) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify({
                 type: "sweep",
@@ -341,6 +344,7 @@ const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
           ) {
             return Result.ok({
               decisions,
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               sourceUrl,
               nextCursor: JSON.stringify(state),
             });
