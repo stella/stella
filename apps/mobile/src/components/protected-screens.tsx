@@ -1,5 +1,9 @@
 import { Stack, useRouter, useSegments } from "expo-router";
-import type { NativeStackHeaderItem } from "expo-router/native-stack";
+import type { Href } from "expo-router";
+import type {
+  NativeStackHeaderItem,
+  NativeStackHeaderItemButton,
+} from "expo-router/native-stack";
 import { useTranslations } from "use-intl";
 
 import { ChangesProvider } from "@/components/changes";
@@ -12,6 +16,8 @@ import { useNewChat } from "@/components/new-chat";
 import { SelectionProvider } from "@/components/selection";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
+import { KeyCommands } from "@/native/key-commands";
+import type { KeyCommand } from "@/native/key-commands";
 import { LayoutMetricsProvider } from "@/native/layout-metrics";
 import { useAppColors } from "@/theme";
 
@@ -70,142 +76,228 @@ const Screens = () => {
     headerTitleStyle: { color: colors.text },
   } as const;
 
+  const shortcuts = useShortcuts(tabItems);
+
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShadowVisible: false,
-            headerShown: true,
-            headerTintColor: colors.text,
-            headerTransparent: true,
-            // The system's own search button, which opens straight into the
-            // field, as t3code's search does; the bar's trailing edge holds it.
-            headerSearchBarOptions:
-              tab === "more"
-                ? undefined
-                : {
-                    allowToolbarIntegration: false,
-                    autoCapitalize: "none",
-                    hideWhenScrolling: false,
-                    onClose: () => {
-                      setSearching(false);
-                    },
-                    onChangeText: (event) => {
-                      setQuery(event.nativeEvent.text);
-                    },
-                    onOpen: () => {
-                      setSearching(true);
-                    },
-                    placeholder: header("search"),
-                    placement: "integratedButton",
-                    ref: searchBar,
-                  },
-            title: "",
-            unstable_headerLeftItems: () =>
-              accountGlyph === null
-                ? []
-                : [
-                    {
-                      icon: { source: accountGlyph, type: "image" },
-                      label: tabs("settings"),
-                      onPress: () => {
-                        router.push("/settings");
+    <KeyCommands commands={shortcuts.commands} onCommand={shortcuts.run}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Protected guard={signedIn}>
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              headerShadowVisible: false,
+              headerShown: true,
+              headerTintColor: colors.text,
+              headerTransparent: true,
+              // The system's own search button, which opens straight into the
+              // field, as t3code's search does; the bar's trailing edge holds it.
+              headerSearchBarOptions:
+                tab === "more"
+                  ? undefined
+                  : {
+                      allowToolbarIntegration: false,
+                      autoCapitalize: "none",
+                      hideWhenScrolling: false,
+                      onClose: () => {
+                        setSearching(false);
                       },
-                      type: "button",
-                    },
-                  ],
-            unstable_headerRightItems: () => tabItems,
-          }}
-        />
-        <Stack.Screen
-          name="settings"
-          options={{
-            ...pushedScreen,
-            presentation: "modal",
-            title: tabs("settings"),
-            unstable_headerRightItems: () =>
-              closeGlyph === null
-                ? []
-                : [
-                    {
-                      icon: { source: closeGlyph, type: "image" },
-                      label: tabs("close"),
-                      onPress: () => {
-                        router.back();
+                      onChangeText: (event) => {
+                        setQuery(event.nativeEvent.text);
                       },
-                      type: "button",
+                      onOpen: () => {
+                        setSearching(true);
+                      },
+                      placeholder: header("search"),
+                      placement: "integratedButton",
+                      ref: searchBar,
                     },
-                  ],
-          }}
-        />
-        <Stack.Screen name="thread/[threadId]" />
-        <Stack.Screen
-          name="matter/new"
-          options={{
-            ...pushedScreen,
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.5, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-        <Stack.Screen
-          name="scan"
-          options={{
-            ...pushedScreen,
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.75, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-        <Stack.Screen name="timers/index" options={pushedScreen} />
-        <Stack.Screen
-          name="timers/new"
-          options={{
-            ...pushedScreen,
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.75, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-        <Stack.Screen
-          name="task/new"
-          options={{
-            ...pushedScreen,
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.75, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-        <Stack.Screen
-          name="law/index"
-          options={{
-            ...pushedScreen,
-            title: tabs("law"),
-          }}
-        />
-        <Stack.Screen name="law/[decisionId]" />
-        <Stack.Screen
-          name="matter/[workspaceId]/index"
-          options={pushedScreen}
-        />
-        <Stack.Screen
-          name="matter/[workspaceId]/[entityId]"
-          options={{
-            contentStyle: { backgroundColor: colors.card },
-            presentation: "formSheet",
-            sheetAllowedDetents: [0.5, 1],
-            sheetGrabberVisible: true,
-          }}
-        />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="sign-in" />
-      </Stack.Protected>
-    </Stack>
+              title: "",
+              unstable_headerLeftItems: () =>
+                accountGlyph === null
+                  ? []
+                  : [
+                      {
+                        icon: { source: accountGlyph, type: "image" },
+                        label: tabs("settings"),
+                        onPress: () => {
+                          router.push("/settings");
+                        },
+                        type: "button",
+                      },
+                    ],
+              unstable_headerRightItems: () => tabItems,
+            }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{
+              ...pushedScreen,
+              presentation: "modal",
+              title: tabs("settings"),
+              unstable_headerRightItems: () =>
+                closeGlyph === null
+                  ? []
+                  : [
+                      {
+                        icon: { source: closeGlyph, type: "image" },
+                        label: tabs("close"),
+                        onPress: () => {
+                          router.back();
+                        },
+                        type: "button",
+                      },
+                    ],
+            }}
+          />
+          <Stack.Screen name="thread/[threadId]" />
+          <Stack.Screen
+            name="matter/new"
+            options={{
+              ...pushedScreen,
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.5, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen
+            name="scan"
+            options={{
+              ...pushedScreen,
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen name="timers/index" options={pushedScreen} />
+          <Stack.Screen
+            name="timers/new"
+            options={{
+              ...pushedScreen,
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen
+            name="task/new"
+            options={{
+              ...pushedScreen,
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+          <Stack.Screen
+            name="law/index"
+            options={{
+              ...pushedScreen,
+              title: tabs("law"),
+            }}
+          />
+          <Stack.Screen name="law/[decisionId]" />
+          <Stack.Screen
+            name="matter/[workspaceId]/index"
+            options={pushedScreen}
+          />
+          <Stack.Screen
+            name="matter/[workspaceId]/[entityId]"
+            options={{
+              contentStyle: { backgroundColor: colors.card },
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.5, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="sign-in" />
+        </Stack.Protected>
+      </Stack>
+    </KeyCommands>
   );
 };
+
+/** Where ⌘1 to ⌘4 go. */
+const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
+  ["tab.chat", "/"],
+  ["tab.tasks", "/tasks"],
+  ["tab.matters", "/matters"],
+  ["tab.more", "/more"],
+]);
+
+/**
+ * A hardware keyboard's shortcuts, as t3code gives an iPad: ⌘N for the
+ * open tab's "+", ⌘F to search it, ⌘1 to ⌘4 for the tabs, ⌘, for the
+ * settings and Escape to close what is open over them.
+ */
+function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
+  commands: readonly KeyCommand[];
+  run: (id: string) => void;
+} {
+  const t = useTranslations("shortcuts");
+  const tabs = useTranslations("tabs");
+  const router = useRouter();
+  const { searchBar } = useHeaderSearch();
+  const primary = tabItems.find(
+    (item): item is NativeStackHeaderItemButton => item.type === "button",
+  );
+
+  const commands: KeyCommand[] = [
+    ...(primary === undefined
+      ? []
+      : [
+          {
+            id: "new",
+            input: "n",
+            modifiers: ["command"] as const,
+            title: primary.label,
+          },
+        ]),
+    { id: "search", input: "f", modifiers: ["command"], title: t("search") },
+    { id: "tab.chat", input: "1", modifiers: ["command"], title: tabs("chat") },
+    {
+      id: "tab.tasks",
+      input: "2",
+      modifiers: ["command"],
+      title: tabs("tasks"),
+    },
+    {
+      id: "tab.matters",
+      input: "3",
+      modifiers: ["command"],
+      title: tabs("matters"),
+    },
+    { id: "tab.more", input: "4", modifiers: ["command"], title: tabs("more") },
+    {
+      id: "settings",
+      input: ",",
+      modifiers: ["command"],
+      title: tabs("settings"),
+    },
+    { id: "close", input: "escape", modifiers: [], title: tabs("close") },
+  ];
+
+  const run = (id: string) => {
+    if (id === "new") {
+      primary?.onPress();
+    } else if (id === "search") {
+      searchBar.current?.focus();
+    } else if (id === "settings") {
+      router.push("/settings");
+    } else if (id === "close") {
+      if (router.canGoBack()) {
+        router.back();
+      }
+    } else {
+      const route = TAB_ROUTES.get(id);
+      if (route !== undefined) {
+        router.navigate(route);
+      }
+    }
+  };
+
+  return { commands, run };
+}
 
 /** The header's action for a tab, if it has one. */
 const useTabHeaderItems = (tab: string): NativeStackHeaderItem[] => {

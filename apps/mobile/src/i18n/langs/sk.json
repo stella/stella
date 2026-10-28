@@ -210,5 +210,8 @@
     "uploadFailed": "Sken sa nepodarilo nahrať. Skúste to znova.",
     "failedTitle": "Skenovanie zlyhalo",
     "failed": "Fotoaparát sken neuložil. Skúste to znova."
+  },
+  "shortcuts": {
+    "search": "Hľadať"
   }
 }

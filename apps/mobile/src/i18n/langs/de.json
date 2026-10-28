@@ -210,5 +210,8 @@
     "uploadFailed": "Der Scan konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
     "failedTitle": "Scan fehlgeschlagen",
     "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut."
+  },
+  "shortcuts": {
+    "search": "Suchen"
   }
 }

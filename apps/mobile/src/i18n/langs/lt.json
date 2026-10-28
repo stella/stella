@@ -210,5 +210,8 @@
     "uploadFailed": "Nepavyko įkelti skenavimo. Bandykite dar kartą.",
     "failedTitle": "Skenuoti nepavyko",
     "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
+  },
+  "shortcuts": {
+    "search": "Ieškoti"
   }
 }

@@ -210,5 +210,8 @@
     "uploadFailed": "No se pudo subir el escaneo. Inténtelo de nuevo.",
     "failedTitle": "Error al escanear",
     "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo."
+  },
+  "shortcuts": {
+    "search": "Buscar"
   }
 }

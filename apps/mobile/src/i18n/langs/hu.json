@@ -210,5 +210,8 @@
     "uploadFailed": "A szkennelt dokumentumot nem sikerült feltölteni. Próbálja újra.",
     "failedTitle": "A szkennelés nem sikerült",
     "failed": "A kamera nem tudta menteni a szkennelést. Próbálja újra."
+  },
+  "shortcuts": {
+    "search": "Keresés"
   }
 }

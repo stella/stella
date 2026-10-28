@@ -210,5 +210,8 @@
     "uploadFailed": "Não foi possível enviar a digitalização. Tente novamente.",
     "failedTitle": "Falha na digitalização",
     "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
+  },
+  "shortcuts": {
+    "search": "Pesquisar"
   }
 }

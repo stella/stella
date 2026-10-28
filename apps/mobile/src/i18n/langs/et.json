@@ -210,5 +210,8 @@
     "uploadFailed": "Skanni ei õnnestunud üles laadida. Proovige uuesti.",
     "failedTitle": "Skannimine ebaõnnestus",
     "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
+  },
+  "shortcuts": {
+    "search": "Otsi"
   }
 }

@@ -210,5 +210,8 @@
     "uploadFailed": "The scan could not be uploaded. Try again.",
     "failedTitle": "Scan failed",
     "failed": "The camera could not save the scan. Try again."
+  },
+  "shortcuts": {
+    "search": "Search"
   }
 }

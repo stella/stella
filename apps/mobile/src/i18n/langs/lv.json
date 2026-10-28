@@ -210,5 +210,8 @@
     "uploadFailed": "Skenējumu neizdevās augšupielādēt. Mēģiniet vēlreiz.",
     "failedTitle": "Skenēšana neizdevās",
     "failed": "Kamera nevarēja saglabāt skenējumu. Mēģiniet vēlreiz."
+  },
+  "shortcuts": {
+    "search": "Meklēt"
   }
 }

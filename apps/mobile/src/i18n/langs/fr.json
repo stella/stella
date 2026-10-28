@@ -210,5 +210,8 @@
     "uploadFailed": "La numérisation n’a pas pu être envoyée. Réessayez.",
     "failedTitle": "Échec de la numérisation",
     "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez."
+  },
+  "shortcuts": {
+    "search": "Rechercher"
   }
 }

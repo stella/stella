@@ -210,5 +210,8 @@
     "uploadFailed": "Nie udało się przesłać skanu. Spróbuj ponownie.",
     "failedTitle": "Skanowanie nie powiodło się",
     "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
+  },
+  "shortcuts": {
+    "search": "Szukaj"
   }
 }
