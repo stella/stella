@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
       "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
+      "configurationIncomplete": "Diese Aktion ist nicht vollständig eingerichtet. Wenden Sie sich an Ihre Administration.",
       "contact": "Kontaktieren Sie uns",
       "featureDisabled": "Diese Funktion ist vorübergehend deaktiviert.",
+      "leaseLost": "Die Reservierung für die Aktion ist abgelaufen. Bitte versuchen Sie es erneut.",
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
-      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
+      "organizationStateUnreadable": "Der Zugriff der Organisation konnte nicht geprüft werden. Bitte versuchen Sie es in Kürze erneut.",
+      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert.",
+      "storeUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in Kürze erneut."
     },
     "actionFailed": "Das hat nicht funktioniert. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "api": {

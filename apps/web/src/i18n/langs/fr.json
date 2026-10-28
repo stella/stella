@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Cette action est temporairement suspendue. Veuillez réessayer dans un instant.",
       "concurrencyBusy": "D’autres opérations sont en cours. Veuillez réessayer dans un instant.",
+      "configurationIncomplete": "Cette action n’est pas entièrement configurée. Contactez votre administrateur.",
       "contact": "Contactez-nous",
       "featureDisabled": "Cette fonctionnalité est temporairement désactivée.",
+      "leaseLost": "La réservation de l’action a expiré. Veuillez réessayer.",
       "notEnabled": "Cette action n’est pas activée pour votre organisation.",
-      "periodExhausted": "Cette action est suspendue pour votre organisation."
+      "organizationStateUnreadable": "L’accès de l’organisation n’a pas pu être vérifié. Veuillez réessayer dans un instant.",
+      "periodExhausted": "Cette action est suspendue pour votre organisation.",
+      "storeUnavailable": "Le service est temporairement indisponible. Veuillez réessayer dans un instant."
     },
     "actionFailed": "Cela n’a pas fonctionné. Réessayez, ou rechargez la page si le problème persiste.",
     "api": {

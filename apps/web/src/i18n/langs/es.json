@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
       "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
+      "configurationIncomplete": "Esta acción no está completamente configurada. Contacte con su administrador.",
       "contact": "Contáctenos",
       "featureDisabled": "Esta función está desactivada temporalmente.",
+      "leaseLost": "La reserva de la acción ha caducado. Inténtelo de nuevo.",
       "notEnabled": "Esta acción no está habilitada para su organización.",
-      "periodExhausted": "Esta acción está pausada para su organización."
+      "organizationStateUnreadable": "No se pudo comprobar el acceso de la organización. Inténtelo de nuevo en unos momentos.",
+      "periodExhausted": "Esta acción está pausada para su organización.",
+      "storeUnavailable": "El servicio no está disponible temporalmente. Inténtelo de nuevo en unos momentos."
     },
     "actionFailed": "No ha funcionado. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "api": {

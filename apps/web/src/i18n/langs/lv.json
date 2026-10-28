@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
       "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "configurationIncomplete": "Šī darbība nav pilnībā konfigurēta. Sazinieties ar administratoru.",
       "contact": "Sazinieties ar mums",
       "featureDisabled": "Šī funkcija ir īslaicīgi izslēgta.",
+      "leaseLost": "Darbības rezervācija ir beigusies. Lūdzu, mēģiniet vēlreiz.",
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
-      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+      "organizationStateUnreadable": "Neizdevās pārbaudīt organizācijas piekļuvi. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta.",
+      "storeUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, drīzumā mēģiniet vēlreiz."
     },
     "actionFailed": "Tas neizdevās. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "api": {

@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Ez a művelet átmenetileg szünetel. Kérjük, próbálja újra hamarosan.",
       "concurrencyBusy": "Más műveletek folyamatban vannak. Kérjük, próbálja újra hamarosan.",
+      "configurationIncomplete": "Ez a művelet nincs teljesen beállítva. Forduljon a rendszergazdához.",
       "contact": "Lépjen kapcsolatba velünk",
       "featureDisabled": "Ez a funkció átmenetileg ki van kapcsolva.",
+      "leaseLost": "A művelet foglalása lejárt. Kérjük, próbálja újra.",
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
-      "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
+      "organizationStateUnreadable": "A szervezet hozzáférését nem sikerült ellenőrizni. Kérjük, próbálja újra hamarosan.",
+      "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára.",
+      "storeUnavailable": "A szolgáltatás átmenetileg nem érhető el. Kérjük, próbálja újra hamarosan."
     },
     "actionFailed": "Ez nem sikerült. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "api": {

@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "configurationIncomplete": "See toiming pole täielikult seadistatud. Võtke ühendust administraatoriga.",
       "contact": "Võtke meiega ühendust",
       "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
+      "leaseLost": "Toimingu broneering aegus. Palun proovige uuesti.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
-      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+      "organizationStateUnreadable": "Organisatsiooni juurdepääsu ei saanud kontrollida. Palun proovige varsti uuesti.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud.",
+      "storeUnavailable": "Teenus pole ajutiselt saadaval. Palun proovige varsti uuesti."
     },
     "actionFailed": "See ei õnnestunud. Proovige uuesti või laadige leht uuesti, kui see kordub.",
     "api": {

@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
       "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
+      "configurationIncomplete": "Táto akcia nie je úplne nastavená. Obráťte sa na správcu.",
       "contact": "Kontaktujte nás",
       "featureDisabled": "Táto funkcia je dočasne vypnutá.",
+      "leaseLost": "Platnosť rezervácie akcie vypršala. Skúste to prosím znova.",
       "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
-      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
+      "organizationStateUnreadable": "Nepodarilo sa overiť prístup organizácie. Skúste to prosím o chvíľu.",
+      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená.",
+      "storeUnavailable": "Služba je dočasne nedostupná. Skúste to prosím o chvíľu."
     },
     "actionFailed": "Nepodarilo sa to. Skúste to znova, a ak sa to opakuje, načítajte stránku znova.",
     "api": {

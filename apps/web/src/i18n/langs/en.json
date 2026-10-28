@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
+      "configurationIncomplete": "This action is not fully configured. Contact your administrator.",
       "contact": "Contact us",
       "featureDisabled": "This feature is temporarily turned off.",
+      "leaseLost": "The action reservation expired. Please try again.",
       "notEnabled": "This action is not enabled for your organization.",
-      "periodExhausted": "This action is paused for your organization."
+      "organizationStateUnreadable": "Organization access could not be checked. Please try again shortly.",
+      "periodExhausted": "This action is paused for your organization.",
+      "storeUnavailable": "The service is temporarily unavailable. Please try again shortly."
     },
     "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {

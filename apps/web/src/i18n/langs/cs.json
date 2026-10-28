@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
       "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
+      "configurationIncomplete": "Tato akce není plně nastavena. Obraťte se na správce.",
       "contact": "Kontaktujte nás",
       "featureDisabled": "Tato funkce je dočasně vypnutá.",
+      "leaseLost": "Platnost rezervace akce vypršela. Zkuste to prosím znovu.",
       "notEnabled": "Tato akce není pro vaši organizaci povolena.",
-      "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
+      "organizationStateUnreadable": "Nepodařilo se ověřit přístup organizace. Zkuste to prosím za chvíli.",
+      "periodExhausted": "Tato akce je pro vaši organizaci pozastavena.",
+      "storeUnavailable": "Služba je dočasně nedostupná. Zkuste to prosím za chvíli."
     },
     "actionFailed": "Nepodařilo se to. Zkuste to znovu, a pokud se to opakuje, načtěte stránku znovu.",
     "api": {

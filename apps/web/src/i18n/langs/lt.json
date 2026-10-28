@@ -2769,12 +2769,15 @@
   },
   "errors": {
     "actionAdmission": {
-      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "configurationIncomplete": "Šis veiksmas nėra visiškai sukonfigūruotas. Kreipkitės į administratorių.",
       "contact": "Susisiekite su mumis",
       "featureDisabled": "Ši funkcija laikinai išjungta.",
+      "leaseLost": "Veiksmo rezervacijos galiojimas baigėsi. Bandykite dar kartą.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
-      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+      "organizationStateUnreadable": "Nepavyko patikrinti organizacijos prieigos. Netrukus bandykite dar kartą.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas.",
+      "storeUnavailable": "Paslauga laikinai nepasiekiama. Netrukus bandykite dar kartą."
     },
     "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
