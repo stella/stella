@@ -5169,7 +5169,7 @@
         "document_review_run": "tundmatu üksus: document review run",
         "document_translation_run": "tundmatu üksus: document translation run",
         "document_type": "Dokumendi tüüp",
-        "entity": "tundmatu üksus: item",
+        "entity": "dokument või ülesanne",
         "entity_version": "tundmatu üksus: entity version",
         "expense": "tundmatu üksus: expense",
         "feedback_report": "tundmatu üksus: feedback report",

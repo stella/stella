@@ -10,9 +10,9 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
-import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
+import { workspaceCheck } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
-import { auditLogs, workspaces } from "@/api/db/schema";
+import { auditLogs } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -35,10 +35,9 @@ import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import {
-  brandPersistedAuditLogId,
-  brandPersistedWorkspaceId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
+
+import { resolveAuditResourceNames } from "./resource-resolvers";
 
 const auditLogCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,
@@ -293,29 +292,15 @@ export const queryAuditLogPage = async function* ({
         ]),
       );
 
-      const workspaceIds = [
-        ...new Set(
-          auditRows
-            .filter((row) => row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE)
-            .map((row) => brandPersistedWorkspaceId(row.resourceId)),
-        ),
-      ];
-      const workspaceResources =
-        workspaceIds.length > 0
-          ? await tx
-              .select({ id: workspaces.id, name: workspaces.name })
-              .from(workspaces)
-              .where(
-                and(
-                  eq(workspaces.organizationId, organizationId),
-                  inArray(workspaces.id, workspaceIds),
-                  workspaceIdCheck,
-                ),
-              )
-          : [];
-      const workspaceResourceMap = new Map(
-        workspaceResources.map((resource) => [resource.id, resource.name]),
-      );
+      const resourceNames = await resolveAuditResourceNames({
+        tx,
+        rows: auditRows.map((row) => ({
+          resourceType: toAuditResourceKind(row.resourceType),
+          resourceId: row.resourceId,
+        })),
+        organizationId,
+        userId,
+      });
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.ACCESS,
@@ -335,16 +320,13 @@ export const queryAuditLogPage = async function* ({
             kind: toAuditResourceKind(row.resourceType),
             id: row.resourceId,
             name:
-              row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE
-                ? (workspaceResourceMap.get(
-                    brandPersistedWorkspaceId(row.resourceId),
-                  ) ?? null)
-                : null,
+              resourceNames
+                .get(toAuditResourceKind(row.resourceType))
+                ?.get(row.resourceId) ?? null,
             available:
-              row.resourceType === AUDIT_RESOURCE_TYPE.WORKSPACE &&
-              workspaceResourceMap.has(
-                brandPersistedWorkspaceId(row.resourceId),
-              ),
+              resourceNames
+                .get(toAuditResourceKind(row.resourceType))
+                ?.has(row.resourceId) ?? false,
           },
           ...projectAuditReadChanges({
             resourceType: row.resourceType,

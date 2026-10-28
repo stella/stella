@@ -5169,7 +5169,7 @@
         "document_review_run": "elemento desconocido: document review run",
         "document_translation_run": "elemento desconocido: document translation run",
         "document_type": "Tipo de documento",
-        "entity": "elemento desconocido: item",
+        "entity": "documento o tarea",
         "entity_version": "elemento desconocido: entity version",
         "expense": "elemento desconocido: expense",
         "feedback_report": "elemento desconocido: feedback report",

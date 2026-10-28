@@ -96,6 +96,7 @@ const contextFor = ({
       }
       return {
         from: () => ({
+          where: async () => [],
           innerJoin: () => ({
             where: async () => [
               {

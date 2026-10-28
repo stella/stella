@@ -280,4 +280,54 @@ describe("audit log compliance filter", () => {
       expect(item.actor).not.toContain(`${ids.userB1}@test.local`);
     }
   });
+  test("resource names never cross organization or matter access", async () => {
+    const recorder = createBackgroundAuditRecorder({
+      organizationId: ids.orgA,
+      workspaceId: null,
+      userId: ids.userA1,
+      execution: {
+        performer: { type: "user", id: ids.userA1 },
+        trigger: { type: "direct" },
+      },
+    });
+    for (const resourceId of [ids.wsA2, ids.wsB1]) {
+      await recorder(asTestRaw<Transaction>(testDb), {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId,
+      });
+    }
+    const seeded = await testDb
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(inArray(auditLogs.resourceId, [ids.wsA2, ids.wsB1]));
+    seededAuditLogIds.push(...seeded.map(({ id }) => id));
+
+    const reader = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    );
+    const page = await readPage({}, reader);
+    const hiddenResourceIds = new Set<string>([ids.wsA2, ids.wsB1]);
+    const hiddenResources = page.items.filter((item) =>
+      hiddenResourceIds.has(item.resourceId),
+    );
+    expect(hiddenResources).toHaveLength(2);
+    for (const item of hiddenResources) {
+      expect(item.resource).toEqual({
+        kind: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        id: item.resourceId,
+        name: null,
+        available: false,
+      });
+    }
+
+    const hiddenNames = await testDb
+      .select({ name: workspaces.name })
+      .from(workspaces)
+      .where(inArray(workspaces.id, [ids.wsA2, ids.wsB1]));
+    const response = JSON.stringify(page);
+    for (const { name } of hiddenNames) {
+      expect(response).not.toContain(name);
+    }
+  });
 });

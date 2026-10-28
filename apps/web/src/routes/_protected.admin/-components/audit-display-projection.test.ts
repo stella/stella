@@ -5,6 +5,9 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@stll/api-contract/audit-log";
 
+import cs from "@/i18n/langs/cs.json";
+import de from "@/i18n/langs/de.json";
+
 import {
   AUDIT_ACTION_PROJECTIONS,
   AUDIT_RESOURCE_PROJECTIONS,
@@ -33,13 +36,39 @@ test("status-only matter rows retain their distinct current names", () => {
   expect(labels).toEqual(["Northwind acquisition", "Contoso dispute"]);
 });
 
-test("a Czech matter update uses the translated resource kind", () => {
-  const label = projectAuditResourceLabel({
-    action: AUDIT_ACTION.UPDATE,
-    resource: { kind: AUDIT_RESOURCE_TYPE.WORKSPACE, name: null },
-    deletedLabel: (kind) => `smazaná položka: ${kind}`,
-    kind: "spis",
-    unavailableLabel: (kind) => `${kind} (není k dispozici)`,
-  });
-  expect(label).toBe("spis (není k dispozici)");
+test("Czech and German catalogues render translated resource kinds", () => {
+  const cases = [
+    [cs, "dokument nebo úkol (není k dispozici)"],
+    [de, "Dokument oder Aufgabe (nicht verfügbar)"],
+  ] as const;
+  for (const [catalogue, expected] of cases) {
+    const messages = catalogue.settings.organization;
+    const label = projectAuditResourceLabel({
+      action: AUDIT_ACTION.UPDATE,
+      resource: { kind: AUDIT_RESOURCE_TYPE.ENTITY, name: null },
+      deletedLabel: (value) =>
+        messages.auditLogsDeletedResource.replace("{kind}", () => value),
+      kind: messages.auditResourceKinds.entity,
+      unavailableLabel: (value) =>
+        messages.auditLogsUnavailableResource.replace("{kind}", () => value),
+    });
+    expect(label).toBe(expected);
+  }
+});
+
+test("status-only contact and invoice rows retain their names", () => {
+  for (const [kind, name] of [
+    [AUDIT_RESOURCE_TYPE.CONTACT, "Ada Lovelace"],
+    [AUDIT_RESOURCE_TYPE.INVOICE, "2026-0042"],
+  ] as const) {
+    expect(
+      projectAuditResourceLabel({
+        action: AUDIT_ACTION.UPDATE,
+        resource: { kind, name },
+        deletedLabel: (value) => `deleted ${value}`,
+        kind,
+        unavailableLabel: (value) => `${value} unavailable`,
+      }),
+    ).toBe(name);
+  }
 });
