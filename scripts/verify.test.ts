@@ -829,6 +829,10 @@ exit 0
               scripts: { typegen: "bun scripts/fixture-typegen.ts" },
             }),
           );
+          copyFileSync(
+            path.join(root, "bun.lock"),
+            path.join(fixture, "bun.lock"),
+          );
           writeFileSync(
             path.join(fixture, "scripts/fixture-typegen.ts"),
             `await Bun.write(${JSON.stringify(path.join(fixture, "base-receipt"))}, "prepared");`,

@@ -686,6 +686,14 @@ const generatingResponse = (
   ...(partialTree.length === 0 ? {} : { partialTree }),
 });
 
+const analysisStartFailure = (cause: unknown) =>
+  new HandlerError({
+    status: 503,
+    code: "internal_error",
+    message: "Analysis generation could not start",
+    cause,
+  });
+
 export const generateAnalysis = async ({
   admitModelAction,
   startModelAction,
@@ -898,22 +906,17 @@ export const generateAnalysis = async ({
       });
     },
   });
-  const cannotStart = (cause: unknown) =>
-    new HandlerError({
-      status: 503,
-      message: "Analysis generation could not start",
-      cause,
-    });
+
   if (Result.isError(started)) {
     return Result.err(
       ActionAdmissionError.is(started.error)
         ? started.error
-        : cannotStart(started.error),
+        : analysisStartFailure(started.error),
     );
   }
   const claimed = started.value;
   if (claimed.isErr()) {
-    return Result.err(cannotStart(claimed.error));
+    return Result.err(analysisStartFailure(claimed.error));
   }
 
   // A claim lost to a failure filed since the read answers that failure;

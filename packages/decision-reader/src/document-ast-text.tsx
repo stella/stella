@@ -18,6 +18,11 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import {
+  statuteListMarkerEnd,
+  withStatuteListDepth,
+} from "@stll/legal-ast/statute-list";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import {
@@ -71,10 +76,24 @@ export const anchorsForPiece = (
 
 /**
  * Whether blocks are the document itself (they carry its DOM ids and its
- * in-document navigation) or an excerpt set inside another page, which must
- * not repeat those ids and has no targets for a fragment link to reach.
+ * in-document navigation), an excerpt set inside another page, which must
+ * not repeat those ids and has no targets for a fragment link to reach, or
+ * wording quoted inside another document's reader (a cited provision's
+ * card), which carries no block anchors at all: that reader's position,
+ * selection and margin logic walk `[data-anchor]` and would read a quoted
+ * block as one of its own.
  */
-export type AnchorPresentation = "document" | "embedded";
+export type AnchorPresentation = "document" | "embedded" | "quoted";
+
+/** Which anchor attributes a block carries under each presentation. */
+const ANCHOR_ATTRIBUTES = {
+  document: { dataAnchor: true, domId: true },
+  embedded: { dataAnchor: true, domId: false },
+  quoted: { dataAnchor: false, domId: false },
+} as const satisfies Record<
+  AnchorPresentation,
+  { dataAnchor: boolean; domId: boolean }
+>;
 
 type HighlightContext = {
   activeMatchIndex: number;
@@ -557,7 +576,7 @@ const renderInline = ({
     // An excerpt carries none of the ids a fragment points at, and the page
     // around it may carry the same id for something else: the reference
     // keeps its words and loses the jump.
-    if (context.anchorPresentation === "embedded") {
+    if (!ANCHOR_ATTRIBUTES[context.anchorPresentation].domId) {
       return <Fragment key={key}>{children}</Fragment>;
     }
     return (
@@ -834,6 +853,15 @@ export const HighlightedText = ({
 export type ReaderVariant = "case-law" | "statute";
 
 /**
+ * The corpus a block renders in and, for a statute, the scheme its
+ * publisher's anchors state list nesting in. A statute surface names it,
+ * because the same anchor shape means different things to two publishers.
+ */
+type BlockRendererCorpus =
+  | { statuteLists?: never; variant: "case-law" }
+  | { statuteLists: StatuteListScheme; variant: "statute" };
+
+/**
  * Class per variant and heading depth. Total over both, so neither a new
  * reader nor a depth the AST can carry reaches the page with no styling.
  */
@@ -1082,6 +1110,7 @@ export const BlockRenderer = ({
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
+  statuteLists,
   variant,
 }: {
   activeMatchIndex: number;
@@ -1121,14 +1150,14 @@ export const BlockRenderer = ({
    */
   noteHead?: boolean | undefined;
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
-  variant: ReaderVariant;
-}) => {
+} & BlockRendererCorpus) => {
+  const attributes = ANCHOR_ATTRIBUTES[anchorPresentation];
   const documentAnchorProps = {
-    "data-anchor": block.anchorId,
+    "data-anchor": attributes.dataAnchor ? block.anchorId : undefined,
     "data-reader-landing": landing ? "" : undefined,
-    id: anchorPresentation === "document" ? block.anchorId : undefined,
+    id: attributes.domId ? block.anchorId : undefined,
   };
-  const isAddressable = anchorPresentation === "document";
+  const isAddressable = attributes.domId;
   const permalink = isAddressable ? (
     <BlockPermalink anchorId={block.anchorId} />
   ) : null;
@@ -1237,13 +1266,19 @@ export const BlockRenderer = ({
       activeMatchIndex,
       anchorPresentation,
       anchorsByPieceId,
-      block,
+      // A statute's list nesting lives in its anchors, so it is read here,
+      // where every statute surface draws its paragraphs.
+      block:
+        variant === "statute"
+          ? withStatuteListDepth(block, statuteLists)
+          : block,
       documentAnchorProps,
       isAddressable,
       noteBackJumpTo,
       noteHead,
       permalink,
       rangesByPieceId,
+      statuteLists: variant === "statute" ? statuteLists : null,
     });
   }
 
@@ -1290,7 +1325,7 @@ type RenderTextBlockOptions = {
   anchorPresentation: AnchorPresentation;
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined;
   documentAnchorProps: {
-    "data-anchor": string;
+    "data-anchor": string | undefined;
     "data-reader-landing": string | undefined;
     id: string | undefined;
   };
@@ -1303,11 +1338,65 @@ type RenderTextBlockOptions = {
 
 type RenderParagraphOptions = RenderTextBlockOptions & {
   block: ParagraphBlock;
+  /** The statute's list scheme; null for a decision, whose items never hang. */
+  statuteLists: StatuteListScheme | null;
 };
 
 /** The case number a decision prints at its head, set to the end edge. */
 const CASE_NUMBER_CLASS =
   "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]";
+
+/**
+ * A statute list item's printed designator split off the words it opens, so
+ * the designator hangs in a gutter and the item's wrapped lines align with
+ * its words (`reader-list-hang` in reader.css). The split is drawn, not
+ * stored: the designator keeps its characters and its offsets in the piece,
+ * so search ranges and annotation offsets index the text as before.
+ *
+ * Only a designator wholly inside the leading plain text nodes, with no
+ * anchor (a citation link) reaching into it, is split; any other item keeps
+ * its indent with the designator running in its text.
+ */
+type HangingListMarker = { end: number; marker: string; rest: Inline[] };
+
+type HangingListMarkerOptions = {
+  anchors: readonly TextAnchor[];
+  block: ParagraphBlock;
+  statuteLists: StatuteListScheme | null;
+};
+
+const hangingListMarker = ({
+  anchors,
+  block,
+  statuteLists,
+}: HangingListMarkerOptions): HangingListMarker | null => {
+  const end =
+    statuteLists === null ? null : statuteListMarkerEnd(block, statuteLists);
+  if (end === null || anchors.some((anchor) => anchor.start < end)) {
+    return null;
+  }
+  // A publisher may store the designator, its space and the words as
+  // separate text runs (Slov-Lex: `a)`, ` `, `spáchal …`); the designator is
+  // split off them as long as only plain text precedes its end.
+  let marker = "";
+  for (const [index, inline] of block.inlines.entries()) {
+    if (inline.type !== "text" || inline.anonymized === true) {
+      return null;
+    }
+    const needed = end - marker.length;
+    if (inline.text.length >= needed) {
+      const rest = inline.text.slice(needed);
+      const others = block.inlines.slice(index + 1);
+      return {
+        end,
+        marker: marker + inline.text.slice(0, needed),
+        rest: rest === "" ? others : [{ text: rest, type: "text" }, ...others],
+      };
+    }
+    marker += inline.text;
+  }
+  return null;
+};
 
 /** A paragraph's classes, for `cn`: shared by a block and a wrapped run. */
 const paragraphClassValues = (block: ParagraphBlock) => {
@@ -1370,15 +1459,22 @@ const renderParagraphBlock = ({
   noteHead,
   permalink,
   rangesByPieceId,
+  statuteLists,
 }: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
     noteHead &&
     noteLabel !== null &&
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
+  const anchors = anchorsForPiece(anchorsByPieceId, block.id);
+  const ranges = rangesForPiece(rangesByPieceId, block.id);
+  const listMarker = hangingListMarker({ anchors, block, statuteLists });
   return (
     <p
-      className={cn(paragraphClassValues(block))}
+      className={cn(
+        paragraphClassValues(block),
+        listMarker !== null && "reader-list-hang",
+      )}
       {...documentAnchorProps}
       data-note={block.note?.type}
     >
@@ -1412,13 +1508,23 @@ const renderParagraphBlock = ({
           text={String(block.number)}
         />
       )}
+      {listMarker !== null && (
+        <HighlightedText
+          activeMatchIndex={activeMatchIndex}
+          className="reader-list-marker"
+          pieceId={block.id}
+          ranges={ranges}
+          text={listMarker.marker}
+        />
+      )}
       <InlineContent
         activeMatchIndex={activeMatchIndex}
         anchorPresentation={anchorPresentation}
-        anchors={anchorsForPiece(anchorsByPieceId, block.id)}
-        inlines={block.inlines}
+        anchors={anchors}
+        initialOffset={listMarker?.end ?? 0}
+        inlines={listMarker?.rest ?? block.inlines}
         pieceId={block.id}
-        ranges={rangesForPiece(rangesByPieceId, block.id)}
+        ranges={ranges}
       />
       {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
         <NoteBackJump headAnchorId={noteBackJumpTo} />
@@ -1644,7 +1750,11 @@ const renderTableBlock = ({
                     // The table around it is a container: `selectionAnchorsFrom`
                     // takes the innermost anchored element, so the two never
                     // both claim the same selection.
-                    data-anchor={pieceId}
+                    data-anchor={
+                      ANCHOR_ATTRIBUTES[anchorPresentation].dataAnchor
+                        ? pieceId
+                        : undefined
+                    }
                     key={pieceId}
                     rowSpan={cell.rowSpan}
                   >

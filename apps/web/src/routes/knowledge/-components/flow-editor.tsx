@@ -653,7 +653,9 @@ const WorkspaceOptionsNotice = ({
     case "failed":
       return (
         <div className="flex items-center gap-2 p-2 text-xs">
-          <span className="text-muted-foreground">{t("common.error")}</span>
+          <span className="text-muted-foreground">
+            {t("common.loadFailed")}
+          </span>
           <Button onClick={workspaces.retry} size="sm" variant="ghost">
             {t("common.retry")}
           </Button>

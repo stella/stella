@@ -2008,7 +2008,7 @@ jobs:
             status=$?
             set -e
             echo "$out"
-            if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
+            if ! grep -q 'Unknown adapter: __smoke__' <<<"$out"; then
               echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
               exit 1
             fi
@@ -2685,6 +2685,8 @@ jobs:
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_008
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_008 != 'true') }}
+        # Also rejects pipes into readers that can exit early (`grep -q`,
+        # `head`), which pipefail can fail after the match was found.
         run: |
           bun test scripts/check-standalone-negated-shell.test.ts
           bun scripts/check-standalone-negated-shell.ts
@@ -4289,7 +4291,7 @@ jobs:
         run: |
           OUT=$(bun --bun drizzle-kit push --explain 2>&1)
           echo "$OUT"
-          echo "$OUT" | grep -q "No changes detected" || {
+          grep -q "No changes detected" <<<"$OUT" || {
             echo "::error::Migrated schema does not match schema.ts. Either commit a generated migration that closes the gap, or fix the migration files."
             exit 1
           }
@@ -6090,7 +6092,7 @@ jobs:
           build_log="$RUNNER_TEMP/api-image-build.log"
           smoke_log="$RUNNER_TEMP/api-image-smoke.log"
           if [[ -f "$smoke_log" ]]; then
-            failures=$(grep -E '^FAIL' "$smoke_log" | head -n 5 || true)
+            failures=$(grep -m 5 -E '^FAIL' "$smoke_log" || true)
             if [[ -n "$failures" ]]; then
               while IFS= read -r line; do
                 annotate "API image smoke" "$line"
@@ -6102,7 +6104,7 @@ jobs:
           elif [[ -f "$build_log" ]]; then
             # Docker prefixes nested workflow commands with BuildKit progress.
             # Promote the install owner's fixed diagnostic to a runner annotation.
-            stall=$(grep -oE 'kind=infra class=install-stall .*' "$build_log" | head -n 1 || true)
+            stall=$(grep -m 1 -oE 'kind=infra class=install-stall .*' "$build_log" || true)
             if [[ -n "$stall" ]]; then
               printf '::error title=infra-stall::%s\n' "$stall"
               exit 0
@@ -6111,14 +6113,14 @@ jobs:
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error
             # words, then to the step's last line.
-            step=$(grep -oE '^#[0-9]+ ERROR' "$build_log" | head -n 1 | grep -oE '[0-9]+' || true)
+            step=$(grep -m 1 -oE '^#[0-9]+ ERROR' "$build_log" | grep -oE '[0-9]+' || true)
             if [[ -n "$step" ]]; then
               output=$(grep -E "^#$step [0-9.]+ " "$build_log" | sed -E 's/^#[0-9]+ [0-9.]+ //' || true)
               lines=$(awk 'prev ~ /^[[:space:]]*\^[[:space:]]*$/ || /FAIL|[Ee]rror|Panic/ { print } { prev = $0 }' <<< "$output" | tail -n 5)
               if [[ -z "$lines" ]]; then
                 lines=$(grep -vE '^[[:space:]]*$' <<< "$output" | tail -n 1 || true)
               fi
-              lines+=${lines:+$'\n'}$(grep -E "^#$step ERROR" "$build_log" | head -n 1 | sed -E 's/^#[0-9]+ //')
+              lines+=${lines:+$'\n'}$(grep -m 1 -E "^#$step ERROR" "$build_log" | sed -E 's/^#[0-9]+ //')
             else
               lines=$(grep -E '^ERROR' "$build_log" | tail -n 1 || true)
             fi

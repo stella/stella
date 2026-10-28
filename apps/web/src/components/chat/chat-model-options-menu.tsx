@@ -44,7 +44,7 @@ import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 export const CHAT_MODEL_MENU_POPUP_CLASS_NAME =
   "w-[min(32rem,calc(100vw-2rem))] max-w-(--available-width)";
@@ -119,7 +119,7 @@ export const ChatModelOptionsMenu = ({
     enabled,
   });
 
-  const modelsView = useQueryView(modelsQuery);
+  const modelsView = queryView(modelsQuery);
   const data = modelsView.type === "items" ? modelsView.items : undefined;
   const options: readonly ModelOption[] = data
     ? data.options

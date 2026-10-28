@@ -9,6 +9,7 @@ import {
   InlineContent,
 } from "@stll/decision-reader/document-ast-text";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
@@ -44,6 +45,7 @@ const renderSide = (side: StatuteCompareSide) =>
           block={block}
           key={block.id}
           rangesByPieceId={rangesByPieceId}
+          statuteLists={E_SBIRKA_LIST_SCHEME}
         />
       ))}
     </>,
@@ -132,6 +134,7 @@ describe("compared blocks render as the reader renders them", () => {
         anchorPresentation="document"
         block={newer[0] ?? provisionHeading("")}
         rangesByPieceId={{}}
+        statuteLists={E_SBIRKA_LIST_SCHEME}
       />,
     );
     const cell = renderSide(headingRow?.after ?? { blocks: [], segments: [] });
