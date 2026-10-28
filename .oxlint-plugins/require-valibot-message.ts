@@ -47,7 +47,7 @@ export default eslintCompatPlugin({
             "User-facing Valibot validators must receive a translated message.",
         },
       },
-      create(context) {
+      createOnce(context) {
         return {
           CallExpression(node) {
             if (!isAstNode(node)) {

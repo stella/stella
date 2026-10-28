@@ -1,19 +1,8 @@
 import { expect, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
-import ar from "@/i18n/langs/ar.json";
-import cs from "@/i18n/langs/cs.json";
-import de from "@/i18n/langs/de.json";
-import en from "@/i18n/langs/en.json";
-import es from "@/i18n/langs/es.json";
-import et from "@/i18n/langs/et.json";
-import fr from "@/i18n/langs/fr.json";
-import hu from "@/i18n/langs/hu.json";
-import lt from "@/i18n/langs/lt.json";
-import lv from "@/i18n/langs/lv.json";
-import pl from "@/i18n/langs/pl.json";
-import ptBR from "@/i18n/langs/pt-BR.json";
-import sk from "@/i18n/langs/sk.json";
+import { UI_LOCALES } from "@stll/locales";
+
 import { formatListWithMore } from "@/i18n/list-format";
 
 test("list composition owns the conjunction", () => {
@@ -28,24 +17,32 @@ test("list composition owns the conjunction", () => {
   expect(result).not.toContain("and and");
 });
 
-const catalogues = [
-  { locale: "ar", messages: ar },
-  { locale: "cs", messages: cs },
-  { locale: "de", messages: de },
-  { locale: "en", messages: en },
-  { locale: "es", messages: es },
-  { locale: "et", messages: et },
-  { locale: "fr", messages: fr },
-  { locale: "hu", messages: hu },
-  { locale: "lt", messages: lt },
-  { locale: "lv", messages: lv },
-  { locale: "pl", messages: pl },
-  { locale: "pt-BR", messages: ptBR },
-  { locale: "sk", messages: sk },
-] as const;
+type Messages = { chat: { historyContext: { unnamed: string } } };
 
-test("translated count fragments preserve every locale plural branch", () => {
-  for (const { locale, messages } of catalogues) {
+const messageAt = (messages: unknown, key: string): unknown => {
+  let value = messages;
+  for (const segment of key.split(".")) {
+    if (typeof value !== "object" || value === null) {
+      return undefined;
+    }
+    value = new Map(Object.entries(value)).get(segment);
+  }
+  return value;
+};
+
+const isMessages = (value: unknown): value is Messages =>
+  typeof messageAt(value, "chat.historyContext.unnamed") === "string";
+
+test("translated count fragments preserve every locale plural branch", async () => {
+  for (const locale of UI_LOCALES) {
+    const parsed: unknown = await Bun.file(
+      new URL(`langs/${locale}.json`, import.meta.url),
+    ).json();
+    expect(isMessages(parsed)).toBeTrue();
+    if (!isMessages(parsed)) {
+      continue;
+    }
+    const messages = parsed;
     const source = messages.chat.historyContext.unnamed;
     const branches = new Map(
       [
