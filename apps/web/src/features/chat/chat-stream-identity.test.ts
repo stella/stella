@@ -2,6 +2,7 @@ import { EventType } from "@tanstack/ai";
 import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { ChatClient, fetchServerSentEvents } from "@tanstack/ai-client";
 import type { RunAgentInputContext, UIMessage } from "@tanstack/ai-client";
+import { panic } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -32,7 +33,10 @@ import {
   keepPostedMessagesInSnapshots,
   keepReasoningSteps,
 } from "@/features/chat/chat-snapshot-history";
-import { buildWireSnapshot } from "@/features/chat/chat-test-fixtures";
+import {
+  buildToolApprovalInterrupt,
+  buildWireSnapshot,
+} from "@/features/chat/chat-test-fixtures";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -439,6 +443,12 @@ const streamSession = async ({
     }
     if (awaited !== undefined) {
       approvalId = `approval-${awaited}`;
+      const pendingCall = latest
+        .flatMap(({ parts }) => parts)
+        .find((part) => part.type === "tool-call" && part.id === awaited);
+      if (pendingCall?.type !== "tool-call") {
+        panic("The approval fixture has no emitted tool call");
+      }
       yield {
         type: EventType.RUN_FINISHED,
         runId: run.runId,
@@ -446,12 +456,13 @@ const streamSession = async ({
         outcome: {
           type: "interrupt",
           interrupts: [
-            {
+            buildToolApprovalInterrupt({
               id: approvalId,
-              reason: "approval_required",
+              runId: run.runId,
               toolCallId: awaited,
-              metadata: { kind: "approval", toolName: TOOL_NAME },
-            },
+              toolName: TOOL_NAME,
+              input: pendingCall.input,
+            }),
           ],
         },
       };
@@ -462,6 +473,7 @@ const streamSession = async ({
   // Woken when the client stops loading.
   const idleWaiters = new Set<() => void>();
   const client = new ChatClient<ChatClientTools, unknown, readonly []>({
+    threadId: Bun.randomUUIDv7(),
     initialMessages: session.history,
     connection: {
       connect: (messages, _data, _signal, run) => {
@@ -528,10 +540,13 @@ const streamSession = async ({
         spec: { end: "finish", ops: session.continuation },
       });
       cause = "approval";
-      await client.addToolApprovalResponse({
-        id: approvalId,
-        approved: session.approved,
-      });
+      const approval = client
+        .getInterrupts()
+        .find(({ id }) => id === approvalId);
+      if (approval?.kind !== "generic") {
+        panic("The server approval did not expose its native binding");
+      }
+      approval.resolveInterrupt({ approved: session.approved });
       await settle();
     }
     if (session.regenerate !== null) {
@@ -1620,6 +1635,7 @@ describe("the chat runtime keeps settled messages while an answer streams", () =
       fetchClient: server.replayFetch,
     });
     const replay = new ChatClient<ChatClientTools, unknown, readonly []>({
+      threadId: "thread-identity",
       initialMessages: history,
       onMessagesChange: notifyChange,
       connection: {

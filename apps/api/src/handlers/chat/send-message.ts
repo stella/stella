@@ -2292,7 +2292,6 @@ export const createSendMessage = (
         transportBody.runId !== body.runId ||
         transportParentRunId !== parentRunId ||
         !deepEquals(transportResume, resume) ||
-        !deepEquals(transportBody.data, body) ||
         !transportBody.messages.some(
           (message) =>
             message.id === body.message.id &&

@@ -694,7 +694,7 @@ export const createApprovalHarness = ({
         tools: [],
         context: [],
         forwardedProps,
-        data: forwardedProps,
+
         ...continuation,
       }),
     );

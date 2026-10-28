@@ -3317,6 +3317,57 @@ describe("acquireChatRuntime reconcile", () => {
     },
   ];
 
+  test("an approval without a native binding refreshes server truth without submitting it", async () => {
+    let requests = 0;
+    let reloads = 0;
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests += 1;
+      return createSseResponse(
+        createApprovalSseChunks(parseChatRequestRunId(init)).map((chunk) =>
+          chunk.type === "RUN_FINISHED"
+            ? {
+                ...chunk,
+                outcome: {
+                  type: "interrupt",
+                  interrupts: [
+                    {
+                      id: "approval_tool-A",
+                      reason: "foreign-pause",
+                      toolCallId: "tool-A",
+                    },
+                  ],
+                },
+              }
+            : chunk,
+        ),
+      );
+    });
+    const runtime = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: [],
+      key: threadRef,
+      onError: () => undefined,
+      onFinish: () => undefined,
+      reloadThread: () => {
+        reloads += 1;
+      },
+    });
+    const started = await runtime.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
+    );
+    await started.stream;
+    await runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-A",
+    });
+    expect(requests).toBe(1);
+    expect(reloads).toBe(1);
+    expect(runtime.getSnapshot().error).toMatchObject({
+      message: "The approval has no current native interrupt binding.",
+    });
+  });
+
   test("shows a rejected native approval continuation as the thread error", async () => {
     const requests: unknown[] = [];
     globalThis.fetch = createFetchMock(async (_input, init) => {

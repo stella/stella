@@ -191,7 +191,6 @@ const createContext = ({
       tools: [],
       context: [],
       forwardedProps,
-      data: forwardedProps,
     },
     createAuditRecorder:
       () => async (_tx: unknown, event: AuditEvent | AuditEvent[]) => {

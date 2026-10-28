@@ -651,7 +651,7 @@ const chatSendRequest = (threadId: SafeId<"chatThread">, messageId: string) => {
   return {
     body: asTestRaw<SendChatMessageBody>({
       context: [],
-      data: forwardedProps,
+
       forwardedProps,
       messages: [message],
       runId: forwardedProps.runId,

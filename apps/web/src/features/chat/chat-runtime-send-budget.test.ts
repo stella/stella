@@ -202,7 +202,7 @@ describe("sending a message on a loaded thread", () => {
 // continuation's `parentRunId` and `resume`, `turnIntent`,
 // `truncateAfterMessageId`), which the page builds from its whole message
 // list. From the AG-UI envelope it reads only the correlation: the same
-// thread, run, `parentRunId` and `resume`, `data` equal to `forwardedProps`,
+// thread, run, `parentRunId` and `resume`, Stella fields only in `forwardedProps`,
 // and an envelope message with the posted message's id and role
 // (`hasEnvelopeCorrelationMismatch` in the API's send handler). Each kind must
 // pass that check with an envelope carrying the posted message alone.
@@ -244,7 +244,7 @@ const correlationOf = (body: JsonObject) => {
       body["runId"] === forwarded["runId"] &&
       body["parentRunId"] === forwarded["parentRunId"] &&
       JSON.stringify(body["resume"]) === JSON.stringify(forwarded["resume"]) &&
-      JSON.stringify(body["data"]) === JSON.stringify(forwarded) &&
+      !("data" in body) &&
       anchors.some(
         (anchor) =>
           anchor["id"] === message["id"] && anchor["role"] === message["role"],

@@ -384,12 +384,10 @@ export const agUiSendMessageBodySchema = v.union([
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: noResumeBodySchema,
-    data: noResumeBodySchema,
   }),
   v.strictObject({
     ...agUiEnvelopeCommonProperties,
     forwardedProps: nativeAssistantContinuationBodySchema,
-    data: nativeAssistantContinuationBodySchema,
     parentRunId: agUiRunIdSchema,
     resume: agUiResumeSchema,
   }),

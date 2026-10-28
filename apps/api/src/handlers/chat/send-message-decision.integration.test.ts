@@ -159,7 +159,6 @@ const createContext = (): SendMessageCtx => {
       tools: [],
       context: [],
       forwardedProps,
-      data: forwardedProps,
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [

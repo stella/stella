@@ -321,7 +321,6 @@ export const buildChatSmokeBody = (): ChatSmokeBody => {
     tools: [],
     context: [],
     forwardedProps,
-    data: forwardedProps,
   } satisfies ChatSmokeBody;
 };
 

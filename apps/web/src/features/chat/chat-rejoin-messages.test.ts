@@ -280,6 +280,7 @@ test("native SDK final tool input catches up to equivalent canonical loader key 
     { type: "RUN_FINISHED", runId: "run-raw", threadId: "thread-raw" },
   ];
   const client = new ChatClient({
+    threadId: "thread-raw",
     connection: fetchServerSentEvents("https://chat.test", {
       fetchClient: Object.assign(
         async () =>

@@ -1039,8 +1039,7 @@ export const createChatRuntime = ({
   // A send that fails after the reset is the turn's error like any other:
   // `onError` refreshes the thread from the server, whose transcript still
   // ends on the awaited call if the message was never accepted, and the
-  // rebuilt runtime answers it through the reload path in
-  // `answerToolApproval`.
+  // rebuilt runtime restores its server-authored native interrupt binding.
   const supersedePendingInterrupts = (): void => {
     if (client.getResumeState() === null) {
       return;
@@ -1147,10 +1146,11 @@ export const createChatRuntime = ({
         return;
       }
 
-      // Transitional reload path for turns persisted before native AG-UI
-      // interrupt descriptors were available. New live turns always resolve
-      // through the bound interrupt above.
-      await client.addToolApprovalResponse(response);
+      reloadThread();
+      throw new ClientOperationError({
+        action: "submit-chat-interrupt:missing-binding",
+        message: "The approval has no current native interrupt binding.",
+      });
     });
   };
 

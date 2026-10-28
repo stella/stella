@@ -319,7 +319,6 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
         tools: [],
         context: [],
         forwardedProps,
-        data: forwardedProps,
       },
       createAuditRecorder: () => async () => undefined,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
