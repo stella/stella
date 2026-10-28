@@ -1,9 +1,13 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, spyOn, test } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
 
-import { documentPropertiesOptions, saveEmailAttachment } from "./queries";
+import {
+  documentPropertiesOptions,
+  saveEmailAttachment,
+  updateDocumentProperty,
+} from "./queries";
 
 const originalFetch = globalThis.fetch;
 
@@ -47,6 +51,31 @@ test("an empty document properties answer is a bad gateway", async () => {
         }),
       ),
   );
+});
+
+test("file writes keep their 60 second request bound", async () => {
+  const timeouts = spyOn(AbortSignal, "timeout");
+  try {
+    await expectBadGateway(
+      async () =>
+        await saveEmailAttachment({
+          attachmentId: "attachment-1",
+          destinationWorkspaceId: "00000000-0000-4000-8000-000000000003",
+          fieldId: "00000000-0000-4000-8000-000000000002",
+          parentId: null,
+          sourceWorkspaceId: "00000000-0000-4000-8000-000000000001",
+        }),
+    );
+    await updateDocumentProperty({
+      fieldId: "00000000-0000-4000-8000-000000000002",
+      propertyKey: "title",
+      value: "Draft agreement",
+      workspaceId: "00000000-0000-4000-8000-000000000001",
+    });
+    expect(timeouts.mock.calls.map(([ms]) => ms)).toEqual([60_000, 60_000]);
+  } finally {
+    timeouts.mockRestore();
+  }
 });
 
 test("an empty email attachment save answer is a bad gateway", async () => {

@@ -72,6 +72,10 @@ const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
   workspaceId: v.string(),
 });
 
+// Saving an attachment copies and re-derives the file, and a property update
+// rewrites it; both keep the longer bound they had before the typed client.
+const FILE_WRITE_TIMEOUT_MS = 60_000;
+
 // Route types do not validate decoded JSON: a success answer that does not
 // match its contract is the same 502 it was before the typed client.
 const parseSuccessBody = <TSchema extends v.GenericSchema>(
@@ -298,7 +302,10 @@ export const saveEmailAttachment = async ({
         await api
           .files({ workspaceId: sourceWorkspaceId })
           ["email-attachment"]({ fieldId })({ attachmentId })
-          .save.post({ destinationWorkspaceId, parentId }),
+          .save.post(
+            { destinationWorkspaceId, parentId },
+            { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
+          ),
       ),
       "Invalid email attachment save response",
     ),
@@ -358,7 +365,10 @@ export const updateDocumentProperty = async ({
       await api
         .files({ workspaceId })
         ["document-properties"]({ fieldId })
-        .patch({ [propertyKey]: value }),
+        .patch(
+          { [propertyKey]: value },
+          { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
+        ),
     ),
   );
 };
