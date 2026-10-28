@@ -508,19 +508,35 @@
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
     "approval": {
+      "approveAll": "{count, plural, one {Schválit # záznam} few {Schválit # záznamy} many {Schválit # záznamu} other {Schválit všech # záznamů}}",
       "approveSelected": "Schválit {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamů}}",
+      "billedTotal": "Účtováno {duration}",
       "empty": "Ve spisu nic nečeká na schválení.",
+      "emptyWeek": "Tento týden nečeká nic na schválení. Odeslaný čas se zobrazí zde.",
+      "everyone": "Všichni",
       "failed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
       "myTime": "Můj čas",
+      "pending": "{count, plural, one {# záznam ke schválení} few {# záznamy ke schválení} many {# záznamu ke schválení} other {# záznamů ke schválení}}",
       "refusals": {
         "invalidEntry": "Doplňte popis a zkontrolujte datum práce, pak záznam schvalte.",
         "notApprover": "Záznam může schválit jen jeho přiřazený schvalovatel nebo správce.",
         "notFound": "Tento záznam už neexistuje. Obnovte seznam.",
+        "notSubmitted": "Záznam ještě nebyl odeslán ke schválení. Nejdřív ho musí odeslat jeho autor.",
         "runningTimer": "Před schválením záznamu zastavte běžící časovač.",
         "unpriced": "Záznam nemá sazbu. Nastavte pro tento spis sazbu a pak záznam schvalte.",
         "wrongStatus": "Tento záznam už není koncept. Obnovte seznam."
       },
       "returnComment": "Důvod vrácení",
+      "returnRefusals": {
+        "invalidEntry": "Zkontrolujte datum práce u záznamu a pak ho vraťte.",
+        "notApprover": "Záznam může vrátit jen jeho přiřazený schvalovatel nebo správce.",
+        "notFound": "Tento záznam už neexistuje, a proto ho nelze vrátit. Obnovte seznam.",
+        "notSubmitted": "Tento koncept nebyl odeslán ke schválení, takže není co vracet.",
+        "runningTimer": "Před vrácením záznamu zastavte běžící časovač.",
+        "timePeriodLocked": "Tento měsíc je uzamčený, a proto záznam nelze vrátit. Požádejte správce o jeho odemčení.",
+        "wrongStatus": "Vyfakturovaný nebo odepsaný čas nelze vrátit jeho autorovi."
+      },
+      "returnSelected": "Vrátit {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamů}}",
       "selectEntry": "Vybrat záznam",
       "timeEntries": "Časové záznamy",
       "title": "Schvalování"
@@ -530,6 +546,17 @@
     "batchActions": "Hromadné akce",
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",
+    "clientComposer": {
+      "flatFeeNote": "Spisy s paušální odměnou fakturujte ze stránky faktur daného spisu.",
+      "includeMatter": "Zahrnout {matterName}",
+      "invalidPeriod": "Vyberte datum konce stejné nebo pozdější než začátek.",
+      "loadFailed": "Nevyfakturovanou práci se nepodařilo načíst. Zkuste to znovu.",
+      "matterSubtotal": "Celkem za spis vč. DPH: {amount} · {share} faktury",
+      "periodEnd": "Konec období",
+      "periodStart": "Začátek období",
+      "title": "Fakturovat klientovi",
+      "visibility": "Tuto fakturu vidí pouze lidé s přístupem ke všem zahrnutým spisům a správci fakturace."
+    },
     "codes": {
       "activity": "Aktivita",
       "activityCode": "Kód aktivity",
@@ -673,6 +700,11 @@
       "invoiceDate": "Datum faktury",
       "invoiceDetail": "Detail faktury",
       "invoiceNumber": "Číslo faktury",
+      "lineOverrides": {
+        "editedRecorded": "Upraveno · zaznamenáno: {description}, {quantity} × {rate}",
+        "quantity": "Množství",
+        "resetRecorded": "Obnovit zaznamenané hodnoty"
+      },
       "linkedExpenses": "Přiřazené výdaje",
       "linkedTimeEntries": "Přiřazené časové záznamy",
       "markPaid": "Označit jako zaplaceno",
@@ -697,6 +729,7 @@
     "markNonBillableSelected": "Označit jako nefakturovatelné",
     "matterRequired": "Vyberte prosím spis",
     "minutes": "Minuty",
+    "moveEntryHint": "Uložením se záznam přesune do tohoto spisu a ocení se podle jeho sazeb.",
     "narrative": "Popis",
     "narrativePlaceholder": "Popište provedenou práci...",
     "noActiveTimer": "Žádný aktivní časovač",
@@ -811,6 +844,7 @@
       "approved": "Schváleno",
       "billed": "Vyfakturováno",
       "draft": "Návrh",
+      "submitted": "Odesláno",
       "written_off": "Odepsáno"
     },
     "stopTimer": "Zastavit",
@@ -965,7 +999,6 @@
     "coverage": {
       "completeness": "Úplnost",
       "courtsHeading": "Podle soudu",
-      "courtsUnavailable": "Rozpis podle soudů není momentálně k dispozici.",
       "decisionYears": "Roky rozhodnutí",
       "description": "Kolik judikatury korpus obsahuje podle států a soudů a jak aktuální je každý zdroj.",
       "generatedAt": "Údaje k {date}",
@@ -976,20 +1009,16 @@
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatím nespuštěno",
       "inPreparation": "Připravuje se",
-      "knownGaps": "Známé mezery",
       "lastSync": "Poslední synchronizace",
-      "noGapsRecorded": "Žádné mezery nejsou zaznamenány",
       "notCountedYet": "Zatím nespočítáno",
       "notMeasuredYet": "Zatím neměřeno",
-      "pendingTexts": "Nevyřízené texty",
       "reportedByListing": "Sečteno z výpisu vydavatele",
       "reportedByOperator": "Zadáno ručně",
       "reportedByPublisher": "Vlastní údaj vydavatele",
       "searchable": "Dostupné k vyhledání",
       "title": "Pokrytí judikatury",
       "totalFrom": "Celkem k {date}",
-      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici.",
-      "unreadListingPeriods": "Nenačtená období výpisu"
+      "unavailable": "Údaje o pokrytí nejsou momentálně k dispozici."
     },
     "decisionNotFound": "Rozhodnutí nenalezeno",
     "decisionTypes": {
@@ -2079,7 +2108,6 @@
       "orLetUsKnowAt": "nebo nám napište na",
       "viewDocumentation": "Zobrazit dokumentaci"
     },
-    "error": "Chyba",
     "expenses": "Výdaje",
     "export": {
       "citations": "Citace",
@@ -2153,6 +2181,7 @@
     "lastUpdated": "Naposledy aktualizováno",
     "layoutResetAfterProblem": "Po problému bylo obnoveno výchozí rozložení.",
     "legalDatabase": "Právní databáze",
+    "loadFailed": "Nepodařilo se načíst.",
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
@@ -2241,7 +2270,7 @@
     "showMore": "Zobrazit více",
     "showSecretValue": "Zobrazit tajnou hodnotu",
     "signOut": "Odhlásit se",
-    "somethingWentWrong": "Něco se pokazilo",
+    "somethingWentWrong": "Něco se pokazilo. Zkuste to znovu, a pokud se to opakuje, načtěte stránku znovu.",
     "sort": "Řadit",
     "source": "Zdroj",
     "stale": "Zastaralé",
@@ -2718,7 +2747,7 @@
       "notEnabled": "Tato akce není pro vaši organizaci povolena.",
       "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
     },
-    "actionFailed": "Akce se nezdařila",
+    "actionFailed": "Nepodařilo se to. Zkuste to znovu, a pokud se to opakuje, načtěte stránku znovu.",
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
       "caseLawCountryUnavailable": "Judikatura této země není dostupná. Vyberte jinou zemi.",
@@ -3269,7 +3298,7 @@
     "saveSerializeFailedTitle": "DOCX se nepodařilo vytvořit",
     "savingDocument": "Ukládání...",
     "showDetails": "Zobrazit podrobnosti",
-    "somethingWentWrong": "Něco se pokazilo",
+    "somethingWentWrong": "Něco se pokazilo. Zkuste to znovu, a pokud se to opakuje, načtěte stránku znovu.",
     "synced": "Synchronizováno",
     "syncing": "Synchronizuji",
     "tableBordersAll": "Všechna ohraničení",
@@ -5882,6 +5911,16 @@
       "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhů}}",
       "previousWeek": "Předchozí týden",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Zkontrolujte datum práce a záznam pak odešlete.",
+        "narrativeRequired": "Doplňte popis a záznam pak odešlete.",
+        "runningTimer": "Zastavte běžící časovač a záznam pak odešlete.",
+        "unpriced": "Záznam nemá sazbu. Požádejte o sazbu pro spis a pak ho odešlete."
+      },
+      "returned": "Vráceno: {comment}",
+      "submitAndApprove": "Odeslat a schválit",
+      "submitResult": "Odesláno {submitted} · schváleno {approved} · k opravě {refused}",
+      "submitWeek": "Odeslat týden",
       "title": "Můj týden",
       "totals": "Vykázáno {logged} · fakturovatelné {billable}"
     }

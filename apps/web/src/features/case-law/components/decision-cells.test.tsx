@@ -112,7 +112,9 @@ describe("a cut headnote can be read whole", () => {
       view: { type: HEADNOTE_VIEW.FAILED },
     });
 
-    expect(markup).toContain(messages.errors.actionFailed);
+    expect(markup).toContain(
+      renderToStaticMarkup(messages.errors.actionFailed),
+    );
     expect(markup).toContain("Retry");
     // The preview is still the text on screen: a failed read loses nothing.
     expect(markup).toContain("Nájemní smlouva");
