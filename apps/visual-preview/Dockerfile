@@ -12,7 +12,7 @@ ADD --checksum=sha256:b6874fc0d7af15e16a15ef1b73177731f698c296c73d26aa4a90840c07
     https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.arm64.tar /chromium.tar
 RUN mkdir -p /chromium && tar -xf /chromium.tar -C /chromium
 
-FROM public.ecr.aws/lambda/nodejs:22-arm64@sha256:3f965c1858f13651484a71587f2fa58717c1b906c33c26d79e1bd88783cc600b
+FROM public.ecr.aws/lambda/nodejs:24-arm64@sha256:067e3248e3dd1c497c017b8b51c7a4c4f85957a838652712d49eeb7dcc11e84d
 COPY --from=builder /chromium /opt/chromium
 COPY --from=builder /app/handler.mjs /var/task/handler.mjs
 COPY --from=builder /runtime/node_modules /var/task/node_modules
