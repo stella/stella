@@ -1645,6 +1645,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "MODE",
   "NETWORK_BASELINE_PURPOSE",
   "NETWORK_CANARY_URL",
+  // Read-only npm summary receives the publishing jobs' needs context.
+  "NPM_RELEASE_NEEDS",
   // The online index gate's child-process fixture receives its target here.
   "ONLINE_INDEX_TEST_NAME",
   "ONLINE_INDEX_TEST_NOW",
@@ -1660,6 +1662,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
+  // Historical package builds use current tooling against a separate source root.
+  "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PR_TITLE",

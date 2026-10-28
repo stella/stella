@@ -422,7 +422,7 @@ jobs:
     # resolve outside the protected ref.
     if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
-      contents: read
+      contents: write # a rerun reads this release's draft receipt
       packages: write
       id-token: write
       attestations: write
@@ -660,7 +660,7 @@ jobs:
     # resolve outside the protected ref.
     if: ${{ success() && needs.resolve.outputs.channel == 'rc' }}
     permissions:
-      contents: read
+      contents: write # a rerun reads this release's draft receipt
       packages: write
       id-token: write
       attestations: write

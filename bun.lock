@@ -1499,7 +1499,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.54.0",
+      "version": "0.54.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",

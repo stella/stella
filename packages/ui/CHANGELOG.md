@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.54.1
+
+### Patch Changes
+
+- [#7228](https://github.com/stella/stella/pull/7228) [`0cfacbc`](https://github.com/stella/stella/commit/0cfacbc4492650dd7ee6c2516de51e5e64aa0c82) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Settled toasts take their own dismissal timing: a loading toast updated to success, error or cancelled no longer keeps the loading toast's infinite lifetime, unless the update names a timeout itself.
+
 ## 0.54.0
 
 ### Minor Changes
