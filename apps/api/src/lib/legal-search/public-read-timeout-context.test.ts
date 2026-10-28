@@ -6,6 +6,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   runWithPublicReadScope,
@@ -51,7 +52,7 @@ test("a transport capability cannot start reads after its admission scope settle
         async (io) => async () =>
           io.fetch(
             "http://localhost/unused",
-            { timeoutMs: 1000 },
+            { timeoutMs: HAPPY_PATH_TIMEOUT_MS },
             async (response) => await response.text(),
           ),
       ),
@@ -86,7 +87,7 @@ for (const failureAt of [
           async (io) =>
             await io.fetch(
               "https://corpus.fixture/read",
-              { timeoutMs: 1000 },
+              { timeoutMs: HAPPY_PATH_TIMEOUT_MS },
               async () => {
                 if (
                   failureAt === "consume" ||
@@ -128,7 +129,7 @@ test("public-read transport propagates cleanup failure after successful consumpt
         async (io) =>
           await io.fetch(
             "https://corpus.fixture/read",
-            { timeoutMs: 1000 },
+            { timeoutMs: HAPPY_PATH_TIMEOUT_MS },
             async () => "read",
             async () =>
               new Response(
@@ -165,7 +166,7 @@ for (const consumption of ["unconsumed", "consumed", "failed"] as const) {
             async (io) =>
               await io.fetch(
                 "https://corpus.fixture/read",
-                { timeoutMs: 1000 },
+                { timeoutMs: HAPPY_PATH_TIMEOUT_MS },
                 async (response) => {
                   if (consumption === "consumed") {
                     return await response.text();
@@ -255,7 +256,7 @@ for (const cleanup of ["success", "failure"] as const) {
           async (io) =>
             await io.fetch(
               "https://corpus.fixture/read",
-              { timeoutMs: 1000 },
+              { timeoutMs: HAPPY_PATH_TIMEOUT_MS },
               async (response) => {
                 controller.abort(failure);
                 return await response.text();

@@ -42,6 +42,14 @@ import {
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
+const OUTBOUND_REQUEST_CALLERS = new Map([
+  [
+    "fetchPublicReadRequest",
+    "apps/api/src/lib/legal-search/public-read-timeout-context.ts",
+  ],
+  ["outboundRequests", "apps/api/src/lib/auth/authorized-outbound-fetch.ts"],
+]);
+
 const ALTERNATE_READERS = new Set([
   "readPublicDecisionLanguageAlternatesByGroup",
 ]);
@@ -60,6 +68,23 @@ const FUNCTION_TYPES = new Set([
 
 const isFunctionLike = (node: unknown): node is AstNode =>
   isAstNode(node) && FUNCTION_TYPES.has(node.type);
+
+const isRawExportReference = (node: AstNode): boolean => {
+  let parent = node.parent;
+  while (isAstNode(parent)) {
+    if (FUNCTION_TYPES.has(parent.type)) {
+      return false;
+    }
+    if (
+      parent.type === "ExportNamedDeclaration" ||
+      parent.type === "ExportDefaultDeclaration"
+    ) {
+      return true;
+    }
+    parent = parent.parent;
+  }
+  return false;
+};
 
 const walkOwnFunctionBody = (
   functionNode: AstNode,
@@ -418,7 +443,7 @@ export default eslintCompatPlugin({
           missingOwner:
             "The registered {{transport}} transport must invoke its canonical withPublicReadIo() scope.",
           confinedRequest:
-            "The public-read request forwarder may only be imported or invoked by the canonical public-read scope owner.",
+            "Raw outbound request primitives may only be used by their canonical scope or permit facade.",
           wrongOwner:
             "This transport owner must use its registered {{transport}} kind.",
         },
@@ -429,13 +454,13 @@ export default eslintCompatPlugin({
         let isContextOwner = false;
         const observed = new Set<string>();
         const checkForwarder = (node: AstNode): void => {
-          if (isContextOwner) {
-            return;
-          }
           const imported = resolveImport(context, node);
           if (
             imported?.moduleId === "apps/api/src/lib/safe-outbound-fetch" &&
-            imported.imported === "fetchPublicReadRequest"
+            OUTBOUND_REQUEST_CALLERS.has(imported.imported) &&
+            (OUTBOUND_REQUEST_CALLERS.get(imported.imported) !==
+              repoRelativeFilename(context) ||
+              isRawExportReference(node))
           ) {
             context.report({ node, messageId: "confinedRequest" });
           }
@@ -455,15 +480,11 @@ export default eslintCompatPlugin({
                 ));
             return (
               checksTransport ||
-              (!isContextOwner &&
-                /fetchPublicReadRequest|safe-outbound-fetch/u.test(
-                  context.sourceCode.text,
-                ))
+              /safe-outbound-fetch/u.test(context.sourceCode.text)
             );
           },
           "ExportNamedDeclaration, ExportAllDeclaration"(node) {
             if (
-              isContextOwner ||
               !isAstNode(node) ||
               !isStringLiteral(node.source) ||
               canonicalModuleId(
@@ -479,8 +500,9 @@ export default eslintCompatPlugin({
                 node.specifiers.some(
                   (specifier) =>
                     isAstNode(specifier) &&
-                    getPropertyName(specifier.local) ===
-                      "fetchPublicReadRequest",
+                    OUTBOUND_REQUEST_CALLERS.has(
+                      getPropertyName(specifier.local) ?? "",
+                    ),
                 ))
             ) {
               context.report({ node, messageId: "confinedRequest" });

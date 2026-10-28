@@ -96,7 +96,7 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 const SOFT_LAW_HANDLER_PATH = /(?:^|\/)apps\/api\/src\/handlers\/soft-law\//u;
 const SOFT_LAW_TRANSPORT_PATH =
   /(?:^|\/)apps\/api\/src\/handlers\/soft-law\/publisher-access\.ts$/u;
-const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/safe-outbound-fetch";
+const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/auth/authorized-outbound-fetch";
 const SAFE_OUTBOUND_FETCHES: ReadonlySet<string> = new Set([
   "safeOutboundFetchBytes",
   "safeOutboundFetchStream",

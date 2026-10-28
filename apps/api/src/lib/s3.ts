@@ -103,7 +103,7 @@ const readCredentialResponse = async <T>({
               ...(headers === undefined ? {} : { headers }),
               ...(method === undefined ? {} : { method }),
               signal,
-              timeoutMs: 2000,
+              timeout: { type: "idle", ms: 2000 },
             },
             async (response) => {
               if (!response.ok) {

@@ -60,6 +60,7 @@ import {
   resolveCredentialMemberAuthorization,
 } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
@@ -101,7 +102,6 @@ import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { getSearchReader } from "@/api/lib/search/provider";
 import type { createStoredTemplate } from "@/api/lib/templates/create-template";
 import type {

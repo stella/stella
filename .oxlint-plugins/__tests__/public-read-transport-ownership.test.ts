@@ -242,7 +242,45 @@ test("the request forwarder is confined to the public-read scope owner", async (
   for (const { callerPath, lines } of results) {
     expect(lines).toEqual(
       callerPath.endsWith("public-read-timeout-context.ts")
-        ? []
+        ? [6, 7, 8]
+        : [1, 2, 4, 5, 6, 7, 8],
+    );
+  }
+});
+
+test("raw outbound requests are confined to the permit facade", async () => {
+  const names = ["outboundRequests"];
+  const cases = names.flatMap((name) => {
+    const code = [
+      `import { ${name} as request } from "@/api/lib/safe-outbound-fetch";`,
+      "await request.bytes(options);",
+      'import * as outbound from "@/api/lib/safe-outbound-fetch";',
+      `await outbound.${name}.bytes(options);`,
+      `const alias = outbound.${name};`,
+      "export const forwarded = request;",
+      `export { ${name} as relay } from "@/api/lib/safe-outbound-fetch";`,
+      'export * from "@/api/lib/safe-outbound-fetch";',
+    ].join("\n");
+    return [
+      "apps/api/src/handlers/documents/read.ts",
+      "apps/api/src/lib/legal-search/public-read-timeout-context.ts",
+      "apps/api/src/lib/auth/authorized-outbound-fetch.ts",
+    ].map((callerPath) => ({ code, callerPath }));
+  });
+  const results = await Promise.all(
+    cases.map(async ({ code, callerPath }) => ({
+      callerPath,
+      lines: await lintSingleRule("require-owned-public-read-transport", code, {
+        plugin: "public-law-read-boundary",
+        sourcePath: callerPath,
+        cwd: "scratch",
+      }),
+    })),
+  );
+  for (const { callerPath, lines } of results) {
+    expect(lines).toEqual(
+      callerPath.endsWith("authorized-outbound-fetch.ts")
+        ? [6, 7, 8]
         : [1, 2, 4, 5, 6, 7, 8],
     );
   }
