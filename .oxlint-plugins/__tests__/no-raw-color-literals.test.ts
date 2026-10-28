@@ -89,6 +89,21 @@ describe("no-raw-color-literals", () => {
       ),
     ).toEqual([1, 2]);
   });
+
+  test("accepts tokens, issue references and computed colour", async () => {
+    expect(
+      await lintSingleRule(
+        "no-raw-color-literals",
+        [
+          'const token = "var(--primary)";',
+          'const relative = "rgb(from var(--color-info) r g b / 0.12)";',
+          'const ticket = "Fixed in #1139 (see #4072)";',
+          "declare const r: number;",
+          `const computed = \`rgb(\${r} \${r} \${r})\`;`,
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe("no-raw-pdf-color-operators", () => {
@@ -109,5 +124,24 @@ describe("no-raw-pdf-color-operators", () => {
         { plugin: "no-raw-color-literals" },
       ),
     ).toEqual([1, 2, 4, 5]);
+  });
+
+  test("accepts helper-built operators, computed colours and prose", async () => {
+    expect(
+      await lintSingleRule(
+        "no-raw-pdf-color-operators",
+        [
+          'import { rgb } from "@libpdf/core";',
+          "declare const channels: string;",
+          "declare const r: number;",
+          `const fill = \`\${channels} rg\`;`,
+          "const computed = rgb(r, r, r);",
+          'const prose = "Add 5 g of salt";',
+          'const geometry = "0.300 0.300 10 20 re";',
+          "export { computed, fill, geometry, prose };",
+        ].join("\n"),
+        { plugin: "no-raw-color-literals" },
+      ),
+    ).toEqual([]);
   });
 });
