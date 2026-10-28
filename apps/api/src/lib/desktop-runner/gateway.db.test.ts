@@ -26,7 +26,10 @@ import {
   type ApiSocketSession,
   apiWebSocketHandler,
 } from "@/api/http/websocket";
-import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
+import {
+  type DesktopKeyLiveness,
+  desktopKeyLiveness,
+} from "@/api/lib/business-registries/desktop/liveness";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
@@ -103,6 +106,12 @@ const RUNNER_GRANTS: FeatureAccessGrants = {
 const runnerGrants: { current: FeatureAccessGrants } = {
   current: RUNNER_GRANTS,
 };
+/** The real credential check over the test database. */
+const isKeyLive: DesktopKeyLiveness = async (key) =>
+  // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
+  await desktopKeyLiveness(
+    asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
+  )(key);
 /** The real feature decision over the test database and the grants above. */
 const isRunnerEnabled: RunnerFeatureAccess = async (account) =>
   await runnerFeatureAccess({
@@ -172,10 +181,7 @@ const startInstance = async (
     timing: { ...TIMING, ...overrides.timing },
     limits: overrides.limits ?? {},
     ...(overrides.timers === undefined ? {} : { timers: overrides.timers }),
-    // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
-    isKeyLive: desktopKeyLiveness(
-      asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
-    ),
+    isKeyLive,
     isRunnerEnabled,
   });
   await gateway.start();
@@ -961,6 +967,7 @@ describe("upgrade scaling", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isKeyLive,
       isRunnerEnabled,
     });
     const fixture = {
@@ -1427,10 +1434,8 @@ describe("socket memory", () => {
       capped.server,
     );
     expect(refused?.status).toBe(429);
-    const [closing, ...rest] = open;
-    if (closing === undefined) {
-      return panic("two sockets were opened");
-    }
+    const closing = open[0] ?? panic("two sockets were opened");
+    const rest = open.slice(1);
     await closing.close();
     // A closed socket frees its place.
     const admitted = await openDesktop(capped, Bun.randomUUIDv7());
@@ -1476,6 +1481,7 @@ describe("outbound frames", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isKeyLive,
       isRunnerEnabled,
     });
     await gateway.start();
@@ -1579,6 +1585,7 @@ describe("gateway edges", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isKeyLive,
       isRunnerEnabled,
     });
     await gateway.start();

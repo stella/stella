@@ -10,15 +10,9 @@ import type { HttpServer } from "@/api/http/context";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import {
-  type DesktopKeyLiveness,
-  desktopKeyLiveness,
-} from "@/api/lib/business-registries/desktop/liveness";
+import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
-import {
-  type RunnerFeatureAccess,
-  runnerFeatureAccess,
-} from "@/api/lib/desktop-runner/feature-access";
+import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
   DESKTOP_RUNNER_CLOSE,
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
@@ -88,10 +82,10 @@ export type DesktopRunnerGatewayOptions = {
   random?: () => number;
   timing?: Partial<DesktopRunnerTiming>;
   limits?: Partial<DesktopRunnerLimits>;
-  /** Re-checked on every heartbeat; the owner connection's check by default. */
-  isKeyLive?: DesktopKeyLiveness;
-  /** Checked on upgrade and every heartbeat; the deployment's grants by default. */
-  isRunnerEnabled?: RunnerFeatureAccess;
+  /** Re-checked on every heartbeat. */
+  isKeyLive: DesktopKeyLiveness;
+  /** Checked on upgrade and every heartbeat. */
+  isRunnerEnabled: RunnerFeatureAccess;
   /** The clock sockets schedule with; the system's by default. */
   timers?: RunnerTimers;
 };
@@ -168,8 +162,8 @@ export const createDesktopRunnerGateway = (
     now,
     random,
     mintRunToken: options.mintRunToken,
-    isKeyLive: options.isKeyLive ?? desktopKeyLiveness(),
-    isRunnerEnabled: options.isRunnerEnabled ?? runnerFeatureAccess(),
+    isKeyLive: options.isKeyLive,
+    isRunnerEnabled: options.isRunnerEnabled,
     ringPrevious: options.doorbell.ring,
   };
 

@@ -1,6 +1,5 @@
 import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,7 +14,7 @@ type RunnerAccount = {
 export type RunnerFeatureAccess = (account: RunnerAccount) => Promise<boolean>;
 
 type RunnerFeatureAccessOptions = {
-  db?: Pick<Transaction, "select">;
+  db: Pick<Transaction, "select">;
   /** The grants to decide with; the deployment's by default. */
   grants?: () => FeatureAccessGrants;
 };
@@ -25,10 +24,7 @@ type RunnerFeatureAccessOptions = {
  * owner that answers the desktop's own feature read.
  */
 export const runnerFeatureAccess =
-  ({
-    db = rootDb,
-    grants,
-  }: RunnerFeatureAccessOptions = {}): RunnerFeatureAccess =>
+  ({ db, grants }: RunnerFeatureAccessOptions): RunnerFeatureAccess =>
   async (account: RunnerAccount) => {
     const { userId, organizationId } = account;
     const decision = await resolveFeatureAccess({

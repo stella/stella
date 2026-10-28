@@ -2,11 +2,13 @@ import { rootDb } from "@/api/db/root";
 import { envBase } from "@/api/env-base";
 import type { HttpServer } from "@/api/http/context";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import {
   createLocalDoorbell,
   createRedisDoorbell,
   type DesktopRunnerDoorbell,
 } from "@/api/lib/desktop-runner/doorbell";
+import { runnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
 import {
   authorizeRunnerWith,
   createDesktopRunnerGateway,
@@ -42,6 +44,8 @@ export const startDesktopRunnerGateway = async () => {
     instanceId: INSTANCE_ID,
     authorize: authorizeRunnerWith(authorizeDesktopAccount),
     mintRunToken: mintAgentRunToken,
+    isKeyLive: desktopKeyLiveness(rootDb),
+    isRunnerEnabled: runnerFeatureAccess({ db: rootDb }),
   });
   await gateway.start();
 };

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import { apikey } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseDesktopRegistryMetadata } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
@@ -26,7 +26,7 @@ export type DesktopKeyLiveness = (key: DesktopKey) => Promise<boolean>;
  * every revocation path disables the key, so each ends it.
  */
 export const desktopKeyLiveness =
-  (db: Pick<typeof rootDb, "select"> = rootDb): DesktopKeyLiveness =>
+  (db: Pick<Transaction, "select">): DesktopKeyLiveness =>
   async (desktopKey: DesktopKey) => {
     const { keyId, userId, organizationId, deviceJkt } = desktopKey;
     const [key] = await db
