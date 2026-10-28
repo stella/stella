@@ -164,12 +164,15 @@ esac
       phase: "selection",
     });
   };
-  const publishEvidence = (proofSha = sha) => {
+  const publishEvidence = (
+    proofSha = sha,
+    stagingTitle = `Staging release proof ${rcTag} `,
+  ) => {
     const contexts = [
       {
         context: "staging/verified",
         workflow: "deploy-staging.yml",
-        title: "Staging release proof v1.2.3-rc.1 ",
+        title: stagingTitle,
       },
       {
         context: "main/heavy",
@@ -336,6 +339,33 @@ test("green workflow receipts for another SHA cannot finalize the selected RC", 
     expect(fixture.receipt("pushes")).toBe("");
     expect(fixture.receipt("publications")).toBe("");
   }));
+
+for (const [name, stagingTitle] of [
+  ["an ordinary main staging deploy", "Deploy main to staging "],
+  [
+    "a staging proof of an RC tag on another commit",
+    `Staging release proof ${releaseTag}-rc.2 `,
+  ],
+  ["a staging proof of another release", "Staging release proof v1.2.3-rc.1 "],
+] as const) {
+  test(`${name} cannot finalize the selected RC`, () =>
+    withFixture((fixture) => {
+      const selected = fixture.select();
+      expect(selected.exitCode, selected.stderr.toString()).toBe(0);
+      fixture.git("tag", rcTag, fixture.sha);
+      // rc.2 exists, but on main rather than on the candidate commit.
+      fixture.git("tag", `${releaseTag}-rc.2`, fixture.main);
+      fixture.publishEvidence(fixture.sha, stagingTitle);
+      const finalized = fixture.finalize();
+      expect(finalized.exitCode).toBe(1);
+      expect(finalized.stderr.toString()).toContain(
+        "RELEASE_STAGING_NOT_GREEN: run provenance or conclusion does not match",
+      );
+      expect(fixture.git("tag", "--list", releaseTag)).toBe("");
+      expect(fixture.receipt("pushes")).toBe("");
+      expect(fixture.receipt("publications")).toBe("");
+    }));
+}
 
 for (const flag of ["--candidate-only", "--proof-sha"]) {
   test(`RC identity selection exposes no legacy evidence mode ${flag}`, () => {

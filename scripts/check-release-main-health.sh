@@ -72,7 +72,17 @@ validate_workflow_status() {
 }
 if [[ "$proof" != "$sha" || -n "$rc_tags" ]]; then
   # Title patterns follow each workflow's run-name (scripts/proof-run-titles.test.ts).
-  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*|Deploy main to staging" "RELEASE_STAGING_NOT_GREEN"
+  # A commit carrying RC tags is proven only by a staging proof of one of
+  # those tags: an ordinary main deploy builds its own images, and another
+  # candidate's proof covers other digests.
+  staging_title="Staging release proof v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*|Deploy main to staging"
+  if [[ -n "$rc_tags" ]]; then
+    candidate_tags=$(grep -E '^v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*$' <<< "$rc_tags" || true)
+    [[ -n "$candidate_tags" ]] \
+      || refuse "RELEASE_STAGING_NOT_GREEN: no well-formed RC tag points at $sha"
+    staging_title="Staging release proof ($(sed 's/[.]/[.]/g' <<< "$candidate_tags" | paste -sd '|' -))"
+  fi
+  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "$staging_title" "RELEASE_STAGING_NOT_GREEN"
 fi
 if [[ "$receipt" != true ]]; then
   validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites" "RELEASE_HEAVY_NOT_GREEN"

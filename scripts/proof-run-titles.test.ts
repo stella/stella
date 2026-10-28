@@ -110,15 +110,36 @@ test("the release health check accepts each proof workflow's rendered title", ()
       ),
     ].map(([, workflow, pattern]) => [workflow, pattern]),
   );
-  for (const [workflow, title] of [
-    ["deploy-staging.yml", candidateStaging],
-    ["main-heavy.yml", heavy],
-    ["main-pr-depth.yml", prDepth],
+  // The staging pattern is chosen per commit: a commit with RC tags accepts
+  // only proofs of those tags, any other commit the untagged pattern.
+  expect(patterns.get("deploy-staging.yml")).toBe("$staging_title");
+  const untagged = /^\s*staging_title="([^"$]+)"$/mu.exec(source)?.[1];
+  const candidatePrefix =
+    /^\s*staging_title="(Staging release proof )\(\$/mu.exec(source)?.[1];
+  expect(untagged).toBeDefined();
+  expect(candidatePrefix).toBeDefined();
+  const escapedRc = RC.replaceAll(".", "[.]");
+  const candidatePattern = `${candidatePrefix ?? ""}(${escapedRc})`;
+  // An ordinary deploy never proves a commit that carries an RC tag.
+  expect(
+    new RegExp(`^(${candidatePattern}) ${SHA}$`, "u").test(ordinaryStaging),
+  ).toBe(false);
+  for (const [workflow, pattern, title] of [
+    ["deploy-staging.yml", candidatePattern, candidateStaging],
+    ["deploy-staging.yml", untagged, candidateStaging],
+    ["deploy-staging.yml", untagged, ordinaryStaging],
+    ["main-heavy.yml", patterns.get("main-heavy.yml"), heavy],
+    ["main-pr-depth.yml", patterns.get("main-pr-depth.yml"), prDepth],
   ] as const) {
-    const pattern = patterns.get(workflow);
     expect(pattern, workflow).toBeDefined();
     expect(new RegExp(`^(${pattern ?? ""}) ${SHA}$`, "u").test(title)).toBe(
       true,
     );
   }
+  // A candidate pattern never accepts another candidate's proof.
+  expect(
+    new RegExp(`^(${candidatePattern}) ${SHA}$`, "u").test(
+      candidateStaging.replace(RC, "v1.2.3-rc.5"),
+    ),
+  ).toBe(false);
 });
