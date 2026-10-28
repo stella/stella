@@ -69,6 +69,7 @@ import { filterWorkspacesBySearch } from "@/routes/_protected.workspaces/-filter
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useMatterClientDrop } from "@/routes/_protected.workspaces/-hooks/use-matter-client-drop";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
+import { hasMatterCreationCapacity } from "@/routes/_protected.workspaces/-matter-creation-capacity.logic";
 import {
   compareWorkspacesByKey,
   groupByClient,
@@ -140,6 +141,9 @@ const MattersContent = ({
   const { data, isFetching } = useSuspenseQuery(
     workspacesRouteOptions(activeOrganizationId, status),
   );
+  const { data: activeMattersData } = useSuspenseQuery(
+    workspacesRouteOptions(activeOrganizationId),
+  );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const resetMatterVisibilityState = useConfigStore((s) => s.updateMatters);
@@ -180,7 +184,11 @@ const MattersContent = ({
     isMatterInStatusView(matter.status, status),
   );
   const canOpenCreateMatter =
-    canCreateMatter && workspaces.length < WORKSPACES_PER_ORGANIZATION_MAX;
+    canCreateMatter &&
+    hasMatterCreationCapacity(
+      activeMattersData.workspaces,
+      WORKSPACES_PER_ORGANIZATION_MAX,
+    );
 
   const searched = filterWorkspacesBySearch(workspaces, search);
 
