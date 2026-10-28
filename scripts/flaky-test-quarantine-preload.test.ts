@@ -27,7 +27,30 @@ import {
 
 const PRELOAD = path.join(import.meta.dir, "flaky-test-quarantine-preload.ts");
 const FIXTURE = "pkg/flaky.test.ts";
-const FIXTURE_SELECTION_ENV = "FLAKY_TEST_FIXTURE_SELECTION";
+const RECEIVER_FIXTURE = "pkg/receivers.test.ts";
+const RECEIVER_SOURCE = `import { describe, expect, test } from "bun:test";
+
+test.skip("native skip", () => {
+  throw new Error("test.skip ran");
+});
+test.skip.if(true)("conditional native skip", () => {
+  throw new Error("test.skip.if ran");
+});
+test.if(false)("false native condition", () => {
+  throw new Error("test.if(false) ran");
+});
+test.each([[1], [2]])("test row %i", (value) => {
+  expect(value).toBeGreaterThan(0);
+});
+describe.each([["one"], ["two"]])("describe row %s", (value) => {
+  test("runs", () => {
+    expect(value.length).toBeGreaterThan(0);
+  });
+});
+test("quarantined pass", () => {
+  expect(true).toBe(true);
+});
+`;
 const SOURCE = `import { describe, expect, it, test } from "bun:test";
 import { existsSync } from "node:fs";
 
@@ -39,6 +62,11 @@ describe("outer", () => {
   });
   test("passes", () => {
     expect(1).toBe(1);
+  });
+  describe.if(true).each([["one"]])("conditional %s", () => {
+    test("conditional case", () => {
+      throw new Error("conditional group flake");
+    });
   });
 });
 describe.concurrent("modified group", () => {
@@ -88,7 +116,7 @@ if (reportDir && registry.entries.length > 0 && !existsSync(reportDir)) {
   throw new Error("quarantine preload did not initialize in the package runner");
 }
 const result = Bun.spawnSync({
-  cmd: [process.execPath, "test", ...(process.env["${FIXTURE_SELECTION_ENV}"] === "only" ? ["--only"] : []), "./${FIXTURE}"],
+  cmd: [process.execPath, "test", "./${FIXTURE}"],
   stdout: "inherit",
   stderr: "inherit",
 });
@@ -112,19 +140,17 @@ const entry = (name: string): QuarantineEntry => ({
 
 type RunOptions = {
   names: readonly string[];
-  source?: string;
-  selection?: "all" | "only";
   // Makes the fixture's unquarantined test fail too.
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
+  source?: string;
 };
 
 const run = ({
   names,
-  source = SOURCE,
-  selection = "all",
   failUnquarantined = false,
   reportDir = "set",
+  source = SOURCE,
 }: RunOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-"));
   roots.push(root);
@@ -149,7 +175,6 @@ const run = ({
     env: {
       ...inherited,
       BUN_OPTIONS: `--preload=${PRELOAD}`,
-      [FIXTURE_SELECTION_ENV]: selection,
       [QUARANTINE_REGISTRY_ENV]: path.join(
         root,
         "scripts/flaky-test-quarantine.json",
@@ -176,6 +201,69 @@ const run = ({
   };
 };
 
+type ReceiverFixtureOptions = {
+  preload: boolean;
+  extraSource?: string;
+  names?: readonly string[];
+};
+
+const runReceiverFixture = ({
+  preload,
+  extraSource = "",
+  names = ["quarantined pass"],
+}: ReceiverFixtureOptions) => {
+  const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-receivers-"));
+  roots.push(root);
+  mkdirSync(path.join(root, "scripts"));
+  mkdirSync(path.join(root, "pkg"));
+  writeFileSync(
+    path.join(root, RECEIVER_FIXTURE),
+    `${RECEIVER_SOURCE}\n${extraSource}`,
+  );
+  writeFileSync(
+    path.join(root, "scripts/flaky-test-quarantine.json"),
+    serializeRegistry({
+      entries: names.map((name) => ({
+        ...entry(name),
+        id: `${RECEIVER_FIXTURE}::${name}`,
+      })),
+    }),
+  );
+  const reports = path.join(root, "reports");
+  const { BUN_OPTIONS: _options, ...inherited } = process.env;
+  const result = Bun.spawnSync({
+    cmd: [process.execPath, "test", `./${RECEIVER_FIXTURE}`],
+    cwd: root,
+    env: {
+      ...inherited,
+      ...(preload
+        ? {
+            BUN_OPTIONS: `--preload=${PRELOAD}`,
+            [QUARANTINE_REGISTRY_ENV]: path.join(
+              root,
+              "scripts/flaky-test-quarantine.json",
+            ),
+            [QUARANTINE_REPORT_DIR_ENV]: reports,
+          }
+        : {}),
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return {
+    exitCode: result.exitCode,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`,
+    records: (existsSync(reports) ? readdirSync(reports) : []).flatMap((file) =>
+      readFileSync(path.join(reports, file), "utf-8")
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line): QuarantineRecord =>
+          v.parse(quarantineRecordSchema, JSON.parse(line)),
+        ),
+    ),
+  };
+};
+
 const compareTuple = (
   left: readonly string[],
   right: readonly string[],
@@ -183,6 +271,7 @@ const compareTuple = (
 
 const FAILING = [
   "outer > inner > throws",
+  "outer > conditional one > conditional case",
   "rejects",
   "calls done with an error",
   "hangs",
@@ -222,43 +311,130 @@ describe("outer", () => {
     ).toEqual(names.map((name) => `${FIXTURE}::${name}`));
   });
 
-  test.each(["skip", "only", "concurrent", "serial"])(
-    "retains native test.%s.each receivers and behavior",
-    (modifier) => {
-      const result = run({
-        names: ["sentinel"],
-        selection: modifier === "only" ? "only" : "all",
-        source: `import { expect, test } from "bun:test";
-test("sentinel", () => {});
-test.${modifier}.each([1])("native row %i", (value) => {
-  ${modifier === "skip" ? 'throw new TypeError("Skipped body ran");' : "expect(value).toBe(1);"}
-});`,
+  test("preserves Bun receiver semantics for native test and describe forms", () => {
+    const native = runReceiverFixture({ preload: false });
+    const preloaded = runReceiverFixture({ preload: true });
+
+    expect(native.exitCode).toBe(0);
+    expect(preloaded.exitCode).toBe(0);
+    for (const result of [native, preloaded]) {
+      expect(result.output).toMatch(/5 pass/u);
+      expect(result.output).toMatch(/3 skip/u);
+      expect(result.output).toMatch(/0 fail/u);
+      expect(result.output).not.toContain("test.skip ran");
+      expect(result.output).not.toContain("test.skip.if ran");
+      expect(result.output).not.toContain("test.if(false) ran");
+    }
+  });
+
+  test.each([
+    {
+      form: "describe.skip.if",
+      source: `describe.skip.if(true)("conditional skipped group", () => {
+        test("skipped child", () => { throw new Error("skipped child ran"); });
+      });`,
+    },
+    {
+      form: "describe.if.each",
+      source: `describe.if(true).each([["native"]])("conditional %s", () => {
+        test("conditional child", () => { expect(true).toBe(true); });
+      });`,
+    },
+    {
+      form: "describe.concurrent.each",
+      source: `describe.concurrent.each([["native"]])("concurrent %s", () => {
+        test("concurrent child", () => { expect(true).toBe(true); });
+      });`,
+    },
+    {
+      form: "test.concurrent.if",
+      source: `test.concurrent.if(true)("conditional concurrent case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+    {
+      form: "test.serial.if",
+      source: `test.serial.if(true)("conditional serial case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+    {
+      form: "test.if.concurrent",
+      source: `test.if(true).concurrent("concurrent conditional case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+  ])("preserves native outcomes through $form", ({ source }) => {
+    const native = runReceiverFixture({ preload: false, extraSource: source });
+    const preloaded = runReceiverFixture({
+      preload: true,
+      extraSource: source,
+    });
+    expect(native.exitCode).toBe(0);
+    expect(native.output).toMatch(/\b[1-9]\d* pass\b/u);
+    expect(preloaded.exitCode).toBe(0);
+    expect(preloaded.output.match(/\b\d+ (?:pass|skip|fail)\b/gu)).toEqual(
+      native.output.match(/\b\d+ (?:pass|skip|fail)\b/gu),
+    );
+  });
+
+  test.each([
+    "test.if(true)",
+    "test.skipIf(false)",
+    "test.concurrent.if(true)",
+    "test.serial.if(true)",
+    "test.if(true).concurrent",
+    "test.skipIf(false).serial",
+  ])(
+    "records matching failures through %s without suppressing other IDs",
+    (form) => {
+      const extraSource = `${form}("chained failure", () => {
+      throw new Error("chained flake");
+    });`;
+      const id = `${RECEIVER_FIXTURE}::chained failure`;
+      const quarantined = runReceiverFixture({
+        preload: true,
+        extraSource,
+        names: ["quarantined pass", "chained failure"],
       });
-      expect(result.output).not.toContain("ERR_INVALID_THIS");
-      expect(result.output).not.toContain("is not a function");
-      expect(result.exitCode, result.output).toBe(0);
+      expect(quarantined.exitCode, quarantined.output).toBe(0);
+      expect(quarantined.records).toContainEqual({ type: "registered", id });
+      expect(quarantined.records).toContainEqual(
+        expect.objectContaining({
+          type: "failed",
+          id,
+          message: "chained flake",
+        }),
+      );
+
+      const unquarantined = runReceiverFixture({ preload: true, extraSource });
+      expect(unquarantined.exitCode).not.toBe(0);
+      expect(unquarantined.output).toContain("chained flake");
+      expect(
+        unquarantined.records.some(
+          (record) => "id" in record && record.id === id,
+        ),
+      ).toBe(false);
     },
   );
 
-  test.each(["skip", "only", "concurrent", "serial"])(
-    "retains native describe.%s.each receivers and behavior",
-    (modifier) => {
-      const result = run({
-        names: ["sentinel"],
-        selection: modifier === "only" ? "only" : "all",
-        source: `import { describe, expect, test } from "bun:test";
-test("sentinel", () => {});
-describe.${modifier}.each([1])("native scope %i", (value) => {
-  test("native row", () => {
-    ${modifier === "skip" ? 'throw new TypeError("Skipped body ran");' : "expect(value).toBe(1);"}
+  test("keeps test.each outside quarantine after conditional modifiers", () => {
+    const result = runReceiverFixture({
+      preload: true,
+      extraSource: `test.concurrent.if(true).each([[1]])("table case %i", () => {
+        throw new Error("table failure");
+      });`,
+      names: ["quarantined pass", "table case 1"],
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.output).toContain("table failure");
+    expect(
+      result.records.some(
+        (record) =>
+          "id" in record && record.id === `${RECEIVER_FIXTURE}::table case 1`,
+      ),
+    ).toBe(false);
   });
-});`,
-      });
-      expect(result.output).not.toContain("ERR_INVALID_THIS");
-      expect(result.output).not.toContain("is not a function");
-      expect(result.exitCode, result.output).toBe(0);
-    },
-  );
 
   test("its static import graph uses only builtins and relative scripts files", () => {
     const pending = [PRELOAD];
@@ -314,7 +490,7 @@ describe.${modifier}.each([1])("native scope %i", (value) => {
   test("a run whose only failures are quarantined exits zero and records each one", () => {
     const { exitCode, records, output } = run({ names: FAILING });
     expect(output).toContain("(quarantined fail)");
-    expect(exitCode).toBe(0);
+    expect(exitCode, output).toBe(0);
     expect(
       records
         .flatMap((record) =>
@@ -339,6 +515,10 @@ describe.${modifier}.each([1])("native scope %i", (value) => {
         [
           `${FIXTURE}::outer > inner > throws`,
           "expect(received).toBe(expected)",
+        ],
+        [
+          `${FIXTURE}::outer > conditional one > conditional case`,
+          "conditional group flake",
         ],
         [`${FIXTURE}::rejects`, "network flake"],
       ].toSorted(compareTuple),

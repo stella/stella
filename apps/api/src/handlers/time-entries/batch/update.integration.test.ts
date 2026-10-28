@@ -164,6 +164,29 @@ test("approval records its actor and time, clears return provenance, and revert 
   });
 });
 
+test("approval audits each entry's own previous status: submitted, or the caller's draft", async () => {
+  const submittedId = await createEntry();
+  await db
+    .update(timeEntries)
+    .set({ status: BILLING_STATUS.SUBMITTED })
+    .where(eq(timeEntries.id, submittedId));
+  const draftId = await createEntry();
+  const events: AuditEvent[] = [];
+  expect(
+    await runBatch({ ids: [submittedId, draftId], action: "approve" }, events),
+  ).toEqual({ updated: 2 });
+  const statusChange = (id: string) =>
+    events.find((event) => event.resourceId === id)?.changes;
+  expect(statusChange(submittedId)).toHaveProperty("status", {
+    old: BILLING_STATUS.SUBMITTED,
+    new: BILLING_STATUS.APPROVED,
+  });
+  expect(statusChange(draftId)).toHaveProperty("status", {
+    old: BILLING_STATUS.DRAFT,
+    new: BILLING_STATUS.APPROVED,
+  });
+});
+
 test("approval accepts stopped legacy timers and paused linked timers despite a persisted start timestamp", async () => {
   const stoppedId = await createEntry("stopped");
   expect((await readEntry(stoppedId))?.timerStartedAt).toEqual(

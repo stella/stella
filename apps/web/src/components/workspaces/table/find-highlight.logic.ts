@@ -1,4 +1,4 @@
-import { findSearchMatchKeyRanges } from "@stll/text-normalize/search-match-key";
+import { findPostgresSearchFoldRanges } from "@stll/text-normalize/postgres-search-fold";
 
 /**
  * Splitting rendered text on a find term, without React.
@@ -12,13 +12,16 @@ export type TextSegment = {
 };
 
 /**
- * Split rendered text into matched and unmatched runs, case-insensitively.
+ * Split rendered text into matched and unmatched runs, ignoring case and
+ * accents exactly as the server's find does.
  *
- * Case folds with `toLocaleLowerCase` on both sides and compares by code unit,
- * which is the closest a client can come to what Postgres `ILIKE` did without
- * reimplementing its collation. It is deliberately not a normalizing or
- * accent-insensitive compare: marking a run the server did not match on would
- * be a worse lie than leaving a run unmarked.
+ * The server matches `search_fold(cell) LIKE '%' || search_fold(term) || '%'`,
+ * and `findPostgresSearchFoldRanges` reproduces that fold code point for code
+ * point, so `dvorak` marks `Dvořák` and nothing the server would not have
+ * matched gets marked. It is not the broader client search fold: marking a
+ * run the server did not match on would be a worse lie than leaving a run
+ * unmarked. A fold that changes length (`Æ` to `ae`, a deleted combining
+ * mark) maps back to whole characters of the input.
  *
  * The concatenated segments always equal the input, so a caller cannot lose or
  * duplicate text by rendering them.
@@ -28,17 +31,9 @@ export const splitByMatch = (text: string, term: string): TextSegment[] => {
     return text === "" ? [] : [{ matched: false, start: 0, text }];
   }
 
-  const haystack = text.toLocaleLowerCase();
-  const needle = term.toLocaleLowerCase();
-  // A term that folds to nothing (or grows) would make the offsets below index
-  // the wrong string; leave the text alone rather than mark it wrongly.
-  if (haystack.length !== text.length || needle.length === 0) {
-    return [{ matched: false, start: 0, text }];
-  }
-
   const segments: TextSegment[] = [];
   let cursor = 0;
-  for (const { start, end } of findSearchMatchKeyRanges(haystack, needle)) {
+  for (const { start, end } of findPostgresSearchFoldRanges(text, term)) {
     if (start > cursor) {
       segments.push({
         matched: false,

@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
+import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -75,7 +76,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -178,6 +182,8 @@ export type McpRequestContext = {
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
     contextFidelityWaivers?: ReadonlyMap<string, string>;
+    /** Replaces the shipped skill catalog, for a skill shape no shipped skill has yet. */
+    listShippedSkillMetadata?: typeof listSkillMetadata;
     materializePlaybookRun?: typeof materializePlaybookRun;
     startWorkflow?: typeof startWorkflow;
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;
@@ -190,6 +196,10 @@ export type McpRequestContext = {
     readCaseLawProvisionScope?: (
       scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */
