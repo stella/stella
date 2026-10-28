@@ -1,0 +1,1 @@
+{"ring-[color:color-mix(in_srgb,var(--auth-gradient-end)_52%,var(--color-white)_16%)]":{"valid":true,"declarations":[["","--tw-ring-color","color-mix(in srgb,var(--auth-gradient-end) 52%,var(--color-white) 16%)"]],"values":{"color-mix(in srgb,var(--auth-gradient-end) 52%,var(--color-white) 16%)":{"p":["--auth-gradient-end","--color-white"],"f":[],"u":false}}}}
