@@ -69,8 +69,8 @@ jobs:
             import assert from "node:assert/strict";
             import { readFileSync } from "node:fs";
             for (const name of ["exemplars-supplement.json", "provenance.json"]) {
-              const committed = JSON.parse(readFileSync(`packages/mojibake/data/cldr49/${name}`, "utf8"));
-              const converted = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/cldr49-input/artifact/${name}`, "utf8"));
-              assert.equal(JSON.stringify(committed), JSON.stringify(converted), `${name} must match the official conversion`);
+              const committed = JSON.parse(readFileSync("packages/mojibake/data/cldr49/" + name, "utf8"));
+              const converted = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/cldr49-input/artifact/" + name, "utf8"));
+              assert.equal(JSON.stringify(committed), JSON.stringify(converted), name + " must match the official conversion");
             }
           '
