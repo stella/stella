@@ -213,7 +213,7 @@ export const createReaderController = (
     };
     publish();
     if (received.status !== "unavailable") {
-      bridge.detached(loadNext(), "load decision blocks");
+      bridge.detached(loadNext(), "decisionReader.loadBlocks");
     }
   });
   return {

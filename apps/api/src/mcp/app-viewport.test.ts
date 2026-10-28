@@ -87,8 +87,11 @@ test("app size reporting cannot bypass the shared viewport", () => {
     "app.sendSizeChanged({ height: document.body.scrollHeight });",
     'app["sendSizeChanged"]({ height: document.body.scrollHeight });',
     "const { sendSizeChanged } = app;",
+    "const { sendSizeChanged: send } = app;",
+    'const { ["sendSizeChanged"]: send } = app;',
     "app.setupSizeChangedNotifications();",
     'parent.postMessage({ method: "ui/notifications/size-changed", params: { height: 9000 } }, "*");',
+    'parent.postMessage({ method: `ui/notifications/size-changed`, params: { height: 9000 } }, "*");',
   ];
   for (const { directory } of MCP_APPS) {
     const file = `${directory}/app.ts`;

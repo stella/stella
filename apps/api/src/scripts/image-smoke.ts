@@ -287,6 +287,62 @@ await probe("no musl native addons", async () => {
   }
 });
 
+// The operator scripts build together and share their code through
+// /app/chunk-*.js. A script whose `import.meta.main` block lands in a chunk
+// loads, does nothing and exits 0. Started without configuration or
+// arguments, every script that loads a shared chunk must reach its own
+// environment or argument validation and say so. Chunks import each other, so
+// only the non-chunk files that import one are scripts.
+const SHARED_CHUNK_PREFIX = "chunk-";
+const SHARED_CHUNK_IMPORT = `"/app/${SHARED_CHUNK_PREFIX}`;
+await probe("every split script runs its main block", async () => {
+  const names = await Array.fromAsync(
+    new Bun.Glob("*.js").scan({ cwd: "/app", onlyFiles: true }),
+  );
+  const scripts: string[] = [];
+  for (const name of names.toSorted()) {
+    if (
+      name.startsWith(SHARED_CHUNK_PREFIX) ||
+      name.startsWith("image-smoke")
+    ) {
+      continue;
+    }
+    const source = await Bun.file(path.join("/app", name)).text();
+    if (source.includes(SHARED_CHUNK_IMPORT)) {
+      scripts.push(path.join("/app", name));
+    }
+  }
+  if (scripts.length === 0) {
+    panic("no script in /app loads a shared chunk; is the split build gone?");
+  }
+  for (const script of scripts) {
+    const subprocess = Bun.spawn(["bun", "--no-env-file", script], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      env: { PATH: process.env["PATH"] ?? "", HOME: "/tmp" },
+    });
+    const [stdout, stderr] = await Promise.all([
+      new Response(subprocess.stdout).text(),
+      new Response(subprocess.stderr).text(),
+      subprocess.exited,
+    ]);
+    const output = `${stdout}\n${stderr}`.trim();
+    if (subprocess.signalCode !== null) {
+      panic(`${script} did not stop within 30 s: ${output}`);
+    }
+    if (/cannot (?:find|resolve) (?:module|package)/iu.test(output)) {
+      panic(`${script} could not load its code: ${output}`);
+    }
+    if (output === "") {
+      panic(
+        `${script} exited ${String(subprocess.exitCode)} without output; its main block did not run`,
+      );
+    }
+  }
+});
+
 // Literal tenant identifier redaction uses Aho-Corasick; both matching and
 // replacement must execute through the native binding in the compiled image.
 await probe("text-search native binding", () => {

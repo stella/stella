@@ -30,9 +30,15 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  euProvisionAnchor,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  renderProvisionAnchor,
+  resolveProvisionCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -73,8 +79,10 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import {
   type CaseLawProvisionFilter,
+  caseLawProvisionFilterOf,
   type CaseLawProvisionScope,
   readCaseLawProvisionScope,
+  readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -930,7 +938,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -986,17 +994,13 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
-      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
-      "textVersion as text_version; versionChanged flags changed text. " +
+      "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
+      "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches and neighbours with position, publisher label, " +
-      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
-      "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy reference counts, polarity, top citers: exact " +
-      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
-      "cites with held decisionIds). " +
-      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
-      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`query` returns matches, neighbours and deep links. Page 1 adds " +
+      "reader/publisher URL, metadata, textFields and citation summaries (top " +
+      `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
+      "Use read_case_law_citations for all citations. One id adds an outline. " +
       "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
@@ -1345,10 +1349,16 @@ const readMatterOverview = async ({
   }
 
   if (overview.isErr()) {
-    return internalFailureResult(overview.error);
+    return internalFailureResult(
+      overview.error,
+      "mcp.readMatterOverview.overview_error",
+    );
   }
   if (contacts.isErr()) {
-    return internalFailureResult(contacts.error);
+    return internalFailureResult(
+      contacts.error,
+      "mcp.readMatterOverview.contacts_error",
+    );
   }
 
   const matter = {
@@ -2029,23 +2039,16 @@ const resolveSearchProvision = (
         'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
       );
     }
-    const reference = euCitation.reference;
+    const { reference } = euCitation;
     return {
       type: "resolved",
-      provision: {
+      provision: caseLawProvisionFilterOf({
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        unit: reference.unit,
-        section: reference.section,
-        ...(reference.sectionSuffix === null
-          ? {}
-          : { sectionSuffix: reference.sectionSuffix }),
-        ...(reference.subsection === null
-          ? {}
-          : { subsection: reference.subsection }),
-        ...(reference.letter === null ? {} : { letter: reference.letter }),
-        ...(reference.point === null ? {} : { point: reference.point }),
-      },
+        path: reference,
+        anchorOf: (named) =>
+          euProvisionAnchor({ ...named, openEnded: false, sentence: null }),
+      }),
     };
   }
   const profile = provisionCitationProfileFor(country);
@@ -2064,17 +2067,11 @@ const resolveSearchProvision = (
     case "resolved":
       return {
         type: "resolved",
-        provision: {
+        provision: caseLawProvisionFilterOf({
           work: read.workIdentifier,
-          unit: read.unit,
-          section: read.section,
-          ...(read.sectionSuffix === null
-            ? {}
-            : { sectionSuffix: read.sectionSuffix }),
-          ...(read.subsection === null ? {} : { subsection: read.subsection }),
-          ...(read.letter === null ? {} : { letter: read.letter }),
-          ...(read.point === null ? {} : { point: read.point }),
-        },
+          path: read,
+          anchorOf: (path) => renderProvisionAnchor(profile, path),
+        }),
       };
     case "no_provision":
       return provisionRefusal(
@@ -2303,7 +2300,10 @@ const caseLawSearchResult = ({
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
-          keywords: hit.keywords,
+          keywords:
+            hit.keywords === null
+              ? null
+              : { ...hit.keywords, items: [...hit.keywords.items] },
           headnote:
             hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
         }
@@ -2371,6 +2371,24 @@ const readSearchProvision = async ({
     return resolved;
   }
   const { provision } = resolved;
+  // An act no recorded link names would read as an exact 0 ("nothing cites
+  // it") when its citations were never extracted; the caller is told so and
+  // sent to the text search, which reads the decisions themselves.
+  const readWorkLinked =
+    context.testDependencies?.readProvisionWorkLinked ??
+    (async (scope) =>
+      await caseLawPublicReadDb(
+        async (tx) => await readProvisionWorkLinked(tx, scope),
+      ));
+  if (!(await readWorkLinked({ jurisdiction: country, provision }))) {
+    return {
+      type: "refused",
+      result: notFoundResult(
+        `The case-law corpus records no provision links to ${provision.work} yet, so it cannot list the decisions citing ${text}`,
+        `Search for the provision as text instead: omit provision and pass queries, for example ${JSON.stringify([text])}.`,
+      ),
+    };
+  }
   // A provision-only list is complete by construction: no set to read.
   if (args.queries === undefined) {
     return { type: "read", body: { provision }, warnings: [] };
@@ -2447,6 +2465,7 @@ const listSearchCaseLawProvision = async ({
       body: {
         // The list ranks no text; the provision as written is what it reads.
         query: provisionText,
+        facets: args.facets,
         sentenceAlignedExcerpt: true,
         headnotePresentation: "expanded",
         limit: normalizePage(args.limit ?? DEFAULT_SEARCH_LIMIT),
@@ -2623,6 +2642,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      facets: index === 0 ? parsed.output.facets : [],
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -2657,6 +2677,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           body,
           caseLawDb: caseLawPublicReadDb,
           observer,
+          signal: context.request?.signal,
         }),
       };
     },
@@ -3741,10 +3762,15 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
       ? coverage.countries
       : coverage.countries.filter((entry) => entry.country === country);
   if (country !== undefined && countries.length === 0) {
-    return notFoundResult(
-      "Case-law country not found",
-      `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`,
-    );
+    const coverageHint = `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`;
+    // The input advertises every public country, including those not yet
+    // open. One the corpus holds nothing for answers with its admission state,
+    // as search_case_law does, rather than as a miss the model cannot explain.
+    const unavailable = publicCountryUnavailable(country, SEARCH_ADMISSION);
+    if (unavailable !== null) {
+      return toolDataResult({ ...unavailable, hint: coverageHint });
+    }
+    return notFoundResult("Case-law country not found", coverageHint);
   }
   return toolDataResult({
     asOf: coverage.generatedAt,

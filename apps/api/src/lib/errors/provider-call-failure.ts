@@ -1,4 +1,4 @@
-import { classifyAIError, providerStatusCode } from "@/api/lib/ai-error";
+import { classifyAIError, providerFailureFacts } from "@/api/lib/ai-error";
 import {
   PROVIDER_CALL_ERROR_MESSAGE,
   ProviderCallError,
@@ -44,24 +44,6 @@ export const providerRequestIdFrom = (
   return undefined;
 };
 
-const providerFactsFrom = (evidence: unknown) => {
-  const seen = new Set<object>();
-  let current = evidence;
-  while (isRecord(current) && !seen.has(current)) {
-    seen.add(current);
-    const status = providerStatusCode(current);
-    if (status !== null) {
-      const isRetryable = current["isRetryable"];
-      return {
-        status,
-        ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
-      };
-    }
-    current = current["cause"];
-  }
-  return undefined;
-};
-
 type CreateProviderCallErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
   evidence: unknown;
@@ -80,16 +62,16 @@ export const createProviderCallError = ({
   const input = new HandlerError({
     message: PROVIDER_CALL_ERROR_MESSAGE,
     status,
-    code,
+    code: code ?? "internal_error",
     cause: evidence,
   });
   return new ProviderCallError({
     model,
     status,
     providerDiagnostic: createProviderDiagnostic({ model, evidence }),
-    code: providerCallErrorCode(code),
+    code: providerCallErrorCode(code) ?? "provider_error",
     kind: classifyAIError(input),
-    facts: providerFactsFrom(input),
+    facts: providerFailureFacts(input),
     requestId: providerRequestIdFrom(evidence),
     retryAfterMs: providerRetryDelayMs(evidence),
   });

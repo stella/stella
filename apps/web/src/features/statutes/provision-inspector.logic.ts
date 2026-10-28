@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { stripDiacritics } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
@@ -35,29 +35,22 @@ type CitingDecisionRow = {
   sentenceText: string | null;
 };
 
-const foldForFilter = (value: string): string =>
-  stripDiacritics(value).toLowerCase();
-
 /**
  * Narrows the loaded pages to the rows whose case number, court, or cited
- * sentence contains the query. Diacritics are folded on both sides, so a
- * query typed without them still finds the decision.
+ * sentence contains the query. Case and accents are folded on both sides, so
+ * a query typed without them still finds the decision.
  */
 export const filterCitingDecisions = <T extends CitingDecisionRow>(
   decisions: readonly T[],
   query: string,
-): T[] => {
-  const needle = foldForFilter(query.trim());
-  if (needle === "") {
-    return [...decisions];
-  }
-
-  return decisions.filter((decision) =>
-    foldForFilter(
-      `${decision.caseNumber} ${decision.court} ${decision.sentenceText ?? ""}`,
-    ).includes(needle),
-  );
-};
+): T[] =>
+  filterBySearchQuery({
+    items: decisions,
+    query,
+    fields: ({ caseNumber, court, sentenceText }) => [
+      `${caseNumber} ${court} ${sentenceText ?? ""}`,
+    ],
+  });
 
 type PresentedCitingDecisionRow = CitingDecisionRow & {
   country: string;

@@ -1,9 +1,13 @@
 import * as v from "valibot";
 
 import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { DEFAULT_SEARCH_SORT, SEARCH_SORTS } from "@stll/api-contract/search";
+import {
+  CASE_LAW_SEARCH_FACET_NAMES,
+  DEFAULT_SEARCH_SORT,
+  SEARCH_SORTS,
+} from "@stll/api-contract/search";
 
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
@@ -65,6 +69,14 @@ export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
 export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
   nullAsAbsent(
     v.strictObject({
+      facets: v.optional(
+        v.pipe(
+          v.array(v.picklist(CASE_LAW_SEARCH_FACET_NAMES)),
+          v.maxLength(CASE_LAW_SEARCH_FACET_NAMES.length),
+          v.description("Opt-in facet names; first phrasing, page one only."),
+        ),
+        [],
+      ),
       queries: v.optional(
         v.pipe(
           v.array(
@@ -165,14 +177,14 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
       source_id: v.optional(uuidInputSchema("Filter by source ID")),
       date_from: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
         ),
       ),
       date_to: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(LIMITS.mcpIsoDateMaxChars),
           v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
         ),
@@ -181,7 +193,7 @@ export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
         v.pipe(
           v.picklist(SEARCH_SORTS),
           v.description(
-            `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+            `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
           ),
         ),
       ),

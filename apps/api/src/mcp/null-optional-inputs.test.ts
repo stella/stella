@@ -129,7 +129,7 @@ describe("MCP tool inputs read null as an omitted optional property", () => {
 
   /**
    * A property a client can read as accepting anything: it advertises no type
-   * and no branches, so `t.Any()` / `t.Unknown()` land here and their null is a
+   * and no branches, so `v.any()` / `v.unknown()` land here and their null is a
    * value the handler asked for, not an unset property.
    */
   const acceptsAnything = (schema: unknown): boolean =>

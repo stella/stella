@@ -44,7 +44,8 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
 import { externalReferencePreviewOptions } from "./external-reference-preview";
@@ -305,8 +306,8 @@ const GenericExternalReferencePanel = ({
     }),
     enabled: shouldFetchPreview,
   });
-  const fetchedPreviewView = useQueryView(fetchedPreviewQuery);
-  useQueryViewError(fetchedPreviewView);
+  const fetchedPreviewView = queryView(fetchedPreviewQuery);
+  useQueryViewError(fetchedPreviewView, "GenericExternalReferencePanel:query");
   const { isLoading: previewLoading } = fetchedPreviewQuery;
   const fetchedPreview =
     fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
@@ -374,8 +375,11 @@ const GenericExternalReferencePanel = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
-  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
+  useQueryViewError(
+    mcpConnectorsDataView,
+    "GenericExternalReferencePanel:query-2",
+  );
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items

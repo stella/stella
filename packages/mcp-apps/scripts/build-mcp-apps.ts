@@ -121,7 +121,7 @@ const inlineReaderFonts = {
           contents = contents.replaceAll(
             match[0],
             () =>
-              `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+              `url("data:font/woff2;base64,${Buffer.from(bytes).toBase64()}")`,
           );
         }
         return { contents, loader: "css" };
@@ -158,8 +158,7 @@ for (const fontPath of paths) {
   ).arrayBuffer();
   fonts = fonts.replaceAll(
     `url("${fontPath}")`,
-    () =>
-      `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+    () => `url("data:font/woff2;base64,${Buffer.from(bytes).toBase64()}")`,
   );
 }
 await writeGenerated(

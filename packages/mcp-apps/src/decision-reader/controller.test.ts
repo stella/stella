@@ -297,6 +297,7 @@ describe("MCP decision reader controller", () => {
     previewCall.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -428,6 +429,7 @@ describe("MCP decision reader controller", () => {
     await settle();
     const preview = {
       url: null,
+      country: "CZE",
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-1",
@@ -492,6 +494,7 @@ describe("MCP decision reader controller", () => {
     call.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -570,6 +573,7 @@ describe("MCP decision reader controller", () => {
     previewCall.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -608,6 +612,7 @@ describe("MCP decision reader controller", () => {
     const secondCall = host.nextCall();
     const preview = {
       url: "https://stella.example/legislation/1#par-2",
+      country: "CZE",
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-2",

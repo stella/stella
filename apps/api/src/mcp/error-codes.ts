@@ -52,6 +52,8 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
+  /** The public corpus read exceeded its statement budget; narrow and retry. */
+  "public_read_timeout",
   /**
    * The case-law and legislation search index could not be reached (refused
    * or reset connection, failed DNS lookup, timeout, or a 502/503/504 from
@@ -67,7 +69,7 @@ export const MCP_ERROR_CODES = [
 
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 
-const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
+export const isMcpErrorCode = (code: unknown): code is McpErrorCode =>
   MCP_ERROR_CODES.some((candidate) => candidate === code);
 
 /**

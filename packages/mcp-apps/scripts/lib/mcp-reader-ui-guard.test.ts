@@ -47,6 +47,42 @@ test("reachable shared reader component imports pass the ownership guard", () =>
   }
 });
 
+test("shared AST renderers pass only when their owning source is reachable", () => {
+  const sharedRenderer = {
+    ...sharedModule,
+    text: `export function BlockRenderer({ block }) {
+      switch (block.type) { case "paragraph": return <p>{block.text}</p>; }
+      return null;
+    }`,
+  };
+  for (const directory of MCP_READER_UI_APP_DIRECTORIES) {
+    const readerConsumer = {
+      ...consumer,
+      file: `packages/mcp-apps/src/${directory}/app.tsx`,
+    };
+    const input = {
+      sharedModules: [sharedRenderer],
+      astModules: [astModule],
+      bundleModules: [readerConsumer, sharedRenderer],
+    };
+    expect(inspectMcpReaderUi(input)).toEqual([]);
+    expect(
+      inspectMcpReaderUi({
+        ...input,
+        bundleModules: [
+          readerConsumer,
+          {
+            ...sharedRenderer,
+            file: `../another-checkout/${sharedRenderer.file}`,
+          },
+        ],
+      }),
+    ).toEqual([
+      "Shared document-ast-text renderer is absent from the bundle inputs",
+    ]);
+  }
+});
+
 test("adding a duplicate renderer in a reachable dependency fails the guard", () => {
   expect(inspectFixture("")).toEqual([]);
   for (const text of [

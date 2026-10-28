@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -27,7 +28,8 @@ const createContext = (
         "https://example.test/v1/invoices/ws_test/inv_test/entries",
         { method: "POST" },
       ),
-      route: "/v1/invoices/:workspaceId/:invoiceId/entries",
+      route:
+        "/v1/invoices/:workspaceId/:invoiceId/entries" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       params: {
@@ -94,9 +96,12 @@ describe("addEntries currency enforcement", () => {
           id: toSafeId<"invoice">("inv_test"),
           totalAmount: 0,
           currency: "USD",
+          finalizedAt: null,
         },
       ]);
       const { safeDb } = createScopedDbMock({
+        execute: async () => [{ id: toSafeId<"workspace">("ws_test") }],
+        selectDistinct: () => createSelectQueryMock([]),
         // The invoice holds no lines yet, so the line limit leaves room.
         $count: async () => 0,
         query: {

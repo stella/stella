@@ -8,14 +8,12 @@ import {
   redirect,
   useMatches,
 } from "@tanstack/react-router";
-import * as v from "valibot";
 
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import {
   getWeekStart,
-  isWorkspaceDocumentRoutePath,
   resolveKanbanGroupBy,
   toISODate,
 } from "@/components/workspaces/entity-utils";
@@ -36,7 +34,10 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { optionalSearchStringSchema } from "@/lib/schema";
+import {
+  optionalIntegerSearchSchema,
+  optionalSearchStringSchema,
+} from "@/lib/schema";
 import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import {
@@ -58,6 +59,12 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
+import { isWorkspaceViewId } from "@/lib/workspaces/view-params.logic";
+import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
@@ -65,10 +72,10 @@ import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-compon
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   folder: optionalSearchStringSchema(),
   reveal: optionalSearchStringSchema(),
-  page: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  page: optionalIntegerSearchSchema({ min: 1 }),
 });
 
 export const Route = createFileRoute(
@@ -77,12 +84,15 @@ export const Route = createFileRoute(
   component: RouteComponent,
   pendingComponent: ViewPendingComponent,
   validateSearch: searchSchema,
-  beforeLoad: ({ params }) => {
+  // Annotated: the context this returns is part of the `matches` type it
+  // reads, so an inferred return would be circular.
+  beforeLoad: ({
+    matches,
+    params,
+  }): { documentOnScreen: CurrentWorkspaceDocument } => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
-    // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
-    const VALID_VIEW_ID =
-      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
-    if (!VALID_VIEW_ID.test(params.viewId)) {
+    // URLs).
+    if (!isWorkspaceViewId(params.viewId)) {
       if (import.meta.env.DEV) {
         // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(
@@ -96,11 +106,14 @@ export const Route = createFileRoute(
         replace: true,
       });
     }
+    // The loader sees no matches; the document page below this view is read
+    // from them here.
+    return { documentOnScreen: getCurrentWorkspaceDocument(matches) };
   },
-  loader: async ({ context, location, params }) => {
+  loader: async ({ context, params }) => {
     const { workspaceId, viewId } = params;
     const { queryClient } = context;
-    const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname);
+    const isDocumentRoute = context.documentOnScreen !== undefined;
 
     const views = await ensureRouteQueryData(
       queryClient,
@@ -157,7 +170,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -173,7 +194,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure-2",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -189,7 +218,15 @@ export const Route = createFileRoute(
             toISODate(prevWeekEnd),
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-3",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
         "workspace-view.prefetch",
@@ -212,7 +249,15 @@ export const Route = createFileRoute(
           queryClient,
           correspondenceAddressOptions(workspaceId),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
       ]);
@@ -408,7 +453,7 @@ function VisibleFieldEntityViewContent({
 
 function ViewShell({ activeView, workspaceId }: ViewContentProps) {
   const matches = useMatches();
-  const isOnPdfRoute = matches.some((m) => m.fullPath.endsWith("/document"));
+  const isOnPdfRoute = getCurrentWorkspaceDocument(matches) !== undefined;
   const paneRef = useRef<HTMLDivElement>(null);
 
   // File detail view: hide the view chrome; breadcrumbs provide navigation

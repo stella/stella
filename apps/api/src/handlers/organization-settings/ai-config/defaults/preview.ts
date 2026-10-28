@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { uniqueItems } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { resolveAIConfigDefaults } from "../../ai-config-defaults";
@@ -15,11 +16,12 @@ const config = {
   access: "read",
   contract: "patch",
   mcp: { type: "internal", reason: "provider_secret" },
-  body: t.Object({
-    providers: t.Array(t.UnionEnum(TANSTACK_AI_PROVIDERS), {
-      maxItems: TANSTACK_AI_PROVIDERS.length,
-      uniqueItems: true,
-    }),
+  body: v.object({
+    providers: v.pipe(
+      v.array(v.picklist(TANSTACK_AI_PROVIDERS)),
+      v.maxLength(TANSTACK_AI_PROVIDERS.length),
+      uniqueItems(),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -33,7 +35,7 @@ const previewAIConfigDefaults = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(previewAIConfigDefaults.handler, {
+declareAggregateMutation(previewAIConfigDefaults, {
   type: "independent",
   reason:
     "Resolves default models for the submitted provider set and returns them; it reads no aggregate and changes no stored state.",

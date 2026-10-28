@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { loadManagedSkill } from "@/api/handlers/skills/managed-skill";
@@ -13,7 +13,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -23,13 +23,17 @@ const REWRITE_PROMPT_MAX_CHARS = 2000;
 const REWRITE_TIMEOUT_MS = 60_000;
 const REWRITE_MAX_OUTPUT_TOKENS = 8192;
 
-const rewriteSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const rewriteSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const rewriteSkillResourceBodySchema = t.Object({
-  path: t.String({ minLength: 1, maxLength: 512 }),
-  prompt: t.String({ minLength: 1, maxLength: REWRITE_PROMPT_MAX_CHARS }),
+const rewriteSkillResourceBodySchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  prompt: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(REWRITE_PROMPT_MAX_CHARS),
+  ),
 });
 
 const config = {
@@ -161,6 +165,7 @@ const rewriteSkillResource = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not rewrite file. Please try again.",
           cause,
         });
@@ -175,6 +180,7 @@ const rewriteSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Rewrite was empty. Please try again.",
         }),
       );

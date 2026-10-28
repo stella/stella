@@ -518,7 +518,7 @@ const handleCompatSearchTool: McpToolHandler<
           query,
         });
   if (matterResult.isErr()) {
-    return internalFailureResult(matterResult.error);
+    return internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
   }
   const matter = matterResult.value;
 
@@ -625,7 +625,7 @@ const handleCompatFetchTool: McpToolHandler<
       }),
   );
   if (loaded.isErr()) {
-    return internalFailureResult(loaded.error);
+    return internalFailureResult(loaded.error, "mcp.compatFetch.matter");
   }
   const row = loaded.value.at(0);
 

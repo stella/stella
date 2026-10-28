@@ -5,8 +5,7 @@ import {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
-import type { Static } from "elysia";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { withModelPlaceholdersOmitted } from "@stll/agent-input";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -70,9 +69,10 @@ import {
   type ChatToolMap,
   registeredChatTool,
 } from "@/api/lib/chat/chat-tool-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withNullsOmitted } from "@/api/lib/json-value";
+import { LIMITS } from "@/api/lib/limits";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
   brandPersistedEntityId,
@@ -90,57 +90,47 @@ export {
 export type { ChatEditApplyMode, ChatRunMode, DocxEditRepresentation };
 
 const rawMessageProperties = {
-  id: tSafeId("chatMessage"),
-  metadata: t.Optional(t.Unknown()),
-  parts: t.Array(t.Unknown()),
+  id: resourceIdSchema("chatMessage"),
+  metadata: v.exactOptional(v.unknown()),
+  parts: v.array(v.unknown()),
 };
 
-const rawMessageSchema = t.Object(
-  {
-    ...rawMessageProperties,
-    role: t.Union([
-      t.Literal("system"),
-      t.Literal("user"),
-      t.Literal("assistant"),
-    ]),
-  },
-  { additionalProperties: true },
-);
-
-const rawAssistantContinuationMessageSchema = t.Object(
-  { ...rawMessageProperties, role: t.Literal("assistant") },
-  { additionalProperties: true },
-);
-
-const userContextSchema = t.Object({
-  userName: t.String(),
-  locale: t.String(),
-  timezone: t.String(),
-  wordEditAuthorName: t.Optional(t.String()),
-  wordEditShortcut: t.Optional(t.String()),
+const rawMessageSchema = v.looseObject({
+  ...rawMessageProperties,
+  role: v.picklist(["system", "user", "assistant"]),
 });
 
-const docxEditSnapshotSchema = t.Object({
-  canApplyEdits: t.Optional(t.Boolean()),
-  blocks: t.Array(
-    t.Object({
-      id: t.String(),
-      kind: t.Union([
-        t.Literal("heading"),
-        t.Literal("listItem"),
-        t.Literal("paragraph"),
-      ]),
-      text: t.String(),
-      displayLabel: t.Optional(t.String()),
-      styleId: t.Optional(t.String()),
-      /**
-       * Folio's normalized text hash of the block at snapshot time. Shown to
-       * the model so it can echo it as `precondition.blockTextHash` on a
-       * `suggest_changes` operation, which makes an edit against a block that
-       * changed since this snapshot skip instead of landing on the wrong text.
-       */
-      blockTextHash: t.Optional(t.String()),
-    }),
+const rawAssistantContinuationMessageSchema = v.looseObject({
+  ...rawMessageProperties,
+  role: v.literal("assistant"),
+});
+
+const boundedText = (maxChars: number) =>
+  v.pipe(v.string(), v.maxLength(maxChars));
+
+const userContextSchema = v.object({
+  userName: boundedText(256),
+  // A BCP 47 tag and an IANA zone name.
+  locale: boundedText(35),
+  timezone: boundedText(64),
+  wordEditAuthorName: v.exactOptional(boundedText(256)),
+  wordEditShortcut: v.exactOptional(boundedText(64)),
+});
+
+const docxEditSnapshotSchema = v.object({
+  canApplyEdits: v.exactOptional(v.boolean()),
+  blocks: v.pipe(
+    v.array(
+      v.object({
+        id: boundedText(128),
+        kind: v.picklist(["heading", "listItem", "paragraph"]),
+        text: boundedText(LIMITS.chatDocxSnapshotBlockTextMaxChars),
+        displayLabel: v.exactOptional(boundedText(256)),
+        styleId: v.exactOptional(boundedText(256)),
+        blockTextHash: v.exactOptional(boundedText(128)),
+      }),
+    ),
+    v.maxLength(LIMITS.chatDocxSnapshotBlocksMax),
   ),
 });
 
@@ -153,23 +143,23 @@ const docxEditSnapshotSchema = t.Object({
  * an act does not have. Going through this constructor is what makes a new
  * kind closed by construction instead of by remembering the option.
  */
-const activeContextSchema = <TShape extends Parameters<typeof t.Object>[0]>(
+const activeContextSchema = <TShape extends v.ObjectEntries>(
   properties: TShape,
-) => t.Object(properties, { additionalProperties: false });
+) => v.strictObject(properties);
 
 export const activeFileSchema = activeContextSchema({
-  entityId: tSafeId("entity"),
-  fileFieldId: t.Optional(tSafeId("field")),
-  fileName: t.String(),
-  supportsDocxEdits: t.Optional(t.Boolean()),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  entityId: resourceIdSchema("entity"),
+  fileFieldId: v.exactOptional(resourceIdSchema("field")),
+  fileName: v.string(),
+  supportsDocxEdits: v.exactOptional(v.boolean()),
+  docxEditSnapshot: v.exactOptional(docxEditSnapshotSchema),
 });
 
 export const activeDraftSchema = activeContextSchema({
-  originChatMessageId: tSafeId("chatMessage"),
-  originChatThreadId: tSafeId("chatThread"),
-  toolCallId: t.String(),
-  fileName: t.String(),
+  originChatMessageId: resourceIdSchema("chatMessage"),
+  originChatThreadId: resourceIdSchema("chatThread"),
+  toolCallId: v.string(),
+  fileName: v.string(),
   docxEditSnapshot: docxEditSnapshotSchema,
 });
 
@@ -181,13 +171,13 @@ export const activeDraftSchema = activeContextSchema({
  * in-document suggestions.
  */
 export const activeTemplateSchema = activeContextSchema({
-  templateId: tSafeId("template"),
-  fileName: t.String(),
-  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+  templateId: resourceIdSchema("template"),
+  fileName: v.string(),
+  docxEditSnapshot: v.exactOptional(docxEditSnapshotSchema),
 });
 
 export const activeDecisionSchema = activeContextSchema({
-  decisionId: tSafeId("caseLawDecision"),
+  decisionId: resourceIdSchema("caseLawDecision"),
 });
 
 /**
@@ -197,35 +187,32 @@ export const activeDecisionSchema = activeContextSchema({
  * told an act says.
  */
 export const activeStatuteSchema = activeContextSchema({
-  documentId: tSafeId("legislationDocument"),
+  documentId: resourceIdSchema("legislationDocument"),
 });
 
 export const activeExternalSchema = activeContextSchema({
-  connectorSlug: t.Optional(t.String()),
-  provider: t.Optional(t.String()),
-  snippet: t.Optional(t.String()),
-  sourceToolName: t.Optional(t.String()),
-  text: t.Optional(t.String()),
-  title: t.String(),
-  url: t.String(),
+  connectorSlug: v.exactOptional(v.string()),
+  provider: v.exactOptional(v.string()),
+  snippet: v.exactOptional(v.string()),
+  sourceToolName: v.exactOptional(v.string()),
+  text: v.exactOptional(v.string()),
+  title: v.string(),
+  url: v.string(),
 });
 
 // Any version parses so a tab running an older or newer web build can still
 // chat; `resolveBrowserClientCapability` decides whether the tool registers.
-// `t.Integer` would also admit numeric strings, so this is a whole number.
-const browserClientSchema = t.Object(
-  {
-    protocolVersion: t.Number({ minimum: 1, multipleOf: 1 }),
-  },
-  { additionalProperties: false },
-);
+// A JSON number that is whole, not a numeric string.
+const browserClientSchema = v.strictObject({
+  protocolVersion: v.pipe(v.number(), v.minValue(1), v.multipleOf(1)),
+});
 
 /**
  * The browser tool is offered only to a client speaking this server's
  * extension protocol; another version chats without it.
  */
 export const resolveBrowserClientCapability = (
-  browserClient: Static<typeof browserClientSchema> | undefined,
+  browserClient: v.InferOutput<typeof browserClientSchema> | undefined,
 ): BrowserClientCapability | undefined =>
   browserClient?.protocolVersion === BROWSER_CONTROL_PROTOCOL_VERSION
     ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
@@ -233,40 +220,36 @@ export const resolveBrowserClientCapability = (
 
 export const activeSkillSchema = activeContextSchema({
   // A built-in skill has no row: `skillName` alone names it.
-  skillId: t.Optional(tSafeId("agentSkill")),
-  skillName: t.String({ minLength: 1, maxLength: 64 }),
+  skillId: v.exactOptional(resourceIdSchema("agentSkill")),
+  skillName: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
-const agUiRunIdSchema = t.String({ minLength: 1, maxLength: 256 });
-const agUiResumeSchema = t.Array(
-  t.Union([
-    t.Object(
-      {
-        interruptId: t.String({ minLength: 1, maxLength: 512 }),
-        status: t.Literal("resolved"),
-        // AG-UI intentionally defines resume payloads as application-owned JSON.
-        payload: t.Optional(t.Unknown()),
-      },
-      { additionalProperties: false },
-    ),
-    t.Object(
-      {
-        interruptId: t.String({ minLength: 1, maxLength: 512 }),
-        status: t.Literal("cancelled"),
-      },
-      { additionalProperties: false },
-    ),
-  ]),
-  { minItems: 1, maxItems: 128 },
+const agUiRunIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(256));
+const agUiResumeSchema = v.pipe(
+  v.array(
+    v.union([
+      v.strictObject({
+        interruptId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        status: v.literal("resolved"),
+        payload: v.exactOptional(v.unknown()),
+      }),
+      v.strictObject({
+        interruptId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        status: v.literal("cancelled"),
+      }),
+    ]),
+  ),
+  v.minLength(1),
+  v.maxLength(128),
 );
 
 const sendMessageCommonProperties = {
-  threadId: tSafeId("chatThread"),
+  threadId: resourceIdSchema("chatThread"),
   runId: agUiRunIdSchema,
-  workspaceId: t.Optional(tSafeId("workspace")),
-  sendMode: t.Union([
-    t.Literal(CHAT_SEND_MODE.anonymized),
-    t.Literal(CHAT_SEND_MODE.rawOverride),
+  workspaceId: v.exactOptional(resourceIdSchema("workspace")),
+  sendMode: v.union([
+    v.literal(CHAT_SEND_MODE.anonymized),
+    v.literal(CHAT_SEND_MODE.rawOverride),
   ]),
   /**
    * Matters the chat draws context from. Empty (or omitted) means
@@ -276,40 +259,40 @@ const sendMessageCommonProperties = {
    * persisted on the chat thread so subsequent turns reuse it
    * without re-sending.
    */
-  contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
-  truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
-  turnIntent: t.Optional(t.Literal(CHAT_TURN_INTENT.regenerate)),
+  contextMatterIds: v.exactOptional(v.array(resourceIdSchema("workspace"))),
+  truncateAfterMessageId: v.exactOptional(resourceIdSchema("chatMessage")),
+  turnIntent: v.exactOptional(v.literal(CHAT_TURN_INTENT.regenerate)),
   /**
    * Optional named tool scope for this turn. Only server-defined
    * scope names validate; the server maps the name to a fixed tool
    * allowlist (see `tools/tool-scope.ts`), so a client can narrow
    * but never widen the turn's tool surface.
    */
-  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+  toolScope: v.exactOptional(v.literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   /**
    * Execution mode for this turn. Absent runs normal server-side chat;
    * `"agent"` explicitly requests the configured agent sandbox.
    */
-  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
-  userContext: t.Optional(userContextSchema),
-  activeDraft: t.Optional(activeDraftSchema),
-  activeFile: t.Optional(activeFileSchema),
-  activeTemplate: t.Optional(activeTemplateSchema),
-  activeDecision: t.Optional(activeDecisionSchema),
-  activeExternal: t.Optional(activeExternalSchema),
-  activeSkill: t.Optional(activeSkillSchema),
-  activeStatute: t.Optional(activeStatuteSchema),
-  browserClient: t.Optional(browserClientSchema),
+  runMode: v.exactOptional(v.literal(CHAT_RUN_MODE.agent)),
+  userContext: v.exactOptional(userContextSchema),
+  activeDraft: v.exactOptional(activeDraftSchema),
+  activeFile: v.exactOptional(activeFileSchema),
+  activeTemplate: v.exactOptional(activeTemplateSchema),
+  activeDecision: v.exactOptional(activeDecisionSchema),
+  activeExternal: v.exactOptional(activeExternalSchema),
+  activeSkill: v.exactOptional(activeSkillSchema),
+  activeStatute: v.exactOptional(activeStatuteSchema),
+  browserClient: v.exactOptional(browserClientSchema),
   /**
    * Which DOCX-edit review mode this turn uses; omitted means
    * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
    * registers exactly one `suggest_changes` variant accordingly: the
    * client-executed queue (manual) or the server-executed apply (auto).
    */
-  editApplyMode: t.Optional(
-    t.Union([
-      t.Literal(CHAT_EDIT_APPLY_MODE.manual),
-      t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+  editApplyMode: v.exactOptional(
+    v.union([
+      v.literal(CHAT_EDIT_APPLY_MODE.manual),
+      v.literal(CHAT_EDIT_APPLY_MODE.auto),
     ]),
   ),
   /**
@@ -317,66 +300,53 @@ const sendMessageCommonProperties = {
    * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
    * human picks the representation at accept time.
    */
-  docxEditRepresentation: t.Optional(
-    t.Union([
-      t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
-      t.Literal(DOCX_EDIT_REPRESENTATION.direct),
+  docxEditRepresentation: v.exactOptional(
+    v.union([
+      v.literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
+      v.literal(DOCX_EDIT_REPRESENTATION.direct),
     ]),
   ),
-  devModelId: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: 160,
-      pattern: "^[A-Za-z0-9._:/-]+$",
-    }),
+  devModelId: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(160),
+      v.regex(/^[A-Za-z0-9._:/-]+$/u),
+    ),
   ),
 };
 
-const noResumeBodySchema = t.Object(
-  {
-    ...sendMessageCommonProperties,
-    message: rawMessageSchema,
-  },
-  { additionalProperties: false },
-);
+const noResumeBodySchema = v.strictObject({
+  ...sendMessageCommonProperties,
+  message: rawMessageSchema,
+});
 
-const nativeAssistantContinuationBodySchema = t.Object(
-  {
-    ...sendMessageCommonProperties,
-    message: rawAssistantContinuationMessageSchema,
-    parentRunId: agUiRunIdSchema,
-    resume: agUiResumeSchema,
-  },
-  { additionalProperties: false },
-);
+const nativeAssistantContinuationBodySchema = v.strictObject({
+  ...sendMessageCommonProperties,
+  message: rawAssistantContinuationMessageSchema,
+  parentRunId: agUiRunIdSchema,
+  resume: agUiResumeSchema,
+});
 
-export const sendMessageBodySchema = t.Union([
+export const sendMessageBodySchema = v.union([
   noResumeBodySchema,
   nativeAssistantContinuationBodySchema,
 ]);
 
-export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
+export type ChatSendRequest = v.InferOutput<typeof sendMessageBodySchema>;
 
-const agUiMessageEnvelopeSchema = t.Object(
-  {
-    id: t.String({ minLength: 1, maxLength: 512 }),
-    role: t.Union([
-      t.Literal("developer"),
-      t.Literal("system"),
-      t.Literal("assistant"),
-      t.Literal("user"),
-      t.Literal("tool"),
-      t.Literal("activity"),
-      t.Literal("reasoning"),
-    ]),
-  },
-  {
-    // Message bodies are the upstream AG-UI discriminated union plus
-    // TanStack's `parts` extension. Stella does not consume this mirrored
-    // history: `forwardedProps.message` below is the strict mutation input.
-    additionalProperties: true,
-  },
-);
+const agUiMessageEnvelopeSchema = v.looseObject({
+  id: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  role: v.picklist([
+    "developer",
+    "system",
+    "assistant",
+    "user",
+    "tool",
+    "activity",
+    "reasoning",
+  ]),
+});
 
 /**
  * Canonical AG-UI RunAgentInput envelope emitted by TanStack's connection
@@ -384,66 +354,56 @@ const agUiMessageEnvelopeSchema = t.Object(
  * correlation and resume fields stay protocol-native at the top level.
  */
 const agUiEnvelopeCommonProperties = {
-  threadId: tSafeId("chatThread"),
+  threadId: resourceIdSchema("chatThread"),
   runId: agUiRunIdSchema,
-  state: t.Object({}, { additionalProperties: true }),
-  messages: t.Array(agUiMessageEnvelopeSchema, { maxItems: 4096 }),
-  tools: t.Array(
-    t.Object(
-      {
-        name: t.String({ minLength: 1, maxLength: 512 }),
-        description: t.String({ maxLength: 16_384 }),
-        parameters: t.Optional(t.Unknown()),
-        metadata: t.Optional(t.Record(t.String(), t.Unknown())),
-      },
-      { additionalProperties: false },
+  state: v.looseObject({}),
+  messages: v.pipe(v.array(agUiMessageEnvelopeSchema), v.maxLength(4096)),
+  tools: v.pipe(
+    v.array(
+      v.strictObject({
+        name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+        description: v.pipe(v.string(), v.maxLength(16_384)),
+        parameters: v.exactOptional(v.unknown()),
+        metadata: v.exactOptional(v.record(v.string(), v.unknown())),
+      }),
     ),
-    { maxItems: 512 },
+    v.maxLength(512),
   ),
-  context: t.Array(
-    t.Object(
-      {
-        description: t.String({ maxLength: 16_384 }),
-        value: t.String({ maxLength: 1_000_000 }),
-      },
-      { additionalProperties: false },
+  context: v.pipe(
+    v.array(
+      v.strictObject({
+        description: v.pipe(v.string(), v.maxLength(16_384)),
+        value: v.pipe(v.string(), v.maxLength(1_000_000)),
+      }),
     ),
-    { maxItems: 512 },
+    v.maxLength(512),
   ),
 };
 
-export const agUiSendMessageBodySchema = t.Union([
-  t.Object(
-    {
-      ...agUiEnvelopeCommonProperties,
-      forwardedProps: noResumeBodySchema,
-      // TanStack mirrors forwardedProps under legacy `data`; validating both
-      // prevents an untyped shadow payload from crossing the route boundary.
-      data: noResumeBodySchema,
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      ...agUiEnvelopeCommonProperties,
-      forwardedProps: nativeAssistantContinuationBodySchema,
-      data: nativeAssistantContinuationBodySchema,
-      parentRunId: agUiRunIdSchema,
-      resume: agUiResumeSchema,
-    },
-    { additionalProperties: false },
-  ),
+export const agUiSendMessageBodySchema = v.union([
+  v.strictObject({
+    ...agUiEnvelopeCommonProperties,
+    forwardedProps: noResumeBodySchema,
+    data: noResumeBodySchema,
+  }),
+  v.strictObject({
+    ...agUiEnvelopeCommonProperties,
+    forwardedProps: nativeAssistantContinuationBodySchema,
+    data: nativeAssistantContinuationBodySchema,
+    parentRunId: agUiRunIdSchema,
+    resume: agUiResumeSchema,
+  }),
 ]);
 
-type RawIncomingMessage = Static<typeof rawMessageSchema>;
-type AgUiResume = Static<typeof agUiResumeSchema>;
-export type IncomingUserContext = Static<typeof userContextSchema>;
-export type IncomingActiveFile = Static<typeof activeFileSchema>;
-export type IncomingActiveDraft = Static<typeof activeDraftSchema>;
-export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
-export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
-export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
-export type IncomingActiveStatute = Static<typeof activeStatuteSchema>;
+type RawIncomingMessage = v.InferOutput<typeof rawMessageSchema>;
+type AgUiResume = v.InferOutput<typeof agUiResumeSchema>;
+export type IncomingUserContext = v.InferOutput<typeof userContextSchema>;
+export type IncomingActiveFile = v.InferOutput<typeof activeFileSchema>;
+export type IncomingActiveDraft = v.InferOutput<typeof activeDraftSchema>;
+export type IncomingActiveTemplate = v.InferOutput<typeof activeTemplateSchema>;
+export type IncomingActiveDecision = v.InferOutput<typeof activeDecisionSchema>;
+export type IncomingActiveExternal = v.InferOutput<typeof activeExternalSchema>;
+export type IncomingActiveStatute = v.InferOutput<typeof activeStatuteSchema>;
 
 /**
  * Every active document a turn may carry, by the body field that carries it.

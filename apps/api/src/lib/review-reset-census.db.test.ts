@@ -4,6 +4,8 @@ import { sql } from "drizzle-orm";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  clearReviewOrganizationBilling,
+  REVIEW_RESET_BILLING_TABLES,
   REVIEW_RESET_CLEARED_TABLES,
   sweepReviewOrganization,
 } from "@/api/lib/review-organization/reset-scope";
@@ -14,11 +16,16 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const identifier = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
+// Every table the reset deletes by name: billing records, then the sweep.
+const RESET_TABLES: readonly string[] = [
+  ...REVIEW_RESET_BILLING_TABLES,
+  ...REVIEW_RESET_CLEARED_TABLES,
+];
+
 const OWNER_ERASURE_TABLES = [
   "billing_arrangements",
   "correspondence_allowed_sender_matters",
   "correspondence_drop_logs",
-  "invoice_lines",
   "number_series",
   "number_series_allocations",
   "number_series_counters",
@@ -69,7 +76,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           ARRAY(SELECT CASE WHEN role = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(role) END FROM unnest(p.polroles) role) AS roles,
           pg_get_expr(p.polqual, p.polrelid) AS using, pg_get_expr(p.polwithcheck, p.polrelid) AS check
         FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'public' AND c.relname = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+        WHERE n.nspname = 'public' AND c.relname = ANY(${`{${RESET_TABLES.join(",")}}`})`;
       expect(
         policies
           .filter(
@@ -82,7 +89,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       ).toEqual([...OWNER_ERASURE_TABLES].toSorted());
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+        WHERE table_schema = 'public' AND table_name = ANY(${`{${[...RESET_TABLES, "workspaces"].join(",")}}`})`;
       const forced = await client<
         { name: string }[]
       >`SELECT relname AS name FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relforcerowsecurity`;
@@ -93,16 +100,23 @@ describe.skipIf(!enabled)("review reset policy census", () => {
         GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella;
         SET search_path TO ${schema}, public`);
       try {
-        await client.unsafe(`CREATE TABLE workspaces (id uuid, organization_id text);
+        await client.unsafe(`CREATE TABLE workspaces (LIKE public.workspaces);
           CREATE TABLE member (organization_id text, user_id text, role text);
           GRANT SELECT ON workspaces, member TO stella;
           CREATE TABLE user_files (id uuid, thread_id uuid);
           ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner}`);
+        for (const { name } of columns.filter(
+          ({ table }) => table === "workspaces",
+        )) {
+          await client.unsafe(
+            `ALTER TABLE workspaces ALTER COLUMN ${identifier(name)} DROP NOT NULL`,
+          );
+        }
         await client`INSERT INTO member VALUES (${organizationId}, ${reviewerId}, 'owner')`;
         for (const workspaceId of workspaceIds) {
-          await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
+          await client`INSERT INTO workspaces (id, organization_id) VALUES (${workspaceId}, ${organizationId})`;
         }
-        for (const name of REVIEW_RESET_CLEARED_TABLES) {
+        for (const name of RESET_TABLES) {
           const table = identifier(name);
           await client.unsafe(
             `CREATE TABLE ${table} (LIKE public.${table}); ALTER TABLE ${table} OWNER TO ${owner}; GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO stella`,
@@ -174,6 +188,11 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           await tx.execute(
             sql`SELECT set_config('role', ${owner}, true), set_config('app.enabled_features', '[]', true)`,
           );
+          const billing = await clearReviewOrganizationBilling(
+            tx,
+            organizationId,
+          );
+          expect([...billing.keys()]).toEqual([...REVIEW_RESET_BILLING_TABLES]);
           const removed = await sweepReviewOrganization(
             tx,
             organizationId,
@@ -182,10 +201,10 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           expect(
             [...removed.keys()].filter((name) => name !== "user_files"),
           ).toEqual([...REVIEW_RESET_CLEARED_TABLES]);
-          return removed;
+          return new Map([...billing, ...removed]);
         });
         // A different connection, outside the scoped owner, counts every row.
-        for (const name of REVIEW_RESET_CLEARED_TABLES) {
+        for (const name of RESET_TABLES) {
           const rows = await census.unsafe<{ organization_id: string }[]>(
             `SELECT organization_id FROM ${schema}.${identifier(name)}`,
           );

@@ -38,7 +38,8 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ToolPart = ChatToolCallPart;
 
@@ -442,8 +443,8 @@ const ToolCallCardComponent = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: mcpToolInfo !== null,
   });
-  const catalogDataView = useQueryView(catalogDataQuery);
-  useQueryViewError(catalogDataView);
+  const catalogDataView = queryView(catalogDataQuery);
+  useQueryViewError(catalogDataView, "ToolCallCard:query");
   const catalogData =
     catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];

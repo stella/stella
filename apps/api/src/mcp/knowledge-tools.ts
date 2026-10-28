@@ -56,6 +56,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
@@ -736,7 +737,7 @@ const readClauseDetail = async ({
       }),
     );
     if (Result.isError(result)) {
-      return internalFailureResult(result.error);
+      return internalFailureResult(result.error, "mcp.readClauseVersion");
     }
     const rawVersion = result.value;
     // Fail-closed (P7): a malformed version body aborts before any push runs,
@@ -776,7 +777,7 @@ const readClauseDetail = async ({
     getClauseHandler({ safeDb: context.safeDb, organizationId, clauseId }),
   );
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(result.error, "mcp.readClause");
   }
   const { metadata: _metadata, ...rawClause } = result.value;
   if (!isClauseBody(rawClause.body)) {
@@ -895,7 +896,10 @@ const handleListClausesTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListClausesTool.listed_error",
+    );
   }
   const clauses = listed.value.items.map(
     ({ createdAt, updatedAt, ...clause }) =>
@@ -917,7 +921,10 @@ const handleListClausesTool: TypedMcpToolHandler<
         )
       : undefined;
   if (categoriesResult !== undefined && Result.isError(categoriesResult)) {
-    return internalFailureResult(categoriesResult.error);
+    return internalFailureResult(
+      categoriesResult.error,
+      "mcp.handleListClausesTool.categoriesResult_error",
+    );
   }
   const categories =
     categoriesResult !== undefined && !Result.isError(categoriesResult)
@@ -1287,7 +1294,10 @@ const handleSaveClauseTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveClauseTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_CLAUSE_PROJECTION, {
@@ -1337,7 +1347,10 @@ const handleSaveClauseTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveClauseTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_CLAUSE_PROJECTION, {
@@ -1384,7 +1397,10 @@ const handleDeleteClauseTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteClauseTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -1446,7 +1462,10 @@ const readPlaybookDetail = async ({
     }),
   );
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.readPlaybookDetail.result_error",
+    );
   }
   // Remove the sources the caller cannot read before the payload is used
   // anywhere else. Chat creates a ref for each source, and a ref adds the
@@ -1459,7 +1478,10 @@ const readPlaybookDetail = async ({
     accessibleWorkspaceIds: context.accessibleWorkspaceIds,
   });
   if (Result.isError(readableSources)) {
-    return internalFailureResult(readableSources.error);
+    return internalFailureResult(
+      readableSources.error,
+      "mcp.readPlaybookDetail.readableSources_error",
+    );
   }
   const playbook = {
     ...result.value,
@@ -1518,7 +1540,10 @@ const handleListPlaybooksTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListPlaybooksTool.listed_error",
+    );
   }
   const items = listed.value.items;
 
@@ -1797,7 +1822,7 @@ const savePlaybookFailureResult = (error: unknown) => {
         "from the document-types.list capability.",
     });
   }
-  return internalFailureResult(error);
+  return internalFailureResult(error, "mcp.savePlaybookFailureResult.error");
 };
 
 const loadOrgSettings = async (context: AuthorizedMcpRequestContext) => {
@@ -1832,7 +1857,10 @@ const savePlaybookUpdateFailureResult = async ({
     }),
   );
   if (Result.isError(current)) {
-    return internalFailureResult(current.error);
+    return internalFailureResult(
+      current.error,
+      "mcp.savePlaybookUpdateFailureResult.current_error",
+    );
   }
   return savePlaybookConflictResult(current.value.updatedAt);
 };
@@ -1916,7 +1944,10 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       stored: [],
     });
     if (Result.isError(readableSources)) {
-      return internalFailureResult(readableSources.error);
+      return internalFailureResult(
+        readableSources.error,
+        "mcp.createPlaybook.readSources",
+      );
     }
     const merged = mergePlaybookPositions({
       stored: [],
@@ -1962,7 +1993,10 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(stored)) {
-      return internalFailureResult(stored.error);
+      return internalFailureResult(
+        stored.error,
+        "mcp.createPlaybook.readStored",
+      );
     }
     const payload = projectionPayload(SAVE_PLAYBOOK_PROJECTION, {
       playbookId: created.value.id,
@@ -1987,7 +2021,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(stored)) {
-    return internalFailureResult(stored.error);
+    return internalFailureResult(stored.error, "mcp.updatePlaybook.readStored");
   }
   const readableSources = await readSavePlaybookSources({
     context,
@@ -1995,7 +2029,10 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     stored: stored.value.positions.items,
   });
   if (Result.isError(readableSources)) {
-    return internalFailureResult(readableSources.error);
+    return internalFailureResult(
+      readableSources.error,
+      "mcp.updatePlaybook.readSources",
+    );
   }
   const merged = mergePlaybookPositions({
     stored: stored.value.positions.items,
@@ -2171,12 +2208,16 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     });
   });
   if (Result.isError(txResult)) {
-    return internalFailureResult(txResult.error);
+    return internalFailureResult(
+      txResult.error,
+      "mcp.handleRunPlaybookTool.txResult_error",
+    );
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
     return internalFailureResult(
       new HandlerError(playbookRunFailureDetails(outcome)),
+      "mcp.handleRunPlaybookTool.failure",
     );
   }
 
@@ -2199,7 +2240,12 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
     catch: (cause) => cause,
   });
   if (Result.isError(started)) {
-    captureError(started.error, { workspaceId });
+    captureError(
+      started.error,
+      handlerErrorContext("mcp.handleRunPlaybookTool.started_error", {
+        workspaceId,
+      }),
+    );
     return workflowStartFailureResult();
   }
   // The queue reports an enqueue failure in band (having already captured the
@@ -2351,16 +2397,12 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create a review playbook, or add, change, and remove positions in one. " +
-      "Omit playbook_id to create (name required); pass playbook_id and " +
-      "expected_updated_at to update. positions lists only what is added or " +
-      "changed, never the whole playbook: an entry with source_id replaces " +
-      "that stored position whole, an entry without one is added. Entries are " +
-      "checked one by one; a refused entry comes back in issues with the fix " +
-      "and the rest are saved. A saved playbook is a draft that a person " +
-      "approves in the editor before it can run. Returns the playbook id, the " +
-      "updatedAt to pass as the next expected_updated_at, and each written " +
-      "position's sourceId.",
+      "Create a review playbook or change its positions. Omit playbook_id to " +
+      "create (name required); to update, pass it with expected_updated_at. " +
+      "positions is a patch: source_id replaces one position, while no source_id " +
+      "adds one. Invalid entries return in issues; valid entries are saved. The " +
+      "result is a draft for human approval and returns the id, updatedAt for the " +
+      "next update, and written sourceIds.",
     inputSchema: savePlaybookArgsSchema,
     inputNormalization: {
       "scope.perspective": { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

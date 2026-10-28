@@ -4,7 +4,7 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-import type { ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
+import type { Context, ESTree, Ranged, Scope, Variable } from "@oxlint/plugins";
 
 import { isDatabaseHandleName, MUTATION_METHODS } from "./database-access.ts";
 import { canonicalModuleId } from "./module-id.ts";
@@ -115,7 +115,7 @@ export const isCallTo = (node: unknown, name: string): boolean =>
   isIdentifier(node.callee, name);
 
 // Resolve the dot-notation name of a callee: an Identifier, or a
-// non-computed MemberExpression chain (e.g. `t.String`, `Schema.is`,
+// non-computed MemberExpression chain (e.g. `v.string`, `Schema.is`,
 // `process.stderr.write`). Returns null when the chain is computed
 // or the property name itself can't be resolved.
 //
@@ -536,6 +536,20 @@ export const resolveVariable = (
   return null;
 };
 
+export const isUnshadowedGlobalIdentifier = (
+  context: Context,
+  value: unknown,
+): boolean => {
+  if (!isIdentifierReference(value)) {
+    return false;
+  }
+  if (context.sourceCode.isGlobalReference(value)) {
+    return true;
+  }
+  const variable = resolveVariable(context, value);
+  return variable === null || variable.defs.length === 0;
+};
+
 // Whether a variable is never reassigned after its declaration, so its
 // initializer is the only value it can hold.
 export const isSingleAssignment = (variable: Variable): boolean =>
@@ -646,7 +660,10 @@ export const dynamicModuleSourceForEnforcement = (
 };
 
 // The static key of a member expression: `a.b`, `a["b"]`, `` a[`b`] ``.
-export const memberPropertyName = (member: AstNode): string | null => {
+export const memberPropertyName = (member: unknown): string | null => {
+  if (!isAstNode(member)) {
+    return null;
+  }
   if (member.computed !== true) {
     return getPropertyName(member.property);
   }

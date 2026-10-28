@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 import type { InvoiceLanguage } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,48 +18,64 @@ import {
   sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
+import {
+  tInvoiceDocumentType,
+  validateInvoiceDocument,
+} from "@/api/lib/billing/invoice-document-type";
+import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tCurrencyCode,
-  tInvoiceLanguage,
-  tSafeId,
+  invoiceLanguageSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
-import { recalculateInvoiceTotals } from "./invoice-lines";
-
-const updateInvoiceBodySchema = t.Object({
-  invoiceNumber: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: 64 })),
+const updateInvoiceBodySchema = v.object({
+  invoiceNumber: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
   ),
-  documentType: t.Optional(tInvoiceDocumentType),
-  originalInvoiceId: t.Optional(t.Nullable(tSafeId("invoice"))),
-  invoiceDate: t.Optional(t.String({ format: "date" })),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  currency: t.Optional(tCurrencyCode),
-  language: t.Optional(tInvoiceLanguage),
-  notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
-  buyerName: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 512 }))),
-  buyerRegistrationId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  buyerTaxId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  buyerVatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  buyerAddressLine1: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
-  buyerAddressLine2: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
-  buyerCity: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  buyerPostalCode: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  buyerCountry: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
+  documentType: v.exactOptional(tInvoiceDocumentType),
+  originalInvoiceId: v.exactOptional(v.nullable(resourceIdSchema("invoice"))),
+  invoiceDate: v.exactOptional(apiDateSchema),
+  dueDate: v.exactOptional(v.nullable(apiDateSchema)),
+  reference: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+  currency: v.exactOptional(currencyCodeSchema),
+  language: v.exactOptional(invoiceLanguageSchema),
+  notes: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
+  taxableSupplyDate: v.exactOptional(v.nullable(apiDateSchema)),
+  sellerProfileId: v.exactOptional(
+    v.nullable(resourceIdSchema("sellerProfile")),
+  ),
+  buyerName: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+  ),
+  buyerRegistrationId: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(64))),
+  ),
+  buyerTaxId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  buyerVatId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  buyerAddressLine1: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  ),
+  buyerAddressLine2: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  ),
+  buyerCity: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+  buyerPostalCode: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(32))),
+  ),
+  buyerCountry: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  ),
 });
 
 const BUYER_FIELDS = [
@@ -72,7 +90,9 @@ const BUYER_FIELDS = [
   "buyerCountry",
 ] as const;
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 type InvoiceUpdateSource = {
   currency: string;
@@ -167,7 +187,7 @@ type InvoiceEntriesScope = {
 };
 const invoiceHasEntries = async (
   tx: Transaction,
-  { invoiceId, workspaceId, lines }: InvoiceEntriesScope,
+  { invoiceId, lines }: InvoiceEntriesScope,
 ) => {
   const line = await tx
     .select({ id: invoiceLines.id })
@@ -175,7 +195,6 @@ const invoiceHasEntries = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
         lines === "entry-sourced"
           ? ne(invoiceLines.source, INVOICE_LINE_SOURCE.MANUAL)
           : undefined,
@@ -189,12 +208,7 @@ const invoiceHasEntries = async (
   const attachedTimeEntry = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.invoiceId, invoiceId),
-        eq(timeEntries.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(timeEntries.invoiceId, invoiceId)))
     .limit(1);
   if (attachedTimeEntry.at(0)) {
     return true;
@@ -203,12 +217,7 @@ const invoiceHasEntries = async (
   const attachedExpense = await tx
     .select({ id: expenses.id })
     .from(expenses)
-    .where(
-      and(
-        eq(expenses.invoiceId, invoiceId),
-        eq(expenses.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(expenses.invoiceId, invoiceId)))
     .limit(1);
   if (attachedExpense.at(0)) {
     return true;
@@ -298,6 +307,7 @@ const updateInvoice = createSafeHandler(
             invoiceId: params.invoiceId,
             workspaceId,
             status: INVOICE_STATUS.DRAFT,
+            matterLocks: { type: "acquire" },
           });
           if (!existing) {
             return Result.ok({ status: "not-updated" });
@@ -393,12 +403,7 @@ const updateInvoice = createSafeHandler(
                 grossAmount: sql`-${invoiceLines.grossAmount}`,
                 updatedAt: set.updatedAt,
               })
-              .where(
-                and(
-                  eq(invoiceLines.invoiceId, params.invoiceId),
-                  eq(invoiceLines.workspaceId, workspaceId),
-                ),
-              );
+              .where(and(eq(invoiceLines.invoiceId, params.invoiceId)));
           }
 
           const updated = await tx
@@ -407,7 +412,7 @@ const updateInvoice = createSafeHandler(
             .where(
               and(
                 eq(invoices.id, params.invoiceId),
-                eq(invoices.workspaceId, workspaceId),
+                invoiceInMatter(invoices, workspaceId),
                 eq(invoices.status, INVOICE_STATUS.DRAFT),
               ),
             )

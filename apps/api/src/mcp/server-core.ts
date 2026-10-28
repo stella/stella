@@ -24,10 +24,18 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import type { HandlerExceptionScope } from "@stll/errors";
 
+import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
+import type { BoundedRequest } from "@/api/http/request-body";
+import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -46,7 +54,10 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
@@ -202,10 +213,11 @@ type McpServerDependencies = {
     token: string,
     options: {
       mode: McpMode;
-      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+      resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
-  captureError: (error: unknown, context?: Record<string, string>) => void;
+  captureError: typeof captureApiError;
+  observeTransportFailure?: typeof observeMcpTransportFailure;
   getMcpToolDefinition: (
     toolName: string,
     context: McpRequestResources,
@@ -233,8 +245,8 @@ type McpServerDependencies = {
   ) => Promise<McpTool[]>;
   listMcpResources: (
     mode: McpMode,
-    context?: McpRequestResources,
-  ) => Resource[];
+    options?: { context?: McpRequestResources | undefined },
+  ) => Promise<Resource[]>;
   readMcpResource: (
     uri: string,
     mode: McpMode,
@@ -578,48 +590,25 @@ const declaredBodyLength = (request: Request): DeclaredBodyLength => {
  * length is checked without touching the body. Every actual stream is metered,
  * including one whose declared length is smaller: parsedBody bypasses the
  * transports' own byte limit. Abandon at the cap and hand on only bounded bytes.
+ * A body the action size policy already metered is not read again: its
+ * metered size is checked against the cap.
  */
 const withCappedRequestBody = async (
   request: Request,
+  metered: BoundedRequest | undefined,
 ): Promise<McpRequestFrame> => {
-  const declared = declaredBodyLength(request);
-  if (declared === "too_large") {
-    return { status: "too_large" };
+  if (metered !== undefined) {
+    return metered.bytes > MCP_MAX_REQUEST_BODY_BYTES
+      ? { status: "too_large" }
+      : { request: metered.request, status: "within_limit" };
   }
-  if (request.body === null) {
-    return { request, status: "within_limit" };
-  }
-
-  // Bun types the stream's chunks as `any`; a request body is bytes.
-  const stream: ReadableStream<Uint8Array> = request.body;
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for await (const chunk of stream) {
-    total += chunk.length;
-    if (total > MCP_MAX_REQUEST_BODY_BYTES) {
-      // Leaving the loop cancels the stream: the rest of the upload is never
-      // read into this process.
-      return { status: "too_large" };
-    }
-    chunks.push(chunk);
-  }
-
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return {
-    request: new Request(request.url, {
-      body,
-      headers: request.headers,
-      method: request.method,
-      signal: request.signal,
-    }),
-    status: "within_limit",
-  };
+  const bounded = await reframeBoundedRequest(
+    request,
+    MCP_MAX_REQUEST_BODY_BYTES,
+  );
+  return Result.isError(bounded)
+    ? { status: "too_large" }
+    : { request: bounded.value.request, status: "within_limit" };
 };
 
 /**
@@ -650,12 +639,39 @@ const readFactoryState = (): McpFactoryState => {
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
+/** The exception scope every MCP transport exchange of a mode runs in. */
+const mcpTransportExceptionScope = (mode: McpMode): HandlerExceptionScope => ({
+  type: "handler",
+  handlerId: `mcp.transport.${mode}`,
+});
+
+const MCP_TRANSPORT_FAILURE_SINK = failureSink({
+  event: "mcp.transport_failed",
+  expected: [],
+});
+
+/**
+ * Observe the server-side fault behind a retryable 5xx. The request is passed
+ * so its scope records the failure and the completion log carries the cause.
+ */
+const observeMcpTransportFailure = (
+  error: unknown,
+  { mode, request }: { mode: McpMode; request: Request },
+): void => {
+  observeFailure(error, {
+    sink: MCP_TRANSPORT_FAILURE_SINK,
+    request,
+    scope: mcpTransportExceptionScope(mode),
+    ctx: { mode, phase: "transport", source: "mcp" },
+  });
+};
+
 /**
  * A server-side fault (token-verification infrastructure outage, a bug in
  * session resolution, or a transport failure) is not a bad token: it must not
  * carry `WWW-Authenticate` (which would trigger a re-consent loop) and must not
  * leak internals. A generic, retryable 5xx tells the client to back off and
- * retry; the real cause is captured for observability by the caller.
+ * retry; the caller observes the real cause.
  */
 const retryableServerErrorResponse = (requestId: RequestId | null) => {
   const headers = createMcpCorsHeaders();
@@ -706,7 +722,7 @@ const readInboundMessage = async (
 ): Promise<McpInboundMessage> => {
   if (
     request.method !== "POST" ||
-    request.body === null ||
+    !hasRequestBody(request) ||
     !isJsonContentType(request.headers.get("content-type"))
   ) {
     return { parsedBody: undefined, request, requestId: null, status: "read" };
@@ -819,7 +835,13 @@ const boundMcpToolResult = async ({
       return result;
     }
     if (charged.error.reason === "unavailable") {
-      captureError(charged.error, { phase: "read-fence", source: "mcp" });
+      captureError(
+        charged.error,
+        handlerErrorContext("boundMcpToolResult.charged_error", {
+          phase: "read-fence",
+          source: "mcp",
+        }),
+      );
     }
     const refusal = actionAdmissionRefusal(charged.error);
     return mcpStructuredErrorResult({
@@ -854,6 +876,7 @@ export const createMcpHttpRequestHandler = ({
   decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
+  observeTransportFailure = observeMcpTransportFailure,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -917,11 +940,17 @@ export const createMcpHttpRequestHandler = ({
       // else is unexpected here and must be captured before it degrades to a
       // generic retryable result.
       if (!(error instanceof McpGatewayLoadError)) {
-        captureError(error, {
-          phase: "tools/call",
-          mode,
-          source: "mcp",
-        });
+        captureError(
+          error,
+          handlerErrorContext(
+            "createMcpHttpRequestHandler.handleToolsCallRequest.error",
+            {
+              phase: "tools/call",
+              mode,
+              source: "mcp",
+            },
+          ),
+        );
       }
       return retryableToolErrorResult(mode, context);
     }
@@ -1039,10 +1068,16 @@ export const createMcpHttpRequestHandler = ({
     }
     if (ActionAdmissionError.is(admitted.error)) {
       if (admitted.error.reason === "unavailable") {
-        captureError(admitted.error, {
-          phase: "action-admission",
-          source: "mcp",
-        });
+        captureError(
+          admitted.error,
+          handlerErrorContext(
+            "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
+            {
+              phase: "action-admission",
+              source: "mcp",
+            },
+          ),
+        );
       }
       const refusal = actionAdmissionRefusal(admitted.error);
       return mcpStructuredErrorResult({
@@ -1053,14 +1088,20 @@ export const createMcpHttpRequestHandler = ({
         retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
       });
     }
-    captureError(admitted.error, {
-      phase: "action-admission",
-      source: "mcp",
-    });
+    captureError(
+      admitted.error,
+      handlerErrorContext(
+        "createMcpHttpRequestHandler.handleToolsCallRequest.admitted_error",
+        {
+          phase: "action-admission",
+          source: "mcp",
+        },
+      ),
+    );
     return retryableToolErrorResult(mode, context);
   };
 
-  const createMcpServer = ({
+  const createMcpServer = async ({
     context,
     mode,
     session,
@@ -1081,7 +1122,7 @@ export const createMcpHttpRequestHandler = ({
       },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode, context),
+        instructions: await getMcpInstructions(mode, context),
       },
     );
 
@@ -1107,8 +1148,8 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode, context),
+    server.setRequestHandler("resources/list", async () => ({
+      resources: await listMcpResources(mode, { context }),
     }));
 
     server.setRequestHandler(
@@ -1191,7 +1232,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     const handler = createMcpHandler(
-      () => createMcpServer({ ...readFactoryState(), mode }),
+      async () => await createMcpServer({ ...readFactoryState(), mode }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1199,7 +1240,13 @@ export const createMcpHttpRequestHandler = ({
         // the endpoint's observability contract through the handler's reporting
         // hook; the response is normalized to the retryable contract below.
         onerror: (error) => {
-          captureError(error, { phase: "transport", mode, source: "mcp" });
+          captureError(
+            error,
+            handlerErrorContext(
+              "createMcpHttpRequestHandler.handlerForMode.handler.error",
+              { phase: "transport", mode, source: "mcp" },
+            ),
+          );
         },
       },
     );
@@ -1229,7 +1276,7 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = createMcpServer({ context, mode, session });
+    const server = await createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1269,21 +1316,34 @@ export const createMcpHttpRequestHandler = ({
         catch: (cause) => cause,
       });
       if (recorded.isErr()) {
-        captureError(recorded.error, {
-          phase: "initialize",
-          mode,
-          source: "mcp",
-        });
+        captureError(
+          recorded.error,
+          handlerErrorContext(
+            "createMcpHttpRequestHandler.serveLegacyRequest.observeHandshake.recorded_error",
+            {
+              phase: "initialize",
+              mode,
+              source: "mcp",
+            },
+          ),
+        );
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);
-    const reportTransportError = (error: unknown, operation: string) => {
-      captureError(error, {
-        mode,
-        operation,
-        phase: "transport",
-        source: "mcp",
-      });
+    const reportTransportError = (
+      error: unknown,
+      operation:
+        "close_transport" | "close_server" | "cancel_stream" | "read_stream",
+    ) => {
+      captureError(
+        error,
+        handlerErrorContext(`mcp.legacyTransport.${operation}`, {
+          mode,
+          operation,
+          phase: "transport",
+          source: "mcp",
+        }),
+      );
     };
 
     let toreDown = false;
@@ -1415,6 +1475,35 @@ export const createMcpHttpRequestHandler = ({
     }
   };
 
+  // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
+  // else (a token-verification infrastructure outage surfaced as
+  // `McpTokenVerificationError`, a bug in session resolution, or a transport
+  // fault) is a server-side problem, not a bad token: observe it and return
+  // a retryable 5xx so the client backs off instead of dropping into a
+  // re-consent loop. Every answer carries the id of the request once its
+  // body has been read.
+  type FailureResponseOptions = {
+    error: unknown;
+    mode: McpMode;
+    request: Request;
+    requestId: RequestId | null;
+  };
+  const failureResponse = ({
+    error,
+    mode,
+    request,
+    requestId,
+  }: FailureResponseOptions): Response => {
+    const denial = accessRefusalDenial(error);
+    if (denial !== undefined) {
+      return accessDeniedResponse({ denial, mode, requestId });
+    }
+
+    observeTransportFailure(error, { mode, request });
+
+    return retryableServerErrorResponse(requestId);
+  };
+
   return async (
     incomingRequest: Request,
     {
@@ -1422,217 +1511,227 @@ export const createMcpHttpRequestHandler = ({
       mode = "default",
     }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
   ): Promise<Response> =>
-    await observeMcpRequest({
-      method: incomingRequest.headers.get("mcp-method"),
-      mode,
-      run: async () => {
-        if (incomingRequest.method === "OPTIONS") {
-          return new Response(null, {
-            headers: createMcpPreflightHeaders(),
-            status: 204,
-          });
-        }
+    await withExceptionScope(
+      mcpTransportExceptionScope(mode),
+      async () =>
+        await observeMcpRequest({
+          method: incomingRequest.headers.get("mcp-method"),
+          mode,
+          run: async () => {
+            if (incomingRequest.method === "OPTIONS") {
+              return new Response(null, {
+                headers: createMcpPreflightHeaders(),
+                status: 204,
+              });
+            }
 
-        const configuredPolicy = actionSizePolicy();
-        if (Result.isError(configuredPolicy)) {
-          return withMcpCors(
-            actionSizeErrorResponse(configuredPolicy.error),
-            undefined,
-            mode,
-          );
-        }
-        const policy = configuredPolicy.value;
-        const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
-        const completeResponse = async (
-          response: Response,
-          accepted?: McpAuthenticated,
-        ) => {
-          const bounded =
-            policy === undefined || envelopeDisposition.type === "tool"
-              ? response
-              : await boundActionJsonResponse(response, {
-                  maximum: policy.responseBytes,
-                  disposition: "refuse",
-                  operation: "mcp",
-                });
-          return withMcpCors(bounded, accepted, mode);
-        };
-        let framedRequest = incomingRequest;
-        if (policy !== undefined) {
-          const bounded = await boundActionRequest(
-            incomingRequest,
-            policy.requestBytes,
-          );
-          if (Result.isError(bounded)) {
-            return withMcpCors(
-              actionSizeErrorResponse(bounded.error, policy.responseBytes),
-              undefined,
-              mode,
-            );
-          }
-          framedRequest = bounded.value;
-        }
-
-        // Preserve the existing transport frame limit while admission is disabled.
-        if (
-          policy === undefined &&
-          declaredBodyLength(incomingRequest) === "too_large"
-        ) {
-          return payloadTooLargeResponse();
-        }
-
-        const token = extractBearerToken(incomingRequest);
-        if (!token) {
-          return accessDeniedResponse({
-            denial: "missing_credentials",
-            mode,
-            requestId: null,
-          });
-        }
-
-        // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
-        // else (a token-verification infrastructure outage surfaced as
-        // `McpTokenVerificationError`, a bug in session resolution, or a transport
-        // fault) is a server-side problem, not a bad token: capture it and return
-        // a retryable 5xx so the client backs off instead of dropping into a
-        // re-consent loop. Every answer carries the id of the request once its
-        // body has been read.
-        const failureResponse = (
-          error: unknown,
-          requestId: RequestId | null,
-        ): Response => {
-          const denial = accessRefusalDenial(error);
-          if (denial !== undefined) {
-            return accessDeniedResponse({ denial, mode, requestId });
-          }
-
-          captureError(error, {
-            phase: "transport",
-            mode,
-            source: "mcp",
-          });
-
-          return retryableServerErrorResponse(requestId);
-        };
-
-        // `null` until the body is read; the read message's id from then on.
-        let requestId: RequestId | null = null;
-        try {
-          const authenticated = await measureMcpPhase(
-            "auth",
-            async () => await authenticateMcpRequest(token, { mode }),
-          );
-          if (Result.isError(authenticated)) {
-            return failureResponse(authenticated.error, requestId);
-          }
-          const session = authenticated.value;
-          // An event-stream answer holds while this token still authenticates:
-          // a genuine rejection ends it, a verification outage leaves it to
-          // the next sweep.
-          const accepted: McpAuthenticated = {
-            session,
-            stream: {
-              kind: "credential",
-              revalidate: async () => {
-                const again = await authenticateMcpRequest(token, {
+            const configuredPolicy = actionSizePolicy();
+            if (Result.isError(configuredPolicy)) {
+              return withMcpCors(
+                actionSizeErrorResponse(configuredPolicy.error),
+                undefined,
+                mode,
+              );
+            }
+            const policy = configuredPolicy.value;
+            const envelopeDisposition: { type: "read" | "tool" } = {
+              type: "read",
+            };
+            const completeResponse = async (
+              response: Response,
+              accepted?: McpAuthenticated,
+            ) => {
+              const bounded =
+                policy === undefined || envelopeDisposition.type === "tool"
+                  ? response
+                  : await boundActionJsonResponse(response, {
+                      maximum: policy.responseBytes,
+                      disposition: "refuse",
+                      operation: "mcp",
+                    });
+              return withMcpCors(bounded, accepted, mode);
+            };
+            // With the size policy on, the body is read once here; the
+            // transport cap below checks the metered size instead of reading
+            // it again.
+            let metered: BoundedRequest | undefined;
+            if (policy !== undefined) {
+              const bounded = await boundActionRequest(
+                incomingRequest,
+                policy.requestBytes,
+              );
+              if (Result.isError(bounded)) {
+                return withMcpCors(
+                  actionSizeErrorResponse(bounded.error, policy.responseBytes),
+                  undefined,
                   mode,
-                  resolveApiKeySession: revalidateMachineApiKeySession,
-                });
-                if (Result.isOk(again)) {
-                  return true;
-                }
-                return again.error instanceof McpAuthenticationError
-                  ? false
-                  : await Promise.reject(again.error);
-              },
-            },
-          };
+                );
+              }
+              metered = bounded.value;
+            }
 
-          // Refuse session termination only after the token is accepted, so an
-          // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
-          // drives OAuth discovery.
-          if (incomingRequest.method === "DELETE") {
-            return await completeResponse(
-              mcpMethodNotAllowedResponse(),
-              accepted,
-            );
-          }
+            // Preserve the existing transport frame limit while admission is disabled.
+            if (
+              policy === undefined &&
+              declaredBodyLength(incomingRequest) === "too_large"
+            ) {
+              return payloadTooLargeResponse();
+            }
 
-          // The transport cap is enforced only for an accepted token: a caller
-          // without one is refused from the headers alone, so it cannot hold
-          // connections and buffers open by streaming a body that is discarded
-          // anyway.
-          const frame = await withCappedRequestBody(framedRequest);
-          if (frame.status === "too_large") {
-            return await completeResponse(payloadTooLargeResponse(), accepted);
-          }
-          const inbound = await readInboundMessage(
-            withTransportAcceptHeader(frame.request),
-          );
-          if (inbound.status === "unreadable") {
-            return await completeResponse(unreadableBodyResponse(), accepted);
-          }
-          const { parsedBody, request } = inbound;
-          requestId = inbound.requestId;
+            const token = extractBearerToken(incomingRequest);
+            if (!token) {
+              return accessDeniedResponse({
+                denial: "missing_credentials",
+                mode,
+                requestId: null,
+              });
+            }
 
-          // Before the leg is chosen, so a refusal it raises is answered by
-          // this endpoint on either leg, never by the SDK as a server fault.
-          const context = await measureMcpPhase(
-            "context",
-            async () =>
-              await resolveMcpSessionContext(session, { clientIp, request }),
-          );
-
-          const authInfo = {
-            clientId: session.userId,
-            scopes: session.scopes,
-            token,
-          };
-          const legacyRequest = await isLegacyRequest(request, parsedBody);
-          setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
-          const dispatch = async () =>
-            responseDisposition.run(envelopeDisposition, async () =>
-              legacyRequest
-                ? await serveLegacyRequest({
-                    authInfo,
-                    context,
+            // `null` until the body is read; the read message's id from then on.
+            let requestId: RequestId | null = null;
+            try {
+              const authenticated = await measureMcpPhase(
+                "auth",
+                async () =>
+                  await authenticateMcpRequest(token, {
                     mode,
-                    parsedBody,
-                    request,
-                    session,
-                  })
-                : await factoryState.run(
-                    { context, session },
-                    async () =>
-                      await handlerForMode(mode).fetch(request, {
-                        authInfo,
-                        parsedBody,
-                      }),
-                  ),
-            );
-          const response =
-            policy === undefined
-              ? await dispatch()
-              : await withTenantActionSizePolicy(policy, dispatch);
+                    resolveApiKeySession: resolveMachineApiKeySession,
+                  }),
+              );
+              if (Result.isError(authenticated)) {
+                return failureResponse({
+                  error: authenticated.error,
+                  mode,
+                  request: incomingRequest,
+                  requestId,
+                });
+              }
+              const session = authenticated.value;
+              // An event-stream answer holds while this token still authenticates:
+              // a genuine rejection ends it, a verification outage leaves it to
+              // the next sweep.
+              const accepted: McpAuthenticated = {
+                session,
+                stream: {
+                  kind: "credential",
+                  revalidate: async () => {
+                    const again = await authenticateMcpRequest(token, {
+                      mode,
+                      resolveApiKeySession: revalidateMachineApiKeySession,
+                    });
+                    if (Result.isOk(again)) {
+                      return true;
+                    }
+                    return again.error instanceof McpAuthenticationError
+                      ? false
+                      : await Promise.reject(again.error);
+                  },
+                },
+              };
 
-          // `createMcpHandler` owns and catches modern exchange failures. Restore
-          // the public retry contract the outer catch provides on the legacy leg.
-          if (!legacyRequest && response.status >= 500) {
-            return policy === undefined
-              ? retryableServerErrorResponse(requestId)
-              : await completeResponse(
-                  retryableServerErrorResponse(requestId),
+              // Refuse session termination only after the token is accepted, so an
+              // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
+              // drives OAuth discovery.
+              if (incomingRequest.method === "DELETE") {
+                return await completeResponse(
+                  mcpMethodNotAllowedResponse(),
                   accepted,
                 );
-          }
+              }
 
-          return await completeResponse(response, accepted);
-        } catch (error) {
-          return failureResponse(error, requestId);
-        }
-        // No teardown here on purpose. The handler owns instance lifetime and a
-        // response body may still be streaming when this returns; closing it here
-        // is what truncated the notification stream under the hand-wired transport.
-      },
-    });
+              // The transport cap is enforced only for an accepted token: a caller
+              // without one is refused from the headers alone, so it cannot hold
+              // connections and buffers open by streaming a body that is discarded
+              // anyway.
+              const frame = await withCappedRequestBody(
+                incomingRequest,
+                metered,
+              );
+              if (frame.status === "too_large") {
+                return await completeResponse(
+                  payloadTooLargeResponse(),
+                  accepted,
+                );
+              }
+              const inbound = await readInboundMessage(
+                withTransportAcceptHeader(frame.request),
+              );
+              if (inbound.status === "unreadable") {
+                return await completeResponse(
+                  unreadableBodyResponse(),
+                  accepted,
+                );
+              }
+              const { parsedBody, request } = inbound;
+              requestId = inbound.requestId;
+
+              // Before the leg is chosen, so a refusal it raises is answered by
+              // this endpoint on either leg, never by the SDK as a server fault.
+              const context = await measureMcpPhase(
+                "context",
+                async () =>
+                  await resolveMcpSessionContext(session, {
+                    clientIp,
+                    request,
+                  }),
+              );
+
+              const authInfo = {
+                clientId: session.userId,
+                scopes: session.scopes,
+                token,
+              };
+              const legacyRequest = await isLegacyRequest(request, parsedBody);
+              setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
+              const dispatch = async () =>
+                responseDisposition.run(envelopeDisposition, async () =>
+                  legacyRequest
+                    ? await serveLegacyRequest({
+                        authInfo,
+                        context,
+                        mode,
+                        parsedBody,
+                        request,
+                        session,
+                      })
+                    : await factoryState.run(
+                        { context, session },
+                        async () =>
+                          await handlerForMode(mode).fetch(request, {
+                            authInfo,
+                            parsedBody,
+                          }),
+                      ),
+                );
+              const response =
+                policy === undefined
+                  ? await dispatch()
+                  : await withTenantActionSizePolicy(policy, dispatch);
+
+              // `createMcpHandler` owns and catches modern exchange failures. Restore
+              // the public retry contract the outer catch provides on the legacy leg.
+              if (!legacyRequest && response.status >= 500) {
+                return policy === undefined
+                  ? retryableServerErrorResponse(requestId)
+                  : await completeResponse(
+                      retryableServerErrorResponse(requestId),
+                      accepted,
+                    );
+              }
+
+              return await completeResponse(response, accepted);
+            } catch (error) {
+              return failureResponse({
+                error,
+                mode,
+                request: incomingRequest,
+                requestId,
+              });
+            }
+            // No teardown here on purpose. The handler owns instance lifetime and a
+            // response body may still be streaming when this returns; closing it here
+            // is what truncated the notification stream under the hand-wired transport.
+          },
+        }),
+    );
 };

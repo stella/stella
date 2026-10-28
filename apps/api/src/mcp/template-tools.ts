@@ -50,6 +50,7 @@ import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -705,17 +706,12 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   description:
-    "Configure an existing template's fields: who fills each one, its input " +
-    "control, options and validation. The configuration lives in the " +
-    "document, so this rewrites what carries each field (its markers at " +
-    "every occurrence, the {% if %} tags a rule replaces, the keyed markers " +
-    "that render a registry hit) and publishes the result. Pass " +
-    "template_id and one entry per field path; every path must be one the " +
-    "document already carries, and a " +
-    "property you leave out keeps what the marker says. Read " +
-    `${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the template's full ` +
-    "field configuration afterwards, plus the entries that could not be " +
-    "applied.",
+    "Configure an existing template's field owner, input control, options and " +
+    "validation. This rewrites its field markers and affected {% if %} or " +
+    "registry markers, then publishes the result. Pass template_id and entries " +
+    "for existing field paths; omitted properties keep their marker settings. " +
+    `Read ${TEMPLATE_FIELD_REFERENCE_URI} first. Returns the full configuration ` +
+    "and entries that could not be applied.",
   inputSchema: configureTemplateFieldsArgsSchema,
   inputNormalization: {
     "fields[].date_format": {
@@ -1557,7 +1553,10 @@ const handleFillTemplateTool: McpToolHandler<
     recordAuditEvent: context.recordAuditEvent,
   });
   if (Result.isError(recorded)) {
-    return internalFailureResult(recorded.error);
+    return internalFailureResult(
+      recorded.error,
+      "mcp.handleFillTemplateTool.recorded_error",
+    );
   }
 
   const completion = gateTemplateFillCompletion({
@@ -1579,7 +1578,7 @@ const handleFillTemplateTool: McpToolHandler<
           ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
           : filled.text,
         truncated,
-        docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
+        docxBase64: Buffer.from(filled.file.bytes).toBase64(),
         unmatchedPlaceholders: filled.unmatchedPlaceholders,
         unusedValues: filled.unusedValues,
         clauseWarnings: filled.clauseWarnings,
@@ -1827,7 +1826,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     requestFingerprint,
   });
   if (Result.isError(claim)) {
-    return internalFailureResult(claim.error);
+    return internalFailureResult(
+      claim.error,
+      "mcp.handleSaveFilledTemplateTool.claim_error",
+    );
   }
   const claimToken = (():
     | string
@@ -1880,7 +1882,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       claimToken,
     });
     if (Result.isError(released)) {
-      captureError(released.error);
+      captureError(
+        released.error,
+        handlerErrorContext("mcp.releaseClaim.released_error"),
+      );
     }
   };
 
@@ -1995,7 +2000,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   );
   if (Result.isError(filledResult)) {
     await releaseClaim();
-    return internalFailureResult(filledResult.error);
+    return internalFailureResult(
+      filledResult.error,
+      "mcp.handleSaveFilledTemplateTool.filledResult_error",
+    );
   }
   const filled = filledResult.value;
   if ("usageRejection" in filled) {
@@ -2163,7 +2171,10 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   });
   if (Result.isError(persistence)) {
     await releaseClaim();
-    return internalFailureResult(persistence.error);
+    return internalFailureResult(
+      persistence.error,
+      "mcp.handleSaveFilledTemplateTool.persistence_error",
+    );
   }
   if (persistence.value.status === "error") {
     await releaseClaim();
@@ -2491,7 +2502,10 @@ const upsertStoredTemplate = async ({
       }),
     );
     return Result.isError(renamed)
-      ? internalFailureResult(renamed.error)
+      ? internalFailureResult(
+          renamed.error,
+          "mcp.upsertStoredTemplate.renamed_error",
+        )
       : { fieldCount: renamed.value.fieldCount };
   }
 
@@ -2509,7 +2523,10 @@ const upsertStoredTemplate = async ({
     }),
   );
   return Result.isError(written)
-    ? internalFailureResult(written.error)
+    ? internalFailureResult(
+        written.error,
+        "mcp.upsertStoredTemplate.written_error",
+      )
     : { fieldCount: written.value.row.fieldCount };
 };
 
@@ -2595,7 +2612,10 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleCreateTemplateTool.created_error",
+    );
   }
 
   const described = await describeTemplateForAgent({
@@ -2972,7 +2992,10 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(configured)) {
-    return internalFailureResult(configured.error);
+    return internalFailureResult(
+      configured.error,
+      "mcp.handleConfigureTemplateFieldsTool.configured_error",
+    );
   }
   // The service only saw the entries the schema accepted, so it counts
   // positions in THAT list. The caller counts positions in the list it sent,
@@ -3036,7 +3059,7 @@ const templateFailureResult = (
     case 403:
     case 429:
     case 500:
-      return internalFailureResult(error);
+      return internalFailureResult(error, "mcp.templateFailureResult.error");
     default:
       error.status satisfies never;
       return panic(
@@ -3168,7 +3191,10 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     }
     return decided.error.status === 404 || decided.error.status === 422
       ? templateFailureResult(decided.error)
-      : internalFailureResult(decided.error);
+      : internalFailureResult(
+          decided.error,
+          "mcp.handlePreviewTemplateConditionsTool.decided_error",
+        );
   }
 
   // Each condition's label is the org-authored field label; its path,

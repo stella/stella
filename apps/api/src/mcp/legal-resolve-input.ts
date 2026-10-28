@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { LIMITS } from "@/api/lib/limits";
 
@@ -76,7 +76,7 @@ export const resolveLawArgsSchema = nullAsAbsent(
     ),
     as_of: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.description(
           "Expression date YYYY-MM-DD; omit for the current expression.",
         ),

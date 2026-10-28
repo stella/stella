@@ -173,6 +173,10 @@ class InspectorViewRegistry {
     return this.registrations.get(type);
   }
 
+  values() {
+    return [...this.registrations.values()];
+  }
+
   registerPersistence(
     type: InspectorViewKind,
     persistence: InspectorPersistenceReference,
@@ -273,3 +277,5 @@ export const registerInspectorView = <P>(
 export const getInspectorView = (
   type: InspectorViewKind,
 ): StoredRegistration | undefined => registry.get(type);
+
+export const getInspectorViews = () => registry.values();

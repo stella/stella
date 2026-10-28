@@ -20,7 +20,10 @@ export const loadAuthContext = async (queryClient: QueryClient) => {
     catch: (error) => error,
   });
   if (sessionResult.isErr()) {
-    getAnalytics().captureError(sessionResult.error);
+    getAnalytics().captureError(sessionResult.error, {
+      fingerprintKey: "loadAuthContext:failure",
+      scope: { type: "handler", handlerId: "loadAuthContext:failure" },
+    });
   }
   // Re-observe the same promise so route recovery receives the original
   // rejection, not a Result unwrap error, without repeating the query.

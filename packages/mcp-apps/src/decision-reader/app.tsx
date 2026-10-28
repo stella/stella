@@ -20,5 +20,5 @@ createRoot(root).render(
 );
 controller.bridge.detached(
   controller.bridge.connect(),
-  "connect decision reader",
+  "decisionReader.connect",
 );

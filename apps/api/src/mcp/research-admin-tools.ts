@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
@@ -516,7 +516,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
-        return internalFailureResult(block.error);
+        return internalFailureResult(
+          block.error,
+          "mcp.handleSearchBoeLegislationTool.block_error",
+        );
       }
       return toolDataResult({ lawId, blockId, block: block.value });
     }
@@ -528,7 +531,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
-        return internalFailureResult(related.error);
+        return internalFailureResult(
+          related.error,
+          "mcp.handleSearchBoeLegislationTool.related_error",
+        );
       }
       return toolDataResult(related.value);
     }
@@ -550,7 +556,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
       catch: mapBoeError,
     });
     if (Result.isError(detail)) {
-      return internalFailureResult(detail.error);
+      return internalFailureResult(
+        detail.error,
+        "mcp.handleSearchBoeLegislationTool.detail_error",
+      );
     }
     return toolDataResult(detail.value);
   }
@@ -587,7 +596,10 @@ const handleSearchBoeLegislationTool = withThirdPartyOutbound<
     catch: mapBoeError,
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleSearchBoeLegislationTool.result_error",
+    );
   }
   // Publisher search has no held corpus identity. Its existing source URL
   // remains primary through the same citation resolver as corpus reads.
@@ -674,7 +686,10 @@ const handleListAuditLogTool: McpToolHandler<
     }),
   );
   if (Result.isError(page)) {
-    return internalFailureResult(page.error);
+    return internalFailureResult(
+      page.error,
+      "mcp.handleListAuditLogTool.page_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LIST_AUDIT_LOG_OUTPUT_SCHEMA, {
@@ -784,7 +799,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
       ),
       time_locked_through_month: v.optional(
         v.pipe(
-          v.nullable(vApiDate),
+          v.nullable(apiDateSchema),
           v.description("Locked month-end date; null unlocks"),
         ),
       ),
@@ -923,7 +938,10 @@ const handleAddMember = async ({
     }),
   );
   if (Result.isError(added)) {
-    return internalFailureResult(added.error);
+    return internalFailureResult(
+      added.error,
+      "mcp.handleAddMember.added_error",
+    );
   }
   return toolDataResult(
     projectionPayload(ADD_MATTER_MEMBER_PROJECTION, {
@@ -967,7 +985,10 @@ const handleRemoveMember = async ({
     }),
   );
   if (Result.isError(removed)) {
-    return internalFailureResult(removed.error);
+    return internalFailureResult(
+      removed.error,
+      "mcp.handleRemoveMember.removed_error",
+    );
   }
   return toolDataResult(
     projectionPayload(REMOVE_MATTER_MEMBER_PROJECTION, {
@@ -1055,7 +1076,10 @@ const handleUpdateOrganizationSettingsTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleUpdateOrganizationSettingsTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(UPDATE_ORGANIZATION_SETTINGS_PROJECTION, updated.value),

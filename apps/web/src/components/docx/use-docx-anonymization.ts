@@ -14,7 +14,8 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -53,8 +54,11 @@ export const useDocxAnonymizationHighlights = ({
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const anonymizationTermsQueryView = useQueryView(anonymizationTermsQuery);
-  useQueryViewError(anonymizationTermsQueryView);
+  const anonymizationTermsQueryView = queryView(anonymizationTermsQuery);
+  useQueryViewError(
+    anonymizationTermsQueryView,
+    "useDocxAnonymizationHighlights:query",
+  );
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
       return [];
@@ -97,8 +101,11 @@ export const useDocxAnonymizationHighlights = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  const allowlistQueryView = queryView(allowlistQuery);
+  useQueryViewError(
+    allowlistQueryView,
+    "useDocxAnonymizationHighlights:query-2",
+  );
   const policyReady =
     anonymizationTermsQuery.status === "success" &&
     allowlistQuery.status === "success";
@@ -188,7 +195,13 @@ export const useDocxAnonymizationHighlights = ({
       view.dispatch(view.state.tr.setMeta(key, payload));
     });
     if (Result.isError(dispatched)) {
-      getAnalytics().captureError(dispatched.error);
+      getAnalytics().captureError(dispatched.error, {
+        fingerprintKey: "useDocxAnonymizationHighlights:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDocxAnonymizationHighlights:failure",
+        },
+      });
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineFailed(fieldId);

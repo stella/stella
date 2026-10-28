@@ -123,8 +123,9 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -177,7 +178,10 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
     (error: unknown): void => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatTabPanel:failure",
+        scope: { type: "handler", handlerId: "ChatTabPanel:failure" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
@@ -291,6 +295,7 @@ export const ChatTabPanel = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.inspector" },
     chat,
     timingSurface: "inspector-chat",
     conversationId: threadRef.threadId,
@@ -818,8 +823,8 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
       userId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useChatContextLabel:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];

@@ -171,6 +171,7 @@ export const fillByIdLogic = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "PDF conversion failed",
         }),
       );
@@ -197,9 +198,8 @@ export const fillByIdLogic = async function* ({
   return Result.ok({
     additionalHeaders,
     body: new Uint8Array(result.file.bytes),
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content).
+    // Octet-stream, not the DOCX mime type: the API client decodes
+    // octet-stream as an `ArrayBuffer`; the DOCX type travels in the filename.
     contentType: OCTET_STREAM_MIME_TYPE,
     disposition: "attachment",
     fileName: sanitizeFilename(baseName),

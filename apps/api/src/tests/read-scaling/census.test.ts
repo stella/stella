@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
@@ -14,10 +14,13 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -30,6 +33,7 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -38,11 +42,15 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
+  suggestionRangeScalingScenario,
+  mobileClientMetadataScalingScenario,
+  ...documentAnnotationScalingScenarios,
 ];
-const measuredApiReads = api.routes
-  .filter(({ handler }) =>
-    measuredApiScenarios.some((scenario) => scenario.handler === handler),
+const measuredApiReads = apiApp.routes
+  .filter(({ definition }) =>
+    measuredApiScenarios.some((scenario) => scenario.definition === definition),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
@@ -93,14 +101,15 @@ test("previously measured scenarios retain their handler or tool identity", asyn
         );
       }
       const owner = ownerModule[entry.handlerOwner.exportName];
-      if (!isRecord(owner) || !("handler" in owner)) {
+      if (!isRecord(owner)) {
         panic(
-          `Scaling owner has no handler: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
+          `Scaling owner is not an endpoint definition: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
         );
       }
-      expect(owner["handler"]).toBe(
-        measuredApiScenarios.find(({ name }) => name === entry.name)?.handler,
+      const measured = measuredApiScenarios.find(
+        ({ name }) => name === entry.name,
       );
+      expect(measured?.definition === owner).toBe(true);
     }
     expect(
       scenarioMembershipViolations({
@@ -113,17 +122,19 @@ test("previously measured scenarios retain their handler or tool identity", asyn
 
 test("every scaling scenario exercises a mounted API handler", () => {
   for (const scenario of measuredApiScenarios) {
-    expect(api.routes.some(({ handler }) => handler === scenario.handler)).toBe(
-      true,
-    );
+    expect(
+      apiApp.routes.some(
+        ({ definition }) => definition === scenario.definition,
+      ),
+    ).toBe(true);
   }
 });
 
 test("removing any mounted read scenario makes its coverage fail", () => {
-  const surface = apiScalingSurface(api.routes);
+  const surface = apiScalingSurface(apiApp.routes);
   for (const scenario of measuredApiScenarios) {
-    const mounted = api.routes.filter(
-      ({ handler }) => handler === scenario.handler,
+    const mounted = apiApp.routes.filter(
+      ({ definition }) => definition === scenario.definition,
     );
     expect(mounted.length, scenario.name).toBeGreaterThan(0);
     for (const { method, path: routePath } of mounted) {
@@ -159,7 +170,7 @@ test("every MCP scenario names a registered tool", () => {
 for (const { kind, surface, ledger, measured } of [
   {
     kind: "api",
-    surface: apiScalingSurface(api.routes),
+    surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
   },

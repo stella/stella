@@ -331,10 +331,10 @@ const main = async (argv: readonly string[]): Promise<number> => {
     await import("./schema-introspection.ts");
   const problems = [
     ...validateOwnership(OWNERSHIP, REPO_ROOT),
-    ...validateSchemaIntrospection({
+    ...(await validateSchemaIntrospection({
       entries: SCHEMA_INTROSPECTION,
       repoRoot: REPO_ROOT,
-    }),
+    })),
   ];
   for (const { path: file, contents } of artifacts) {
     const absolute = path.join(REPO_ROOT, file);
