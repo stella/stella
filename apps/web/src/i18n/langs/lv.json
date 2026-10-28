@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Ja ir norādīta adrese, adreses 1. rinda ir obligāta.",
         "display_name_required": "Neizdevās izveidot parādāmo nosaukumu.",
+        "in_file_duplicate": "Iepriekšējas šī faila rindas dublikāts",
         "invalid_email": "E-pasta adrese nav derīga.",
         "invalid_phone": "Tālruņa numurs nav derīgs.",
         "invalid_tags": "Atzīmēm jābūt teksta vērtībām.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brazīlijas CPF/CNPJ (kontrolsumma)",
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
-      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
+      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
+      "warning": {
+        "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta."
+      }
     },
     "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
     "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",

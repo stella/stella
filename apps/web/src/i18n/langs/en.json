@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Address line 1 is required when an address is present.",
         "display_name_required": "A display name could not be created.",
+        "in_file_duplicate": "Duplicate of an earlier row in this file",
         "invalid_email": "The e-mail address is invalid.",
         "invalid_phone": "The phone number is invalid.",
         "invalid_tags": "Tags must be text values.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
-      "validateFailed": "Couldn't check these contacts."
+      "validateFailed": "Couldn't check these contacts.",
+      "warning": {
+        "ignored_populated_column": "Column “{column}” contains data but is ignored."
+      }
     },
     "invalidDateOfBirth": "Enter a valid date of birth.",
     "invalidNationalityCodes": "Enter valid nationality codes.",

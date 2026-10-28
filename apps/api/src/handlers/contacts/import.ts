@@ -12,7 +12,7 @@ import {
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import {
   importedTaxIdentifiers,
-  validateContactImportCandidate,
+  validateContactImportCandidates,
 } from "@/api/handlers/contacts/contact-import-file";
 import type {
   ContactImportCandidate,
@@ -137,12 +137,15 @@ const importContacts = createSafeRootHandler(
         const seenContactIds = new Set<SafeId<"contact">>();
         const seenTaxIds = new Set<string>();
 
-        for (const [index, { id, ...candidate }] of body.rows.entries()) {
-          const { contact, issues } = validateContactImportCandidate({
-            candidate,
-            taxIdScheme: body.taxIdScheme,
-            rowNumber: index + 1,
-          });
+        const validatedBatch = validateContactImportCandidates({
+          candidates: body.rows.map(({ id: _, ...candidate }) => candidate),
+          rowNumbers: body.rows.map((_, index) => index + 1),
+          taxIdScheme: body.taxIdScheme,
+        });
+        for (const [index, { id }] of body.rows.entries()) {
+          const { contact, issues } =
+            validatedBatch.at(index) ??
+            panic("Contact import validation omitted a row");
           if (issues.length > 0) {
             resultByIndex.set(index, {
               index,

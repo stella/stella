@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "La ligne d’adresse 1 est obligatoire lorsqu’une adresse est renseignée.",
         "display_name_required": "Impossible de créer un nom affiché.",
+        "in_file_duplicate": "Doublon d’une ligne précédente de ce fichier",
         "invalid_email": "L’adresse e-mail n’est pas valide.",
         "invalid_phone": "Le numéro de téléphone n’est pas valide.",
         "invalid_tags": "Les étiquettes doivent être des valeurs textuelles.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
-      "validateFailed": "Impossible de vérifier ces contacts."
+      "validateFailed": "Impossible de vérifier ces contacts.",
+      "warning": {
+        "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée."
+      }
     },
     "invalidDateOfBirth": "Saisissez une date de naissance valide.",
     "invalidNationalityCodes": "Saisissez des codes de nationalité valides.",

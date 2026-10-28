@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Ak je uvedená adresa, jej prvý riadok je povinný.",
         "display_name_required": "Zobrazovaný názov sa nepodarilo vytvoriť.",
+        "in_file_duplicate": "Duplikát skoršieho riadka v tomto súbore",
         "invalid_email": "E-mailová adresa je neplatná.",
         "invalid_phone": "Telefónne číslo je neplatné.",
         "invalid_tags": "Značky musia byť textové hodnoty.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
-      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
+      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
+      "warning": {
+        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný."
+      }
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
     "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",

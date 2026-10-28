@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Ha van cím, a cím 1. sora kötelező.",
         "display_name_required": "Nem sikerült létrehozni a megjelenítési nevet.",
+        "in_file_duplicate": "A fájl egy korábbi sorának másolata",
         "invalid_email": "Az e-mail-cím érvénytelen.",
         "invalid_phone": "A telefonszám érvénytelen.",
         "invalid_tags": "A címkéknek szöveges értékeknek kell lenniük.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
-      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
+      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
+      "warning": {
+        "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad."
+      }
     },
     "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
     "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",

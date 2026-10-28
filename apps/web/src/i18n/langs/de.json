@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Adresszeile 1 ist erforderlich, wenn eine Adresse angegeben ist.",
         "display_name_required": "Es konnte kein Anzeigename erstellt werden.",
+        "in_file_duplicate": "Duplikat einer früheren Zeile in dieser Datei",
         "invalid_email": "Die E-Mail-Adresse ist ungültig.",
         "invalid_phone": "Die Telefonnummer ist ungültig.",
         "invalid_tags": "Schlagwörter müssen Textwerte sein.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brasilianische CPF/CNPJ (Prüfsumme)",
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
-      "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
+      "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
+      "warning": {
+        "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert."
+      }
     },
     "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
     "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",

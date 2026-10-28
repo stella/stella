@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "Jei nurodomas adresas, adreso 1 eilutė yra privaloma.",
         "display_name_required": "Nepavyko sukurti rodomo pavadinimo.",
+        "in_file_duplicate": "Ankstesnės šio failo eilutės dublikatas",
         "invalid_email": "El. pašto adresas netinkamas.",
         "invalid_phone": "Telefono numeris netinkamas.",
         "invalid_tags": "Žymos turi būti tekstinės reikšmės.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
-      "validateFailed": "Nepavyko patikrinti šių kontaktų."
+      "validateFailed": "Nepavyko patikrinti šių kontaktų.",
+      "warning": {
+        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas."
+      }
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
     "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",

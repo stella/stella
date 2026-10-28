@@ -2555,6 +2555,7 @@
       "issue": {
         "address_line_required": "سطر العنوان 1 مطلوب عند إدخال عنوان.",
         "display_name_required": "تعذّر إنشاء اسم العرض.",
+        "in_file_duplicate": "نسخة مكررة من صف سابق في هذا الملف",
         "invalid_email": "عنوان البريد الإلكتروني غير صالح.",
         "invalid_phone": "رقم الهاتف غير صالح.",
         "invalid_tags": "يجب أن تكون الوسوم قيمًا نصية.",
@@ -2583,7 +2584,10 @@
       "taxIdSchemeBrCpfCnpj": "الرقم البرازيلي CPF/CNPJ (مجموع تحقق)",
       "taxIdSchemeNone": "بدون تحقق من الرقم الضريبي",
       "title": "استيراد جهات الاتصال",
-      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
+      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
+      "warning": {
+        "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله."
+      }
     },
     "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
     "invalidNationalityCodes": "أدخل رموز جنسية صالحة.",

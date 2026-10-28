@@ -110,6 +110,8 @@ const IMPORT_ISSUE_LABELS = {
     "contacts.importStudio.issue.invalid_tax_id",
   [CONTACT_IMPORT_ISSUE_CODE.INVALID_TYPE]:
     "contacts.importStudio.issue.invalid_type",
+  [CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE]:
+    "contacts.importStudio.issue.in_file_duplicate",
   [CONTACT_IMPORT_ISSUE_CODE.ROW_LENGTH_MISMATCH]:
     "contacts.importStudio.issue.row_length_mismatch",
   [CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED]:
@@ -148,6 +150,7 @@ type ImportReviewSeedRow = {
   issues: ImportIssue[];
   /** Position in the source, kept stable while rows are edited or removed. */
   rowNumber: number;
+  warnings: { code: "ignored_populated_column"; column: string }[];
 };
 
 type ImportReviewRow = ImportReviewSeedRow & {
@@ -235,12 +238,14 @@ export const useImportReview = ({
 
   const requestValidation = async (
     candidates: ImportCandidate[],
+    rowNumbers: number[],
     scheme: ContactImportTaxIdScheme,
   ) =>
     await Result.tryPromise(async () => {
       const response = await api.contacts.import.validate.post({
         taxIdScheme: scheme,
         rows: candidates.map(toWireCandidate),
+        rowNumbers,
       });
       return unwrapApiResponse(response);
     });
@@ -251,6 +256,7 @@ export const useImportReview = ({
     setValidation({ status: "pending" });
     const result = await requestValidation(
       pending.map(({ candidate }) => candidate),
+      pending.map(({ rowNumber }) => rowNumber),
       taxIdScheme,
     );
     if (generation !== validationGeneration.current) {
@@ -310,7 +316,11 @@ export const useImportReview = ({
     taxIdScheme: scheme,
   }: SeedValidatedArgs) => {
     setIsSeeding(true);
-    const result = await requestValidation(candidates, scheme);
+    const result = await requestValidation(
+      candidates,
+      candidates.map((_, index) => index + 1),
+      scheme,
+    );
     setIsSeeding(false);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error, {
@@ -329,6 +339,7 @@ export const useImportReview = ({
         candidate: contact,
         issues,
         rowNumber,
+        warnings: [],
       })),
     });
     return true;
@@ -452,8 +463,6 @@ type ImportCandidateCardProps = {
   fields: readonly ImportEditableField[];
   onChange: (candidate: ImportCandidate) => void;
   onRemove: () => void;
-  /** 1-based position in the review list; the title falls back to it. */
-  ordinal: number;
 };
 
 /** One reviewed contact, editable, with the issues the server reported on it. */
@@ -462,7 +471,6 @@ export const ImportCandidateCard = ({
   fields,
   onChange,
   onRemove,
-  ordinal,
 }: ImportCandidateCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -502,14 +510,19 @@ export const ImportCandidateCard = ({
           <span>
             {row.candidate.displayName.trim() ||
               t("contacts.import.rowLabel", {
-                index: format.number(ordinal),
+                index: format.number(row.rowNumber),
               })}
           </span>
-          <span>
-            {t("contacts.importStudio.sourceRow", {
-              index: format.number(row.rowNumber),
-            })}
-          </span>
+          {row.candidate.displayName.trim() && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                {t("contacts.importStudio.sourceRow", {
+                  index: format.number(row.rowNumber),
+                })}
+              </span>
+            </>
+          )}
         </h3>
         <Button
           aria-label={t("common.remove")}
@@ -587,6 +600,18 @@ export const ImportCandidateCard = ({
           ),
         )}
       </div>
+
+      {row.warnings.map((warning) => (
+        <p
+          className="text-warning-foreground flex items-center gap-1.5 text-sm"
+          key={`${warning.code}:${warning.column}`}
+        >
+          <AlertTriangleIcon className="size-4" />
+          {t("contacts.importStudio.warning.ignored_populated_column", {
+            column: warning.column,
+          })}
+        </p>
+      ))}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-muted-foreground text-xs font-medium">

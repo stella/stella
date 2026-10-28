@@ -17,6 +17,7 @@ import {
   contactMetadataSchema,
 } from "@/api/db/schema-validators";
 import {
+  assertContactImportHeaderAliases,
   importedTaxIdentifiers,
   inspectContactImportDocument,
   parseContactImportDocument,
@@ -87,6 +88,55 @@ const LABELED_BLOCKS = [
 ].join("\n");
 
 describe("contact import document", () => {
+  test.each([
+    {
+      name: "Czech",
+      csv: "Jméno,Příjmení,E-mail,Telefon,Organizace\nJan,Novák,jan@example.com,+420123456789,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+    {
+      name: "Slovak",
+      csv: "Meno,Priezvisko,E-mail,Telefón,Organizácia\nJán,Novák,jan@example.com,+421123456789,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+    {
+      name: "English Google/Outlook",
+      csv: "Given Name,Family Name,E-mail Address,Phone Number,Company\nJane,Doe,jane@example.com,+12025550123,Example Legal",
+      targets: [
+        "first_name",
+        "last_name",
+        "primary_email",
+        "primary_phone",
+        "organization_name",
+      ],
+    },
+  ])("maps $name export headers", ({ csv, targets }) => {
+    const inspection = inspectContactImportDocument(parseDocument(csv));
+    expect(inspection.columns.map(({ targetField }) => targetField)).toEqual([
+      ...targets,
+    ]);
+  });
+
+  test("rejects an alias vocabulary whose normalized labels collide", () => {
+    expect(() =>
+      assertContactImportHeaderAliases([
+        { first_name: ["Shared label"], display_name: ["Shared-label"] },
+      ]),
+    ).toThrow("Contact import header aliases must map to one field");
+  });
+
   test("parses quoted headers after a UTF-8 BOM", () => {
     const document = parseDocument(
       '\uFEFF"Name","Email"\n"Jane Doe","jane@example.com"',
@@ -106,7 +156,7 @@ describe("contact import document", () => {
       rowCount: 1,
       taxIdScheme: "none",
       columns: [
-        { sourceIndex: 0, targetField: "display_name" },
+        { sourceIndex: 0, targetField: "first_name" },
         { sourceIndex: 1, targetField: "primary_email" },
         { sourceIndex: 2, targetField: "ignore" },
       ],
@@ -169,6 +219,64 @@ describe("contact import document", () => {
           issues: [{ code: "invalid_email", field: "primary_email" }],
         },
       ],
+    });
+  });
+
+  test("skips blank rows, preserves file line numbers, and warns for ignored data", () => {
+    const document = parseDocument("Name,Extra\nJane,kept out\n   ,   \nJohn,");
+    expect(inspectContactImportDocument(document).skippedBlankRowCount).toBe(1);
+    const result = previewContactImport({
+      document,
+      mapping: {
+        version: CONTACT_IMPORT_SCHEMA_VERSION,
+        defaultType: "person",
+        generateDisplayName: false,
+        taxIdScheme: "none",
+        columns: [
+          { sourceIndex: 0, targetField: "display_name" },
+          { sourceIndex: 1, targetField: "ignore" },
+        ],
+      },
+    });
+    expect(
+      Result.isOk(result) &&
+        result.value.rows.map(({ rowNumber }) => rowNumber),
+    ).toEqual([2, 4]);
+    expect(Result.isOk(result) && result.value.rows.at(0)?.warnings).toEqual([
+      { code: "ignored_populated_column", column: "Extra", rowNumber: 2 },
+    ]);
+  });
+
+  test("marks repeated email and fallback identity as duplicates of the earlier source row", () => {
+    const result = preview(
+      "First name,Last name,Email,Date of birth,Phone\nJane,Doe,JANE@example.com,1990-01-02,+1 202 555 0100\nJanet,Doe,jane@example.com,,\nJohn,Smith,,1980-03-04,+1 202 555 0111\nJohn,Smith,,1980-03-04,+1 202 555 0111",
+      {
+        defaultType: "person",
+        generateDisplayName: true,
+        taxIdScheme: "none",
+        columns: CONTACT_IMPORT_FIELDS.flatMap((targetField) => {
+          const sourceIndex = [
+            "first_name",
+            "last_name",
+            "primary_email",
+            "date_of_birth",
+            "primary_phone",
+          ].indexOf(targetField);
+          return sourceIndex === -1 ? [] : [{ sourceIndex, targetField }];
+        }),
+      },
+    );
+    expect(result.rows.at(1)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      field: null,
+      rowNumber: 3,
+      duplicateOfRowNumber: 2,
+    });
+    expect(result.rows.at(3)?.issues).toContainEqual({
+      code: "in_file_duplicate",
+      field: null,
+      rowNumber: 5,
+      duplicateOfRowNumber: 4,
     });
   });
 
