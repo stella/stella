@@ -10,6 +10,7 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawPublishedDecisionsFixtureSql } from "@/api/tests/helpers/case-law-publication-view-fixture";
@@ -64,12 +65,14 @@ const citationScans = (root: Record<string, unknown>) => {
   );
   expect(scans.length).toBeGreaterThan(0);
   for (const scan of scans) {
-    expect(["Index Scan", "Index Only Scan"]).toContain(
+    expect(["Index Scan", "Index Only Scan", "Bitmap Heap Scan"]).toContain(
       String(scan["Node Type"]),
     );
-    expect(String(scan["Index Name"])).toContain(
-      "case_law_provision_citations",
-    );
+    if (scan["Node Type"] !== "Bitmap Heap Scan") {
+      expect(String(scan["Index Name"])).toContain(
+        "case_law_provision_citations",
+      );
+    }
   }
   return scans;
 };
@@ -242,7 +245,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             nodesOf(pagePlan).some((node) => node["Index Name"] === index.name),
           ).toBe(true);
           for (const scan of citationScans(pagePlan)) {
-            expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(1);
+            expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
+              LIMITS.caseLawProvisionLinkProbeMax + 1,
+            );
             expect(Number(scan["Actual Loops"])).toBeLessThanOrEqual(
               PAGE_SIZE + 1,
             );
@@ -304,8 +309,69 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             Number(scan["Rows Removed by Filter"] ?? 0);
           expect(examined).toBeLessThanOrEqual(SCOPE_LIMIT + 1);
         }
+
+        // A decision can cite thousands of unrelated provisions. The
+        // correlated probe must stop at its sentinel and preserve the row as
+        // incomplete, so a continuation can examine it rather than proving a
+        // false non-match.
+        await db.execute(sql`TRUNCATE ${schema}.case_law_provision_citations`);
+        const adversarialDecision = (
+          await db
+            .select({ id: publishedCaseLawDecisions.id })
+            .from(publishedCaseLawDecisions)
+            .limit(1)
+        ).at(0)?.id;
+        if (adversarialDecision === undefined) {
+          panic("The adversarial provision fixture has no decision");
+        }
+        const probeBudget = LIMITS.caseLawProvisionLinkProbeMax;
+        await db.execute(sql`INSERT INTO case_law_provision_citations
+          (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
+           work_collection, unit, section, subsection, anchor, decision_date,
+           sentence_text, span_start, span_end, confidence)
+          SELECT gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
+            2, 1993, 'Sb.', 'article', 100 + n, '1',
+            'cl_' || (100 + n) || '-odst_1', DATE '2020-01-01',
+            'unrelated citation before the match', n, n + 1, 1
+          FROM generate_series(1, ${probeBudget + 1}::int) n`);
+        await db.execute(sql`INSERT INTO case_law_provision_citations
+          (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
+           work_collection, unit, section, subsection, anchor, decision_date,
+           sentence_text, span_start, span_end, confidence)
+          VALUES (gen_random_uuid(), ${adversarialDecision}, 'CZE', '2/1993 Sb.',
+            2, 1993, 'Sb.', 'article', 36, '1', 'cl_36-odst_1',
+            DATE '2020-01-01', 'matching citation beyond the budget',
+            ${probeBudget + 2}, ${probeBudget + 3}, 1)`);
+        await db.execute(
+          sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
+        );
+        await db.execute(sql`SET enable_seqscan = off`);
+        const continuationProbe = provisionDecisionPageQuery(tx, {
+          body: { country: "CZE", query: "", provision: PROVISION },
+          generation: GENERATION,
+          after: undefined,
+          orderBy: [desc(publishedCaseLawDecisions.id)],
+          limit: 1,
+          decisionIds: [adversarialDecision],
+        });
+        expect(await continuationProbe).toEqual([
+          expect.objectContaining({ id: adversarialDecision }),
+        ]);
+        const continuationPlan = explainRoot(
+          await db.execute(
+            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${continuationProbe.getSQL()}`,
+          ),
+        );
+        for (const scan of citationScans(continuationPlan)) {
+          const examined =
+            Number(scan["Actual Rows"]) +
+            Number(scan["Rows Removed by Filter"] ?? 0);
+          expect(examined).toBeLessThanOrEqual(probeBudget + 1);
+        }
+        await db.execute(sql`SET enable_seqscan = on`);
       } finally {
         await db.execute(sql`SET statement_timeout = 0`);
+        await db.execute(sql`SET enable_seqscan = on`);
         await db.execute(sql`SET search_path TO public`);
         await db.execute(
           sql`DROP VIEW IF EXISTS pg_temp.case_law_published_decisions`,
