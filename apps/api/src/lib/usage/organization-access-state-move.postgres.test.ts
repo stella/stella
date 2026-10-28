@@ -122,18 +122,19 @@ if (!databaseUrl || !runPostgres) {
             state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
             origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
           });
+          const startedAt =
+            final?.evaluationStartedAt?.getTime() ??
+            panic("Missing evaluation start");
+          const endsAt =
+            final?.evaluationEndsAt?.getTime() ??
+            panic("Missing evaluation end");
           expect(creationTimes.map((time) => time.getTime())).toContain(
-            final?.evaluationStartedAt?.getTime(),
+            startedAt,
           );
           expect(
             creationTimes.map((time) => time.getTime() + 3 * DAY_IN_MS),
-          ).toContain(final?.evaluationEndsAt?.getTime());
-
-          expect(final?.evaluationEndsAt?.getTime()).toBe(
-            (final?.evaluationStartedAt?.getTime() ??
-              panic("Missing evaluation start")) +
-              3 * DAY_IN_MS,
-          );
+          ).toContain(endsAt);
+          expect(endsAt).toBe(startedAt + 3 * DAY_IN_MS);
 
           const creationAudits = await firstDb
             .select({ id: auditLogs.id })
