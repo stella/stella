@@ -1,4 +1,5 @@
 import { EventType } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -51,6 +52,7 @@ import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operati
 import { exportAccountRows } from "@/api/lib/account-export/pages";
 import { createSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readChatExportSource } from "@/api/lib/chat/export-source";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
@@ -1507,6 +1509,196 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       }
     });
   });
+
+  test.each(
+    [
+      { split: "scheme", deltas: 2, delivery: "existing" },
+      { split: "scheme", deltas: 3, delivery: "existing" },
+      { split: "id", deltas: 2, delivery: "existing" },
+      { split: "id", deltas: 3, delivery: "existing" },
+      { split: "scheme", deltas: 2, delivery: "tail" },
+      { split: "scheme", deltas: 3, delivery: "tail" },
+      { split: "id", deltas: 2, delivery: "tail" },
+      { split: "id", deltas: 3, delivery: "tail" },
+      { split: "id", deltas: 2, delivery: "separate messages" },
+    ].flatMap((testCase) =>
+      (
+        [EventType.TEXT_MESSAGE_CONTENT, EventType.TEXT_MESSAGE_CHUNK] as const
+      ).map((event) => ({ ...testCase, event })),
+    ),
+  )(
+    "running generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
+    async ({ split, deltas, delivery, event }) => {
+      const id = createSafeId<"chatThread">();
+      seededThreads.push(id);
+      const incomingId = createSafeId<"chatMessage">();
+      const assistantId = createSafeId<"chatMessage">();
+      const execution = {
+        id: createSafeId<"chatTurn">(),
+        executionId: Bun.randomUUIDv7(),
+      };
+      const liveRunId = Bun.randomUUIDv7();
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: own,
+          titleSource: "user",
+        });
+        await tx.insert(chatMessages).values({
+          id: incomingId,
+          threadId: id,
+          userId,
+          workspaceId,
+          role: "user",
+          content: ownContent,
+        });
+        await tx.insert(chatTurns).values({
+          id: execution.id,
+          executionId: execution.executionId,
+          organizationId,
+          userId,
+          workspaceId,
+          threadId: id,
+          userMessageId: incomingId,
+          runId: liveRunId,
+          status: "running",
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        });
+      });
+      const text = `[decision](#stella-decision=${decisionId}) ${secret}`;
+      const boundary =
+        split === "scheme"
+          ? text.indexOf("#stella") + 3
+          : text.indexOf(decisionId) + 12;
+      const cuts = deltas === 2 ? [boundary] : [boundary, boundary + 2];
+      const pieces = [0, ...cuts].map((start, index) =>
+        text.slice(start, cuts.at(index)),
+      );
+      expect([...decisionReferencesIn(text)]).toEqual([decisionId]);
+      for (const piece of pieces) {
+        expect(decisionReferencesIn(piece).size).toBe(0);
+      }
+      const prefix = pieces.slice(0, -1);
+      const final =
+        pieces.at(-1) ?? panic("Split stream requires a final delta");
+      const log = createChatRunLog({
+        db: scopedDb,
+        organizationId,
+        runId: liveRunId,
+        execution,
+      });
+      const textDelta = (delta: string) => {
+        switch (event) {
+          case EventType.TEXT_MESSAGE_CONTENT:
+            return {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: assistantId,
+              delta,
+            } as const;
+          case EventType.TEXT_MESSAGE_CHUNK:
+            return {
+              type: EventType.TEXT_MESSAGE_CHUNK,
+              messageId: assistantId,
+              delta,
+            } as const;
+          default:
+            event satisfies never;
+            return panic("Missing stream fixture event");
+        }
+      };
+      const initial = [
+        { type: EventType.RUN_STARTED, runId: liveRunId, threadId: id },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: assistantId,
+          role: "assistant",
+        },
+        ...prefix.map(textDelta),
+      ] satisfies StreamChunk[];
+      const suffix = (
+        delivery === "separate messages"
+          ? [
+              { type: EventType.TEXT_MESSAGE_END, messageId: assistantId },
+              {
+                type: EventType.TEXT_MESSAGE_START,
+                messageId,
+                role: "assistant",
+              },
+              { ...textDelta(final), messageId },
+            ]
+          : [textDelta(final)]
+      ) satisfies StreamChunk[];
+      await log.append(initial);
+      if (delivery !== "tail") {
+        await log.append(suffix);
+        const snapshot = await request(async () => await log.snapshot());
+        expect(JSON.stringify(snapshot)).toContain(
+          delivery === "separate messages" ? secret : marker,
+        );
+        if (delivery !== "separate messages") {
+          expect(JSON.stringify(snapshot)).not.toContain(secret);
+        }
+      }
+      await request(async () => {
+        const controller = new AbortController();
+        const stream = log.read("-1", controller.signal);
+        const reader = stream[Symbol.asyncIterator]();
+        try {
+          const entries = [];
+          for (const expectedChunk of initial) {
+            const entry = await reader.next();
+            if (entry.done) {
+              panic("Expected another running log entry");
+            }
+            expect(entry.value.chunk.type).toBe(expectedChunk.type);
+            entries.push(entry.value);
+          }
+          if (delivery === "tail") {
+            await log.append(suffix);
+          }
+          for (const expectedChunk of suffix) {
+            const entry = await reader.next();
+            if (entry.done) {
+              panic("Expected another running log entry");
+            }
+            expect(entry.value.chunk.type).toBe(expectedChunk.type);
+            entries.push(entry.value);
+          }
+          expect(entries.map((entry) => entry.offset)).toEqual(
+            Array.from({ length: initial.length + suffix.length }, (_, index) =>
+              String(index + 1),
+            ),
+          );
+          if (delivery === "separate messages") {
+            expect(JSON.stringify(entries)).toContain(secret);
+            expect(JSON.stringify(entries)).not.toContain(marker);
+            return;
+          }
+          expect(JSON.stringify(entries)).not.toContain(secret);
+          expect(JSON.stringify(entries)).toContain(marker);
+          const capture = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for (const entry of entries) {
+            capture.processor.processChunk(entry.chunk);
+          }
+          expect(JSON.stringify(capture.processor.getMessages())).toContain(
+            marker,
+          );
+          expect(JSON.stringify(capture.processor.getMessages())).not.toContain(
+            secret,
+          );
+        } finally {
+          controller.abort();
+          await reader.return?.();
+        }
+      });
+    },
+  );
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
     const id = createSafeId<"chatThread">();

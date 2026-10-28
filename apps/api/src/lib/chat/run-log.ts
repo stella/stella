@@ -34,7 +34,6 @@ import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
-import { isRecord } from "@/api/lib/type-guards";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
@@ -202,8 +201,10 @@ const readRunLogHeaderOnTx = async ({
         subjectDecisionId: chatThreads.subjectDecisionId,
         sourceContent: chatMessages.content,
         decisionReferences: includeReferences
-          ? sql`(select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId})`
-          : sql`null`,
+          ? sql<
+              { seq: string; chunk: StreamChunk }[] | null
+            >`(select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId})`
+          : sql<{ seq: string; chunk: StreamChunk }[] | null>`null`,
         tailChunk: chatRunLogEntries.chunk,
         tailTimingSeq: sql<string | null>`(
             select pending.seq::text from chat_run_log_entries pending
@@ -244,6 +245,28 @@ const readRunLogHeaderOnTx = async ({
 type RunLogHeader = Awaited<ReturnType<typeof readRunLogHeaderOnTx>>;
 
 const createRunLogCopyProjection = () => {
+  const { processor } = createStreamMessageCapture({
+    initialMessages: [],
+    capture: (message) => message,
+  });
+  let accumulatedSequence = 0n;
+  let reconstructedReferences = { sequence: 0n, ids: new Set<string>() };
+  const metadataReferences = new Set<string>();
+  const accumulate = (chunk: StreamChunk, sequence: bigint) => {
+    // Header history can extend beyond this page; fold each durable sequence once.
+    if (sequence <= accumulatedSequence) {
+      return;
+    }
+    processor.processChunk(chunk);
+    // Delta text is scanned only through the processor's per-message reconstruction.
+    const metadata = Object.fromEntries(
+      Object.entries(chunk).filter(([key]) => key !== "delta"),
+    );
+    for (const id of decisionReferencesIn(metadata)) {
+      metadataReferences.add(id);
+    }
+    accumulatedSequence = sequence;
+  };
   let projection:
     Awaited<ReturnType<typeof readWithdrawnCopyProjection>> | undefined;
   let runMarker: string | null | undefined;
@@ -316,71 +339,90 @@ const createRunLogCopyProjection = () => {
   }) => {
     if (Array.isArray(log?.decisionReferences)) {
       for (const record of log.decisionReferences) {
+        accumulate(record.chunk, BigInt(record.seq));
+        knownSequences.add(record.seq);
+        const chunk = record.chunk;
         if (
-          !isRecord(record) ||
-          typeof record["seq"] !== "string" ||
-          !isRecord(record["chunk"])
+          chunk.type === EventType.TEXT_MESSAGE_START ||
+          chunk.type === EventType.TEXT_MESSAGE_CHUNK
         ) {
-          continue;
-        }
-        knownSequences.add(record["seq"]);
-        const chunk = record["chunk"];
-        if (
-          chunk["type"] === EventType.TEXT_MESSAGE_START ||
-          chunk["type"] === EventType.TEXT_MESSAGE_CHUNK
-        ) {
-          if (chunk["type"] === EventType.TEXT_MESSAGE_START) {
+          if (chunk.type === EventType.TEXT_MESSAGE_START) {
             currentRole =
-              typeof chunk["role"] === "string" ? chunk["role"] : "assistant";
-          } else if (typeof chunk["role"] === "string") {
-            currentRole = chunk["role"];
+              typeof chunk.role === "string" ? chunk.role : "assistant";
+          } else if (typeof chunk.role === "string") {
+            currentRole = chunk.role;
           }
-          if (
-            chunk["role"] === "user" &&
-            typeof chunk["messageId"] === "string"
-          ) {
-            userMessageIds.add(chunk["messageId"]);
+          if (chunk.role === "user" && typeof chunk.messageId === "string") {
+            userMessageIds.add(chunk.messageId);
           }
         }
         if (currentRole === "user") {
-          userSequences.add(record["seq"]);
+          userSequences.add(record.seq);
         }
-        if (chunk["type"] === EventType.TEXT_MESSAGE_END) {
+        if (chunk.type === EventType.TEXT_MESSAGE_END) {
           currentRole = undefined;
         }
       }
     }
-    const references = decisionReferencesIn([log, entries]);
+    for (const entry of entries) {
+      accumulate(
+        entry.chunk,
+        entry.seq ??
+          BigInt(entry.offset ?? panic("Run entry requires a sequence")),
+      );
+    }
+    if (reconstructedReferences.sequence !== accumulatedSequence) {
+      const messages = processor.getMessages();
+      const messageText = messages.map(({ parts }) =>
+        parts
+          .flatMap((part) => (part.type === "text" ? [part.content] : []))
+          .join(""),
+      );
+      reconstructedReferences = {
+        sequence: accumulatedSequence,
+        ids: decisionReferencesIn([messages, messageText]),
+      };
+    }
+    const references = decisionReferencesIn([
+      { subjectDecisionId: log?.subjectDecisionId },
+      log?.sourceContent,
+    ]);
+    for (const id of reconstructedReferences.ids) {
+      references.add(id);
+    }
+    for (const id of metadataReferences) {
+      references.add(id);
+    }
+    const source = { decisionId: [...references] };
     if (
       projection === undefined ||
       [...references].some((id) => !checkedReferences.has(id))
     ) {
       projection = await readWithdrawnCopyProjection({
-        values: [log, entries],
+        values: source,
         decisionIds: [...checkedReferences],
       });
       for (const id of references) {
         checkedReferences.add(id);
       }
     }
-    runMarker ??= projection.marker([log, entries], log?.subjectDecisionId);
+    runMarker ??= projection.marker(source, log?.subjectDecisionId);
     const marker = runMarker;
     return entries.map((entry) => {
       const chunk = entry.chunk;
       if (isAuthoredEntry(entry)) {
         return entry;
       }
-      const label = marker ?? projection?.marker(chunk);
-      if (label === null || label === undefined) {
+      if (marker === null) {
         return entry;
       }
-      let text = label;
+      let text = marker;
       if (
         chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
         chunk.type === EventType.TEXT_MESSAGE_CHUNK
       ) {
         const messageKey = chunk.messageId ?? "current-text-message";
-        text = shownMarkers.has(messageKey) ? "" : label;
+        text = shownMarkers.has(messageKey) ? "" : marker;
         shownMarkers.add(messageKey);
       }
       return { ...entry, chunk: projectWithdrawnRunChunk(chunk, text) };

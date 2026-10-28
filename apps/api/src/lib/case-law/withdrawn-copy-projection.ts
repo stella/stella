@@ -27,10 +27,12 @@ export const decisionReferencesIn = (value: unknown): DecisionReferences => {
         references.add(item.toLowerCase());
       }
       for (const { decisionId } of chatDecisionPassagesIn(item)) {
-        references.add(decisionId.toLowerCase());
+        if (isUuid(decisionId)) {
+          references.add(decisionId.toLowerCase());
+        }
       }
       for (const { target } of findCanonicalChatResourceHrefs(item)) {
-        if (target.type === "case_law_decision") {
+        if (target.type === "case_law_decision" && isUuid(target.resource.id)) {
           references.add(target.resource.id.toLowerCase());
         }
       }

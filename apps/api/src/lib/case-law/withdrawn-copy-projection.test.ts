@@ -22,6 +22,14 @@ const content = proveTextOnlyPersistedChatMessageContent({
 });
 
 describe("withdrawn decision copies", () => {
+  test("only complete UUIDs in decision hrefs become corpus references", () => {
+    for (let length = 0; length < id.length; length++) {
+      expect(
+        decisionReferencesIn(`#stella-decision=${id.slice(0, length)}`).size,
+      ).toBe(0);
+    }
+    expect([...decisionReferencesIn(`#stella-decision=${id}`)]).toEqual([id]);
+  });
   test("UUID spelling does not change the withdrawal verdict", () => {
     expect(id.toUpperCase()).not.toBe(id);
     expect(projection.marker(null, id.toUpperCase())).toBe(marker);
