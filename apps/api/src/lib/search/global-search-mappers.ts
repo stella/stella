@@ -18,7 +18,8 @@ type ScoredEntityGlobalSearchHit = {
 };
 
 export const searchRankingTier = (value: unknown): SearchRankingTier => {
-  switch (Number(value)) {
+  // The tier is an SQL `::int`, which the driver already returns as a number.
+  switch (value) {
     case 0:
       return 0;
     case 1:
