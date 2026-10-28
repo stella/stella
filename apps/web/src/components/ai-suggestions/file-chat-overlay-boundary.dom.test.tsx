@@ -71,6 +71,57 @@ test("a failed chat load names the document chat and retries", () => {
   );
 });
 
+test("each chunk failure is classified anew under one query client", async () => {
+  const fetchSpy = spyOn(globalThis, "fetch");
+  fetchSpy.mockResolvedValueOnce(
+    new Response(JSON.stringify({ commit: "running-build" })),
+  );
+  fetchSpy.mockResolvedValueOnce(
+    new Response(JSON.stringify({ commit: "deployed-build" })),
+  );
+  const client = new QueryClient();
+  const chunkError = () =>
+    new TypeError(
+      "Failed to fetch dynamically imported module: https://app.example/assets/gated-chat-composer-old.js",
+    );
+  const renderWith = (error: Error) => (
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={messages}>
+        <FileChatOverlayErrorFallback
+          error={error}
+          onDismiss={() => undefined}
+          onRetry={() => undefined}
+        />
+      </IntlProvider>
+    </QueryClientProvider>
+  );
+
+  // The boundary unmounts the fallback on retry and mounts it again when the
+  // next attempt fails.
+  const first = render(renderWith(chunkError()));
+  await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+  expect(
+    first.getByRole("button", { name: messages.common.tryAgain }),
+  ).toBeDefined();
+  first.unmount();
+  await waitFor(() =>
+    expect(
+      client.getQueryCache().find({ queryKey: ["failed-document-chat-chunk"] }),
+    ).toBeUndefined(),
+  );
+
+  const view = render(renderWith(chunkError()));
+  await waitFor(() =>
+    expect(view.getByRole("alert").textContent).toContain(
+      messages.chat.overlayUpdated,
+    ),
+  );
+  expect(fetchSpy).toHaveBeenCalledTimes(2);
+  expect(
+    view.getByRole("button", { name: messages.common.reload }),
+  ).toBeDefined();
+});
+
 test("a chunk removed by a deploy asks for a reload instead of a retry", async () => {
   spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ commit: "deployed-build" })),

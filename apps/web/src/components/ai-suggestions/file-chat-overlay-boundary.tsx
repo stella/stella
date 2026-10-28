@@ -34,10 +34,15 @@ export const FileChatOverlayErrorFallback = ({
 }: FileChatOverlayErrorFallbackProps) => {
   const t = useTranslations();
   const chunkShapedError = isStaleDeploymentLoadError(error);
+  // The boundary mounts this fallback once per failure. The answer holds while
+  // it is on screen and is dropped when it unmounts, so the next failure is
+  // classified anew instead of reusing an earlier answer (the query cache
+  // hashes Error objects as {}, so the error cannot tell failures apart).
   const classification = useQuery({
-    queryKey: ["failed-document-chat-chunk", error],
+    queryKey: ["failed-document-chat-chunk"],
     queryFn: classifyFailedChunkLoad,
     enabled: chunkShapedError,
+    gcTime: 0,
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
   });
