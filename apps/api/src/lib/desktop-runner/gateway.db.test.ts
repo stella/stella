@@ -1314,3 +1314,54 @@ describe("sweep delivery", () => {
     }
   });
 });
+
+describe("socket memory", () => {
+  test("frames waiting past the socket's byte cap close it as overloaded", async () => {
+    const capped = await startInstance("api-queued-bytes", sharedDoorbell, {
+      limits: { maxQueuedBytesPerSocket: 1500 },
+    });
+    const { runId, desktop } = await acceptedRun(capped);
+    const held: HeldCommit = {
+      reached: Promise.withResolvers<undefined>(),
+      release: Promise.withResolvers<undefined>(),
+    };
+    commitGate.next = held;
+    desktop.send(textEvent(runId, 1, "Stored slowly"));
+    // While the first message is being stored, the next ones wait in memory.
+    await held.reached.promise;
+    desktop.send(textEvent(runId, 2, "x".repeat(800)));
+    desktop.send(textEvent(runId, 3, "y".repeat(800)));
+    expect((await desktop.closed).code).toBe(
+      DESKTOP_RUNNER_CLOSE.overloaded.code,
+    );
+    held.release.resolve(undefined);
+  });
+
+  test("an account holds at most its socket cap on one API task", async () => {
+    const capped = await startInstance("api-socket-cap", sharedDoorbell, {
+      limits: { maxSocketsPerAccount: 2 },
+    });
+    const open: FakeDesktop[] = [];
+    for (let index = 0; index < 2; index += 1) {
+      const desktop = await openDesktop(capped, Bun.randomUUIDv7());
+      await desktop.hello();
+      open.push(desktop);
+    }
+    const refused = await capped.gateway.upgrade(
+      await upgradeRequest(capped, Bun.randomUUIDv7()),
+      capped.server,
+    );
+    expect(refused?.status).toBe(429);
+    const [closing, ...rest] = open;
+    if (closing === undefined) {
+      return panic("two sockets were opened");
+    }
+    await closing.close();
+    // A closed socket frees its place.
+    const admitted = await openDesktop(capped, Bun.randomUUIDv7());
+    await admitted.hello();
+    for (const desktop of [...rest, admitted]) {
+      await desktop.close();
+    }
+  });
+});

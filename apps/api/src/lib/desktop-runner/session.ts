@@ -170,6 +170,8 @@ type SessionState = {
   /** The step in flight; the next one starts after it. */
   chain: Promise<void>;
   queuedFrames: number;
+  /** UTF-8 bytes of the frames waiting behind the one being stored. */
+  queuedBytes: number;
   queuedDelivery: Promise<void> | null;
   /** The last queued command this socket has sent. */
   deliveredThrough: number;
@@ -693,6 +695,7 @@ export const createRunnerSession = ({
     phase: { type: "connecting" },
     chain: Promise.resolve(),
     queuedFrames: 0,
+    queuedBytes: 0,
     queuedDelivery: null,
     deliveredThrough: 0,
     claimed: false,
@@ -719,14 +722,22 @@ export const createRunnerSession = ({
         close(state, DESKTOP_RUNNER_CLOSE.unsupportedData);
         return;
       }
-      if (state.queuedFrames >= MAX_QUEUED_FRAMES) {
+      // Frames wait in memory until the one before them is stored, so their
+      // count and their bytes are both bounded.
+      const bytes = Buffer.byteLength(message);
+      if (
+        state.queuedFrames >= MAX_QUEUED_FRAMES ||
+        state.queuedBytes + bytes > context.limits.maxQueuedBytesPerSocket
+      ) {
         close(state, DESKTOP_RUNNER_CLOSE.overloaded);
         return;
       }
       state.queuedFrames += 1;
+      state.queuedBytes += bytes;
       detached(
         step(state, "frame", async () => {
           state.queuedFrames -= 1;
+          state.queuedBytes -= bytes;
           await handleFrame(state, message);
         }),
         "desktop-runner.frame",
