@@ -41,7 +41,6 @@ export type {
 } from "@/lib/api-contract";
 
 export type RouterToPath = FileRouteTypes["to"];
-export type RouterFullPath = FileRouteTypes["fullPaths"];
 
 export type WorkspaceId = SafeId<"workspace">;
 export type EntityId = SafeId<"entity">;

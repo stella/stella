@@ -164,7 +164,7 @@ jobs:
             node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
             echo "rc_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
           else
-            rc_tags="$(git tag --points-at "$RELEASE_SHA" --sort=-v:refname)"
+            rc_tags="$(git tag --points-at "$RELEASE_SHA" --list "v${file_version}-rc.*" --sort=-v:refname)"
             rc_ref="$(grep -E -m 1 "^v${file_version//./\.}-rc\.[0-9]+$" <<<"$rc_tags" || true)"
             [[ -n "$rc_ref" ]] || { echo '::error::No RC tag on the final SHA'; exit 1; }
             bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" "$RELEASE_SHA"
@@ -1140,10 +1140,11 @@ jobs:
             exit 0
           fi
 
+          # Newest by creation, not version: the version line restarted once.
           merged_tags="$(
             git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
               --merged "$RELEASE_REF" \
-              --sort=-v:refname
+              --sort=-creatordate
           )"
           previous_stable="$(
             awk -v release_ref="$RELEASE_REF" \
