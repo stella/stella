@@ -2586,7 +2586,8 @@
       "title": "استيراد جهات الاتصال",
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
       "warning": {
-        "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله."
+        "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله.",
+        "possible_in_file_duplicate": "تكرار محتمل للصف {row}؛ الاسم فقط متطابق."
       }
     },
     "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",

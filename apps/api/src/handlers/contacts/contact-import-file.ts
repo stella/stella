@@ -113,7 +113,8 @@ export type ContactImportPreviewRow = {
 
 export type ContactImportWarning = {
   code: ContactImportWarningCode;
-  column: string;
+  column?: string | undefined;
+  duplicateOfRowNumber?: number | undefined;
   rowNumber: number;
 };
 
@@ -1009,26 +1010,99 @@ export const validateContactImportCandidate = ({
   return { contact: { ...candidate, taxId: classified.digits }, issues };
 };
 
-const duplicateIdentity = (
-  candidate: ContactImportCandidate,
-): string | null => {
-  const email = candidate.emails?.at(0)?.address.trim().toLocaleLowerCase();
-  if (email) {
-    return `email:${email}`;
-  }
-  const name = normalizeToken(
+type DuplicateEvidence =
+  | "email"
+  | "registrationId"
+  | "taxId"
+  | "contactId"
+  | "nameAndBirthDate"
+  | "nameAndPhone";
+
+export type InFileDuplicateDecision<Row> =
+  | { kind: "duplicate"; of: Row; by: DuplicateEvidence }
+  | { kind: "possibleDuplicate"; of: Row; by: "nameOnly" }
+  | { kind: "distinct" };
+
+const normalizedName = (candidate: ContactImportCandidate): string =>
+  normalizeToken(
     [candidate.firstName, candidate.middleName, candidate.lastName]
       .filter(Boolean)
       .join(" ") || candidate.displayName,
   );
-  if (!name) {
-    return null;
+
+const normalizedValue = (value: string | undefined): string | undefined => {
+  const normalized = normalizeToken(value ?? "");
+  return normalized || undefined;
+};
+
+const conflicting = (left: string | undefined, right: string | undefined) =>
+  Boolean(left && right && left !== right);
+
+/** The sole owner of the evidence grade used for in-file duplicate review. */
+export const decideInFileDuplicate = <Row extends ContactImportPreviewRow>(
+  earlier: Row,
+  later: ContactImportPreviewRow,
+): InFileDuplicateDecision<Row> => {
+  const left = earlier.contact;
+  const right = later.contact;
+  const leftEmail = left.emails?.at(0)?.address.trim().toLocaleLowerCase();
+  const rightEmail = right.emails?.at(0)?.address.trim().toLocaleLowerCase();
+  const leftRegistration = normalizedValue(left.registrationNumber);
+  const rightRegistration = normalizedValue(right.registrationNumber);
+  const leftTaxId = normalizedValue(left.taxId);
+  const rightTaxId = normalizedValue(right.taxId);
+  const leftBirthDate = left.dateOfBirth
+    ? JSON.stringify(left.dateOfBirth)
+    : undefined;
+  const rightBirthDate = right.dateOfBirth
+    ? JSON.stringify(right.dateOfBirth)
+    : undefined;
+
+  if (
+    conflicting(leftEmail, rightEmail) ||
+    conflicting(leftRegistration, rightRegistration) ||
+    conflicting(leftTaxId, rightTaxId) ||
+    conflicting(leftBirthDate, rightBirthDate)
+  ) {
+    return { kind: "distinct" };
   }
-  const birthDate = candidate.dateOfBirth
-    ? JSON.stringify(candidate.dateOfBirth)
-    : "";
-  const phone = normalizeToken(candidate.phones?.at(0)?.number ?? "");
-  return `person:${name}:${birthDate}:${phone}`;
+  if (leftEmail && leftEmail === rightEmail) {
+    return { kind: "duplicate", of: earlier, by: "email" };
+  }
+  if (leftRegistration && leftRegistration === rightRegistration) {
+    return { kind: "duplicate", of: earlier, by: "registrationId" };
+  }
+  if (leftTaxId && leftTaxId === rightTaxId) {
+    return { kind: "duplicate", of: earlier, by: "taxId" };
+  }
+
+  const leftName = normalizedName(left);
+  const rightName = normalizedName(right);
+  if (!leftName || leftName !== rightName) {
+    return { kind: "distinct" };
+  }
+  if (leftBirthDate && leftBirthDate === rightBirthDate) {
+    return { kind: "duplicate", of: earlier, by: "nameAndBirthDate" };
+  }
+  const leftPhone = normalizedValue(left.phones?.at(0)?.number);
+  const rightPhone = normalizedValue(right.phones?.at(0)?.number);
+  if (leftPhone && leftPhone === rightPhone) {
+    return { kind: "duplicate", of: earlier, by: "nameAndPhone" };
+  }
+
+  const leftHasIdentifier = Boolean(
+    leftEmail || leftRegistration || leftTaxId || leftBirthDate || leftPhone,
+  );
+  const rightHasIdentifier = Boolean(
+    rightEmail ||
+    rightRegistration ||
+    rightTaxId ||
+    rightBirthDate ||
+    rightPhone,
+  );
+  return leftHasIdentifier || rightHasIdentifier
+    ? { kind: "distinct" }
+    : { kind: "possibleDuplicate", of: earlier, by: "nameOnly" };
 };
 
 export const validateContactImportCandidates = ({
@@ -1060,19 +1134,18 @@ export const validateContactImportCandidates = ({
 const markInFileDuplicates = (
   rows: ContactImportPreviewRow[],
 ): ContactImportPreviewRow[] => {
-  const firstRowByIdentity = new Map<string, number>();
+  const earlierRows: ContactImportPreviewRow[] = [];
   return rows.map((row) => {
-    const identity = duplicateIdentity(row.contact);
-    const duplicateOfRowNumber = identity
-      ? firstRowByIdentity.get(identity)
-      : undefined;
-    if (identity && duplicateOfRowNumber === undefined) {
-      firstRowByIdentity.set(identity, row.rowNumber);
+    const decision = earlierRows
+      .map((earlier) => decideInFileDuplicate(earlier, row))
+      .find(({ kind }) => kind !== "distinct");
+    if (row.issues.length === 0) {
+      earlierRows.push(row);
     }
     return {
       contact: row.contact,
       issues:
-        duplicateOfRowNumber === undefined
+        decision?.kind !== "duplicate"
           ? row.issues
           : [
               ...row.issues,
@@ -1080,11 +1153,21 @@ const markInFileDuplicates = (
                 code: CONTACT_IMPORT_ISSUE_CODE.IN_FILE_DUPLICATE,
                 field: null,
                 rowNumber: row.rowNumber,
-                duplicateOfRowNumber,
+                duplicateOfRowNumber: decision.of.rowNumber,
               },
             ],
       rowNumber: row.rowNumber,
-      warnings: row.warnings,
+      warnings:
+        decision?.kind === "possibleDuplicate"
+          ? [
+              ...row.warnings,
+              {
+                code: CONTACT_IMPORT_WARNING_CODE.POSSIBLE_IN_FILE_DUPLICATE,
+                rowNumber: row.rowNumber,
+                duplicateOfRowNumber: decision.of.rowNumber,
+              },
+            ]
+          : row.warnings,
     };
   });
 };

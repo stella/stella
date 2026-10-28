@@ -2586,7 +2586,8 @@
       "title": "Kontaktų importavimas",
       "validateFailed": "Nepavyko patikrinti šių kontaktų.",
       "warning": {
-        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas."
+        "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
+        "possible_in_file_duplicate": "Galimas {row} eilutės dublikatas; sutampa tik vardas."
       }
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",

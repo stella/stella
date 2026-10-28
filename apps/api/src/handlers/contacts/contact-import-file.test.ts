@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
@@ -11,6 +12,7 @@ import {
   type ContactImportLabeledField,
   type ContactImportTargetField,
 } from "@stll/api-contract";
+import { assertProperty } from "@stll/property-testing";
 
 import {
   contactCustomFieldSchema,
@@ -18,12 +20,14 @@ import {
 } from "@/api/db/schema-validators";
 import {
   assertContactImportHeaderAliases,
+  decideInFileDuplicate,
   importedTaxIdentifiers,
   inspectContactImportDocument,
   parseContactImportDocument,
   previewContactImport,
   suggestedTargetForHeader,
   validateContactImportCandidate,
+  validateContactImportCandidates,
 } from "@/api/handlers/contacts/contact-import-file";
 import type { ContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
 
@@ -35,6 +39,27 @@ const parseDocument = (text: string) => {
   }
   return result.value;
 };
+
+const person = (displayName: string): ContactImportCandidate => ({
+  type: "person",
+  displayName,
+});
+
+const email = (address: string) => ({
+  type: "work" as const,
+  address,
+  isPrimary: true,
+});
+
+const organization = (
+  displayName: string,
+  registrationNumber: string,
+): ContactImportCandidate => ({
+  type: "organization",
+  displayName,
+  organizationName: displayName,
+  registrationNumber,
+});
 
 type PreviewMapping = Omit<
   Parameters<typeof previewContactImport>[0]["mapping"],
@@ -247,7 +272,7 @@ describe("contact import document", () => {
     ]);
   });
 
-  test("marks repeated email and fallback identity as duplicates of the earlier source row", () => {
+  test("marks repeated email and strong person identity as duplicates of the earlier source row", () => {
     const result = preview(
       "First name,Last name,Email,Date of birth,Phone\nJane,Doe,JANE@example.com,1990-01-02,+1 202 555 0100\nJanet,Doe,jane@example.com,,\nJohn,Smith,,1980-03-04,+1 202 555 0111\nJohn,Smith,,1980-03-04,+1 202 555 0111",
       {
@@ -278,6 +303,116 @@ describe("contact import document", () => {
       rowNumber: 5,
       duplicateOfRowNumber: 4,
     });
+  });
+
+  test("warns about name-only matches without blocking either row", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [person("John Smith"), person("John Smith")],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.map(({ issues }) => issues)).toEqual([[], []]);
+    expect(rows.at(1)?.warnings).toContainEqual({
+      code: "possible_in_file_duplicate",
+      duplicateOfRowNumber: 2,
+      rowNumber: 3,
+    });
+  });
+
+  test("keeps same-name people with different birth dates distinct", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("John Smith"),
+          dateOfBirth: { precision: "day", year: 1980, month: 1, day: 2 },
+        },
+        {
+          ...person("John Smith"),
+          dateOfBirth: { precision: "day", year: 1981, month: 1, day: 2 },
+        },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues).toEqual([]);
+    expect(rows.at(1)?.warnings).toEqual([]);
+  });
+
+  test("blocks repeated email even when names differ", () => {
+    const rows = validateContactImportCandidates({
+      candidates: [
+        { ...person("Jane Doe"), emails: [email("same@example.com")] },
+        { ...person("Janet Roe"), emails: [email("SAME@example.com")] },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+  });
+
+  test("grades organization registration numbers as strong evidence", () => {
+    const different = validateContactImportCandidates({
+      candidates: [
+        organization("Northwind", "REG-1"),
+        organization("Northwind", "REG-2"),
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+    const same = validateContactImportCandidates({
+      candidates: [
+        organization("Northwind", "REG-1"),
+        organization("Northwind", "reg 1"),
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(different.at(1)?.issues).toEqual([]);
+    expect(different.at(1)?.warnings).toEqual([]);
+    expect(same.at(1)?.issues.at(0)?.duplicateOfRowNumber).toBe(2);
+  });
+
+  test("duplicate evidence is symmetric and name alone never blocks", () => {
+    const candidate = fc.record({
+      displayName: fc.constantFrom("John Smith", "Jane Doe", "Northwind"),
+      email: fc.option(fc.constantFrom("a@example.com", "b@example.com"), {
+        nil: undefined,
+      }),
+      registrationNumber: fc.option(fc.constantFrom("REG-1", "REG-2"), {
+        nil: undefined,
+      }),
+    });
+    assertProperty(
+      "duplicate evidence is symmetric and name alone never blocks",
+      fc.property(candidate, candidate, (left, right) => {
+        const toRow = (value: typeof left, rowNumber: number) => ({
+          contact: {
+            ...person(value.displayName),
+            ...(value.email ? { emails: [email(value.email)] } : {}),
+            registrationNumber: value.registrationNumber,
+          },
+          issues: [],
+          rowNumber,
+          warnings: [],
+        });
+        const forward = decideInFileDuplicate(toRow(left, 1), toRow(right, 2));
+        const reverse = decideInFileDuplicate(toRow(right, 2), toRow(left, 1));
+        expect({
+          kind: forward.kind,
+          by: "by" in forward ? forward.by : undefined,
+        }).toEqual({
+          kind: reverse.kind,
+          by: "by" in reverse ? reverse.by : undefined,
+        });
+        if (forward.kind === "possibleDuplicate") {
+          expect(forward.by).toBe("nameOnly");
+        }
+      }),
+    );
   });
 
   test("rejects mapping one destination more than once", () => {

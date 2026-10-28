@@ -2586,7 +2586,8 @@
       "title": "Import contacts",
       "validateFailed": "Couldn't check these contacts.",
       "warning": {
-        "ignored_populated_column": "Column “{column}” contains data but is ignored."
+        "ignored_populated_column": "Column “{column}” contains data but is ignored.",
+        "possible_in_file_duplicate": "Possible duplicate of row {row}; matching name only."
       }
     },
     "invalidDateOfBirth": "Enter a valid date of birth.",

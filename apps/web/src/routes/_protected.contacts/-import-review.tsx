@@ -59,6 +59,7 @@ import type {
   ImportEditableTextField,
   ImportIssue,
   ImportSkipReason,
+  ImportWarning,
 } from "@/routes/_protected.contacts/-import-candidate";
 
 const VALIDATION_DEBOUNCE_MS = 400;
@@ -150,7 +151,7 @@ type ImportReviewSeedRow = {
   issues: ImportIssue[];
   /** Position in the source, kept stable while rows are edited or removed. */
   rowNumber: number;
-  warnings: { code: "ignored_populated_column"; column: string }[];
+  warnings: ImportWarning[];
 };
 
 type ImportReviewRow = ImportReviewSeedRow & {
@@ -499,7 +500,10 @@ export const ImportCandidateCard = ({
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border p-3">
+    <section
+      className="flex flex-col gap-3 rounded-lg border p-3"
+      id={`import-row-${String(row.rowNumber)}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-medium">
           {row.issues.length === 0 ? (
@@ -604,12 +608,23 @@ export const ImportCandidateCard = ({
       {row.warnings.map((warning) => (
         <p
           className="text-warning-foreground flex items-center gap-1.5 text-sm"
-          key={`${warning.code}:${warning.column}`}
+          key={`${warning.code}:${warning.column ?? warning.duplicateOfRowNumber ?? "row"}`}
         >
           <AlertTriangleIcon className="size-4" />
-          {t("contacts.importStudio.warning.ignored_populated_column", {
-            column: warning.column,
-          })}
+          {warning.code === "ignored_populated_column" ? (
+            t("contacts.importStudio.warning.ignored_populated_column", {
+              column: warning.column ?? "",
+            })
+          ) : (
+            <a
+              className="underline"
+              href={`#import-row-${String(warning.duplicateOfRowNumber)}`}
+            >
+              {t("contacts.importStudio.warning.possible_in_file_duplicate", {
+                row: format.number(warning.duplicateOfRowNumber ?? 0),
+              })}
+            </a>
+          )}
         </p>
       ))}
 

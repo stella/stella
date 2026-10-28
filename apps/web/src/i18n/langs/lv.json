@@ -2586,7 +2586,8 @@
       "title": "Kontaktpersonu importēšana",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
       "warning": {
-        "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta."
+        "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
+        "possible_in_file_duplicate": "Iespējams {row}. rindas dublikāts; sakrīt tikai nosaukums."
       }
     },
     "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",

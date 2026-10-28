@@ -2586,7 +2586,8 @@
       "title": "Kontaktide importimine",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
       "warning": {
-        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse."
+        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
+        "possible_in_file_duplicate": "Rea {row} võimalik duplikaat; kattub ainult nimi."
       }
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",

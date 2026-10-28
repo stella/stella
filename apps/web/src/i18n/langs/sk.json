@@ -2586,7 +2586,8 @@
       "title": "Import kontaktov",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
       "warning": {
-        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný."
+        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
+        "possible_in_file_duplicate": "Možný duplikát riadka {row}; zhoduje sa iba meno."
       }
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",

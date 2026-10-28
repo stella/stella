@@ -2586,7 +2586,8 @@
       "title": "Kontakte importieren",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
       "warning": {
-        "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert."
+        "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
+        "possible_in_file_duplicate": "Mögliches Duplikat von Zeile {row}; nur der Name stimmt überein."
       }
     },
     "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",

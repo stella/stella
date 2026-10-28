@@ -79,6 +79,7 @@ export type ContactImportIssueCode =
 
 export const CONTACT_IMPORT_WARNING_CODE = {
   IGNORED_POPULATED_COLUMN: "ignored_populated_column",
+  POSSIBLE_IN_FILE_DUPLICATE: "possible_in_file_duplicate",
 } as const;
 
 export type ContactImportWarningCode =
