@@ -40,3 +40,11 @@ Sources:
 - [CLDR 49 release notes](https://cldr.unicode.org/downloads/cldr-49)
 - [Pinned CLDR source](https://github.com/unicode-org/cldr/tree/96e54b273d2da4ec6fbad350ba19ff23fa24a588)
 - [Official JSON generation options](https://github.com/unicode-org/cldr-json/blob/49.0.0/cldr-generate-json.sh)
+
+The committed `data/cldr49/` supplement was produced by the official converter
+in run 40651680324 at a35772b9934. It contains 93 supplemental locales;
+292 npm locales plus those 93 preserve 385 locales. Every npm locale's
+normalized exemplar membership matched the same-release resolved source.
+The offline extractor verifies the supplement digest, release and exact
+primary/supplemental coverage before generating the table. A future CLDR
+upgrade must refresh this input and provenance together.
