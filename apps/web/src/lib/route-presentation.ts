@@ -17,8 +17,11 @@ export type RouteBreadcrumb =
 
 export type RoutePresentation = {
   breadcrumb: RouteBreadcrumb;
+  parent?: Extract<RouteBreadcrumb, { type: "label" }>;
 };
 
 export const routePresentation = (
   breadcrumb: RouteBreadcrumb,
-): RoutePresentation => ({ breadcrumb });
+  parent?: Extract<RouteBreadcrumb, { type: "label" }>,
+): RoutePresentation =>
+  parent === undefined ? { breadcrumb } : { breadcrumb, parent };

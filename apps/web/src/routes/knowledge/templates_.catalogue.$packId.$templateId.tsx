@@ -19,6 +19,7 @@ import {
 import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
 
 type CatalogueTemplateLoaderArgs = {
@@ -60,6 +61,16 @@ export const loadCatalogueTemplate = async ({
 export const Route = createFileRoute(
   "/knowledge/templates_/catalogue/$packId/$templateId",
 )({
+  staticData: {
+    presentation: routePresentation(
+      { type: "knowledge-detail", detail: "templates" },
+      {
+        type: "label",
+        labelKey: "knowledge.sections.templates.title",
+        to: "/knowledge/templates",
+      },
+    ),
+  },
   validateSearch: templateIntentSearchSchema,
   beforeLoad: () => {
     if (!isPublicKnowledgeEnabled()) {

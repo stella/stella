@@ -45,10 +45,17 @@ const searchSchema = routeSearchSchema({
  */
 export const Route = createFileRoute("/knowledge/tools_/$entry")({
   staticData: {
-    presentation: routePresentation({
-      type: "knowledge-detail",
-      detail: "skill",
-    }),
+    presentation: routePresentation(
+      {
+        type: "knowledge-detail",
+        detail: "skill",
+      },
+      {
+        type: "label",
+        labelKey: "knowledge.sections.tools.title",
+        to: "/knowledge/tools",
+      },
+    ),
   },
   validateSearch: searchSchema,
   loader: async ({ params }) => {

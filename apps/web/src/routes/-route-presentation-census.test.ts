@@ -2,67 +2,147 @@ import { expect, test } from "bun:test";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 type RouteSource = {
-  id: string;
+  path: string;
   source: string;
 };
 
 type RouteExemption = {
   reason: string;
+  fields?: readonly ("title" | "breadcrumb")[];
 };
 
-const ROUTE_PRESENTATION_EXEMPTIONS = {
-  "/_protected/admin/catalogue": { reason: "Redirects to Knowledge tools." },
-  "/_protected/verify/$code": {
-    reason: "Completes verification and redirects.",
-  },
-  "/agent-claim": { reason: "Completes an agent claim and redirects." },
-  "/auth/accept-invitation/$invitationId": {
-    reason: "The auth shell owns presentation during the invitation callback.",
-  },
-  "/auth/error": {
-    reason: "The auth shell owns presentation for provider errors.",
-  },
-  "/auth/handoff": { reason: "Authentication handoff callback." },
-  "/auth/organization": {
-    reason: "The auth shell owns presentation while selecting an organization.",
-  },
-  "/auth/otp": {
-    reason: "The auth shell owns presentation during the OTP challenge.",
-  },
-  "/auth/professional-use": {
-    reason: "The auth shell owns presentation during account setup.",
-  },
-  "/auth/reauth": {
-    reason: "The auth shell owns presentation during reauthentication.",
-  },
-  "/auth/two-factor": {
-    reason: "The auth shell owns presentation during the two-factor challenge.",
-  },
-  "/consent": {
-    reason: "Standalone consent shell; it does not render app breadcrumbs.",
-  },
-  "/dev": { reason: "Development-only component catalogue." },
-  "/law/$country/cases/$court/$slug": {
-    reason: "The public law reader owns its document breadcrumb.",
-  },
-  "/law/$country/statutes/$slug/v/$version": {
-    reason: "The public law reader owns its document breadcrumb.",
-  },
-  "/law/cases/research/$tableId": {
-    reason: "The public law shell owns research presentation.",
-  },
-  "/law/coverage": {
-    reason: "The public law shell owns coverage breadcrumbs.",
-  },
-  "/mcp/oauth-callback": { reason: "OAuth callback that closes or redirects." },
-  "/onboarding": {
-    reason: "Standalone onboarding shell; it does not render app breadcrumbs.",
-  },
-  "/tools/contribute": {
-    reason: "The public tools shell owns its breadcrumb.",
-  },
-} as const satisfies Record<string, RouteExemption>;
+const ROUTE_PRESENTATION_EXEMPTIONS: Readonly<Record<string, RouteExemption>> =
+  {
+    "/_protected/admin/catalogue": { reason: "Redirects to Knowledge tools." },
+    "/_protected/verify/$code": {
+      reason: "Completes verification and redirects.",
+    },
+    "/agent-claim": { reason: "Completes an agent claim and redirects." },
+    "/auth/accept-invitation/$invitationId": {
+      reason:
+        "The auth shell owns presentation during the invitation callback.",
+    },
+    "/auth/error": {
+      reason: "The auth shell owns presentation for provider errors.",
+    },
+    "/auth/handoff": { reason: "Authentication handoff callback." },
+    "/auth/organization": {
+      reason:
+        "The auth shell owns presentation while selecting an organization.",
+    },
+    "/auth/otp": {
+      reason: "The auth shell owns presentation during the OTP challenge.",
+    },
+    "/auth/professional-use": {
+      reason: "The auth shell owns presentation during account setup.",
+    },
+    "/auth/reauth": {
+      reason: "The auth shell owns presentation during reauthentication.",
+    },
+    "/auth/two-factor": {
+      reason:
+        "The auth shell owns presentation during the two-factor challenge.",
+    },
+    "/consent": {
+      reason: "Standalone consent shell; it does not render app breadcrumbs.",
+    },
+    "/dev": { reason: "Development-only component catalogue." },
+    "/law/$country/cases/$court/$slug": {
+      reason: "The public law reader owns its document breadcrumb.",
+    },
+    "/law/$country/statutes/$slug/v/$version": {
+      reason: "The public law reader owns its document breadcrumb.",
+    },
+    "/law/cases/research/$tableId": {
+      reason: "The public law shell owns research presentation.",
+    },
+    "/law/coverage": {
+      reason: "The public law shell owns coverage breadcrumbs.",
+    },
+    "/mcp/oauth-callback": {
+      reason: "OAuth callback that closes or redirects.",
+    },
+    "/onboarding": {
+      reason:
+        "Standalone onboarding shell; it does not render app breadcrumbs.",
+    },
+    "/tools/contribute": {
+      reason: "The public tools shell owns its breadcrumb.",
+    },
+    "/_protected/chat/workspaces/$workspaceId/$threadId": {
+      reason: "The live chat name supplies the document title.",
+      fields: ["title"],
+    },
+    "/_protected/chat/workspaces/$workspaceId/new": {
+      reason: "Transient redirect into a newly created matter chat.",
+    },
+    "/_protected/settings/account/connections": {
+      reason:
+        "The account settings shell owns this nested screen's presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/$viewId/document": {
+      reason: "The document viewer supplies the live document title.",
+      fields: ["title"],
+    },
+    "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId": {
+      reason: "The correspondence viewer owns its dynamic presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/expenses": {
+      reason:
+        "The matter view shell owns this legacy nested screen's presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/invoices/$invoiceId": {
+      reason: "The invoice editor owns its dynamic presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/invoices/new": {
+      reason: "The invoice editor owns its create-screen presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/lists": {
+      reason:
+        "The matter view shell owns this legacy nested screen's presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/reports/$exportId": {
+      reason: "The report viewer owns its dynamic presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/timesheets": {
+      reason:
+        "The matter view shell owns this legacy nested screen's presentation.",
+    },
+    "/_protected/workspaces/$workspaceId/workflows": {
+      reason:
+        "The matter view shell owns this legacy nested screen's presentation.",
+    },
+    "/knowledge/company-formats/$registry/$companyId": {
+      reason: "The embedded company-format preview does not render app chrome.",
+    },
+    "/law/$country/cases/$court/$language/$slug": {
+      reason: "The public law reader owns its document breadcrumb.",
+      fields: ["breadcrumb"],
+    },
+    "/robots.txt": { reason: "Machine-readable endpoint." },
+    "/sitemap.xml": { reason: "Machine-readable endpoint." },
+    "/sitemaps/law-cases/$country/$year/$month/{$bucket}.xml": {
+      reason: "Machine-readable endpoint.",
+    },
+    "/sitemaps/law-cases/$country/$year/{$month}.xml": {
+      reason: "Machine-readable endpoint.",
+    },
+    "/sitemaps/law-statutes/$country/{$bucket}.xml": {
+      reason: "Machine-readable endpoint.",
+    },
+    "/sitemaps/law-statutes/{$country}.xml": {
+      reason: "Machine-readable endpoint.",
+    },
+    "/sitemaps/law.xml": { reason: "Machine-readable endpoint." },
+    "/sitemaps/tools.xml": { reason: "Machine-readable endpoint." },
+    "/knowledge/tools_/$entry_/download": {
+      reason: "File download endpoint.",
+    },
+    "/tools/$slug_/download": { reason: "File download endpoint." },
+  };
 
 test("every user-facing leaf route declares a title and breadcrumb decision", async () => {
   const routesDirectory = path.resolve(import.meta.dir);
@@ -77,20 +157,37 @@ test("every user-facing leaf route declares a title and breadcrumb decision", as
 
 test("the census rejects a fixture leaf without presentation metadata", () => {
   const routeTree = `
+    import { Route as FixtureRouteImport } from './routes/fixture'
     '/fixture': {
       id: '/fixture'
       fullPath: '/fixture'
+      preLoaderRoute: typeof FixtureRouteImport
     }
   `;
   const sources = [
     {
-      id: "/fixture",
-      source: `createFileRoute("/fixture")({ component: FixturePage })`,
+      path: "fixture",
+      source: `createFileRoute(\n  "/fixture",\n)({ component: FixturePage })`,
     },
   ];
 
   expect(findMissingRoutePresentation({ routeTree, sources })).toEqual([
     "/fixture: title, breadcrumb",
+  ]);
+});
+
+test("the census rejects a generated leaf whose source cannot be resolved", () => {
+  const routeTree = `
+    import { Route as MissingRouteImport } from './routes/missing'
+    '/missing': {
+      id: '/missing'
+      fullPath: '/missing'
+      preLoaderRoute: typeof MissingRouteImport
+    }
+  `;
+
+  expect(findMissingRoutePresentation({ routeTree, sources: [] })).toEqual([
+    "/missing: source",
   ]);
 });
 
@@ -105,22 +202,40 @@ export function findMissingRoutePresentation({
 }: CensusInput): string[] {
   const paths = routePaths(routeTree);
   const fullPaths = [...paths.values()];
+  const sourcePaths = routeSourcePaths(routeTree);
+  const sourcesByPath = new Map(sources.map((source) => [source.path, source]));
   const missing: string[] = [];
 
-  for (const { id, source } of sources) {
-    const fullPath = paths.get(id);
-    if (
-      fullPath === undefined ||
-      !isLeafPath(fullPath, fullPaths) ||
-      id in ROUTE_PRESENTATION_EXEMPTIONS
-    ) {
+  for (const [id, fullPath] of paths) {
+    if (!isLeafPath(fullPath, fullPaths)) {
+      continue;
+    }
+    const sourcePath = sourcePaths.get(id);
+    const source =
+      sourcePath === undefined
+        ? undefined
+        : sourcesByPath.get(sourcePath)?.source;
+    if (source === undefined) {
+      missing.push(`${id}: source`);
       continue;
     }
     const absent = [];
-    if (!source.includes("head:") && !source.includes("<title>")) {
+    const exemptFields = ROUTE_PRESENTATION_EXEMPTIONS[id]?.fields;
+    const exemptsAll =
+      id in ROUTE_PRESENTATION_EXEMPTIONS && exemptFields === undefined;
+    if (
+      !exemptsAll &&
+      !exemptFields?.includes("title") &&
+      !source.includes("head:") &&
+      !source.includes("<title>")
+    ) {
       absent.push("title");
     }
-    if (!source.includes("presentation: routePresentation(")) {
+    if (
+      !exemptsAll &&
+      !exemptFields?.includes("breadcrumb") &&
+      !source.includes("presentation: routePresentation(")
+    ) {
       absent.push("breadcrumb");
     }
     if (absent.length > 0) {
@@ -128,6 +243,32 @@ export function findMissingRoutePresentation({
     }
   }
   return missing.toSorted();
+}
+
+function routeSourcePaths(routeTree: string): Map<string, string> {
+  const imports = new Map<string, string>();
+  const importDeclaration =
+    /import \{ Route as (\w+) \} from '\.\/routes\/([^']+)'/gu;
+  for (const match of routeTree.matchAll(importDeclaration)) {
+    const symbol = match[1];
+    const sourcePath = match[2];
+    if (symbol !== undefined && sourcePath !== undefined) {
+      imports.set(symbol, sourcePath);
+    }
+  }
+
+  const paths = new Map<string, string>();
+  const routeDeclaration =
+    /'([^']+)': \{[\s\S]*?preLoaderRoute: typeof (\w+)[\s\S]*?\}/gu;
+  for (const match of routeTree.matchAll(routeDeclaration)) {
+    const id = match[1];
+    const symbol = match[2];
+    const sourcePath = symbol === undefined ? undefined : imports.get(symbol);
+    if (id !== undefined && sourcePath !== undefined) {
+      paths.set(id, sourcePath);
+    }
+  }
+  return paths;
 }
 
 function routePaths(routeTree: string): Map<string, string> {
@@ -158,17 +299,21 @@ async function readRouteSources(directory: string): Promise<RouteSource[]> {
   });
   const sources: RouteSource[] = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".tsx")) {
+    if (
+      !entry.isFile() ||
+      (!entry.name.endsWith(".tsx") && !entry.name.endsWith(".ts"))
+    ) {
       continue;
     }
     const source = await readFile(
       path.join(entry.parentPath, entry.name),
       "utf-8",
     );
-    const id = source.match(/createFileRoute\("([^"]+)"\)/u)?.[1];
-    if (id !== undefined) {
-      sources.push({ id, source });
-    }
+    const relativePath = repoRelativePath(
+      directory,
+      path.join(entry.parentPath, entry.name),
+    );
+    sources.push({ path: relativePath.replace(/\.(?:ts|tsx)$/u, ""), source });
   }
   return sources;
 }

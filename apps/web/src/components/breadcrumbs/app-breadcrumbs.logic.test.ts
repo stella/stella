@@ -52,3 +52,45 @@ test("explicit inherit and none decisions add no crumb", () => {
     ]),
   ).toEqual([]);
 });
+
+test("detail routes can restore the crumb for an escaped layout", () => {
+  const breadcrumbs = declaredBreadcrumbs([
+    {
+      routeId: "/knowledge",
+      staticData: {
+        presentation: routePresentation({
+          type: "label",
+          labelKey: "navigation.knowledge",
+          to: "/knowledge",
+        }),
+      },
+    },
+    {
+      routeId: "/knowledge/tools_/$entry",
+      staticData: {
+        presentation: routePresentation(
+          { type: "knowledge-detail", detail: "skill" },
+          {
+            type: "label",
+            labelKey: "knowledge.sections.tools.title",
+            to: "/knowledge/tools",
+          },
+        ),
+      },
+    },
+  ]);
+
+  expect(breadcrumbs.map(({ decision }) => decision)).toEqual([
+    {
+      type: "label",
+      labelKey: "navigation.knowledge",
+      to: "/knowledge",
+    },
+    {
+      type: "label",
+      labelKey: "knowledge.sections.tools.title",
+      to: "/knowledge/tools",
+    },
+    { type: "knowledge-detail", detail: "skill" },
+  ]);
+});

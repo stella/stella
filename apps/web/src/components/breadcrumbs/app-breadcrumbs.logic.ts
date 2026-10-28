@@ -3,19 +3,27 @@ import type { RouteBreadcrumb } from "@/lib/route-presentation";
 type BreadcrumbMatch = {
   routeId: string;
   staticData: {
-    presentation?: { breadcrumb: RouteBreadcrumb };
+    presentation?: {
+      breadcrumb: RouteBreadcrumb;
+      parent?: Extract<RouteBreadcrumb, { type: "label" }>;
+    };
   };
 };
 
 export const declaredBreadcrumbs = (matches: readonly BreadcrumbMatch[]) =>
   matches.flatMap((match) => {
-    const decision = match.staticData.presentation?.breadcrumb;
-    if (
-      decision === undefined ||
-      decision.type === "inherit" ||
-      decision.type === "none"
-    ) {
+    const presentation = match.staticData.presentation;
+    if (presentation === undefined) {
       return [];
     }
-    return [{ decision, key: match.routeId }];
+    const decision = presentation.breadcrumb;
+    if (decision.type === "inherit" || decision.type === "none") {
+      return [];
+    }
+    return [
+      ...(presentation.parent === undefined
+        ? []
+        : [{ decision: presentation.parent, key: `${match.routeId}:parent` }]),
+      { decision, key: match.routeId },
+    ];
   });
