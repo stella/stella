@@ -2214,6 +2214,7 @@
     "moveDown": "Perkelti žemyn",
     "moveUp": "Perkelti aukštyn",
     "name": "Pavadinimas",
+    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "newMatter": "Nauja byla",
     "newRow": "Nauja eilutė",
     "next": "Toliau",
@@ -3299,7 +3300,6 @@
       "simple": "Supaprastintas žymėjimas"
     },
     "moreFormatting": "Daugiau formatavimo",
-    "networkError": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
     "nextChange": "Kitas keitimas",
     "numberedList": "Numeruotas sąrašas",
     "parseError": "Nepavyko apdoroti dokumento. Jis gali būti sugadintas arba nepalaikomo formato.",
@@ -5990,6 +5990,9 @@
       "description": "Išsaugota kaip „{fileName}“",
       "title": "Vertimas paruoštas"
     }
+  },
+  "transportErrors": {
+    "timeout": "Užklausa truko per ilgai. Bandykite dar kartą."
   },
   "validation": {
     "invalidEmail": "Įveskite galiojantį el. pašto adresą.",

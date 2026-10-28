@@ -2214,6 +2214,7 @@
     "moveDown": "Descendre",
     "moveUp": "Monter",
     "name": "Nom",
+    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
@@ -3299,7 +3300,6 @@
       "simple": "Marques simples"
     },
     "moreFormatting": "Plus de mise en forme",
-    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "nextChange": "Modification suivante",
     "numberedList": "Liste numérotée",
     "parseError": "Le document n’a pas pu être analysé. Il est peut-être corrompu ou dans un format non pris en charge.",
@@ -5990,6 +5990,9 @@
       "description": "Enregistré sous « {fileName} »",
       "title": "Traduction prête"
     }
+  },
+  "transportErrors": {
+    "timeout": "La requête a pris trop de temps. Réessayez."
   },
   "validation": {
     "invalidEmail": "Saisissez une adresse e-mail valide.",

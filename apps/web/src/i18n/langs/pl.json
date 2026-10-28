@@ -2214,6 +2214,7 @@
     "moveDown": "Przesuń w dół",
     "moveUp": "Przesuń w górę",
     "name": "Nazwa",
+    "networkError": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
     "newMatter": "Nowa sprawa",
     "newRow": "Nowy wiersz",
     "next": "Dalej",
@@ -3299,7 +3300,6 @@
       "simple": "Prosta adiustacja"
     },
     "moreFormatting": "Więcej formatowania",
-    "networkError": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
     "nextChange": "Następna zmiana",
     "numberedList": "Lista numerowana",
     "parseError": "Nie udało się przetworzyć dokumentu. Może być uszkodzony lub w nieobsługiwanym formacie.",
@@ -5990,6 +5990,9 @@
       "description": "Zapisano jako „{fileName}”",
       "title": "Tłumaczenie gotowe"
     }
+  },
+  "transportErrors": {
+    "timeout": "Żądanie trwało zbyt długo. Spróbuj ponownie."
   },
   "validation": {
     "invalidEmail": "Wpisz prawidłowy adres e-mail.",

@@ -2214,6 +2214,7 @@
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
@@ -3299,7 +3300,6 @@
       "simple": "Az egyszerű korrektúra"
     },
     "moreFormatting": "További formázás",
-    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "nextChange": "Következő módosítás",
     "numberedList": "Számozott lista",
     "parseError": "A dokumentumot nem sikerült feldolgozni. Lehet, hogy sérült, vagy nem támogatott formátumú.",
@@ -5990,6 +5990,9 @@
       "description": "Mentve „{fileName}” néven",
       "title": "A fordítás elkészült"
     }
+  },
+  "transportErrors": {
+    "timeout": "A kérés túl sokáig tartott. Próbálja újra."
   },
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",

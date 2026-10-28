@@ -2214,6 +2214,7 @@
     "moveDown": "Posunúť nadol",
     "moveUp": "Posunúť nahor",
     "name": "Názov",
+    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "newMatter": "Nový spis",
     "newRow": "Nový riadok",
     "next": "Pokračovať",
@@ -3299,7 +3300,6 @@
       "simple": "Jednoduché revízie"
     },
     "moreFormatting": "Ďalšie formátovanie",
-    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "nextChange": "Ďalšia zmena",
     "numberedList": "Číslovaný zoznam",
     "parseError": "Dokument sa nepodarilo spracovať. Môže byť poškodený alebo v nepodporovanom formáte.",
@@ -5990,6 +5990,9 @@
       "description": "Uložené ako „{fileName}“",
       "title": "Preklad je pripravený"
     }
+  },
+  "transportErrors": {
+    "timeout": "Požiadavka trvala príliš dlho. Skúste to znova."
   },
   "validation": {
     "invalidEmail": "Zadajte platnú e-mailovú adresu.",

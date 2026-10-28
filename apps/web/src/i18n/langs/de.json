@@ -2214,6 +2214,7 @@
     "moveDown": "Nach unten",
     "moveUp": "Nach oben",
     "name": "Name",
+    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
@@ -3299,7 +3300,6 @@
       "simple": "Einfaches Markup"
     },
     "moreFormatting": "Weitere Formatierung",
-    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "nextChange": "Nächste Änderung",
     "numberedList": "Nummerierte Liste",
     "parseError": "Das Dokument konnte nicht verarbeitet werden. Möglicherweise ist es beschädigt oder liegt in einem nicht unterstützten Format vor.",
@@ -5990,6 +5990,9 @@
       "description": "Gespeichert als „{fileName}“",
       "title": "Übersetzung bereit"
     }
+  },
+  "transportErrors": {
+    "timeout": "Die Anfrage hat zu lange gedauert. Versuchen Sie es erneut."
   },
   "validation": {
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",

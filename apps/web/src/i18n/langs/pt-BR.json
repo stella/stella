@@ -2214,6 +2214,7 @@
     "moveDown": "Mover para baixo",
     "moveUp": "Mover para cima",
     "name": "Nome",
+    "networkError": "Erro de rede. Verifique sua conexão com a Internet e tente novamente.",
     "newMatter": "Novo caso",
     "newRow": "Nova linha",
     "next": "Próximo",
@@ -3299,7 +3300,6 @@
       "simple": "Marcação Simples"
     },
     "moreFormatting": "Mais formatação",
-    "networkError": "Erro de rede. Verifique sua conexão com a Internet e tente novamente.",
     "nextChange": "Próxima alteração",
     "numberedList": "Lista numerada",
     "parseError": "O documento não pôde ser analisado. Ele pode estar corrompido ou em um formato não compatível.",
@@ -5990,6 +5990,9 @@
       "description": "Salvo como “{fileName}”",
       "title": "Tradução pronta"
     }
+  },
+  "transportErrors": {
+    "timeout": "A solicitação demorou muito. Tente novamente."
   },
   "validation": {
     "invalidEmail": "Insira um endereço de e-mail válido.",
