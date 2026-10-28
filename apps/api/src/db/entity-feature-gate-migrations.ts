@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
 
 import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex } from "@stll/sha256/bun";
 
 export type EffectiveEntityFeatureGateDefinitions = {
   functions: ReadonlyMap<string, string>;
@@ -280,7 +281,9 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
     },
   },
   {
-    // A disabled trigger does not fire, so it counts as absent.
+    // Only plain ENABLE fires for application writes: DISABLE does not fire,
+    // and ENABLE REPLICA or ALWAYS change when it fires. Anything but plain
+    // ENABLE counts as not present and is repaired to plain ENABLE.
     pattern: pattern(
       `^ALTER\\s+TABLE\\s+(?:ONLY\\s+)?${tableId}\\s+(DISABLE|ENABLE(?:\\s+ALWAYS|\\s+REPLICA)?)\\s+TRIGGER\\s+(ALL|USER|"?${GATE_TRIGGER}"?)`,
     ),
@@ -289,7 +292,7 @@ const STATEMENT_HANDLERS: readonly StatementHandler[] = [
         state,
         group(match, 1),
         group(match, 3).replaceAll('"', ""),
-        group(match, 2).toUpperCase().startsWith("ENABLE"),
+        group(match, 2).toUpperCase() === "ENABLE",
       ),
   },
   {
@@ -391,10 +394,28 @@ const NEUTRAL_STATEMENTS: readonly RegExp[] = [
 
 const GATED_OBJECT =
   /entity_feature_gate_[a-z0-9_]+|workspace_entity_feature|entity_feature_gate_maintenance|(?:GRANT|REVOKE)[\s\S]+ON[\s\S]+stella_entity_gate|(?:entity_feature|_ef_)[a-z0-9_]*\s+(?:ON|RENAME)/iu;
-// A DO block may only add gate constraints; anything that drops, disables or
-// renames a gated object inside one is not folded, so it is refused.
-const DO_BLOCK_REMOVAL =
-  /\b(?:DROP|DISABLE|RENAME|REVOKE)\b[\s\S]*?(?:entity_feature_gate_|workspace_entity_feature|_ef_)/iu;
+// A DO block's effect is not folded, so one that names a gate object is
+// refused, except two reviewed forms: the gate check constraints the
+// generator writes for a newly gated table, and the gate migration's role
+// and ownership setup, pinned by content.
+const NAMES_GATE_OBJECT =
+  /entity_feature_gate|workspace_entity_feature|stella_entity_gate|_ef_/iu;
+const GATE_CHECK_BLOCK =
+  /^DO \$check\$ BEGIN IF NOT EXISTS \(SELECT 1 FROM pg_constraint WHERE conrelid = 'public\.[a-z0-9_]+'::regclass AND conname = 'entity_feature_gate_(?:states|ready)_check'\) THEN ALTER TABLE public\."[a-z0-9_]+" ADD CONSTRAINT entity_feature_gate_(?:states_check CHECK \(entity_feature_gate IN \('pending', 'open', 'legal-lists', 'missing'\)\)|ready_check CHECK \(entity_feature_gate <> 'pending'\)) NOT VALID; END IF; END \$check\$;?$/u;
+const GATE_SETUP_BLOCK_DIGESTS: ReadonlySet<string> = new Set([
+  // 20261009112500_entity_feature_row_gates: the gate role ($role$) and the
+  // gated tables' ownership check ($ownership$).
+  "2cc1de9651dce4678295ae32a0be83b4e543aed1d09da1770e8bbea7f3310c8b",
+  "bf691151d21554b79204533029c538cbfbf4b52d6c28703bc9bdef51292c9347",
+]);
+
+/** A DO block's content digest, whitespace-insensitive. */
+export const doBlockDigest = (sql: string): string =>
+  sha256Hex(sql.replace(/\s+/gu, " ").trim());
+
+const isReviewedGateDoBlock = (sql: string) =>
+  GATE_CHECK_BLOCK.test(sql) ||
+  GATE_SETUP_BLOCK_DIGESTS.has(doBlockDigest(sql));
 
 /** Inline the policy DDL that `entity_feature_gate_finish()` runs when called. */
 const withFinishBody = (statement: string): string[] => {
@@ -412,6 +433,16 @@ const withFinishBody = (statement: string): string[] => {
     : [statement, ...splitStatements(body.slice(firstGateDdl))];
 };
 
+/** One migration's statements as the fold reads them, in order. */
+export const foldedStatements = (migration: string): string[] =>
+  splitStatements(migration)
+    .flatMap(withFinishBody)
+    .map((raw) =>
+      clean(raw)
+        .replace(/^END;?/iu, "")
+        .trim(),
+    );
+
 const foldStatement = (state: FoldState, sql: string, migration: number) => {
   for (const handler of STATEMENT_HANDLERS) {
     const match = handler.pattern.exec(sql);
@@ -421,7 +452,7 @@ const foldStatement = (state: FoldState, sql: string, migration: number) => {
     }
   }
   if (/^DO\s/iu.test(sql)) {
-    if (DO_BLOCK_REMOVAL.test(sql)) {
+    if (NAMES_GATE_OBJECT.test(sql) && !isReviewedGateDoBlock(sql)) {
       panic(`Unsupported gated DO block in migration ${migration}: ${sql}`);
     }
     return;
@@ -454,14 +485,8 @@ export const effectiveEntityFeatureGateDefinitions = (
     revokes: new Set(),
   };
   for (const [index, migration] of migrations.entries()) {
-    for (const raw of splitStatements(migration).flatMap(withFinishBody)) {
-      foldStatement(
-        state,
-        clean(raw)
-          .replace(/^END;?/iu, "")
-          .trim(),
-        index + 1,
-      );
+    for (const sql of foldedStatements(migration)) {
+      foldStatement(state, sql, index + 1);
     }
   }
   const { functions, policies, triggers, indexes, grants, revokes } = state;

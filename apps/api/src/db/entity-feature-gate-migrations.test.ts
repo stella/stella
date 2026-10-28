@@ -121,3 +121,27 @@ test("unknown gated-object statements fail closed with migration and SQL", () =>
     fold(["COMMENT ON TRIGGER entity_feature_gate_write ON items IS 'x';"]),
   ).toThrow(/migration 1: COMMENT ON TRIGGER entity_feature_gate_write/u);
 });
+
+test.each(["DISABLE", "ENABLE REPLICA", "ENABLE ALWAYS"])(
+  "a trigger left in %s mode is not present and repairs to plain ENABLE",
+  (mode) => {
+    const effective = fold([
+      `${trigger()} ALTER TABLE items ${mode} TRIGGER entity_feature_gate_write;`,
+    ]);
+    expect(effective.triggers.has("items.entity_feature_gate_write")).toBe(
+      false,
+    );
+    expect(
+      effective.disabledTriggers.has("items.entity_feature_gate_write"),
+    ).toBe(true);
+  },
+);
+
+test("a DO block naming a gate object is refused, whatever it does", () => {
+  expect(() =>
+    fold([
+      `${routine("entity_feature_gate_propagate")} REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;`,
+      "DO $$ BEGIN GRANT EXECUTE ON FUNCTION public.entity_feature_gate_propagate() TO PUBLIC; END $$;",
+    ]),
+  ).toThrow(/Unsupported gated DO block in migration 2/u);
+});

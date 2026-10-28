@@ -6,6 +6,7 @@ import { entityFeatureGateMetadata } from "../src/db/entity-feature-gate-metadat
 import {
   effectiveEntityFeatureGateDefinitions,
   readEffectiveEntityFeatureGateDefinitions,
+  readEntityFeatureGateMigrationTexts,
 } from "../src/db/entity-feature-gate-migrations";
 import { entityFeaturePolicyDefinitions } from "../src/db/entity-feature-policies";
 import * as schema from "../src/db/schema";
@@ -215,4 +216,18 @@ test("the generator spells every gate policy exactly as online DDL does", async 
       await createPolicyStatementsOf(policies),
     );
   }
+});
+
+test("a trigger history leaves in REPLICA mode is repaired to plain ENABLE", async () => {
+  const statements = entityFeatureGateTableSql(
+    tables,
+    descriptors,
+    effectiveEntityFeatureGateDefinitions([
+      ...(await readEntityFeatureGateMigrationTexts()),
+      'ALTER TABLE public."legal_list_item_sources" ENABLE REPLICA TRIGGER entity_feature_gate_write;',
+    ]),
+  );
+  expect(statements).toEqual([
+    'ALTER TABLE public."legal_list_item_sources" ENABLE TRIGGER entity_feature_gate_write;',
+  ]);
 });
