@@ -5,18 +5,27 @@ on:
   pull_request:
     paths:
       - .github/workflows/refresh-cldr-exemplars.yml
-      - packages/mojibake/scripts/cldr49-input.json
-      - packages/mojibake/scripts/refresh-exemplar-input.*
-      - packages/mojibake/src/exemplar-input.test.ts
-      - packages/mojibake/src/exemplars.generated.ts
-      - packages/mojibake/src/unicode-set.ts
+      - packages/mojibake/**
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   refresh-exemplars:
@@ -53,3 +62,10 @@ jobs:
           path: ${{ runner.temp }}/cldr49-input/artifact/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Verify committed input matches the official conversion
+        run: |
+          for name in exemplars-supplement.json provenance.json; do
+            diff -u <(jq -S . "packages/mojibake/data/cldr49/$name") \
+              <(jq -S . "$RUNNER_TEMP/cldr49-input/artifact/$name")
+          done
