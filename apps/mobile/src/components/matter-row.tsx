@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter } from "use-intl";
 
+import { useLayout, useSelection } from "@/components/selection";
 import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text } from "@/components/ui/text";
 import type { MatterSummary } from "@/state/matters";
@@ -10,7 +11,8 @@ import type { MatterSummary } from "@/state/matters";
  * One matter: its name, then reference, client and the day of its last
  * activity. The day is a date, not "2 days ago": Hermes, the app's
  * JavaScript engine, cannot format relative times. Under its client's
- * heading the client goes unsaid. Tapping it opens the matter.
+ * heading the client goes unsaid. Tapping it opens the matter, beside the
+ * list where the window has two columns, which marks it as the one open.
  */
 export const MatterRow = ({
   matter,
@@ -21,6 +23,10 @@ export const MatterRow = ({
 }) => {
   const format = useFormatter();
   const router = useRouter();
+  const layout = useLayout();
+  const selection = useSelection();
+  const open =
+    layout.usesSplitView && selection.matter?.workspaceId === matter.id;
   const activity =
     matter.lastActivityAt === null || matter.lastActivityAt === undefined
       ? undefined
@@ -40,8 +46,16 @@ export const MatterRow = ({
   return (
     <Pressable
       accessibilityRole="button"
-      className="border-border active:bg-accent flex-row gap-3 border-b py-3"
+      accessibilityState={{ selected: open }}
+      className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
       onPress={() => {
+        if (layout.usesSplitView) {
+          selection.select("matter", {
+            name: matter.name,
+            workspaceId: matter.id,
+          });
+          return;
+        }
         router.push({
           pathname: "/matter/[workspaceId]",
           params: { workspaceId: matter.id, name: matter.name },

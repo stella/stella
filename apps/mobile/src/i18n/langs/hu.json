@@ -38,7 +38,9 @@
     "answerStopped": "Leállítva.",
     "answerNeedsInput": "Ez a válasz az Ön közreműködésére vár. Folytassa a stella webes felületén.",
     "answerFailed": "A választ nem sikerült befejezni.",
-    "composerMenu": "Mellékletek és eszközök menüjének megnyitása"
+    "composerMenu": "Mellékletek és eszközök menüjének megnyitása",
+    "pickTitle": "Válasszon beszélgetést",
+    "pickDescription": "Válasszon szálat a listából, vagy kezdjen újat a + gombbal."
   },
   "tasks": {
     "emptyTitle": "Nincsenek nyitott feladatok",
@@ -70,7 +72,9 @@
     },
     "markDone": "Késznek jelölés",
     "reopen": "Újranyitás",
-    "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra."
+    "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
+    "pickTitle": "Válasszon feladatot",
+    "pickDescription": "Válasszon feladatot a listából, hogy itt lássa."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
@@ -85,7 +89,9 @@
     "create": "Létrehozás",
     "name": "Ügy neve",
     "personalHint": "Személyes ügyként jön létre, csak Ön látja. Ügyfelet és tagokat a weben adhat hozzá.",
-    "createFailed": "Az ügyet nem sikerült létrehozni. Próbálja újra."
+    "createFailed": "Az ügyet nem sikerült létrehozni. Próbálja újra.",
+    "pickTitle": "Válasszon ügyet",
+    "pickDescription": "Válasszon ügyet a listából a dokumentumai és feladatai megtekintéséhez."
   },
   "matter": {
     "documents": "Dokumentumok",

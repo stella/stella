@@ -38,7 +38,9 @@
     "answerStopped": "Interrompido.",
     "answerNeedsInput": "Esta resposta precisa da sua ação. Continue-a na stella pela web.",
     "answerFailed": "Não foi possível concluir a resposta.",
-    "composerMenu": "Abrir o menu de anexos e ferramentas"
+    "composerMenu": "Abrir o menu de anexos e ferramentas",
+    "pickTitle": "Escolha uma conversa",
+    "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +."
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",
@@ -70,7 +72,9 @@
     },
     "markDone": "Marcar como concluída",
     "reopen": "Reabrir",
-    "statusFailed": "Não foi possível alterar a tarefa. Tente novamente."
+    "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
+    "pickTitle": "Escolha uma tarefa",
+    "pickDescription": "Escolha uma tarefa da lista para vê-la aqui."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",
@@ -85,7 +89,9 @@
     "create": "Criar",
     "name": "Nome do caso",
     "personalHint": "Ele é criado como caso pessoal, visível só para você. Adicione um cliente e membros na web.",
-    "createFailed": "Não foi possível criar o caso. Tente novamente."
+    "createFailed": "Não foi possível criar o caso. Tente novamente.",
+    "pickTitle": "Escolha um caso",
+    "pickDescription": "Escolha um caso da lista para ver seus documentos e tarefas."
   },
   "matter": {
     "documents": "Documentos",

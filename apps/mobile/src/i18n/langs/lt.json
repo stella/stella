@@ -38,7 +38,9 @@
     "answerStopped": "Sustabdyta.",
     "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
     "answerFailed": "Atsakymo užbaigti nepavyko.",
-    "composerMenu": "Atverti priedų ir įrankių meniu"
+    "composerMenu": "Atverti priedų ir įrankių meniu",
+    "pickTitle": "Pasirinkite pokalbį",
+    "pickDescription": "Pasirinkite giją iš sąrašo arba pradėkite naują mygtuku +."
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
@@ -70,7 +72,9 @@
     },
     "markDone": "Pažymėti kaip atliktą",
     "reopen": "Atidaryti iš naujo",
-    "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą."
+    "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
+    "pickTitle": "Pasirinkite užduotį",
+    "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",
@@ -85,7 +89,9 @@
     "create": "Sukurti",
     "name": "Bylos pavadinimas",
     "personalHint": "Ji sukuriama kaip asmeninė byla, matoma tik jums. Klientą ir narius pridėsite žiniatinklyje.",
-    "createFailed": "Nepavyko sukurti bylos. Bandykite dar kartą."
+    "createFailed": "Nepavyko sukurti bylos. Bandykite dar kartą.",
+    "pickTitle": "Pasirinkite bylą",
+    "pickDescription": "Pasirinkite bylą iš sąrašo, kad matytumėte jos dokumentus ir užduotis."
   },
   "matter": {
     "documents": "Dokumentai",

@@ -38,7 +38,9 @@
     "answerStopped": "Stopped.",
     "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
     "answerFailed": "The answer could not be completed.",
-    "composerMenu": "Open attachments and tools menu"
+    "composerMenu": "Open attachments and tools menu",
+    "pickTitle": "Pick a conversation",
+    "pickDescription": "Choose a thread from the list, or start a new one with +."
   },
   "tasks": {
     "emptyTitle": "No open tasks",
@@ -70,7 +72,9 @@
     },
     "markDone": "Mark as done",
     "reopen": "Reopen",
-    "statusFailed": "The task could not be changed. Try again."
+    "statusFailed": "The task could not be changed. Try again.",
+    "pickTitle": "Pick a task",
+    "pickDescription": "Choose a task from the list to see it here."
   },
   "matters": {
     "emptyTitle": "No matters yet",
@@ -85,7 +89,9 @@
     "create": "Create",
     "name": "Matter name",
     "personalHint": "It opens as a personal matter, visible only to you. Add a client and members on the web.",
-    "createFailed": "The matter could not be created. Try again."
+    "createFailed": "The matter could not be created. Try again.",
+    "pickTitle": "Pick a matter",
+    "pickDescription": "Choose a matter from the list to see its documents and tasks."
   },
   "matter": {
     "documents": "Documents",

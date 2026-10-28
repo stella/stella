@@ -9,7 +9,8 @@ import { useAppColors } from "@/theme";
  * web navigation's glyph (apps/web workspace-primary-nav.ts) from lucide:
  * chat's bubble, tasks' list and the matters layers. More is the bar's
  * prominent tab, which iOS 27 draws apart on its own surface; it holds case
- * law, settings and what is still to come.
+ * law, settings and what is still to come. On an iPad the bar can open
+ * into a sidebar, as the system's own apps and GitHub's do.
  * `tab-icons.test.ts` holds them equal.
  */
 const TabLayout = () => {
@@ -19,6 +20,7 @@ const TabLayout = () => {
   return (
     <NativeTabs
       iconColor={{ default: colors.muted, selected: colors.text }}
+      sidebarAdaptable
       tintColor={colors.text}
       // iOS 27 sets the prominent tab apart from the bar on its own surface.
       unstable_nativeProps={{ ios: { prominentScreenKey: "more" } }}

@@ -38,7 +38,9 @@
     "answerStopped": "Detenido.",
     "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
     "answerFailed": "No se pudo completar la respuesta.",
-    "composerMenu": "Abrir el menú de archivos adjuntos y herramientas"
+    "composerMenu": "Abrir el menú de archivos adjuntos y herramientas",
+    "pickTitle": "Elija una conversación",
+    "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +."
   },
   "tasks": {
     "emptyTitle": "No hay tareas abiertas",
@@ -70,7 +72,9 @@
     },
     "markDone": "Marcar como hecha",
     "reopen": "Reabrir",
-    "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo."
+    "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
+    "pickTitle": "Elija una tarea",
+    "pickDescription": "Elija una tarea de la lista para verla aquí."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",
@@ -85,7 +89,9 @@
     "create": "Crear",
     "name": "Nombre del asunto",
     "personalHint": "Se crea como asunto personal, visible solo para usted. Añada un cliente y miembros en la web.",
-    "createFailed": "No se pudo crear el asunto. Inténtelo de nuevo."
+    "createFailed": "No se pudo crear el asunto. Inténtelo de nuevo.",
+    "pickTitle": "Elija un asunto",
+    "pickDescription": "Elija un asunto de la lista para ver sus documentos y tareas."
   },
   "matter": {
     "documents": "Documentos",

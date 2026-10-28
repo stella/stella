@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { useLayout, useSelection } from "@/components/selection";
 import { Text } from "@/components/ui/text";
 import { CircleIcon } from "@/icons.gen";
 import type { TaskSummary } from "@/state/tasks";
@@ -10,7 +11,8 @@ import { useUiColors } from "@/theme";
 /**
  * One open task: its name, then its matter and the day it is due, the day
  * in the destructive colour once it has passed. Tapping it opens the task
- * over its matter, as a matter's own list does.
+ * over its matter, as a matter's own list does, or beside the list where
+ * the window has two columns.
  */
 export const TaskRow = ({
   overdue,
@@ -23,6 +25,9 @@ export const TaskRow = ({
   const matter = useTranslations("matter");
   const format = useFormatter();
   const router = useRouter();
+  const layout = useLayout();
+  const selection = useSelection();
+  const open = layout.usesSplitView && selection.task?.entityId === task.id;
   const ui = useUiColors();
   const due =
     task.dueDate === null || task.dueDate === undefined
@@ -38,8 +43,16 @@ export const TaskRow = ({
   return (
     <Pressable
       accessibilityRole="button"
-      className="border-border active:bg-accent flex-row gap-3 border-b py-3"
+      accessibilityState={{ selected: open }}
+      className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
       onPress={() => {
+        if (layout.usesSplitView) {
+          selection.select("task", {
+            entityId: task.id,
+            workspaceId: task.matterId,
+          });
+          return;
+        }
         router.push({
           pathname: "/matter/[workspaceId]/[entityId]",
           params: { entityId: task.id, workspaceId: task.matterId },

@@ -38,7 +38,9 @@
     "answerStopped": "Arrêté.",
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
     "answerFailed": "La réponse n’a pas pu être terminée.",
-    "composerMenu": "Ouvrir le menu des pièces jointes et des outils"
+    "composerMenu": "Ouvrir le menu des pièces jointes et des outils",
+    "pickTitle": "Choisissez une conversation",
+    "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
@@ -70,7 +72,9 @@
     },
     "markDone": "Marquer comme terminée",
     "reopen": "Rouvrir",
-    "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez."
+    "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
+    "pickTitle": "Choisissez une tâche",
+    "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -85,7 +89,9 @@
     "create": "Créer",
     "name": "Nom du dossier",
     "personalHint": "Il est créé comme dossier personnel, visible de vous seul. Ajoutez un client et des membres sur le web.",
-    "createFailed": "Le dossier n’a pas pu être créé. Réessayez."
+    "createFailed": "Le dossier n’a pas pu être créé. Réessayez.",
+    "pickTitle": "Choisissez un dossier",
+    "pickDescription": "Choisissez un dossier dans la liste pour voir ses documents et tâches."
   },
   "matter": {
     "documents": "Documents",

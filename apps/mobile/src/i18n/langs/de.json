@@ -38,7 +38,9 @@
     "answerStopped": "Gestoppt.",
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
     "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
-    "composerMenu": "Menü für Anhänge und Werkzeuge öffnen"
+    "composerMenu": "Menü für Anhänge und Werkzeuge öffnen",
+    "pickTitle": "Unterhaltung wählen",
+    "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen."
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",
@@ -70,7 +72,9 @@
     },
     "markDone": "Als erledigt markieren",
     "reopen": "Wieder öffnen",
-    "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut."
+    "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
+    "pickTitle": "Aufgabe wählen",
+    "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",
@@ -85,7 +89,9 @@
     "create": "Erstellen",
     "name": "Name der Akte",
     "personalHint": "Sie wird als persönliche Akte angelegt, die nur Sie sehen. Mandant und Mitglieder fügen Sie im Web hinzu.",
-    "createFailed": "Die Akte konnte nicht erstellt werden. Versuchen Sie es erneut."
+    "createFailed": "Die Akte konnte nicht erstellt werden. Versuchen Sie es erneut.",
+    "pickTitle": "Akte wählen",
+    "pickDescription": "Wählen Sie eine Akte aus der Liste, um ihre Dokumente und Aufgaben zu sehen."
   },
   "matter": {
     "documents": "Dokumente",

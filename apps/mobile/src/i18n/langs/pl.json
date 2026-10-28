@@ -38,7 +38,9 @@
     "answerStopped": "Zatrzymano.",
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
     "answerFailed": "Nie udało się dokończyć odpowiedzi.",
-    "composerMenu": "Otwórz menu załączników i narzędzi"
+    "composerMenu": "Otwórz menu załączników i narzędzi",
+    "pickTitle": "Wybierz rozmowę",
+    "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",
@@ -70,7 +72,9 @@
     },
     "markDone": "Oznacz jako wykonane",
     "reopen": "Otwórz ponownie",
-    "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie."
+    "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
+    "pickTitle": "Wybierz zadanie",
+    "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",
@@ -85,7 +89,9 @@
     "create": "Utwórz",
     "name": "Nazwa sprawy",
     "personalHint": "Powstanie jako sprawa osobista, widoczna tylko dla Ciebie. Klienta i członków dodasz w wersji webowej.",
-    "createFailed": "Nie udało się utworzyć sprawy. Spróbuj ponownie."
+    "createFailed": "Nie udało się utworzyć sprawy. Spróbuj ponownie.",
+    "pickTitle": "Wybierz sprawę",
+    "pickDescription": "Wybierz sprawę z listy, aby zobaczyć jej dokumenty i zadania."
   },
   "matter": {
     "documents": "Dokumenty",

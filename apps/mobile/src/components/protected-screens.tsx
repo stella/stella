@@ -9,8 +9,10 @@ import {
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
+import { SelectionProvider } from "@/components/selection";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
+import { LayoutMetricsProvider } from "@/native/layout-metrics";
 import { useAppColors } from "@/theme";
 
 /** Signed out, only sign-in exists; signed in, only the app does. */
@@ -20,13 +22,17 @@ export const ProtectedScreens = () => {
   const activeTab =
     segments[0] === "(tabs)" ? (segments[1] ?? "index") : undefined;
   return (
-    <HeaderSearchProvider activeTab={activeTab}>
-      <MattersViewProvider>
-        <ChangesProvider>
-          <Screens />
-        </ChangesProvider>
-      </MattersViewProvider>
-    </HeaderSearchProvider>
+    <LayoutMetricsProvider>
+      <HeaderSearchProvider activeTab={activeTab}>
+        <MattersViewProvider>
+          <ChangesProvider>
+            <SelectionProvider>
+              <Screens />
+            </SelectionProvider>
+          </ChangesProvider>
+        </MattersViewProvider>
+      </HeaderSearchProvider>
+    </LayoutMetricsProvider>
   );
 };
 

@@ -38,7 +38,9 @@
     "answerStopped": "Peatatud.",
     "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
     "answerFailed": "Vastust ei õnnestunud lõpetada.",
-    "composerMenu": "Ava manuste ja tööriistade menüü"
+    "composerMenu": "Ava manuste ja tööriistade menüü",
+    "pickTitle": "Vali vestlus",
+    "pickDescription": "Vali loendist lõim või alusta uut nupuga +."
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
@@ -70,7 +72,9 @@
     },
     "markDone": "Märgi tehtuks",
     "reopen": "Ava uuesti",
-    "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti."
+    "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti.",
+    "pickTitle": "Vali ülesanne",
+    "pickDescription": "Vali loendist ülesanne, et seda siin näha."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",
@@ -85,7 +89,9 @@
     "create": "Loo",
     "name": "Asja nimi",
     "personalHint": "See luuakse isikliku asjana, mida näete ainult teie. Kliendi ja liikmed saate lisada veebis.",
-    "createFailed": "Asja ei õnnestunud luua. Proovige uuesti."
+    "createFailed": "Asja ei õnnestunud luua. Proovige uuesti.",
+    "pickTitle": "Vali asi",
+    "pickDescription": "Vali loendist asi, et näha selle dokumente ja ülesandeid."
   },
   "matter": {
     "documents": "Dokumendid",

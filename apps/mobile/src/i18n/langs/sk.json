@@ -38,7 +38,9 @@
     "answerStopped": "Zastavené.",
     "answerNeedsInput": "Táto odpoveď čaká na váš vstup. Pokračujte v nej vo webovej aplikácii stella.",
     "answerFailed": "Odpoveď sa nepodarilo dokončiť.",
-    "composerMenu": "Otvoriť ponuku príloh a nástrojov"
+    "composerMenu": "Otvoriť ponuku príloh a nástrojov",
+    "pickTitle": "Vyberte konverzáciu",
+    "pickDescription": "Vyberte vlákno zo zoznamu alebo začnite nové tlačidlom +."
   },
   "tasks": {
     "emptyTitle": "Žiadne otvorené úlohy",
@@ -70,7 +72,9 @@
     },
     "markDone": "Označiť ako hotové",
     "reopen": "Znova otvoriť",
-    "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova."
+    "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
+    "pickTitle": "Vyberte úlohu",
+    "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
@@ -85,7 +89,9 @@
     "create": "Vytvoriť",
     "name": "Názov spisu",
     "personalHint": "Spis vznikne ako osobný a uvidíte ho len vy. Klienta a členov pridáte na webe.",
-    "createFailed": "Spis sa nepodarilo vytvoriť. Skúste to znova."
+    "createFailed": "Spis sa nepodarilo vytvoriť. Skúste to znova.",
+    "pickTitle": "Vyberte spis",
+    "pickDescription": "Vyberte spis zo zoznamu a uvidíte jeho dokumenty a úlohy."
   },
   "matter": {
     "documents": "Dokumenty",

@@ -38,7 +38,9 @@
     "answerStopped": "Apturēts.",
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
     "answerFailed": "Atbildi neizdevās pabeigt.",
-    "composerMenu": "Atvērt pielikumu un rīku izvēlni"
+    "composerMenu": "Atvērt pielikumu un rīku izvēlni",
+    "pickTitle": "Izvēlieties sarunu",
+    "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",
@@ -70,7 +72,9 @@
     },
     "markDone": "Atzīmēt kā izpildītu",
     "reopen": "Atvērt atkārtoti",
-    "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz."
+    "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
+    "pickTitle": "Izvēlieties uzdevumu",
+    "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -85,7 +89,9 @@
     "create": "Izveidot",
     "name": "Lietas nosaukums",
     "personalHint": "Tā tiek izveidota kā personīga lieta, ko redzat tikai jūs. Klientu un dalībniekus pievienojiet tīmeklī.",
-    "createFailed": "Lietu neizdevās izveidot. Mēģiniet vēlreiz."
+    "createFailed": "Lietu neizdevās izveidot. Mēģiniet vēlreiz.",
+    "pickTitle": "Izvēlieties lietu",
+    "pickDescription": "Izvēlieties lietu no saraksta, lai redzētu tās dokumentus un uzdevumus."
   },
   "matter": {
     "documents": "Dokumenti",
