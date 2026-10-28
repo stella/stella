@@ -225,7 +225,7 @@ body:has(.clipboard-editor-window) .font-sans {
   background-color: color-mix(in srgb, var(--card) 88%, transparent);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent),
-    0 10px 28px rgb(23 28 38 / 0.12);
+    0 10px 28px color-mix(in srgb, var(--shadow-tint) 12%, transparent);
 }
 
 .clipboard-card::after {
@@ -248,7 +248,7 @@ body:has(.clipboard-editor-window) .font-sans {
   .clipboard-card[aria-current="true"] {
   box-shadow:
     inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 30%, transparent),
-    0 12px 30px rgb(23 28 38 / 0.16);
+    0 12px 30px color-mix(in srgb, var(--shadow-tint) 16%, transparent);
 
   &::after {
     border-color: var(--option-blue);
@@ -280,7 +280,7 @@ body:has(.clipboard-editor-window) .font-sans {
   background-color: color-mix(in srgb, var(--card) 84%, transparent);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-white) 8%, transparent),
-    0 12px 30px rgb(0 0 0 / 0.24);
+    0 12px 30px color-mix(in srgb, var(--color-black) 24%, transparent);
 }
 
 /* Selection persists while keyboard focus moves to another card or control.
@@ -316,7 +316,7 @@ body:has(.clipboard-editor-window) .font-sans {
   .clipboard-card[aria-current="true"] {
   box-shadow:
     inset 0 0 0 1.5px color-mix(in srgb, var(--color-white) 32%, transparent),
-    0 14px 32px rgb(0 0 0 / 0.3);
+    0 14px 32px color-mix(in srgb, var(--color-black) 30%, transparent);
 }
 
 .clipboard-card[data-source-tint="0"] {
@@ -354,11 +354,15 @@ body:has(.clipboard-editor-window) .font-sans {
 }
 
 .clipboard-source-icon {
-  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28));
+  filter: drop-shadow(
+    0 2px 4px color-mix(in srgb, var(--color-black) 28%, transparent)
+  );
 }
 
 .clipboard-card:hover .clipboard-source-icon {
-  filter: drop-shadow(0 3px 6px rgb(0 0 0 / 0.36));
+  filter: drop-shadow(
+    0 3px 6px color-mix(in srgb, var(--color-black) 36%, transparent)
+  );
 }
 
 /* Favicons are drawn for a light browser tab strip (GitHub's is black on
@@ -366,7 +370,8 @@ body:has(.clipboard-editor-window) .font-sans {
  * without it they vanish on a dark card. */
 .clipboard-source-favicon {
   background: var(--color-white);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-black) 8%, transparent);
 }
 
 /* Sanitised clipboard HTML keeps only layout (tables, alignment, rules,
@@ -392,7 +397,7 @@ body:has(.clipboard-editor-window) .font-sans {
   border-color: color-mix(in srgb, var(--foreground) 16%, transparent);
   background-color: color-mix(in srgb, var(--background) 82%, transparent);
   box-shadow:
-    0 6px 18px rgb(23 28 38 / 0.08),
+    0 6px 18px color-mix(in srgb, var(--shadow-tint) 8%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--color-white) 48%, transparent);
 }
 
@@ -400,7 +405,7 @@ body:has(.clipboard-editor-window) .font-sans {
   border-color: color-mix(in srgb, var(--color-white) 14%, transparent);
   background-color: color-mix(in srgb, var(--card) 82%, transparent);
   box-shadow:
-    0 8px 20px rgb(0 0 0 / 0.2),
+    0 8px 20px color-mix(in srgb, var(--color-black) 20%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--color-white) 8%, transparent);
 }
 
