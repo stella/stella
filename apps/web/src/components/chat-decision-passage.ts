@@ -51,7 +51,7 @@ export const readDecisionPassage = (
   return parsed.success ? parsed.output : null;
 };
 
-const decisionPassageChip = ({
+export const decisionPassageChip = ({
   caseNumber,
   quote,
 }: DecisionPassage): PastedTextAttrs => ({
@@ -60,7 +60,7 @@ const decisionPassageChip = ({
   text: quote.replace(/\s+/gu, " ").trim(),
 });
 
-const decisionPassageMention = ({
+export const decisionPassageMention = ({
   caseNumber,
   decisionId,
 }: DecisionPassage): ChatMentionOption => ({

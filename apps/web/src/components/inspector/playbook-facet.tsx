@@ -3974,26 +3974,29 @@ const ReviewResultCard = ({
             onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
-                delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
                 fileFieldId: targetFileFieldId,
-                markdown: buildFindingChatDraft({
-                  item,
-                  passageTextById: passageTexts.textById,
-                  references,
-                  impactLabel: isDirectedImpact(finding.impact)
-                    ? impactLabel(finding.impact, perspective)
-                    : null,
-                  labels: {
-                    finding: t("inspector.review.chatDraft.finding"),
-                    impact: t("inspector.review.chatDraft.impact"),
-                    issue: t("inspector.review.chatDraft.issue"),
-                    question: t("inspector.review.chatDraft.question"),
-                    rationale: t("inspector.review.chatDraft.rationale"),
-                    recommendation: t("inspector.review.recommendation"),
-                    reference: t("inspector.review.referenceDocument"),
-                    target: t("inspector.review.targetDocument"),
-                  },
-                }),
+                handoff: {
+                  type: "prose",
+                  delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
+                  markdown: buildFindingChatDraft({
+                    item,
+                    passageTextById: passageTexts.textById,
+                    references,
+                    impactLabel: isDirectedImpact(finding.impact)
+                      ? impactLabel(finding.impact, perspective)
+                      : null,
+                    labels: {
+                      finding: t("inspector.review.chatDraft.finding"),
+                      impact: t("inspector.review.chatDraft.impact"),
+                      issue: t("inspector.review.chatDraft.issue"),
+                      question: t("inspector.review.chatDraft.question"),
+                      rationale: t("inspector.review.chatDraft.rationale"),
+                      recommendation: t("inspector.review.recommendation"),
+                      reference: t("inspector.review.referenceDocument"),
+                      target: t("inspector.review.targetDocument"),
+                    },
+                  }),
+                },
               })
             }
             onDecide={(decision) => onDecide(item.id, decision)}

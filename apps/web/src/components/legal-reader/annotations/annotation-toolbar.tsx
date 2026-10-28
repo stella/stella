@@ -13,9 +13,9 @@ import type {
   AnnotationVisibility,
 } from "@/components/legal-reader/annotations/annotation-types";
 import {
-  askAboutReaderPassage,
   readerSelectionLocator,
   readerSpansLocator,
+  useAskAboutReaderPassage,
   writeReaderPassage,
 } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
@@ -128,6 +128,7 @@ export const AnnotationToolbar = ({
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const askAboutReaderPassage = useAskAboutReaderPassage();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -485,6 +486,7 @@ export const AnnotationToolbar = ({
   // the same question, and the tools look the provision up by it.
   const askAboutPassage = (quote: string, locator: string | null) => {
     askAboutReaderPassage({
+      locator,
       prompt: t("legalReader.annotations.askPassagePrompt", {
         citation: readerTargetCitation({ locator, target }).inline,
         quote,
