@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "cc626a47427b783c474227557a00e2731f05c7aed953b041b80855c86ee38d28"
+  "kind": "priority",
+  "qualifier": "Publishes generated-only conflict resolutions to pull-request branches.",
+  "reviewedDigest": "98ab1664ad389d451b8d8503e85d967c0f6d477d34d30bead5bb72178636d566"
 }

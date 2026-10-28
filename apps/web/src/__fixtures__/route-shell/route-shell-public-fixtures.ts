@@ -26,6 +26,7 @@ const absentText = { type: "absent", reason: "not_published" } as const;
 const decision = {
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  citationCount: 0,
   citationsFrom: [],
   citationsNextCursor: null,
   citationsTo: [],
@@ -174,6 +175,9 @@ export const publicFixtureResponse = (
         color: null,
         registrationNumber: null,
         taxId: null,
+        vatId: null,
+        vatPayer: false,
+        invoiceLanguage: null,
         bankAccounts: [],
         billingAddress: null,
         defaultHourlyRate: null,

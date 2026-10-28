@@ -1,0 +1,2970 @@
+{
+  "unmeasuredReads": [
+    {
+      "id": "GET /v1/api-keys",
+      "reason": "Requires a api-keys fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/api-keys/current",
+      "reason": "Requires a api-keys fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/api-keys/personal",
+      "reason": "Requires a api-keys fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/api-keys/personal/organization",
+      "reason": "Requires a api-keys fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/audit-logs",
+      "reason": "Requires a audit-logs fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/audit-logs/export",
+      "reason": "Requires a audit-logs fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/auth/capabilities",
+      "reason": "Requires a auth fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/billing-codes/:workspaceId",
+      "reason": "Requires a billing-codes fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/:country/decisions/resolve",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/admin/ingestion/status",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/coverage",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId/analysis",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId/citations",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId/citations/leading",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId/citations/summary",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/:decisionId/provisions",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/by-slug/:slug",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/facets",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/latest",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/decisions/status",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/judges/:judgeId/portrait",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/matter-links/:workspaceId",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/provisions/citation-counts",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/provisions/citing-decisions",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/research/columns",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/sitemap/decisions/shard",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/case/sitemap/shards",
+      "reason": "Requires a case fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/catalogue",
+      "reason": "Requires a catalogue fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/catalogue/native-tool-deploy-availability",
+      "reason": "Requires a catalogue fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/decision-threads/:decisionId",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/link-icons/:hostname",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/model-options",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/skill-availability",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/messages",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/messages/:messageId",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/messages/:messageId/revisions",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/messages/older",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/saved-secret",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/title",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/turns/:turnId/join",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/tool-grants",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/tool-grants/coverage",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/chat/workspaces/:workspaceId/file-thread",
+      "reason": "Requires a chat fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clause-categories",
+      "reason": "Requires a clause-categories fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/:clauseId",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/:clauseId/variants",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/:clauseId/versions/:versionId",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/:clauseId/versions/:versionId/diff",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/export",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/clauses/template-slot-preview/:templateId",
+      "reason": "Requires a clauses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/:contactId",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/:contactId/sanctions",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/business-registries",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/export",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/sanctions/events",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/sanctions/matches",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/contacts/search",
+      "reason": "Requires a contacts fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop-edit-sessions/:sessionId/events",
+      "reason": "Requires a desktop-edit-sessions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop-edit-sessions/:sessionId/status",
+      "reason": "Requires a desktop-edit-sessions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop/feature-access",
+      "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop/matter-candidates",
+      "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop/matters",
+      "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/desktop/presence",
+      "reason": "Requires a desktop fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/dev/public-law-connection",
+      "reason": "Requires a dev fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/dev/seed",
+      "reason": "Requires a dev fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/dev/seed-firm-knowledge",
+      "reason": "Requires a dev fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/document-types",
+      "reason": "Requires a document-types fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/docx-suggestions/:workspaceId/entity/:entityId",
+      "reason": "Requires a docx-suggestions fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/desktop-edit-handoffs/:handoffId/status",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/entity/:entityId",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/file",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/diff",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/files",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/folders",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/pdf-signing-sessions/:sessionId",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/summaries",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/summaries/count",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entities/:workspaceId/zip/:entityId",
+      "reason": "Requires a entities fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/entity-views",
+      "reason": "Requires a entity-views fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/expenses/:workspaceId",
+      "reason": "Requires a expenses fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/external-preview",
+      "reason": "Requires a external-preview fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/external-preview/file",
+      "reason": "Requires a external-preview fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/document-properties/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/email-html/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/ocr-export/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/office-citation/:entityId/:fieldId/:blockId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/print-pdf/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/scrubbed/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/stamped/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/thumbnail/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/files/:workspaceId/url/:fieldId",
+      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/flows",
+      "reason": "Requires a flows fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/flows/:flowId",
+      "reason": "Requires a flows fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/invoices/:workspaceId",
+      "reason": "Requires a invoices fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/invoices/:workspaceId/:invoiceId",
+      "reason": "Requires a invoices fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/invoices/:workspaceId/prefill",
+      "reason": "Requires a invoices fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/:country/citations/resolve",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/sitemap/shards",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/sitemap/statutes/shard",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/:documentId",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/:documentId/provisions/:anchor/history",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/:documentId/provisions/:anchor/preview",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/:documentId/versions",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/by-eli",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/by-slug/:slug",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/facets",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/search",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/law/statutes/shelf",
+      "reason": "Requires a law fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/borme/:date",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/corpus/:documentId",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/laws/:lawId",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/laws/:lawId/blocks/:blockId",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/laws/:lawId/related",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/laws/:lawId/structure",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/legislation/search",
+      "reason": "Requires a legislation fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId/generations",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId/generations/:runId/candidates",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId/items",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId/items/:itemEntityId/activity",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/:listId/items/:itemEntityId/sources",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/verifications",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/lists/:workspaceId/verifications/:runId",
+      "reason": "Requires a lists fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/mcp/connections",
+      "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/mcp/connectors",
+      "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/mcp/oauth/callback",
+      "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/mcp/oauth/cli-client-metadata.json",
+      "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/mcp/oauth/client-metadata.json",
+      "reason": "Requires a mcp fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/data-exports",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/data-exports/:exportId",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/data-exports/:exportId/download",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/delete/pending-tasks",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/oauth-connections",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/me/professional-use",
+      "reason": "Requires a me fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/memories",
+      "reason": "Requires a memories fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/my-work",
+      "reason": "Requires a my-work fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/notifications",
+      "reason": "Requires a notifications fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/notifications/events",
+      "reason": "Requires a notifications fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/number-series",
+      "reason": "Requires a number-series fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/number-series/:numberSeriesId",
+      "reason": "Requires a number-series fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/number-series/:numberSeriesId/preview",
+      "reason": "Requires a number-series fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/ai-availability",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/ai-config",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/anonymization-blacklist",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/business-registry-credentials",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/correspondence/allowed-senders",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/deepl",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/deepl-config",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/document-ocr-availability",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/feature-access",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/feature-enrolments",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/organization-settings/web-search-config",
+      "reason": "Requires a organization-settings fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/playbooks",
+      "reason": "Requires a playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/playbooks/:playbookId",
+      "reason": "Requires a playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/playbooks/:playbookId/versions",
+      "reason": "Requires a playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/playbooks/recent",
+      "reason": "Requires a playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/playbooks/starters",
+      "reason": "Requires a playbooks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/properties/:workspaceId",
+      "reason": "Requires a properties fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/playbook-starters",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/playbook-starters/:id",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/template-packs",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/template-packs/:packId",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId/preview",
+      "reason": "Requires a public fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/rates/:workspaceId",
+      "reason": "Requires a rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/rates/:workspaceId/:rateTableId/entries",
+      "reason": "Requires a rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/rates/:workspaceId/arrangement",
+      "reason": "Requires a rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/rates/:workspaceId/resolve",
+      "reason": "Requires a rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/rates/:workspaceId/summary",
+      "reason": "Requires a rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/reader/annotations",
+      "reason": "Requires a reader fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/reader/answers",
+      "reason": "Requires a reader fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/saved-searches",
+      "reason": "Requires a saved-searches fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/saved-time-narratives",
+      "reason": "Requires a saved-time-narratives fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/search-history",
+      "reason": "Requires a search-history fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/search-history/import-clock",
+      "reason": "Requires a search-history fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/seller-profiles",
+      "reason": "Requires a seller-profiles fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/seller-profiles/:sellerProfileId",
+      "reason": "Requires a seller-profiles fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/sharepoint/connection",
+      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/sharepoint/drive/root",
+      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/sharepoint/oauth/callback",
+      "reason": "Requires a sharepoint fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/signals",
+      "reason": "Requires a signals fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/signals/:signalId",
+      "reason": "Requires a signals fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/signals/count",
+      "reason": "Requires a signals fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId/comments",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId/proposals",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId/proposals/:proposalId",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId/revisions",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/:skillId/revisions/:revisionId",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/skills/commands",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/style-sets",
+      "reason": "Requires a style-sets fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/style-sets/:styleSetId/download",
+      "reason": "Requires a style-sets fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/style-sets/:styleSetId/editor",
+      "reason": "Requires a style-sets fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/style-sets/editor/stella",
+      "reason": "Requires a style-sets fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/tasks/:workspaceId/:taskId",
+      "reason": "Requires a tasks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/tasks/:workspaceId/:taskId/links",
+      "reason": "Requires a tasks fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/template-categories",
+      "reason": "Requires a template-categories fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/template-packs",
+      "reason": "Requires a template-packs fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/template-packs/:packId",
+      "reason": "Requires a template-packs fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/template-recipes",
+      "reason": "Requires a template-recipes fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/check",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/clause-slots",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/clauses",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/preview",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/versions",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/versions/:versionId",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/:templateId/versions/:versionId/diff",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/binding-catalog",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/templates/lookup-formats",
+      "reason": "Requires a templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/:id",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/export/csv",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/export/ledes",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/export/pdf",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/suggestions",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/:workspaceId/summary",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/approval-queue",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-entries/me",
+      "reason": "Requires a time-entries fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-timers",
+      "reason": "Requires a time-timers fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/time-timers/admin",
+      "reason": "Requires a time-timers fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/usage/access",
+      "reason": "Requires a usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/usage/assignments",
+      "reason": "Requires a usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/usage/entitlement",
+      "reason": "Requires a usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/usage/lane",
+      "reason": "Requires a usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/usage/policies",
+      "reason": "Requires a usage fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/user-files/:fileId/content",
+      "reason": "Requires a user-files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/user-files/:fileId/thumbnail",
+      "reason": "Requires a user-files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/user-files/:fileId/visual",
+      "reason": "Requires a user-files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/vat-rates",
+      "reason": "Requires a vat-rates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/verify/:code",
+      "reason": "Requires a verify fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/view-templates/:workspaceId",
+      "reason": "Requires a view-templates fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/views/:workspaceId",
+      "reason": "Requires a views fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/views/:workspaceId/view/:viewId/export",
+      "reason": "Requires a views fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/activity",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/anonymization-allowlist",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/anonymization-terms",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/bilingual-translations/runs/:runId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/contacts",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/correspondence",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/correspondence/:correspondenceId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/correspondence/address",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/correspondence/drops",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/document-reviews/runs",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/document-reviews/runs/:runId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/document-reviews/runs/:runId/export",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/document-reviews/sources",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/document-translations/runs/:runId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/events",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/flows/runs",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/flows/runs/:runId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/infosoud/courts",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/members",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/overview",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/overview/activity",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/overview/activity/actors",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/overview/activity/export",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/reports",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/reports/:exportId",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/reports/templates",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/search-preview",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/:workspaceId/workflow",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/active",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/member-previews",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
+      "id": "GET /v1/workspaces/navigation",
+      "reason": "Requires a workspaces fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    }
+  ],
+  "pendingWriteHarness": [
+    {
+      "id": "DELETE /v1/billing-codes/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/case/matter-links/:workspaceId/:linkId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/case/research/columns/:columnId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/chat/threads/:threadId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/chat/tool-grants/:grantId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/clause-categories/:categoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/clauses/:clauseId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/clauses/:clauseId/variants/:variantId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/contacts/:contactId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/document-types/:documentTypeId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/entities/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/entities/:workspaceId/entity/:entityId/versions/:versionId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/entity-views/:viewId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/expenses/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/flows/:flowId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/invoices/:workspaceId/:invoiceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/invoices/:workspaceId/:invoiceId/entries",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/invoices/:workspaceId/:invoiceId/lines/:lineId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/mcp/connections/:connectionId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/mcp/connectors/:slug",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/me/oauth-connections/:consentId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/memories/:memoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/ai-config",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/business-registry-credentials",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/correspondence/allowed-senders/:senderId/scope",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/deepl",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/feature-enrolments/:featureId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/web-search-key",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/playbooks/:playbookId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/properties/:workspaceId/property/:propertyId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/rates/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/rates/:workspaceId/:rateTableId/entries",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/reader/annotations/:annotationId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/reader/answers/:answerId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/saved-searches/:savedSearchId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/saved-time-narratives/:id",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/search-history",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/search-history/:entryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/sharepoint/connection",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/skills/:skillId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/skills/:skillId/comments/:commentId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/skills/:skillId/proposals/:proposalId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/skills/:skillId/resources",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/style-sets/:styleSetId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/tasks/:workspaceId/assignees",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/tasks/:workspaceId/links",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/template-categories/:categoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/template-recipes/:recipeId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/templates/:templateId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/templates/:templateId/clauses/:linkId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/templates/lookup-formats/:formatId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/time-entries/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/time-entries/:workspaceId/batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/time-timers/:id",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/usage/assignments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/view-templates/:workspaceId/:templateId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/views/:workspaceId/view/:viewId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId/anonymization-allowlist/:entryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId/anonymization-terms/:entryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId/correspondence/address",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/workspaces/:workspaceId/members/:userId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/billing-codes/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/case/research/columns/:columnId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/chat/threads/:threadId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/chat/threads/:threadId/model",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/chat/threads/:threadId/title",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/document-types/:documentTypeId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/reject-pending",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/resolve",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/description",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/label",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/entities/:workspaceId/move",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/entities/:workspaceId/rename",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/entity-views/:viewId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/expenses/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/fields/:workspaceId/kanban-placement",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/fields/:workspaceId/metadata",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/fields/:workspaceId/metadata-batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/files/:workspaceId/document-properties/:fieldId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/invoices/:workspaceId/:invoiceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/invoices/:workspaceId/:invoiceId/lines/:lineId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/lists/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/lists/:workspaceId/item-sources",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/lists/:workspaceId/items",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/mcp/connections/:connectionId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/mcp/native-tools/:slug",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/me/guide-progress",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/memories/:memoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/notifications/:notificationId/read",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/number-series/:numberSeriesId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/rates/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/rates/:workspaceId/:rateTableId/entries",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/reader/annotations/:annotationId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/reader/answers/:answerId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/saved-searches/:savedSearchId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/saved-time-narratives/:id",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/seller-profiles/:sellerProfileId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/skills/:skillId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/skills/:skillId/comments/:commentId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/skills/:skillId/proposals/:proposalId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/skills/:skillId/resources",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/tasks/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/templates/:templateId/clauses/:linkId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/time-entries/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/time-timers/:id",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/vat-rates/:vatRateId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/work-obligations/:workspaceId/:entityId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/workspaces/:workspaceId/correspondence/:correspondenceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PATCH /v1/workspaces/:workspaceId/document-reviews/findings/:findingId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/ai-autocomplete/stream",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/ai-config/validate-provider",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/personal",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/personal/organization/revoke",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/personal/policy",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/personal/revoke",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/personal/rotate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/revoke",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/api-keys/rotate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/decisions/search",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/decisions/search/expand",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/decisions/search/refine",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/matter-links/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/matter-links/:workspaceId/batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/research/answers/lookup",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/research/answers/run",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/research/columns",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/case/research/columns/suggest-prompt",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/catalogue/install-skill",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/improve-prompt",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/table-chart",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/template-thread",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/template-thread/rotate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/export",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/fork",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/messages/:messageId/span-edit",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/recap",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/secrets/:toolCallId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/suggested-prompts",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/title/suggest",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/tool-grants",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/chat/workspaces/:workspaceId/file-thread",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clause-categories/:categoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/:clauseId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/:clauseId/variants/:variantId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/:clauseId/versions/:versionId/restore",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/:clauseId/versions/:versionId/summarize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/ai-rewrite",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/clauses/import",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/:contactId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/:contactId/sanctions/monitoring",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/:contactId/sanctions/reviews",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/business-registries/checks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/extract-from-procuracao",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/import/inspect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/import/preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/import/validate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/contacts/procuracao-upload",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-edit-handoffs/:handoffId/opened",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-edit-handoffs/redeem",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-edit-sessions/:sessionId/checkpoint",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-edit-sessions/:sessionId/finalize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-edit-sessions/:sessionId/respond-takeover",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-registry/grant",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-registry/redeem-link",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-registry/renew",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop-registry/request",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/desktop/presence",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/clean",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/clear-cache",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/public-law-connection",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/rebuild-search",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/seed",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/dev/seed-firm-knowledge",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/document-reviews/passages",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/document-types",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/document-types/reorder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/documents/:workspaceId/document/:documentId/compare",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/bilingual",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/check-stamp",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/clip",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/copy-to-workspace",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/create-from-legal-source",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/desktop-edit-handoffs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/desktop-edit-sessions/open",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/desktop-edit-sessions/release",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/desktop-edit-sessions/request-takeover",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/duplicate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/entity/:entityId/ocr",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/restore",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/summarize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/folder-from-selection",
+      "reason": "Creates a folder and reparents the bounded selection atomically; state-changing route awaits write-harness coverage for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/folio-collab-rooms/checkpoint",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/folio-collab-rooms/join",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/folio-collab-rooms/publish-version",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/group-counts",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/kanban-group",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/organize-suggestions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/pdf-signing-handoffs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/pdf-signing-sessions/:sessionId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/property-facets",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/query-window",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/upload",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/upload-generated-document",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entities/:workspaceId/upload-version",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entity-views/query-window",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/entity-views/reorder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/feedback",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/fields/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId/save",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/flows",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/authorize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/heartbeat",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/refresh-token",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/snapshot/load",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/snapshot/seed",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/folio-collab-rooms/snapshot/store",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/invoices/:workspaceId/:invoiceId/entries",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/invoices/:workspaceId/:invoiceId/lines",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/invoices/:workspaceId/:invoiceId/pdf",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/invoices/:workspaceId/:invoiceId/transition",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/invoices/:workspaceId/export",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/law/statutes/resolve",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/legislation/corpus/search",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/claim-reviews",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/claim-reviews/bulk",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/columns",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/generation-candidates",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/generation-candidates/accept",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/generation-candidates/reject",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/generations",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/item-comments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/item-reviews",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/item-sources",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/sample-case",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/sections",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/verifications",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/lists/:workspaceId/verifications/latest",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/mcp/connections",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/mcp/connectors",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/mcp/connectors/:slug/approve-authorization",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/mcp/connectors/:slug/connect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/mcp/connectors/probe",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/data-exports",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/delete/send-otp",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/delete/verify",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/professional-use",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/me/two-factor/send-otp",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/memories",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/memories/firm",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/notifications/announcements",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/notifications/read-all",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/number-series",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/number-series/:numberSeriesId/archive",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/number-series/:numberSeriesId/default",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/ai-config",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/ai-config/defaults-preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/business-registry-credentials",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/correspondence/allowed-senders",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/correspondence/allowed-senders/:senderId/scope",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/deepl",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/practice-jurisdictions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/sanctions-monitoring",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/web-search-key",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/pdf-signing-handoffs/redeem",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/pdf-signing-sessions/:sessionId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/pdf-signing-sessions/:sessionId/certificate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/pdf-signing-sessions/:sessionId/signature",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/playbooks",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/playbooks/:playbookId/approve",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/playbooks/:playbookId/versions/:version/restore",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/playbooks/from-run",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/playbooks/from-starter",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/properties/:workspaceId/preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/properties/:workspaceId/property/:propertyId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/properties/:workspaceId/suggest-prompt",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/reader/annotations",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/reader/answers",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/reader/answers/:answerId/messages",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/reader/answers/:answerId/regenerate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/sanctions/search",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/saved-searches",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/saved-time-narratives",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search-history",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search-history/import",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/facets",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/refine",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/summary",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/search/summary/chat",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/seller-profiles",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/seller-profiles/:sellerProfileId/archive",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/seller-profiles/:sellerProfileId/default",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/sharepoint/connect",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/signals/:signalId/acceptances",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/signals/:signalId/assignments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/signals/:signalId/dismissals",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/signals/:signalId/snoozes",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/signals/requests",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/comments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/proposals",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/proposals/:proposalId/review",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/proposals/from-comments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/resources",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/resources/rename",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/resources/rewrite",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/resources/upload",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/discover-url",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/from-blueprint",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/generate-draft",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/import-url",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/import-urls",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/upload",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/style-sets/:styleSetId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/style-sets/:styleSetId/editor",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/style-sets/:styleSetId/source",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/style-sets/editor/preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/tasks/:workspaceId/assignees",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/tasks/:workspaceId/assignees/move",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/tasks/:workspaceId/calendar",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/tasks/:workspaceId/links",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/template-categories/:categoryId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/template-packs/:packId/install",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/template-packs/visibility",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/clauses/:linkId/sync",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/clauses/sync",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/decide-conditions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/document",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/fill",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/fill-preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/fill-to/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/prefill",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/:templateId/versions/:versionId/summarize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/discover",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/fill",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/lookup-formats",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/lookup-formats/default",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/lookup-formats/my-default",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/lookup-preview",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/prepare",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/templates/suggest-fields",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/:workspaceId/batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/:workspaceId/polish-narrative",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/:workspaceId/split",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/:workspaceId/suggestions/decisions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/approval-queue/return",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/approve",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/internal",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-entries/me/submissions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-timers/:id/confirm",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-timers/:id/pause",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-timers/:id/resume",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-timers/admin/:id/stop",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/time-timers/start",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/uploads/:workspaceId/:uploadId/abort",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/uploads/:workspaceId/:uploadId/finalize",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/uploads/:workspaceId/entity-create/preflight",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/uploads/:workspaceId/entity-create/tree",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/uploads/:workspaceId/presign",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/usage/assignments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/usage/hosted/management",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/usage/hosted/setup",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/vat-rates",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/vat-rates/:vatRateId/archive",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/views/:workspaceId/reorder",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/views/:workspaceId/view/:viewId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/views/:workspaceId/view/:viewId/convert",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/work-obligations/:workspaceId/:entityId/acknowledge",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/work-obligations/:workspaceId/:entityId/transition",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/active",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/archive",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/bilingual-translations/prepare",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/bilingual-translations/runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/bounding-boxes",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/cell-retry",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/correspondence/address",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-reviews/parties",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-reviews/positions",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-reviews/positions/stream",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-reviews/runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-translations/prepare",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/document-translations/runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/duplicate",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/flows/runs",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/flows/runs/:runId/cancel",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/flows/runs/:runId/review",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/infosoud/import-agenda",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/infosoud/lookup",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/justifications/query",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/playbooks/:playbookId/run",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/playbooks/auto-run",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/reports/export",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/reports/templates/clone-builtin",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/unarchive",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/workflow/start",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/workspaces/:workspaceId/workflow/target-count",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/billing-codes/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/case/research/columns/order",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/clause-categories",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/clauses",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/clauses/:clauseId/variants",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/clauses/import",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/client-invoices/:clientId",
+      "reason": "Creates one invoice and claims selected work within a transaction; awaits the write scaling harness."
+    },
+    {
+      "id": "PUT /v1/contacts",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/contacts/import",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/desktop/time-entries/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/desktop/time-entries/batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/desktop/time-entries/batch/status",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/docx-suggestions/:workspaceId/entity/:entityId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/entities/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/entities/:workspaceId/blank-document",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/entities/:workspaceId/blank-document-from-style-set",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/entity-views",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/expenses/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/flows/:flowId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/invoices/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/lists/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/lists/:workspaceId/item-fact-details",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/organization-settings/anonymization-blacklist",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/organization-settings/feature-enrolments/:featureId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/playbooks/:playbookId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/properties/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/properties/:workspaceId/batch",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/rates/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/rates/:workspaceId/:rateTableId/entries",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/rates/:workspaceId/arrangement",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/sharepoint/enablement",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/style-sets",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/style-sets/editor",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/tasks/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/template-categories",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/template-recipes",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/templates",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/templates/:templateId/clauses",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/templates/blank",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/templates/style-set",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/templates/styles",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/time-entries/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/time-entries/me/daily-target",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/time-entries/members/:userId/daily-target",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/view-templates/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/views/:workspaceId",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/workspaces",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/workspaces/:workspaceId/anonymization-allowlist",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/workspaces/:workspaceId/anonymization-terms",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/workspaces/:workspaceId/contacts",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/workspaces/:workspaceId/members",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    }
+  ]
+}

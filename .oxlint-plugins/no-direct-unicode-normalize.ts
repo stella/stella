@@ -28,6 +28,18 @@ const isMarkRemovalPattern = (source: string): boolean => {
   );
 };
 
+// A run of rejected characters collapsed into one separator is slugify() in the
+// owner: the same allowed set (ASCII alphanumerics or Unicode letters and
+// numbers, optionally with the separator itself) and the same replacement.
+// Classes that allow anything else (a dot, a space) are different keys.
+const SLUG_RUN_PATTERN =
+  /^\/\[\^(?:a-z0-9|0-9a-z|\\da-z|a-z\\d|\\p\{L\}\\p\{N\})[-_]?\]\+\/[a-z]*$/u;
+
+const isSlugSeparatorLiteral = (node: unknown): boolean =>
+  isAstNode(node) &&
+  node.type === "Literal" &&
+  (node.value === "-" || node.value === "_");
+
 // Only deleting the marks is equivalent to the owner; any other replacement
 // (a separator, a callback) is different behaviour and stays allowed.
 const isEmptyStringLiteral = (node: unknown): boolean =>
@@ -55,6 +67,7 @@ export default eslintCompatPlugin({
         messages: {
           direct:
             "Use normalizeUnicode() from @stll/text-normalize so Unicode normalization has one owner.",
+          slug: "Use slugify() from @stll/text-normalize so slug rules (charset, budget, fallback) have one owner.",
           markStrip:
             "Use stripUnicodeMarks() or stripDiacritics() from @stll/text-normalize so mark-removal semantics stay explicit.",
         },
@@ -110,6 +123,17 @@ export default eslintCompatPlugin({
               )
             ) {
               context.report({ node, messageId: "markStrip" });
+              return;
+            }
+            if (
+              (property === "replace" || property === "replaceAll") &&
+              node.arguments.length >= 2 &&
+              isSlugSeparatorLiteral(node.arguments[1]) &&
+              SLUG_RUN_PATTERN.test(
+                context.sourceCode.getText(node.arguments[0]),
+              )
+            ) {
+              context.report({ node, messageId: "slug" });
               return;
             }
             if (property !== "normalize") {

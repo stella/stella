@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import {
   type CentsAmount,
   currencyMinorUnitDigits,
@@ -14,11 +16,18 @@ import type {
 /** Where an exported line came from, so e-billing formats can type it. */
 export type InvoiceExportLineSource = "manual" | "time_entry" | "expense";
 
+export type InvoiceExportMatter = {
+  id: string;
+  name: string;
+  reference: string | null;
+};
+
 /**
  * One invoice line as an export file carries it. Amounts are signed minor
  * units: a credit note's lines are negative.
  */
 export type InvoiceExportLine = {
+  matter: InvoiceExportMatter;
   position: number;
   description: string;
   /** Decimal string, as stored (`numeric(18, 4)`); null on a legacy total. */
@@ -30,6 +39,8 @@ export type InvoiceExportLine = {
   grossAmountMinor: CentsAmount;
   vatRateBps: number;
   vatTreatment: VatTreatment;
+  /** The statutory basis stored for an exempt supply. */
+  exemptionReason: string | null;
   source: InvoiceExportLineSource;
   /** The day the work was done or the expense incurred, `YYYY-MM-DD`. */
   date: string | null;
@@ -53,6 +64,7 @@ export type InvoiceExportRecord = {
   number: string;
   documentType: InvoiceDocumentType;
   originalNumber: string | null;
+  originalIssueDate: string | null;
   status: "finalized" | "sent" | "paid" | "void";
   issueDate: string;
   taxableSupplyDate: string | null;
@@ -62,11 +74,33 @@ export type InvoiceExportRecord = {
   currency: string;
   reference: string | null;
   notes: string | null;
-  matter: { id: string; name: string; reference: string | null };
+  scope:
+    | { type: "matter"; matter: InvoiceExportMatter }
+    | {
+        type: "client";
+        clientId: string;
+        matters: readonly InvoiceExportMatter[];
+      };
   seller: InvoiceExportSeller;
   buyer: InvoiceParty;
   lines: InvoiceExportLine[];
   totals: InvoiceTotals;
+};
+
+/** Participating matters; the invoice's client scope never substitutes an anchor. */
+export const exportMattersOf = ({
+  scope,
+}: Pick<InvoiceExportRecord, "scope">): readonly InvoiceExportMatter[] => {
+  switch (scope.type) {
+    case "matter":
+      return [scope.matter];
+    case "client":
+      return scope.matters;
+    default: {
+      scope satisfies never;
+      return panic("Unknown invoice export scope");
+    }
+  }
 };
 
 /**
@@ -183,4 +217,22 @@ export const czechVatBandOf = (vatRateBps: number): CzechVatBand => {
     return "secondReduced";
   }
   return "reduced";
+};
+
+/**
+ * A file name per invoice number, unique within one export. Numbers that
+ * sanitise to the same name (FV/1 and FV_1), or differ only in case, get a
+ * numeric suffix instead of overwriting each other in the archive.
+ */
+export const exportFileNamer = (extension: string) => {
+  const taken = new Set<string>();
+  return (number: string): string => {
+    const base = number.replace(/[^\w.-]/gu, "_");
+    let name = `${base}.${extension}`;
+    for (let suffix = 2; taken.has(name.toLowerCase()); suffix += 1) {
+      name = `${base}-${String(suffix)}.${extension}`;
+    }
+    taken.add(name.toLowerCase());
+    return name;
+  };
 };

@@ -32,10 +32,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { STABLE_RELEASE_TAG } from "./promoted-release-policy";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const STABLE_TAG = /^v\d+\.\d+\.\d+$/u;
 
 class NpmPublishLagError extends Error {
   readonly _tag = "NpmPublishLagError";
@@ -53,18 +53,16 @@ const fail = (message: string): never => {
 export const DAY_SECONDS = 24 * 60 * 60;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
 
-export type RegistryResult =
+type RegistryCheckResult =
   | { status: "passed"; reason: "ok" }
   | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
+  // npm's `latest`, so callers can tell a lagging registry from one ahead.
+  | { status: "failed"; reason: "version_mismatch"; latest: string }
   | {
       status: "failed";
       reason:
-        | "http_status"
-        | "timeout"
-        | "contract_error"
-        | "version_mismatch"
-        | "unattested_publish";
+        "http_status" | "timeout" | "contract_error" | "unattested_publish";
     };
 
 type RepositoryField = string | { url: string };
@@ -354,7 +352,13 @@ type CheckRegistryOptions = {
   registry: string;
   timeoutMs: number;
   npmRunner?: NpmRunner;
+  fetchImpl?: RegistryFetch;
 };
+
+export type RegistryFetch = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
 
 // This is the network boundary: exceptions become fixed, credential-free reasons.
 export const checkRegistry = async ({
@@ -366,9 +370,10 @@ export const checkRegistry = async ({
   timeoutMs,
   movedRepository,
   npmRunner = runNpm,
-}: CheckRegistryOptions): Promise<RegistryResult> => {
+  fetchImpl = fetch,
+}: CheckRegistryOptions): Promise<RegistryCheckResult> => {
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
       { signal: AbortSignal.timeout(timeoutMs) },
     );
@@ -421,7 +426,11 @@ export const checkRegistry = async ({
       case "pending":
         return { status: "skipped", reason: "publish_pending" };
       case "mismatch":
-        return { status: "failed", reason: "version_mismatch" };
+        return {
+          status: "failed",
+          reason: "version_mismatch",
+          latest: payload["version"],
+        };
       default: {
         assessment satisfies never;
         throw new NpmPublishLagError("Unhandled version assessment");
@@ -436,6 +445,84 @@ export const checkRegistry = async ({
           ? "timeout"
           : "contract_error",
     };
+  }
+};
+
+// A release target carries its promotion time, never a main bump timestamp.
+type PromotedPackage = {
+  version: string;
+  promotedAt: number;
+};
+
+export type RegistryResult =
+  | RegistryCheckResult
+  | PromotedRegistryResult
+  | FirstPublishResult
+  | { status: "failed"; reason: "promotion_unavailable" };
+
+// A package still at the enrollment version on main has never been released.
+// Only a pending changeset naming it makes that expected; the release that
+// consumes the changeset bumps the version and ends the pending state.
+export type FirstPublishResult =
+  | { status: "skipped"; reason: "pending_first_publish" }
+  | { status: "failed"; reason: "first_publish_unplanned" };
+
+type PromotedRegistryResult =
+  | { status: "passed"; reason: "published" }
+  | { status: "skipped"; reason: "pending_release" }
+  | { status: "skipped"; reason: "publish_pending" }
+  | { status: "failed"; reason: "publish_lagging"; latest: string };
+
+type CheckPromotedRegistryOptions = Omit<
+  CheckRegistryOptions,
+  "version" | "bumpedAt" | "movedRepository"
+> & {
+  mainVersion: string;
+  promotion: PromotedPackage;
+};
+
+export const checkPromotedRegistry = async ({
+  mainVersion,
+  promotion,
+  ...options
+}: CheckPromotedRegistryOptions): Promise<RegistryResult> => {
+  const result = await checkRegistry({
+    ...options,
+    version: promotion.version,
+    bumpedAt: undefined,
+    movedRepository: undefined,
+  });
+  switch (result.reason) {
+    case "ok":
+      return Bun.semver.order(mainVersion, promotion.version) > 0
+        ? { status: "skipped", reason: "pending_release" }
+        : { status: "passed", reason: "published" };
+    case "version_mismatch":
+      // A newer published release also fulfills the promoted minimum.
+      if (Bun.semver.order(result.latest, promotion.version) > 0) {
+        return Bun.semver.order(mainVersion, promotion.version) > 0
+          ? { status: "skipped", reason: "pending_release" }
+          : { status: "passed", reason: "published" };
+      }
+      return promotion.promotedAt <= options.now &&
+        options.now - promotion.promotedAt < DAY_SECONDS
+        ? { status: "skipped", reason: "publish_pending" }
+        : {
+            status: "failed",
+            reason: "publish_lagging",
+            latest: result.latest,
+          };
+    case "http_status":
+    case "timeout":
+    case "contract_error":
+    case "unattested_publish":
+    case "published_from_declared_repository":
+    case "publish_pending":
+      return result;
+    default: {
+      result satisfies never;
+      throw new NpmPublishLagError("Unhandled promoted registry assessment");
+    }
   }
 };
 
@@ -614,7 +701,7 @@ export const readPublishablePackages = ({
 
 /** The newest stable `vX.Y.Z` tag among those listed, newest first. */
 export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_TAG.test(tag));
+  tags.find((tag) => STABLE_RELEASE_TAG.test(tag));
 
 type Attempt = {
   readonly attempts: number;

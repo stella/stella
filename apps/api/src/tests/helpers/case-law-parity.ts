@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -10,6 +13,7 @@ import {
   plNsaFixture,
   plUodoFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
@@ -40,6 +44,7 @@ const parityOutputOf = ({
 const PARITY_FIXTURES = {
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
@@ -48,6 +53,15 @@ const PARITY_FIXTURES = {
   (documentUrl: URL) => EnrolledAdapterFixture
 >;
 
+export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) => {
+  const originalFetch = globalThis.fetch;
+  try {
+    return await fixture.buildDecision();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+};
+
 export const parserParityOutput = async (
   entry: ParserParityEntry,
 ): Promise<ParserParityOutput> => {
@@ -55,9 +69,9 @@ export const parserParityOutput = async (
     getAdapter(entry.adapterKey) ??
     panic(`Unknown parity adapter ${entry.adapterKey}`);
   const fixtureFactory = PARITY_FIXTURES[entry.adapterKey];
-  const decision = await fixtureFactory(
-    new URL(entry.fixture, INGESTION_ROOT),
-  ).buildDecision();
+  const decision = await buildCaseLawFixture(
+    fixtureFactory(new URL(entry.fixture, INGESTION_ROOT)),
+  );
   const reparse = adapter.reparseStoredRaw;
   if (reparse === undefined || decision.sourceRaw === undefined) {
     return parityOutputOf(decision);
@@ -90,3 +104,28 @@ export const parityGoldenUrl = (entry: ParserParityEntry): URL =>
     `__goldens__/${entry.fixture.replace("/__fixtures__/", "/")}.golden.json`,
     INGESTION_ROOT,
   );
+
+const stableReplayValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(stableReplayValue);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, child]) => child !== undefined)
+        .toSorted(([left], [right]) => compareCodeUnit(left, right))
+        .map(([key, child]) => [key, stableReplayValue(child)]),
+    );
+  }
+  return value;
+};
+
+export const replayParsedOutput = ({
+  sourceRaw: _sourceRaw,
+  sourceRawBytes: _sourceRawBytes,
+  sourceRawObjects: _sourceRawObjects,
+  ...output
+}: IngestionResult): string => JSON.stringify(stableReplayValue(output));
+
+export const replayParserFingerprint = (decision: IngestionResult): string =>
+  sha256Hex(replayParsedOutput(decision));

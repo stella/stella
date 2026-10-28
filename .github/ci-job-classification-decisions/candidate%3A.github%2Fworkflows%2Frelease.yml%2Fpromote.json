@@ -1,5 +1,5 @@
 {
   "kind": "priority",
   "qualifier": "Deploys stable releases to production, verifies the served commit, publishes the release and advances stable image tags.",
-  "reviewedDigest": "02d8b7ce47298f256278141fec87f6dc568c9ce56f7c64c9172c5b03430d64aa"
+  "reviewedDigest": "17ce63ba8eaa748bac49d84c6cdd6a5b90e6b1f106fc18bdf31c6af6b1808eb0"
 }

@@ -18,6 +18,7 @@ import {
   ActionAdmissionError,
   actionAdmissionRefusal as configuredActionAdmissionRefusal,
 } from "@/api/lib/errors/action-admission-error";
+import { admitSwitchedAction } from "@/api/lib/kill-switches/admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withAdmittedOperation } from "@/api/lib/proofs/checked-transaction";
@@ -1335,8 +1336,19 @@ export const withActionAdmission = async <T>(
     admit: async (
       checkedOptions,
       execute: (admission: ActionExecution) => Promise<T>,
-    ) =>
-      await withDemoActionBudget({
+    ) => {
+      // Refuse a switched-off action before it draws any budget. Admissions
+      // that name their kind only later (concurrency-only executions) are
+      // refused when their model dispatch is admitted.
+      const actionKind =
+        checkedOptions.periodIdentity?.actionKind ?? checkedOptions.actionKind;
+      if (actionKind !== undefined) {
+        const switched = admitSwitchedAction(actionKind);
+        if (Result.isError(switched)) {
+          return Result.err(switched.error);
+        }
+      }
+      return await withDemoActionBudget({
         budget: checkedOptions.demoActionBudget ?? configuredDemoActionBudget,
         organizationId: checkedOptions.organizationId,
         userId: checkedOptions.userId,
@@ -1384,5 +1396,6 @@ export const withActionAdmission = async <T>(
             },
           });
         },
-      }),
+      });
+    },
   });

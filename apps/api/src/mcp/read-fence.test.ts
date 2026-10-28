@@ -7,10 +7,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { handoffLinkResult } from "@/api/mcp/web-handoff-links-core";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const organizationId = toSafeId<"organization">("read_org");
@@ -60,11 +60,11 @@ const boundary = ({
     getMcpToolRequiredScopesHint: () => undefined,
     handleMcpToolCall: async () => result,
     listMcpTools: async () => [],
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async () =>
-      asTestRaw<McpRequestContext>({ organizationId, userId }),
+      asTestRaw<AuthorizedMcpRequestContext>({ organizationId, userId }),
   });
 
 const call = async (

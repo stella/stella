@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
@@ -15,6 +15,17 @@ import {
   projectDecisionReader,
   readDecisionSuccessResponseSchema,
 } from "./read-response";
+
+/** Where and why a reader answer breaks its declared schema; empty when it holds. */
+const schemaIssues = (response: unknown) => {
+  const parsed = v.safeParse(readDecisionSuccessResponseSchema, response);
+  return parsed.success
+    ? []
+    : parsed.issues.map((issue) => ({
+        path: v.getDotPath(issue),
+        message: issue.message,
+      }));
+};
 
 const UUID = "00000000-0000-4000-8000-000000000001";
 const decisionId = toSafeId<"caseLawDecision">(UUID);
@@ -48,6 +59,7 @@ const decisionWithText = (text: string) => {
     languageGroupKey: text,
     decisionDate: text,
     decisionType: text,
+    citationCount: 17,
     documentAst: {
       version: 1,
       source: {
@@ -164,12 +176,7 @@ test("decision readers bound every non-document Unicode field and retain officia
         const text = characters.join("").repeat(80_000);
         const original = decisionWithText(text);
         const response = projectDecisionReader(original);
-        const errors = [
-          ...Value.Errors(readDecisionSuccessResponseSchema, response),
-        ];
-        expect(errors.map(({ path, message }) => ({ path, message }))).toEqual(
-          [],
-        );
+        expect(schemaIssues(response)).toEqual([]);
         expect(response.fulltext).toBe(text);
         expect(response.documentAst).toBe(original.documentAst);
         const { documentAst, fulltext, sections, ...nonDocument } = response;
@@ -201,7 +208,5 @@ test("decision readers keep every section whole so citation section indices reso
   });
 
   expect(response.sections).toEqual(sections);
-  expect([
-    ...Value.Errors(readDecisionSuccessResponseSchema, response),
-  ]).toEqual([]);
+  expect(schemaIssues(response)).toEqual([]);
 });

@@ -74,7 +74,7 @@ const CONTACT_FIELD_LABELS = {
   addressPostalCode: "contacts.fields.billingAddressPostalCode",
   addressCountry: "common.country",
   registrationNumber: "contacts.fields.registrationNumber",
-  taxId: "contacts.fields.taxId",
+  taxId: "common.taxId",
   iban: "contacts.fields.bankAccountIban",
   bic: "contacts.fields.bankAccountBic",
   dataBox: "contacts.communication.dataBoxPlaceholder",
@@ -124,7 +124,8 @@ const SOURCE_LABELS = {
 
 /**
  * Every i18n key the catalog can emit, as a literal union. Flows to the
- * frontend through Eden, where `t(labelKey)` then typechecks against the real
+ * frontend through the API client, where `t(labelKey)` then typechecks
+ * against the real
  * message catalog — a stale or values-bearing key fails the web typecheck
  * instead of needing a runtime cast.
  */

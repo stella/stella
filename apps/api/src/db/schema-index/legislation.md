@@ -71,9 +71,9 @@ legislation_documents.updated_at                      timestamptz      default,n
 Publisher-stated aliases bound immutably to a source's language-neutral Work.
 
 ```text
-legislation_work_identifiers.source_id   safeUuid  not null  legislation.ts:511
-legislation_work_identifiers.identifier  varchar   not null  legislation.ts:512
-legislation_work_identifiers.eli         varchar   not null  legislation.ts:513
+legislation_work_identifiers.source_id   safeUuid  fk,not null  legislation.ts:511
+legislation_work_identifiers.identifier  varchar   not null     legislation.ts:512
+legislation_work_identifiers.eli         varchar   not null     legislation.ts:513
 ```
 
 ## legislation_work_names · `legislationWorkNames` · legislation.ts:579 · rls
@@ -166,11 +166,11 @@ legislation_index_jobs.created_at     timestamptz  default,not null  legislation
 Latest publisher observation of incoming amendments for one target Work.
 
 ```text
-legislation_amendment_snapshots.source_id    safeUuid     not null  legislation.ts:840
-legislation_amendment_snapshots.target_eli   varchar      not null  legislation.ts:841
-legislation_amendment_snapshots.language     varchar      not null  legislation.ts:842
-legislation_amendment_snapshots.observed_at  timestamptz  not null  legislation.ts:843
-legislation_amendment_snapshots.coverage     jsonb        not null  legislation.ts:844
+legislation_amendment_snapshots.source_id    safeUuid     fk,not null  legislation.ts:840
+legislation_amendment_snapshots.target_eli   varchar      not null     legislation.ts:841
+legislation_amendment_snapshots.language     varchar      not null     legislation.ts:842
+legislation_amendment_snapshots.observed_at  timestamptz  not null     legislation.ts:843
+legislation_amendment_snapshots.coverage     jsonb        not null     legislation.ts:844
 ```
 
 ## legislation_amendments · `legislationAmendments` · legislation.ts:864 · rls

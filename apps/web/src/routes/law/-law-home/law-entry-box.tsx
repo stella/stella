@@ -106,6 +106,7 @@ export const LawEntryBox = ({
               )}
               disabled={trimmed.length === 0}
               size={COMPOSER_CONTROL_BUTTON_SIZE}
+              tooltip={searchLabel}
               type="submit"
             >
               <SearchIcon className="size-3.5" />

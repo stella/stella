@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
+import { visibleReaderAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -160,14 +160,13 @@ export const readReaderAnswerDecision = async (
         decisionId: read.decision.id,
         court: read.decision.court,
         decisionDate: read.decision.decisionDate,
-        // Every piece a reader selection can anchor to, so an Explain over a
-        // heading or a table cell resolves like one over a paragraph.
-        paragraphs: read.ast.blocks.flatMap((block) =>
-          readerAnchorPiecesOf(block).map(({ anchorId, text }) => ({
-            paragraphId: anchorId,
-            text,
-          })),
-        ),
+        // Exactly the pieces the reader shows, headings and table cells
+        // included: an Explain over any of them resolves, and the model
+        // never reads or cites text the reader hides.
+        paragraphs: visibleReaderAnchorPiecesOf(
+          read.ast,
+          read.decision.caseNumberType,
+        ).map(({ anchorId, text }) => ({ paragraphId: anchorId, text })),
       };
     },
     catch: (cause) =>

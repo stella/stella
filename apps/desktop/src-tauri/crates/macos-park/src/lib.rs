@@ -34,15 +34,25 @@ pub use system_permissions::{
   notification_authorization, request_notification_authorization,
 };
 
+#[cfg(target_os = "macos")]
+mod window_bounds;
+#[cfg(target_os = "macos")]
+pub use window_bounds::{WindowBounds, largest_window_bounds};
+
 #[cfg(target_os = "windows")]
 mod windows_window;
 #[cfg(target_os = "windows")]
 pub use windows_window::focused_window_title;
 
 #[cfg(target_os = "macos")]
+mod activation;
+#[cfg(target_os = "macos")]
+pub use activation::{ActivationReturn, return_activation};
+
+#[cfg(target_os = "macos")]
 mod park;
 #[cfg(target_os = "macos")]
 pub use park::{
   disable_occlusion_detection, is_panel_presented, park_window,
-  prepare_transient_overlay, present_key_panel,
+  prepare_transient_overlay, present_activating_window, present_key_panel,
 };

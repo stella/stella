@@ -8,11 +8,11 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { user } from "@/api/db/auth-schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -99,8 +99,8 @@ describe("verification creation requires complete AI admission", () => {
             },
           }),
         );
-        expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-        if (result instanceof ElysiaCustomStatusResponse) {
+        expect(result).toBeInstanceOf(HttpStatusResponse);
+        if (result instanceof HttpStatusResponse) {
           expect(result.code).toBe(expectedStatus);
           if (expectedCode !== undefined) {
             expect(result.response).toHaveProperty("code", expectedCode);

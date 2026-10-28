@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "ee2adc582ded225849cbd8771852717e60445ef0a402542bf95a1036fb215cbe"
+  "kind": "priority",
+  "qualifier": "Publishes refreshed catalogue upstream inputs as a signed-commit pull request.",
+  "reviewedDigest": "1817f3041461d2875b922bd6b2ee1d3f03b5819dcbb6768bbc3bd9dc614cd874"
 }

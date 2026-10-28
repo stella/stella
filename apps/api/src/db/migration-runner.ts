@@ -5,6 +5,8 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
@@ -326,7 +328,11 @@ export class MigrationLockWaitError extends TaggedError(
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type LockWaitRetry = LockRetryConfig & LockRetryRuntime;
 
@@ -337,19 +343,91 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
 
 type ApplyPendingOptions = {
   apply: (lockTimeoutMs: number) => Promise<void>;
-  /** Whether the ledger still equals the preflight read. */
-  ledgerUnchanged: () => Promise<boolean>;
+  classifyLedger: () => Promise<MigrationLedgerProgress>;
   retry: LockWaitRetry;
 };
 
+export type MigrationLedgerProgress =
+  | { status: "unchanged"; committedReceipts: 0 }
+  | { status: "own"; committedReceipts: number }
+  | { status: "foreign"; committedReceipts: 0 };
+
+type ClassifyMigrationLedgerOptions = {
+  preflightRows: readonly LedgerRow[];
+  currentRows: readonly LedgerRow[];
+  predicted: ReturnType<typeof getMigrationsToRun>;
+};
+
+const sameReceipt = (left: LedgerRow, right: LedgerRow) =>
+  left.id === right.id &&
+  left.hash === right.hash &&
+  String(left.created_at) === String(right.created_at) &&
+  left.name === right.name;
+
+export const classifyMigrationLedger = ({
+  preflightRows,
+  currentRows,
+  predicted,
+}: ClassifyMigrationLedgerOptions): MigrationLedgerProgress => {
+  const preflightById = new Map(preflightRows.map((row) => [row.id, row]));
+  const currentById = new Map(currentRows.map((row) => [row.id, row]));
+  if (
+    currentById.size !== currentRows.length ||
+    preflightRows.some((row) => {
+      const current = currentById.get(row.id);
+      return current === undefined || !sameReceipt(row, current);
+    })
+  ) {
+    return { status: "foreign", committedReceipts: 0 };
+  }
+
+  const inserted = currentRows.filter(({ id }) => !preflightById.has(id));
+  if (inserted.length === 0) {
+    return { status: "unchanged", committedReceipts: 0 };
+  }
+  if (
+    inserted.length > predicted.length ||
+    inserted.some(({ hash, name, created_at }, index) => {
+      const expected = predicted.at(index);
+      return (
+        expected === undefined ||
+        name !== expected.name ||
+        hash !== expected.hash ||
+        String(created_at) !== String(expected.folderMillis)
+      );
+    })
+  ) {
+    return { status: "foreign", committedReceipts: 0 };
+  }
+  return { status: "own", committedReceipts: inserted.length };
+};
+
+type MigrationLedgerClassifierOptions = {
+  preflightRows: readonly LedgerRow[];
+  predicted: ReturnType<typeof getMigrationsToRun>;
+  readLedger: () => Promise<readonly LedgerRow[]>;
+};
+
+const migrationLedgerClassifier =
+  ({
+    preflightRows,
+    predicted,
+    readLedger,
+  }: MigrationLedgerClassifierOptions) =>
+  async () =>
+    classifyMigrationLedger({
+      preflightRows,
+      currentRows: await readLedger(),
+      predicted,
+    });
+
 /**
- * Retry the whole transactional pending set. Split migrations may have committed
- * receipts before a lock failure; refusing a changed ledger keeps those retries
- * from replaying a different pending set.
+ * Retry the whole pending set, including after this run committed a prefix of its
+ * predicted receipts. Refuse a retry only when another writer added a receipt.
  */
 export const applyPendingRetryingLockWaits = async ({
   apply,
-  ledgerUnchanged,
+  classifyLedger,
   retry,
 }: ApplyPendingOptions): Promise<void> => {
   const outcome = await runLockRetryLadder({
@@ -359,7 +437,8 @@ export const applyPendingRetryingLockWaits = async ({
     random: retry.random,
     attempt: apply,
     beforeRetry: async ({ attempts, lockTimeoutMs, cause, pauseMs }) => {
-      if (!(await ledgerUnchanged())) {
+      const ledgerProgress = await classifyLedger();
+      if (ledgerProgress.status === "foreign") {
         throw new MigrationLockWaitError({
           message: `Migrations lost a lock wait after committing receipts on attempt ${String(attempts)}`,
           reason: MIGRATION_LOCK_WAIT_FAILURE.ledgerMoved,
@@ -375,6 +454,7 @@ export const applyPendingRetryingLockWaits = async ({
           attempt: attempts,
           attempts: retry.lockTimeoutsMs.length,
           lockTimeoutMs,
+          committedReceipts: ledgerProgress.committedReceipts,
           delayMs: pauseMs,
         })}\n`,
       );
@@ -412,14 +492,6 @@ export const applySchemaMigrationsRetryingLockWaits = async ({
     }
   }
 };
-
-const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
-  rows
-    .map(
-      ({ id, hash, created_at, name }) =>
-        `${String(id)}:${hash}:${String(created_at)}:${String(name)}`,
-    )
-    .join(",");
 
 type PrepareSchemaPhaseOptions = {
   connection: ReservedSQL;
@@ -713,9 +785,6 @@ export const runMigrations = async ({
         FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
         ORDER BY id
       `);
-    const preflightFingerprint = ledgerFingerprint(preflight.rows);
-    // Retries retain the lane and original migration identities while each
-    // attempt observes its own lock waits and uses main's bounded timeouts.
     await applySchemaMigrationsRetryingLockWaits({
       connection,
       connectionState: () => session.state,
@@ -738,8 +807,11 @@ export const runMigrations = async ({
             ),
         );
       },
-      ledgerUnchanged: async () =>
-        ledgerFingerprint(await readLedger()) === preflightFingerprint,
+      classifyLedger: migrationLedgerClassifier({
+        preflightRows: preflight.rows,
+        predicted,
+        readLedger,
+      }),
       retry: lockWaitRetry,
     });
     clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;

@@ -11,13 +11,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ArrowLeftIcon,
-  BuildingIcon,
-  PlusIcon,
-  UserIcon,
-} from "@stll/ui/icons";
+import { BuildingIcon, PlusIcon, UserIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
@@ -32,6 +26,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -40,6 +35,7 @@ import { ContactPersonDetailsEditor } from "@/routes/_protected.contacts/-compon
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
+import { VatPayerSelect } from "@/routes/_protected.contacts/-components/vat-payer-select";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
@@ -119,6 +115,8 @@ function ContactDetailPage() {
     contactOptions(activeOrganizationId, contactId),
   );
   const deleteContact = useDeleteContact();
+  const [invoiceComposerOpen, setInvoiceComposerOpen] = useState(false);
+  const canCreateInvoice = usePermissions({ invoice: ["create"] });
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canDeleteContact = usePermissions({ contact: ["delete"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
@@ -164,21 +162,10 @@ function ContactDetailPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button
-          aria-label={t("common.back")}
-          onClick={() => {
-            detached(
-              (async () => await navigate({ to: "/contacts" }))(),
-              "contacts.navigate",
-            );
-          }}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-        </Button>
-        <div className="flex items-center gap-2">
+      {/* The breadcrumb already leads back to the list. The actions wrap
+          under the name on narrow screens instead of running off the edge. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           {contact.type === "person" ? (
             <UserIcon className="text-muted-foreground size-5" />
           ) : (
@@ -191,7 +178,12 @@ function ContactDetailPage() {
             {t(`contacts.type.${contact.type}`)}
           </span>
         </div>
-        <div className="ms-auto flex items-center gap-2">
+        <div className="ms-auto flex flex-wrap items-center gap-2">
+          {canCreateInvoice && activeClientMatters.length > 0 && (
+            <Button size="sm" onClick={() => setInvoiceComposerOpen(true)}>
+              {t("billing.clientComposer.title")}
+            </Button>
+          )}
           {canCreateMatter && (
             <Button
               onClick={() =>
@@ -315,9 +307,16 @@ function ContactDetailPage() {
               <EditableRow
                 contact={contact}
                 field="taxId"
-                label={t("contacts.fields.taxId")}
+                label={t("common.taxId")}
                 value={contact.taxId}
               />
+              <EditableRow
+                contact={contact}
+                field="vatId"
+                label={t("common.vatId")}
+                value={contact.vatId}
+              />
+              <VatPayerSelect contact={contact} />
               <EditableRow
                 // A draft is typed in one currency's units; a currency change
                 // remounts the row; its commit guard discards the old draft.
@@ -484,6 +483,14 @@ function ContactDetailPage() {
         </section>
       </div>
 
+      {canCreateInvoice && (
+        <ClientInvoiceComposer
+          clientId={contactId}
+          clientName={contact.displayName}
+          open={invoiceComposerOpen}
+          onOpenChange={setInvoiceComposerOpen}
+        />
+      )}
       <DestructiveConfirmDialog
         cancelLabel={t("common.cancel")}
         confirmLabel={t("common.delete")}

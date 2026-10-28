@@ -4,6 +4,12 @@
 # No merge/rebase chains are inferred: an ambiguous relation is refused.
 set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
+# Resolved without dirname: callers may run this with only bash and git.
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 # Merge-group receipt: the merge queue fast-forwards main to the merge-group
 # commit, so that group's ci-result check run sits on the commit that lands.
 # A successful one from a merge_group run of ci.yml can stand in for main/heavy
@@ -156,7 +162,7 @@ for commit in "${commits[@]}"; do
   metadata=$(bash "$gh_retry_script" api "repos/$repo/commits/$commit")
   jq -e --arg sha "$commit" '.sha == $sha' <<< "$metadata" >/dev/null || refuse 'commit is unavailable in repository'
   if ! git cat-file -e "$commit^{commit}"; then
-    git fetch --no-tags "https://github.com/$repo.git" "$commit"
+    "$BASH" "$retry_script" git fetch --no-tags "https://github.com/$repo.git" "$commit" >&2
   fi
   tree=$(git rev-parse --verify "$commit^{tree}")
   jq -e --arg tree "$tree" '.commit.tree.sha == $tree' <<< "$metadata" >/dev/null || refuse 'repository tree does not match local commit'
@@ -200,12 +206,20 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
 else
   [[ "$allow_pr_head" == true && "$sha" == "$proof" ]] || refuse 'target is not on main'
   pulls=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/pulls?per_page=100")
-  jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" '
-    [.[][] | select(.merged_at == null and .state == "open" and (.title | startswith("chore: release v")) and
+  release_version=$(git show "$sha:VERSION" | tr -d '[:space:]')
+  jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" --arg title "chore: release v$release_version" '
+    [.[][] | select(.merged_at == null and .state == "open" and .draft == false and .title == $title and
       .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
       .base.ref == "main")] | length == 1
   ' <<< "$pulls" >/dev/null || refuse 'open release PR relation is unverified'
-  git merge-base --is-ancestor "$main" "$proof" || refuse 'PR head does not contain current main tip'
+  # Main moving during a release cut is normal: exit 3 lets a caller skip
+  # instead of failing, while every other refusal stays exit 1.
+  if ! git merge-base --is-ancestor "$main" "$proof"; then
+    echo "RELEASE_TREE_PROOF_STALE: PR head $proof does not contain current main tip $main" >&2
+    exit 3
+  fi
+  candidate_tree_verifier="${RELEASE_CANDIDATE_TREE_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-candidate-tree.mjs}"
+  GH_RETRY_SCRIPT="$gh_retry_script" node "$candidate_tree_verifier" "$main" "$proof" "$repo" || refuse 'release PR changes executable or unbound build input'
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

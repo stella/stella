@@ -1,0 +1,1 @@
+{"h-[calc(100%-var(--mac-titlebar-height))]":{"valid":true,"declarations":[["","height","calc(100% - var(--mac-titlebar-height))"]],"values":{"calc(100% - var(--mac-titlebar-height))":{"p":["--mac-titlebar-height"],"f":[],"u":false}}},"top-[15%]":{"valid":true,"declarations":[["","top","15%"]],"values":{"15%":{"p":[],"f":[],"u":false}}}}

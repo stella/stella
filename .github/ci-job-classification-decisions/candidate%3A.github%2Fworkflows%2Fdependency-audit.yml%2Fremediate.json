@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "72e5e659c1a788ace5e6c6a4a3f98016badf2fc11968de1c00d47b61bd93b408"
+  "kind": "priority",
+  "qualifier": "Publishes dependency audit remediation as a signed-commit pull request.",
+  "reviewedDigest": "b08745d764c95c6a23c9f7bbcaadb12e627020d414f87104e3c18321e6fc4418"
 }

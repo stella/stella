@@ -8,6 +8,11 @@ import type {
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
 
+import {
+  CACHE_CONTROL_HEADER,
+  SSE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/http/cache";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -23,20 +28,11 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
-  CACHE_CONTROL_HEADER,
-  SSE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/security-headers";
-import {
+  defaultSseBroadcastPublisher,
   INSTANCE_ID,
   parseRedisPayload,
-  publishOrganizationEvent,
-  publishSessionEvent,
-  publishUserAccessRevoked,
-  publishUserEvent,
-  publishWorkspaceAccessRevoked,
-  publishWorkspaceEvent,
   REDIS_CHANNEL,
+  type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
 import { requireSessionCredentialIssuer } from "@/api/lib/synthetic-principal/credential-policy";
 
@@ -187,6 +183,27 @@ export type SseStreamBinding =
   | { kind: "credential"; revalidate: () => Promise<boolean> };
 
 type SseSessionBinding = Extract<SseStreamBinding, { kind: "session" }>;
+
+/**
+ * The binding for a member handler's stream: the browser session that asked,
+ * or the credential an app's access token carries in its place. Stream
+ * handlers are MCP-internal, so a caller without either (MCP) never reaches
+ * one; arriving here without one is a wiring error.
+ */
+export const memberSessionStreamBinding = ({
+  session,
+  user,
+}: {
+  session: { readonly id: string | null; readonly stream?: SseStreamBinding };
+  user: { readonly id: SafeId<"user"> };
+}): SseStreamBinding => {
+  if (session.stream !== undefined) {
+    return session.stream;
+  }
+  return session.id === null
+    ? panic("An event stream opened for a caller without a browser session")
+    : { kind: "session", sessionId: session.id, userId: user.id };
+};
 
 /** The ids among `sessions` whose session exists, belongs to that user and
  *  has not expired. */
@@ -930,15 +947,15 @@ export const revokeWorkspaceSseAccess = async (
   userId: SafeId<"user">,
 ): Promise<void> => {
   closeLocalWorkspaceUserConnections(workspaceId, userId);
-  const publishAccessRevoked =
-    activeLifecycle?.publishAccessRevoked ?? publishWorkspaceAccessRevoked;
-  await publishAccessRevoked(workspaceId, userId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishWorkspaceAccessRevoked(workspaceId, userId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -952,13 +969,15 @@ export const revokeUserSseAccess = async (
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
   closeLocalUserConnections(userId, organizationId);
-  await publishUserAccessRevoked(userId, organizationId, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.error("sse.user_access_revocation_publish_failed", {
-      "error.type": errorTag(error),
+  await activePublisher()
+    .publishUserAccessRevoked(userId, organizationId, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.error("sse.user_access_revocation_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 /**
@@ -979,19 +998,21 @@ export const broadcastToUser = (
     );
   }
 
-  publishUserEvent(userId, organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishUserEvent(userId, organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        queueUserDelivery(userId, async () =>
+          broadcastLocalToUser(userId, organizationId, event),
+        );
+      }
     });
-    if (!deliveredLocally) {
-      queueUserDelivery(userId, async () =>
-        broadcastLocalToUser(userId, organizationId, event),
-      );
-    }
-  });
 };
 
 /**
@@ -1005,7 +1026,8 @@ export const broadcast = (
   {
     publishWorkspace: publishWorkspaceOverride,
   }: {
-    publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+    publishWorkspace?:
+      SseBroadcastPublisher["publishWorkspaceEvent"] | undefined;
   } = {},
 ): void => {
   // When this instance has no attached subscriber it never receives its
@@ -1028,9 +1050,7 @@ export const broadcast = (
   }
 
   const publishWorkspace =
-    publishWorkspaceOverride ??
-    activeLifecycle?.publishWorkspace ??
-    publishWorkspaceEvent;
+    publishWorkspaceOverride ?? activePublisher().publishWorkspaceEvent;
   publishWorkspace(workspaceId, event, {
     originInstanceId: INSTANCE_ID,
     deliveredInline: deliveredLocally,
@@ -1058,17 +1078,19 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  publishOrganizationEvent(organizationId, event, {
-    originInstanceId: INSTANCE_ID,
-    deliveredInline: deliveredLocally,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishOrganizationEvent(organizationId, event, {
+      originInstanceId: INSTANCE_ID,
+      deliveredInline: deliveredLocally,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
+      if (!deliveredLocally) {
+        broadcastLocalToOrganization(organizationId, event);
+      }
     });
-    if (!deliveredLocally) {
-      broadcastLocalToOrganization(organizationId, event);
-    }
-  });
 };
 
 // ── Desktop-edit session events ─────────────────────────
@@ -1106,13 +1128,15 @@ export const broadcastSessionEvent = (
 ): void => {
   sessionDeliveryHandler?.(sessionId, event);
 
-  publishSessionEvent(sessionId, event, {
-    originInstanceId: INSTANCE_ID,
-  }).catch((error: unknown) => {
-    logger.warn("sse.redis_publish_failed", {
-      "error.type": errorTag(error),
+  activePublisher()
+    .publishSessionEvent(sessionId, event, {
+      originInstanceId: INSTANCE_ID,
+    })
+    .catch((error: unknown) => {
+      logger.warn("sse.redis_publish_failed", {
+        "error.type": errorTag(error),
+      });
     });
-  });
 };
 
 // ── Keep-alive heartbeat ────────────────────────────────
@@ -1160,7 +1184,7 @@ const closeLocalConnections = (): void => {
 // Importing this module must have no side effects: route-level realtime
 // producers pull it into many processes, so an eager Redis connection or timer
 // would fire for every process that imports the route tree, including the
-// exact-mirror schema guard and the test runner. `startSse`/`stopSse` make
+// route-table guards and the test runner. `startSse`/`stopSse` make
 // the keep-alive timer and the cross-instance Redis subscriber an explicit
 // lifecycle that only the server's boot/shutdown path drives, mirroring the
 // BullMQ `init*Worker` / `.close()` pairs in server.ts.
@@ -1192,8 +1216,7 @@ export type SseConnectionAuthorizers = {
 
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
-  publishAccessRevoked?: typeof publishWorkspaceAccessRevoked | undefined;
-  publishWorkspace?: typeof publishWorkspaceEvent | undefined;
+  publisher?: SseBroadcastPublisher | undefined;
 };
 
 type SseLifecycle = {
@@ -1201,8 +1224,8 @@ type SseLifecycle = {
   /** Runs `sweepBoundStreams` every `LIMITS.sseCredentialRecheckMs`. */
   credentialSweepTimer: ReturnType<typeof setInterval>;
   keepAliveTimer: ReturnType<typeof setInterval>;
-  publishAccessRevoked: typeof publishWorkspaceAccessRevoked;
-  publishWorkspace: typeof publishWorkspaceEvent;
+  /** Every scope's cross-instance publish goes through this one publisher. */
+  publisher: SseBroadcastPublisher;
   subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
@@ -1233,6 +1256,13 @@ type SseLifecycle = {
 };
 
 let activeLifecycle: SseLifecycle | null = null;
+
+/**
+ * The publisher the running lifecycle was started with, or the process-wide
+ * one before `startSse` (see the ordering note on `startSse`).
+ */
+const activePublisher = (): SseBroadcastPublisher =>
+  activeLifecycle?.publisher ?? defaultSseBroadcastPublisher;
 
 /**
  * Whether this instance currently has a live, subscribed Redis subscriber. Used
@@ -1502,9 +1532,7 @@ export const startSse = (
       LIMITS.sseCredentialRecheckMs,
     ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
-    publishAccessRevoked:
-      dependencies.publishAccessRevoked ?? publishWorkspaceAccessRevoked,
-    publishWorkspace: dependencies.publishWorkspace ?? publishWorkspaceEvent,
+    publisher: dependencies.publisher ?? defaultSseBroadcastPublisher,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,

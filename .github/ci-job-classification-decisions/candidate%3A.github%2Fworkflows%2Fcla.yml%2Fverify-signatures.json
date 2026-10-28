@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Verifies contributor signatures and reports merge-gating CLA checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "c59fab16378cceab26f3facbda5a95d9caff99aaa1061db4a2c9332652ff9ffe"
+  "kind": "priority",
+  "qualifier": "Records contributor licence agreement signatures with a contents-write app token.",
+  "reviewedDigest": "d60259851dee852edc434cffab0ccc2806b11146fc950bf24c75b1e83d1b71cc"
 }

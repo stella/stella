@@ -16,7 +16,6 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
 import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
@@ -25,6 +24,11 @@ import {
   buildReaderAnswerPrompt,
   validateReaderAnswerCitations,
 } from "@/api/handlers/legal-reader/answers/prompt";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/http/cache";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -34,14 +38,10 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/security-headers";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -297,6 +297,14 @@ export type ReaderAnswerStreamOptions = AnnotationAuthorScope & {
   usageLane?: UsageLaneDecision;
 };
 
+const readerAnswerInterrupted = (cause?: unknown) =>
+  new HandlerError({
+    status: 502,
+    code: "internal_error",
+    message: "Reader answer generation was interrupted",
+    cause,
+  });
+
 /** Admission remains held until the stream settles, including every tool round. */
 export const streamReaderAnswer = ({
   prepared,
@@ -330,17 +338,12 @@ export const streamReaderAnswer = ({
         answerId: prepared.answer.id,
         messageId: prepared.messageId,
       });
-      const interrupted = (cause?: unknown) =>
-        new HandlerError({
-          status: 502,
-          message: "Reader answer generation was interrupted",
-          cause,
-        });
+
       const remainingMs =
         prepared.deadlineAt - Temporal.Now.instant().epochMilliseconds;
       const admitted =
         remainingMs <= 0
-          ? Result.err(interrupted())
+          ? Result.err(readerAnswerInterrupted())
           : await Result.tryPromise({
               try: async () =>
                 await withTimeout(
@@ -360,7 +363,7 @@ export const streamReaderAnswer = ({
                             Temporal.Now.instant().epochMilliseconds >=
                               prepared.deadlineAt;
                           if (expired()) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           const output = yield* Result.await(
                             runModel({
@@ -368,7 +371,7 @@ export const streamReaderAnswer = ({
                               signal: runSignal,
                               answerId: prepared.answer.id,
                               decisionId: prepared.decision.decisionId,
-                              paragraphId: prepared.anchor.paragraphId,
+                              paragraphId: prepared.anchor[0].paragraphId,
                               system: prompt.system,
                               messages: [
                                 { role: "user", content: prompt.context },
@@ -418,7 +421,7 @@ export const streamReaderAnswer = ({
                             }),
                           );
                           if (expired()) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           const validated = validateReaderAnswerCitations({
                             content: output.content,
@@ -442,7 +445,7 @@ export const streamReaderAnswer = ({
                             }),
                           );
                           if (saved === null) {
-                            return Result.err(interrupted());
+                            return Result.err(readerAnswerInterrupted());
                           }
                           emit(saved);
                           return Result.ok(undefined);
@@ -457,7 +460,7 @@ export const streamReaderAnswer = ({
                     timeoutMs: remainingMs,
                   },
                 ),
-              catch: interrupted,
+              catch: readerAnswerInterrupted,
             });
       const outcome = admitted
         .andThen((admission) => admission)

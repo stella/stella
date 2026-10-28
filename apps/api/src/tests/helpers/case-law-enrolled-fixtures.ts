@@ -133,6 +133,7 @@ import {
   buildSkUsDecision,
   skUsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { fetchUkFclDecision } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -1023,7 +1024,7 @@ export const plKioFixture = (): EnrolledAdapterFixture => ({
     const built = assemblePlKioDecision({
       item: { ...PL_KIO_LISTING_ROW },
       detailHtml: PL_KIO_DETAIL_PAGE,
-      documentHtml: PL_KIO_DOCUMENT,
+      document: { type: "read", html: PL_KIO_DOCUMENT },
     });
     return await Promise.resolve(
       built.type === "built"
@@ -1657,7 +1658,7 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({
-      content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
     });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {
@@ -2806,6 +2807,32 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+export const ukFclFixture = (
+  documentUrl = new URL(
+    "../../handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
+    import.meta.url,
+  ),
+): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const feed = await Bun.file(
+      new URL(
+        "../../handlers/case-law/ingestion/adapters/__fixtures__/uk-fcl.atom.xml",
+        import.meta.url,
+      ),
+    ).text();
+    const document = await Bun.file(documentUrl).text();
+    globalThis.fetch = asFetchMock(async () => new Response(document));
+    const built = await fetchUkFclDecision({
+      feed,
+      sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
+    });
+    if (built.isErr()) {
+      return await Promise.reject(built.error);
+    }
+    return built.value;
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2836,6 +2863,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
   [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
+  [ADAPTER_KEYS.UK_FCL]: ukFclFixture,
   [ADAPTER_KEYS.PL_KIS]: plKisFixture,
   [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,

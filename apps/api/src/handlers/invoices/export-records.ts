@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   InvoiceExportLine,
@@ -14,7 +14,11 @@ import { Temporal, todayFor } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
+import {
+  invoiceInMatter,
+  invoiceTouchesMatter,
+} from "@/api/lib/billing/invoice-scope";
 import { selectTimekeeperNames } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -61,6 +65,7 @@ const EXPORT_RELATIONS = {
 
 const PARTY_FIELDS = [
   "registrationNumber",
+  "taxId",
   "vatId",
   "addressLine1",
   "addressLine2",
@@ -71,16 +76,23 @@ const PARTY_FIELDS = [
 
 type StoredParty = Record<(typeof PARTY_FIELDS)[number], string | null>;
 
-const presentText = (value: string | null): value is string =>
-  value !== null && value.trim() !== "";
+/**
+ * Stored text as every export reads it: trimmed, and absent when blank. The
+ * one place exports get identifiers from, so a format's validation and its
+ * output never see different strings.
+ */
+const exportText = (value: string | null): string | null => {
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
+};
 
 /** A party as an export carries it: blank stored fields are left out. */
 const partyOf = (name: string, stored: StoredParty): InvoiceParty => ({
   name,
   ...Object.fromEntries(
     PARTY_FIELDS.flatMap((field) => {
-      const value = stored[field];
-      return presentText(value) ? [[field, value]] : [];
+      const value = exportText(stored[field]);
+      return value === null ? [] : [[field, value]];
     }),
   ),
 });
@@ -102,7 +114,10 @@ export const loadInvoiceExport = async (
   });
   const invoices = await tx.query.invoices.findMany({
     where: {
-      workspaceId: { eq: workspaceId },
+      RAW: (table) =>
+        invoiceIds === undefined
+          ? invoiceTouchesMatter(table, workspaceId)
+          : invoiceInMatter(table, workspaceId),
       organizationId: { eq: organizationId },
       status: { in: [...EXPORTABLE_STATUSES] },
       ...(invoiceIds ? { id: { in: [...invoiceIds] } } : {}),
@@ -112,6 +127,30 @@ export const loadInvoiceExport = async (
     limit: MAX_EXPORT_INVOICES + 1,
     with: EXPORT_RELATIONS,
   });
+  const matterIds = [
+    ...new Set(
+      invoices.flatMap((invoice) => [
+        ...(invoice.workspaceId === null ? [] : [invoice.workspaceId]),
+        ...invoice.lines.map((line) => line.workspaceId),
+        ...invoice.timeEntries.map(
+          (entry) =>
+            entry.workspaceId ?? panic("Invoiced time entry has no matter"),
+        ),
+        ...invoice.expenses.map((expense) => expense.workspaceId),
+      ]),
+    ),
+  ];
+  const matterRows =
+    matterIds.length === 0
+      ? []
+      : await tx.query.workspaces.findMany({
+          where: {
+            id: { in: matterIds },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true, name: true, reference: true },
+          limit: matterIds.length,
+        });
   const sellerIds = [
     ...new Set(invoices.flatMap((invoice) => invoice.sellerProfileId ?? [])),
   ];
@@ -134,10 +173,10 @@ export const loadInvoiceExport = async (
       : await tx.query.invoices.findMany({
           where: {
             id: { in: originalIds },
-            workspaceId: { eq: workspaceId },
+            RAW: (table) => invoiceInMatter(table, workspaceId),
             organizationId: { eq: organizationId },
           },
-          columns: { id: true, invoiceNumber: true },
+          columns: { id: true, invoiceNumber: true, invoiceDate: true },
           limit: originalIds.length,
         });
   const userIds = new Set(
@@ -151,10 +190,14 @@ export const loadInvoiceExport = async (
       : await selectTimekeeperNames(tx, { organizationId, userIds });
   return {
     matter,
+    matters: new Map(matterRows.map((row) => [row.id, row])),
     invoices,
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
-      originals.map((original) => [original.id, original.invoiceNumber]),
+      originals.map((original) => [
+        original.id,
+        { number: original.invoiceNumber, issueDate: original.invoiceDate },
+      ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
     timeZone: await readOrganizationTimeZone(tx, organizationId),
@@ -171,6 +214,7 @@ type DocumentAmounts = {
     unitPrice: CentsAmount | null;
     timeEntryId: SafeId<"timeEntry"> | null;
     expenseId: SafeId<"expense"> | null;
+    exemptionReason: string | null;
   })[];
   totals: InvoiceTotals;
 };
@@ -186,11 +230,17 @@ const sourceOf = (
   return expense === undefined ? "manual" : "expense";
 };
 
-const exportLines = (
-  invoice: LoadedInvoice,
-  amounts: DocumentAmounts,
-  timekeepers: LoadedExport["timekeepers"],
-): InvoiceExportLine[] => {
+type ExportLinesOptions = {
+  invoice: LoadedInvoice;
+  amounts: DocumentAmounts;
+  loaded: LoadedExport;
+};
+
+const exportLines = ({
+  invoice,
+  amounts,
+  loaded,
+}: ExportLinesOptions): InvoiceExportLine[] => {
   const timeEntries = new Map(
     invoice.timeEntries.map((entry) => [entry.id, entry]),
   );
@@ -205,7 +255,18 @@ const exportLines = (
       ? timeEntries.get(line.timeEntryId)
       : undefined;
     const expense = line.expenseId ? expenses.get(line.expenseId) : undefined;
+    const workspaceId =
+      stored?.workspaceId ??
+      entry?.workspaceId ??
+      expense?.workspaceId ??
+      invoice.workspaceId;
+    const matter =
+      workspaceId === null ? undefined : loaded.matters.get(workspaceId);
+    if (matter === undefined) {
+      return panic("Exported invoice line has no authorized matter metadata");
+    }
     return {
+      matter,
       position: index + 1,
       description: line.description,
       quantity: line.quantity,
@@ -216,10 +277,11 @@ const exportLines = (
       grossAmountMinor: line.grossAmountMinor,
       vatRateBps: line.vatRateBps,
       vatTreatment: line.vatTreatment,
+      exemptionReason: exportText(line.exemptionReason),
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
-        ? { id: entry.userId, name: timekeepers.get(entry.userId) ?? "" }
+        ? { id: entry.userId, name: loaded.timekeepers.get(entry.userId) ?? "" }
         : null,
       taskCode: entry?.taskCode ?? null,
       activityCode: entry?.activityCode ?? null,
@@ -232,23 +294,27 @@ const exportLines = (
 
 const exportSellerOf = (
   seller: NonNullable<ReturnType<LoadedExport["sellers"]["get"]>>,
-): InvoiceExportSeller => ({
-  ...partyOf(seller.legalName, {
-    registrationNumber: seller.registrationId,
-    vatId: seller.vatId,
-    addressLine1: seller.addressLine1,
-    addressLine2: seller.addressLine2,
-    city: seller.city,
-    postalCode: seller.postalCode,
-    country: seller.country,
-  }),
-  ...(presentText(seller.iban) ? { iban: seller.iban } : {}),
-  ...(presentText(seller.bic) ? { bic: seller.bic } : {}),
-  ...(presentText(seller.accountNumber)
-    ? { accountNumber: seller.accountNumber }
-    : {}),
-  homeCurrency: seller.defaultCurrency,
-});
+): InvoiceExportSeller => {
+  const iban = exportText(seller.iban);
+  const bic = exportText(seller.bic);
+  const accountNumber = exportText(seller.accountNumber);
+  return {
+    ...partyOf(seller.legalName, {
+      registrationNumber: seller.registrationId,
+      taxId: seller.taxId,
+      vatId: seller.vatId,
+      addressLine1: seller.addressLine1,
+      addressLine2: seller.addressLine2,
+      city: seller.city,
+      postalCode: seller.postalCode,
+      country: seller.country,
+    }),
+    ...(iban === null ? {} : { iban }),
+    ...(bic === null ? {} : { bic }),
+    ...(accountNumber === null ? {} : { accountNumber }),
+    homeCurrency: seller.defaultCurrency,
+  };
+};
 
 /**
  * The loaded invoices as export records. Refused when a selected invoice is
@@ -306,6 +372,15 @@ export const toExportRecords = (
         }),
       );
     }
+    if (invoice.vatExchangeRate !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Invoice ${invoice.invoiceNumber} includes VAT stated in the seller's home currency`,
+          hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
+        }),
+      );
+    }
     if (!seller) {
       return Result.err(
         new HandlerError({
@@ -316,9 +391,10 @@ export const toExportRecords = (
       );
     }
     const amounts = readInvoiceDocumentLines(invoice);
-    if (amounts.isErr()) {
-      return Result.err(amounts.error);
-    }
+    const lines = exportLines({ invoice, amounts, loaded });
+    const invoiceMatters = [
+      ...new Map(lines.map((line) => [line.matter.id, line.matter])).values(),
+    ];
     records.push({
       id: invoice.id,
       number: invoice.invoiceNumber,
@@ -326,7 +402,12 @@ export const toExportRecords = (
       originalNumber:
         invoice.originalInvoiceId === null
           ? null
-          : (loaded.originals.get(invoice.originalInvoiceId) ?? null),
+          : (loaded.originals.get(invoice.originalInvoiceId)?.number ?? null),
+      originalIssueDate:
+        invoice.originalInvoiceId === null
+          ? null
+          : (loaded.originals.get(invoice.originalInvoiceId)?.issueDate ??
+            null),
       status: invoice.status,
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
@@ -341,10 +422,24 @@ export const toExportRecords = (
       currency: invoice.currency,
       reference: invoice.reference,
       notes: invoice.notes,
-      matter: { id: matter.id, name: matter.name, reference: matter.reference },
+      scope:
+        invoice.workspaceId === null
+          ? {
+              type: "client",
+              clientId:
+                invoice.clientId ?? panic("Client invoice has no client"),
+              matters: invoiceMatters,
+            }
+          : {
+              type: "matter",
+              matter:
+                loaded.matters.get(invoice.workspaceId) ??
+                panic("Invoice has no authorized matter metadata"),
+            },
       seller: exportSellerOf(seller),
       buyer: partyOf(invoice.buyerName ?? "", {
         registrationNumber: invoice.buyerRegistrationId,
+        taxId: invoice.buyerTaxId,
         vatId: invoice.buyerVatId,
         addressLine1: invoice.buyerAddressLine1,
         addressLine2: invoice.buyerAddressLine2,
@@ -352,8 +447,8 @@ export const toExportRecords = (
         postalCode: invoice.buyerPostalCode,
         country: invoice.buyerCountry,
       }),
-      lines: exportLines(invoice, amounts.value, loaded.timekeepers),
-      totals: amounts.value.totals,
+      lines,
+      totals: amounts.totals,
     });
   }
   return Result.ok(records);

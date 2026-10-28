@@ -49,6 +49,11 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
+beforeEach(() => {
+  putPacksMock.mockReset();
+  putPacksMock.mockImplementation(putPacksDefault);
+});
+
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
  * type cannot check is the ordering: the row and durable upload intent must
@@ -88,19 +93,18 @@ const packedDocumentIds = (pack: EncodedPack): string[] => [
 // redundancy decision and encodes a real pack, so a payload the planner
 // refuses contributes no member here for the same reason it would in
 // production, not because a fixture said so.
-const putPacksMock = mock(
-  async ({
-    packs,
-  }: Parameters<typeof putCorpusPacks>[0]): Promise<
-    Result<void, CorpusPackError>
-  > => {
-    for (const pack of packs) {
-      transferredPacks.push(pack);
-      events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
-    }
-    return await Promise.resolve(Result.ok(undefined));
-  },
-);
+const putPacksDefault = async ({
+  packs,
+}: Parameters<typeof putCorpusPacks>[0]): Promise<
+  Result<void, CorpusPackError>
+> => {
+  for (const pack of packs) {
+    transferredPacks.push(pack);
+    events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
+  }
+  return await Promise.resolve(Result.ok(undefined));
+};
+const putPacksMock = mock(putPacksDefault);
 
 /** A transfer that fails the way an unreachable bucket does. */
 const failTheTransfer = () => {
@@ -982,11 +986,9 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     fake.stop();
   });
 
-  test("reports the raw-source retry although the pack settled", async () => {
-    // The update kept its old `sourceHash` so the next pass re-observes the
-    // decision. A single decision is its own batch, and its corpus outcome
-    // is the whole answer only if nothing else is owed: reporting complete
-    // here would advance the cursor past a raw source that never landed.
+  test("preserves the stored parse until its new raw input is durable", async () => {
+    // A failed raw write cannot pair new derived output with the old input.
+    // The retry holds the cursor while the existing row and corpus stand.
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
@@ -1019,15 +1021,15 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
       observedAt: new Date("2026-07-31T12:00:00.000Z"),
     });
 
-    // The corpus write itself succeeded, so the reason names the retry the
-    // page-batch path reports for the same failure.
-    expect(transferredPacks).toHaveLength(1);
-    expect(settledDecisionRows()).toHaveLength(1);
     expect(outcome).toEqual({
       status: "retryable",
-      inserted: true,
-      reason: "corpus-write",
+      inserted: false,
+      reason: "source-raw-write",
     });
+    expect(transferredPacks).toEqual([]);
+    expect(insertedRows).toEqual([]);
+    expect(updatedDecisionRows).toEqual([]);
+    expect(events).not.toContain("intent-reserve");
   });
 });
 

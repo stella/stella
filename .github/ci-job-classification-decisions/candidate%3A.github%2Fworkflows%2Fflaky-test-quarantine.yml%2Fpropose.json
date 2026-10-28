@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Scans flake history and opens or refreshes a review-required quarantine proposal; no release publication or deployment.",
-  "reviewedDigest": "d458f9a75c1d6201d26bb6a6add53c90402a8f51bd04a5ddc2e7da3d8c0975e3"
+  "kind": "priority",
+  "qualifier": "Publishes flaky-test quarantine proposals as a signed-commit pull request.",
+  "reviewedDigest": "7cfefab1161370220ede59ae0818eb084426d6c2d8f80df386e0caa23ff02514"
 }

@@ -1286,7 +1286,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Finalize deadline (`uploadTimeline`); later requests only replay terminal results. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),
@@ -1555,7 +1555,8 @@ export const fields = p.pgTable(
     // immutable projection of the text a cell displays. Partial on the
     // findable types so pending and error placeholders stay out of the GIN
     // pending list; `fields-find-text-index.test.ts` binds that list to
-    // `FIELD_FIND_SUPPORT` and to the migration.
+    // `FIELD_FIND_SUPPORT` and to the migration. No query reads it once the
+    // find folds through `search_fold`.
     p
       .index("fields_find_text_trgm_idx")
       .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)

@@ -200,6 +200,8 @@ const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
       DEPLOY_SHA: "a".repeat(40),
       DEPLOYMENT_ID: "1",
       WEB_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
       API_SMOKE: "success",
       MCP_SMOKE: "skipped",
       CORPUS_PREFLIGHT: "failure",
@@ -238,7 +240,14 @@ test("the sole named waiver validates before checkout and derives its downstream
     workflow.on.workflow_dispatch.inputs,
   );
   expect(inputs.waive_check.options).toEqual(["none", "corpus-search"]);
-  expect(workflow.jobs["resolve"]?.steps?.at(1)?.id).toBe("waiver");
+  // Right after the release candidate check, still before any checkout of
+  // the candidate.
+  const resolveSteps = workflow.jobs["resolve"]?.steps ?? [];
+  const preflight = resolveSteps.findIndex(
+    ({ name }) => name === "Check release candidate",
+  );
+  expect(preflight).toBeGreaterThanOrEqual(0);
+  expect(resolveSteps.at(preflight + 1)?.id).toBe("waiver");
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );
@@ -269,6 +278,12 @@ test("the sole named waiver validates before checkout and derives its downstream
   expect(recordEnv?.["CORPUS_PREFLIGHT"]).toBe(
     `\${{ steps.corpus-preflight.outcome }}`,
   );
+  for (const [name, id] of [
+    ["DEPLOYED_JOURNEYS", "deployed-journeys"],
+    ["MOCK_JOURNEYS", "mock-journeys"],
+  ] as const) {
+    expect(recordEnv?.[name]).toBe(`\${{ steps.${id}.outcome }}`);
+  }
   assertValidation();
   expect(
     validation({
@@ -329,6 +344,10 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
     { CORPUS_SEARCH_WAIVED: "false" },
     { WEB_SMOKE: "failure" },
     { API_SMOKE: "failure" },
+    ...["failure", "skipped", "cancelled", ""].flatMap((outcome) => [
+      { DEPLOYED_JOURNEYS: outcome },
+      { MOCK_JOURNEYS: outcome },
+    ]),
     { JOB_STATUS: "failure" },
     { JOB_STATUS: "cancelled" },
     { CORPUS_PREFLIGHT: "skipped" },
@@ -397,4 +416,28 @@ test("waiver scope, required reason and manual-only boundary mutations are rejec
   expect(statuses(record({ WEB_SMOKE: "failure" })).at(0)?.state).toBe(
     "failure",
   );
+});
+
+test("both application journey outcomes belong to the serialized staging promotion", () => {
+  const promotion =
+    workflow.jobs["promote-staging"] ?? panic("Missing promotion owner");
+  expect(promotion["concurrency"]).toEqual({
+    group: "deploy-staging",
+    "cancel-in-progress": false,
+  });
+  const steps = promotion.steps ?? panic("Missing promotion steps");
+  const verification = steps.findIndex(
+    ({ name }) => name === "Record staging verification",
+  );
+  for (const id of ["deployed-journeys", "mock-journeys"]) {
+    const index = steps.findIndex((step) => step.id === id);
+    expect(index).toBeGreaterThan(-1);
+    expect(index).toBeLessThan(verification);
+    const journey = steps.at(index) ?? panic("Missing application journey");
+    expect(journey.uses).toBe("./.github/actions/user-journeys");
+    expect(journey.with?.["expected-commit"]).toBe(
+      `\${{ needs.resolve.outputs.sha }}`,
+    );
+    expect(journey["continue-on-error"]).toBeUndefined();
+  }
 });

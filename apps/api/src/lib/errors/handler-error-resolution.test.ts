@@ -44,6 +44,7 @@ test("archive errors keep their client status through handler wrappers", () => {
   expect(resolveHandlerError(generic)).toBe(generic);
   const explicit = new HandlerError({
     status: 503,
+    code: "internal_error",
     message: "Retry later",
     cause: archive,
   });
@@ -57,6 +58,7 @@ const admissionReasons = {
   not_enabled: true,
   not_on_plan: true,
   unavailable: true,
+  feature_disabled: true,
 } as const satisfies Record<ActionAdmissionError["reason"], true>;
 
 test("all admission refusals preserve the canonical contract through bounded wrappers", () => {
@@ -68,7 +70,8 @@ test("all admission refusals preserve the canonical contract through bounded wra
       reason === "daily_exhausted" ||
       reason === "not_enabled" ||
       reason === "not_on_plan" ||
-      reason === "unavailable"
+      reason === "unavailable" ||
+      reason === "feature_disabled"
     )) {
       throw new Error("Unknown admission reason");
     }
@@ -111,7 +114,7 @@ test("all admission refusals preserve the canonical contract through bounded wra
       bounded = new Error("Domain wrapper", { cause: bounded });
     }
     expect(resolveHandlerError(bounded)).toMatchObject(
-      ACTION_ADMISSION_REFUSALS[refusal.code],
+      actionAdmissionRefusal(refusal),
     );
     expect(
       resolveHandlerError(new Error("Too deep", { cause: bounded })),

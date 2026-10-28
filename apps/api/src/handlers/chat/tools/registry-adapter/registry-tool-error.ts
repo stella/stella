@@ -17,6 +17,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   usage_limited: "limit",
   [ACTION_ADMISSION_CODES.periodExhausted]: "limit",
   [ACTION_ADMISSION_CODES.notEnabled]: "unavailable",
+  [ACTION_ADMISSION_CODES.featureDisabled]: "unavailable",
   [ACTION_ADMISSION_CODES.concurrencyBusy]: "transient",
   [ACTION_ADMISSION_CODES.admissionUnavailable]: "transient",
   // Active runs free up as they finish; the daily cap holds until tomorrow.
@@ -27,6 +28,7 @@ const MCP_CODE_TO_CHAT_KIND = {
   conflict: "invalid-input",
   rate_limited: "transient",
   upstream_unavailable: "transient",
+  public_read_timeout: "transient",
   search_index_unavailable: "transient",
   unknown_tool: "unavailable",
   internal_error: "server-defect",

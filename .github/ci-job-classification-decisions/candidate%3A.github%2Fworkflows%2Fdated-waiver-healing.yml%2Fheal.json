@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "48d57a726c28106d88888ce1f95d20fb829d093fefb4b8bd7b25536e2a455767"
+  "kind": "priority",
+  "qualifier": "Publishes dated-waiver fixes with a contents-write app token.",
+  "reviewedDigest": "5b7bf5ce493e12e053a23fff1b880a4ff71c74adb4539c18a94b59057c9705ab"
 }

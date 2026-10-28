@@ -16,6 +16,8 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
@@ -67,6 +69,9 @@ const quoteIdentifier = (identifier: string): string => {
   return `"${identifier}"`;
 };
 
+const quoteLiteral = (value: string): string =>
+  `'${value.replaceAll("'", "''")}'`;
+
 type LockTakingOptions = {
   tableName: string;
   text: string;
@@ -100,11 +105,13 @@ const lockTaking = ({
 /** An index declared for the online phase, with its own build statement. */
 export type OnlineIndexDeclaration = RequiredMigrationIndex & {
   /**
-   * The declared build, read only by `createIndexConcurrently`. Without it,
-   * the build renders from `definitionBody`, PostgreSQL's own definition.
+   * The declared build, read only by `createIndexConcurrently`. An index
+   * without one belongs to a schema migration rather than the online phase.
    */
   createSql?: string;
 };
+
+type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
 
@@ -112,27 +119,18 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineBuildDeclaration => index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
 
 export const createIndexConcurrently = ({
   createSql,
-  definitionBody,
-  isUnique,
   name,
   tableName,
-}: OnlineIndexDeclaration): LockTakingStatement => {
-  if (createSql === undefined) {
-    return lockTaking({
-      tableName,
-      text: `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-      lockQueue: "beside_writers",
-    });
-  }
+}: OnlineBuildDeclaration): LockTakingStatement => {
   // The gate watches the declared table, so the build must be on it.
   const match = createSqlTarget.exec(createSql);
   const builtName = match?.at(1);
@@ -144,7 +142,7 @@ export const createIndexConcurrently = ({
   }
   return lockTaking({
     tableName,
-    text: createSql,
+    text: spliced(createSql),
     lockQueue: "beside_writers",
   });
 };
@@ -189,6 +187,92 @@ export const renameIndex = ({
     lockQueue: "beside_writers",
   });
 };
+
+/** The original-invoice tenant reference uses this online-built covering key. */
+export const INVOICE_TENANT_UNIQUE_INDEX = {
+  createSql:
+    'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_org_unique" ON public."invoices" USING btree (id, organization_id)',
+  definitionBody: "ON public.invoices USING btree (id, organization_id)",
+  isUnique: true,
+  name: "invoices_id_org_unique",
+  tableName: "invoices",
+} as const satisfies OnlineIndexDeclaration;
+
+const INVOICE_TENANT_KEY_STATE_SQL = `
+WITH target AS (
+  SELECT 'public.invoices'::regclass AS table_id,
+    to_regclass('public.invoices_id_org_unique') AS index_id,
+    ARRAY[(SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='id'),
+      (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='organization_id')]::smallint[] AS referenced_columns,
+    ARRAY[(SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='original_invoice_id'),
+      (SELECT attnum FROM pg_catalog.pg_attribute WHERE attrelid='public.invoices'::regclass AND attname='organization_id')]::smallint[] AS source_columns
+)
+SELECT
+  EXISTS (SELECT 1 FROM pg_catalog.pg_index i, target t WHERE i.indexrelid=t.index_id AND i.indrelid=t.table_id
+    AND i.indisunique AND i.indisvalid AND i.indisready AND i.indimmediate
+    AND pg_get_indexdef(i.indexrelid)=${quoteLiteral(`CREATE UNIQUE INDEX ${INVOICE_TENANT_UNIQUE_INDEX.name} ${INVOICE_TENANT_UNIQUE_INDEX.definitionBody}`)}) AS "indexReady",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique') AS "uniquePresent",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_id_org_unique'
+    AND c.contype='u' AND c.conindid=t.index_id AND c.conkey=t.referenced_columns AND NOT c.condeferrable AND NOT c.condeferred) AS "uniqueReady",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_original_organization_fk') AS "foreignPresent",
+  EXISTS (SELECT 1 FROM pg_catalog.pg_constraint c, target t WHERE c.conrelid=t.table_id AND c.conname='invoices_original_organization_fk'
+    AND c.contype='f' AND c.confrelid=t.table_id AND c.conindid=t.index_id
+    AND c.conkey=t.source_columns AND c.confkey=t.referenced_columns
+    AND c.confupdtype='a' AND c.confdeltype='a' AND c.confmatchtype='s'
+    AND NOT c.condeferrable AND NOT c.condeferred) AS "foreignReady"
+FROM target`;
+
+/** Catalog identity, not a matching name, proves the online installation. */
+export const readInvoiceTenantKeyInstalled = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+): Promise<boolean> => {
+  const row = (await connection.query(INVOICE_TENANT_KEY_STATE_SQL)).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["indexReady"] !== "boolean" ||
+    typeof row["uniquePresent"] !== "boolean" ||
+    typeof row["uniqueReady"] !== "boolean" ||
+    typeof row["foreignPresent"] !== "boolean" ||
+    typeof row["foreignReady"] !== "boolean"
+  ) {
+    return panic("Invoice tenant key catalog state has an invalid shape");
+  }
+  if (!row["indexReady"]) {
+    return panic("Invoice tenant key index is missing, stale or not ready");
+  }
+  if (
+    (row["uniquePresent"] && !row["uniqueReady"]) ||
+    (row["foreignPresent"] && !row["foreignReady"])
+  ) {
+    return panic("Invoice tenant constraints have an unexpected identity");
+  }
+  return row["uniqueReady"] && row["foreignReady"];
+};
+
+/** One atomic catalog-only installation, gated as writer-blocking work. */
+export const installInvoiceTenantKey = (): LockTakingStatement =>
+  lockTaking({
+    tableName: INVOICE_TENANT_UNIQUE_INDEX.tableName,
+    lockQueue: "blocks_writers",
+    text: `DO $invoice_tenant_key$
+DECLARE state record;
+BEGIN
+  SELECT * INTO state FROM (${INVOICE_TENANT_KEY_STATE_SQL}) identity_state;
+  IF NOT state."indexReady" THEN
+    RAISE EXCEPTION 'Invoice tenant key index is missing, stale or not ready';
+  END IF;
+  IF (state."uniquePresent" AND NOT state."uniqueReady") OR (state."foreignPresent" AND NOT state."foreignReady") THEN
+    RAISE EXCEPTION 'Invoice tenant constraints have an unexpected identity';
+  END IF;
+  IF NOT state."uniqueReady" THEN
+    ALTER TABLE public.invoices ADD CONSTRAINT invoices_id_org_unique UNIQUE USING INDEX invoices_id_org_unique;
+  END IF;
+  IF NOT state."foreignReady" THEN
+    ALTER TABLE public.invoices ADD CONSTRAINT invoices_original_organization_fk
+      FOREIGN KEY (original_invoice_id,organization_id) REFERENCES public.invoices(id,organization_id) NOT VALID;
+  END IF;
+END $invoice_tenant_key$`,
+  });
 
 /** A NOT VALID CHECK or foreign key the online phase validates. */
 export type OnlineConstraintValidation = {
@@ -314,9 +398,6 @@ export const setRowLevelSecurity = (
     `ALTER TABLE "public".${quoteIdentifier(tableName)} ${mode.toUpperCase()} ROW LEVEL SECURITY`,
   ]);
 
-const quoteLiteral = (value: string): string =>
-  `'${value.replaceAll("'", "''")}'`;
-
 /**
  * A call to a function declared `online` in `DDL_FUNCTIONS`, gated on the
  * table it locks, under the same retry ladder as the policy statements: its
@@ -392,7 +473,11 @@ class OnlineLockRetryDeferred extends TaggedError("OnlineLockRetryDeferred")<{
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type GatedTableSessionOptions = {
   connection: Pick<OnlineMigrationConnection, "execute" | "query">;

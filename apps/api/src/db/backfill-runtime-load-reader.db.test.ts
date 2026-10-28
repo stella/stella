@@ -7,6 +7,7 @@ import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
 } from "@stll/db-load-gate/indicators";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
@@ -538,10 +539,10 @@ describe.skipIf(!enabled)(
     }
     const url = databaseUrl;
 
-    test("checked-in definition grants effective execute only to owner and ingestion", async () => {
+    test("fresh definition restricts execution and reports real maintenance only on its target", async () => {
       await withFreshIndicatorDatabase(
         url,
-        async ({ client, migration, unrelatedRole }) => {
+        async ({ client, db, migration, unrelatedRole }) => {
           const definition = (
             await client`
         SELECT prosrc, owner.rolname AS owner,
@@ -591,57 +592,55 @@ describe.skipIf(!enabled)(
           ).at(0);
           expect(permissions?.["unrelated"]).toBe(false);
           expect(permissions?.["ingestion"]).toBe(true);
-        },
-      );
-    }, 15_000);
-
-    test("real autovacuum and autoanalyze on A degrade only A", async () => {
-      await withFreshIndicatorDatabase(url, async ({ client, db }) => {
-        await client.unsafe(`CREATE TABLE public.target_a (id integer, payload text) WITH (
+          await client.unsafe(`CREATE TABLE public.target_a (id integer, payload text) WITH (
         autovacuum_enabled = true, autovacuum_vacuum_threshold = 0,
         autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_insert_threshold = 0,
         autovacuum_vacuum_insert_scale_factor = 0, autovacuum_analyze_threshold = 0,
         autovacuum_analyze_scale_factor = 0, autovacuum_vacuum_cost_delay = 10,
         autovacuum_vacuum_cost_limit = 1)`);
-        await client.unsafe(
-          "ALTER TABLE public.target_a ALTER COLUMN payload SET STORAGE PLAIN",
-        );
-        await client.unsafe(
-          "ALTER TABLE public.target_a ALTER COLUMN payload SET STATISTICS 1000",
-        );
-        await client.unsafe(
-          "CREATE TABLE public.target_b (id integer) WITH (autovacuum_enabled = false)",
-        );
-        await client.unsafe(
-          "GRANT SELECT ON public.target_a, public.target_b TO stella_ingestion",
-        );
-        const config = { ...defaultConfig, busyWindows: [] };
-        const readEbsSignal = async () =>
-          ({
-            indicator: "ebs_balance",
-            kind: "normal",
-            value: 100,
-            threshold: 70,
-            observedAt: new Date().toISOString(),
-            reason: "External EBS boundary fixture",
-          }) as const;
-        const reader = (tableName: string) =>
-          createDatabaseLoadVerdictReader({
-            db: restrictedRunner(db, "stella_ingestion", "public"),
-            tableName,
-            config,
-            readEbsSignal,
-          });
-        const readA = reader("public.target_a");
-        const readB = reader("public.target_b");
-        await client.unsafe(
-          "INSERT INTO public.target_a SELECT id, repeat(md5(id::text), 100) FROM generate_series(1, 512) AS id",
-        );
-        await client`SELECT pg_stat_force_next_flush()`;
-        const seen = new Set<string>();
-        const deadline = performance.now() + 110_000;
-        while (seen.size < 2 && performance.now() < deadline) {
-          const progress = await client`
+          await client.unsafe(
+            "ALTER TABLE public.target_a ALTER COLUMN payload SET STORAGE PLAIN",
+          );
+          await client.unsafe(
+            "ALTER TABLE public.target_a ALTER COLUMN payload SET STATISTICS 1000",
+          );
+          await client.unsafe(
+            "CREATE TABLE public.target_b (id integer) WITH (autovacuum_enabled = false)",
+          );
+          await client.unsafe(
+            "GRANT SELECT ON public.target_a, public.target_b TO stella_ingestion",
+          );
+          const config = { ...defaultConfig, busyWindows: [] };
+          const readEbsSignal = async () =>
+            ({
+              indicator: "ebs_balance",
+              kind: "normal",
+              value: 100,
+              threshold: 70,
+              observedAt: new Date().toISOString(),
+              reason: "External EBS boundary fixture",
+            }) as const;
+          const reader = (tableName: string) =>
+            createDatabaseLoadVerdictReader({
+              db: restrictedRunner(db, "stella_ingestion", "public"),
+              tableName,
+              config,
+              readEbsSignal,
+            });
+          const readA = reader("public.target_a");
+          const readB = reader("public.target_b");
+          await client.unsafe(
+            "INSERT INTO public.target_a SELECT id, repeat(md5(id::text), 100) FROM generate_series(1, 512) AS id",
+          );
+          await client`SELECT pg_stat_force_next_flush()`;
+          const seen = new Set<string>();
+          // Autovacuum workers run on the server's schedule; each read checks
+          // the verdict while a phase is still active.
+          await waitForExternalState({
+            description: "autovacuum and autoanalyze run on public.target_a",
+            timeoutMs: 110_000,
+            read: async () => {
+              const progress = await client`
           SELECT 'vacuum' AS phase, progress.pid FROM pg_stat_progress_vacuum AS progress
           JOIN pg_stat_activity AS worker USING (pid)
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
@@ -652,53 +651,55 @@ describe.skipIf(!enabled)(
           WHERE progress.relid = 'public.target_a'::regclass AND worker.backend_type = 'autovacuum worker'
             AND progress.datid = (SELECT oid FROM pg_database WHERE datname = current_database())
         `;
-          for (const row of progress) {
-            const phase = row["phase"];
-            if (typeof phase !== "string" || seen.has(phase)) {
-              continue;
-            }
-            const direct = (
-              await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
-            ).at(0);
-            const verdict = await readA();
-            const stillActive = (
-              await client`
+              for (const row of progress) {
+                const phase = row["phase"];
+                if (typeof phase !== "string" || seen.has(phase)) {
+                  continue;
+                }
+                const direct = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_a'::regclass)`
+                ).at(0);
+                const verdict = await readA();
+                const stillActive = (
+                  await client`
             SELECT EXISTS (SELECT 1 FROM pg_stat_progress_vacuum WHERE pid = ${row["pid"]} AND ${phase} = 'vacuum'
               UNION ALL SELECT 1 FROM pg_stat_progress_analyze WHERE pid = ${row["pid"]} AND ${phase} = 'analyze') AS active
           `
-            ).at(0);
-            if (stillActive?.["active"] !== true) {
-              continue;
-            }
-            expect(direct?.["vacuum_active"]).toBe(true);
-            expect(verdict.kind).toBe("degraded");
-            expect(
-              verdict.signals.find(
-                ({ indicator }) => indicator === "autovacuum_on_target",
-              ),
-            ).toMatchObject({ kind: "degraded", value: 1 });
-            const other = (
-              await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
-            ).at(0);
-            expect(other?.["vacuum_active"]).toBe(false);
-            expect((await readB()).kind).toBe("normal");
-            seen.add(phase);
+                ).at(0);
+                if (stillActive?.["active"] !== true) {
+                  continue;
+                }
+                expect(direct?.["vacuum_active"]).toBe(true);
+                expect(verdict.kind).toBe("degraded");
+                expect(
+                  verdict.signals.find(
+                    ({ indicator }) => indicator === "autovacuum_on_target",
+                  ),
+                ).toMatchObject({ kind: "degraded", value: 1 });
+                const other = (
+                  await client`SELECT vacuum_active FROM public.stella_database_load_indicators('public.target_b'::regclass)`
+                ).at(0);
+                expect(other?.["vacuum_active"]).toBe(false);
+                expect((await readB()).kind).toBe("normal");
+                seen.add(phase);
+              }
+              return seen.size === 2;
+            },
+            // The diagnostics below name what was observed.
+            onTimeout: () => undefined,
+          });
+          if (seen.size !== 2) {
+            const settings =
+              await client`SELECT current_setting('autovacuum') AS enabled, current_setting('autovacuum_naptime') AS naptime`;
+            const statistics =
+              await client`SELECT n_dead_tup, n_ins_since_vacuum, n_mod_since_analyze, autovacuum_count, autoanalyze_count FROM pg_stat_user_tables WHERE relid = 'public.target_a'::regclass`;
+            panic(
+              `Real automatic maintenance witness missing: observed=${JSON.stringify(Array.from(seen))}; settings=${JSON.stringify(settings)}; statistics=${JSON.stringify(statistics)}`,
+            );
           }
-          if (seen.size < 2) {
-            await Bun.sleep(10);
-          }
-        }
-        if (seen.size !== 2) {
-          const settings =
-            await client`SELECT current_setting('autovacuum') AS enabled, current_setting('autovacuum_naptime') AS naptime`;
-          const statistics =
-            await client`SELECT n_dead_tup, n_ins_since_vacuum, n_mod_since_analyze, autovacuum_count, autoanalyze_count FROM pg_stat_user_tables WHERE relid = 'public.target_a'::regclass`;
-          panic(
-            `Real automatic maintenance witness missing: observed=${JSON.stringify(Array.from(seen))}; settings=${JSON.stringify(settings)}; statistics=${JSON.stringify(statistics)}`,
-          );
-        }
-        expect(Array.from(seen).toSorted()).toEqual(["analyze", "vacuum"]);
-      });
+          expect(Array.from(seen).toSorted()).toEqual(["analyze", "vacuum"]);
+        },
+      );
     }, 120_000);
   },
 );

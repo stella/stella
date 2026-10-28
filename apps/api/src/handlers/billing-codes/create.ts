@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { billingCodes } from "@/api/db/schema";
 import { billingCodeRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -11,12 +11,12 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-const createBillingCodeBodySchema = t.Object({
-  type: t.UnionEnum(["task", "activity"]),
-  code: t.String({ minLength: 1, maxLength: 20 }),
-  label: t.String({ minLength: 1, maxLength: 256 }),
-  active: t.Optional(t.Boolean()),
-  sortOrder: t.Optional(t.Integer({ minimum: 0 })),
+const createBillingCodeBodySchema = v.object({
+  type: v.picklist(["task", "activity"]),
+  code: v.pipe(v.string(), v.minLength(1), v.maxLength(20)),
+  label: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  active: v.optional(v.boolean()),
+  sortOrder: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
 const config = {

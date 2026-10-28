@@ -1205,7 +1205,7 @@ export const TemplateStudioPage = ({
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.
           markDirty();
-          notifyUserError(slotRenameError, t("common.error"), {
+          notifyUserError(slotRenameError, t("errors.actionFailed"), {
             description: slotRenameErrorMessage,
           });
         }
@@ -1260,7 +1260,13 @@ export const TemplateStudioPage = ({
       // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateStudioPage.handleSave:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TemplateStudioPage.handleSave:failure",
+        },
+      });
       notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {

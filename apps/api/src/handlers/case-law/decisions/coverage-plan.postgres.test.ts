@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 
+import { Temporal } from "@stll/time";
+
 import {
   caseLawSources,
   publishedCaseLawDecisions,
@@ -12,18 +14,17 @@ import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisio
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_COVERAGE_INDEX } from "@/api/lib/case-law/coverage-index";
+import { refreshPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facet-refresh";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import {
-  explainRoot,
-  scanOccurrences,
-} from "@/api/tests/query-plans/plan-walker";
+import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
 const SOURCES = 3;
 const DECISIONS_PER_SOURCE = 4000;
+const SOURCE_DATE_SPAN = 5000;
 
 const planNodes = (
   node: Record<string, unknown>,
@@ -61,6 +62,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           "case_law_sources",
           "case_law_decisions",
           "case_law_search_documents",
+          "case_law_browse_facet_counts",
         ]) {
           await db.execute(sql`CREATE TABLE ${schema}.${sql.identifier(table)}
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
@@ -116,17 +118,23 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           },
         ]);
         await db.insert(caseLawSources).values(
-          Array.from({ length: SOURCES }, () => ({
+          Array.from({ length: SOURCES }, (_, sourceIndex) => ({
             id: createSafeId<"caseLawSource">(),
-            adapterKey: `coverage-plan-${createSafeId<"caseLawSource">()}`,
+            adapterKey: `coverage-plan-${sourceIndex}`,
             name: "Coverage plan fixture",
           })),
         );
+        // Distinct source ranges make scanning a global date prefix costly;
+        // each source must seek its own endpoint regardless of other sources.
         await db.execute(sql`INSERT INTO case_law_decisions
           (id, source_id, case_number, court, country, language, decision_date, fulltext)
           SELECT gen_random_uuid(), sources.id, 'published/' || n,
-            'Plan court', 'CZE', 'cs', DATE '2000-01-01' + n, 'Published text'
-          FROM case_law_sources sources CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+            'Plan court', 'CZE', 'cs',
+            DATE '1970-01-01' + n + sources.source_index * ${SOURCE_DATE_SPAN}, 'Published text'
+          FROM (
+            SELECT id, (row_number() OVER (ORDER BY adapter_key) - 1)::integer AS source_index
+            FROM case_law_sources
+          ) sources CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
         await db.execute(sql`INSERT INTO case_law_decisions
           (id, source_id, case_number, court, country, language, decision_date, fulltext, redacted_at, metadata)
           SELECT gen_random_uuid(), sources.id, 'excluded/' || status || '/' || endpoint,
@@ -136,7 +144,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             CASE WHEN status = 'listing-only' THEN
               '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
           FROM case_law_sources sources
-          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2020-01-01')) endpoints(endpoint)
+          CROSS JOIN (VALUES (DATE '1900-01-01'), (DATE '2010-01-01')) endpoints(endpoint)
           CROSS JOIN (VALUES ('withdrawn'), ('listing-only')) statuses(status)`);
         await db.execute(sql`INSERT INTO case_law_search_documents
           (decision_id, language, regconfig, searchable_text, tsv)
@@ -146,6 +154,13 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
         await db.execute(sql`ANALYZE case_law_sources`);
 
+        await refreshPgFtsBrowseFacets(db);
+        await db.execute(sql`INSERT INTO case_law_browse_facet_counts
+          (kind, country, source_id, value, total)
+          SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
+          FROM case_law_sources sources
+          CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+        await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
           asTestRaw<CaseLawPublicReadTransaction>(db),
@@ -162,15 +177,42 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             statement.params,
           ),
         );
-        const probes = scanOccurrences(root).filter(
-          ({ index }) => index === COVERAGE_INDEX,
+        const planEvidence = JSON.stringify(
+          { query: statement.query, plan: root },
+          null,
+          2,
         );
-        expect(probes).toHaveLength(2);
+        const facetProbes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_browse_facet_counts" &&
+            node["Actual Loops"] !== 0,
+        );
+        expect(facetProbes, planEvidence).toHaveLength(2);
+        for (const probe of facetProbes) {
+          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
+            String(probe["Node Type"]),
+          );
+          expect(probe["Index Cond"], planEvidence).toContain("source_id");
+          expect(probe["Index Cond"], planEvidence).toContain("court");
+          expect(probe["Actual Rows"], planEvidence).toBe(1);
+          expect(probe["Actual Loops"], planEvidence).toBe(SOURCES);
+        }
+        const probes = planNodes(root).filter(
+          (node) =>
+            node["Relation Name"] === "case_law_decisions" &&
+            node["Actual Loops"] !== 0,
+        );
+        expect(probes, planEvidence).toHaveLength(2);
         for (const probe of probes) {
-          expect(["Index Scan", "Index Only Scan"]).toContain(probe.nodeType);
+          expect(["Index Scan", "Index Only Scan"], planEvidence).toContain(
+            String(probe["Node Type"]),
+          );
           // The endpoint limits and actual scan work are asserted below.
-          expect(probe.indexCond).toContain("source_id");
-          expect(probe.indexCond).toContain("decision_date IS NOT NULL");
+          expect(probe["Index Name"], planEvidence).toBe(COVERAGE_INDEX);
+          expect(probe["Index Cond"], planEvidence).toContain("source_id");
+          expect(probe["Index Cond"], planEvidence).toContain(
+            "decision_date IS NOT NULL",
+          );
         }
         const endpointLimits = planNodes(root).filter(
           (node) =>
@@ -183,9 +225,9 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         const limits = endpointLimits.filter(
           (node) => node["Actual Loops"] === SOURCES,
         );
-        expect(limits).toHaveLength(2);
+        expect(limits, planEvidence).toHaveLength(2);
         for (const limit of limits) {
-          expect(limit["Actual Rows"]).toBe(1);
+          expect(limit["Actual Rows"], planEvidence).toBe(1);
           const nodes = planNodes(limit);
           expect(
             nodes.some((node) =>
@@ -193,12 +235,13 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
                 String(node["Node Type"]),
               ),
             ),
+            planEvidence,
           ).toBe(false);
           const scan =
             nodes.find((node) => node["Index Name"] === COVERAGE_INDEX) ??
             panic("Missing endpoint scan");
-          expect(scan["Actual Rows"]).toBe(1);
-          expect(scan["Actual Loops"]).toBe(SOURCES);
+          expect(scan["Actual Rows"], planEvidence).toBe(1);
+          expect(scan["Actual Loops"], planEvidence).toBe(SOURCES);
         }
         expect(
           new Set(
@@ -207,13 +250,22 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
               .filter((node) => node["Index Name"] === COVERAGE_INDEX)
               .map((node) => node["Scan Direction"]),
           ),
+          planEvidence,
         ).toEqual(new Set(["Forward", "Backward"]));
         expect(rows).toHaveLength(SOURCES);
-        for (const row of rows) {
+        for (const [sourceIndex, row] of rows.entries()) {
+          const firstDate = Temporal.PlainDate.from("1970-01-01").add({
+            days: sourceIndex * SOURCE_DATE_SPAN + 1,
+          });
+          const lastDate = Temporal.PlainDate.from("1970-01-01").add({
+            days: sourceIndex * SOURCE_DATE_SPAN + DECISIONS_PER_SOURCE,
+          });
           expect(row).toMatchObject({
-            decisionYearFrom: 2000,
-            decisionYearTo: 2010,
+            adapterKey: `coverage-plan-${sourceIndex}`,
+            decisionYearFrom: firstDate.year,
+            decisionYearTo: lastDate.year,
             pendingTextCount: 0,
+            courts: [{ court: "Plan court", decisions: DECISIONS_PER_SOURCE }],
           });
         }
       } finally {

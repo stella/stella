@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
-import Elysia from "elysia";
 import * as v from "valibot";
 
 import {
@@ -16,15 +15,20 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteTable } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   createScopedDbMock,
@@ -52,6 +56,11 @@ const BODY = {
     },
   ],
 };
+const serve = (table: RouteTable) =>
+  serveForTest(
+    createHttpApp({ routes: routes(table), middleware: [errorBoundary] }),
+  );
+
 const receiptSchema = v.object({
   requestFingerprint: v.nullable(v.string()),
   status: v.picklist(DESKTOP_TIME_ENTRY_BATCH_STATUSES),
@@ -180,17 +189,12 @@ const createBatchHarness = (existingEntries = 0) => {
   const endpoint = createDesktopTimeEntryBatchEndpoint(authorizeAccount);
   const statusEndpoint =
     createDesktopTimeEntryBatchStatusEndpoint(authorizeAccount);
-  const app = new Elysia()
-    .put("/batch", endpoint.handler, {
-      body: endpoint.config.body,
-      response: endpoint.config.response,
-    })
-    .put("/status", statusEndpoint.handler, {
-      body: statusEndpoint.config.body,
-      response: statusEndpoint.config.response,
-    });
+  const server = serve({
+    "/batch": { PUT: endpoint },
+    "/status": { PUT: statusEndpoint },
+  });
   const status = async () =>
-    await app.handle(
+    await server.fetch(
       new Request("http://localhost/status", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -198,7 +202,7 @@ const createBatchHarness = (existingEntries = 0) => {
       }),
     );
   const send = async (body: typeof BODY) =>
-    await app.handle(
+    await server.fetch(
       new Request("http://localhost/batch", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -224,11 +228,13 @@ const createBatchHarness = (existingEntries = 0) => {
     revokeMatter: () => {
       missingMatter = true;
     },
+    [Symbol.asyncDispose]: server.stop,
   };
 };
 
 test("batch replay converges and a changed payload or revoked matter refuses without new writes", async () => {
-  const { send, writes, revokeMatter } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, revokeMatter } = harness;
   const first = await send(BODY);
   expect(first.status).toBe(200);
   const result = await first.json();
@@ -249,14 +255,11 @@ test("batch replay converges and a changed payload or revoked matter refuses wit
   expect(writes).toHaveLength(1);
 });
 
-test("batch rejects unknown fields before authorization under default normalization", async () => {
+test("batch rejects unknown fields before authorization", async () => {
   const endpoint = createDesktopTimeEntryBatchEndpoint(async () =>
     panic("Invalid batch must fail validation before authorization"),
   );
-  const app = new Elysia().put("/batch", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  await using server = serve({ "/batch": { PUT: endpoint } });
   for (const extra of [
     { appName: "private" },
     { rawSegments: [] },
@@ -270,7 +273,7 @@ test("batch rejects unknown fields before authorization under default normalizat
         entries: BODY.entries.map((entry) => ({ ...entry, ...extra })),
       },
     ]) {
-      const response = await app.handle(
+      const response = await server.fetch(
         new Request("http://localhost/batch", {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -282,8 +285,33 @@ test("batch rejects unknown fields before authorization under default normalizat
   }
 });
 
+test.each(["2026-02-30", "1900-02-29", "2026-04-31", "0000-01-01"])(
+  "batch rejects invalid calendar date %s before authorization",
+  async (dateWorked) => {
+    let authorizationCalls = 0;
+    const endpoint = createDesktopTimeEntryBatchEndpoint(async () => {
+      authorizationCalls += 1;
+      return panic("Invalid calendar date must not reach authorization");
+    });
+    await using server = serve({ "/batch": { PUT: endpoint } });
+    const response = await server.fetch(
+      new Request("http://localhost/batch", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...BODY,
+          entries: BODY.entries.map((entry) => ({ ...entry, dateWorked })),
+        }),
+      }),
+    );
+    expect(response.status).toBe(422);
+    expect(authorizationCalls).toBe(0);
+  },
+);
+
 test("uppercase matter identifiers converge with lowercase database identities and fingerprints", async () => {
-  const { send, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes } = harness;
   const uppercase = {
     ...BODY,
     entries: BODY.entries.map((entry) => ({
@@ -306,7 +334,8 @@ test("uppercase matter identifiers converge with lowercase database identities a
 });
 
 test("recovery cancels a noncommitted batch after rejection and fences delayed originals", async () => {
-  const { send, status, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
   // The first attempt was not delivered; a subsequent attempt is definitively rejected.
   expect(
     (
@@ -328,7 +357,7 @@ test("recovery cancels a noncommitted batch after rejection and fences delayed o
 });
 
 test("entry creation is audited in the batch transaction; a cancellation receipt writes no entry or audit row", async () => {
-  const committed = createBatchHarness();
+  await using committed = createBatchHarness();
   expect((await committed.send(BODY)).status).toBe(200);
   // The audit skip in batch status covers only the receipt: the committed
   // batch audits its entries before the receipt closes the transaction.
@@ -338,7 +367,7 @@ test("entry creation is audited in the batch transaction; a cancellation receipt
   );
   expect(committed.inserts.at(-1)).toBe("receipt");
 
-  const cancelled = createBatchHarness();
+  await using cancelled = createBatchHarness();
   expect(await (await cancelled.status()).json()).toEqual({
     type: "cancelled",
   });
@@ -346,7 +375,8 @@ test("entry creation is audited in the batch transaction; a cancellation receipt
 });
 
 test("recovery preserves a committed batch and returns its exact receipt without new writes", async () => {
-  const { send, status, writes } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, status, writes } = harness;
   const created = await send(BODY);
   expect(created.status).toBe(200);
   const receipt = v.parse(
@@ -361,7 +391,8 @@ test("recovery preserves a committed batch and returns its exact receipt without
 });
 
 test("uppercase matter identifiers count towards the authorized matter capacity", async () => {
-  const { send, writes } = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  await using harness = createBatchHarness(LIMITS.timeEntriesPerWorkspace);
+  const { send, writes } = harness;
   const uppercase = {
     ...BODY,
     entries: BODY.entries.map((entry) => ({
@@ -374,7 +405,8 @@ test("uppercase matter identifiers count towards the authorized matter capacity"
 });
 
 test("a full unpriced batch resolves rates once and preserves nonbillable entries", async () => {
-  const { send, writes, rateReads } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
   const entry = BODY.entries.at(0);
   if (!entry) {
     panic("Missing fixture entry");
@@ -395,7 +427,8 @@ test("a full unpriced batch resolves rates once and preserves nonbillable entrie
 });
 
 test("missing bulk rates reject billable entries without individual rate reads or writes", async () => {
-  const { send, writes, rateReads } = createBatchHarness();
+  await using harness = createBatchHarness();
+  const { send, writes, rateReads } = harness;
   const response = await send({
     ...BODY,
     entries: BODY.entries.map((entry) => ({ ...entry, billable: true })),

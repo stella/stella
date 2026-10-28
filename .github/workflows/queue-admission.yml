@@ -19,6 +19,15 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 jobs:
   admission:
     runs-on: ubuntu-24.04
@@ -89,7 +98,7 @@ jobs:
         run: |
           needs_file=$(mktemp)
           printf '%s\n' '{"ci-plan":{"outputs":{"package_checks_required":"true","root_checks":""}}}' > "$needs_file"
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-rest --only \
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-rest --only \
             "Workspace hygiene,Test dependency malware scanners,Generated files manifest guard,Generated source artifact contract,Generated artifact formatting invariants"
 
       - name: Check parser versions
@@ -145,7 +154,7 @@ jobs:
 
       - name: Upload admission result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: queue-admission-${{ inputs.pr }}
           path: admission.json

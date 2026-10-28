@@ -1,8 +1,39 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+import {
+  type ArrowFunctionExpression,
+  type Expression,
+  type Function as OxcFunction,
+  type Node,
+  parseSync,
+  Visitor,
+  visitorKeys,
+} from "oxc-parser";
+
+const isNode = (value: unknown): value is Node =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof value.type === "string";
+
+const parsePropertySource = (file: string, source: string) => {
+  const parsed = parseSync(file, source);
+  const errors = parsed.errors.filter((error) => {
+    const severity: string = error.severity;
+    return severity === "Error";
+  });
+  if (errors.length > 0) {
+    panic(
+      `${file} does not parse: ${errors.map(({ message }) => message).join("; ")}`,
+    );
+  }
+  return parsed.program;
+};
+const lineOf = (source: string, offset: number) =>
+  source.slice(0, offset).split("\n").length;
 
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
@@ -57,7 +88,7 @@ const scanPropertyCandidates = async (): Promise<PropertyTestFile[]> => {
 
 const PROPERTY_CANDIDATES = await scanPropertyCandidates();
 
-// One TypeScript parse per file, shared by every guard that inspects it.
+// One syntax parse per file, shared by every guard that inspects it.
 const inspections = new Map<string, ReturnType<typeof inspectPropertyTest>>();
 const inspectOnce = (file: PropertyTestFile) => {
   const cached = inspections.get(file.relativePath);
@@ -78,160 +109,145 @@ const collectPropertyTestFiles = (): PropertyTestFile[] =>
   );
 
 const inspectPropertyTest = ({ relativePath, source }: PropertyTestFile) => {
-  const parsed = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const parsed = parsePropertySource(relativePath, source);
   const configurationBindings = new Set<string>();
   const fastCheckBindings = new Set<string>();
   const runnerBindings = new Set<string>();
   const assertionBindings = new Set<string>();
   let propertyCalls = 0;
-  const initializers = new Map<string, ts.Expression>();
+  const initializers = new Map<string, Expression>();
   const violations: string[] = [];
 
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of parsed.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const clause = statement.importClause;
-    if (statement.moduleSpecifier.text === "fast-check") {
-      if (clause?.name !== undefined) {
-        fastCheckBindings.add(clause.name.text);
-      }
+    for (const binding of statement.specifiers) {
       if (
-        clause?.namedBindings !== undefined &&
-        ts.isNamespaceImport(clause.namedBindings)
+        statement.source.value === "fast-check" &&
+        (binding.type === "ImportDefaultSpecifier" ||
+          binding.type === "ImportNamespaceSpecifier")
       ) {
-        fastCheckBindings.add(clause.namedBindings.name.text);
+        fastCheckBindings.add(binding.local.name);
       }
-    }
-    if (
-      clause?.namedBindings === undefined ||
-      !ts.isNamedImports(clause.namedBindings)
-    ) {
-      continue;
-    }
-    for (const binding of clause.namedBindings.elements) {
-      const imported = binding.propertyName?.text ?? binding.name.text;
+      if (binding.type !== "ImportSpecifier") {
+        continue;
+      }
+      const imported =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
       if (
-        statement.moduleSpecifier.text === "@stll/property-testing" &&
+        statement.source.value === "@stll/property-testing" &&
         imported === "propertyConfig"
       ) {
-        configurationBindings.add(binding.name.text);
+        configurationBindings.add(binding.local.name);
       }
       if (
-        statement.moduleSpecifier.text === "@stll/property-testing" &&
+        statement.source.value === "@stll/property-testing" &&
         imported === "assertProperty"
       ) {
-        assertionBindings.add(binding.name.text);
+        assertionBindings.add(binding.local.name);
       }
       if (
-        statement.moduleSpecifier.text === "fast-check" &&
+        statement.source.value === "fast-check" &&
         (imported === "assert" || imported === "check")
       ) {
-        runnerBindings.add(binding.name.text);
+        runnerBindings.add(binding.local.name);
       }
     }
   }
 
-  const collectInitializers = (node: ts.Node) => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
-    ) {
-      initializers.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectInitializers);
-  };
-  collectInitializers(parsed);
+  new Visitor({
+    VariableDeclarator(node) {
+      if (node.id.type === "Identifier" && node.init !== null) {
+        initializers.set(node.id.name, node.init);
+      }
+    },
+  }).visit(parsed);
 
   const configured = (
-    expression: ts.Expression,
+    expression: Expression,
     seen = new Set<string>(),
   ): boolean => {
     if (
-      ts.isParenthesizedExpression(expression) ||
-      ts.isAsExpression(expression) ||
-      ts.isSatisfiesExpression(expression)
+      expression.type === "ParenthesizedExpression" ||
+      expression.type === "TSAsExpression" ||
+      expression.type === "TSSatisfiesExpression"
     ) {
       return configured(expression.expression, seen);
     }
-    if (ts.isObjectLiteralExpression(expression)) {
+    if (expression.type === "ObjectExpression") {
       return expression.properties.some(
         (member) =>
-          ts.isSpreadAssignment(member) && configured(member.expression, seen),
+          member.type === "SpreadElement" && configured(member.argument, seen),
       );
     }
-    if (ts.isArrowFunction(expression) && !ts.isBlock(expression.body)) {
+    if (
+      expression.type === "ArrowFunctionExpression" &&
+      expression.body.type !== "BlockStatement"
+    ) {
       return configured(expression.body, seen);
     }
-    const identifier = ts.isCallExpression(expression)
-      ? expression.expression
-      : expression;
-    if (!ts.isIdentifier(identifier)) {
+    const identifier =
+      expression.type === "CallExpression" ? expression.callee : expression;
+    if (identifier.type !== "Identifier") {
       return false;
     }
     if (
-      ts.isCallExpression(expression) &&
-      configurationBindings.has(identifier.text)
+      expression.type === "CallExpression" &&
+      configurationBindings.has(identifier.name)
     ) {
       return true;
     }
-    if (seen.has(identifier.text)) {
+    if (seen.has(identifier.name)) {
       return false;
     }
-    seen.add(identifier.text);
-    const initializer = initializers.get(identifier.text);
+    seen.add(identifier.name);
+    const initializer = initializers.get(identifier.name);
     return initializer !== undefined && configured(initializer, seen);
   };
 
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
+  new Visitor({
+    CallExpression(node) {
+      const callee = node.callee;
       const namedRunner =
-        ts.isIdentifier(callee) && runnerBindings.has(callee.text);
+        callee.type === "Identifier" && runnerBindings.has(callee.name);
       let member: string | undefined;
-      if (ts.isPropertyAccessExpression(callee)) {
-        member = callee.name.text;
-      } else if (
-        ts.isElementAccessExpression(callee) &&
-        ts.isStringLiteral(callee.argumentExpression)
-      ) {
-        member = callee.argumentExpression.text;
+      if (callee.type === "MemberExpression") {
+        if (!callee.computed && callee.property.type === "Identifier") {
+          member = callee.property.name;
+        } else if (
+          callee.computed &&
+          callee.property.type === "Literal" &&
+          typeof callee.property.value === "string"
+        ) {
+          member = callee.property.value;
+        }
       }
       const namespaceRunner =
-        (ts.isPropertyAccessExpression(callee) ||
-          ts.isElementAccessExpression(callee)) &&
-        ts.isIdentifier(callee.expression) &&
-        fastCheckBindings.has(callee.expression.text) &&
+        callee.type === "MemberExpression" &&
+        callee.object.type === "Identifier" &&
+        fastCheckBindings.has(callee.object.name) &&
         (member === "assert" || member === "check");
-      if (ts.isIdentifier(callee) && assertionBindings.has(callee.text)) {
+      if (callee.type === "Identifier" && assertionBindings.has(callee.name)) {
         propertyCalls += 1;
       }
       if (namedRunner || namespaceRunner) {
         propertyCalls += 1;
         const parameters = node.arguments.at(1);
-        if (parameters === undefined || !configured(parameters)) {
-          const { line } = parsed.getLineAndCharacterOfPosition(
-            node.getStart(),
-          );
+        if (
+          parameters === undefined ||
+          parameters.type === "SpreadElement" ||
+          !configured(parameters)
+        ) {
           violations.push(
-            `${relativePath}:${line + 1}: property runner must pass propertyConfig parameters`,
+            `${relativePath}:${lineOf(source, node.start)}: property runner must pass propertyConfig parameters`,
           );
         }
       }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+    },
+  }).visit(parsed);
   return { violations, propertyCalls };
 };
 
@@ -260,158 +276,163 @@ const SPAWN_MODULES: Record<string, ReadonlySet<string> | "all"> = {
 };
 const PROPERTY_BUILDERS = new Set(["asyncProperty", "property"]);
 
-type FunctionNode =
-  ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
+type FunctionNode = ArrowFunctionExpression | OxcFunction;
 
 // Reports property predicates that spawn a process, directly or through a
 // function declared in the same file.
 const inspectPropertySpawns = ({ relativePath, source }: PropertyTestFile) => {
-  const parsed = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const parsed = parsePropertySource(relativePath, source);
   const fastCheckNamespaces = new Set<string>();
   const propertyBindings = new Set<string>();
   const spawnBindings = new Set<string>();
   const spawnNamespaces = new Map<string, ReadonlySet<string> | "all">();
   const functions = new Map<string, FunctionNode>();
 
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of parsed.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const specifier = statement.moduleSpecifier.text;
-    const clause = statement.importClause;
+    const specifier = statement.source.value;
     const spawnExports = SPAWN_MODULES[specifier];
-    const namespace =
-      clause?.namedBindings !== undefined &&
-      ts.isNamespaceImport(clause.namedBindings)
-        ? clause.namedBindings.name.text
-        : undefined;
-    for (const name of [clause?.name?.text, namespace]) {
-      if (name === undefined) {
+    for (const binding of statement.specifiers) {
+      const name = binding.local.name;
+      if (
+        binding.type === "ImportDefaultSpecifier" ||
+        binding.type === "ImportNamespaceSpecifier"
+      ) {
+        if (specifier === "fast-check") {
+          fastCheckNamespaces.add(name);
+        } else if (spawnExports !== undefined) {
+          spawnNamespaces.set(name, spawnExports);
+          if (
+            binding.type === "ImportDefaultSpecifier" &&
+            spawnExports === "all"
+          ) {
+            spawnBindings.add(name);
+          }
+        }
         continue;
       }
-      if (specifier === "fast-check") {
-        fastCheckNamespaces.add(name);
-      } else if (spawnExports !== undefined) {
-        spawnNamespaces.set(name, spawnExports);
-        if (name === clause?.name?.text && spawnExports === "all") {
-          // `execa`'s default export is itself a spawn.
-          spawnBindings.add(name);
-        }
-      }
-    }
-    if (
-      clause?.namedBindings === undefined ||
-      !ts.isNamedImports(clause.namedBindings)
-    ) {
-      continue;
-    }
-    for (const binding of clause.namedBindings.elements) {
-      const imported = binding.propertyName?.text ?? binding.name.text;
+      const imported =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
       if (specifier === "fast-check" && PROPERTY_BUILDERS.has(imported)) {
-        propertyBindings.add(binding.name.text);
+        propertyBindings.add(name);
       }
       if (spawnExports === "all" || spawnExports?.has(imported) === true) {
-        spawnBindings.add(binding.name.text);
+        spawnBindings.add(name);
       }
     }
   }
 
-  const collectFunctions = (node: ts.Node) => {
-    if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
-      functions.set(node.name.text, node);
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined &&
-      (ts.isArrowFunction(node.initializer) ||
-        ts.isFunctionExpression(node.initializer))
-    ) {
-      functions.set(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, collectFunctions);
-  };
-  collectFunctions(parsed);
+  new Visitor({
+    FunctionDeclaration(node) {
+      if (node.id !== null) {
+        functions.set(node.id.name, node);
+      }
+    },
+    VariableDeclarator(node) {
+      if (
+        node.id.type === "Identifier" &&
+        (node.init?.type === "ArrowFunctionExpression" ||
+          node.init?.type === "FunctionExpression")
+      ) {
+        functions.set(node.id.name, node.init);
+      }
+    },
+  }).visit(parsed);
 
-  const isSpawnCallee = (callee: ts.Expression): boolean => {
-    if (ts.isIdentifier(callee)) {
-      return spawnBindings.has(callee.text);
+  const isSpawnCallee = (callee: Expression): boolean => {
+    if (callee.type === "Identifier") {
+      return spawnBindings.has(callee.name);
     }
     if (
-      !ts.isPropertyAccessExpression(callee) ||
-      !ts.isIdentifier(callee.expression)
+      callee.type !== "MemberExpression" ||
+      callee.computed ||
+      callee.object.type !== "Identifier" ||
+      callee.property.type !== "Identifier"
     ) {
       return false;
     }
-    const owner = callee.expression.text;
+    const owner = callee.object.name;
     if (owner === "Bun") {
-      return BUN_SPAWN_MEMBERS.has(callee.name.text);
+      return BUN_SPAWN_MEMBERS.has(callee.property.name);
     }
     const exports = spawnNamespaces.get(owner);
     return (
       exports !== undefined &&
-      (exports === "all" || exports.has(callee.name.text))
+      (exports === "all" || exports.has(callee.property.name))
     );
   };
 
-  const spawns = (node: ts.Node, seen: Set<string>): boolean => {
-    let callee: ts.Expression | undefined;
-    if (ts.isCallExpression(node)) {
-      callee = node.expression;
-    } else if (ts.isTaggedTemplateExpression(node)) {
-      callee = node.tag;
-    }
-    if (callee !== undefined) {
+  const spawns = (node: Node, seen: Set<string>): boolean => {
+    let found = false;
+    const inspectCallee = (callee: Expression) => {
       if (isSpawnCallee(callee)) {
-        return true;
+        found = true;
       }
-      if (ts.isIdentifier(callee) && !seen.has(callee.text)) {
-        const helper = functions.get(callee.text);
+      if (callee.type === "Identifier" && !seen.has(callee.name)) {
+        const helper = functions.get(callee.name);
         if (helper !== undefined) {
-          seen.add(callee.text);
-          if (spawns(helper, seen)) {
-            return true;
-          }
+          seen.add(callee.name);
+          found ||= spawns(helper, seen);
         }
       }
-    }
-    return ts.forEachChild(node, (child) => spawns(child, seen)) ?? false;
+    };
+    // oxc's Visitor walks only a Program; a helper is a function node, so its
+    // subtree is walked by its own visitor keys.
+    const enter = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          enter(item);
+        }
+        return;
+      }
+      if (!isNode(value)) {
+        return;
+      }
+      if (value.type === "CallExpression") {
+        inspectCallee(value.callee);
+      } else if (value.type === "TaggedTemplateExpression") {
+        inspectCallee(value.tag);
+      }
+      for (const key of visitorKeys[value.type] ?? []) {
+        enter(Reflect.get(value, key));
+      }
+    };
+    enter(node);
+    return found;
   };
 
-  const isPropertyBuilder = (callee: ts.Expression): boolean =>
-    (ts.isIdentifier(callee) && propertyBindings.has(callee.text)) ||
-    (ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression) &&
-      fastCheckNamespaces.has(callee.expression.text) &&
-      PROPERTY_BUILDERS.has(callee.name.text));
+  const isPropertyBuilder = (callee: Expression): boolean =>
+    (callee.type === "Identifier" && propertyBindings.has(callee.name)) ||
+    (callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "Identifier" &&
+      fastCheckNamespaces.has(callee.object.name) &&
+      callee.property.type === "Identifier" &&
+      PROPERTY_BUILDERS.has(callee.property.name));
 
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && isPropertyBuilder(node.expression)) {
+  new Visitor({
+    CallExpression(node) {
+      if (!isPropertyBuilder(node.callee)) {
+        return;
+      }
       const predicate = node.arguments.at(-1);
       const resolved =
-        predicate !== undefined && ts.isIdentifier(predicate)
-          ? functions.get(predicate.text)
+        predicate?.type === "Identifier"
+          ? functions.get(predicate.name)
           : predicate;
       if (resolved !== undefined && spawns(resolved, new Set())) {
-        const { line } = parsed.getLineAndCharacterOfPosition(node.getStart());
         violations.push(
-          `${relativePath}:${line + 1}: property predicate spawns a process per sample; evaluate it in process or draw the samples and run them as one batch`,
+          `${relativePath}:${lineOf(source, node.start)}: property predicate spawns a process per sample; evaluate it in process or draw the samples and run them as one batch`,
         );
       }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+    },
+  }).visit(parsed);
+
   return violations;
 };
 
@@ -587,22 +608,7 @@ describe("property-test convention", () => {
 
   test("every workspace property selector includes both assertion APIs", async () => {
     const fixtureRoot = mkdtempSync(path.join(tmpdir(), "property-selectors-"));
-    const legacyPath = "src/legacy.test.ts";
-    const sharedPath = "src/shared.test.ts";
-    const expectedPaths = [legacyPath, sharedPath];
     try {
-      mkdirSync(path.join(fixtureRoot, "src"));
-      await Promise.all([
-        Bun.write(path.join(fixtureRoot, legacyPath), "fc.assert(property);"),
-        Bun.write(
-          path.join(fixtureRoot, sharedPath),
-          'assertProperty("shared", property);',
-        ),
-        Bun.write(
-          path.join(fixtureRoot, "src/ordinary.test.ts"),
-          'test("ordinary", () => {});',
-        ),
-      ]);
       const violations: string[] = [];
       for (const [
         workspace,
@@ -623,14 +629,49 @@ describe("property-test convention", () => {
           }
           continue;
         }
-        // Exercise the manifest's selector without starting the test runner.
         const selector = /\$\((grep\s[^)]+)\)/u.exec(command)?.at(1);
-        if (selector === undefined) {
+        // Accept the literal root operands and include flags used by the
+        // manifests; unrelated test roots need not belong to this runner.
+        const roots =
+          selector === undefined
+            ? undefined
+            : /^grep\s+-rlE\s+'[^']+'\s+([a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*(?:\s+[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)*)(?:\s+--include='[^']+')*$/u
+                .exec(selector)
+                ?.at(1)
+                ?.split(/\s+/u);
+        if (
+          selector === undefined ||
+          roots === undefined ||
+          roots.length === 0
+        ) {
           violations.push(
-            `${workspace}: test:property has no recognized property selector`,
+            `${workspace}: test:property has no recognized literal-root selector`,
           );
           continue;
         }
+        for (const root of roots) {
+          mkdirSync(path.join(fixtureRoot, root), { recursive: true });
+          await Promise.all([
+            Bun.write(
+              path.join(fixtureRoot, root, "legacy.test.ts"),
+              "fc.assert(property);",
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "shared.test.ts"),
+              'assertProperty("shared", property);',
+            ),
+            Bun.write(
+              path.join(fixtureRoot, root, "ordinary.test.ts"),
+              'test("ordinary", () => {});',
+            ),
+          ]);
+        }
+        const expectedPaths = [...new Set(roots)]
+          .flatMap((root) => [
+            `${root}/legacy.test.ts`,
+            `${root}/shared.test.ts`,
+          ])
+          .toSorted();
         const selectionProcess = Bun.spawn(["sh", "-c", selector], {
           cwd: fixtureRoot,
           stdout: "pipe",

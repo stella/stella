@@ -18,6 +18,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -362,7 +364,11 @@ export class CorpusIndexGroupNotReadyError extends TaggedError(
   message: string;
   indexId: string;
   reason: Extract<CorpusIndexGroupReadiness, { type: "unready" }>["reason"];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type AttestedGroupsOptions = {
   /**
@@ -595,6 +601,37 @@ const mergeAttachedTarget = ({
 };
 
 /**
+ * The generations a family's readers are served from: the family's serving
+ * generation, and each jurisdiction the jurisdiction-serving pointer moved to
+ * another generation, with that generation. The one source of that set for
+ * the read path (`readServingCorpusIndexTargetTx`) and for anything that has
+ * to measure what those readers are served (the freshness report).
+ */
+export const readServedCorpusIndexGenerationsTx = async (
+  tx: ReadTransaction,
+  family: CorpusFamily,
+): Promise<
+  Result<
+    {
+      serving: ServingCorpusIndexGeneration;
+      /** Jurisdiction (canonical uppercase) and the generation serving it. */
+      flipped: readonly (readonly [string, string])[];
+    },
+    CorpusServingGenerationAbsentError
+  >
+> => {
+  const servingRead = await readServingCorpusIndexGenerationTx(tx, family);
+  if (Result.isError(servingRead)) {
+    return Result.err(servingRead.error);
+  }
+  const serving = servingRead.value;
+  const flipped = [
+    ...(await readJurisdictionServingGenerationsTx(tx, family)),
+  ].filter(([, generation]) => generation !== serving.generation);
+  return Result.ok({ serving, flipped });
+};
+
+/**
  * The generation and indexes a read reaches, resolved through the
  * jurisdiction-serving pointer (`corpus-index-jurisdiction-serving-store.ts`)
  * and nothing else.
@@ -621,14 +658,11 @@ export const readServingCorpusIndexTargetTx = async (
     jurisdiction,
   }: { family: CorpusFamily; jurisdiction: string | undefined },
 ): Promise<Result<ServingCorpusIndexTarget, ServingCorpusIndexTargetError>> => {
-  const servingRead = await readServingCorpusIndexGenerationTx(tx, family);
-  if (Result.isError(servingRead)) {
-    return Result.err(servingRead.error);
+  const served = await readServedCorpusIndexGenerationsTx(tx, family);
+  if (Result.isError(served)) {
+    return Result.err(served.error);
   }
-  const serving = servingRead.value;
-  const flipped = [
-    ...(await readJurisdictionServingGenerationsTx(tx, family)),
-  ].filter(([, generation]) => generation !== serving.generation);
+  const { serving, flipped } = served.value;
   if (jurisdiction !== undefined) {
     const servedBy = flipped.find(
       ([flippedJurisdiction]) => flippedJurisdiction === jurisdiction,

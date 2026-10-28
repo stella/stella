@@ -69,7 +69,7 @@ document_review_parties.{...entityFeatureWorkspaceGateColumns()}  spread        
 document_review_parties.id                                        pUuid               pk,not null       document-reviews.ts:382
 document_review_parties.organization_id                           safeOrganizationId  fk,not null       document-reviews.ts:383
 document_review_parties.workspace_id                              safeWorkspaceId     fk,not null       document-reviews.ts:386
-document_review_parties.entity_id                                 safeUuid            not null          document-reviews.ts:389
+document_review_parties.entity_id                                 safeUuid            fk,not null       document-reviews.ts:389
 document_review_parties.entity_version_id                         safeUuid            fk,not null       document-reviews.ts:390
 document_review_parties.prompt_version                            smallint            not null          document-reviews.ts:395  Bumped when the detection prompt changes shape, so a stale row is recomputed instead of read as today's answer.
 document_review_parties.parties                                   jsonb               not null          document-reviews.ts:396
@@ -83,9 +83,9 @@ The words a reference-derived position quotes: one row per block of a reference 
 ```text
 document_review_reference_passages.{...entityFeatureGateColumns()}  spread                                document-reviews.ts:448
 document_review_reference_passages.id                               pUuid               pk,not null       document-reviews.ts:449
-document_review_reference_passages.organization_id                  safeOrganizationId  not null          document-reviews.ts:452  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
-document_review_reference_passages.workspace_id                     safeWorkspaceId     not null          document-reviews.ts:455  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
-document_review_reference_passages.entity_id                        safeUuid            not null          document-reviews.ts:456
+document_review_reference_passages.organization_id                  safeOrganizationId  fk,not null       document-reviews.ts:452  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
+document_review_reference_passages.workspace_id                     safeWorkspaceId     fk,not null       document-reviews.ts:455  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
+document_review_reference_passages.entity_id                        safeUuid            fk,not null       document-reviews.ts:456
 document_review_reference_passages.file_field_id                    safeUuid            not null          document-reviews.ts:457
 document_review_reference_passages.entity_version_id                safeUuid            not null          document-reviews.ts:460  Provenance, not a foreign key: a passage outlives the pruning of the version it was read from as long as the document itself exists.
 document_review_reference_passages.block_id                         varchar             not null          document-reviews.ts:461

@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
@@ -36,6 +44,11 @@ import {
 } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -693,6 +706,38 @@ describe("replaceFileFieldId", () => {
       .getState()
       .tabs.find((item) => item.id === "field-pdf");
     expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
+  test("reopening an open file applies a requested facet and keeps the reader's otherwise", () => {
+    const contract = {
+      id: "field-contract",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    };
+    const contractTab = () =>
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((item) => item.id === contract.id);
+    useInspectorTabsStore.getState().openFile(contract);
+    useInspectorTabsStore.getState().setFileFacet(contract.id, "metadata");
+
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...contract, facet: "versions" });
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore.getState().openFile(contract);
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore
+      .getState()
+      .openFileForEntity({ ...contract, facet: "preview" });
+    expect(contractTab()).toMatchObject({ facet: "preview", type: "pdf" });
   });
 
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
@@ -2217,7 +2262,7 @@ describe("Inspector tab broadcast", () => {
           userId: "user-storage",
         }),
       ),
-    ).toBe("1");
+    ).toBe(JSON.stringify({ version: 1, value: true }));
   });
 
   test("does not exchange tabs across organization scopes", () => {
@@ -2331,20 +2376,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeLegalKey: statuteChatKey("document-1"),
-            contextMatterIds: [],
-            id: restored,
-            label: "Statute chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeLegalKey: statuteChatKey("document-1"),
+              contextMatterIds: [],
+              id: restored,
+              label: "Statute chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
     const minted = ensureLegalDocumentChatThread({
@@ -2376,20 +2424,23 @@ describe("a legal document's chat tab and the reader's composer", () => {
         userId: scope.userId,
       }),
       JSON.stringify({
-        activeId: restored,
-        collapsedGroupIds: [],
-        groupAssignments: {},
-        groups: [],
-        tabs: [
-          {
-            activeDecisionId: "decision-1",
-            contextMatterIds: [],
-            id: restored,
-            label: "Decision chat",
-            started: true,
-            type: "chat",
-          },
-        ],
+        version: 1,
+        value: {
+          activeId: restored,
+          collapsedGroupIds: [],
+          groupAssignments: {},
+          groups: [],
+          tabs: [
+            {
+              activeDecisionId: "decision-1",
+              contextMatterIds: [],
+              id: restored,
+              label: "Decision chat",
+              started: true,
+              type: "chat",
+            },
+          ],
+        },
       }),
     );
 
@@ -2432,10 +2483,13 @@ describe("a legal document's chat tab and the reader's composer", () => {
     // Exactly these two: the empty document chat is left out.
     expect(persisted).toEqual(
       expect.objectContaining({
-        tabs: [
-          expect.objectContaining({ id: used, started: true }),
-          expect.objectContaining({ id: "thread-plain" }),
-        ],
+        version: 1,
+        value: expect.objectContaining({
+          tabs: [
+            expect.objectContaining({ id: used, started: true }),
+            expect.objectContaining({ id: "thread-plain" }),
+          ],
+        }),
       }),
     );
   });
@@ -2469,7 +2523,9 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "a",
   });
-  expect(localArea().getItem(keyA)).toBe("1");
+  expect(localArea().getItem(keyA)).toBe(
+    JSON.stringify({ version: 1, value: true }),
+  );
   client.setQueryData(["session"], { user: { id: "b" } });
   expect(useInspectorTabsStore.getState().minimized).toBe(false);
   expect(useInspectorTabsStore.getState().tabs).toEqual([]);
@@ -2482,14 +2538,16 @@ test("inspector subscriptions restore only their active account scope", () => {
     kind: "user",
     userId: "b",
   });
-  localArea().setItem(keyB, "1");
+  localArea().setItem(keyB, JSON.stringify({ version: 1, value: true }));
   cleanupInspectorBroadcast = initializeInspectorTabBroadcast({
     organizationId: "org",
     userId: "b",
   });
   expect(useInspectorTabsStore.getState().minimized).toBe(true);
   useInspectorTabsStore.getState().setMinimized(false);
-  expect(localArea().getItem(keyB)).toBe("0");
+  expect(localArea().getItem(keyB)).toBe(
+    JSON.stringify({ version: 1, value: false }),
+  );
   expect(localArea().getItem(keyA)).toBeNull();
   cleanupInspectorBroadcast();
   cleanupInspectorBroadcast = null;

@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "2b503eed22f7ba1499e98594056ce76ee6659bcd99012a6a9aae93a55ef0bc12"
+  "kind": "priority",
+  "qualifier": "Publishes refreshed marketing screenshots as signed commits.",
+  "reviewedDigest": "a567021ce1adc8a7692c2921b14e80042170252dd0e0415d16672f206a10aa00"
 }

@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -50,12 +51,15 @@ const { WebReaderPresentationProvider } =
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { MarginNotes } =
-  await import("@/features/case-law/components/case-viewer/analysis/margin-notes");
+const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
 const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
-const { clickOpensVisitorOffer, READER_ASIDE_RESIZE_SLOT } =
+const { clickOpensVisitorOffer } =
   await import("@/features/case-law/components/case-viewer/decision-workspace.logic");
+const { READER_ASIDE_RESIZE_SLOT } =
+  await import("@/features/case-law/components/case-viewer/reader-aside-slots");
+const { getCategoryVar } =
+  await import("@/features/case-law/components/case-viewer/analysis/types");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { ActionCapabilitiesProvider } =
@@ -91,7 +95,7 @@ const renderVisitorColumn = () =>
         <MarginNotes
           items={[
             {
-              category: "facts",
+              accentVar: getCategoryVar("facts"),
               depth: 0,
               heading: EXAMPLE_HEADING,
               id: "example:facts",
@@ -101,13 +105,16 @@ const renderVisitorColumn = () =>
             },
             {
               author: { image: null, name: "Visitor" },
+              createdAt: "2026-09-01T10:00:00.000Z",
               id: "comment-1",
               kind: "comment",
               mine: true,
               onDelete: () => undefined,
               onToggleVisibility: () => undefined,
               startAnchorId: "p-2",
+              targetType: "decision",
               text: COMMENT_TEXT,
+              updatedAt: "2026-09-01T10:00:00.000Z",
               visibility: "private",
             },
             {
@@ -116,6 +123,7 @@ const renderVisitorColumn = () =>
               onCancel: () => undefined,
               onSubmit: () => undefined,
               startAnchorId: "p-3",
+              targetType: "decision",
             },
           ]}
           placement="inline"
@@ -352,7 +360,7 @@ test("an inline holding reference highlights its full range and scrolls to its s
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}

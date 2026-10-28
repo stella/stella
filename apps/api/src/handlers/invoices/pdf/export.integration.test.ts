@@ -1,4 +1,5 @@
 import { PDF } from "@libpdf/core";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -6,14 +7,18 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
+  BILLING_STATUS,
   featureEnrolments,
+  INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
+  timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -27,6 +32,7 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+// Selected by the STELLA_RUN_POSTGRES_TESTS gate because the fixture exercises RLS.
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 const invoiceId = createSafeId<"invoice">();
 beforeAll(async () => {
@@ -58,6 +64,7 @@ beforeAll(async () => {
     invoiceDate: "2026-09-30",
     status: INVOICE_STATUS.DRAFT,
     currency: "CZK",
+    language: "sk",
     netAmount: cents(500_000),
     vatAmount: cents(105_000),
     totalAmount: cents(605_000),
@@ -90,6 +97,7 @@ afterAll(async () => {
 const context = (
   scope: "own" | "neighbour" | "other",
   auditEvents: AuditEvent[],
+  targetInvoiceId = invoiceId,
 ) => {
   const { testDb, ids } = fixture;
   const scopes = {
@@ -122,7 +130,7 @@ const context = (
       { id: workspaceId, status: "active" },
     ],
     getWorkspaceAccess: async () => ({ id: workspaceId, status: "active" }),
-    params: { workspaceId, invoiceId },
+    params: { workspaceId, invoiceId: targetInvoiceId },
     query: {},
     body: {},
     createAuditRecorder: () => recordAuditEvent,
@@ -133,8 +141,9 @@ const context = (
     promptCachingEnabled: false,
     request: new Request("https://example.test/invoice/pdf", {
       method: "POST",
+      headers: { "Accept-Language": "en" },
     }),
-    route: "/test/invoice/pdf",
+    route: "/v1/invoices/:workspaceId/:invoiceId/pdf" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
     session: { activeOrganizationId: organizationId },
@@ -188,8 +197,10 @@ describe("invoice document export", () => {
       .map((page) => page.text)
       .join("\n");
     expect(text).toContain("Contract review");
-    expect(text).toContain("Quantity: 2.5 h");
-    expect(text).toContain("Unit price:");
+    // Slovak column headers, with the figures under them.
+    expect(text).toContain("MNOŽSTVO");
+    expect(text).toContain("JEDNOTKOVÁ CENA");
+    expect(text).toContain("2,5 h");
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action: "download",
@@ -198,10 +209,163 @@ describe("invoice document export", () => {
       workspaceId: fixture.ids.wsA1,
     });
   });
+  test("exports a legacy invoice whose attached entry has no stored line", async () => {
+    const legacyInvoiceId = createSafeId<"invoice">();
+    const entryId = createSafeId<"timeEntry">();
+    const { testDb, ids } = fixture;
+    // A legacy invoice stores no net amount: its document adds a line for
+    // each attached entry that has none after its stored lines.
+    await testDb.insert(invoices).values({
+      id: legacyInvoiceId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceDate: "2026-09-30",
+      status: INVOICE_STATUS.DRAFT,
+      currency: "CZK",
+      language: "en",
+      netAmount: null,
+    });
+    await testDb.insert(invoiceLines).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId: legacyInvoiceId,
+      position: 0,
+      description: "Stored advice line",
+      quantity: "1",
+      unit: "h",
+      unitPrice: cents(100_000),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100_000),
+      vatAmount: cents(21_000),
+      grossAmount: cents(121_000),
+      source: INVOICE_LINE_SOURCE.MANUAL,
+    });
+    await testDb.insert(timeEntries).values({
+      id: entryId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      workItemId: ids.entityA1,
+      dateWorked: "2026-09-28",
+      timezoneId: "UTC",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(50_000),
+      currency: "CZK",
+      narrative: "Attached hearing preparation",
+      noCharge: false,
+      status: BILLING_STATUS.APPROVED,
+      invoiceId: legacyInvoiceId,
+      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
+    });
+    try {
+      const writes: Uint8Array[] = [];
+      const handler = createInvoicePdfExport(async (object) => {
+        if (object.data instanceof Uint8Array) {
+          writes.push(object.data);
+        }
+        return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+      });
+      const response = await handler.handler(
+        context("own", [], legacyInvoiceId),
+      );
+      expect("downloadUrl" in response).toBe(true);
+      const written = writes.at(0);
+      if (written === undefined) {
+        throw new Error("the export stored no PDF bytes");
+      }
+      const text = (await PDF.load(written))
+        .extractText()
+        .map((page) => page.text)
+        .join("\n");
+      expect(text).toContain("Stored advice line");
+      expect(text).toContain("Attached hearing preparation");
+    } finally {
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, entryId));
+      await testDb
+        .delete(invoiceLines)
+        .where(eq(invoiceLines.invoiceId, legacyInvoiceId));
+      await testDb.delete(invoices).where(eq(invoices.id, legacyInvoiceId));
+    }
+  });
+
+  test("renders English stored on the invoice despite a Slovak request", async () => {
+    await fixture.testDb
+      .update(invoices)
+      .set({ language: "en" })
+      .where(eq(invoices.id, invoiceId));
+    const stored: Uint8Array[] = [];
+    const handler = createInvoicePdfExport(async (object) => {
+      if (typeof object.data === "string") {
+        throw new TypeError("invoice export must store PDF bytes");
+      }
+      stored.push(object.data);
+      return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+    });
+    const requestContext = {
+      ...context("own", []),
+      request: new Request("https://example.test/invoice/pdf", {
+        method: "POST",
+        headers: { "Accept-Language": "sk" },
+      }),
+    };
+    await handler.handler(requestContext);
+    const pdf = stored.at(0);
+    if (pdf === undefined) {
+      throw new Error("the export stored no PDF bytes");
+    }
+    const text = (await PDF.load(pdf))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    // English column headers, with the figures under them.
+    expect(text).toContain("QUANTITY");
+    expect(text).toContain("UNIT PRICE");
+    expect(text).toContain("2.5 h");
+  });
+  test.each(["timeout", "crashed", "memory"] as const)(
+    "maps renderer %s failures to a retryable service response",
+    async (reason) => {
+      let writes = 0;
+      const handler = createInvoicePdfExport(
+        async () => {
+          writes += 1;
+          return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+        },
+        async () =>
+          Result.ok({
+            status: "rejected" as const,
+            reason,
+            diagnostics: ["internal renderer detail"],
+          }),
+      );
+
+      const response = await handler.handler(context("own", []));
+
+      expect(response).toMatchObject({
+        code: 503,
+        response: {
+          message: "The invoice PDF renderer is temporarily unavailable.",
+          hint: "Try exporting the invoice again later.",
+          retryable: true,
+        },
+      });
+      expect(JSON.stringify(response)).not.toContain(
+        "internal renderer detail",
+      );
+      expect(writes).toBe(0);
+    },
+  );
+
   test("refuses delivery without a download audit when storage fails", async () => {
     const events: AuditEvent[] = [];
     const handler = createInvoicePdfExport(async () => {
-      throw new HandlerError({ status: 502, message: "Storage unavailable" });
+      throw new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Storage unavailable",
+      });
     });
     const response = await handler.handler(context("own", events));
     expect(response).toMatchObject({ code: 502 });

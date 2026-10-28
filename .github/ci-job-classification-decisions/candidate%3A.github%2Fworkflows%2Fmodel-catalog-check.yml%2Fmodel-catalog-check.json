@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "ee7b75f084f870155ff15cc81260d750f9181b93b1d12590a8bf23c354306ae1"
+  "kind": "priority",
+  "qualifier": "Publishes refreshed model catalog snapshots as a signed-commit pull request.",
+  "reviewedDigest": "4f434bb43072e1b9315271277dc4e67ca3fed9b7e8355f49e2d8ab1394604c45"
 }

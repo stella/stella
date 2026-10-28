@@ -2,25 +2,25 @@ import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
-import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
-
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { professionalUseOptions, roleOptions } from "@/lib/auth-queries";
+import { roleOptions } from "@/lib/auth-queries";
 import { stashDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import {
-  ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { returnPathOf } from "@/lib/redirect";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
-import { loadAuthContext } from "@/routes/-auth-context";
+import {
+  loadAuthContext,
+  requireProfessionalUseForSignedInRoute,
+} from "@/routes/-auth-context";
 
 // The signed-in routes' guard, apart from the signed-in frame so a route can
 // run it without loading the frame.
@@ -64,34 +64,22 @@ export const loadProtectedContext = async ({
   const activeOrganizationId = authContext.session.activeOrganizationId;
   const userId = authContext.session.userId;
 
-  // Confirm professional use before anything signed-in loads; the API refuses
-  // signed-in requests until the statement is accepted.
-  const professionalUse = await ensureRouteQueryData(
-    context.queryClient,
-    professionalUseOptions(userId),
-  );
-  switch (professionalUse.status) {
-    case PROFESSIONAL_USE_STATUS.accepted:
-      break;
-    case PROFESSIONAL_USE_STATUS.required:
-      redirect({
-        to: "/auth/professional-use",
-        search: { redirectTo },
-        replace: true,
-        throw: true,
-      });
-      return panic(
-        "TanStack Router did not throw the professional-use redirect.",
-      );
-    default:
-      professionalUse satisfies never;
-      return panic("Unhandled professional-use state");
-  }
+  await requireProfessionalUseForSignedInRoute({
+    authContext,
+    queryClient: context.queryClient,
+    location,
+  });
 
   // Start optional shell data immediately. The loader settles the role before
   // chrome mounts, while child loaders fetch their independent data in parallel.
   const onPrefetchError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "loadProtectedContext.onPrefetchError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "loadProtectedContext.onPrefetchError:failure",
+      },
+    });
   };
   if (location.pathname === "/admin/time-policy") {
     detached(
@@ -158,7 +146,10 @@ export const prefetchProtectedShell = async ({
   context: { queryClient: QueryClient };
 }) =>
   await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "prefetchProtectedShell:failure",
+      scope: { type: "handler", handlerId: "prefetchProtectedShell:failure" },
+    });
   });
 
 /**
@@ -176,7 +167,13 @@ export const startSignedInShellRequests = ({
   userId: string;
 }): void => {
   const onPrefetchError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "startSignedInShellRequests:onPrefetchError",
+      scope: {
+        type: "handler",
+        handlerId: "startSignedInShellRequests:onPrefetchError",
+      },
+    });
   };
   detached(
     prefetchRouteQuery(

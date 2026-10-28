@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "5a7c6c53ae9df9be1ea52c57296b9b5a643ca88e5c8a756a6a5be58d81897172"
+  "kind": "priority",
+  "qualifier": "Arms auto-merge on bot refresh pull requests with a contents-write app token.",
+  "reviewedDigest": "1e3ae2ad4eb4c7d6ecf03c93963a0e1bd8934f5c50590d7c419f30dacfb63bfb"
 }

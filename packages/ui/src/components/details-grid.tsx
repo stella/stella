@@ -2,8 +2,15 @@ import type * as React from "react";
 
 import { cn } from "../lib/utils";
 
+// A query container is size-contained, so its content no longer sizes it: in
+// a content-sized host (a popover, a `w-max` box) the sheet measured 0px wide
+// and every value wrapped one letter per line. It claims one column's minimum
+// instead; `min-w-0` still lets a narrower host shrink it.
 const DetailsGrid = ({ className, ...props }: React.ComponentProps<"dl">) => (
-  <div className="@container min-w-0" data-slot="details-grid-container">
+  <div
+    className="@container min-w-0 [contain-intrinsic-inline-size:20rem]"
+    data-slot="details-grid-container"
+  >
     <dl
       className={cn(
         "grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-x-6 gap-y-2 font-sans @min-[64rem]:grid-cols-3",

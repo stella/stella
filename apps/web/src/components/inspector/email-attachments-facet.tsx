@@ -577,6 +577,7 @@ const AttachmentPreviewContent = ({
       key={previewId}
     >
       <PDFViewport
+        pageSource="portfolio"
         buffer={previewBuffer}
         className="document-preview-surface h-full w-full"
         contentClassName="relative space-y-2 px-2 pt-2"
@@ -729,6 +730,7 @@ const AttachmentSaveControls = ({
       onPrimaryClick={onSave}
       primaryDescriptionId={descriptionId}
       primaryDisabled={disabled}
+      primaryContent={compact ? "icon" : "text"}
       primaryLabel={t("common.save")}
       size="sm"
       menu={

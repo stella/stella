@@ -46,7 +46,8 @@ type RequestLogOptions = {
   clientAddressSource?: string | undefined;
   durationMs: number;
   errorFingerprint?: ErrorFingerprint | undefined;
-  elysiaCode?: string | undefined;
+  /** Why the HTTP layer refused the request (`malformed`, `not_found`, ...). */
+  failureKind?: string | undefined;
   errorType?: string | undefined;
   failure?: RequestLogFailure | undefined;
   message: "request.completed" | "request.failed";
@@ -217,31 +218,22 @@ const annotateUnowned = (
   return { ...attributes, [UNOWNED_KEY]: true };
 };
 
-const emit = ({
-  attributes,
-  message,
+type OutputStream = "stderr" | "stdout";
+
+/** Write a record that is already safe to emit to every sink. */
+const write = ({
+  attributes: safeAttributes,
+  message: safeMessage,
   severityNumber,
   severityText,
-  outputStream = "stderr",
+  outputStream,
 }: {
-  attributes: LoggerAttributeInput | undefined;
+  attributes: LoggerAttributes | undefined;
   message: string;
   severityNumber: SeverityNumber;
   severityText: string;
-  outputStream?: "stderr" | "stdout";
+  outputStream: OutputStream;
 }): void => {
-  const output = sanitizeErrorForOutput([message, attributes]);
-  const safeMessage =
-    Array.isArray(output) && typeof output.at(0) === "string"
-      ? String(output.at(0))
-      : "[unreadable log]";
-  const safeAttributes = annotateUnowned(
-    severityNumber,
-    filterLogAttributes({
-      attributes: Array.isArray(output) ? output.at(1) : undefined,
-      queryFieldsDropped: queryFieldCount(attributes),
-    }),
-  );
   if (recordSink !== null) {
     recordSink({
       severityText,
@@ -296,16 +288,55 @@ const emit = ({
   }
 };
 
+const emit = ({
+  attributes,
+  message,
+  severityNumber,
+  severityText,
+  outputStream = "stderr",
+}: {
+  attributes: LoggerAttributeInput | undefined;
+  message: string;
+  severityNumber: SeverityNumber;
+  severityText: string;
+  outputStream?: OutputStream;
+}): void => {
+  const output = sanitizeErrorForOutput([message, attributes]);
+  write({
+    message:
+      Array.isArray(output) && typeof output.at(0) === "string"
+        ? String(output.at(0))
+        : "[unreadable log]",
+    attributes: annotateUnowned(
+      severityNumber,
+      filterLogAttributes({
+        attributes: Array.isArray(output) ? output.at(1) : undefined,
+        queryFieldsDropped: queryFieldCount(attributes),
+      }),
+    ),
+    severityNumber,
+    severityText,
+    outputStream,
+  });
+};
+
 const REQUEST_SEVERITY = {
   ERROR: SeverityNumber.ERROR,
   INFO: SeverityNumber.INFO,
   WARN: SeverityNumber.WARN,
 } as const;
 
+/**
+ * The request record. Its own fields are typed (a method, a route pattern,
+ * numbers and closed vocabularies under fixed keys) and written as they are;
+ * only what came from a thrown error, the fingerprint and the error type,
+ * passes the scrub every free-form attribute passes. The request fields go
+ * last, so no error-derived key can replace them.
+ */
 const emitRequest = ({
   clientAddressSource,
   durationMs,
-  elysiaCode,
+  failureKind,
   errorFingerprint,
   errorType,
   failure,
@@ -316,24 +347,28 @@ const emitRequest = ({
   severity,
   statusCode,
 }: RequestLogOptions): void => {
-  emit({
+  const errorAttributes =
+    errorFingerprint === undefined && errorType === undefined
+      ? undefined
+      : sanitizeLogAttributes({
+          ...errorFingerprint,
+          ...(errorType === undefined ? {} : { "error.type": errorType }),
+        });
+  const severityNumber = REQUEST_SEVERITY[severity];
+  write({
     message,
-    severityNumber: REQUEST_SEVERITY[severity],
+    severityNumber,
     severityText: severity,
     outputStream: "stdout",
-    attributes: {
-      // The fingerprint's keys are already this sink's attribute names, so the
-      // record ships whole rather than being re-listed field by field. A second
-      // copy of that key set can only ever be a shorter one, and a field it
-      // leaves out is a field no reader of this sink can get back. It goes
-      // first, so none of its keys can override the request's own.
-      ...errorFingerprint,
+    attributes: annotateUnowned(severityNumber, {
+      ...errorAttributes,
       "http.method": method,
       "http.route": route ?? "unmatched",
       "http.status_code": statusCode,
       "request.duration_ms": durationMs,
-      ...(elysiaCode === undefined ? {} : { "http.elysia_code": elysiaCode }),
-      ...(errorType === undefined ? {} : { "error.type": errorType }),
+      ...(failureKind === undefined
+        ? {}
+        : { "http.failure_kind": failureKind }),
       ...(requestId === undefined ? {} : { "request.id": requestId }),
       ...(clientAddressSource === undefined
         ? {}
@@ -345,7 +380,7 @@ const emitRequest = ({
             "failure.reason": failure.reason,
             "failure.shadow": "true",
           }),
-    },
+    }),
   });
 };
 

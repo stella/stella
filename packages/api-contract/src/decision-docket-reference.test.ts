@@ -10,6 +10,7 @@ import {
   parseDecisionDocket,
   storedDecisionDocketOf,
 } from "./decision-docket-grammar";
+import { DECISION_DOCKET_GRAMMAR_FIXTURES } from "./decision-docket-grammar.fixtures";
 import {
   DECISION_DOCKET_IDENTITY_FIXTURES,
   DOCKET_IDENTITY_FIXTURE_NUMBER_MAX,
@@ -29,6 +30,74 @@ import {
   parseDecisionQuery,
   resolveDecisionIdentity,
 } from "./decision-query-intent";
+
+test("balanced wrappers preserve every grammar's reference identity", () => {
+  assertProperty(
+    "balanced wrappers preserve every grammar's reference identity",
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          ["(", ")"],
+          ["[", "]"],
+          ["{", "}"],
+          ["<", ">"],
+          ["“", "”"],
+          ["«", "»"],
+        ),
+        { minLength: 1, maxLength: 4 },
+      ),
+      (wrappers) => {
+        for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
+          for (const fixture of DECISION_DOCKET_GRAMMAR_FIXTURES[
+            grammar.jurisdiction
+          ]) {
+            for (const entry of [fixture.canonical, ...fixture.variants]) {
+              const reference = readDecisionDocketReference(entry, { grammar });
+              expect(reference, entry).not.toBeNull();
+              let wrapped: string = entry;
+              for (const [opening, closing] of wrappers) {
+                wrapped = `${opening}${wrapped}${closing}`;
+              }
+              expect(
+                readDecisionDocketReference(wrapped, { grammar }),
+                wrapped,
+              ).toEqual(reference);
+            }
+          }
+        }
+      },
+    ),
+  );
+});
+
+test("balanced citation punctuation survives reference edge trimming", () => {
+  const grammar = DECISION_DOCKET_GRAMMARS.GBR;
+  for (const citation of [
+    "[2099] UKSC 998",
+    "[2099] EWHC 998 (KB)",
+    "[2099] EWHC 998 (BP)",
+  ]) {
+    const expected = grammar.parse(citation);
+    if (expected === null) {
+      panic(`Not a British neutral citation: ${citation}`);
+    }
+    for (const wrapped of [
+      citation,
+      `“${citation}”`,
+      `(${citation})`,
+      `[${citation}]`,
+      `«(${citation}),»`,
+    ]) {
+      expect(
+        readDecisionDocketReference(wrapped, { grammar }),
+        wrapped,
+      ).toEqual({
+        family: expected,
+        selector: { kind: "none" },
+      });
+    }
+  }
+});
 
 const CZE = { grammar: DECISION_DOCKET_GRAMMARS.CZE } as const;
 

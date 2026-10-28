@@ -1,4 +1,15 @@
-// parser-output-unchanged: failure grades classify telemetry; no parser reads this vocabulary.
+// parser-output-unchanged: [us-courtlistener] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-ns] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-uohs] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-courts] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-sn] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kio] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-tk] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-ncourt] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [eu-ecj] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kis] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-uokik] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -18,7 +29,10 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
   upstream_unavailable: "transient",
+  work_capacity_unavailable: "transient",
+  work_deadline_exceeded: "transient",
   provider_unavailable: "transient",
   // The provider's stream stopped before its answer finished: a dropped
   // connection or a provider-side cut, not a fault of this service.
@@ -50,6 +64,8 @@ export const FAILURE_REASON_GRADE = {
   // wrong address.
   upstream_connection_refused: "transient",
   generation_cancelled: "anticipated",
+  work_cancelled: "anticipated",
+  publisher_resource_limit: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
   // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
@@ -57,6 +73,7 @@ export const FAILURE_REASON_GRADE = {
   visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
+  publisher_refused: "anticipated",
   model_unavailable: "anticipated",
   // A complete structured answer that does not match the requested schema:
   // the model's choice, which this service rejects rather than stores.
@@ -70,6 +87,8 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
+  document_ocr_unconfigured: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",
@@ -85,7 +104,9 @@ export const FAILURE_REASON_GRADE = {
   request_validation: "client",
   route_not_found: "client",
   request_malformed: "client",
+  method_not_allowed: "client",
   unclassified: "defect",
+  tagged_failure: "defect",
   // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
   // A provider answered 400 to a request this service built and nothing more
   // specific named it: the request broke the provider's contract, which is
@@ -97,6 +118,8 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  // parser-output-unchanged: invoice renderer failures grade telemetry only.
+  invoice_renderer_failed: "defect",
   visual_preview_unavailable: "defect",
   visual_preview_timeout: "defect",
   visual_preview_response_invalid: "defect",
@@ -106,6 +129,9 @@ export const FAILURE_REASON_GRADE = {
   pg_lock_unavailable: "defect",
   pg_query_canceled: "defect",
   pg_auth_failed: "defect",
+  // 22007, 22008, 22P02: Postgres could not read a value as its column type.
+  // A value that fails there passed input validation, so the gap is a defect.
+  pg_invalid_input: "defect",
   connection_refused: "defect",
   socket_open_failed: "defect",
   timeout_unbounded: "defect",
@@ -234,9 +260,14 @@ const resolveDeclaration = (
  * A reader that has already walked the prototype chain passes it, so a Proxy
  * whose `getPrototypeOf` answers differently on each call is read once.
  */
+type ReadFailureBrandOptions = {
+  prototypes?: readonly object[];
+  read?: (value: object, key: string) => unknown;
+};
+
 export const readFailureBrand = (
   value: unknown,
-  prototypes?: readonly object[],
+  { prototypes, read }: ReadFailureBrandOptions = {},
 ): FailureBrand | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
@@ -249,7 +280,17 @@ export const readFailureBrand = (
     const declaration = classDeclarations.get(prototype);
     if (declaration !== undefined) {
       return {
-        reason: resolveDeclaration(declaration, value),
+        reason: resolveDeclaration(
+          declaration,
+          read === undefined
+            ? value
+            : new Proxy(value, {
+                get: (target, key): unknown =>
+                  typeof key === "string"
+                    ? read(target, key)
+                    : Reflect.get(target, key),
+              }),
+        ),
         source: "class",
       };
     }

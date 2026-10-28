@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -81,8 +82,10 @@ const CitationDirectionSection = ({
         onClick={() => setOpen(!open)}
         type="button"
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn("size-3.5 transition-transform", open && "rotate-90")}
+          flip={!open}
+          icon={ChevronRightIcon}
         />
         <span>{t(DIRECTION_TITLE[direction])}</span>
         <span className="text-muted-foreground font-normal">

@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
+  "kind": "priority",
+  "qualifier": "Publishes provenance updates through the shared provenance workflow.",
   "reviewedDigest": "1e0670e96fd8631f194ffd50f801c1293f49382b84236f50e1e133bb8889a364"
 }

@@ -388,6 +388,7 @@
         "reading": "Reading view"
       },
       "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {
@@ -506,11 +507,56 @@
     "addEntry": "Add entry",
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
+    "approval": {
+      "approveAll": "{count, plural, one {Approve # entry} other {Approve all # entries}}",
+      "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "billedTotal": "{duration} billed",
+      "empty": "Nothing on this matter is waiting for approval.",
+      "emptyWeek": "Nothing is waiting for approval this week. Submitted time shows up here.",
+      "everyone": "Everyone",
+      "failed": "The change was not saved. Try again.",
+      "myTime": "My time",
+      "pending": "{count, plural, one {# entry to approve} other {# entries to approve}}",
+      "refusals": {
+        "invalidEntry": "Add a description and check the work date, then approve the entry.",
+        "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
+        "notFound": "This entry no longer exists. Refresh the list.",
+        "notSubmitted": "This entry has not been submitted yet. Its timekeeper submits it first.",
+        "runningTimer": "Stop the running timer before approving this entry.",
+        "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
+        "wrongStatus": "This entry is no longer a draft. Refresh the list."
+      },
+      "returnComment": "Reason for returning",
+      "returnRefusals": {
+        "invalidEntry": "Check the entry's work date, then return it.",
+        "notApprover": "Only the entry's assigned approver or an administrator can return it.",
+        "notFound": "This entry no longer exists, so it cannot be returned. Refresh the list.",
+        "notSubmitted": "This draft was never submitted, so there is nothing to return.",
+        "runningTimer": "Stop the running timer before returning this entry.",
+        "timePeriodLocked": "This month is locked, so the entry cannot be returned. Ask an administrator to unlock it.",
+        "wrongStatus": "Billed or written-off time cannot be returned to its timekeeper."
+      },
+      "returnSelected": "Return {count, plural, one {# selected entry} other {# selected entries}}",
+      "selectEntry": "Select entry",
+      "timeEntries": "Time entries",
+      "title": "Approvals"
+    },
     "approve": "Approve",
     "approveSelected": "Approve selected",
     "batchActions": "Batch actions",
     "billable": "Billable",
     "billedAmount": "Billed amount",
+    "clientComposer": {
+      "flatFeeNote": "Bill flat-fee matters from the matter’s invoice page.",
+      "includeMatter": "Include {matterName}",
+      "invalidPeriod": "Choose an end date on or after the start date.",
+      "loadFailed": "Could not load unbilled work. Try again.",
+      "matterSubtotal": "Matter total incl. VAT: {amount} · {share} of invoice",
+      "periodEnd": "Period end",
+      "periodStart": "Period start",
+      "title": "Bill client",
+      "visibility": "This invoice is visible only to people who can access every included matter, and billing administrators."
+    },
     "codes": {
       "activity": "Activity",
       "activityCode": "Activity code",
@@ -593,6 +639,7 @@
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
       "outsideScope": "Outside the scope of VAT, 0 %",
+      "pendingApprovals": "{count, plural, one {# item is awaiting approval} other {# items are awaiting approval}}. Review approvals.",
       "rate": "Rate",
       "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.",
       "readyTitle": "Ready to issue",
@@ -644,6 +691,7 @@
         "eso9": "ESO9 import sheet (XLSX)",
         "exporting": "Preparing export…",
         "isdoc": "ISDOC e-invoice (ABRA Gen and others)",
+        "ksefFa3": "KSeF e-invoice FA(3) (XML)",
         "spreadsheets": "Spreadsheets",
         "xlsx": "Invoices (XLSX)",
         "xlsxLines": "Invoice lines (XLSX)"
@@ -652,6 +700,11 @@
       "invoiceDate": "Invoice date",
       "invoiceDetail": "Invoice detail",
       "invoiceNumber": "Invoice number",
+      "lineOverrides": {
+        "editedRecorded": "Edited · recorded: {description}, {quantity} × {rate}",
+        "quantity": "Quantity",
+        "resetRecorded": "Reset to recorded"
+      },
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
       "markPaid": "Mark paid",
@@ -676,6 +729,7 @@
     "markNonBillableSelected": "Mark non-billable",
     "matterRequired": "Please select a matter",
     "minutes": "Minutes",
+    "moveEntryHint": "Saving moves the entry to this matter and prices it with this matter's rates.",
     "narrative": "Narrative",
     "narrativePlaceholder": "Describe the work performed...",
     "noActiveTimer": "No active timer",
@@ -757,6 +811,7 @@
     "sellerProfiles": {
       "add": "Add seller profile",
       "archiveConfirm": "Archive this seller profile? It will no longer be available for new invoices.",
+      "barRegistration": "Bar registration",
       "bic": "BIC / SWIFT code",
       "default": "Default seller",
       "defaultCurrency": "Default currency",
@@ -768,11 +823,10 @@
       "invalidCurrency": "Enter a three-letter currency code.",
       "invalidIban": "Enter a valid IBAN.",
       "legalName": "Legal name",
+      "registerEntry": "Register entry",
       "registrationId": "Registration ID",
       "setDefault": "Make default",
       "title": "Seller profiles",
-      "vatId": "VAT ID",
-      "vatPayer": "VAT payer",
       "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.",
       "vatPayerRequiresVatId": "Enter the VAT ID to issue invoices as a VAT payer."
     },
@@ -790,13 +844,16 @@
       "approved": "Approved",
       "billed": "Billed",
       "draft": "Draft",
+      "submitted": "Submitted",
       "written_off": "Written off"
     },
     "stopTimer": "Stop",
     "suggestions": {
       "actionCount": "{count, plural, one {# action} other {# actions}}",
       "activeVsLogged": "{active} active · {logged} logged",
+      "alreadyCovered": "Already covered by logged time",
       "chatEvidence": "{count, plural, one {# message} other {# messages}} in “{title}”",
+      "engagedTime": "{duration} engaged",
       "keyboardHint": "Enter accepts, E edits before accepting, Delete dismisses",
       "privacyNote": "Only you can see these. Nothing is recorded until you accept it.",
       "title": "Suggested from your activity",
@@ -807,6 +864,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Add VAT rate",
+      "addCzechia": "Add rates for Czechia",
+      "addSlovakia": "Add rates for Slovakia",
       "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.",
       "code": "Rate code",
       "current": "Current rate",
@@ -821,6 +880,7 @@
       "overlap": "Validity periods for the same rate code cannot overlap.",
       "past": "Past rate",
       "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.",
+      "presetResult": "Added {added}; skipped {skipped}.",
       "rate": "VAT percentage",
       "title": "VAT rates",
       "validFrom": "Valid since",
@@ -887,9 +947,14 @@
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
       "dateUnavailable": "Date unavailable",
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
+      "goToMention": "Go to mention {number}",
+      "goToParagraph": "Go to paragraph {paragraph}",
       "lastNegative": "last negative treatment in {year}",
+      "mentionMark": "mention {number}",
+      "mentionsInDecision": "{count, plural, one {Cited once in this decision} other {Cited # times in this decision}}",
       "negativeCount": "{count, plural, one {# negative} other {# negative}}",
       "none": "No citations recorded yet.",
+      "notInStella": "Not in stella yet",
       "openAtCitation": "Open at the citation",
       "openDecision": "Open decision",
       "paragraphLabel": "Paragraph {paragraph}",
@@ -934,7 +999,6 @@
     "coverage": {
       "completeness": "Completeness",
       "courtsHeading": "By court",
-      "courtsUnavailable": "The per-court breakdown is unavailable right now.",
       "decisionYears": "Decision years",
       "description": "How much case law the corpus holds, per country and per court, and how fresh each source is.",
       "generatedAt": "Figures from {date}",
@@ -945,20 +1009,16 @@
       "healthStalled": "Stalled",
       "healthUnknown": "Never run",
       "inPreparation": "In preparation",
-      "knownGaps": "Known gaps",
       "lastSync": "Last sync",
-      "noGapsRecorded": "No gaps recorded",
       "notCountedYet": "Not counted yet",
       "notMeasuredYet": "Not measured yet",
-      "pendingTexts": "Pending texts",
       "reportedByListing": "Counted from the publisher's listing",
       "reportedByOperator": "Recorded by hand",
       "reportedByPublisher": "Publisher's own count",
       "searchable": "Searchable",
       "title": "Case-law coverage",
       "totalFrom": "Total from {date}",
-      "unavailable": "Coverage figures are unavailable right now.",
-      "unreadListingPeriods": "Listing periods not read"
+      "unavailable": "Coverage figures are unavailable right now."
     },
     "decisionNotFound": "Decision not found",
     "decisionTypes": {
@@ -998,6 +1058,12 @@
       "matchedIn": "Matched in {language}"
     },
     "loadingMore": "Loading more...",
+    "marginFilter": {
+      "label": "Cited provisions filter",
+      "paragraph": "{count, plural, =0 {No provisions cited in ¶{paragraph}} one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {No provisions cited in the selection} one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, =0 {No provisions cited in this paragraph} one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
       "empty": "No case law is kept in this matter yet.",
@@ -1019,15 +1085,20 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Human"
+      "human": "Human",
+      "toggleState": "{label}: {state, select, on {on} other {off}}"
     },
+    "oldestDecisions": "Oldest decisions",
     "pagination": {
       "goToPage": "Go to page {page}",
       "label": "Result pages",
       "pageOfCount": "Page {page} of {pageCount}",
       "pageOfEstimatedCount": "Page {page} of ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} of about {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page {page} · about {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithEstimatedResultCount": "Page {page} · about {count, plural, one {# result} other {# results}}",
+      "pageWithMatchCounts": "Page {page} · {exactCount, plural, one {# exact match} other {# exact matches}} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
+      "pageWithPartialMatchCount": "Page {page} · {relaxedCount, plural, one {# partial match} other {# partial matches}} on this page",
       "pageWithResultCount": "Page {page} · {count, plural, one {# result} other {# results}}",
       "perPage": "Per page",
       "refineForMore": "Refine your search to see more results"
@@ -1079,8 +1150,7 @@
       "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.",
       "runTitle": "Answer this page",
       "savedQuestions": "Saved questions",
-      "title": "Research tables",
-      "updated": "Last edited {date}"
+      "title": "Research tables"
     },
     "results": {
       "excerpt": {
@@ -1124,6 +1194,8 @@
     "showWholeHeadnote": "Show whole headnote",
     "sort": {
       "newest": "Newest",
+      "oldest": "Oldest",
+      "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
       "relevance": "Most relevant"
     },
     "viewer": {
@@ -1139,6 +1211,7 @@
       "citedDecisionPassage": "Passage in the decision",
       "cites": "Cites",
       "dissentByline": "Dissenting: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Go to paragraph} other {Go to paragraphs}}",
       "judgeRole": {
         "advocateGeneral": "Advocate General",
         "dissenting": "Dissenting opinion",
@@ -1478,7 +1551,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
@@ -1690,21 +1763,8 @@
       "describe-stella-function": "Preparing data lookup",
       "describe_template": "Reading template fields",
       "discover_tools": "Preparing data lookup",
-      "docxCommentSummary": "Add a comment to {blockId}",
-      "docxDeleteSummary": "Delete {blockId}",
-      "docxDeleteTableColumnSummary": "Delete table column at {blockId}",
-      "docxDeleteTableRowSummary": "Delete table row at {blockId}",
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}",
       "docxEditSummary": "{count, plural, one {# proposed edit} other {# proposed edits}}",
-      "docxInsertAfterSummary": "Insert text after {blockId}",
-      "docxInsertBeforeSummary": "Insert text before {blockId}",
-      "docxInsertTableColumnSummary": "Insert table column near {blockId}",
-      "docxInsertTableRowSummary": "Insert table row near {blockId}",
-      "docxMergeTableCellsSummary": "Merge table cells at {blockId}",
-      "docxReplaceBlockSummary": "Replace {blockId}",
-      "docxReplaceSummary": "Replace “{find}” with “{replace}”",
-      "docxSignatureTableSummary": "Insert signature table near {blockId}",
-      "docxSplitTableCellSummary": "Split table cell at {blockId}",
       "execute-typescript": "Reading workspace data",
       "execute_typescript": "Reading workspace data",
       "expand-chat-history": "Reading chat history",
@@ -2048,8 +2108,6 @@
       "orLetUsKnowAt": "or let us know at",
       "viewDocumentation": "View documentation"
     },
-    "enterKey": "↵",
-    "error": "Error",
     "expenses": "Expenses",
     "export": {
       "citations": "Citations",
@@ -2121,7 +2179,9 @@
       "ZH-HANT": "Chinese (traditional)"
     },
     "lastUpdated": "Last updated",
+    "layoutResetAfterProblem": "The layout was reset after a problem.",
     "legalDatabase": "Legal database",
+    "loadFailed": "Couldn't load.",
     "loadMore": "Load more",
     "loading": "Loading",
     "logTime": "Log time",
@@ -2196,10 +2256,12 @@
     "scrollToTop": "Scroll to top",
     "search": "Search...",
     "searchIn": "Search in",
+    "searchMembers": "Search members…",
     "selectAMatter": "Select a matter",
     "selectARole": "Select a role",
     "selectAll": "Select all",
     "selectDate": "Select date…",
+    "selected": "Selected",
     "sessions": "Sessions",
     "settings": "Settings",
     "showAll": "Show all",
@@ -2208,7 +2270,7 @@
     "showMore": "Show more",
     "showSecretValue": "Show secret value",
     "signOut": "Sign out",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "sort": "Sort",
     "source": "Source",
     "stale": "Stale",
@@ -2219,6 +2281,7 @@
     "suggested": "Suggested",
     "summarizeChanges": "Summarize changes",
     "target": "Target",
+    "taxId": "Tax ID",
     "timeBilling": "Time & Billing",
     "today": "Today",
     "translate": "Translate",
@@ -2242,6 +2305,8 @@
     "urlIdentifierPlaceholder": "my-organization",
     "user": "User",
     "value": "Value",
+    "vatId": "VAT ID",
+    "vatPayer": "VAT payer",
     "verified": "Verified",
     "verify": "Verify",
     "version": "Version",
@@ -2283,6 +2348,7 @@
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks",
     "scopeLawRead": "Read public statutes and case law",
     "scopeMattersWrite": "Create and edit your matters and tasks",
+    "scopeMemoryWrite": "Create and update assistant memories",
     "scopeOfflineAccess": "Keep you signed in without repeated approval",
     "scopeOnboarding": "Configure your organization's practice jurisdictions",
     "scopeProfile": "Access your profile information",
@@ -2310,6 +2376,7 @@
     "summaryLineRead": "<group>Read:</group> {items}",
     "summaryLineUse": "<group>Use:</group> {items}",
     "summaryMattersWrite": "matters and tasks",
+    "summaryMemoryWrite": "assistant memories",
     "summaryProfile": "profile",
     "summaryRead": "documents, matters and contacts",
     "summaryReadAnonymized": "anonymized documents and matters",
@@ -2430,7 +2497,9 @@
       "prefix": "Prefix",
       "registrationNumber": "Registration number",
       "suffix": "Suffix",
-      "taxId": "Tax ID",
+      "vatPayer": "VAT-payer status",
+      "vatPayerNo": "Not a VAT payer",
+      "vatPayerUnknown": "Unknown",
       "year": "Year of birth"
     },
     "filterOrganizations": "Organizations",
@@ -2470,7 +2539,6 @@
         "primary_phone": "Primary phone",
         "state": "State or region",
         "suffix": "Suffix",
-        "tax_id": "Tax ID",
         "type": "Contact type"
       },
       "fileInvalid": "Choose one CSV, TSV or TXT file.",
@@ -2675,10 +2743,11 @@
       "admissionUnavailable": "This action is temporarily paused. Please try again shortly.",
       "concurrencyBusy": "Other work is in progress. Please try again shortly.",
       "contact": "Contact us",
+      "featureDisabled": "This feature is temporarily turned off.",
       "notEnabled": "This action is not enabled for your organization.",
       "periodExhausted": "This action is paused for your organization."
     },
-    "actionFailed": "Action failed",
+    "actionFailed": "That didn't work. Try again, or reload the page if it keeps happening.",
     "api": {
       "badRequest": "The request could not be completed.",
       "caseLawCountryUnavailable": "Case law for this country is not available. Choose another country.",
@@ -3229,7 +3298,7 @@
     "saveSerializeFailedTitle": "Could not create DOCX",
     "savingDocument": "Saving...",
     "showDetails": "Show details",
-    "somethingWentWrong": "Something went wrong",
+    "somethingWentWrong": "Something went wrong. Try again, or reload the page if it keeps happening.",
     "synced": "Synced",
     "syncing": "Syncing",
     "tableBordersAll": "All borders",
@@ -3814,6 +3883,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "One client",
+      "availabilityClientBadgeHelp": "Available only in one client's matters.",
+      "availabilityClientHelp": "Usable only in this client's matters. This can't be changed later.",
+      "availabilityFixedHelp": "Set when the skill was created. It can't be changed.",
+      "availabilityLabel": "Available in",
+      "availabilityMatter": "One matter",
+      "availabilityMatterBadgeHelp": "Available only in one matter.",
+      "availabilityMatterHelp": "Usable only in this matter. This can't be changed later.",
+      "availabilityOrganization": "Whole organization",
+      "availabilityTeamNeedsMatter": "To share a skill with the team, choose the matter it is for. This can't be changed later.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.",
@@ -4227,6 +4306,8 @@
       "commentPlaceholder": "Write a comment…",
       "commentText": "Comment text",
       "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
       "guestAuthor": "You",
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
       "guestMigrationComplete": "Highlights and notes saved.",
@@ -4256,7 +4337,12 @@
       "styleHighlight": "Highlight",
       "styleSquiggly": "Squiggly",
       "styleStrikethrough": "Strikethrough",
-      "visibilityShared": "Shared with organization"
+      "visibilityShared": "Shared with organization",
+      "visibilitySharedWithMatter": "Shared with the matter"
+    },
+    "contents": {
+      "aiSection": "{section} (AI-generated section)",
+      "headingWithAiSection": "{heading} (AI-generated section: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Block quote with citation",
@@ -4733,10 +4819,8 @@
   },
   "readerAnswers": {
     "budgetError": "The answer budget is exhausted.",
-    "citation": "¶{paragraph}",
     "expand": "Expand answer",
     "explain": "Explain",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Ask a follow-up",
     "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
     "loading": "Generating answer…",
@@ -4744,7 +4828,7 @@
     "modelError": "The model could not finish this answer.",
     "networkError": "The connection was interrupted. Try again.",
     "regenerate": "Regenerate answer",
-    "selectionError": "Select text within a single paragraph (up to 2,000 characters).",
+    "selectionError": "Select text from the decision itself.",
     "send": "Send follow-up",
     "share": "Share with team",
     "timeoutError": "The answer timed out. Try again.",
@@ -4797,6 +4881,8 @@
     "recentDocuments": "Recent documents",
     "recentSearches": "Recent searches",
     "recentlyOpenedFiles": "Recently opened files",
+    "registryCandidateNameMismatch": "Official name is “{officialName}” and does not match",
+    "registryCandidateNoOfficialRecord": "Official register has no record for this number",
     "registryChoose": "Choose a company registry",
     "registryCredentialAskAdmin": "Ask an organization administrator to configure access to this registry.",
     "registryCredentialSaved": "Registry access saved",
@@ -4807,6 +4893,7 @@
       "enrichmentUnavailable": "Commercial-register details are temporarily unavailable"
     },
     "registryKrsHint": "KRS searches by registration number, not company name. Enter a 10-digit KRS number, including leading zeros (e.g. 0000006865).",
+    "registryNameSearchNotFound": "No verified company matched that name. The following candidates were rejected:",
     "registryVatHint": "VIES checks VAT numbers, not company names. Enter a VAT number with its country prefix (e.g. CZ27082440); the format depends on the country.",
     "renameSearchTitle": "Rename saved search",
     "requestCountry": "Request a new country",
@@ -5331,7 +5418,7 @@
     "importDescription": "Styles are extracted into a fresh, content-free DOCX.",
     "importTitle": "Import style set",
     "loadFailed": "Style sets could not be loaded",
-    "newDocument": "New document",
+    "newDocument": "New DOCX document",
     "pickerDescription": "Choose the formatting system for the new file.",
     "renameTitle": "Rename style set",
     "replace": "Replace source",
@@ -5615,7 +5702,7 @@
     "moveToMatter": "Save to matter",
     "moveToMatterAnyway": "Save anyway",
     "myDefaultLookupFormat": "My default",
-    "newFromTemplate": "New document from template",
+    "newFromTemplate": "New DOCX document from template",
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.",
     "newTemplate": "New template",
     "noTemplates": "No templates yet",
@@ -5814,6 +5901,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Internal work"
+    },
+    "week": {
+      "allLogged": "Everything here is logged. New activity shows up as you work.",
+      "days": "Days of the week",
+      "entriesTitle": "Logged time",
+      "nextWeek": "Next week",
+      "noActivity": "Nothing to log yet. Work in a matter and your activity shows up here to accept.",
+      "pendingCount": "{count, plural, one {# suggestion} other {# suggestions}}",
+      "previousWeek": "Previous week",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Check the work date, then submit this entry.",
+        "narrativeRequired": "Add a description, then submit this entry.",
+        "runningTimer": "Stop the running timer, then submit this entry.",
+        "unpriced": "This entry has no rate. Ask for a rate on the matter, then submit it."
+      },
+      "returned": "Returned: {comment}",
+      "submitAndApprove": "Submit and approve",
+      "submitResult": "{submitted} submitted · {approved} approved · {refused} to fix",
+      "submitWeek": "Submit week",
+      "title": "My week",
+      "totals": "{logged} logged · {billable} billable"
     }
   },
   "translate": {
@@ -5986,6 +6095,7 @@
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
+        "editInApplication": "Edit in <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edit this file locally and sync changes with stella.",
         "forceRelease": "Force release",
         "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.",
@@ -6009,13 +6119,15 @@
         "alreadyInstalled": "Already installed? Connect it",
         "connect": "Connect stella desktop",
         "connected": "stella desktop is connected",
+        "download": "Download stella desktop",
         "editNone": "Download stella desktop to edit this file",
         "editOutdated": "Update stella desktop to edit",
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.",
         "signCurrent": "Sign with stella desktop",
         "signNone": "Download stella desktop to sign this PDF",
         "signOutdated": "Update stella desktop to sign",
-        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop."
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.",
+        "update": "Update stella desktop"
       },
       "downloadAs": "Download as…",
       "downloadAsZip": "Download as ZIP",
@@ -6028,8 +6140,10 @@
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
+      "ocrBatchHelp": "Queued documents are processed in the next OCR batch.",
       "ocrQueueFailed": "Couldn't queue text recognition",
-      "ocrQueued": "Text recognition queued for the next OCR batch",
+      "ocrQueued": "Text recognition queued",
+      "ocrQueuedForBatch": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
         "alreadySigningTitle": "Signing is already in progress in stella desktop",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
@@ -6086,6 +6200,7 @@
         "waitingDescription": "Choose a signing certificate in stella desktop to sign this PDF.",
         "waitingTitle": "Waiting for stella desktop"
       },
+      "queueForOcr": "Queue for OCR",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "What to do with {fileName}",
@@ -6097,7 +6212,6 @@
       "removeMetadata": "Remove document metadata",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
-      "runOcr": "Queue OCR",
       "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",
@@ -6176,8 +6290,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Set lead",
-        "noLead": "No lead",
-        "searchMembers": "Search members…"
+        "noLead": "No lead"
       },
       "to": "To"
     },
@@ -6239,6 +6352,7 @@
       "deleteAll": "Delete all",
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?",
       "hideColumn": "Hide column",
+      "moveFailed": "{failed, plural, one {# of {total} items could not be moved.} other {# of {total} items could not be moved.}}",
       "readOnlyGrouping": "This grouping is read-only",
       "selectPropertyHint": "Select a property to group by in the toolbar",
       "uploadDocument": "Upload document",
@@ -6257,10 +6371,10 @@
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
       "alreadyMember": "User is already a member",
+      "alreadyOnMatter": "Already on this matter",
       "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
-      "removeMemberConfirm": "Remove this member from the matter?",
-      "selectMember": "Select a member"
+      "removeMemberConfirm": "Remove this member from the matter?"
     },
     "newDocument": "New document",
     "newFolder": "New folder",
@@ -6298,7 +6412,6 @@
           "approvedBy": "Approved by",
           "channel": "Channel",
           "dateTime": "Date and time",
-          "eventId": "Event ID",
           "notAvailable": "Not available",
           "openTarget": "Open item",
           "runId": "Run ID",
@@ -6385,6 +6498,7 @@
       "addParty": "Add party",
       "changeClient": "Change client",
       "client": "Client",
+      "movedToClient": "Moved <bdi>{matterName}</bdi> to <bdi>{clientName}</bdi>",
       "noClient": "No client assigned",
       "noClientOptional": "No client (optional)",
       "noParties": "No parties added to this matter.",
@@ -6403,7 +6517,9 @@
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
       "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
+      "recentClients": "Recent clients",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
@@ -6412,6 +6528,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode",
+      "annotations": {
+        "commentedBy": "Comment by {name}",
+        "detachedHeading": "Not on this version",
+        "detachedOtherVersion": "Made on version {version}; the page now reads differently.",
+        "detachedTextChanged": "The words are no longer on page {page}.",
+        "empty": "Select words in the document, then choose Comment.",
+        "highlightedBy": "Highlighted by {name}",
+        "refusedNoText": "This page has no text to mark. Run text recognition on the document first.",
+        "refusedNotFound": "These words were not found in the page's text. Select them again.",
+        "refusedTooLong": "This passage is too long to mark. Select a shorter one."
+      },
       "backToPeek": "Back to peek",
       "entitySidebar": "Document details",
       "evidence": "Justification",
@@ -6420,6 +6547,36 @@
       "pageEditor": {
         "addPDF": "Add PDF",
         "applyCrop": "Apply crop",
+        "cleanScan": {
+          "applied": "Cleaned version applied",
+          "apply": "Apply",
+          "applyAll": "Apply all",
+          "applyPage": "Apply cleaned page {number}",
+          "cleaned": "Cleaned",
+          "cleaning": "Cleaning page",
+          "contentCrop": "Crop to content",
+          "description": "{count, plural, one {Review the cleaned page before you use it. The document changes only when you do.} other {Review each of the # cleaned pages before you use them. The document changes only when you do.}}",
+          "deskew": "Straighten",
+          "failedEngine": "Cleaning failed. This page stays as it is.",
+          "failedRender": "This page could not be prepared for cleaning. It stays as it is.",
+          "failedTimeout": "Cleaning took too long. This page stays as it is.",
+          "heading": "Clean scan",
+          "output": "Color mode",
+          "outputBinary": "Black and white",
+          "outputGrayscale": "Grayscale",
+          "pageLimit": "Clean up to {max} pages at a time. Select fewer pages.",
+          "preview": "Cleaned page {number}",
+          "progress": "{done} of {total} pages processed",
+          "reject": "Keep original",
+          "rejectPage": "Keep original page {number}",
+          "rejected": "Original kept",
+          "scope": "{count, plural, =0 {Straighten and clean every page} one {Straighten and clean the selected page} other {Straighten and clean the # selected pages}}",
+          "unrecognized": "This page was not recognized as a scan. It stays as it is.",
+          "unrecognizedNoContent": "No content was found on this page. It stays as it is.",
+          "unrecognizedNoPage": "The page edges could not be found. This page stays as it is.",
+          "unrecognizedTooLarge": "This page is too large to clean. It stays as it is.",
+          "use": "{count, plural, =0 {Use cleaned pages} one {Use # cleaned page} other {Use # cleaned pages}}"
+        },
         "crop": "Crop",
         "cropAdvanced": "Advanced crop settings",
         "cropBottom": "Bottom (mm)",
@@ -6467,7 +6624,10 @@
         "saveVersion": "Save version",
         "selectAll": "Select every page",
         "selectPage": "Select page {number}",
+        "signAfterSave": "Saves your page edits as a new version, then signs it",
+        "signSavedVersionMissing": "The new version was saved, but it could not be opened for signing. Sign it from the document viewer.",
         "signatureWarning": "Digital signatures will be invalidated when you edit this PDF.",
+        "signatureWarningWithSign": "Editing invalidates existing digital signatures. Signing from here saves your edits first and signs the new version.",
         "sourceLimit": "The combined size of the PDFs cannot exceed 100 MB.",
         "title": "Edit pages",
         "undo": "Undo page edit",
@@ -6478,6 +6638,11 @@
       },
       "passwordLabel": "Enter the PDF password",
       "previousPage": "Previous page",
+      "selection": {
+        "explainPassagePrompt": "Explain this passage of {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "pp. {start}–{end}"
+      },
       "showOriginal": "Show original pages",
       "unlock": "Unlock"
     },
@@ -6591,10 +6756,12 @@
       "selectOperator": "Select operator",
       "setPromptPlaceholder": "Set a prompt to extract the information",
       "singleSelect": "Single Select",
-      "sortAscending": "Sort ascending",
       "sortAscendingDate": "Oldest first",
-      "sortDescending": "Sort descending",
+      "sortAscendingNumber": "Lowest first",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Newest first",
+      "sortDescendingNumber": "Highest first",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
       "text": "Text",
@@ -6615,6 +6782,12 @@
     "referenceTaken": "This reference number is already in use",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Find a matter…",
+      "trigger": "Switch matter",
+      "viewAll": "View all matters",
+      "viewAllForClient": "View all matters for {clientName}"
     },
     "table": {
       "clearFlags": "Clear flags",

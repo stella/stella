@@ -65,6 +65,13 @@ export const RECHECK_INSTRUCTIONS = {
 
 export type ProbeKind = keyof typeof RECHECK_INSTRUCTIONS;
 
+/**
+ * The llms.txt URL a documentation waiver's recheck probes: the first one its
+ * explanation names, or "" when it names none and so cannot be rechecked.
+ */
+export const docProbeUrl = (explanation: string): string =>
+  /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(explanation)?.at(0) ?? "";
+
 export type DatedWaiver = {
   source: string;
   line: number;
@@ -132,7 +139,7 @@ export const collectWaivers = ({
         "bun",
         "scripts/dated-waiver-probes.ts",
         "--doc-url",
-        /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(entry.explanation)?.at(0) ?? "",
+        docProbeUrl(entry.explanation),
       ],
       attempts: NETWORK_ATTEMPTS,
     },
@@ -315,7 +322,8 @@ export const waiverWarnings = (
 // elapsed flaky-test quarantine is enforced on main by the scheduled
 // flaky-test-quarantine workflow, which fails naming its owner: neither is a defect
 // of whichever change is under review, so pull requests and merge groups only
-// annotate them. Every other elapsed waiver, including a dated test quarantine
+// annotate them. Dependency acceptance dates warn unless their source changes.
+// Every other elapsed waiver, including a dated test quarantine
 // that still skips its test, keeps failing the gate.
 export const EXPIRY_AT_CHANGE_GATE = {
   "no-llms-txt": "fail",
@@ -351,7 +359,8 @@ export const expiredWaiverAnnotations = (
  * `changedFiles`: an expiry fails it only when the change touches the file that
  * declares the waiver (adding, renewing or editing it, or the waived code a
  * test quarantine sits on). Time alone never fails an unrelated change; the
- * scheduled run on the default branch checks every waiver and alerts owners.
+ * scheduled run checks other waivers; dependency acceptance dates remain warnings
+ * until a change touches the acceptance file.
  */
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
@@ -363,12 +372,37 @@ export const expiredWaiverFailures = (
       (entry) =>
         EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
         isExpired(entry, now) &&
-        (changedFiles === undefined || changedFiles.has(entry.source)),
+        (entry.kind === "dependency-audit"
+          ? changedFiles?.has(entry.source) === true
+          : changedFiles === undefined || changedFiles.has(entry.source)),
     )
     .map(
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
+
+/**
+ * Due waivers this check neither fails nor already annotates: each warns on
+ * the file declaring it from WARNING_DAYS before its expiry, so the owner
+ * renews or removes it before the date, and keeps warning after the date on
+ * changes that do not touch that file.
+ */
+export const dueWaiverWarnings = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+  changedFiles?: ReadonlySet<string>,
+): string[] =>
+  waiverWarnings(
+    entries.filter(
+      (entry) =>
+        !isExpired(entry, now) ||
+        (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
+          (entry.kind === "dependency-audit"
+            ? changedFiles?.has(entry.source) !== true
+            : changedFiles !== undefined && !changedFiles.has(entry.source))),
+    ),
+    now,
+  );
 
 // Runs one test through its owning package script, filtered by its title.
 type TestProbeOptions = { file: string; title: string };
@@ -638,6 +672,9 @@ if (import.meta.main) {
               .split("\0")
               .filter((file) => file !== ""),
           );
+    for (const warning of dueWaiverWarnings(entries, now, changedFiles)) {
+      console.log(warning);
+    }
     const failures = expiredWaiverFailures(entries, now, changedFiles);
     if (failures.length > 0) {
       console.error(failures.join("\n"));

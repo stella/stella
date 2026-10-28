@@ -135,6 +135,10 @@ const ADAPTER_JURISDICTIONS = {
     country: "EU",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.EU,
   },
+  GBR: {
+    country: "GBR",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.GBR,
+  },
   HUN: {
     country: "HUN",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.HUN,
@@ -580,6 +584,22 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    key: ADAPTER_KEYS.UK_FCL,
+    documentStage: "inline",
+    name: "Find Case Law",
+    publisher: "Find Case Law",
+    publicHomeUrl: "https://caselaw.nationalarchives.gov.uk",
+    ...ADAPTER_JURISDICTIONS.GBR,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "decision-date",
+      fromInclusive: "2001-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     key: ADAPTER_KEYS.HU_BHGY,
     documentStage: "inline",
@@ -774,6 +794,7 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.AT_FINDOK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.EU_ECJ]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.HU_BHGY]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.UK_FCL]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_KIS]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,

@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.50.2",
+  "version": "0.53.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -30,6 +30,7 @@
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./browser-clock": "./src/testing/browser-clock.ts",
     "./toolbar-icon-action": "./src/components/toolbar-icon-action.tsx",
     "./view-toolbar": "./src/components/view-toolbar.tsx",
     "./accordion": "./src/components/accordion.tsx",
@@ -88,6 +89,7 @@
     "./panel-inset": "./src/lib/panel-inset.ts",
     "./pagination": "./src/components/pagination.tsx",
     "./popover": "./src/components/popover.tsx",
+    "./steps": "./src/components/steps.tsx",
     "./positioner-sizing": "./src/lib/positioner-sizing.ts",
     "./preview-card": "./src/components/preview-card.tsx",
     "./preview-pane": "./src/components/preview-pane.tsx",
@@ -231,11 +233,12 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "@tanstack/react-virtual": "^3.14.13",
+    "@tanstack/react-virtual": "^3.14.21",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/react": "catalog:react19",
@@ -245,12 +248,14 @@
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
     "tsdown": "catalog:",
+    "tsrs": "catalog:",
     "vite": "catalog:"
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "^1.7.0",
+    "@playwright/test": "^1.63.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",
     "@types/react-dom": ">=19",
@@ -259,6 +264,9 @@
     "tailwindcss": "^4.3.0"
   },
   "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    },
     "@types/react": {
       "optional": true
     },

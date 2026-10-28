@@ -16,25 +16,18 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 
-export type DecisionCitationMetadata = {
-  decisionId: string;
-  court: string;
-  courtShortCode: string;
-  caseNumber: string;
-  decisionDate: string | null;
-  readerUrl: string;
-  originalUrl: string | null;
-};
-
-type DecisionCitationChipProps = {
+export type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
+  /** A complete, lazily mounted preview for surfaces with richer metadata. */
+  preview?: ReactNode;
   presentation?: DecisionCitationPresentation | undefined;
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
@@ -128,10 +121,59 @@ const triggerShapeClassName = ({
   return "inline-flex rounded align-baseline";
 };
 
-/** The same decision annotation in answers, provenance cards and reader text. */
+const DecisionCitationTriggerContent = ({
+  citingText,
+  decision,
+  label,
+  paragraph,
+  presentation,
+}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  /** The court's number, already in the reader's formatting locale. */
+  paragraph: string | null;
+  presentation: DecisionCitationPresentation;
+}) => {
+  const t = useTranslations();
+  const badge = (
+    <DecisionCitationLabel
+      decision={decision}
+      presentation={presentation}
+      paragraphNumber={paragraph}
+    />
+  );
+  if (label !== undefined) {
+    return (
+      <>
+        {label}
+        {paragraph !== null && (
+          <span className="ms-1 whitespace-nowrap">
+            {t("caseLaw.citation.paragraphMark", { paragraph })}
+          </span>
+        )}
+      </>
+    );
+  }
+  if (citingText === undefined) {
+    return badge;
+  }
+  return (
+    <>
+      {citingText}
+      {/* The badge is not the citing text's words: as reader chrome it stays
+          off the offsets a selection is stored in, so a quote around a
+          citation still matches the decision text. */}
+      <span data-reader-chrome=""> {badge}</span>
+    </>
+  );
+};
+
+/**
+ * The same decision annotation in answers, provenance cards and reader text.
+ * Surfaces render it through `CitationChip`, which owns citation kinds.
+ */
 export const DecisionCitationChip = ({
   decision,
   passage,
+  preview,
   presentation = DECISION_CITATION_PRESENTATION.compact,
   paragraphNumber = null,
   onOpen,
@@ -213,27 +255,14 @@ export const DecisionCitationChip = ({
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
-        {label === undefined ? (
-          <>
-            {citingText !== undefined && <>{citingText} </>}
-            <DecisionCitationLabel
-              decision={decision}
-              presentation={presentation}
-              paragraphNumber={paragraph}
-            />
-          </>
-        ) : (
-          <>
-            {label}
-            {paragraph !== null && (
-              <span className="ms-1 whitespace-nowrap">
-                {t("caseLaw.citation.paragraphMark", { paragraph })}
-              </span>
-            )}
-          </>
-        )}
+        <DecisionCitationTriggerContent
+          citingText={citingText}
+          decision={decision}
+          label={label}
+          paragraph={paragraph}
+          presentation={presentation}
+        />
       </PopoverTrigger>
       <PopoverPanel
         align="start"
@@ -246,20 +275,22 @@ export const DecisionCitationChip = ({
           return false;
         }}
       >
-        <div className="flex flex-col gap-1">
-          <BidiText as="span" className="text-sm font-medium">
-            {decision.court}
-          </BidiText>
-          <BidiText as="span" className="text-sm">
-            {decision.caseNumber}
-          </BidiText>
-          {paragraph !== null && (
-            <span className="text-sm">
-              {t("caseLaw.citation.paragraphLabel", { paragraph })}
-            </span>
-          )}
-          <span className="text-muted-foreground text-xs">{date}</span>
-        </div>
+        {preview ?? (
+          <div className="flex flex-col gap-1">
+            <BidiText as="span" className="text-sm font-medium">
+              {decision.court}
+            </BidiText>
+            <BidiText as="span" className="text-sm">
+              {decision.caseNumber}
+            </BidiText>
+            {paragraph !== null && (
+              <span className="text-sm">
+                {t("caseLaw.citation.paragraphLabel", { paragraph })}
+              </span>
+            )}
+            <span className="text-muted-foreground text-xs">{date}</span>
+          </div>
+        )}
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div

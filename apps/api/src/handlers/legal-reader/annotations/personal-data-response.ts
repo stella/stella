@@ -1,3 +1,5 @@
+import { READER_MATTER_TARGET_TYPES } from "@stll/api-contract/legal-reader-annotations";
+
 import type { legalReaderAnnotations } from "@/api/db/schema";
 import type {
   UnbackedProjectionKeys,
@@ -7,8 +9,14 @@ import type {
 type PrivateAnnotationExportRow = Pick<
   typeof legalReaderAnnotations.$inferSelect,
   | "id"
+  | "userId"
   | "targetType"
   | "targetId"
+  | "workspaceId"
+  | "verificationRunId"
+  | "verificationClaimId"
+  | "entityId"
+  | "pageTextSha256"
   | "groupId"
   | "kind"
   | "visibility"
@@ -23,17 +31,35 @@ type PrivateAnnotationExportRow = Pick<
   | "updatedAt"
 >;
 
-/** A user's private notes only; shared annotations remain organization data. */
+const MATTER_TARGET_TYPES: ReadonlySet<string> = new Set(
+  READER_MATTER_TARGET_TYPES,
+);
+
+/**
+ * A user's private public-law notes and all of their notes on matter content
+ * (verification-claim comments, matter document marks). Shared public-law
+ * annotations remain organization data, while the words a user wrote on a
+ * matter remain part of the author's personal-data export.
+ */
 export const projectPrivateAnnotationForAccountExport = (
   row: PrivateAnnotationExportRow,
 ) => {
-  if (row.visibility !== "private") {
+  if (
+    row.visibility !== "private" &&
+    !MATTER_TARGET_TYPES.has(row.targetType)
+  ) {
     return undefined;
   }
   return {
     id: row.id,
+    userId: row.userId,
     targetType: row.targetType,
     targetId: row.targetId,
+    workspaceId: row.workspaceId,
+    verificationRunId: row.verificationRunId,
+    verificationClaimId: row.verificationClaimId,
+    entityId: row.entityId,
+    pageTextSha256: row.pageTextSha256,
     groupId: row.groupId,
     kind: row.kind,
     visibility: row.visibility,
@@ -58,8 +84,6 @@ type PrivateAnnotationAccountExport = NonNullable<
 const UNEXPORTED_LEGAL_READER_ANNOTATION_COLUMNS = [
   // Tenant id: internal routing, not data the user provided.
   "organizationId",
-  // The exporting account itself; every exported note is its own.
-  "userId",
 ] as const satisfies readonly (keyof LegalReaderAnnotationRow)[];
 
 // Totality guard, bidirectional: every schema column must be exported or

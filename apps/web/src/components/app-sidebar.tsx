@@ -17,12 +17,8 @@ import {
   useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import {
-  getRouteApi,
-  Link,
-  useMatch,
-  useRouterState,
-} from "@tanstack/react-router";
+import { getRouteApi, Link, useMatch, useRouter } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -36,6 +32,7 @@ import {
   CircleHelpIcon,
   Clock3Icon,
   EllipsisVerticalIcon,
+  FileTextIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PinIcon,
@@ -60,8 +57,11 @@ import { cn } from "@stll/ui/utils";
 
 import {
   chatActivityByWorkspace,
+  getMatterBillingLinks,
+  MATTER_BILLING_LINK_KINDS,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
+  type MatterBillingLink,
   resolveAutomaticExpandedMatterId,
   resolveEntityActivityDestination,
   resolveMatterNavigationTarget,
@@ -75,6 +75,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -118,7 +119,7 @@ import {
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -145,10 +146,10 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
@@ -158,6 +159,8 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright
@@ -193,21 +196,37 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const router = useRouter();
+  // On compact layouts the sidebar is a sheet over the page, so a navigation
+  // started from it would land behind it. Close it once the new location
+  // resolves, whichever item (link, button or matter sub-row) started it.
+  useMountEffect(() =>
+    router.subscribe("onResolved", ({ hrefChanged }) => {
+      if (hrefChanged) {
+        setOpenMobile(false);
+      }
+    }),
+  );
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
-  const showTimesheetLink = timeBillingPreviewEnabled && canReadTimeEntries;
+  const canReadInvoices = usePermissions({ workspace: ["read"] });
+  const matterBillingLinks = getMatterBillingLinks({
+    canReadInvoices,
+    canReadTimeEntries,
+    timeBillingPreviewEnabled,
+  });
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
     includePublicLaw: publicLawPreviewEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: showTimesheetLink,
+    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
@@ -253,7 +272,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const inboxView = useQueryView(inboxQuery);
+  const inboxView = queryView(inboxQuery);
   // This badge decorates an always-available inbox link; hide it when the count cannot be read.
   const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
@@ -264,7 +283,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
     enabled: mounted,
   });
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
     groupedThreadsView.type === "items"
@@ -653,25 +672,21 @@ export const AppSidebar = (props: AppSidebarProps) => {
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Tooltip
-            content={
+          <Button
+            className={SIDE_RAIL_ICON_BUTTON_SIZE}
+            disabled={!mounted}
+            onClick={toggleSidebar}
+            size="icon"
+            tooltip={
               isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")
             }
-            render={
-              <Button
-                className={SIDE_RAIL_ICON_BUTTON_SIZE}
-                onClick={toggleSidebar}
-                size="icon"
-                variant="muted"
-              />
-            }
-            side="right"
+            variant="muted"
           >
             <PanelLeftIcon className="size-4" />
             <span className="sr-only">
               {isCollapsed ? t("inspector.showPane") : t("inspector.hidePane")}
             </span>
-          </Tooltip>
+          </Button>
         </div>
       </SidebarHeader>
 
@@ -724,6 +739,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
                             </SidebarMenuBadge>
                           );
                         }
+                        if (item.id === "timesheets") {
+                          return (
+                            <PendingApprovalsNavBadge
+                              organizationId={user.activeOrganizationId}
+                              userId={user.id}
+                            />
+                          );
+                        }
                         if (item.id === "inbox" && openInboxCount > 0) {
                           return (
                             <SidebarMenuBadge>
@@ -773,7 +796,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
                       onReorder={reorderPinned}
-                      showTimesheetLink={showTimesheetLink}
+                      billingLinks={matterBillingLinks}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -799,7 +822,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onDeleted={handleMatterDeleted}
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
-                      showTimesheetLink={showTimesheetLink}
+                      billingLinks={matterBillingLinks}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -1016,7 +1039,7 @@ type MatterItemProps = {
   isActive: boolean;
   isPinned?: boolean;
   isExpanded: boolean;
-  showTimesheetLink: boolean;
+  billingLinks: MatterBillingLink[];
   onExpandedChange: () => void;
   onTogglePin: (id: string) => void;
   /** Navigate-away (or other cleanup) after the matter is deleted; the
@@ -1093,7 +1116,7 @@ const MatterItem = ({
   workspace: ws,
   isActive,
   isExpanded,
-  showTimesheetLink,
+  billingLinks,
   isPinned: _isPinnedProp,
   onTogglePin,
   onDeleted,
@@ -1189,7 +1212,7 @@ const MatterItem = ({
     })),
     status: activityStatus,
   });
-  const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
+  const hasExpandableContent = !activityIsKnownEmpty || billingLinks.length > 0;
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -1516,6 +1539,7 @@ const MatterItem = ({
               <MenuTrigger
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+                tooltip={t("common.actions")}
               >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>
@@ -1539,22 +1563,49 @@ const MatterItem = ({
         )}
         {isExpanded ? (
           <div id={`matter-activity-${ws.id}`}>
-            {showTimesheetLink && (
+            {billingLinks.length > 0 && (
               <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                  <MatterActivityRow>
-                    <Link
-                      activeProps={{ "data-active": true }}
-                      params={{ workspaceId: ws.id }}
-                      to="/workspaces/$workspaceId/timesheets"
-                    >
-                      <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
-                      <span className="truncate">
-                        {t("billing.timesheets")}
-                      </span>
-                    </Link>
-                  </MatterActivityRow>
-                </SidebarMenuSubItem>
+                {billingLinks.map(({ kind }) => {
+                  switch (kind) {
+                    case MATTER_BILLING_LINK_KINDS.timesheets:
+                      return (
+                        <SidebarMenuSubItem key={kind}>
+                          <MatterActivityRow>
+                            <Link
+                              activeProps={{ "data-active": true }}
+                              params={{ workspaceId: ws.id }}
+                              to="/workspaces/$workspaceId/timesheets"
+                            >
+                              <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
+                              <span className="truncate">
+                                {t("billing.timesheets")}
+                              </span>
+                            </Link>
+                          </MatterActivityRow>
+                        </SidebarMenuSubItem>
+                      );
+                    case MATTER_BILLING_LINK_KINDS.invoices:
+                      return (
+                        <SidebarMenuSubItem key={kind}>
+                          <MatterActivityRow>
+                            <Link
+                              activeProps={{ "data-active": true }}
+                              params={{ workspaceId: ws.id }}
+                              to="/workspaces/$workspaceId/invoices"
+                            >
+                              <FileTextIcon className="text-muted-foreground size-3.5 shrink-0" />
+                              <span className="truncate">
+                                {t("common.invoices")}
+                              </span>
+                            </Link>
+                          </MatterActivityRow>
+                        </SidebarMenuSubItem>
+                      );
+                    default:
+                      kind satisfies never;
+                      return panic("Unsupported matter billing link kind");
+                  }
+                })}
               </SidebarMenuSub>
             )}
             <MatterActivityList
@@ -1579,7 +1630,7 @@ type MatterActivityListProps = {
   workspaceId: string;
 };
 
-const MatterActivityList = ({
+export const MatterActivityList = ({
   activeOrganizationId,
   id,
   userId,
@@ -1588,9 +1639,7 @@ const MatterActivityList = ({
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const mounted = useHasMounted();
   const {
     data,
@@ -1627,7 +1676,7 @@ const MatterActivityList = ({
       await navigateToWorkspaceFolder({
         folderId: entityId,
         navigate,
-        pathname,
+        router,
         queryClient,
         targetWorkspaceId: workspaceId,
       });
@@ -1635,13 +1684,18 @@ const MatterActivityList = ({
     }
 
     if (destination.type === "document") {
-      await openEntityInInspector(entityId, title, workspaceId);
+      await openEntityInInspector({
+        documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+        entityId,
+        label: title,
+        workspaceId,
+      });
       return;
     }
 
     await navigate({
       to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
+      params: { workspaceId, viewId: DEFAULT_WORKSPACE_VIEW_ID },
     });
   };
 

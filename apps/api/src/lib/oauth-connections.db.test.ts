@@ -38,7 +38,13 @@ import type {
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 // Disconnecting a connected app from the settings page, through the real
 // session-authenticated route, against grants minted by the real OAuth
@@ -70,7 +76,7 @@ const connectionsSchema = v.looseObject({
 });
 
 const listConnections = async (browser: HumanBrowser) => {
-  const response = await meRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}/me/oauth-connections`, {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -80,7 +86,7 @@ const listConnections = async (browser: HumanBrowser) => {
 };
 
 const disconnect = async (browser: HumanBrowser, consentId: string) =>
-  await meRoute.handle(
+  await routeServer.fetch(
     new Request(`${BASE}/me/oauth-connections/${consentId}`, {
       method: "DELETE",
       headers: { cookie: browser.cookieHeader() },

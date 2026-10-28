@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -36,8 +36,14 @@ import {
   CommandInput,
   CommandList,
 } from "@stll/ui/command";
+import { DIALOG_MOBILE_LAYOUT } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { AiActionIcon, ChevronRightIcon, PanelRightIcon } from "@stll/ui/icons";
+import {
+  AiActionIcon,
+  ChevronRightIcon,
+  PanelRightIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -138,7 +144,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -152,7 +158,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -184,6 +190,10 @@ import {
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -215,6 +225,23 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+const observeSearchResultsRect: typeof observeElementRect = (
+  instance,
+  callback,
+) => {
+  const element = instance.scrollElement;
+  return observeElementRect(instance, (rect) => {
+    const offsetHeight =
+      element instanceof HTMLElement ? element.offsetHeight : 0;
+    const offsetWidth =
+      element instanceof HTMLElement ? element.offsetWidth : 0;
+    callback({
+      height: rect.height === 0 ? offsetHeight : rect.height,
+      width: rect.width === 0 ? offsetWidth : rect.width,
+    });
+  });
+};
 
 type SearchColumnsStyle = CSSProperties & {
   "--search-facets-w"?: string;
@@ -562,12 +589,13 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const router = useRouter();
+  const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -857,6 +885,7 @@ export const SearchDialog = ({
     estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
     getItemKey: getHitVirtualKey,
     getScrollElement: () => resultsElement,
+    observeElementRect: observeSearchResultsRect,
     overscan: VIRTUAL_HIT_OVERSCAN,
     scrollMargin: hitsScrollMargin,
   });
@@ -906,7 +935,10 @@ export const SearchDialog = ({
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
     if (searchError) {
-      analytics.captureError(searchError);
+      analytics.captureError(searchError, {
+        fingerprintKey: "SearchDialog:searchError",
+        scope: { type: "handler", handlerId: "SearchDialog:searchError" },
+      });
     }
   }, [analytics, searchError]);
 
@@ -952,10 +984,13 @@ export const SearchDialog = ({
         ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure",
+        scope: { type: "handler", handlerId: "SearchDialog:failure" },
+      });
     },
   });
 
@@ -966,10 +1001,13 @@ export const SearchDialog = ({
         locale: vars.locale,
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-2",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-2" },
+      });
     },
   });
 
@@ -994,10 +1032,13 @@ export const SearchDialog = ({
         ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-3",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-3" },
+      });
     },
   });
 
@@ -1026,7 +1067,10 @@ export const SearchDialog = ({
       return threadRef.threadId;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-4",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-4" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
@@ -1086,7 +1130,13 @@ export const SearchDialog = ({
       }
       detached(
         navigateToTarget().catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "SearchDialog.navigateAfterClose:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SearchDialog.navigateAfterClose:failure",
+            },
+          });
           notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",
@@ -1226,8 +1276,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1252,7 +1302,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {
@@ -1298,7 +1353,7 @@ export const SearchDialog = ({
         await openEntityLocation(location);
         return;
       }
-      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
+      await navigate(getRecentFileRoute({ ...file, currentView, fileFieldId }));
     });
   };
 
@@ -1325,6 +1380,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1443,6 +1499,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1702,9 +1759,14 @@ export const SearchDialog = ({
         }}
         open={open}
       >
+        {/* A phone gets the whole screen rather than the bottom sheet: search
+            needs the height for results, and a sheet starting below the top
+            edge left the page (and an open sidebar) showing above it while
+            its last rows ran under the browser toolbar. */}
         <CommandDialogPopup
+          mobileLayout={DIALOG_MOBILE_LAYOUT.fullscreen}
           className={cn(
-            "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
+            "flex h-full w-full max-w-none flex-col overflow-clip sm:h-[min(720px,calc(100dvh-96px))]",
             showPreview
               ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
               : "sm:w-[min(960px,calc(100vw-32px))]",
@@ -1870,6 +1932,17 @@ export const SearchDialog = ({
                     {t("common.reset")}
                   </Button>
                 )}
+                {/* Full screen on a phone leaves no backdrop to tap. */}
+                <Button
+                  aria-label={t("common.close")}
+                  className="shrink-0 sm:hidden"
+                  onClick={() => onOpenChange(false)}
+                  size="icon-lg"
+                  title={t("common.close")}
+                  variant="ghost"
+                >
+                  <XIcon className="size-4" />
+                </Button>
               </div>
 
               {/* Content area */}

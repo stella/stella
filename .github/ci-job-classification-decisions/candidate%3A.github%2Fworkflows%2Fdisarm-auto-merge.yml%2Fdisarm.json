@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "de0788cd46d99d68dbc9de11d8015de85c899651782720bc8d9971f8b8540829"
+  "kind": "priority",
+  "qualifier": "Disarms auto-merge on pull requests; holds contents write.",
+  "reviewedDigest": "3f0c5102d62c1a2fd57dbc1d87213e40257ef76519f402571f91ee26d0c7e0c9"
 }

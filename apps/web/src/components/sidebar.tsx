@@ -4,6 +4,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { useTranslations } from "use-intl";
 
 import {
+  PanelTrigger,
   Sidebar as SidebarShell,
   SidebarContent,
   SidebarFooter,
@@ -27,14 +28,14 @@ import {
   useSidebarLayout,
 } from "@stll/ui/sidebar";
 
+import { DEFAULT_SIDEBAR_OPEN } from "@/components/sidebar/sidebar-state";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
-const DEFAULT_SIDEBAR_OPEN = true;
-
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
- * persisted (localStorage-backed) open state in as a controlled value. The
+ * persisted (cookie-backed) open state in as a controlled value. The
  * shell itself stays host-agnostic and does not persist anything on its own.
  */
 const SidebarProvider = ({
@@ -100,13 +101,19 @@ const SidebarTrigger = (
   props: React.ComponentProps<typeof SidebarTriggerShell>,
 ) => {
   const t = useTranslations();
+  const mounted = useHasMounted();
 
   return (
-    <SidebarTriggerShell label={t("navigation.toggleSidebar")} {...props} />
+    <SidebarTriggerShell
+      label={t("navigation.toggleSidebar")}
+      {...props}
+      disabled={!mounted || props.disabled}
+    />
   );
 };
 
 export {
+  PanelTrigger,
   Sidebar,
   SidebarContent,
   SidebarFooter,

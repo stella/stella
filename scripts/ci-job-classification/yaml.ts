@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sha256 } from "./classification-values";
+import { requestsRepositoryWrite, shapeWritesRepository } from "./review";
 
 export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
@@ -21,6 +22,8 @@ export const CLASSIFICATION_EXCLUSIONS = {
 const DOCUMENT = v.strictObject({
   digest: v.string(),
   privileged: v.boolean(),
+  // Composite-action steps are not kept in the shape, so callers read this.
+  writesRepository: v.boolean(),
   jobs: v.record(
     v.string(),
     v.strictObject({
@@ -429,6 +432,11 @@ const parse = (text: string): ParsedDocument => {
     privileged:
       privileged(shape) ||
       Object.values(jobs).some(({ shape: jobShape }) => privileged(jobShape)),
+    writesRepository:
+      requestsRepositoryWrite(actionSteps) ||
+      Object.values(jobs).some(({ shape: jobShape }) =>
+        shapeWritesRepository(jobShape),
+      ),
     jobs,
     dependencies,
     relocatedActions,

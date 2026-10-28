@@ -285,6 +285,7 @@ test("every API code-quality graph task has an explicit budget entry", async () 
   const plan = planCheck({
     changedPaths,
     presentChangedPaths: changedPaths,
+    repositoryPaths: changedPaths,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
   });
@@ -1061,14 +1062,14 @@ test("successful leader exit cleans its inherited-pipe descendants without waiti
 test("a progress stall interrupts a longer group drain window", async () => {
   const cwd = await scratch();
   try {
-    const descendant =
-      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),5000)";
+    const completion = path.join(cwd, "descendant-completion");
+    // Kernel sleep keeps this quiescence fixture independent of JS runtime CPU work.
+    const descendant = `trap 'printf interrupted > "$1"; exit 0' TERM; printf ready; sleep 5; printf completed > "$1"`;
     const leader = `
       const {spawn}=require('child_process');
-      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      const nested=spawn('/bin/sh',['-c',${JSON.stringify(descendant)},'descendant',${JSON.stringify(completion)}],{stdio:['ignore','pipe','inherit']});
       nested.stdout.once('data',()=>process.exit(0));
     `;
-    const started = Date.now();
     const result = await runBudgetedCheck({
       command: [process.execPath, "-e", leader],
       cwd,
@@ -1083,7 +1084,10 @@ test("a progress stall interrupts a longer group drain window", async () => {
     expect(result.exitCode).toBe(124);
     expect(result.outcome).toBe("stalled");
     expect(result.output).toContain("class=task-stall");
-    expect(Date.now() - started).toBeLessThan(3800);
+    expect(await Bun.file(completion).text()).toBe("interrupted");
+    expect(result.output).not.toContain(
+      "Notice: Terminating owned process after leader exit:",
+    );
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

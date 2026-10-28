@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
@@ -19,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -36,7 +36,6 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -44,6 +43,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
   createTestHandlerContext,
@@ -259,7 +259,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
         async (tx) =>
           await resolveFeatureAccessSnapshot({ tx, organizationId, userId }),
       );
-      const context = {
+      const context = authorizedMcpContextForTest({
         organizationId,
         userId,
         userEmail: `${userId}@example.test`,
@@ -279,7 +279,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           scopedDb,
           pinServerValidatedWorkspaceId: (id) => id === workspaceId,
         }),
-      } satisfies McpRequestContext;
+      });
       const result = await handleMcpToolCall({
         mode: "advanced",
         toolName: "write_capability",
@@ -618,6 +618,7 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
         if (Array.isArray(events)) {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Sample audit unavailable",
           });
         }
@@ -694,8 +695,8 @@ describe.skipIf(!runPostgresTests)("atomic sample case loading", () => {
           body: {},
         }),
       );
-      expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (result instanceof ElysiaCustomStatusResponse) {
+      expect(result).toBeInstanceOf(HttpStatusResponse);
+      if (result instanceof HttpStatusResponse) {
         expect(result.code).toBe(404);
       }
     });
