@@ -59,6 +59,7 @@ fi
         ],
         {
           cwd: root,
+          maxBuffer: 32 * 1024 * 1024,
           env: {
             ...process.env,
             PATH: [path.join(root, "bin"), process.env["PATH"]]

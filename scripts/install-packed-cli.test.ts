@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+const CHILD_OUTPUT_LIMIT_BYTES = 32 * 1024 * 1024;
+
 // timeout: actual offline npm installation exercises consumer dependency resolution.
 test("a packed CLI installs offline with unpublished same-release tarballs", () => {
   const root = mkdtempSync(path.join(tmpdir(), "packed-cli-test-"));
@@ -53,7 +55,7 @@ test("a packed CLI installs offline with unpublished same-release tarballs", () 
           source,
           "package",
         ],
-        { encoding: "utf-8" },
+        { encoding: "utf-8", maxBuffer: CHILD_OUTPUT_LIMIT_BYTES },
       );
       expect(packed.status, packed.stderr).toBe(0);
     }
@@ -67,6 +69,7 @@ test("a packed CLI installs offline with unpublished same-release tarballs", () 
       ],
       {
         encoding: "utf-8",
+        maxBuffer: CHILD_OUTPUT_LIMIT_BYTES,
         env: {
           ...process.env,
           npm_config_offline: "true",
@@ -79,7 +82,7 @@ test("a packed CLI installs offline with unpublished same-release tarballs", () 
     const cli = spawnSync(
       "node",
       ["node_modules/@stella-release-fixture/cli/index.js"],
-      { cwd: consumer, encoding: "utf-8" },
+      { cwd: consumer, encoding: "utf-8", maxBuffer: CHILD_OUTPUT_LIMIT_BYTES },
     );
     expect(cli.status, cli.stderr).toBe(0);
     expect(cli.stdout.trim()).toBe("same-release input");

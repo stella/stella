@@ -23,7 +23,9 @@ import {
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
+import { npmReleaseJobId } from "./generate-npm-release-jobs";
 import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
+import { ALL_PACKAGE_ORDER } from "./publish-packages";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -1832,7 +1834,11 @@ describe("detect-e2e-changes", () => {
     // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set(["publish-npm.yml#release"]);
+    const forwardingCallers = new Set(
+      ALL_PACKAGE_ORDER.map(
+        (directory) => `publish-npm.yml#${npmReleaseJobId(directory)}`,
+      ),
+    );
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
