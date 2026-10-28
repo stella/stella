@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Dabar",
       "currentSession": "Dabartinis",
       "device": "Įrenginys",
       "deviceOnOs": "{browser} / {os}",
@@ -1189,7 +1190,7 @@
       "searchEveryWord": "Ieškoti visų žodžių"
     },
     "seo": {
-      "collectionName": "Stella teismų praktika",
+      "collectionName": "stella teismų praktika",
       "description": "Vieša teismų praktikos duomenų bazė su indeksuojamais teismų sprendimais ir teisės šaltiniais.",
       "homeDescription": "Vieša teisės duomenų bazė: teismų sprendimai ir konsoliduoti teisės aktai, ieškomi pagal identifikatorių arba žodžius.",
       "scopedDescription": "Vieša teismų praktikos duomenų bazė ({scope}) su indeksuojamais teismų sprendimais ir teisės šaltiniais."
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+      "unnamed": "dar {count, number}"
     },
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",
@@ -2028,7 +2029,7 @@
     "author": "Autorius",
     "back": "Atgal",
     "cancel": "Atšaukti",
-    "caseLaw": "Teismų praktika",
+    "caseLaw": "Teisinė duomenų bazė",
     "catalogue": "Katalogas",
     "category": "Kategorija",
     "categoryName": "Kategorijos pavadinimas",
@@ -2468,10 +2469,10 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
-    "deleteContact": "Ištrinti klientą",
+    "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
-    "editContact": "Redaguoti klientą",
+    "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",
       "personal": "Asmeninis",
@@ -2484,7 +2485,7 @@
     "extractProcuracao": {
       "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
       "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
-      "fileHint": "Stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
+      "fileHint": "stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
       "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
@@ -5056,7 +5057,7 @@
         "title": "Dviejų veiksnių autentifikavimas"
       },
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
-      "wordEditShortcut": "Word redagavimo žyma",
+      "wordEditShortcut": "Inicialai Word pakeitimams",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",
       "wordEditShortcutPlaceholder": "pvz., JK"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Išsaugotas stilių rinkinys",
     "sourceDocument": "Šaltinio DOCX",
     "stellaDescription": "Išsamus neutralus stella teisinių dokumentų formatavimas",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stilių rinkiniai",
     "untitledDocument": "Dokumentas be pavadinimo"
   },
   "success": {
     "aiConfigDeleted": "DI konfigūracija pašalinta",
     "aiConfigUpdated": "DI konfigūracija atnaujinta",
-    "clientUpdated": "Klientas atnaujintas",
-    "contactCreated": "Klientas sukurtas",
-    "contactDeleted": "Klientas ištrintas",
+    "clientUpdated": "Kontaktas atnaujintas",
+    "contactCreated": "Kontaktas sukurtas",
+    "contactDeleted": "Kontaktas ištrintas",
     "documentCreated": "Dokumentas sukurtas",
     "folderCreated": "Aplankas sukurtas",
     "invitationCanceled": "Kvietimas atšauktas",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Įveskite galiojantį el. pašto adresą.",
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
     "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",
     "slugRequired": "Slug yra privalomas"

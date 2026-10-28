@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Most",
       "currentSession": "Jelenlegi",
       "device": "Eszköz",
       "deviceOnOs": "{browser} – {os}",
@@ -1189,7 +1190,7 @@
       "searchEveryWord": "Minden szó keresése"
     },
     "seo": {
-      "collectionName": "Stella ítélkezési gyakorlat",
+      "collectionName": "stella ítélkezési gyakorlat",
       "description": "Nyilvános ítélkezési adatbázis indexelhető bírósági határozatokkal és jogforrásokkal.",
       "homeDescription": "Nyilvános jogi adatbázis: bírósági határozatok és egységes szerkezetű jogszabályok, azonosító vagy szavak alapján kereshetők.",
       "scopedDescription": "Nyilvános ítélkezési adatbázis ({scope}), indexelhető bírósági határozatokkal és jogforrásokkal."
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {és még #} other {és még #}}"
+      "unnamed": "még {count, number}"
     },
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",
@@ -2028,7 +2029,7 @@
     "author": "Szerző",
     "back": "Vissza",
     "cancel": "Mégse",
-    "caseLaw": "Ítélkezési gyakorlat",
+    "caseLaw": "Jogi adatbázis",
     "catalogue": "Katalógus",
     "category": "Kategória",
     "categoryName": "Kategória neve",
@@ -2468,10 +2469,10 @@
       "value": "Mező értéke"
     },
     "datePrecision": "Dátum pontossága",
-    "deleteContact": "Ügyfél törlése",
+    "deleteContact": "Kapcsolat törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
-    "editContact": "Ügyfél szerkesztése",
+    "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {
       "other": "Egyéb",
       "personal": "Személyes",
@@ -5056,7 +5057,7 @@
         "title": "Kétfaktoros hitelesítés"
       },
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
-      "wordEditShortcut": "Word-szerkesztési rövidítés",
+      "wordEditShortcut": "Monogram a Word-módosításokhoz",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",
       "wordEditShortcutPlaceholder": "pl. KJ"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Mentett stíluskészlet",
     "sourceDocument": "Forrás DOCX",
     "stellaDescription": "A stella teljes, semleges jogi dokumentumformázása",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stíluskészletek",
     "untitledDocument": "Névtelen dokumentum"
   },
   "success": {
     "aiConfigDeleted": "AI-konfiguráció eltávolítva",
     "aiConfigUpdated": "AI-konfiguráció frissítve",
-    "clientUpdated": "Ügyfél frissítve",
-    "contactCreated": "Ügyfél létrehozva",
-    "contactDeleted": "Ügyfél törölve",
+    "clientUpdated": "Kapcsolat frissítve",
+    "contactCreated": "Kapcsolat létrehozva",
+    "contactDeleted": "Kapcsolat törölve",
     "documentCreated": "Dokumentum létrehozva",
     "folderCreated": "Mappa létrehozva",
     "invitationCanceled": "Meghívó visszavonva",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
     "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",
     "slugRequired": "A slug kötelező"

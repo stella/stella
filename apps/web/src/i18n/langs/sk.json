@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Teraz",
       "currentSession": "Aktuálna",
       "device": "Zariadenie",
       "deviceOnOs": "{browser} na {os}",
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+      "unnamed": "{count, number} ďalších"
     },
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
@@ -2028,7 +2029,7 @@
     "author": "Autor",
     "back": "Späť",
     "cancel": "Zrušiť",
-    "caseLaw": "Judikatúra",
+    "caseLaw": "Právna databáza",
     "catalogue": "Katalóg",
     "category": "Kategória",
     "categoryName": "Názov kategórie",
@@ -2406,7 +2407,7 @@
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentov",
     "title": "Autorizácia prístupu",
     "unverifiedApp": "Neoverená aplikácia",
-    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
+    "unverifiedExplanation": "stella neoverila, kto túto aplikáciu vydáva.",
     "useAnotherAccount": "Použiť iný účet",
     "verifiedPublisher": "Overená aplikácia od {publisher}"
   },
@@ -2468,10 +2469,10 @@
       "value": "Hodnota poľa"
     },
     "datePrecision": "Presnosť dátumu",
-    "deleteContact": "Vymazať klienta",
+    "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
-    "editContact": "Upraviť klienta",
+    "editContact": "Upraviť kontakt",
     "emailTypes": {
       "other": "Iný",
       "personal": "Osobný",
@@ -2484,7 +2485,7 @@
     "extractProcuracao": {
       "dropZone": "Presuňte sem plnomocenstvo (.docx) alebo kliknite a vyberte súbor",
       "extracting": "Zisťujeme splnomocniteľa…",
-      "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
+      "fileHint": "stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
       "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
@@ -5056,7 +5057,7 @@
         "title": "Dvojfaktorové overenie"
       },
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
-      "wordEditShortcut": "Skratka pre úpravy vo Worde",
+      "wordEditShortcut": "Iniciály pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",
       "wordEditShortcutPlaceholder": "napr. JK"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Uložená sada štýlov",
     "sourceDocument": "Zdrojový DOCX",
     "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Sady štýlov",
     "untitledDocument": "Dokument bez názvu"
   },
   "success": {
     "aiConfigDeleted": "Konfigurácia AI odstránená",
     "aiConfigUpdated": "Konfigurácia AI aktualizovaná",
-    "clientUpdated": "Klient aktualizovaný",
-    "contactCreated": "Klient vytvorený",
-    "contactDeleted": "Klient vymazaný",
+    "clientUpdated": "Kontakt aktualizovaný",
+    "contactCreated": "Kontakt vytvorený",
+    "contactDeleted": "Kontakt vymazaný",
     "documentCreated": "Dokument vytvorený",
     "folderCreated": "Priečinok vytvorený",
     "invitationCanceled": "Pozvánka zrušená",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Zadajte platnú e-mailovú adresu.",
     "organizationNameRequired": "Názov organizácie je povinný",
     "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky",
     "slugRequired": "Slug je povinný"

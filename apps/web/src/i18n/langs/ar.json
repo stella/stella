@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "الآن",
       "currentSession": "الحالية",
       "device": "الجهاز",
       "deviceOnOs": "{browser} على {os}",
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
+      "unnamed": "{count, number} آخر"
     },
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
@@ -2028,7 +2029,7 @@
     "author": "الكاتب",
     "back": "رجوع",
     "cancel": "إلغاء",
-    "caseLaw": "الاجتهاد القضائي",
+    "caseLaw": "قاعدة البيانات القانونية",
     "catalogue": "الكتالوج",
     "category": "الفئة",
     "categoryName": "اسم الفئة",
@@ -2468,10 +2469,10 @@
       "value": "قيمة الحقل"
     },
     "datePrecision": "دقة التاريخ",
-    "deleteContact": "حذف العميل",
+    "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
-    "editContact": "تعديل العميل",
+    "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",
       "personal": "شخصي",
@@ -5056,7 +5057,7 @@
         "title": "المصادقة الثنائية"
       },
       "wordEditIdentitySaved": "تم تحديث هوية تحرير Word",
-      "wordEditShortcut": "اختصار تحرير Word",
+      "wordEditShortcut": "الأحرف الأولى لتعديلات Word",
       "wordEditShortcutDescription": "وسم قصير للأحرف الأولى من اسمك في تحريرات Word.",
       "wordEditShortcutPlaceholder": "مثل: ج.ك"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "مجموعة أنماط محفوظة",
     "sourceDocument": "ملف DOCX المصدر",
     "stellaDescription": "تنسيق stella القانوني الكامل والمحايد للمستندات",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "مجموعات الأنماط",
     "untitledDocument": "مستند بلا عنوان"
   },
   "success": {
     "aiConfigDeleted": "تمت إزالة إعدادات الذكاء الاصطناعي",
     "aiConfigUpdated": "تم تحديث إعدادات الذكاء الاصطناعي",
-    "clientUpdated": "تم تحديث العميل",
-    "contactCreated": "تم إنشاء العميل",
-    "contactDeleted": "تم حذف العميل",
+    "clientUpdated": "تم تحديث جهة الاتصال",
+    "contactCreated": "تم إنشاء جهة الاتصال",
+    "contactDeleted": "تم حذف جهة الاتصال",
     "documentCreated": "تم إنشاء المستند",
     "folderCreated": "تم إنشاء المجلد",
     "invitationCanceled": "تم إلغاء الدعوة",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
     "organizationNameRequired": "اسم المؤسسة مطلوب",
     "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
     "slugRequired": "المعرّف مطلوب"

@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Agora",
       "currentSession": "Atual",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} em {os}",
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
+      "unnamed": "mais {count, number}"
     },
     "historyTrimmed": "Não foi possível resumir as mensagens anteriores, então esta resposta considera apenas a parte mais recente da conversa.",
     "improvePrompt": "Melhorar prompt",
@@ -2028,7 +2029,7 @@
     "author": "Autor",
     "back": "Voltar",
     "cancel": "Cancelar",
-    "caseLaw": "Jurisprudência",
+    "caseLaw": "Base de dados jurídica",
     "catalogue": "Catálogo",
     "category": "Categoria",
     "categoryName": "Nome da categoria",
@@ -2468,10 +2469,10 @@
       "value": "Valor do campo"
     },
     "datePrecision": "Precisão da data",
-    "deleteContact": "Excluir cliente",
+    "deleteContact": "Excluir contato",
     "deleteContactBlockedByMatters": "Este contato ainda está atribuído como cliente em casos. Reatribua ou exclua esses casos antes de excluir o contato.",
     "deleteContactConfirmDescription": "Tem certeza de que deseja excluir este contato? Esta ação não pode ser desfeita.",
-    "editContact": "Editar cliente",
+    "editContact": "Editar contato",
     "emailTypes": {
       "other": "Outro",
       "personal": "Pessoal",
@@ -5056,7 +5057,7 @@
         "title": "Autenticação de dois fatores"
       },
       "wordEditIdentitySaved": "Identidade de edição do Word atualizada",
-      "wordEditShortcut": "Atalho de edição do Word",
+      "wordEditShortcut": "Iniciais para edições no Word",
       "wordEditShortcutDescription": "Tag curta para suas iniciais nas edições do Word.",
       "wordEditShortcutPlaceholder": "por exemplo JK"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Conjunto de estilos salvo",
     "sourceDocument": "DOCX de origem",
     "stellaDescription": "Formatação jurídica completa e neutra da stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sem título"
   },
   "success": {
     "aiConfigDeleted": "Configuração de IA removida",
     "aiConfigUpdated": "Configuração de IA atualizada",
-    "clientUpdated": "Cliente atualizado",
-    "contactCreated": "Cliente criado",
-    "contactDeleted": "Cliente excluído",
+    "clientUpdated": "Contato atualizado",
+    "contactCreated": "Contato criado",
+    "contactDeleted": "Contato excluído",
     "documentCreated": "Documento criado",
     "folderCreated": "Pasta criada",
     "invitationCanceled": "Convite cancelado",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Insira um endereço de e-mail válido.",
     "organizationNameRequired": "O nome da organização é obrigatório",
     "slugFormat": "O slug deve conter letras minúsculas, números e hifens",
     "slugRequired": "O slug é obrigatório"
