@@ -31,19 +31,18 @@ import {
 } from "@/api/lib/case-law/plain-text-markup";
 import { metadataUrlAddresses } from "@/api/lib/legal-search/metadata-urls";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 
 const MIGRATION = new URL(
   "../../../drizzle/20261003123100_plain_text_markup_guard/migration.sql",
   import.meta.url,
 );
 const migration = await Bun.file(MIGRATION).text();
-// Later sources replace the URL contract function; install the shipped one.
-const urlContractMigration = await Bun.file(
-  new URL(
-    "../../../drizzle/20261027160100_uk_fcl_metadata_url_contract/migration.sql",
-    import.meta.url,
-  ),
-).text();
+// Install the last committed definition, as a deployment's migration history does.
+const urlContractMigration =
+  readCommittedMigrations().findLast(({ sql }) =>
+    sql.includes("CREATE OR REPLACE FUNCTION plain_text_source_url_schema("),
+  )?.sql ?? panic("No committed source URL contract migration");
 const tables = [
   caseLawDecisions,
   caseLawDecisionSupplements,
