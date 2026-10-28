@@ -309,13 +309,14 @@ export const markedPdfDownloadScalingScenario = {
         return panic("Marked PDF download scaling requires the PDF");
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      const annotations =
-        (await PDF.load(bytes)).getPages().at(0)?.getAnnotations() ?? [];
+      const page =
+        (await PDF.load(bytes)).getPages().at(0) ??
+        panic("Marked PDF download scaling requires a first page");
       return {
         statements: counter.count,
         transactionRoundTrips: counter.transactions,
         responseBytes: bytes.byteLength,
-        rows: annotations.length,
+        rows: page.getAnnotations().length,
       };
     }),
 };

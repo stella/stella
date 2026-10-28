@@ -171,33 +171,75 @@ const MARK_ANNOTATION_BY_MODE = {
   (mark: PdfMark) => MarkAnnotation | null
 >;
 
+/** Field trees deeper than this are malformed; the walk stops there. */
+const MAX_FIELD_DEPTH = 32;
+
+/** The `P` of a FieldMDP transform in a signature's `/Reference`, if any. */
+const fieldMdpTransformPermission = (
+  signature: PdfDict | undefined,
+  resolve: (ref: PdfRef) => PdfObject | null,
+): number | undefined => {
+  const references = signature?.getArray("Reference", resolve);
+  for (let index = 0; index < (references?.length ?? 0); index += 1) {
+    const reference = references?.at(index, resolve);
+    const permission =
+      reference instanceof PdfDict &&
+      reference.getName("TransformMethod", resolve)?.value === "FieldMDP"
+        ? reference.getDict("TransformParams", resolve)?.getNumber("P", resolve)
+            ?.value
+        : undefined;
+    if (permission !== undefined) {
+      return permission;
+    }
+  }
+  return undefined;
+};
+
 /**
- * The strictest modification permission a signed field's FieldMDP transform
- * grants (ISO 32000-2 Table 257 `P`), the same scale as DocMDP's; null when
- * no signature carries one.
+ * The strictest modification permission a signed field's lock grants, on the
+ * same scale as DocMDP's (ISO 32000-2: `P` in the field's `/Lock` dictionary,
+ * Table 236, and in the FieldMDP transform its signature carries, Table
+ * 257); null when no signed field carries one. The field tree is read from
+ * the catalog itself, so a lock set only in `/Lock` is seen too; a field is
+ * signed when it, or a parent it inherits from, has a `/V`.
  */
 const fieldLockPermission = (pdf: PDF): number | null => {
   const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
   let strictest: number | null = null;
-  for (const field of pdf.getForm()?.getSignatureFields() ?? []) {
-    const references: PdfArray | undefined = field.isSigned()
-      ? field.getSignatureDict()?.getArray("Reference", resolve)
-      : undefined;
-    for (let index = 0; index < (references?.length ?? 0); index += 1) {
-      const reference = references?.at(index, resolve);
-      const permission =
-        reference instanceof PdfDict &&
-        reference.getName("TransformMethod", resolve)?.value === "FieldMDP"
-          ? reference
-              .getDict("TransformParams", resolve)
-              ?.getNumber("P", resolve)?.value
-          : undefined;
-      if (permission !== undefined) {
-        strictest =
-          strictest === null ? permission : Math.min(strictest, permission);
-      }
+  const consider = (permission: number | undefined) => {
+    if (permission !== undefined) {
+      strictest =
+        strictest === null ? permission : Math.min(strictest, permission);
     }
-  }
+  };
+  const visit = (
+    fields: PdfArray | undefined,
+    inheritedValue: PdfDict | undefined,
+    depth: number,
+  ): void => {
+    if (depth > MAX_FIELD_DEPTH) {
+      return;
+    }
+    for (let index = 0; index < (fields?.length ?? 0); index += 1) {
+      const field = fields?.at(index, resolve);
+      if (!(field instanceof PdfDict)) {
+        continue;
+      }
+      const value = field.getDict("V", resolve) ?? inheritedValue;
+      if (value !== undefined) {
+        consider(
+          field.getDict("Lock", resolve)?.getNumber("P", resolve)?.value,
+        );
+        consider(fieldMdpTransformPermission(value, resolve));
+      }
+      visit(field.getArray("Kids", resolve), value, depth + 1);
+    }
+  };
+  visit(
+    pdf.getCatalog().getDict("AcroForm", resolve)?.getArray("Fields", resolve),
+    undefined,
+    0,
+  );
   return strictest;
 };
 

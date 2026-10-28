@@ -1,4 +1,10 @@
-import { PDF, rectsToQuadPoints } from "@libpdf/core";
+import {
+  PDF,
+  PdfDict,
+  PdfName,
+  PdfNumber,
+  rectsToQuadPoints,
+} from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import { READER_ANNOTATION_STYLES } from "@stll/api-contract/legal-reader-annotations";
@@ -381,6 +387,54 @@ describe("a signed PDF with the reader's marks", () => {
       await expectSignaturesIntact(signed, marked.bytes);
     },
   );
+
+  /**
+   * A signed file whose signature field locks the document at `level` in its
+   * `/Lock` dictionary only, with no FieldMDP transform carrying the level.
+   */
+  const lockedTextPdf = async (level: number) => {
+    const pdf = await PDF.load(await signedTextPdf());
+    const resolve = pdf.getObject.bind(pdf);
+    const field = pdf
+      .getCatalog()
+      .getDict("AcroForm", resolve)
+      ?.getArray("Fields", resolve)
+      ?.at(0, resolve);
+    if (!(field instanceof PdfDict)) {
+      throw new Error("the signed fixture has no signature field");
+    }
+    field.set(
+      "Lock",
+      PdfDict.of({
+        Type: PdfName.of("SigFieldLock"),
+        Action: PdfName.of("All"),
+        P: PdfNumber.of(level),
+      }),
+    );
+    return await pdf.save({ incremental: true });
+  };
+
+  test.each([1, 2])(
+    "hands over the stored bytes of a file whose field lock forbids annotations (P = %d)",
+    async (level) => {
+      const locked = await lockedTextPdf(level);
+      const mark = await markOn(locked, "deliver the goods");
+
+      for (const mode of MARKED_PDF_EXPORT_MODES) {
+        expect(await write(locked, [mark], mode)).toEqual({
+          status: "unchanged",
+          reason: MARKED_PDF_UNCHANGED.certified,
+        });
+      }
+    },
+  );
+
+  test("adds annotations to a file whose field lock allows them (P = 3)", async () => {
+    const locked = await lockedTextPdf(3);
+    const mark = await markOn(locked, "deliver the goods");
+
+    expect((await markedBytes(locked, [mark])).annotationCount).toBe(1);
+  });
 
   const CERTIFICATIONS = [
     ["no changes (P = 1)", 1],
