@@ -14,6 +14,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   refresh-exemplars:
     runs-on: ubuntu-24.04
@@ -27,7 +31,7 @@ jobs:
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
         with:
-          save: false
+          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install refresh dependencies
         timeout-minutes: 5
