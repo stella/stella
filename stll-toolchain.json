@@ -190,5 +190,27 @@
       "updateTypes": ["version-update:semver-minor"],
       "reason": "Expo SDK 58 requires react-native 0.88.x; remove when the SDK supports a newer minor."
     }
+  ],
+  "formatterStagedSelector": {
+    "script": "scripts/precommit-paths.ts",
+    "reason": "Select author-written staged paths, including merge resolutions, using the repository-tested selector."
+  },
+  "formatterCheckSource": {
+    "source": ".github/ci-checks/ci-checks-policy.yml",
+    "workflow": ".github/workflows/ci.yml",
+    "job": "ci-checks-policy",
+    "runner": "scripts/ci-check-pool.ts",
+    "argument": "ci-checks-policy",
+    "reason": "The repository-tested CI pool executes the policy check source, including the whole-repository formatter check."
+  },
+  "nodeCompatibility": [
+    {
+      "package": "packages/cli",
+      "workflow": ".github/workflows/publish-npm.yml",
+      "job": "pack",
+      "step": "cli-node-smoke",
+      "version": "22.23.4",
+      "reason": "Smoke-test the packed CLI on the supported Node22 line while the repository runtime uses Node26; engines.node >=20 permits this compatibility target."
+    }
   ]
 }
