@@ -4631,7 +4631,6 @@
       "selectAtLeastOneRole": "Selecione pelo menos uma função para esta chave.",
       "selectModelForEachRole": "Adicione um provedor e selecione um modelo para cada categoria.",
       "selectedProvider": "{provider}",
-      "title": "Configuração de IA",
       "usingDefaults": "Usando os padrões"
     },
     "invitations": {

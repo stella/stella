@@ -16,6 +16,7 @@ import {
   RECAP_PROMPT_VERSION,
 } from "@/api/handlers/chat/thread-recap";
 import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
@@ -91,6 +92,10 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
     session,
     user,
   } = ctx;
+  if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.ok<ThreadRecapResult>({ recap: null });
+  }
+
   // The recap is a non-critical nicety: when AI is unavailable we
   // return no recap rather than blocking the thread view.
   if (

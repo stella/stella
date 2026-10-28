@@ -10,6 +10,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { type Context, contextFromNested, evaluate } from "./github-expression";
+
+const evaluateInput = (input: unknown, context: Context) => {
+  if (typeof input !== "string") {
+    throw new TypeError("Promotion input must be an expression string");
+  }
+  return evaluate(input, context);
+};
+
 const ROOT = path.resolve(import.meta.dir, "..");
 const RESOLVER = path.join(ROOT, "scripts/resolve-staging-deploy-sha.sh");
 const PREDICATE = path.join(ROOT, "scripts/staging-source-predicate.sh");
@@ -399,7 +408,35 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
     throw new TypeError("Staging promotion must exist");
   }
   const promotionInputs = record(promoted["with"]);
-  expect(promotionInputs["git-sha"]).toBe(SOURCE);
+  const sourceCommit = "a".repeat(40);
+  const builtImages = Object.fromEntries(
+    imageJobs.map(([name]) => [name, { outputs: { digest: `built-${name}` } }]),
+  );
+  const synthetic = contextFromNested({
+    inputs: { release_ref: "" },
+    needs: { resolve: { outputs: { sha: sourceCommit } }, ...builtImages },
+    steps: { "rc-images": { outputs: { api: "", web: "" } } },
+  });
+  const candidate = contextFromNested({
+    inputs: { release_ref: "v1.2.3-rc.1" },
+    needs: { resolve: { outputs: { sha: sourceCommit } }, ...builtImages },
+    steps: { "rc-images": { outputs: { api: "rc-api", web: "rc-web" } } },
+  });
+  expect(evaluateInput(promotionInputs["git-sha"], synthetic)).toBe(
+    sourceCommit,
+  );
+  expect(
+    evaluateInput(promotionInputs["git-sha"], candidate),
+    "RC promotion must resolve its tag instead of supplying git-sha",
+  ).toBe("");
+  expect(
+    evaluateInput(promotionInputs["image-digest"], candidate),
+    "RC API promotion must use the manifest digest",
+  ).toBe("rc-api");
+  expect(
+    evaluateInput(promotionInputs["web-image-digest"], candidate),
+    "RC web promotion must use the manifest digest",
+  ).toBe("rc-web");
   for (const [name, rawJob] of imageJobs) {
     const job = record(rawJob);
     const jobSteps = steps(job);
@@ -470,9 +507,12 @@ const assertImageBindings = (workflow: Record<string, unknown>) => {
       expect(inputs["main-sha"]).toBe(MAIN);
     }
     expect(record(job["outputs"])["digest"]).toBe(DIGEST);
-    expect(Object.values(promotionInputs)).toContain(
-      `\${{ needs.${name}.outputs.digest }}`,
-    );
+    expect(
+      [
+        promotionInputs["image-digest"],
+        promotionInputs["web-image-digest"],
+      ].some((input) => evaluateInput(input, synthetic) === `built-${name}`),
+    ).toBe(true);
   }
 };
 
@@ -510,6 +550,32 @@ describe("staging image source bindings", () => {
     }
     record(checkout["with"])["ref"] = SOURCE;
     expect(() => assertImageBindings(workflow)).toThrow(WORKFLOW_SHA);
+  });
+
+  test("the promotion census rejects an RC that overrides its tag or ignores manifest digests", () => {
+    for (const [input, replacement, message] of [
+      ["git-sha", SOURCE, "RC promotion must resolve its tag"],
+      [
+        "image-digest",
+        `\${{ needs.build-api.outputs.digest }}`,
+        "RC API promotion must use the manifest digest",
+      ],
+      [
+        "web-image-digest",
+        `\${{ needs.build-web.outputs.digest }}`,
+        "RC web promotion must use the manifest digest",
+      ],
+    ] as const) {
+      const workflow = document(".github/workflows/deploy-staging.yml");
+      const promotion = steps(
+        record(record(workflow["jobs"])["promote-staging"]),
+      ).find((step) => step["uses"] === "./.github/actions/promote-dispatch");
+      if (promotion === undefined) {
+        throw new TypeError("Fixture promotion must exist");
+      }
+      record(promotion["with"])[input] = replacement;
+      expect(() => assertImageBindings(workflow)).toThrow(message);
+    }
   });
 
   test("ordinary and custom provenance attestations bind the same image digest", () => {

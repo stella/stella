@@ -4631,7 +4631,6 @@
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",
-      "title": "إعدادات الذكاء الاصطناعي",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
     "invitations": {

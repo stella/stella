@@ -4631,7 +4631,6 @@
       "selectAtLeastOneRole": "Vali selle võtme jaoks vähemalt üks roll.",
       "selectModelForEachRole": "Lisa teenusepakkuja ja vali iga kategooria jaoks mudel.",
       "selectedProvider": "{provider}",
-      "title": "AI seadistus",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
     "invitations": {

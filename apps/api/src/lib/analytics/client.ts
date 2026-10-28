@@ -30,7 +30,11 @@ export const getServerAnalytics = (): ServerAnalytics => {
     localDebug: envBase.POSTHOG_LOCAL_DEBUG,
   };
   analytics = shouldEnablePostHog(posthogConfig)
-    ? createPostHogServerAnalytics(posthogConfig.key, posthogConfig.host)
+    ? createPostHogServerAnalytics(
+        posthogConfig.key,
+        posthogConfig.host,
+        envBase.DEPLOY_ENVIRONMENT,
+      )
     : noopAnalytics;
 
   return analytics;

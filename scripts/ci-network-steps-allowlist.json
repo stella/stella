@@ -20,10 +20,6 @@
     "reason": "Health check of the deployed backend; the response is the verdict, so a retry would mask an outage."
   },
   {
-    "id": ".github/workflows/deploy-staging.yml#promote-staging#Run staging web smoke#timeout",
-    "reason": "The smoke first waits until staging serves the deployed commit, so its duration includes the service rollover; no step timings exist to bound that wait."
-  },
-  {
     "id": ".github/workflows/deploy-staging.yml#staging-health#Probe staging health#retry",
     "reason": "Health probe with its own bounded attempt loop; the probe result decides whether to deploy."
   },

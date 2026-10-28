@@ -19,6 +19,8 @@ import {
   spliceSpanProposal,
 } from "@/api/handlers/chat/messages/revisions/span-proposal";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -84,6 +86,7 @@ export const createProposeMessageSpanEdit = ({
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       body,
       params: { threadId, messageId },
       safeDb,
@@ -97,6 +100,10 @@ export const createProposeMessageSpanEdit = ({
       request,
       promptCachingEnabled,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError(undefined));
+      }
+
       const organizationId = session.activeOrganizationId;
       const loaded = yield* Result.await(
         safeDb(
