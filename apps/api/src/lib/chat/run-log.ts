@@ -1,5 +1,5 @@
 import { EventType, uiMessagesToWire } from "@tanstack/ai";
-import type { StreamChunk, StreamDurability } from "@tanstack/ai";
+import type { StreamChunk, StreamDurability, UIMessage } from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";
 import {
   and,
@@ -29,6 +29,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
+import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
@@ -37,7 +39,8 @@ import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
-const READ_PAGE_SIZE = 256;
+export const READ_PAGE_SIZE = 256;
+const REFERENCE_TEXT_CARRY_CHARS = 256;
 const TAIL_POLL_MS = 250;
 const FIRST_ENTRY_WAIT_MS = 30_000;
 const CLOSED_LOG_RETENTION = "15 minutes";
@@ -180,6 +183,11 @@ const readCurrentRunTiming = async ({
   return row?.timing ?? null;
 };
 
+type RunLogReferenceSummary = Pick<
+  ChatRunReferenceState,
+  "through" | "decisionIds"
+> & { userMessageIds: string[] };
+
 type RunLogHeaderOptions = Pick<
   RunLogReaderOptions,
   "organizationId" | "runId"
@@ -199,13 +207,17 @@ const readRunLogHeaderOnTx = async ({
         closedAt: chatRunLogs.closedAt,
         nextSeq: chatRunLogs.nextSeq,
         subjectDecisionId: chatThreads.subjectDecisionId,
-        sourceContent: chatMessages.content,
-        decisionReferences: includeReferences
-          ? sql<
-              { seq: string; chunk: StreamChunk }[] | null
-            >`(select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId})`
-          : sql<{ seq: string; chunk: StreamChunk }[] | null>`null`,
-        tailChunk: chatRunLogEntries.chunk,
+        referenceState: includeReferences
+          ? sql<RunLogReferenceSummary>`jsonb_build_object('through', ${chatRunLogs.referenceState}->'through', 'decisionIds', ${chatRunLogs.referenceState}->'decisionIds', 'userMessageIds', jsonb_path_query_array(${chatRunLogs.referenceState}, '$.messages[*] ? (@.role == "user").id'))`
+          : sql<RunLogReferenceSummary | null>`null`,
+        sourceContent: includeReferences
+          ? sql`CASE WHEN octet_length(${chatMessages.content}::text) <= ${MAX_CHUNK_BYTES} THEN ${chatMessages.content} ELSE NULL END`
+          : sql`null`,
+        sourceOverflow: includeReferences
+          ? sql<boolean>`coalesce(octet_length(${chatMessages.content}::text) > ${MAX_CHUNK_BYTES}, false)`
+          : sql<boolean>`false`,
+        tailType: sql<string | null>`${chatRunLogEntries.chunk}->>'type'`,
+        tailHasTiming: sql<boolean>`coalesce(${chatRunLogEntries.chunk}->'metadata' ? 'turnTiming', false)`,
         tailTimingSeq: sql<string | null>`(
             select pending.seq::text from chat_run_log_entries pending
             where pending.organization_id = ${chatRunLogs.organizationId}
@@ -244,89 +256,213 @@ const readRunLogHeaderOnTx = async ({
   ).at(0);
 type RunLogHeader = Awaited<ReturnType<typeof readRunLogHeaderOnTx>>;
 
-const createRunLogCopyProjection = () => {
+const CARRY_TOOL_ARGUMENTS = {
+  "awaiting-input": false,
+  "input-streaming": true,
+  "input-complete": false,
+  "approval-requested": false,
+  "approval-responded": false,
+  complete: false,
+  error: false,
+} as const satisfies Record<
+  Extract<UIMessage["parts"][number], { type: "tool-call" }>["state"],
+  boolean
+>;
+
+type FoldReferenceStateOptions = {
+  state: ChatRunReferenceState;
+  chunks: StreamChunk[];
+  through: string;
+};
+
+const foldReferenceState = ({
+  state,
+  chunks,
+  through,
+}: FoldReferenceStateOptions): ChatRunReferenceState => {
   const { processor } = createStreamMessageCapture({
-    initialMessages: [],
+    initialMessages: state.messages.filter(({ role }) => role === "activity"),
     capture: (message) => message,
   });
-  let accumulatedSequence = 0n;
-  let reconstructedReferences = { sequence: 0n, ids: new Set<string>() };
-  const metadataReferences = new Set<string>();
-  const accumulate = (chunk: StreamChunk, sequence: bigint) => {
-    // Header history can extend beyond this page; fold each durable sequence once.
-    if (sequence <= accumulatedSequence) {
-      return;
+  // Replaying only the bounded carry restores the SDK's transient shorthand
+  // lanes too; initialMessages alone cannot resume a TEXT_MESSAGE_CHUNK lane.
+  for (const message of state.messages) {
+    if (message.role === "activity") {
+      continue;
     }
-    processor.processChunk(chunk);
-    // Delta text is scanned only through the processor's per-message reconstruction.
-    const metadata = Object.fromEntries(
+    processor.processChunk({
+      type: EventType.TEXT_MESSAGE_START,
+      messageId: message.id,
+      role: message.role,
+    });
+    for (const part of message.parts) {
+      if (part.type === "text") {
+        processor.processChunk({
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: message.id,
+          delta: part.content,
+        });
+      } else if (
+        part.type === "structured-output" &&
+        part.status === "streaming"
+      ) {
+        processor.processChunk({
+          type: EventType.CUSTOM,
+          name: "structured-output.start",
+          value: { messageId: message.id },
+        });
+        processor.processChunk({
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: message.id,
+          delta: part.raw,
+        });
+      } else if (part.type === "thinking") {
+        processor.processChunk({
+          type: EventType.REASONING_MESSAGE_CONTENT,
+          messageId: part.stepId ?? message.id,
+          delta: part.content,
+        });
+      } else if (part.type === "tool-call") {
+        processor.processChunk({
+          type: EventType.TOOL_CALL_START,
+          parentMessageId: message.id,
+          toolCallId: part.id,
+          toolCallName: part.name,
+        });
+        processor.processChunk({
+          type: EventType.TOOL_CALL_ARGS,
+          toolCallId: part.id,
+          delta: part.arguments,
+        });
+      }
+    }
+  }
+  const metadata = chunks.map((chunk) =>
+    Object.fromEntries(
       Object.entries(chunk).filter(([key]) => key !== "delta"),
-    );
-    for (const id of decisionReferencesIn(metadata)) {
-      metadataReferences.add(id);
+    ),
+  );
+  for (const chunk of chunks) {
+    processor.processChunk(chunk);
+  }
+  const messages = processor.getMessages();
+  const text = messages.map(({ parts }) =>
+    parts
+      .flatMap((part) => (part.type === "text" ? [part.content] : []))
+      .join(""),
+  );
+  const decisionIds = [
+    ...new Set([
+      ...state.decisionIds,
+      ...decisionReferencesIn([metadata, messages, text]),
+    ]),
+  ];
+  const carry = messages.map(({ id, role, parts }) => {
+    if (role === "activity") {
+      return { id, role, parts };
     }
-    accumulatedSequence = sequence;
+    // Canonical decision identities fit in this suffix; long passage anchors
+    // follow the identity and are discovered before the suffix advances.
+    const suffix = parts
+      .flatMap((part) => (part.type === "text" ? [part.content] : []))
+      .join("")
+      .slice(-REFERENCE_TEXT_CARRY_CHARS);
+    const kept: UIMessage["parts"] =
+      suffix === "" ? [] : [{ type: "text", content: suffix }];
+    for (const part of parts) {
+      if (part.type === "structured-output") {
+        switch (part.status) {
+          case "streaming":
+            kept.push({
+              type: "structured-output",
+              status: part.status,
+              raw: part.raw,
+            });
+            break;
+          case "complete":
+          case "error":
+            break;
+          default:
+            part satisfies never;
+            panic("Unknown structured output carry state");
+        }
+      }
+    }
+    const thinking = parts.findLast((part) => part.type === "thinking");
+    if (thinking?.type === "thinking") {
+      kept.push({
+        type: "thinking",
+        content: thinking.content.slice(-REFERENCE_TEXT_CARRY_CHARS),
+        ...(thinking.stepId === undefined ? {} : { stepId: thinking.stepId }),
+      });
+    }
+    for (const part of parts) {
+      if (part.type === "tool-call" && CARRY_TOOL_ARGUMENTS[part.state]) {
+        kept.push({
+          type: "tool-call",
+          id: part.id,
+          name: part.name,
+          state: part.state,
+          arguments: part.arguments,
+        });
+      }
+    }
+    return { id, role, parts: kept };
+  });
+  const next = { through, decisionIds, messages: carry };
+  // JSONB's text adds spacing. Reserve half of the database ceiling so both
+  // wire and stored representations remain bounded without truncating IDs.
+  if (
+    Buffer.byteLength(JSON.stringify(next)) >
+    CHAT_RUN_REFERENCE_STATE_MAX_BYTES / 2
+  ) {
+    throw new ChatRunLogError({
+      message: "Chat run log reference summary exceeds its size limit",
+    });
+  }
+  return next;
+};
+
+const createRunLogCopyProjection = () => {
+  let liveState: ChatRunReferenceState = {
+    through: "0",
+    decisionIds: [],
+    messages: [],
   };
   let projection:
     Awaited<ReturnType<typeof readWithdrawnCopyProjection>> | undefined;
   let runMarker: string | null | undefined;
   const checkedReferences = new Set<string>();
   const userMessageIds = new Set<string>();
-  const userSequences = new Set<string>();
-  const knownSequences = new Set<string>();
   let currentRole: string | undefined;
   const shownMarkers = new Set<string>();
-  const isAuthoredEntry = ({
-    chunk,
-    seq,
-    offset,
-  }: {
-    chunk: StreamChunk;
-    seq?: bigint;
-    offset?: string;
-  }) => {
-    const sequence = seq?.toString() ?? offset;
-    if (sequence !== undefined && userSequences.has(sequence)) {
-      return true;
-    }
-    if (sequence === undefined || !knownSequences.has(sequence)) {
-      if (chunk.type === EventType.TEXT_MESSAGE_START) {
-        currentRole = chunk.role ?? "assistant";
-      } else if (
-        chunk.type === EventType.TEXT_MESSAGE_CHUNK &&
-        chunk.role !== undefined
-      ) {
-        currentRole = chunk.role;
+  const isAuthoredEntry = (chunk: StreamChunk) => {
+    if (chunk.type === EventType.TEXT_MESSAGE_START) {
+      currentRole = chunk.role ?? "assistant";
+      if (currentRole === "user") {
+        userMessageIds.add(chunk.messageId);
       }
-      const authored = currentRole === "user";
-      if (chunk.type === EventType.TEXT_MESSAGE_END) {
-        currentRole = undefined;
-      }
-      if (sequence !== undefined) {
-        knownSequences.add(sequence);
-        if (authored) {
-          userSequences.add(sequence);
-        }
-      }
-      if (authored) {
-        return true;
-      }
-    }
-    if (chunk.type === EventType.TEXT_MESSAGE_CHUNK && chunk.role === "user") {
-      return true;
-    }
-    if (chunk.type === EventType.TEXT_MESSAGE_START && chunk.role === "user") {
-      userMessageIds.add(chunk.messageId);
-    }
-    if (
-      (chunk.type === EventType.TEXT_MESSAGE_START ||
-        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
-        chunk.type === EventType.TEXT_MESSAGE_END) &&
-      userMessageIds.has(chunk.messageId)
+    } else if (
+      chunk.type === EventType.TEXT_MESSAGE_CHUNK &&
+      chunk.role !== undefined
     ) {
-      return true;
+      currentRole = chunk.role;
+      if (chunk.role === "user" && chunk.messageId !== undefined) {
+        userMessageIds.add(chunk.messageId);
+      }
     }
-    return false;
+    const authored =
+      currentRole === "user" ||
+      ((chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.TEXT_MESSAGE_END ||
+        chunk.type === EventType.TEXT_MESSAGE_CHUNK) &&
+        chunk.messageId !== undefined &&
+        userMessageIds.has(chunk.messageId));
+    if (chunk.type === EventType.TEXT_MESSAGE_END) {
+      currentRole = undefined;
+    }
+    return authored;
   };
   const projectEntries = async <
     T extends { chunk: StreamChunk; seq?: bigint; offset?: string },
@@ -337,61 +473,49 @@ const createRunLogCopyProjection = () => {
     entries: T[];
     log: RunLogHeader;
   }) => {
-    if (Array.isArray(log?.decisionReferences)) {
-      for (const record of log.decisionReferences) {
-        accumulate(record.chunk, BigInt(record.seq));
-        knownSequences.add(record.seq);
-        const chunk = record.chunk;
-        if (
-          chunk.type === EventType.TEXT_MESSAGE_START ||
-          chunk.type === EventType.TEXT_MESSAGE_CHUNK
-        ) {
-          if (chunk.type === EventType.TEXT_MESSAGE_START) {
-            currentRole =
-              typeof chunk.role === "string" ? chunk.role : "assistant";
-          } else if (typeof chunk.role === "string") {
-            currentRole = chunk.role;
-          }
-          if (chunk.role === "user" && typeof chunk.messageId === "string") {
-            userMessageIds.add(chunk.messageId);
-          }
-        }
-        if (currentRole === "user") {
-          userSequences.add(record.seq);
-        }
-        if (chunk.type === EventType.TEXT_MESSAGE_END) {
-          currentRole = undefined;
+    if (entries.length === 0) {
+      return entries;
+    }
+    if (log === undefined) {
+      panic("Run log projection requires its header");
+    }
+    if (log.sourceOverflow) {
+      throw new ChatRunLogError({
+        message: "Chat run log source exceeds its size limit",
+      });
+    }
+    const persisted = log.referenceState;
+    const references = decisionReferencesIn([
+      { subjectDecisionId: log.subjectDecisionId },
+      log.sourceContent,
+    ]);
+    if (persisted === null) {
+      const final = entries.at(-1);
+      liveState = foldReferenceState({
+        state: liveState,
+        chunks: entries.map(({ chunk }) => chunk),
+        through: final?.seq?.toString() ?? final?.offset ?? liveState.through,
+      });
+      for (const id of liveState.decisionIds) {
+        references.add(id);
+      }
+      for (const message of liveState.messages) {
+        if (message.role === "user") {
+          userMessageIds.add(message.id);
         }
       }
-    }
-    for (const entry of entries) {
-      accumulate(
-        entry.chunk,
-        entry.seq ??
-          BigInt(entry.offset ?? panic("Run entry requires a sequence")),
-      );
-    }
-    if (reconstructedReferences.sequence !== accumulatedSequence) {
-      const messages = processor.getMessages();
-      const messageText = messages.map(({ parts }) =>
-        parts
-          .flatMap((part) => (part.type === "text" ? [part.content] : []))
-          .join(""),
-      );
-      reconstructedReferences = {
-        sequence: accumulatedSequence,
-        ids: decisionReferencesIn([messages, messageText]),
-      };
-    }
-    const references = decisionReferencesIn([
-      { subjectDecisionId: log?.subjectDecisionId },
-      log?.sourceContent,
-    ]);
-    for (const id of reconstructedReferences.ids) {
-      references.add(id);
-    }
-    for (const id of metadataReferences) {
-      references.add(id);
+    } else {
+      if (persisted.through !== (log.nextSeq - 1n).toString()) {
+        throw new ChatRunLogError({
+          message: "Chat run log reference summary is incomplete",
+        });
+      }
+      for (const messageId of persisted.userMessageIds) {
+        userMessageIds.add(messageId);
+      }
+      for (const id of persisted.decisionIds) {
+        references.add(id);
+      }
     }
     const source = { decisionId: [...references] };
     if (
@@ -406,11 +530,11 @@ const createRunLogCopyProjection = () => {
         checkedReferences.add(id);
       }
     }
-    runMarker ??= projection.marker(source, log?.subjectDecisionId);
+    runMarker ??= projection.marker(source, log.subjectDecisionId);
     const marker = runMarker;
     return entries.map((entry) => {
       const chunk = entry.chunk;
-      if (isAuthoredEntry(entry)) {
+      if (isAuthoredEntry(chunk)) {
         return entry;
       }
       if (marker === null) {
@@ -428,7 +552,7 @@ const createRunLogCopyProjection = () => {
       return { ...entry, chunk: projectWithdrawnRunChunk(chunk, text) };
     });
   };
-  return { projectEntries, hasRead: () => projection !== undefined };
+  return { projectEntries };
 };
 
 const createRunLogReader = ({
@@ -452,16 +576,12 @@ const createRunLogReader = ({
     if (log?.closedAt !== null) {
       return undefined;
     }
-    if (
-      log.tailChunk?.type === EventType.TEXT_MESSAGE_END &&
-      log.tailChunk.metadata !== undefined &&
-      "turnTiming" in log.tailChunk.metadata
-    ) {
+    if (log.tailType === EventType.TEXT_MESSAGE_END && log.tailHasTiming) {
       return log.nextSeq - 2n;
     }
     if (
-      log.tailChunk?.type !== EventType.RUN_FINISHED &&
-      log.tailChunk?.type !== EventType.RUN_ERROR
+      log.tailType !== EventType.RUN_FINISHED &&
+      log.tailType !== EventType.RUN_ERROR
     ) {
       return undefined;
     }
@@ -469,12 +589,17 @@ const createRunLogReader = ({
       ? log.nextSeq - 2n
       : BigInt(log.tailTimingSeq) - 1n;
   };
-  const loadPage = async (
-    after: bigint,
-    projection: ReturnType<typeof createRunLogCopyProjection>,
-  ) =>
+  const loadPage = async ({
+    after,
+    projection,
+    includeReferences,
+  }: {
+    after: bigint;
+    projection: ReturnType<typeof createRunLogCopyProjection>;
+    includeReferences: boolean;
+  }) =>
     await db(async (tx) => {
-      const log = await loadHeader(tx, !projection.hasRead());
+      const log = await loadHeader(tx, includeReferences);
       if (log === undefined) {
         return { entries: [], log };
       }
@@ -541,7 +666,11 @@ const createRunLogReader = ({
           return;
         }
         // db-await-in-loop: tailing page walk; each read starts after the last yielded seq, a page holds at most READ_PAGE_SIZE rows, and the loop ends at the close marker, the not-found deadline, or the abort signal
-        const { entries, log } = await loadPage(after, projection);
+        const { entries, log } = await loadPage({
+          after,
+          projection,
+          includeReferences: offset !== "now",
+        });
         for (const entry of entries) {
           after = entry.seq;
           yield { offset: after.toString(), chunk: entry.chunk };
@@ -575,6 +704,10 @@ const createRunLogReader = ({
         if (log === undefined) {
           return [];
         }
+        const timing =
+          timingMode === "current"
+            ? await readCurrentRunTiming({ tx, organizationId, runId })
+            : null;
         const result: { offset: string; chunk: StreamChunk }[] = [];
         let after = 0n;
         for (;;) {
@@ -594,7 +727,17 @@ const createRunLogReader = ({
             )
             .orderBy(asc(chatRunLogEntries.seq))
             .limit(READ_PAGE_SIZE);
-          for (const entry of entries) {
+          const projected = await projectEntries({
+            entries: entries.map((entry) => ({
+              ...entry,
+              chunk:
+                timing === null
+                  ? entry.chunk
+                  : refreshRunningTiming(entry.chunk, timing),
+            })),
+            log,
+          });
+          for (const entry of projected) {
             after = entry.seq;
             result.push({ offset: after.toString(), chunk: entry.chunk });
           }
@@ -604,32 +747,15 @@ const createRunLogReader = ({
                 message: "Chat run log changed during snapshot",
               });
             }
-            if (!needsCurrentTiming(result.map(({ chunk }) => chunk))) {
-              return await projectEntries({
-                entries: result,
-                log,
-              });
-            }
-            const timing = await readCurrentRunTiming({
-              tx,
-              organizationId,
-              runId,
-            });
-            return await projectEntries({
-              entries: result.map((entry) => ({
-                ...entry,
-                chunk: refreshRunningTiming(entry.chunk, timing),
-              })),
-              log,
-            });
+            return result;
           }
         }
       }),
   };
 };
 
-// A reconnect replays at most 256 deltas or a 1 MiB suffix. Larger prefixes
-// fold into one canonical SDK transcript snapshot, bounded by MAX_RUN_BYTES.
+// A full replay can fold into a canonical SDK snapshot, bounded by MAX_RUN_BYTES.
+// A cursor or live reconnect reads only its indexed suffix, one page at a time.
 export const MAX_CATCHUP_CHUNKS = 256n;
 export const MAX_CATCHUP_BYTES = 1024n * 1024n;
 
@@ -691,31 +817,10 @@ export const createChatRunLogReplay = async ({
       message: "Chat run log offset is beyond the stored tail",
     });
   }
-  // Headers let small runs skip the range aggregate; large runs measure only
-  // the requested indexed suffix, so a recent reader does not compact again.
-  const gapBytes =
-    header.bytesUsed <= MAX_CATCHUP_BYTES
-      ? header.bytesUsed
-      : await db(async (tx) => {
-          const [range] = await tx
-            .select({
-              bytes: sql<string>`coalesce(sum(octet_length(${chatRunLogEntries.chunk}::text)), 0)::text`,
-            })
-            .from(chatRunLogEntries)
-            .where(
-              and(
-                entryKey(organizationId, runId),
-                gt(chatRunLogEntries.seq, after),
-              ),
-            );
-          return BigInt(
-            range?.bytes ??
-              panic("Chat catch-up byte aggregate returned no row"),
-          );
-        });
   const compact =
-    header.nextSeq - 1n - after > MAX_CATCHUP_CHUNKS ||
-    gapBytes > MAX_CATCHUP_BYTES;
+    after === 0n &&
+    (header.nextSeq - 1n > MAX_CATCHUP_CHUNKS ||
+      header.bytesUsed > MAX_CATCHUP_BYTES);
   return {
     ...reader,
     resumeFrom: () => resumeOffset,
@@ -724,7 +829,7 @@ export const createChatRunLogReplay = async ({
       // A viewer closes delivery without closing the producer log.
     },
     async *read(offset, signal) {
-      if (!compact) {
+      if (!compact || offset !== "-1") {
         yield* reader.read(offset, signal);
         return;
       }
@@ -774,6 +879,35 @@ export const createChatRunLogReplay = async ({
   };
 };
 
+const assertRunLogOwner = async ({
+  tx,
+  execution,
+  organizationId,
+  runId,
+}: Pick<ChatRunLogOptions, "execution" | "organizationId" | "runId"> & {
+  tx: Transaction;
+}) => {
+  const rows = await tx
+    .select({ id: chatTurns.id })
+    .from(chatTurns)
+    .where(
+      and(
+        eq(chatTurns.id, execution.id),
+        eq(chatTurns.organizationId, organizationId),
+        eq(chatTurns.runId, runId),
+        eq(chatTurns.executionId, execution.executionId),
+        eq(chatTurns.status, "running"),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (rows.length !== 1) {
+    throw new ChatRunLogError({
+      message: "Chat run log execution fence lost",
+    });
+  }
+};
+
 /** PostgreSQL owns the turn fence, event prefix, and close marker together. */
 export const createChatRunLog = ({
   db,
@@ -784,28 +918,6 @@ export const createChatRunLog = ({
 }: ChatRunLogOptions): StreamDurability => {
   let pendingBatch: { id: string; fingerprint: string } | null = null;
   const reader = createRunLogReader({ db, organizationId, runId });
-
-  const assertOwner = async (tx: Transaction) => {
-    const rows = await tx
-      .select({ id: chatTurns.id })
-      .from(chatTurns)
-      .where(
-        and(
-          eq(chatTurns.id, execution.id),
-          eq(chatTurns.organizationId, organizationId),
-          eq(chatTurns.runId, runId),
-          eq(chatTurns.executionId, execution.executionId),
-          eq(chatTurns.status, "running"),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    if (rows.length !== 1) {
-      throw new ChatRunLogError({
-        message: "Chat run log execution fence lost",
-      });
-    }
-  };
 
   return {
     ...reader,
@@ -830,7 +942,7 @@ export const createChatRunLog = ({
       }
       const startedAt = performance.now();
       const offsets = await db(async (tx) => {
-        await assertOwner(tx);
+        await assertRunLogOwner({ tx, execution, organizationId, runId });
         await tx
           .insert(chatRunLogs)
           .values({ organizationId, runId, turnId: execution.id })
@@ -893,6 +1005,24 @@ export const createChatRunLog = ({
             message: "Chat run log exceeds its size limit",
           });
         }
+        const [reference] = await tx
+          .select({ state: chatRunLogs.referenceState })
+          .from(chatRunLogs)
+          .where(logKey(organizationId, runId))
+          .limit(1);
+        const previous =
+          reference?.state ??
+          panic("Locked run log reference state disappeared");
+        if (previous.through !== (log.nextSeq - 1n).toString()) {
+          throw new ChatRunLogError({
+            message: "Chat run log reference summary is incomplete",
+          });
+        }
+        const referenceState = foldReferenceState({
+          state: previous,
+          chunks,
+          through: (log.nextSeq + BigInt(chunks.length) - 1n).toString(),
+        });
         const first = log.nextSeq;
         await tx.insert(chatRunLogEntries).values(
           chunks.map((chunk, index) => ({
@@ -906,7 +1036,11 @@ export const createChatRunLog = ({
         );
         await tx
           .update(chatRunLogs)
-          .set({ nextSeq: first + BigInt(chunks.length), bytesUsed: nextBytes })
+          .set({
+            nextSeq: first + BigInt(chunks.length),
+            bytesUsed: nextBytes,
+            referenceState,
+          })
           .where(logKey(organizationId, runId));
         return chunks.map((_, index) => (first + BigInt(index)).toString());
       });
@@ -937,7 +1071,7 @@ export const createChatRunLog = ({
         if (closed !== undefined && closed.closedAt !== null) {
           return;
         }
-        await assertOwner(tx);
+        await assertRunLogOwner({ tx, execution, organizationId, runId });
         const [log] = await tx
           .select({
             turnId: chatRunLogs.turnId,

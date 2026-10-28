@@ -11,6 +11,8 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
+import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
+import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
   CHAT_THREAD_NAME_KINDS,
@@ -746,6 +748,11 @@ export const chatRunLogs = p.pgTable(
       .references(() => chatTurns.id, { onDelete: "cascade" }),
     nextSeq: p.bigint("next_seq", { mode: "bigint" }).notNull().default(1n),
     bytesUsed: p.bigint("bytes_used", { mode: "bigint" }).notNull().default(0n),
+    /** Bounded SDK carry and source identities, updated atomically with each append. */
+    referenceState: jsonb("reference_state")
+      .$type<ChatRunReferenceState>()
+      .notNull()
+      .default({ through: "0", decisionIds: [], messages: [] }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     closedAt: timestamptz("closed_at"),
   },
@@ -756,6 +763,10 @@ export const chatRunLogs = p.pgTable(
     }),
     p.check("chat_run_logs_next_seq_check", sql`${table.nextSeq} > 0`),
     p.check("chat_run_logs_bytes_used_check", sql`${table.bytesUsed} >= 0`),
+    p.check(
+      "chat_run_logs_reference_state_size_check",
+      sql`octet_length(${table.referenceState}::text) <= ${CHAT_RUN_REFERENCE_STATE_MAX_BYTES}`,
+    ),
     p.index("chat_run_logs_turn_id_idx").on(table.turnId),
     p
       .index("chat_run_logs_closed_at_idx")
