@@ -32,7 +32,11 @@ export function createPageOrganizerOperationOwner() {
   let latestRequestId = 0;
   const controllers = new Map<number, Set<AbortController>>();
   const abort = (requestId: number) => {
-    for (const controller of controllers.get(requestId) ?? []) {
+    const requestControllers = controllers.get(requestId);
+    if (requestControllers === undefined) {
+      return;
+    }
+    for (const controller of requestControllers) {
       controller.abort();
     }
     controllers.delete(requestId);
