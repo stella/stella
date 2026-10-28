@@ -36,6 +36,11 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-change-details";
+import {
+  AUDIT_ACTION_PROJECTIONS,
+  isAuditAction,
+  projectAuditResourceLabel,
+} from "@/routes/_protected.admin/-components/audit-display-projection";
 import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
 import {
   auditLogOptions,
@@ -334,9 +339,6 @@ function AuditLogsPage() {
                       {t("settings.organization.auditLogsResourceType")}
                     </TableHead>
                     <TableHead>
-                      {t("settings.organization.auditLogsResourceId")}
-                    </TableHead>
-                    <TableHead>
                       {t("settings.organization.auditLogsChanges")}
                     </TableHead>
                   </TableRow>
@@ -392,7 +394,7 @@ function AuditLogsTableBody({
       <TableRow>
         <TableCell
           className="text-muted-foreground h-24 text-center"
-          colSpan={6}
+          colSpan={5}
         >
           {t("settings.organization.auditLogsLoading")}
         </TableCell>
@@ -405,7 +407,7 @@ function AuditLogsTableBody({
       <TableRow>
         <TableCell
           className="text-destructive h-24 text-center font-medium"
-          colSpan={6}
+          colSpan={5}
         >
           {t("settings.organization.auditLogsError")}
         </TableCell>
@@ -418,7 +420,7 @@ function AuditLogsTableBody({
       <TableRow>
         <TableCell
           className="text-muted-foreground h-24 text-center"
-          colSpan={6}
+          colSpan={5}
         >
           {t("settings.organization.auditLogsEmpty")}
         </TableCell>
@@ -444,16 +446,18 @@ function AuditLogsTableBody({
             <bdi>{log.actor}</bdi>
           </TableCell>
           <TableCell className="text-xs font-medium">
-            <AuditActionLabel action={log.action} />
+            <AuditActionSentence
+              action={log.action}
+              changes={log.changes}
+              resourceType={log.resourceType}
+            />
           </TableCell>
           <TableCell className="text-xs">
-            <bdi>{log.resourceType}</bdi>
-          </TableCell>
-          <TableCell
-            className="max-w-[120px] truncate font-mono text-xs"
-            title={log.resourceId}
-          >
-            <bdi>{log.resourceId}</bdi>
+            <AuditResourceLabel
+              action={log.action}
+              changes={log.changes}
+              resourceType={log.resourceType}
+            />
           </TableCell>
           <AuditChangeDetails
             changes={log.changes}
@@ -465,27 +469,72 @@ function AuditLogsTableBody({
   );
 }
 
-function AuditActionLabel({ action }: { action: string }) {
+function AuditActionSentence({
+  action,
+  changes,
+  resourceType,
+}: {
+  action: string;
+  changes: unknown;
+  resourceType: string;
+}) {
   const t = useTranslations();
+  const resource = resourceDisplayName({
+    action,
+    changes,
+    resourceType,
+    deletedLabel: (kind) =>
+      t("settings.organization.auditLogsDeletedResource", { kind }),
+    unknownLabel: t("settings.organization.auditLogsUnknownResource"),
+  });
+  if (!isAuditAction(action)) {
+    return t("settings.organization.auditLogsSentenceActivity", { resource });
+  }
+  return t(AUDIT_ACTION_PROJECTIONS[action], { resource });
+}
 
-  if (action === "create") {
-    return t("settings.organization.auditLogsActionCreate");
-  }
-  if (action === "update") {
-    return t("settings.organization.auditLogsActionUpdate");
-  }
-  if (action === "delete") {
-    return t("settings.organization.auditLogsActionDelete");
-  }
-  if (action === "download") {
-    return t("settings.organization.auditLogsActionDownload");
-  }
-  if (action === "execute") {
-    return t("settings.organization.auditLogsActionExecute");
-  }
-  if (action === "access") {
-    return t("settings.organization.auditLogsActionAccess");
-  }
+function AuditResourceLabel({
+  action,
+  changes,
+  resourceType,
+}: {
+  action: string;
+  changes: unknown;
+  resourceType: string;
+}) {
+  const t = useTranslations();
+  return (
+    <bdi>
+      {resourceDisplayName({
+        action,
+        changes,
+        resourceType,
+        deletedLabel: (kind) =>
+          t("settings.organization.auditLogsDeletedResource", { kind }),
+        unknownLabel: t("settings.organization.auditLogsUnknownResource"),
+      })}
+    </bdi>
+  );
+}
 
-  return <bdi>{action}</bdi>;
+function resourceDisplayName({
+  action,
+  changes,
+  resourceType,
+  deletedLabel,
+  unknownLabel,
+}: {
+  action: string;
+  changes: unknown;
+  resourceType: string;
+  deletedLabel: (kind: string) => string;
+  unknownLabel: string;
+}) {
+  return projectAuditResourceLabel({
+    action,
+    changes,
+    resourceType,
+    deletedLabel,
+    unknownLabel,
+  });
 }

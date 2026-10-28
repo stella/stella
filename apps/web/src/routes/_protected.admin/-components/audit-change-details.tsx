@@ -6,6 +6,8 @@ import { TableCell } from "@stll/ui/table";
 
 import type { fetchAuditLogs } from "@/routes/_protected.admin/-queries/audit-logs";
 
+import { fieldLabel, isUnknownRecord } from "./audit-display-projection";
+
 type AuditChangeDetailsProps = Pick<
   Awaited<ReturnType<typeof fetchAuditLogs>>["items"][number],
   "changes" | "changesStatus"
@@ -24,13 +26,41 @@ export const AuditChangeDetails = ({
         </TableCell>
       );
     case AUDIT_CHANGES_STATUS.visible: {
-      const text = changes ? JSON.stringify(changes) : "-";
       return (
-        <TableCell
-          className="max-w-[200px] truncate font-mono text-xs"
-          title={changes ? text : ""}
-        >
-          <bdi>{text}</bdi>
+        <TableCell className="max-w-[320px] text-xs">
+          {changes === null ? (
+            "-"
+          ) : (
+            <div className="space-y-2">
+              <dl className="space-y-1">
+                {Object.entries(toChangeRecord(changes)).map(
+                  ([field, change]) => {
+                    const { before, after } = beforeAndAfter(change);
+                    return (
+                      <div className="flex gap-2" key={field}>
+                        <dt className="min-w-24 font-medium">
+                          {fieldLabel(field)}
+                        </dt>
+                        <dd className="text-muted-foreground wrap-break-word">
+                          <bdi>{displayValue(before)}</bdi>
+                          <span aria-hidden="true"> → </span>
+                          <bdi>{displayValue(after)}</bdi>
+                        </dd>
+                      </div>
+                    );
+                  },
+                )}
+              </dl>
+              <details>
+                <summary className="cursor-pointer font-medium select-none">
+                  {t("common.details")}
+                </summary>
+                <pre className="mt-1 font-mono text-xs whitespace-pre-wrap">
+                  <bdi>{JSON.stringify(changes, null, 2)}</bdi>
+                </pre>
+              </details>
+            </div>
+          )}
         </TableCell>
       );
     }
@@ -39,3 +69,30 @@ export const AuditChangeDetails = ({
       return panic("Audit changes require a supported status");
   }
 };
+
+function beforeAndAfter(change: unknown) {
+  if (!isUnknownRecord(change)) {
+    return { before: null, after: change };
+  }
+  const before = change["before"] ?? change["old"] ?? null;
+  const after = change["after"] ?? change["new"] ?? change["value"] ?? null;
+  return { before, after };
+}
+
+function toChangeRecord(changes: unknown) {
+  return isUnknownRecord(changes) ? changes : {};
+}
+
+function displayValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}

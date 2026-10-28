@@ -57,12 +57,22 @@ test("visible entries without changes keep their empty marker", () => {
   ).toBeNull();
 });
 
-test("visible changes keep their text and tooltip", () => {
-  const changes = { amount: { old: 100, new: 200 } };
+test("visible changes render every field as a labelled before-and-after row", () => {
+  const changes = {
+    amount: { old: 100, new: 200 },
+    due_date: { old: "2026-01-01", new: "2026-02-01" },
+    clientName: { old: "Northwind", new: "Contoso" },
+  };
   const view = mount({ changes, changesStatus: AUDIT_CHANGES_STATUS.visible });
-  expect(view.getByRole("cell").textContent).toBe(JSON.stringify(changes));
-  expect(view.getByRole("cell").getAttribute("title")).toBe(
-    JSON.stringify(changes),
+  expect(view.getAllByRole("term").map((term) => term.textContent)).toEqual([
+    "Amount",
+    "Due date",
+    "Client Name",
+  ]);
+  expect(view.getAllByRole("definition")).toHaveLength(3);
+  expect(view.getByText(messages.common.details)).not.toBeNull();
+  expect(view.container.querySelector("pre")?.textContent).toBe(
+    JSON.stringify(changes, null, 2),
   );
 });
 
