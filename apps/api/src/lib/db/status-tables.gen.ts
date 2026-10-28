@@ -28,6 +28,7 @@ export const STATUS_COLUMNS = {
   caseLawResearchAnswers: ["state"],
   caseLawSearchBackfillFailures: ["status"],
   caseLawStatuteCitationCountState: ["status"],
+  caseLawWithdrawalStatus: ["status"],
   chatThreadCompactions: ["status"],
   chatTurns: ["status"],
   contactExtractionUploads: ["status"],
