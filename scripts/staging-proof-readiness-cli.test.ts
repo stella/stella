@@ -1,5 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 
+import { readApiDeployment } from "./check-api-deployment";
 import { readStagingReadiness } from "./staging-proof-readiness-cli";
 
 const COMMIT = "a".repeat(40);
@@ -68,12 +69,26 @@ for (const fixture of [
   {
     name: "an unexpected commit",
     status: 200,
-    body: JSON.stringify({ status: "ok", commit: "b".repeat(40) }),
+    body: JSON.stringify({
+      status: "ok",
+      commit: "b".repeat(40),
+      deployEnvironment: "staging",
+    }),
+    rejection: {
+      reason: "commit mismatch",
+      commit: "b".repeat(40),
+      status: "ready",
+    },
   },
   {
     name: "an unhealthy status",
     status: 200,
-    body: JSON.stringify({ status: "unavailable", commit: COMMIT }),
+    body: JSON.stringify({
+      status: "unavailable",
+      commit: COMMIT,
+      deployEnvironment: "staging",
+    }),
+    rejection: { reason: "health status", commit: COMMIT, status: "not-ready" },
   },
   {
     name: "a missing commit",
@@ -90,9 +105,21 @@ for (const fixture of [
       fetch: () => new Response(fixture.body, { status: fixture.status }),
     });
     try {
-      expect(await readStagingReadiness(options(server.url))).toEqual({
-        status: "not-ready",
-      });
+      if ("rejection" in fixture) {
+        const probe = await readApiDeployment({
+          url: server.url,
+          expectedEnvironment: "staging",
+        });
+        expect(probe, fixture.rejection.reason).toMatchObject({
+          statusCode: 200,
+          commit: fixture.rejection.commit,
+          status: fixture.rejection.status,
+        });
+      }
+      expect(
+        await readStagingReadiness(options(server.url)),
+        "rejection" in fixture ? fixture.rejection.reason : fixture.name,
+      ).toEqual({ status: "not-ready" });
     } finally {
       await server.stop(true);
     }
