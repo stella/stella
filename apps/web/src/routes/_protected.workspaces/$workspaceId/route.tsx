@@ -16,9 +16,9 @@ import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-w
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
@@ -65,10 +65,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
           load: async () =>
             await ensureRouteQueryData(qc, workspaceOptions(wsId)),
         });
-        if (workspace.isErr()) {
-          throw workspace.error;
-        }
-        return workspace.value;
+        return workspace;
       },
       startPrefetches: [
         () =>

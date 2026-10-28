@@ -13,10 +13,10 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import { useQueryViewError } from "@/lib/use-query-view";
 import {
   CORRESPONDENCE_AUTH_LABEL_KEYS,
@@ -38,7 +38,7 @@ export const Route = createFileRoute(
 )({
   component: CorrespondenceDetailPage,
   loader: async ({ context, params }) => {
-    const correspondence = await loadRouteResource({
+    await loadRouteResource({
       ids: [params.workspaceId, params.correspondenceId],
       load: async () =>
         await ensureRouteQueryData(
@@ -49,9 +49,6 @@ export const Route = createFileRoute(
           ),
         ),
     });
-    if (correspondence.isErr()) {
-      throw correspondence.error;
-    }
   },
 });
 

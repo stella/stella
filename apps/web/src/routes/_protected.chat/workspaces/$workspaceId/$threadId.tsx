@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute(
@@ -31,16 +31,13 @@ export const Route = createFileRoute(
       },
       context: { allowMissingThread: true },
     });
-    const threadResult = await loadRouteResource({
+    await loadRouteResource({
       ids: [params.workspaceId, params.threadId],
       load: async () =>
         context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
         (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
       exists: (thread) => thread.threadExists,
     });
-    if (threadResult.isErr()) {
-      throw threadResult.error;
-    }
   },
 });
 

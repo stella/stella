@@ -55,9 +55,9 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import { toSafeId } from "@/lib/safe-id";
 import {
   schemaFormOptions,
@@ -81,7 +81,7 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     // Prime the invoice query the detail view suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
-    const invoice = await loadRouteResource({
+    await loadRouteResource({
       ids: [params.workspaceId, params.invoiceId],
       load: async () =>
         await ensureRouteQueryData(
@@ -89,9 +89,6 @@ export const Route = createFileRoute(
           invoiceByIdOptions(params.workspaceId, params.invoiceId),
         ),
     });
-    if (invoice.isErr()) {
-      throw invoice.error;
-    }
   },
   remountDeps: ({ params }) => [params.workspaceId, params.invoiceId],
 });

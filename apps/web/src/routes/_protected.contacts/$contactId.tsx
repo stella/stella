@@ -23,9 +23,9 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
     // navigation instead of after the component mounts and suspends.
-    const contact = await loadRouteResource({
+    await loadRouteResource({
       ids: [params.contactId],
       load: async () =>
         await ensureRouteQueryData(
@@ -51,9 +51,6 @@ export const Route = createFileRoute("/_protected/contacts/$contactId")({
           contactOptions(context.user.activeOrganizationId, params.contactId),
         ),
     });
-    if (contact.isErr()) {
-      throw contact.error;
-    }
   },
   pendingComponent: ContactDetailPending,
   remountDeps: ({ params }) => params.contactId,

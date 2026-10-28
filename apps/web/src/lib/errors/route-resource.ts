@@ -17,7 +17,7 @@ const MISSING_RESOURCE_STATUSES = [403, 404] as const;
  * Loads a URL-addressed resource without leaking whether an inaccessible row
  * exists. URL ids and missing outcomes all become the router's 404 boundary.
  */
-export async function loadRouteResource<T>({
+export async function routeResourceResult<T>({
   ids,
   load,
   exists = () => true,
@@ -41,4 +41,19 @@ export async function loadRouteResource<T>({
   }
 
   return exists(loaded.value) ? loaded : Result.err(notFound());
+}
+
+/**
+ * TanStack Router consumes a loader's not-found and failures through Promise
+ * rejection; this adapter translates the typed result at that framework
+ * boundary, so route loaders never throw on their own.
+ */
+export async function loadRouteResource<T>(
+  options: LoadRouteResourceOptions<T>,
+): Promise<T> {
+  const loaded = await routeResourceResult(options);
+  if (loaded.isErr()) {
+    throw loaded.error;
+  }
+  return loaded.value;
 }

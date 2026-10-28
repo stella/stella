@@ -244,6 +244,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Router consumes a loader's notFound() and failures through
+  // Promise rejection; this adapter translates the typed route-resource Result.
+  "apps/web/src/lib/errors/route-resource.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",

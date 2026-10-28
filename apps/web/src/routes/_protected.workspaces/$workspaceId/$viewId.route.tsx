@@ -29,12 +29,12 @@ import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { loadRouteResource } from "@/lib/errors/route-resource";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/router/route-not-found";
 import {
   optionalIntegerSearchSchema,
   optionalSearchStringSchema,
@@ -116,16 +116,12 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = context.documentOnScreen !== undefined;
 
-    const viewsResult = await loadRouteResource({
+    const views = await loadRouteResource({
       ids: [workspaceId, viewId],
       load: async () =>
         await ensureRouteQueryData(queryClient, viewsOptions(workspaceId)),
       exists: (loadedViews) => loadedViews.some((view) => view.id === viewId),
     });
-    if (viewsResult.isErr()) {
-      throw viewsResult.error;
-    }
-    const views = viewsResult.value;
     const activeView = views.find((view) => view.id === viewId);
 
     if (!activeView) {
