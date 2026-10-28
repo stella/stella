@@ -1607,6 +1607,7 @@ describe("dev env factories", () => {
       DB_LOAD_GATE_EBS_SIGNAL: "disabled",
       FRONTEND_URL: "http://localhost:3100",
       KEEP_ME: "1",
+      DEPLOY_ENVIRONMENT: "development",
       NODE_ENV: "development",
       STELLA_API_PORT: "3101",
       STELLA_LOCAL_DEV: "1",

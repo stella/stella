@@ -4135,11 +4135,6 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::scripts/check-release-candidate.test.ts::<module>::test timeout",
-    "count": 2,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::scripts/check-release-receipt-coverage.test.ts::<module>::test timeout",
     "count": 3,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
