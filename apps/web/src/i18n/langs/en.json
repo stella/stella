@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
+    "modelRefused": "The model refused to answer",
+    "nothingFound": "Nothing found",
     "refusedBudget": "Not run: answer budget unavailable",
     "rerunAllPage": "Rerun all (this page)",
     "rerunColumnPage": "Rerun column (this page)",

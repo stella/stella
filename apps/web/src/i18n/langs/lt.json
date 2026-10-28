@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stulpeliai × {rows} eilutės = {answers, plural, one {# atsakymas} few {# atsakymai} many {# atsakymo} other {# atsakymų}}. Atsakymai naudoja biudžetą.",
+    "modelRefused": "Modelis atsisakė atsakyti",
+    "nothingFound": "Nieko nerasta",
     "refusedBudget": "Nevykdyta: atsakymų biudžetas nepasiekiamas",
     "rerunAllPage": "Vykdyti viską iš naujo (šiame puslapyje)",
     "rerunColumnPage": "Vykdyti stulpelį iš naujo (šiame puslapyje)",
