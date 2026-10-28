@@ -1,0 +1,5 @@
+{
+  "add-constraint": "Both feature gate CHECKs are added to the decision history table created by the previous migration, which no application code has written yet, so the validating scan reads no rows; acquisition is bounded by 2s lock_timeout.",
+  "create-policy": "The feature gate policies are catalog-only additions to the new, still empty decision history table, under 2s lock_timeout.",
+  "create-trigger": "The gate triggers on the new history table and the statement-level gate propagation triggers on list item sources are catalog-only creations that read no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 2s lock_timeout."
+}

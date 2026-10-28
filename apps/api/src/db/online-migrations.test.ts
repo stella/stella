@@ -2294,6 +2294,10 @@ const createHarness = ({
           if (query.includes("document_review_finding_decisions event")) {
             return [];
           }
+          // The list source decision backfill's probe, likewise.
+          if (query.includes("legal_list_item_source_decisions event")) {
+            return [];
+          }
           if (
             query.includes("oauth_resource") ||
             query.includes("oauth_client")
