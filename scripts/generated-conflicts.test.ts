@@ -411,6 +411,17 @@ describe("resolution across runs", () => {
     git(origin, "init", "-q", "-b", "main");
     configureGitFixture(origin);
     write(origin, MESSAGES, "type Messages = { a: string };\n");
+    const manifest = { name: "fixture" };
+    write(origin, "package.json", JSON.stringify(manifest));
+    write(
+      origin,
+      "bun.lock",
+      JSON.stringify({
+        lockfileVersion: 3,
+        workspaces: { "": manifest },
+        packages: {},
+      }),
+    );
     write(
       origin,
       NOTES,
@@ -1251,6 +1262,58 @@ describe("resolution across runs", () => {
     git(origin, "merge", "--abort");
     expect(git(origin, "status", "--porcelain")).toBe("");
     expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration refuses a new ignored file outside generator outputs", () => {
+    const ignored = "ignored-outside.txt";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, ".gitignore", `/${ignored}\n`),
+    });
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({
+        repo: origin,
+        main,
+        generators: [
+          localGenerator(
+            `fs.writeFileSync(${JSON.stringify(ignored)}, "unexpected")`,
+          ),
+        ],
+      }),
+    ).toThrow(`outside the owning generators' outputs: ${ignored}`);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration validates lockfile consistency without a lockfile conflict", () => {
+    const manifest = { name: "fixture", dependencies: { a: "1.0.0" } };
+    const lockfile = {
+      lockfileVersion: 3,
+      workspaces: { "": manifest },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify(manifest));
+        write(repo, "bun.lock", JSON.stringify(lockfile));
+      },
+      branchEdits: (repo) =>
+        write(
+          repo,
+          "package.json",
+          JSON.stringify({ ...manifest, dependencies: { a: "2.0.0" } }),
+        ),
+    });
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+    ).toThrow("lockfile workspace metadata differs from merged manifest");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
   });
 
   test("local regeneration refuses lockfile pin drift and leaves an abortable merge", () => {

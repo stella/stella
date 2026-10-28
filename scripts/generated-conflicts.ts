@@ -1535,6 +1535,20 @@ export const resolveDerived = ({
     const selected = orderGenerators(
       generators.filter(({ id }) => planned.ids.includes(id)),
     );
+    const ignoredBefore = new Set(
+      run([
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "-z",
+        "--",
+        ".",
+      ])
+        .stdout.toString()
+        .split("\0")
+        .filter(Boolean),
+    );
     const failed = runGenerators(
       selected,
       (command) =>
@@ -1551,6 +1565,30 @@ export const resolveDerived = ({
     if (failed !== null) {
       fail(
         `Generator ${failed.id} failed; merge remains pending for inspection or git merge --abort`,
+      );
+    }
+    const unexpectedIgnored = run([
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "-z",
+      "--",
+      ".",
+    ])
+      .stdout.toString()
+      .split("\0")
+      .filter(
+        (file) =>
+          file !== "" &&
+          !ignoredBefore.has(file) &&
+          !selected.some(({ outputs }) =>
+            outputs.some((output) => matchesGeneratedGlob(output, file)),
+          ),
+      );
+    if (unexpectedIgnored.length > 0) {
+      fail(
+        `Regeneration created ignored files outside the owning generators' outputs: ${unexpectedIgnored.join(", ")}; merge remains pending`,
       );
     }
     const tree = read(["write-tree"]);
@@ -1578,14 +1616,12 @@ export const resolveDerived = ({
         `Regeneration changed files outside the owning generators' outputs: ${outside.join(", ")}; merge remains pending`,
       );
     }
-    if (changed.includes("bun.lock")) {
-      const frozen = path.join(scratch, "frozen.lock");
-      writeFileSync(
-        frozen,
-        git(bare, ["show", `${planned.baseline}:bun.lock`]).stdout,
-      );
-      assertFinalAutofixLockfile({ repo, frozen });
-    }
+    const frozen = path.join(scratch, "frozen.lock");
+    writeFileSync(
+      frozen,
+      git(bare, ["show", `${planned.baseline}:bun.lock`]).stdout,
+    );
+    assertFinalAutofixLockfile({ repo, frozen });
     return planned;
   } finally {
     rmSync(scratch, { recursive: true, force: true });
