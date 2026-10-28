@@ -27,8 +27,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
@@ -86,6 +87,7 @@ type UseFolioCollaborationRoomOptions = {
 const FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS = 5 * 60 * 1000;
 const SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
 const COLLAB_FLUSH_TIMEOUT_MS = 10_000;
+const COLLAB_API_TIMEOUT_MS = 10_000;
 const GENERATION_REJOIN_RETRY_DELAY_MS = 1000;
 const GENERATION_REJOIN_MAX_RETRY_DELAY_MS = 10_000;
 // Peers receive the server-derived color; the local cursor is never rendered.
@@ -142,27 +144,51 @@ const joinFolioCollaborationRoom = async ({
   entityId,
   propertyId,
   workspaceId,
+  signal,
 }: {
   entityId: string;
   propertyId: string;
   workspaceId: string;
+  signal?: AbortSignal;
 }) => {
   const entitiesRoute = api.entities({ workspaceId });
-  const response = await entitiesRoute["folio-collab-rooms"].join.post({
-    entityId,
-    propertyId,
-  });
-  throwIfCollaborationSeedIsPreparing(response.error);
-  return unwrapApiResponse(response);
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.join",
+    async () => {
+      const result = await entitiesRoute["folio-collab-rooms"].join.post(
+        { entityId, propertyId },
+        {
+          fetch: {
+            ...(signal === undefined ? {} : { signal }),
+            timeoutMs: COLLAB_API_TIMEOUT_MS,
+          },
+        },
+      );
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
 };
 
 const refreshFolioCollaborationToken = async (body: {
   roomId: string;
   token: string;
 }) => {
-  const response = await api["folio-collab-rooms"]["refresh-token"].post(body);
-  throwIfCollaborationSeedIsPreparing(response.error);
-  return unwrapApiResponse(response);
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.refresh-token",
+    async () => {
+      const result = await api["folio-collab-rooms"]["refresh-token"].post(
+        body,
+        {
+          fetch: { timeoutMs: COLLAB_API_TIMEOUT_MS },
+        },
+      );
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
 };
 
 const acknowledgeFolioCollaborationSeed = async (body: {
@@ -170,9 +196,17 @@ const acknowledgeFolioCollaborationSeed = async (body: {
   token: string;
   snapshotSha256Hex: string;
 }) => {
-  const response = await api["folio-collab-rooms"].snapshot.seed.post(body);
-  throwIfCollaborationSeedIsPreparing(response.error);
-  return unwrapApiResponse(response);
+  const response = await invokeAppOnlyWrite(
+    "folio-collaboration.seed.acknowledge",
+    async () => {
+      const result = await api["folio-collab-rooms"].snapshot.seed.post(body, {
+        fetch: { timeoutMs: COLLAB_API_TIMEOUT_MS },
+      });
+      throwIfCollaborationSeedIsPreparing(result.error);
+      return unwrapApiResponse(result);
+    },
+  );
+  return response;
 };
 
 class CollaborationFlushError extends TaggedError("CollaborationFlushError")<{
@@ -368,6 +402,7 @@ export const useFolioCollaborationRoom = ({
                       await joinFolioCollaborationRoom({
                         entityId,
                         propertyId,
+                        signal: generationRejoinAbortController.signal,
                         workspaceId,
                       }),
                     ),
@@ -469,6 +504,7 @@ export const useFolioCollaborationRoom = ({
                       await joinFolioCollaborationRoom({
                         entityId,
                         propertyId,
+                        signal: generationRejoinAbortController.signal,
                         workspaceId,
                       }),
                     ),
@@ -480,7 +516,8 @@ export const useFolioCollaborationRoom = ({
                 }
                 if (Result.isError(rejoinResult)) {
                   const status =
-                    rejoinResult.error instanceof FetchBoundaryError
+                    rejoinResult.error instanceof FetchBoundaryError ||
+                    APIError.is(rejoinResult.error)
                       ? rejoinResult.error.status
                       : null;
                   if (!reportedFailure) {

@@ -24,6 +24,7 @@ import {
 import { parseSyntax } from "./parse-memo";
 
 const INVOKE_CAPABILITY = "invokeCapability";
+const INVOKE_APP_ONLY_WRITE = "invokeAppOnlyWrite";
 const USE_CAPABILITY_MUTATION = "useCapabilityMutation";
 // A cheap text test before parsing: every specifier of a client module ends
 // in its file name, whether aliased or relative.
@@ -129,8 +130,10 @@ const isCapabilityCallback = (fn: Node, parents: readonly Node[]): boolean => {
   const parent = parents.at(-1);
   if (
     parent?.type === "CallExpression" &&
-    calleeName(parent) === INVOKE_CAPABILITY &&
-    parent.arguments.at(1) === fn
+    ((calleeName(parent) === INVOKE_CAPABILITY &&
+      parent.arguments.at(1) === fn) ||
+      (calleeName(parent) === INVOKE_APP_ONLY_WRITE &&
+        parent.arguments.at(1) === fn))
   ) {
     return true;
   }

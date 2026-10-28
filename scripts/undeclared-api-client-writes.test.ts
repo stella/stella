@@ -36,3 +36,14 @@ test("recognises the client under relative and aliased specifiers alike", () => 
     ),
   ).toBe(0);
 });
+
+test("recognises explicit capability and app-only write declarations", () => {
+  const source = `
+import { api } from "@/lib/api";
+await invokeCapability("items.create", async (request) => api.items.post(body, request));
+await invokeAppOnlyWrite("items.internal.create", async () => api.internal.post(body));
+`;
+  expect(
+    countUndeclaredApiClientWrites(source, "apps/web/src/example.ts"),
+  ).toBe(0);
+});

@@ -19,6 +19,8 @@ import {
 
 export type WebApiRoutes = WebRoutes["v1"];
 
+const WEB_API_REQUEST_TIMEOUT_MS = 30_000;
+
 // Types the API owns and the browser reads by name, re-exported through the
 // generated API types.
 export type {
@@ -46,6 +48,7 @@ export type {
 } from "@/generated/api-routes.gen";
 
 export const webApiClientOptions = {
+  timeoutMs: WEB_API_REQUEST_TIMEOUT_MS,
   async onRequest() {
     await waitForSimulatedApiDelay();
   },

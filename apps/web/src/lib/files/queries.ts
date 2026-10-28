@@ -10,6 +10,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import {
   APIError,
   shouldRetryAPIRequest,
@@ -267,11 +268,13 @@ export const saveEmailAttachment = async ({
   parentId: string | null;
   sourceWorkspaceId: string;
 }) =>
-  unwrapApiResponse(
-    await api
-      .files({ workspaceId: sourceWorkspaceId })
-      ["email-attachment"]({ fieldId })({ attachmentId })
-      .save.post({ destinationWorkspaceId, parentId }),
+  await invokeAppOnlyWrite("files.email-attachment.save", async () =>
+    unwrapApiResponse(
+      await api
+        .files({ workspaceId: sourceWorkspaceId })
+        ["email-attachment"]({ fieldId })({ attachmentId })
+        .save.post({ destinationWorkspaceId, parentId }),
+    ),
   );
 
 /**
@@ -319,11 +322,14 @@ export const updateDocumentProperty = async ({
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
 }): Promise<void> => {
-  const response = await api
-    .files({ workspaceId })
-    ["document-properties"]({ fieldId })
-    .patch({ [propertyKey]: value });
-  unwrapApiResponse(response);
+  await invokeAppOnlyWrite("files.document-properties.update", async () =>
+    unwrapApiResponse(
+      await api
+        .files({ workspaceId })
+        ["document-properties"]({ fieldId })
+        .patch({ [propertyKey]: value }),
+    ),
+  );
 };
 
 export const textFileOptions = (props: FileOptionsProps) =>

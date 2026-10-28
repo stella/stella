@@ -7,6 +7,7 @@ import type { CentsAmount } from "@stll/money";
 
 import { api } from "@/lib/api";
 import type { WebApiRoutes } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 
 const timeEntriesRoute = (workspaceId: string) =>
@@ -164,7 +165,13 @@ export const polishTimeEntryNarrative = async ({
 
 /** Approves entries across the organization's matters in one call. */
 export const approveTimeEntries = async (ids: readonly string[]) =>
-  unwrapApiResponse(await api["time-entries"].approve.post({ ids: [...ids] }));
+  await invokeCapability(
+    "time-entries.approval-queue.approve",
+    async (request) =>
+      unwrapApiResponse(
+        await api["time-entries"].approve.post({ ids: [...ids] }, request),
+      ),
+  );
 
 /** Returns entries to their owners with one comment in one call. */
 export const returnTimeEntries = async ({
@@ -174,9 +181,13 @@ export const returnTimeEntries = async ({
   comment: string;
   ids: readonly string[];
 }) =>
-  unwrapApiResponse(
-    await api["time-entries"]["approval-queue"].return.post({
-      comment,
-      ids: [...ids],
-    }),
+  await invokeCapability(
+    "time-entries.approval-queue.return",
+    async (request) =>
+      unwrapApiResponse(
+        await api["time-entries"]["approval-queue"].return.post(
+          { comment, ids: [...ids] },
+          request,
+        ),
+      ),
   );

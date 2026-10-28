@@ -1,18 +1,29 @@
 import { panic } from "better-result";
+import * as v from "valibot";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type { AcceptingDocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 
-type ManualOcrResponse =
-  | { outcome: "already_processed"; runId: string }
-  | {
-      outcome: "queued";
-      runId: string;
-      availability: AcceptingDocumentOcrAvailability;
-    };
+const REQUEST_TIMEOUT_MS = 15_000;
+
+const manualOcrResponseSchema = v.variant("outcome", [
+  v.object({ outcome: v.literal("already_processed"), runId: v.string() }),
+  v.object({
+    outcome: v.literal("queued"),
+    runId: v.string(),
+    availability: v.variant("type", [
+      v.object({ type: v.literal(DOCUMENT_OCR_AVAILABILITY.live.type) }),
+      v.object({ type: v.literal(DOCUMENT_OCR_AVAILABILITY.batched.type) }),
+    ]),
+  }),
+]);
+
+type ManualOcrResponse = v.InferOutput<typeof manualOcrResponseSchema>;
 
 type RequestManualOcrOptions = {
   entityId: string;
@@ -24,13 +35,26 @@ export const requestManualOcr = async ({
   entityId,
   fieldId,
   workspaceId,
-}: RequestManualOcrOptions): Promise<ManualOcrResponse> =>
-  unwrapApiResponse(
-    await api
-      .entities({ workspaceId })
-      .entity({ entityId })
-      .ocr.post({ fieldId }),
+}: RequestManualOcrOptions): Promise<ManualOcrResponse> => {
+  const payload = await invokeCapability(
+    "entities.ocr.create",
+    async (request) =>
+      unwrapApiResponse(
+        await api
+          .entities({ workspaceId })
+          .entity({ entityId })
+          .ocr.post(
+            { fieldId },
+            { ...request, fetch: { timeoutMs: REQUEST_TIMEOUT_MS } },
+          ),
+      ),
   );
+  const parsed = v.safeParse(manualOcrResponseSchema, payload);
+  if (!parsed.success) {
+    return await Promise.reject(toAPIError({ status: 502, value: null }));
+  }
+  return parsed.output;
+};
 
 const QUEUED_OCR_TOAST_KEYS = {
   live: "workspaces.files.ocrQueued",
