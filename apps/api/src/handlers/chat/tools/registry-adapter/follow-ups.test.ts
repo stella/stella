@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { operators } from "drizzle-orm";
+import { EmptyFilter, operators } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -215,9 +215,13 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                   "Invoice detail query omitted its scope predicate",
                 );
               }
-              predicates.push(
-                dialect.sqlToQuery(predicate(invoices, operators)),
-              );
+              const scope = predicate(invoices, operators);
+              if (scope === EmptyFilter) {
+                return panic(
+                  "Invoice detail query has an empty scope predicate",
+                );
+              }
+              predicates.push(dialect.sqlToQuery(scope));
               return {
                 id: INV_UUID,
                 clientId: null,
