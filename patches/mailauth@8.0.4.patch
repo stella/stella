@@ -1,0 +1,31 @@
+Correct the DNS resolver declaration to include MX records returned by the runtime.
+Remove when upstream declarations include MxRecord[].
+
+diff --git a/dist/cjs/types.d.ts b/dist/cjs/types.d.ts
+--- a/dist/cjs/types.d.ts
++++ b/dist/cjs/types.d.ts
+@@ -1,8 +1,9 @@
+ import type { Readable } from 'node:stream';
++import type { MxRecord } from 'node:dns';
+ /**
+  * DNS resolver function type for custom DNS resolution
+  */
+-export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[]>;
++export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[] | MxRecord[]>;
+ /**
+  * Input types accepted by mailauth functions
+  */
+diff --git a/dist/esm/types.d.ts b/dist/esm/types.d.ts
+--- a/dist/esm/types.d.ts
++++ b/dist/esm/types.d.ts
+@@ -1,8 +1,9 @@
+ import type { Readable } from 'node:stream';
++import type { MxRecord } from 'node:dns';
+ /**
+  * DNS resolver function type for custom DNS resolution
+  */
+-export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[]>;
++export type DNSResolver = (domain: string, rrtype: string) => Promise<string[][] | string[] | MxRecord[]>;
+ /**
+  * Input types accepted by mailauth functions
+  */

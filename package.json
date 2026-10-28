@@ -330,7 +330,7 @@
     "@stll/aho-corasick@1.0.4": "patches/@stll%2Faho-corasick@1.0.4.patch",
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
-    "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",
+    "mailauth@8.0.4": "patches/mailauth@8.0.4.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
     "@tanstack/ai@0.65.1": "patches/@tanstack%2Fai@0.65.1.patch",
