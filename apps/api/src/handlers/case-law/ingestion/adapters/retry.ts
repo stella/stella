@@ -1,3 +1,34 @@
+// parser-output-unchanged: [cz-ns] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-nss] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-regional] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [cz-uohs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [sk-us] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-sn] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kio] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-tk] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-nsa] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-ncourt] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-courts] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vfgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-vwgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-lvwg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-asylgh] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-ubas] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-uvs] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-verg] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-umse] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-bks] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [at-findok] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [eu-ecj] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [hu-bhgy] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [uk-fcl] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-kis] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uodo] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
+// parser-output-unchanged: [pl-uokik] Cancellation and discarded-body settlement preserve successful response bytes and parsed decisions.
 // parser-output-unchanged: one-request reads honor the existing rate-limit redirect predicate and preserve its typed source stop.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: completion failures return Results to the job boundary; adapter parsing and ordinary request semantics are unchanged.
