@@ -14,6 +14,7 @@ import type {
 import { Temporal } from "@stll/time";
 
 import type { ActivityDaySnapshot } from "../src/activity/activity-types";
+import type { BillingDraftSettingsControl } from "../src/activity/ActivityBillingDrafts";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
@@ -175,13 +176,16 @@ const installNativeBoundary = (matterCandidates = candidates) => {
   return { draftRequests, submissions };
 };
 
-const mountReview = (day = snapshot()) =>
+const mountReview = (
+  day = snapshot(),
+  settings: BillingDraftSettingsControl = billingDrafts,
+) =>
   render(
     <DesktopIntlProvider language="en" messages={messages}>
       <ActivityDayReview
         snapshot={day}
         header={<span>Review</span>}
-        billingDrafts={billingDrafts}
+        billingDrafts={settings}
         onCopy={(_text, onSettled) => onSettled(true)}
         onReviewStatusChange={() => undefined}
       />
@@ -248,6 +252,82 @@ afterEach(async () => {
 afterAll(async () => {
   await GlobalRegistrator.unregister();
 });
+
+for (const dialog of ["closed", "open"] as const) {
+  for (const selection of ["one", "none"] as const) {
+    test(`delayed consent with dialog ${dialog} and ${selection} selected sends only current intent`, async () => {
+      const boundary = installNativeBoundary();
+      const consent = Promise.withResolvers<boolean>();
+      const savedConsent: string[] = [];
+      const firstSegment = segments.at(0) ?? panic("Expected activity");
+      const view = mountReview(
+        snapshot([
+          ...segments,
+          {
+            ...firstSegment,
+            matterId: SECOND_MATTER_ID,
+            start: "2026-10-07T10:00:00Z",
+            end: "2026-10-07T10:30:00Z",
+          },
+        ]),
+        {
+          settings: { type: "ready", consent: "revoked", preference: null },
+          setConsent: async (value) => {
+            savedConsent.push(value);
+            return await consent.promise;
+          },
+          setPreference: billingDrafts.setPreference,
+        },
+      );
+      const includeMatter = (name: string) =>
+        view.getByRole("checkbox", {
+          name: messages.activity.includeMatter.replace("{matter}", () => name),
+        });
+      await waitFor(() => expect(includeMatter("Target matter")).toBeTruthy());
+      const firstMatter = includeMatter("Source matter");
+      const secondMatter = includeMatter("Target matter");
+      expect(firstMatter.getAttribute("aria-checked")).toBe("true");
+      expect(secondMatter.getAttribute("aria-checked")).toBe("true");
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiDraft }),
+      );
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiConsentAllow }),
+      );
+      expect(savedConsent).toEqual(["granted"]);
+      expect(boundary.draftRequests).toHaveLength(0);
+      if (dialog === "closed") {
+        fireEvent.click(
+          view.getByRole("button", {
+            name: messages.activity.aiConsentDecline,
+          }),
+        );
+      }
+      fireEvent.click(secondMatter);
+      expect(secondMatter.getAttribute("aria-checked")).toBe("false");
+      if (selection === "none") {
+        fireEvent.click(firstMatter);
+        expect(firstMatter.getAttribute("aria-checked")).toBe("false");
+      }
+      await act(async () => {
+        consent.resolve(true);
+        await consent.promise;
+      });
+      if (dialog === "closed" || selection === "none") {
+        expect(boundary.draftRequests).toHaveLength(0);
+        return;
+      }
+      expect(boundary.draftRequests).toHaveLength(1);
+      expect(firstDraftRequest(boundary.draftRequests).request).toMatchObject({
+        entries: [{ matterId: FIRST_MATTER_ID }],
+      });
+      await resolveDraft(
+        firstDraftRequest(boundary.draftRequests),
+        review([draft("entry_1", "Current selection")]),
+      );
+    });
+  }
+}
 
 test("accepted split content can be edited and the confirmed payload uses those rows", async () => {
   const boundary = installNativeBoundary();

@@ -12,6 +12,7 @@ import {
 import type { DesktopBillingDraftReview } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
+import { useLatest } from "@stll/ui/use-latest";
 
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -149,6 +150,53 @@ const useDraftReviewResults = (dispatch: (action: ReviewEvent) => void) => {
   };
 };
 
+type DraftConsentOptions = {
+  billingDrafts: BillingDraftSettingsControl;
+  onDraft: () => void;
+  onSaved: (saved: boolean) => void;
+};
+
+const useDraftConsent = ({
+  billingDrafts,
+  onDraft,
+  onSaved,
+}: DraftConsentOptions) => {
+  const [consentPrompt, setConsentPrompt] = useState<ConsentPrompt>("closed");
+  const consentIntent = useRef<symbol | null>(null);
+  const closeConsent = () => {
+    consentIntent.current = null;
+    setConsentPrompt("closed");
+  };
+
+  const allowDrafting = () => {
+    const intent = Symbol("drafting consent");
+    consentIntent.current = intent;
+    setConsentPrompt("saving");
+    void billingDrafts.setConsent("granted").then((granted) => {
+      if (consentIntent.current === intent) {
+        closeConsent();
+        if (granted) {
+          onDraft();
+        }
+      }
+      onSaved(granted);
+      return undefined;
+    });
+  };
+
+  return {
+    open: () => setConsentPrompt("open"),
+    dialog: (
+      <BillingDraftConsentDialog
+        open={consentPrompt !== "closed"}
+        pending={consentPrompt === "saving"}
+        onAllow={allowDrafting}
+        onClose={closeConsent}
+      />
+    ),
+  };
+};
+
 type BillingDraftSessionOptions = {
   snapshot: ActivityDaySnapshot;
   billingDrafts: BillingDraftSettingsControl;
@@ -179,7 +227,6 @@ export const useBillingDraftSession = ({
 }: BillingDraftSessionOptions) => {
   const t = useTranslations("activity");
   const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
-  const [consentPrompt, setConsentPrompt] = useState<ConsentPrompt>("closed");
   const [refining, setRefining] = useState<string | null>(null);
   const { earlierEntries, guidelines, applyReview, clearGuidelines } =
     useDraftReviewResults(dispatch);
@@ -214,15 +261,28 @@ export const useBillingDraftSession = ({
         })
       : null;
 
+  const currentDraftState = useLatest({
+    undrafted,
+    steerable,
+    busy,
+    drafts,
+    editFor,
+    snapshot,
+  });
+
   const requestDrafts = ({
-    groups: requestedGroups,
+    groupId,
     steer,
   }: {
-    groups: readonly DraftableGroup[];
+    groupId: string | null;
     steer: string | null;
   }) => {
-    const groups = captureReviewSources(requestedGroups.filter(canDraft));
-    if (groups.length === 0 || busy) {
+    const current = currentDraftState.current;
+    const selection = steer === null ? current.undrafted : current.steerable;
+    const groups = captureReviewSources(
+      selection.filter((group) => groupId === null || group.id === groupId),
+    );
+    if (groups.length === 0 || current.busy) {
       return;
     }
     if (groups.length > DESKTOP_BILLING_DRAFT_LIMITS.entries) {
@@ -235,7 +295,7 @@ export const useBillingDraftSession = ({
       );
       return;
     }
-    const previous = groups.map((group) => drafts.get(group.id));
+    const previous = groups.map((group) => current.drafts.get(group.id));
     const previousResult =
       steer !== null && previous.every((state) => state !== undefined)
         ? previousDraftResult(
@@ -248,7 +308,7 @@ export const useBillingDraftSession = ({
           )
         : null;
     const sentEdits = new Map(
-      groups.map((group) => [group.id, editFor(group)]),
+      groups.map((group) => [group.id, current.editFor(group)]),
     );
     const request = ++draftRequest.current;
     onError(null);
@@ -259,9 +319,9 @@ export const useBillingDraftSession = ({
           request: {
             entries: draftRequestEntries({
               groups,
-              date: snapshot.date,
+              date: current.snapshot.date,
               timezone: Temporal.Now.timeZoneId(),
-              captureDetails: snapshot.captureDetails,
+              captureDetails: current.snapshot.captureDetails,
             }),
             ...(steer === null ? {} : { steer }),
             ...(previousResult === null ? {} : { previousResult }),
@@ -309,27 +369,21 @@ export const useBillingDraftSession = ({
     return undefined;
   };
 
+  const consent = useDraftConsent({
+    billingDrafts,
+    onDraft: () => requestDrafts({ groupId: null, steer: null }),
+    onSaved: settingsFailed,
+  });
+
   const startDrafting = () => {
     if (billingDrafts.settings.type !== "ready") {
       return;
     }
     if (billingDrafts.settings.consent !== "granted") {
-      setConsentPrompt("open");
+      consent.open();
       return;
     }
-    requestDrafts({ groups: undrafted, steer: null });
-  };
-
-  const allowDrafting = () => {
-    setConsentPrompt("saving");
-    void billingDrafts.setConsent("granted").then((granted) => {
-      setConsentPrompt("closed");
-      if (granted) {
-        requestDrafts({ groups: undrafted, steer: null });
-      }
-      settingsFailed(granted);
-      return undefined;
-    });
+    requestDrafts({ groupId: null, steer: null });
   };
 
   const steerAll = (steer: string, remember: boolean) => {
@@ -341,7 +395,7 @@ export const useBillingDraftSession = ({
       void billingDrafts.setPreference(steer).then(settingsFailed);
     }
     requestDrafts({
-      groups: steerable,
+      groupId: null,
       steer,
     });
   };
@@ -413,7 +467,7 @@ export const useBillingDraftSession = ({
         onUndoStructure={() => dispatch({ type: "undo-structure", ...target })}
         onRefine={() => setRefining(group.id)}
         onCancelRefine={() => setRefining(null)}
-        onSteer={(steer) => requestDrafts({ groups: [group], steer })}
+        onSteer={(steer) => requestDrafts({ groupId: group.id, steer })}
       />
     );
   };
@@ -457,13 +511,6 @@ export const useBillingDraftSession = ({
       />
     ) : null,
     guidelines: <BillingDraftGuidelines files={guidelines} />,
-    consentDialog: (
-      <BillingDraftConsentDialog
-        open={consentPrompt !== "closed"}
-        pending={consentPrompt === "saving"}
-        onAllow={allowDrafting}
-        onClose={() => setConsentPrompt("closed")}
-      />
-    ),
+    consentDialog: consent.dialog,
   };
 };
