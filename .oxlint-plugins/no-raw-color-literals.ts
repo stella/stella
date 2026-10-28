@@ -67,7 +67,7 @@ const COLOR_SPACE_FUNCTION =
 /** The first raw colour in `value`, or null. */
 export const findRawColor = (value: string): string | null => {
   for (const match of value.matchAll(HEX_CANDIDATE)) {
-    const digits = match.groups?.["digits"] ?? "";
+    const digits = match.groups?.digits ?? "";
     if (/[a-f]/iu.test(digits)) {
       return match[0];
     }
@@ -122,12 +122,12 @@ const isNumericLiteral = (node: unknown): boolean => {
     return false;
   }
   if (expression.type === "Literal") {
-    return typeof expression["value"] === "number";
+    return typeof expression.value === "number";
   }
   return (
     expression.type === "UnaryExpression" &&
-    (expression["operator"] === "-" || expression["operator"] === "+") &&
-    isNumericLiteral(expression["argument"])
+    (expression.operator === "-" || expression.operator === "+") &&
+    isNumericLiteral(expression.argument)
   );
 };
 
