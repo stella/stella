@@ -25,6 +25,7 @@ import {
   type MobileUpdateTarget,
 } from "@stll/api-contract/mobile-updates";
 
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   type ReadOutcome,
@@ -32,10 +33,9 @@ import {
   readPresent,
   readUnavailable,
 } from "@/api/lib/errors/read-outcome";
-import {
-  safeOutboundFetchBytes,
-  type SafeOutboundFetchError,
-  type SafeOutboundFetchResponse,
+import type {
+  SafeOutboundFetchError,
+  SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
 
 /** stella's public downloads CDN, which the publish job writes to. */
@@ -79,9 +79,9 @@ export const cdnFetch =
     await safeOutboundFetchBytes({
       maxBytes: MANIFEST_MAX_BYTES,
       permit,
-      // The whole read, body included: a CDN that sends headers and then
-      // stalls must not hold the request open.
-      timeoutMs: CDN_TIMEOUT_MS,
+      // The repository's transfer policy: a deadline on the headers and a
+      // byte cap on the body (a manifest is small), never a total deadline.
+      timeout: { type: "headers", ms: CDN_TIMEOUT_MS },
       url,
     });
 
