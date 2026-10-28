@@ -100,6 +100,20 @@
   --warning-foreground: #fcd34d;
 }
 
+/* Hues the product previews, frames and illustrations draw with, the same in
+   light and dark: the anonymization entity highlights (person, organization,
+   identifier), the ember and iris frame accents, the line-art accent and the
+   preview window's shadow. */
+:root {
+  --preview-green: rgb(22 163 74);
+  --preview-blue: rgb(37 99 235);
+  --preview-amber: rgb(217 119 6);
+  --accent-ember: #d97757;
+  --accent-iris: #6264a7;
+  --illustration-accent: #549cd1;
+  --preview-window-shadow: rgb(15 23 42 / 0.5);
+}
+
 /* Tokens the @stll/workspace-ui feature previews (the Product menu's scenes)
    draw with beyond the landing's own set, valued as in @stll/ui/theme.css.
    The landing does not import that theme: its base layer and surface tokens

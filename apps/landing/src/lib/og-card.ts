@@ -18,6 +18,10 @@ const HEIGHT = 630;
 const MARGIN_X = 84;
 /** Baseline of the last headline line; earlier lines stack upward from it. */
 const HEADLINE_BASELINE = 450;
+// The card is rasterised SVG, which no stylesheet reaches, so its two colours
+// are named here: the headline ink and the wash over the background image.
+const HEADLINE_INK = "#111827";
+const BACKGROUND_WASH = "#F7FAFF";
 
 type OgCardOptions = {
   headline: string;
@@ -79,14 +83,14 @@ const cardSvg = async ({
       .display {
         font-family: "${CARD_FACES[direction].family}", sans-serif;
         letter-spacing: -0.02em;
-        fill: #111827;
+        fill: ${HEADLINE_INK};
         font-weight: 400;
       }
     </style>
   </defs>
 
   <image href="data:image/png;base64,${backgroundImage}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" preserveAspectRatio="xMidYMid slice" />
-  <rect width="${WIDTH}" height="${HEIGHT}" fill="#F7FAFF" fill-opacity="0.04" />
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="${BACKGROUND_WASH}" fill-opacity="0.04" />
 
   <image
     href="data:image/svg+xml;base64,${wordmark(direction)}"

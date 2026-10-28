@@ -111,11 +111,11 @@ const bucketOf = (label: string): Bucket => LABEL_TO_BUCKET[label] ?? "misc";
 // theme-paired --auth-gradient-end/--terminal-accent/--warning/
 // --muted-foreground tokens) rather than inventing new colors.
 const BUCKET_STYLE: Record<Bucket, { fg: string; displayLabel: string }> = {
-  person: { fg: "rgb(22,163,74)", displayLabel: "Person" },
-  organization: { fg: "rgb(37,99,235)", displayLabel: "Organization" },
-  id: { fg: "rgb(217,119,6)", displayLabel: "ID / number" },
-  phone: { fg: "#6264a7", displayLabel: "Phone" },
-  address: { fg: "#d97757", displayLabel: "Address" },
+  person: { fg: "var(--preview-green)", displayLabel: "Person" },
+  organization: { fg: "var(--preview-blue)", displayLabel: "Organization" },
+  id: { fg: "var(--preview-amber)", displayLabel: "ID / number" },
+  phone: { fg: "var(--accent-iris)", displayLabel: "Phone" },
+  address: { fg: "var(--accent-ember)", displayLabel: "Address" },
   country: { fg: "var(--auth-gradient-end)", displayLabel: "Country" },
   email: { fg: "var(--terminal-accent)", displayLabel: "Email" },
   date: { fg: "var(--muted-foreground)", displayLabel: "Date" },
