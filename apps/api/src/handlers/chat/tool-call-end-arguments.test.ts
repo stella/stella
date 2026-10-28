@@ -7,12 +7,10 @@ import { expect, test } from "bun:test";
 
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
-// `patches/@tanstack%2Fai@0.65.1.patch` makes `StreamProcessor` write
-// `TOOL_CALL_END.input` into the tool-call part's `arguments` even when
-// argument deltas were streamed. Unpatched, the part keeps the raw wire
-// string next to the normalized `input`, so a strict-mode OpenAI call
-// persists with the widened `null`s the persistence validator rejects.
-// Both tests go red when a version bump drops the patch; delete them with it.
+// TOOL_CALL_END input must replace widened wire arguments before persistence.
+// TanStack AI 1.0 reconciles the arguments; our processor patch also applies
+// that reconciliation when an earlier event already completed the call.
+// These cases retain the normalized input and reject strict-mode null drift.
 
 const TOOL_NAME = "spawn";
 const WIDENED_ARGUMENTS = '{"task":"list matters","context":null}';
