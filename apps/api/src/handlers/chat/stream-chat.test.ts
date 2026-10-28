@@ -3228,6 +3228,7 @@ describe("approved client tool with an output schema", () => {
         },
       ],
       safeDb: noDbReads,
+      refRegistry: createChatRefRegistry(),
       threadId: toSafeId<"chatThread">("thread-1"),
       tools: browserTools,
       userId: toSafeId<"user">("user-1"),

@@ -1795,14 +1795,36 @@ describe("assistant turn settlement", () => {
   const startStreamingTurn = async ({
     failAssistantInsertOnce = false,
     onSafeDbTransaction,
+    connectableCount = 0,
   }: {
+    connectableCount?: number;
     failAssistantInsertOnce?: boolean;
     onSafeDbTransaction?: (() => void) | undefined;
   } = {}) => {
     let onFinish: StreamChatProps["onFinish"] | undefined;
+    let providerPrompt: unknown;
+    const connectorRows = Array.from(
+      { length: connectableCount },
+      (_, index) => ({
+        slug: `source-${String(index).padStart(2, "0")}`,
+        displayName: `Source ${index}`,
+      }),
+    );
+    const connectorQuery = {
+      from: () => connectorQuery,
+      leftJoin: () => connectorQuery,
+      where: () => connectorQuery,
+      orderBy: () => connectorQuery,
+      limit: async (limit: number) => connectorRows.slice(0, limit),
+    };
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
+      providerPrompt = props.systemUntrusted;
+      if (connectableCount > 0) {
+        expect(props.tools).toHaveProperty("connect_connector");
+        expect(props.tools).toHaveProperty("list_connectable_connectors");
+      }
       return {
         type: "streaming",
         response: new Response("", {
@@ -1872,6 +1894,7 @@ describe("assistant turn settlement", () => {
         contextMatterIds: [],
         onSafeDbTransaction,
         transaction: {
+          selectDistinctOn: () => connectorQuery,
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1910,8 +1933,22 @@ describe("assistant turn settlement", () => {
         `the send did not reach streaming: ${JSON.stringify(result)}`,
       );
     }
-    return { onFinish, turnUpdates };
+    return { onFinish, turnUpdates, providerPrompt };
   };
+
+  test("an unrelated send proceeds with 21 connectable connectors and a bounded deterministic hint", async () => {
+    const first = await startStreamingTurn({ connectableCount: 21 });
+    const second = await startStreamingTurn({ connectableCount: 21 });
+    expect(first.providerPrompt).toEqual(second.providerPrompt);
+    const hint = JSON.stringify(first.providerPrompt);
+    expect(hint).toContain("source-00");
+    expect(hint).toContain("source-19");
+    expect(hint).not.toContain("source-20");
+    expect(hint).toContain("list_connectable_connectors");
+    expect(first.turnUpdates).not.toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (
