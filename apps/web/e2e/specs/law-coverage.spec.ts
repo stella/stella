@@ -35,7 +35,7 @@ test.beforeAll(() => {
       "--outfile",
       output,
     ],
-    { stdio: "pipe" },
+    { maxBuffer: 2 ** 30, stdio: "pipe" },
   );
   bundle = readFileSync(output, "utf-8");
   writeFileSync(
@@ -58,7 +58,7 @@ test.beforeAll(() => {
       "--outDir",
       "dist",
     ],
-    { stdio: "pipe" },
+    { maxBuffer: 2 ** 30, stdio: "pipe" },
   );
   const assets = path.join(directory, "dist/assets");
   styles = readdirSync(assets)
@@ -92,7 +92,9 @@ for (const locale of ["en", "ar"]) {
   test(`country disclosures and anchors work with the keyboard (${locale})`, async ({
     page,
   }) => {
-    await page.goto(`/law/coverage?locale=${locale}#country-svk`);
+    await page.goto(`/law/coverage?locale=${locale}#country-svk`, {
+      waitUntil: "domcontentloaded",
+    });
     const country = page.locator("#country-cze");
     const toggle = country.locator("header button");
     const table = country.getByRole("table");
