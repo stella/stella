@@ -1,7 +1,13 @@
 import { use, useState } from "react";
 
 import { Result } from "better-result";
-import { RefreshControl, SectionList, StyleSheet, Text } from "react-native";
+import {
+  RefreshControl,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
 import { ChatThreadRow } from "@/components/chat-thread-row";
@@ -10,6 +16,7 @@ import {
   ScreenHeading,
   screenStyles,
 } from "@/components/empty-state-screen";
+import { NewChatButton } from "@/components/new-chat-button";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import type { AccessTokenSource } from "@/connection/session";
@@ -122,7 +129,10 @@ const ThreadTimeline = ({
         />
       }
       ListHeaderComponent={
-        <ScreenHeading description={t("description")} title={tabs("chat")} />
+        <View style={styles.header}>
+          <ScreenHeading description={t("description")} title={tabs("chat")} />
+          <NewChatButton />
+        </View>
       }
       onEndReached={() => {
         void loadMore();
@@ -150,6 +160,9 @@ const ThreadTimeline = ({
 };
 
 const styles = StyleSheet.create({
+  header: {
+    gap: 16,
+  },
   sectionHeader: {
     fontSize: 13,
     fontWeight: "600",

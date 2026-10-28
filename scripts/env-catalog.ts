@@ -1467,6 +1467,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "CHECK_SHA",
   "CHECK_START_FILE",
   "CHECK_TARGET",
+  // Hosted agent runtimes identify themselves before secret-scanner bootstrap.
+  "CLAUDE_CODE_REMOTE",
+  "CODEX_CI",
   // Local verification host configuration, remote recursion guard, and base preparation.
   "STELLA_VERIFY_CONFIG",
   "REMOTE_CHECK",

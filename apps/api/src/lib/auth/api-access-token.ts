@@ -77,6 +77,14 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/create.ts",
   },
+  "GET /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/get.ts",
+  },
+  "PATCH /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/update.ts",
+  },
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
@@ -110,6 +118,36 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
+  },
+  // The caller's own timers. The organization-wide admin timer routes stay
+  // closed to access tokens.
+  "GET /v1/time-timers": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/time-timers/list.ts",
+  },
+  "POST /v1/time-timers/start": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/start.ts",
+  },
+  "POST /v1/time-timers/:id/pause": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/pause.ts",
+  },
+  "POST /v1/time-timers/:id/resume": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/resume.ts",
+  },
+  "PATCH /v1/time-timers/:id": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/update.ts",
+  },
+  "POST /v1/time-timers/:id/confirm": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/confirm.ts",
+  },
+  "DELETE /v1/time-timers/:id": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/discard.ts",
   },
 } as const satisfies Record<
   string,
