@@ -38,13 +38,18 @@ function BetaFeaturesPage() {
   let timeBillingPanel = null;
   if (timeBillingView.type === "pending") {
     timeBillingPanel = (
-      <FramePanel aria-hidden="true">
-        <div className="flex flex-col gap-3 p-1">
-          <Skeleton className="h-5 w-28" />
-          <Skeleton className="h-4 w-72 max-w-full" />
-          <Skeleton className="h-5 w-36" />
-        </div>
-      </FramePanel>
+      <>
+        <span className="sr-only" role="status">
+          {t("common.loading")}
+        </span>
+        <FramePanel aria-hidden="true">
+          <div className="flex flex-col gap-3 p-1">
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+            <Skeleton className="h-5 w-36" />
+          </div>
+        </FramePanel>
+      </>
     );
   } else if (timeBillingView.type === "error") {
     timeBillingPanel = (
