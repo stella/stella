@@ -125,6 +125,53 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+test("a dotted reference is not mistaken for a filename extension", async () => {
+  const bodyOnlyId = createSafeId<"entity">();
+  const titleMatchId = createSafeId<"entity">();
+  await testDb.insert(entities).values([
+    {
+      id: bodyOnlyId,
+      workspaceId: documentWorkspaceId,
+      kind: "document",
+      name: "Article 10",
+    },
+    {
+      id: titleMatchId,
+      workspaceId: documentWorkspaceId,
+      kind: "document",
+      name: "Notes on Article 1.2",
+    },
+  ]);
+  await testDb.insert(searchDocuments).values([
+    {
+      entityId: bodyOnlyId,
+      organizationId,
+      workspaceId: documentWorkspaceId,
+      kind: "document",
+      title: "Article 10",
+      searchableText: "article 10 refers to article 1.2",
+      tsv: sql`to_tsvector('public.stella_unaccent', 'article 10 refers to article 1.2')`,
+    },
+    {
+      entityId: titleMatchId,
+      organizationId,
+      workspaceId: documentWorkspaceId,
+      kind: "document",
+      title: "Notes on Article 1.2",
+      searchableText: "notes on article 1.2",
+      tsv: sql`to_tsvector('public.stella_unaccent', 'notes on article 1.2')`,
+    },
+  ]);
+
+  const page = await search({
+    query: "Article 1.2",
+    types: ["document"],
+    limit: 2,
+  });
+
+  expect(page.hits.map(({ id }) => id)).toEqual([titleMatchId, bodyOnlyId]);
+});
+
 test("database title tiers outrank stronger loose matches across cursor pages", async () => {
   const firstPage = await search();
   expect(firstPage.hits.map(({ id }) => id)).toEqual([

@@ -80,6 +80,11 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 const REINDEX_BATCH_SIZE = 100;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
 const MATTER_RELEVANCE_BOOST = 0.15;
+// File extensions a query typed as a filename may end with; matched against
+// the lower-cased, unaccented query.
+const FILENAME_EXTENSION_PATTERN =
+  "\\.(pdf|docx?|dotx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|md|csv|html?|eml|msg|jpe?g|png|gif|tiff?|zip)$";
+
 const SEARCH_TIER = {
   FILTER_ONLY: 0,
   LOOSE: 1,
@@ -671,7 +676,10 @@ const buildSearchFilterFragments = ({
     }
     const foldedTitle = sql`lower(unaccent(arabic_normalize(${title})))`;
     const foldedQuery = sql`lower(unaccent(arabic_normalize(${query.trim()})))`;
-    const foldedQueryStem = sql`regexp_replace(${foldedQuery}, '\\.[^.[:space:]]+$', '')`;
+    // Only a recognised file extension is dropped, so a query typed as a
+    // filename still prefixes its title while dotted legal references such as
+    // "Article 1.2" stay whole.
+    const foldedQueryStem = sql`regexp_replace(${foldedQuery}, ${FILENAME_EXTENSION_PATTERN}, '')`;
     return sql`CASE
       WHEN ${foldedTitle} = ${foldedQuery} THEN ${SEARCH_TIER.EXACT_TITLE}::int
       WHEN starts_with(${foldedTitle}, ${foldedQueryStem}) THEN ${SEARCH_TIER.TITLE_PREFIX}::int
