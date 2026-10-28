@@ -184,8 +184,11 @@ const [dragState, setDragState] = useState<
 ```
 
 The default sensors are mouse (8px movement), touch (150ms delay with 8px
-tolerance), and keyboard. Scroll containers retain `touch-action: auto`; only
-`KanbanDragHandle` disables touch panning. `KanbanSortableBoard` also accepts
+tolerance), and keyboard. Scroll containers retain `touch-action: auto`.
+`KanbanDragHandle` and `{ type: "item" }` activation disable touch panning on
+their activation surfaces. Use `{ type: "card" }` with
+`KanbanCardDragSurface` to preserve scrolling from the card while supporting
+long-press dragging. `KanbanSortableBoard` also accepts
 custom `sensors`, `accessibility`, collision detection, keyboard coordinates,
 auto-scroll options, and an `overlay` render function.
 
