@@ -193,6 +193,7 @@ export const CONTACT_IMPORT_HEADER_VOCABULARIES = {
     nationality_codes: ["nationality codes", "nationalities"],
   },
   cs: {
+    type: ["Typ", "Druh"],
     display_name: ["Celé jméno", "Název"],
     first_name: ["Jméno"],
     last_name: ["Příjmení"],
@@ -215,6 +216,7 @@ export const CONTACT_IMPORT_HEADER_VOCABULARIES = {
     tax_id: ["DIČ"],
   },
   sk: {
+    type: ["Typ", "Druh"],
     display_name: ["Celé meno", "Názov"],
     first_name: ["Meno"],
     last_name: ["Priezvisko"],
@@ -266,6 +268,10 @@ export const CONTACT_IMPORT_HEADER_VOCABULARIES = {
     notes: ["Notatki", "Uwagi"],
     tax_id: ["NIP"],
     registration_number: ["REGON"],
+  },
+  pt: {
+    display_name: ["Nome"],
+    address_line_1: ["Endereço"],
   },
 } as const satisfies Record<
   string,

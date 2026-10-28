@@ -673,6 +673,21 @@ describe("labeled contact import blocks", () => {
     }
   });
 
+  test("headers recognised before the locale vocabularies keep their destinations", () => {
+    expect(
+      ["Nome", "Endereço", "Endereco", "Typ", "Druh"].map((header) => [
+        header,
+        suggestedTargetForHeader(header),
+      ]),
+    ).toEqual([
+      ["Nome", "display_name"],
+      ["Endereço", "address_line_1"],
+      ["Endereco", "address_line_1"],
+      ["Typ", "type"],
+      ["Druh", "type"],
+    ]);
+  });
+
   test("every field name suggests its own field", () => {
     for (const field of CONTACT_IMPORT_FIELDS) {
       expect([field, suggestedTargetForHeader(field)]).toEqual([field, field]);
