@@ -127,6 +127,7 @@ describe("which routes an API access token opens", () => {
     for (const [method, route] of [
       ["PUT", "/v1/workspaces"],
       ["PUT", "/v1/tasks/:workspaceId"],
+      ["PATCH", "/v1/tasks/:workspaceId"],
     ] as const) {
       expect(
         admitApiAccessTokenRoute({ method, route, scopes: readOnly }),
