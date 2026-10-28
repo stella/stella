@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "modelRefused": "رفض النموذج الإجابة",
+    "nothingFound": "لم يتم العثور على شيء",
     "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
     "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
     "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
@@ -2212,6 +2214,7 @@
     "moveDown": "نقل لأسفل",
     "moveUp": "نقل لأعلى",
     "name": "الاسم",
+    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
     "newMatter": "ملف قانوني جديد",
     "newRow": "صف جديد",
     "next": "التالي",
@@ -2531,6 +2534,7 @@
       "rowLabel": "العميل {index}",
       "skippedDuplicateContactId": "تم التخطي: معرّف جهة اتصال مكرر",
       "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
+      "skippedInFileDuplicate": "تم التخطي: يكرر صفًا سابقًا في الملف",
       "skippedInvalidRow": "تم التخطي: الصف لم يستوفِ قواعد الاستيراد",
       "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",
       "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "سطر العنوان 1 مطلوب عند إدخال عنوان.",
         "display_name_required": "تعذّر إنشاء اسم العرض.",
+        "in_file_duplicate": "نسخة مكررة من صف سابق في هذا الملف",
         "invalid_email": "عنوان البريد الإلكتروني غير صالح.",
         "invalid_phone": "رقم الهاتف غير صالح.",
         "invalid_tags": "يجب أن تكون الوسوم قيمًا نصية.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "الرقم البرازيلي CPF/CNPJ (مجموع تحقق)",
       "taxIdSchemeNone": "بدون تحقق من الرقم الضريبي",
       "title": "استيراد جهات الاتصال",
-      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
+      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
+      "warning": {
+        "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله.",
+        "possible_in_file_duplicate": "تكرار محتمل للصف {row}؛ الاسم فقط متطابق."
+      }
     },
     "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
     "invalidNationalityCodes": "أدخل رموز جنسية صالحة.",
@@ -3300,7 +3309,6 @@
       "simple": "تعديلات مبسّطة"
     },
     "moreFormatting": "المزيد من التنسيق",
-    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
     "nextChange": "التغيير التالي",
     "numberedList": "قائمة مرقّمة",
     "parseError": "تعذّر تحليل المستند. قد يكون تالفًا أو بتنسيق غير مدعوم.",
@@ -5991,6 +5999,9 @@
       "description": "تم الحفظ باسم «{fileName}»",
       "title": "الترجمة جاهزة"
     }
+  },
+  "transportErrors": {
+    "timeout": "استغرق الطلب وقتًا طويلاً. حاول مرة أخرى."
   },
   "validation": {
     "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",

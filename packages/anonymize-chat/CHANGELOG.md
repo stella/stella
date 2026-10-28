@@ -1,5 +1,12 @@
 # @stll/anonymize-chat
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [[`5a279ca`](https://github.com/stella/stella/commit/5a279cac4dcaa80087c6c92f2e621ad124c661d9)]:
+  - @stll/text-normalize@0.5.1
+
 ## 0.2.3
 
 ### Patch Changes

@@ -31,7 +31,7 @@ test("adds validated diagnostics and replays without changing failed messages", 
   const admissionOutcomesMigration = readFileSync(
     nodePath.resolve(
       import.meta.dir,
-      "../../drizzle/20261028120100_reader_answer_admission_outcomes/migration.sql",
+      "../../drizzle/20261028130100_reader_answer_admission_outcomes/migration.sql",
     ),
     "utf-8",
   );

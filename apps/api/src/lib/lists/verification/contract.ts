@@ -7,6 +7,8 @@
 // from the consts here, and the handlers and the review fold share one
 // definition of a claim and a review event.
 
+import type { ReviewDecision } from "@stll/api-contract/review-decision";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import type {
@@ -175,6 +177,11 @@ export type VerificationEvidence = {
 
 export const CLAIM_REVIEW_STATUSES = ["reviewed", "disputed"] as const;
 export type ClaimReviewStatus = (typeof CLAIM_REVIEW_STATUSES)[number];
+
+export const AVT_CLAIM_REVIEW_DECISION = {
+  reviewed: "accepted",
+  disputed: "rejected",
+} as const satisfies Record<ClaimReviewStatus, ReviewDecision | null>;
 
 /**
  * Reviewer actions, one row each, never rewritten. The current disposition of

@@ -54,6 +54,7 @@ import type {
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS } from "@/lib/workspaces/types";
 import { routeSearchSchema } from "@/route-search-params";
+import { routePresentation } from "@/routes/-route-presentation";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupSection } from "@/routes/_protected.workspaces/-components/client-group-section";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
@@ -78,6 +79,7 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/_protected/workspaces/")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     // Prime the workspaces query the page suspends on so the fetch starts
