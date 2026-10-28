@@ -1200,6 +1200,8 @@ const bunNativeFiles = [
 const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
 
 const config = defineConfig({
+  // Oxlint does not inherit `env` through `extends`.
+  env: core.env,
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
