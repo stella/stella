@@ -8,15 +8,24 @@ test.use({
 });
 
 const openFixture = async (page: Page, query = "") => {
-  await page.goto(`${fixturePath}${query}`);
+  await page.addInitScript(() => {
+    window.addEventListener("error", ({ message }) => {
+      document.documentElement.dataset["testError"] = message;
+    });
+  });
+  await page.goto(`${fixturePath}${query}`, { waitUntil: "domcontentloaded" });
   await expect(page.locator("[data-slot=middle-truncate]")).toBeVisible();
 };
 
 const setFrameWidth = (page: Page, width: number) =>
-  page.getByTestId("frame").evaluate((frame, inlineSize) => {
+  page.getByTestId("frame").evaluate(async (frame, inlineSize) => {
     if (frame instanceof HTMLElement) {
       frame.style.inlineSize = `${String(inlineSize)}px`;
     }
+    // Complete the frame that delivers resize notifications, then its paint.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
   }, width);
 
 /**
@@ -82,9 +91,11 @@ for (const rtl of [false, true]) {
     for (const width of [180, 163, 141]) {
       await setFrameWidth(page, width);
       await expect(page.locator("[data-overflow]")).toHaveCount(1);
-      const cut = await measureCut(page);
-      expect(cut?.gap).toBeLessThan(1);
+      await expect
+        .poll(async () => (await measureCut(page))?.gap ?? Infinity)
+        .toBeLessThan(1);
     }
+    await expect(page.locator("html")).not.toHaveAttribute("data-test-error");
   });
 
   test(`drops the ellipsis once the value fits again (${label})`, async ({
@@ -95,6 +106,7 @@ for (const rtl of [false, true]) {
     await expect(page.locator("[data-overflow]")).toHaveCount(1);
     await setFrameWidth(page, 600);
     await expect(page.locator("[data-overflow]")).toHaveCount(0);
+    await expect(page.locator("html")).not.toHaveAttribute("data-test-error");
   });
 }
 

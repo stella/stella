@@ -47,8 +47,8 @@ export const MiddleTruncate = ({ value, className }: MiddleTruncateProps) => {
     >
       <span
         className="peer min-w-0 overflow-hidden"
-        // A new head is a new node, so the ref fits it again.
-        key={split.head}
+        // Either part can change the available head width.
+        key={value}
         ref={fitHeadWhileMounted}
       >
         {split.head}
@@ -70,9 +70,27 @@ function fitHeadWhileMounted(head: HTMLSpanElement) {
   if (!root) {
     return undefined;
   }
-  const observer = new ResizeObserver(() => fitHead(head));
+  let frame: number | undefined;
+  const scheduleFit = () => {
+    if (frame !== undefined) {
+      return;
+    }
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      fitHead(head);
+    });
+  };
+  // The ellipsis can change intrinsic size; write after observer delivery.
+  const observer = new ResizeObserver(scheduleFit);
   observer.observe(root);
-  return () => observer.disconnect();
+  document.fonts.addEventListener("loadingdone", scheduleFit);
+  return () => {
+    observer.disconnect();
+    document.fonts.removeEventListener("loadingdone", scheduleFit);
+    if (frame !== undefined) {
+      cancelAnimationFrame(frame);
+    }
+  };
 }
 
 /**
@@ -89,16 +107,17 @@ function fitHead(head: HTMLElement) {
   }
   // Measure without the ellipsis: it takes width from the head while shown,
   // so a stale one would keep the text cut after it fits again.
-  delete head.dataset.overflow;
+  delete head.dataset["overflow"];
   head.style.clipPath = "";
   tail.style.translate = "";
   if (head.scrollWidth <= head.clientWidth) {
     return;
   }
-  head.dataset.overflow = "";
+  head.dataset["overflow"] = "";
 
   const rtl = getComputedStyle(head).direction === "rtl";
   const box = head.getBoundingClientRect();
+  const availableWidth = box.width;
   const range = document.createRange();
   const widthTo = (end: number) => {
     if (end === 0) {
@@ -121,13 +140,13 @@ function fitHead(head: HTMLElement) {
   let over = ends.length;
   while (over - fits > 1) {
     const middle = Math.floor((fits + over) / 2);
-    if (widthTo(ends[middle - 1] ?? 0) <= head.clientWidth) {
+    if (widthTo(ends[middle - 1] ?? 0) <= availableWidth) {
       fits = middle;
     } else {
       over = middle;
     }
   }
-  const slack = head.clientWidth - widthTo(ends[fits - 1] ?? 0);
+  const slack = availableWidth - widthTo(ends[fits - 1] ?? 0);
   if (slack <= 0) {
     return;
   }

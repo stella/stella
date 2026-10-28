@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
 import { graphemesOf, splitForMiddleTruncate } from "./middle-truncate.logic";
 
 // Word characters, the break characters the split snaps to, and graphemes
@@ -25,9 +27,8 @@ const name = fc
 
 describe("splitForMiddleTruncate", () => {
   test("keeps every value whole and cuts only between graphemes", () => {
-    // `@stll/ui` builds standalone, so it runs fast-check directly with a
-    // fixed seed instead of the workspace property harness.
-    fc.assert(
+    assertProperty(
+      "keeps every value whole and cuts only between graphemes",
       fc.property(name, (value) => {
         const split = splitForMiddleTruncate(value);
         if (split === null) {
@@ -44,7 +45,7 @@ describe("splitForMiddleTruncate", () => {
           graphemesOf(split.head).length >= 4
         );
       }),
-      { numRuns: 500, seed: 0x57_11 },
+      { numRuns: 500 },
     );
   });
 

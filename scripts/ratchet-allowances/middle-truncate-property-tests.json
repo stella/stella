@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The UI package declares fast-check directly to generate Unicode names for the middle-truncation grapheme invariant; the existing workspace property harness owns seeds, replay and run budgets."
+}
