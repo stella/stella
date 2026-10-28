@@ -11,7 +11,9 @@ import { SettingsPageHeader } from "@/components/settings-page-header";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
+import { pageTitle } from "@/lib/page-title";
 import { useTimeBillingEnrolment } from "@/queries/feature-enrolments";
+import { routePresentation } from "@/routes/-route-presentation";
 
 export const Route = createFileRoute("/_protected/settings/account/beta")({
   beforeLoad: () => {
@@ -19,6 +21,14 @@ export const Route = createFileRoute("/_protected/settings/account/beta")({
       throw redirect({ to: "/settings/account/profile" });
     }
   },
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.account.beta",
+      to: "/settings/account/beta",
+    }),
+  },
+  head: () => ({ meta: [{ title: pageTitle("settings.account.beta") }] }),
   component: BetaFeaturesPage,
 });
 
