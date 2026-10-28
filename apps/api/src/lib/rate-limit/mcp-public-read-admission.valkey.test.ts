@@ -8,6 +8,10 @@ import {
 } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createRedisClient } from "@/api/lib/redis-client";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 
 import {
   ACQUIRE_SCRIPT,
@@ -62,6 +66,99 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("MCP public-read admission (valkey)", () => {
+    test("a timed-out acquire releases its landed lease without delaying the read", async () => {
+      await withStore(async (client) => {
+        const identity = caller();
+        const analytics = installRecordingAnalytics();
+        const logs = installRecordingLogger();
+        const acquireLanded = Promise.withResolvers<{
+          key: string;
+          leaseId: string;
+        }>();
+        const acquireReply = Promise.withResolvers<unknown>();
+        const cleanupStarted = Promise.withResolvers<string>();
+        const allowCleanup = Promise.withResolvers<undefined>();
+        const cleanupLanded = Promise.withResolvers<unknown>();
+        let cleanupAttempts = 0;
+        let cleanupFinished = false;
+        const read = withMcpPublicReadAdmission({
+          caller: identity,
+          limit: 1,
+          redis: {
+            send: async (command, args) => {
+              const script = args.at(0);
+              if (script === ACQUIRE_SCRIPT) {
+                const key = args.at(2);
+                const leaseId = args.at(7);
+                if (key === undefined || leaseId === undefined) {
+                  panic("Expected the acquired lease identity");
+                }
+                expect(await client.send(command, args)).toBe(1);
+                acquireLanded.resolve({ key, leaseId });
+                // The store accepted the command, but its reply never reaches the caller.
+                return await acquireReply.promise;
+              }
+              if (script !== RELEASE_SCRIPT) {
+                panic("Expected acquisition cleanup without renewal");
+              }
+              const leaseId = args.at(4);
+              if (leaseId === undefined) {
+                panic("Expected the cleanup lease identity");
+              }
+              cleanupAttempts += 1;
+              cleanupStarted.resolve(leaseId);
+              await allowCleanup.promise;
+              const result = await client.send(command, args);
+              cleanupFinished = true;
+              cleanupLanded.resolve(result);
+              return result;
+            },
+          },
+          run: async () => "read",
+        });
+        try {
+          const { key, leaseId } = await acquireLanded.promise;
+          expect(await client.send("ZCARD", [key])).toBe(1);
+          expect(await read).toEqual(
+            Result.ok({
+              status: "degraded",
+              degradation: { phase: "acquire", reason: "unavailable" },
+              value: "read",
+            }),
+          );
+          expect(cleanupAttempts).toBe(1);
+          expect(await cleanupStarted.promise).toBe(leaseId);
+          expect(cleanupFinished).toBe(false);
+          expect(await client.send("ZCARD", [key])).toBe(1);
+          // Awaiting cleanup would exhaust its own command budget before the read returns.
+          expect(
+            logs.records.filter(
+              ({ message }) =>
+                message === "mcp.public_read.acquire_cleanup_failed",
+            ),
+          ).toEqual([]);
+          allowCleanup.resolve(undefined);
+          expect(await cleanupLanded.promise).toBe(1);
+          expect(await client.send("ZCARD", [key])).toBe(0);
+          expect(
+            await withMcpPublicReadAdmission({
+              caller: identity,
+              redis: client,
+              limit: 1,
+              run: async () => "next",
+            }),
+          ).toEqual(leased("next"));
+          expect(cleanupAttempts).toBe(1);
+        } finally {
+          allowCleanup.resolve(undefined);
+          acquireReply.resolve(undefined);
+          await read;
+          analytics.restore();
+          logs.restore();
+        }
+      });
+    });
+
     test("concurrent reads beyond the caller cap return a retryable refusal", async () => {
       await withStore(async (redis) => {
         const identity = caller();

@@ -50,6 +50,7 @@ type AdmissionCommandOptions = {
   args: string[];
   redis?: AdmissionRedisClient | undefined;
   redisReady?: AdmissionRedisReady | undefined;
+  commandTimeoutMs?: number;
 };
 export const executeAdmissionCommand = async ({
   script,
@@ -57,6 +58,7 @@ export const executeAdmissionCommand = async ({
   args,
   redis,
   redisReady = admissionRedis.ready,
+  commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
 }: AdmissionCommandOptions): Promise<Result<unknown, ActionAdmissionError>> => {
   const outcome = await Result.tryPromise({
     try: async () => {
@@ -64,7 +66,7 @@ export const executeAdmissionCommand = async ({
         redis === undefined
           ? await withCommandTimeout({
               command: resolveAdmissionRedisClient(redisReady),
-              commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+              commandTimeoutMs,
               label: "action-admission-redis-connect",
             })
           : Result.ok(redis);
@@ -78,7 +80,7 @@ export const executeAdmissionCommand = async ({
           ...keys,
           ...args,
         ]),
-        commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+        commandTimeoutMs,
         label: "action-admission-redis-command",
       });
     },

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 import { setImmediate } from "node:timers/promises";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -35,9 +35,16 @@ for (const scenario of [
 ] as const) {
   test(`public reads proceed with one sanitized degradation capture after ${scenario}`, async () => {
     const analytics = installRecordingAnalytics();
-    const logs = installRecordingLogger();
+    const cleanupObserved = Promise.withResolvers<undefined>();
+    const logs = installRecordingLogger(({ message }) => {
+      if (message === "mcp.public_read.acquire_cleanup_failed") {
+        cleanupObserved.resolve(undefined);
+      }
+    });
     let reads = 0;
     let releases = 0;
+    let readyCalls = 0;
+    const cleanupStarted = Promise.withResolvers<undefined>();
     const commands: string[] = [];
     const redis = {
       send: async (_command: string, args: string[]) => {
@@ -45,6 +52,8 @@ for (const scenario of [
         commands.push(script);
         if (script === RELEASE_SCRIPT) {
           releases += 1;
+          cleanupStarted.resolve(undefined);
+          return 1;
         }
         if (scenario === "timeout") {
           return await Promise.withResolvers<unknown>().promise;
@@ -59,7 +68,15 @@ for (const scenario of [
       const result = await withMcpPublicReadAdmission({
         caller,
         ...(scenario === "connection"
-          ? { redisReady: async () => await Promise.reject(privateFailure()) }
+          ? {
+              redisReady: async () => {
+                readyCalls += 1;
+                if (readyCalls === 2) {
+                  cleanupStarted.resolve(undefined);
+                }
+                return await Promise.reject(privateFailure());
+              },
+            }
           : { redis }),
         run: async (signal) =>
           await runWithPublicReadScope(
@@ -72,6 +89,10 @@ for (const scenario of [
             },
           ),
       });
+      await cleanupStarted.promise;
+      if (scenario === "connection") {
+        await cleanupObserved.promise;
+      }
       expect(result).toMatchObject(
         Result.ok({
           status: "degraded",
@@ -84,7 +105,11 @@ for (const scenario of [
         }),
       );
       expect(reads).toBe(1);
-      expect(releases).toBe(0);
+      expect(readyCalls).toBe(scenario === "connection" ? 2 : 0);
+      expect(releases).toBe(scenario === "connection" ? 0 : 1);
+      expect(
+        commands.filter((script) => script === RELEASE_SCRIPT),
+      ).toHaveLength(scenario === "connection" ? 0 : 1);
       expect(commands.filter((script) => script === RENEW_SCRIPT)).toHaveLength(
         0,
       );
@@ -92,13 +117,19 @@ for (const scenario of [
         ({ message }) => message === "mcp.public_read.admission_degraded",
       );
       expect(events).toHaveLength(1);
+      const cleanupFailures = logs.records.filter(
+        ({ message }) => message === "mcp.public_read.acquire_cleanup_failed",
+      );
+      expect(cleanupFailures).toHaveLength(scenario === "connection" ? 1 : 0);
       expect(events.at(0)?.attributes).toMatchObject({
         phase: "acquire",
         operation:
           scenario === "invalid_reply" ? "invalid_reply" : "unavailable",
         "failure.reason": "tagged_failure",
       });
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(
+        scenario === "connection" ? 2 : 1,
+      );
       const emitted = JSON.stringify({
         logs: logs.records,
         captures: analytics.exceptions(),
@@ -117,6 +148,174 @@ for (const scenario of [
     }
   });
 }
+
+for (const cleanupFailure of ["invalid_reply", "command_rejection"] as const) {
+  test(`degraded acquire reports one sanitized cleanup ${cleanupFailure}`, async () => {
+    const analytics = installRecordingAnalytics();
+    const cleanupObserved = Promise.withResolvers<undefined>();
+    const logs = installRecordingLogger(({ message }) => {
+      if (message === "mcp.public_read.acquire_cleanup_failed") {
+        cleanupObserved.resolve(undefined);
+      }
+    });
+    let releaseAttempts = 0;
+
+    try {
+      const result = await withMcpPublicReadAdmission({
+        caller,
+        redis: {
+          send: async (_command, args) => {
+            const script = args.at(0);
+            if (script === ACQUIRE_SCRIPT) {
+              return null;
+            }
+            if (script === RELEASE_SCRIPT) {
+              releaseAttempts += 1;
+              if (cleanupFailure === "command_rejection") {
+                return await Promise.reject(privateFailure());
+              }
+              return { private_data: "private_user" };
+            }
+            return panic("Unexpected public-read admission command");
+          },
+        },
+        run: async () => "read",
+      });
+      await cleanupObserved.promise;
+
+      expect(result).toMatchObject(
+        Result.ok({
+          status: "degraded",
+          degradation: { phase: "acquire", reason: "invalid_reply" },
+          value: "read",
+        }),
+      );
+      expect(releaseAttempts).toBe(1);
+      const cleanupFailures = logs.records.filter(
+        ({ message }) => message === "mcp.public_read.acquire_cleanup_failed",
+      );
+      expect(cleanupFailures).toHaveLength(1);
+      expect(cleanupFailures.at(0)?.attributes).toMatchObject({
+        phase: "release",
+        operation:
+          cleanupFailure === "invalid_reply" ? "invalid_reply" : "unavailable",
+        "failure.reason": "tagged_failure",
+      });
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "mcp.public_read.admission_degraded",
+        ),
+      ).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(2);
+      const emitted = JSON.stringify({
+        logs: logs.records,
+        captures: analytics.exceptions(),
+      });
+      for (const secret of [
+        "private_org",
+        "private_user",
+        "private_client",
+        "SELECT secret",
+      ]) {
+        expect(emitted).not.toContain(secret);
+      }
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
+  });
+}
+
+test("acquire cleanup timeout is observed without delaying the read or leaking a rejection", async () => {
+  const analytics = installRecordingAnalytics();
+  const cleanupObserved = Promise.withResolvers<undefined>();
+  const logs = installRecordingLogger(({ message }) => {
+    if (message === "mcp.public_read.acquire_cleanup_failed") {
+      cleanupObserved.resolve(undefined);
+    }
+  });
+  const cleanupStarted = Promise.withResolvers<undefined>();
+  const cleanupCommand = Promise.withResolvers<unknown>();
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  process.on("unhandledRejection", onUnhandled);
+  jest.useFakeTimers();
+  try {
+    const result = await withMcpPublicReadAdmission({
+      caller,
+      redis: {
+        send: async (_command, args) => {
+          if (args.at(0) === ACQUIRE_SCRIPT) {
+            return null;
+          }
+          if (args.at(0) === RELEASE_SCRIPT) {
+            cleanupStarted.resolve(undefined);
+            return await cleanupCommand.promise;
+          }
+          return panic("Unexpected public-read admission command");
+        },
+      },
+      run: async () => "read",
+    });
+    await cleanupStarted.promise;
+    expect(result).toMatchObject(
+      Result.ok({
+        status: "degraded",
+        degradation: { phase: "acquire", reason: "invalid_reply" },
+        value: "read",
+      }),
+    );
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "mcp.public_read.acquire_cleanup_failed",
+      ),
+    ).toHaveLength(0);
+
+    jest.advanceTimersByTime(249);
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "mcp.public_read.acquire_cleanup_failed",
+      ),
+    ).toHaveLength(0);
+    jest.advanceTimersByTime(1);
+    await cleanupObserved.promise;
+    expect(
+      logs.records.filter(
+        ({ message }) => message === "mcp.public_read.acquire_cleanup_failed",
+      ),
+    ).toHaveLength(1);
+    expect(logs.records.at(-1)?.attributes).toMatchObject({
+      phase: "release",
+      operation: "unavailable",
+      "failure.reason": "tagged_failure",
+    });
+    expect(analytics.exceptions()).toHaveLength(2);
+
+    cleanupCommand.reject(privateFailure());
+    jest.useRealTimers();
+    await setImmediate();
+    expect(unhandled).toEqual([]);
+    const emitted = JSON.stringify({
+      logs: logs.records,
+      captures: analytics.exceptions(),
+    });
+    for (const secret of [
+      "private_org",
+      "private_user",
+      "private_client",
+      "SELECT secret",
+    ]) {
+      expect(emitted).not.toContain(secret);
+    }
+  } finally {
+    jest.useRealTimers();
+    process.off("unhandledRejection", onUnhandled);
+    analytics.restore();
+    logs.restore();
+  }
+});
 
 test("reachable caller caps refuse busy reads without degradation", async () => {
   const analytics = installRecordingAnalytics();

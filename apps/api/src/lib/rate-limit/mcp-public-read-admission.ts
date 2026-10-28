@@ -4,6 +4,7 @@ import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
+import { detached } from "@/api/lib/analytics/capture";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { coordinationKey } from "@/api/lib/redis-keys";
@@ -16,10 +17,12 @@ import {
   defaultAdmissionTiming,
   executeAdmissionCommand,
   type LeaseDegradation,
+  RELEASE_SCRIPT,
   withAcquiredConcurrencyLease,
 } from "./concurrency-lease";
 
 const PUBLIC_READ_LEASE_MS = 30_000;
+const PUBLIC_READ_ACQUIRE_CLEANUP_TIMEOUT_MS = 250;
 
 type PublicReadDegradation = {
   phase: "acquire" | LeaseDegradation["phase"];
@@ -35,7 +38,7 @@ class PublicReadAdmissionCoordinationError extends TaggedError(
 )<{
   message: string;
   phase: PublicReadDegradation["phase"];
-  outcome: "degraded" | "lease_lost";
+  outcome: "degraded" | "lease_lost" | "cleanup_failed";
   reason: PublicReadDegradation["reason"] | "definite_loss";
 }> {
   static {
@@ -51,6 +54,48 @@ const LEASE_LOST_FAILURE = failureSink({
   event: "mcp.public_read.lease_lost",
   expected: [],
 });
+
+const ACQUIRE_CLEANUP_FAILURE = failureSink({
+  event: "mcp.public_read.acquire_cleanup_failed",
+  expected: [],
+});
+
+type DegradedAcquireCleanupOptions = Pick<
+  Parameters<typeof executeAdmissionCommand>[0],
+  "keys" | "redis" | "redisReady"
+> & { leaseId: string };
+
+const releaseDegradedAcquire = async ({
+  keys,
+  leaseId,
+  redis,
+  redisReady,
+}: DegradedAcquireCleanupOptions): Promise<void> => {
+  const released = await executeAdmissionCommand({
+    script: RELEASE_SCRIPT,
+    keys,
+    args: [leaseId],
+    redis,
+    redisReady,
+    commandTimeoutMs: PUBLIC_READ_ACQUIRE_CLEANUP_TIMEOUT_MS,
+  });
+  if (Result.isOk(released) && released.value === 1) {
+    return;
+  }
+  const reason = Result.isError(released) ? "unavailable" : "invalid_reply";
+  observeFailure(
+    new PublicReadAdmissionCoordinationError({
+      message: "Public-read admission cleanup failed",
+      outcome: "cleanup_failed",
+      phase: "release",
+      reason,
+    }),
+    {
+      sink: ACQUIRE_CLEANUP_FAILURE,
+      ctx: { source: "mcp_public_read", phase: "release", operation: reason },
+    },
+  );
+};
 
 type McpPublicReadAdmissionOptions<T> = {
   caller: Pick<McpRequestContext, "organizationId" | "userId" | "clientId">;
@@ -153,6 +198,11 @@ export const withMcpPublicReadAdmission = async <T>({
   };
   const runUnleased = async (event: PublicReadDegradation) => {
     degraded(event);
+    // The store may complete an uncertain acquire; cleanup must not delay the read.
+    detached(
+      releaseDegradedAcquire({ keys, leaseId, redis, redisReady }),
+      "mcp-public-read.acquire-cleanup",
+    );
     const outcome = await Result.tryPromise({
       try: async () => {
         const requestSignal = signal ?? new AbortController().signal;

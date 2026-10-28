@@ -45,6 +45,7 @@ import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
+import { RELEASE_SCRIPT } from "@/api/lib/rate-limit/concurrency-lease";
 import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
@@ -645,10 +646,12 @@ describe("public corpus statement budgets", () => {
             await withMcpPublicReadAdmission({
               ...options,
               redis: {
-                send: async () =>
-                  await Promise.reject(
-                    new TypeError("Coordination unavailable"),
-                  ),
+                send: async (_command, args) =>
+                  args.at(0) === RELEASE_SCRIPT
+                    ? 1
+                    : await Promise.reject(
+                        new TypeError("Coordination unavailable"),
+                      ),
               },
             }),
           dispatchGatewayToolCall: async () => {
