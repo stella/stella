@@ -15,12 +15,14 @@ import {
 } from "./chat-search-text";
 import { TS_HEADLINE_CONFIG } from "./highlight";
 import { globalSearchCursorSql } from "./pagination";
-import type { GlobalSearchCursor } from "./pagination";
+import type { GlobalSearchCursor, SearchRankingTier } from "./pagination";
 import { buildSearchTsQuery } from "./query";
+import { searchTitleTierSql } from "./search-ranking";
 
 export type ChatSearchCandidateRow = Record<string, unknown> & {
   id: string;
   score: number;
+  tier: SearchRankingTier;
 };
 type ReadChatCandidateBatchesOptions = {
   readBatch: (
@@ -59,6 +61,7 @@ export const readChatCandidateBatches = async ({
     const last =
       page.at(-1) ?? panic("A full candidate batch must have a final row");
     cursor = {
+      tier: last.tier,
       score: last.score,
       id: `chat:${last.id}`,
       seen: 0,
@@ -134,6 +137,7 @@ export const projectChatSearchCandidates = async ({
   const ranked = await database.execute<{
     id: string;
     score: number;
+    tier: SearchRankingTier;
     headline: string | null;
   }>(sql`
     WITH source AS (
@@ -142,15 +146,16 @@ export const projectChatSearchCandidates = async ({
         AS r(id text, title text, text text, updated_at timestamptz)
     ), ranked AS (
     SELECT id,
+      ${searchTitleTierSql(sql`title`, query)} AS tier,
       ${query.trim() === "" ? sql`extract(epoch from updated_at)::float8 * 1000` : sql`ts_rank(tsv, ${tsQuery})::float8`} AS score,
       ${query.trim() === "" ? sql`NULL::text` : sql`ts_headline('public.stella_unaccent'::regconfig, left(title || ' ' || text, ${LIMITS.searchHeadlineDocumentMaxChars}), ${tsQuery}, ${TS_HEADLINE_CONFIG})`} AS headline
     FROM source
     WHERE ${query.trim() === "" ? sql`true` : sql`tsv @@ ${tsQuery}`}
     )
-    SELECT id, score, headline FROM ranked
+    SELECT id, tier, score, headline FROM ranked
     WHERE TRUE
-      ${globalSearchCursorSql({ cursor, score: sql`score`, id: sql`'chat:' || id` })}
-    ORDER BY score DESC, id COLLATE "C" DESC
+      ${globalSearchCursorSql({ cursor, tier: sql`tier`, score: sql`score`, id: sql`'chat:' || id` })}
+    ORDER BY tier DESC, score DESC, id COLLATE "C" DESC
     LIMIT ${limit}
   `);
   const byId = new Map(ranked.map((row) => [row.id, row]));
@@ -175,6 +180,7 @@ export const projectChatSearchCandidates = async ({
             ? row["title"]
             : (label ?? row["title"]),
         score: safe.score,
+        tier: safe.tier,
         headline: safe.headline,
       },
     ];

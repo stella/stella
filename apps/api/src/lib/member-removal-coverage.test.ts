@@ -124,6 +124,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",
@@ -459,7 +462,7 @@ const RETAINED_MEMBER_COLUMNS = {
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
   "chat_run_logs.reference_summary":
-    "Derived run log history; retained SDK tool arguments and activity payloads can name members, grant no membership, and expire with the run log.",
+    "Derived conversation context can retain member identifiers in text; it grants no membership and expires with the run log.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",

@@ -79,6 +79,8 @@
     "release-desktop.yml/carry-forward": "main",
     "release-mobile-ios.yml/testflight": "main",
     "publish-mobile-update.yml/publish": "main",
+    "mobile-release-plan.yml/builds": "main",
+    "mobile-release-plan.yml/plan": "main",
     "mcp-canary.yml/mcp-canary": "main",
     "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
@@ -204,6 +206,10 @@
     "refresh-cldr-exemplars.yml/refresh-exemplars": "pr-fast"
   },
   "pushMain": {
+    "mobile-release-plan.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
+    },
     "typecheck-base.yml": {
       "role": "analysis",
       "cancelInProgress": false

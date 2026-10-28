@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "modelRefused": "Modelis atteicās atbildēt",
+    "nothingFound": "Nekas netika atrasts",
     "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
     "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
     "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
@@ -2213,6 +2215,7 @@
     "moveDown": "Pārvietot lejup",
     "moveUp": "Pārvietot augšup",
     "name": "Nosaukums",
+    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "newMatter": "Jauna lieta",
     "newRow": "Jauna rinda",
     "next": "Tālāk",
@@ -2532,6 +2535,7 @@
       "rowLabel": "Klients {index}",
       "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
+      "skippedInFileDuplicate": "Izlaists: atkārto agrāku faila rindu",
       "skippedInvalidRow": "Izlaists: rinda neatbilst importa noteikumiem",
       "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"
@@ -2573,6 +2577,7 @@
       "issue": {
         "address_line_required": "Ja ir norādīta adrese, adreses 1. rinda ir obligāta.",
         "display_name_required": "Neizdevās izveidot parādāmo nosaukumu.",
+        "in_file_duplicate": "Iepriekšējas šī faila rindas dublikāts",
         "invalid_email": "E-pasta adrese nav derīga.",
         "invalid_phone": "Tālruņa numurs nav derīgs.",
         "invalid_tags": "Atzīmēm jābūt teksta vērtībām.",
@@ -2601,7 +2606,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazīlijas CPF/CNPJ (kontrolsumma)",
       "taxIdSchemeNone": "Nodokļu numurs netiek pārbaudīts",
       "title": "Kontaktpersonu importēšana",
-      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
+      "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas.",
+      "warning": {
+        "ignored_populated_column": "Kolonna “{column}” ar vērtībām netiks importēta.",
+        "possible_in_file_duplicate": "Iespējams {row}. rindas dublikāts; sakrīt tikai nosaukums."
+      }
     },
     "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
     "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",
@@ -3298,7 +3307,6 @@
       "simple": "Vienkāršas atzīmes"
     },
     "moreFormatting": "Papildu formatēšana",
-    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "nextChange": "Nākamā izmaiņa",
     "numberedList": "Numurēts saraksts",
     "parseError": "Dokumentu neizdevās apstrādāt. Iespējams, tas ir bojāts vai neatbalstītā formātā.",
@@ -5989,6 +5997,9 @@
       "description": "Saglabāts kā „{fileName}”",
       "title": "Tulkojums ir gatavs"
     }
+  },
+  "transportErrors": {
+    "timeout": "Pieprasījums aizņēma pārāk ilgu laiku. Mēģiniet vēlreiz."
   },
   "validation": {
     "invalidEmail": "Ievadiet derīgu e-pasta adresi.",

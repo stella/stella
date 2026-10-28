@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} sloupců × {rows} řádků = {answers, plural, one {# odpověď} few {# odpovědi} many {# odpovědi} other {# odpovědí}}. Odpovědi čerpají rozpočet.",
+    "modelRefused": "Model odmítl odpovědět",
+    "nothingFound": "Nic nenalezeno",
     "refusedBudget": "Nespuštěno: rozpočet na odpovědi není k dispozici",
     "rerunAllPage": "Spustit vše znovu (tato stránka)",
     "rerunColumnPage": "Spustit sloupec znovu (tato stránka)",
@@ -2213,6 +2215,7 @@
     "moveDown": "Posunout dolů",
     "moveUp": "Posunout nahoru",
     "name": "Název",
+    "networkError": "Chyba sítě. Zkontrolujte připojení k internetu a zkuste to znovu.",
     "newMatter": "Nový spis",
     "newRow": "Nový řádek",
     "next": "Pokračovat",
@@ -2532,6 +2535,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Přeskočeno: duplicitní ID kontaktu",
       "skippedDuplicateTaxId": "Přeskočeno: duplicitní daňové identifikační číslo",
+      "skippedInFileDuplicate": "Přeskočeno: opakuje dřívější řádek souboru",
       "skippedInvalidRow": "Přeskočeno: řádek nesplňuje pravidla importu",
       "skippedInvalidTaxId": "Přeskočeno: neplatné daňové identifikační číslo",
       "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"
@@ -2573,6 +2577,7 @@
       "issue": {
         "address_line_required": "Pokud je uvedena adresa, je nutné vyplnit její první řádek.",
         "display_name_required": "Zobrazovaný název se nepodařilo vytvořit.",
+        "in_file_duplicate": "Duplikát dřívějšího řádku v tomto souboru",
         "invalid_email": "E-mailová adresa není platná.",
         "invalid_phone": "Telefonní číslo není platné.",
         "invalid_tags": "Štítky musí být textové hodnoty.",
@@ -2601,7 +2606,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilské CPF/CNPJ (kontrolní součet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktů",
-      "validateFailed": "Kontakty se nepodařilo zkontrolovat."
+      "validateFailed": "Kontakty se nepodařilo zkontrolovat.",
+      "warning": {
+        "ignored_populated_column": "Sloupec „{column}“ obsahuje data, ale je ignorován.",
+        "possible_in_file_duplicate": "Možný duplikát řádku {row}; shoduje se pouze jméno."
+      }
     },
     "invalidDateOfBirth": "Zadejte platné datum narození.",
     "invalidNationalityCodes": "Zadejte platné kódy státní příslušnosti.",
@@ -3298,7 +3307,6 @@
       "simple": "Jednoduché revize"
     },
     "moreFormatting": "Další formátování",
-    "networkError": "Chyba sítě. Zkontrolujte připojení k internetu a zkuste to znovu.",
     "nextChange": "Následující změna",
     "numberedList": "Číslovaný seznam",
     "parseError": "Dokument se nepodařilo zpracovat. Může být poškozen nebo v nepodporovaném formátu.",
@@ -5989,6 +5997,9 @@
       "description": "Uloženo jako „{fileName}“",
       "title": "Překlad je hotový"
     }
+  },
+  "transportErrors": {
+    "timeout": "Požadavek trval příliš dlouho. Zkuste to znovu."
   },
   "validation": {
     "invalidEmail": "Zadejte platnou e-mailovou adresu.",

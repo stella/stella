@@ -148,7 +148,12 @@ test.each([1, 17, 100])(
       selectedWorkspaceIds: [],
       types: ["chat"],
       userId: toSafeId<"user">("user_1"),
-      cursor: encodeGlobalSearchCursor({ id: cursorId, score: 1, seen: limit }),
+      cursor: encodeGlobalSearchCursor({
+        id: cursorId,
+        tier: 0,
+        score: 1,
+        seen: limit,
+      }),
     });
 
     const dialect = new PgDialect();
@@ -247,6 +252,7 @@ test("sorts filter-only hits newest first across result types", async () => {
           last_edited_by_name: null,
           mime_type: null,
           score: 0,
+          tier: 0,
           title: "Older document",
           type: "document",
           updated_at: new Date("2026-04-01T08:00:00.000Z"),
@@ -265,6 +271,7 @@ test("sorts filter-only hits newest first across result types", async () => {
           headline: null,
           id: "ws_1",
           score: 0,
+          tier: 0,
           title: "Newest matter",
           updated_at: new Date("2026-04-02T08:00:00.000Z"),
         },

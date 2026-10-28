@@ -841,6 +841,76 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     });
   }
 
+  test("authored exact chat titles outrank admitted body matches after withdrawal projection", async () => {
+    const query = "admittedtierquartz";
+    const authoredId = createSafeId<"chatThread">();
+    const generatedId = createSafeId<"chatThread">();
+    const rows = [
+      { id: authoredId, titleSource: "user", text: "A retained note" },
+      {
+        id: generatedId,
+        titleSource: "ai",
+        text: Array.from({ length: 20 }, () => query).join(" "),
+      },
+    ] as const;
+    seededThreads.push(authoredId, generatedId);
+    await scopedDb(async (tx) => {
+      await tx.insert(chatThreads).values(
+        rows.map(({ id, titleSource }) => ({
+          id,
+          organizationId,
+          userId,
+          workspaceId,
+          title: query,
+          titleSource,
+          subjectDecisionId: decisionId,
+        })),
+      );
+      await tx.insert(chatMessages).values(
+        rows.map(({ id, text }) => ({
+          id: createSafeId<"chatMessage">(),
+          threadId: id,
+          userId,
+          workspaceId,
+          role: "user" as const,
+          content: proveTextOnlyPersistedChatMessageContent({
+            version: 3,
+            data: [{ type: "text", content: text }],
+          }),
+        })),
+      );
+      await upsertChatThreadSearchDocument(authoredId, tx);
+      await upsertChatThreadSearchDocument(generatedId, tx);
+    });
+    const searchPage = async (cursor?: string) =>
+      await request(
+        async () =>
+          await searchGlobal(
+            {
+              organizationId,
+              userId,
+              accessibleWorkspaceIds: [workspaceId],
+              selectedWorkspaceIds: [],
+              types: ["chat"],
+              editedByUserIds: [],
+              mimeTypes: [],
+              query,
+              limit: 1,
+              ...(cursor === undefined ? {} : { cursor }),
+            },
+            { scopedDb },
+          ),
+      );
+    const first = await searchPage();
+    expect(first.hits.map(({ id }) => id)).toEqual([`chat:${authoredId}`]);
+    expect(first.hits.at(0)?.title).toBe(query);
+    const second = await searchPage(
+      first.nextCursor ?? panic("Expected a second admitted chat page"),
+    );
+    expect(second.hits.map(({ id }) => id)).toEqual([`chat:${generatedId}`]);
+    expect(second.hits.at(0)?.title).toBe(marker);
+  });
+
   test.each([
     {
       placement: "title and message",

@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "modelRefused": "Mudel keeldus vastamast",
+    "nothingFound": "Midagi ei leitud",
     "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
     "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
     "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
@@ -2213,6 +2215,7 @@
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
     "name": "Nimi",
+    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
@@ -2532,6 +2535,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
+      "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
@@ -2573,6 +2577,7 @@
       "issue": {
         "address_line_required": "Kui aadress on lisatud, on aadressirida 1 kohustuslik.",
         "display_name_required": "Kuvatavat nime ei õnnestunud koostada.",
+        "in_file_duplicate": "Selle faili varasema rea duplikaat",
         "invalid_email": "E-posti aadress on vigane.",
         "invalid_phone": "Telefoninumber on vigane.",
         "invalid_tags": "Sildid peavad olema tekstiväärtused.",
@@ -2601,7 +2606,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
-      "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
+      "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
+      "warning": {
+        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
+        "possible_in_file_duplicate": "Rea {row} võimalik duplikaat; kattub ainult nimi."
+      }
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
     "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
@@ -3298,7 +3307,6 @@
       "simple": "Lihtmärgistus"
     },
     "moreFormatting": "Veel vormindust",
-    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "nextChange": "Järgmine muudatus",
     "numberedList": "Nummerdatud loend",
     "parseError": "Dokumenti ei õnnestunud sõeluda. See võib olla rikutud või toetamata vormingus.",
@@ -5989,6 +5997,9 @@
       "description": "Salvestatud kui „{fileName}“",
       "title": "Tõlge on valmis"
     }
+  },
+  "transportErrors": {
+    "timeout": "Päring võttis liiga kaua aega. Proovi uuesti."
   },
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",

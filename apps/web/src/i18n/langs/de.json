@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "modelRefused": "Das Modell hat die Antwort verweigert",
+    "nothingFound": "Nichts gefunden",
     "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
     "rerunAllPage": "Alle erneut ausführen (diese Seite)",
     "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",
@@ -2213,6 +2215,7 @@
     "moveDown": "Nach unten",
     "moveUp": "Nach oben",
     "name": "Name",
+    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
@@ -2532,6 +2535,7 @@
       "rowLabel": "Mandant {index}",
       "skippedDuplicateContactId": "Übersprungen: doppelte Kontakt-ID",
       "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
+      "skippedInFileDuplicate": "Übersprungen: wiederholt eine frühere Zeile der Datei",
       "skippedInvalidRow": "Übersprungen: Die Zeile verletzt die Importregeln",
       "skippedInvalidTaxId": "Übersprungen: ungültige Steuernummer",
       "skippedLimitReached": "Übersprungen: Kontaktlimit erreicht"
@@ -2573,6 +2577,7 @@
       "issue": {
         "address_line_required": "Adresszeile 1 ist erforderlich, wenn eine Adresse angegeben ist.",
         "display_name_required": "Es konnte kein Anzeigename erstellt werden.",
+        "in_file_duplicate": "Duplikat einer früheren Zeile in dieser Datei",
         "invalid_email": "Die E-Mail-Adresse ist ungültig.",
         "invalid_phone": "Die Telefonnummer ist ungültig.",
         "invalid_tags": "Schlagwörter müssen Textwerte sein.",
@@ -2601,7 +2606,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasilianische CPF/CNPJ (Prüfsumme)",
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
-      "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
+      "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
+      "warning": {
+        "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
+        "possible_in_file_duplicate": "Mögliches Duplikat von Zeile {row}; nur der Name stimmt überein."
+      }
     },
     "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
     "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",
@@ -3298,7 +3307,6 @@
       "simple": "Einfaches Markup"
     },
     "moreFormatting": "Weitere Formatierung",
-    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
     "nextChange": "Nächste Änderung",
     "numberedList": "Nummerierte Liste",
     "parseError": "Das Dokument konnte nicht verarbeitet werden. Möglicherweise ist es beschädigt oder liegt in einem nicht unterstützten Format vor.",
@@ -5989,6 +5997,9 @@
       "description": "Gespeichert als „{fileName}“",
       "title": "Übersetzung bereit"
     }
+  },
+  "transportErrors": {
+    "timeout": "Die Anfrage hat zu lange gedauert. Versuchen Sie es erneut."
   },
   "validation": {
     "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
