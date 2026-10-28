@@ -451,9 +451,9 @@ test("nested composite actions retain the reusable workflow checkout mount", () 
           path: .tooling
       - uses: ./.tooling/.github/actions/outer`),
   );
-  for (const [name, next] of [
-    ["outer", "middle"],
-    ["middle", "inner"],
+  for (const { name, next } of [
+    { name: "outer", next: "middle" },
+    { name: "middle", next: "inner" },
   ]) {
     write(
       fixture.source,

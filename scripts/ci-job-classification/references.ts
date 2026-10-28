@@ -176,7 +176,7 @@ export const resolveLocalMetadataPath = ({
       !localPath.endsWith(`/${relocation.path}`)
     ) {
       throw new AdmissionError({
-        message: "local checkout metadata origin mismatch",
+        message: "local metadata path, repository or origin mismatch",
       });
     }
     const mount = localPath.slice(0, -(relocation.path.length + 1));
