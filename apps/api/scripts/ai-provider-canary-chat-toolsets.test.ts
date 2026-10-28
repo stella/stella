@@ -183,6 +183,7 @@ const serializeTools = (
   }));
 
 const commonProviderOptions = (model: string, tools: Tool[]) => ({
+  threadId: Bun.randomUUIDv7(),
   logger: resolveDebugOption(false),
   messages: [{ role: "user" as const, content: "Contract probe." }],
   model,
