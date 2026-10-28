@@ -3870,6 +3870,8 @@ jobs:
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/postgres.log" --frozen-lockfile --ignore-scripts --filter @stll/api --filter @stll/cli
         env:
           NPM_TOKEN: ""
+          STELLA_CI_INSTALL_RESTORE: uncached
+          STELLA_CI_INSTALL_KEY: filtered-install
 
       - name: Configure test Postgres parity
         run: |

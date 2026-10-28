@@ -892,11 +892,8 @@ type ReleaseAuditDependencies = {
 };
 
 const previousReleaseTag = async (): Promise<string | undefined> => {
-  const merged = await gitTagList([
-    "--merged",
-    "HEAD",
-    "--sort=-version:refname",
-  ]);
+  // Newest by creation, not version: the version line restarted once.
+  const merged = await gitTagList(["--merged", "HEAD", "--sort=-creatordate"]);
   const current = new Set(await gitTagList(["--points-at", "HEAD"]));
   for (const tag of merged) {
     if (/^v\d+\.\d+\.\d+$/u.test(tag) && !current.has(tag)) {

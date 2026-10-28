@@ -204,6 +204,46 @@ test("managed checks require an explicit supported provider and bounded configur
   }
 });
 
+test("a managed free tier requires an isolated OpenRouter credential", () => {
+  const configured = {
+    ...environment,
+    AI_PROVIDER: "openrouter" as const,
+    FEATURE_FREE_TIER: true,
+    FEATURE_ORG_ACCESS_STATE: true,
+    FEATURE_ORG_SERVICE_BUDGETS: true,
+    FEATURE_ACTION_ADMISSION: true,
+    ORG_EVALUATION_PERIOD_DAYS: 14,
+    FEATURE_MANAGED_PROVIDER_CHECKS: true,
+    OPENROUTER_API_KEY: "standard-key",
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS: 71,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 13,
+  };
+  expect(envApiInvariantViolation(configured)).toContain(
+    "requires OPENROUTER_FAST_TIER_API_KEY",
+  );
+  // Catalog checks off: the free floor still runs on managed OpenRouter.
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      FEATURE_MANAGED_PROVIDER_CHECKS: false,
+    }),
+  ).toContain("requires OPENROUTER_FAST_TIER_API_KEY");
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID: "fast-policy",
+      OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+      OPENROUTER_WIF_STS_REGION: "eu-west-1",
+    }),
+  ).toBeNull();
+});
+
 test("OpenRouter WIF settings are nonblank and configured as a complete set", () => {
   const wifSchemas = [
     envApiServerSchema.OPENROUTER_WIF_POLICY_ID,
