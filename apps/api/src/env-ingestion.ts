@@ -1,3 +1,4 @@
+// parser-output-unchanged: reads only the ingestion user agent override; parsed records do not depend on it.
 import * as v from "valibot";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";

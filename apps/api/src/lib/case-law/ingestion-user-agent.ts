@@ -1,3 +1,4 @@
+// parser-output-unchanged: the user agent is read without the API environment; the value and parsed records are unchanged.
 import { readIngestionUserAgentOverride } from "@/api/env-ingestion";
 import { APP_VERSION } from "@/api/lib/version";
 
