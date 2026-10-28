@@ -1434,6 +1434,19 @@ const SK_COURTS_REGISTRY_RECORD = {
  * reads them, so the read-fault guard drives both reads.
  */
 export const skCourtsFixture = (): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    "sud.adresaString": SK_COURTS_LISTING_ROW.sud.adresaString,
+    "sud.suradnice.zemepisnaDlzka":
+      SK_COURTS_LISTING_ROW.sud.suradnice.zemepisnaDlzka,
+    "sud.suradnice.zemepisnaSirka":
+      SK_COURTS_LISTING_ROW.sud.suradnice.zemepisnaSirka,
+    zvyraznenie: SK_COURTS_LISTING_ROW.zvyraznenie,
+    "povodnySud.adresaString": SK_COURTS_DETAIL_RECORD.povodnySud.adresaString,
+    "povodnySud.suradnice.zemepisnaDlzka":
+      SK_COURTS_DETAIL_RECORD.povodnySud.suradnice.zemepisnaDlzka,
+    "povodnySud.suradnice.zemepisnaSirka":
+      SK_COURTS_DETAIL_RECORD.povodnySud.suradnice.zemepisnaSirka,
+  },
   buildDecision: async () => {
     globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
@@ -1615,6 +1628,13 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  * stored row holds rather than one this helper invented.
  */
 export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
+  rawFieldValues: {
+    content: SK_US_LISTING_ROW.content,
+    index: SK_US_LISTING_ROW.index,
+    extension: SK_US_LISTING_ROW.extension,
+    size: SK_US_LISTING_ROW.size,
+    mkDecisionInTermsOfForSort: SK_US_LISTING_ROW.mkDecisionInTermsOfForSort,
+  },
   buildDecision: async () => {
     if (documentUrl !== undefined) {
       const payload = await readGzipJson(documentUrl);

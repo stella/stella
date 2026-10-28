@@ -1257,70 +1257,8 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
       "reason": "the column container; each value in it is declared below",
     },
   ],
-  "sk-courts": [
-    {
-      "field": "povodnySud.adresaString",
-      "policy": "legacy",
-      "reason": "the transferring courthouse's postal address, as for the deciding court's",
-    },
-    {
-      "field": "povodnySud.suradnice.zemepisnaDlzka",
-      "policy": "legacy",
-      "reason": "the transferring courthouse's map position, as for the deciding court's",
-    },
-    {
-      "field": "povodnySud.suradnice.zemepisnaSirka",
-      "policy": "legacy",
-      "reason": "the transferring courthouse's map position, as for the deciding court's",
-    },
-    {
-      "field": "sud.adresaString",
-      "policy": "legacy",
-      "reason": "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
-    },
-    {
-      "field": "sud.suradnice.zemepisnaDlzka",
-      "policy": "legacy",
-      "reason": "the courthouse's map position, as for its address",
-    },
-    {
-      "field": "sud.suradnice.zemepisnaSirka",
-      "policy": "legacy",
-      "reason": "the courthouse's map position, as for its address",
-    },
-    {
-      "field": "zvyraznenie",
-      "policy": "legacy",
-      "reason": "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
-    },
-  ],
-  "sk-us": [
-    {
-      "field": "content",
-      "policy": "legacy",
-      "reason": "always empty in a search row; the document body is served by an endpoint of its own and kept as the document part",
-    },
-    {
-      "field": "extension",
-      "policy": "legacy",
-      "reason": "empty on every record of every corpus this endpoint serves",
-    },
-    {
-      "field": "index",
-      "policy": "legacy",
-      "reason": "the row's offset inside the page it arrived on, which changes with the page and states nothing about the document",
-    },
-    {
-      "field": "mkDecisionInTermsOfForSort",
-      "policy": "legacy",
-      "reason": "a sort projection of the basis field: the same values flattened into one string",
-    },
-    {
-      "field": "size",
-      "policy": "legacy",
-      "reason": "empty on every record of every corpus this endpoint serves",
-    },
-  ],
+  "sk-courts": [],
+  "sk-us": [],
   "uk-fcl": [],
   "us-courtlistener": [],
 }

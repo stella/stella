@@ -28,7 +28,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -1790,10 +1789,9 @@ const listSkCourtsSourceFields = (parts: SourceRawParts): readonly string[] => {
  * either reaches `listSourceFields` as an undeclared field rather than as
  * silence.
  *
- * The three court-registry paths are excluded twice over, once for the
- * deciding court and once for the transferring one: they describe a
- * courthouse rather than a decision, and repeat unchanged on every decision
- * that court has ever issued.
+ * Court-registry fields are retained in the listing and detail responses,
+ * including the transferring court. Repetition across decisions does not
+ * justify excluding a publisher field.
  */
 const SK_COURTS_SOURCE_FIELDS = {
   guid: { disposition: "stored", target: { type: "identity" } },
@@ -1813,15 +1811,33 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "court" },
   },
-  "sud.adresaString": legacyExcludedSourceField(
-    "the courthouse's postal address, identical on every decision that court issues; it describes the court register, not the decision",
-  ),
-  "sud.suradnice.zemepisnaDlzka": legacyExcludedSourceField(
-    "the courthouse's map position, as for its address",
-  ),
-  "sud.suradnice.zemepisnaSirka": legacyExcludedSourceField(
-    "the courthouse's map position, as for its address",
-  ),
+  "sud.adresaString": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "adresaString"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
+  "sud.suradnice.zemepisnaDlzka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "suradnice", "zemepisnaDlzka"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
+  "sud.suradnice.zemepisnaSirka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["sud", "suradnice", "zemepisnaSirka"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
   "sudca.registreGuid": {
     disposition: "stored",
     target: { type: "metadata", key: "judgeRegistreGuid" },
@@ -1842,9 +1858,15 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  zvyraznenie: legacyExcludedSourceField(
-    "fragments of the decision highlighted against a search term the request carried; the crawl sends none, so it is a property of the query rather than of the decision",
-  ),
+  zvyraznenie: {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["zvyraznenie"],
+      reason: "Publisher field retained verbatim in the listing response",
+    },
+  },
   ecli: { disposition: "stored", target: { type: "result", key: "ecli" } },
   oblast: { disposition: "stored", target: { type: "metadata", key: "area" } },
   podOblast: {
@@ -1891,15 +1913,33 @@ const SK_COURTS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "originCourt" },
   },
-  "povodnySud.adresaString": legacyExcludedSourceField(
-    "the transferring courthouse's postal address, as for the deciding court's",
-  ),
-  "povodnySud.suradnice.zemepisnaDlzka": legacyExcludedSourceField(
-    "the transferring courthouse's map position, as for the deciding court's",
-  ),
-  "povodnySud.suradnice.zemepisnaSirka": legacyExcludedSourceField(
-    "the transferring courthouse's map position, as for the deciding court's",
-  ),
+  "povodnySud.adresaString": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "adresaString"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
+  "povodnySud.suradnice.zemepisnaDlzka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "suradnice", "zemepisnaDlzka"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
+  "povodnySud.suradnice.zemepisnaSirka": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: ["povodnySud", "suradnice", "zemepisnaSirka"],
+      reason: "Publisher field retained verbatim in the detail response",
+    },
+  },
   povodnaSpisovaZnacka: {
     disposition: "stored",
     target: { type: "metadata", key: "originCaseNumber" },
