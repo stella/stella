@@ -18,7 +18,11 @@ const SOURCE_ROOT = import.meta.dir;
  * unchanged under Bun, which is what lets the API's end-to-end test sign the
  * real app code in against the real server.
  */
-const DEVICE_MODULES = new Set(["platform.ts", "session-provider.tsx"]);
+const DEVICE_MODULES = new Set([
+  "platform.ts",
+  "restored-session.ts",
+  "session-provider.tsx",
+]);
 
 const importsOf = (source: string): string[] =>
   [
@@ -136,4 +140,23 @@ describe("the app's JavaScript engine", () => {
       ).toEqual([]);
     },
   );
+});
+
+describe("the app's colours", () => {
+  /** Every bundled module but the generated theme, which is where colours live. */
+  const painted = appModules.filter((name) => name !== "ui-theme.gen.ts");
+
+  test("finds the theme that maps the web's colours", () => {
+    expect(painted).toContain("theme.ts");
+  });
+
+  // A colour written into the app would drift from @stll/ui; every colour
+  // comes from the web theme through ui-theme.gen.ts.
+  test.each(painted)("%s writes no colour of its own", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      source.match(/["'`]#[\da-f]{3,8}["'`]|\b(?:rgba?|hsla?|oklch)\(/giu) ??
+        [],
+    ).toEqual([]);
+  });
 });

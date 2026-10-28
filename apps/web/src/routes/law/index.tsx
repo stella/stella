@@ -51,6 +51,7 @@ import { useDecisionColumnPreferences } from "@/features/case-law/decision-colum
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -518,9 +519,9 @@ function LawHome() {
               })}
               to="/law/$country/statutes/$slug"
             >
-              <LandingItemText
+              <StatuteSignalText
                 meta={signalLine(side, item.versionValidFrom)}
-                title={item.title}
+                statute={item}
               />
             </Link>
           ))
