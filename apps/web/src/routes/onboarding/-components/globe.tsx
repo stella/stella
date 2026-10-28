@@ -4,36 +4,15 @@ import createGlobe from "cobe";
 
 import { cn } from "@stll/ui/utils";
 
-import { createVisibleFrameLoop } from "@/components/visible-frame-loop";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { createVisibleFrameLoop } from "@/routes/onboarding/-components/visible-frame-loop";
 
 export type GlobeMarker = {
   /** Latitude, then longitude, in degrees. */
   location: [number, number];
   /** cobe's marker radius, a fraction of the sphere; 0.03 is a pin, 0.15 a blot. */
   size: number;
-  /** A six-digit hex colour of its own; without one, the marker is brand blue. */
-  color?: string;
 };
-
-/** A six-digit hex colour as cobe takes it: three channels in [0, 1]. */
-const hexToRgb = (hex: string): RGB => {
-  const digits = hex.replace("#", "");
-  const channel = (offset: number): number =>
-    Number.parseInt(digits.slice(offset, offset + 2), 16) / 255;
-  return [channel(0), channel(2), channel(4)];
-};
-
-type CobeMarker = {
-  location: [number, number];
-  size: number;
-  color?: [number, number, number];
-};
-
-const toCobeMarker = ({ color, location, size }: GlobeMarker): CobeMarker =>
-  color === undefined
-    ? { location, size }
-    : { location, size, color: hexToRgb(color) };
 
 type GlobeProps = {
   markers: readonly GlobeMarker[];
@@ -132,9 +111,7 @@ const shortestAngleDelta = (target: number, current: number): number =>
   Math.atan2(Math.sin(target - current), Math.cos(target - current));
 
 /**
- * A slowly turning dotted globe with markers on it, drawn by cobe on a
- * canvas. One drawing for every surface that puts places on a sphere, so
- * they share the sphere, the marker colour and the theme handling.
+ * The jurisdiction preview, drawn by cobe on a slowly turning globe.
  *
  * The markers and the focus live in refs the animation frame reads, so a
  * change to either reaches the next frame without rebuilding the globe.
@@ -149,7 +126,7 @@ export const Globe = ({
   tilt,
 }: GlobeProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const markersRef = useRef<CobeMarker[]>([]);
+  const markersRef = useRef<GlobeMarker[]>([]);
   const targetPhiRef = useRef<number | null>(null);
   const themeRef = useRef<GlobeTheme | null>(null);
   const [themeVersion, setThemeVersion] = useState(0);
@@ -164,7 +141,7 @@ export const Globe = ({
   });
 
   useExternalSyncEffect(() => {
-    markersRef.current = markers.map(toCobeMarker);
+    markersRef.current = markers.slice();
     targetPhiRef.current =
       focusLongitude === null ? null : longitudeToTargetPhi(focusLongitude);
   }, [focusLongitude, markers]);

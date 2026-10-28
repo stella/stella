@@ -23,7 +23,10 @@ test.beforeAll(() => {
     "bun",
     [
       "build",
-      path.resolve(import.meta.dirname, "../fixtures/law-coverage.fixture.tsx"),
+      path.resolve(
+        import.meta.dirname,
+        "../../tests/fixtures/law-coverage.fixture.tsx",
+      ),
       "--target=browser",
       "--minify",
       "--external=@tanstack/react-start/server",
@@ -107,7 +110,10 @@ for (const locale of ["en", "ar"]) {
     await expect(page).toHaveURL(/#country-cze$/u);
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(table).toBeVisible();
-    const help = country.locator('[data-slot="tooltip-trigger"]');
+    const completenessLabel = locale === "en" ? "Completeness" : "الاكتمال";
+    const help = country
+      .getByRole("columnheader", { name: completenessLabel, exact: true })
+      .getByRole("button", { name: completenessLabel, exact: true });
     await help.focus();
     await expect(page.locator('[data-slot="tooltip-popup"]')).toBeVisible();
     await expect(page.locator('[data-slot="tooltip-popup"]')).toContainText(

@@ -9,15 +9,12 @@ import {
 } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
-import { FormattingProvider } from "../../src/i18n/formatting-context";
-import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
-import en from "../../src/i18n/langs/en.json" with { type: "json" };
-import { CaseLawCoveragePage } from "../../src/routes/law/-law-coverage/coverage-page";
-import {
-  COVERAGE,
-  CZECHIA,
-  IN_PREPARATION,
-} from "../../src/routes/law/-law-coverage/coverage-page.fixture";
+import { FormattingProvider } from "@/i18n/formatting-context";
+import ar from "@/i18n/langs/ar.json" with { type: "json" };
+import en from "@/i18n/langs/en.json" with { type: "json" };
+
+import { CaseLawCoveragePage } from "@/routes/law/-law-coverage/coverage-page";
+import { COVERAGE, CZECHIA, IN_PREPARATION } from "@/routes/law/-law-coverage/coverage-page.fixture";
 
 const locale =
   new URL(location.href).searchParams.get("locale") === "ar" ? "ar" : "en";

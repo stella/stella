@@ -73,7 +73,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   completeness: { state: "not-counted-yet" },
 };
 
-export const CZECHIA: CaseLawCoverageCountry = {
+export const CZECHIA = {
   availability: "searchable",
   country: "CZE",
   health: "delayed",
@@ -104,7 +104,7 @@ export const CZECHIA: CaseLawCoverageCountry = {
     notCountedSources: 1,
   },
   sources: [NEARLY_COMPLETE, NEVER_MEASURED, NEVER_COUNTED],
-};
+} satisfies CaseLawCoverageCountry;
 
 export const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
