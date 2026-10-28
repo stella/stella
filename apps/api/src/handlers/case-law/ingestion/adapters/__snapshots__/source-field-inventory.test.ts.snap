@@ -1,6 +1,6 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`every exclusion is visible and legacy exclusions match the migration census exactly 1`] = `
+exports[`every registered source has a reviewable exclusion census 1`] = `
 {
   "at-asylgh": [],
   "at-bks": [],
@@ -19,7 +19,10 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
   "cz-regional": [],
   "cz-uohs": [],
   "cz-us": [],
+  "de-bfdi": [],
   "eu-ecj": [],
+  "eu-edpb": [],
+  "eu-wp29": [],
   "hu-bhgy": [],
   "pl-courts": [],
   "pl-kio": [],

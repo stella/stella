@@ -3,7 +3,6 @@ import * as cheerio from "cheerio";
 
 import {
   excludedSourceSurface,
-  legacyExcludedSourceField,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -417,7 +416,8 @@ const FIELDS = [
   "asset-title",
   "asset-language",
   "asset-format",
-  "asset-size",
+  "newsroom-asset-size",
+  "archive-asset-size",
   "archive-year",
   "archive-date",
 ] as const;
@@ -427,28 +427,80 @@ const fields = {
     disposition: "stored",
     target: { type: "metadata", key: "statedReference" },
   },
-  "publisher-date": legacyExcludedSourceField(
-    "Publisher Date is retained in sourceDates and raw HTML; it is not an adoption date.",
-  ),
+  "publisher-date": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The original newsroom publisher date remains in this HTML and sourceDates.publisherDate; it is not treated as an adoption date.",
+    },
+  },
   "asset-language": {
     disposition: "stored",
     target: { type: "metadata", key: "expression" },
   },
-  "asset-title": legacyExcludedSourceField(
-    "Download display names are retained in raw HTML; the instrument title identifies the document.",
-  ),
-  "asset-format": legacyExcludedSourceField(
-    "Asset format is retained in raw HTML and verified by the bounded PDF or Word content-type boundary.",
-  ),
-  "asset-size": legacyExcludedSourceField(
-    "Publisher display size is presentation metadata; actual bytes and raw HTML are retained.",
-  ),
-  "archive-year": legacyExcludedSourceField(
-    "Year grouping is retained in sourceDates and raw HTML, without invented day precision.",
-  ),
-  "archive-date": legacyExcludedSourceField(
-    "Archive date text is retained in sourceDates and raw HTML without inferring adoption.",
-  ),
+  "asset-title": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher download title is retained verbatim in the newsroom detail HTML.",
+    },
+  },
+  "asset-format": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher format label is retained in the newsroom detail HTML alongside the verified document bytes.",
+    },
+  },
+  "newsroom-asset-size": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-1",
+      path: [],
+      reason:
+        "The publisher newsroom size label is retained in the original detail HTML.",
+    },
+  },
+  "archive-asset-size": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "The publisher archive download size label is retained verbatim in the original index HTML.",
+    },
+  },
+  "archive-year": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "Archive year grouping is retained verbatim in the original index and sourceDates without invented day precision.",
+    },
+  },
+  "archive-date": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "source-page-0",
+      path: [],
+      reason:
+        "Archive date text is retained verbatim in the original index and sourceDates without inferring adoption.",
+    },
+  },
 } as const satisfies Record<(typeof FIELDS)[number], SourceFieldDisposition>;
 const SURFACES = [
   "index",
@@ -619,8 +671,11 @@ export const wp29Adapter = {
         if ($(".ecl-file__meta").length) {
           discovered.add("asset-format");
         }
-        if ($(".ecl-file__meta, .link-size").length) {
-          discovered.add("asset-size");
+        if ($(".ecl-file__meta").length) {
+          discovered.add("newsroom-asset-size");
+        }
+        if ($(".link-size").length) {
+          discovered.add("archive-asset-size");
         }
         if ($(".contentsection h2").length) {
           discovered.add("archive-year");
