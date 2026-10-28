@@ -835,9 +835,15 @@ const runAuthorizedMcpToolCall = async ({
     const outcome = admitted.value;
     switch (outcome.status) {
       case "leased":
-        return outcome.value;
       case "degraded":
-        return outcome.value;
+        return Result.isOk(outcome.value)
+          ? outcome.value.value
+          : internalErrorResult({
+              mode,
+              context,
+              toolName,
+              error: outcome.value.error,
+            });
       default:
         outcome satisfies never;
         return panic("Unhandled public-read admission outcome");

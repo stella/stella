@@ -59,7 +59,7 @@ export const runWithPublicReadStatementTimeout = <T>(
 export const runWithPublicReadScope = async <T>(
   { budgetMs, signal }: PublicReadTimeoutOptions,
   fn: () => Promise<T>,
-): Promise<T> => {
+): Promise<Result<T, unknown>> => {
   const inherited = publicReadTimeout.getStore();
   const scopeSignal = combinedPublicReadSignal(signal, inherited?.signal);
   const work: PublicReadWork = { pending: new Set(), status: "active" };
@@ -78,12 +78,9 @@ export const runWithPublicReadScope = async <T>(
             await Promise.allSettled(work.pending);
           }
           work.status = "settled";
-          scopeSignal?.throwIfAborted();
-          if (Result.isError(outcome)) {
-            const error = outcome.error;
-            throw error;
-          }
-          return outcome.value;
+          return scopeSignal?.aborted
+            ? Result.err(scopeSignal.reason)
+            : outcome;
         },
       ),
   );
@@ -254,24 +251,25 @@ const fetchPublicRead = async ({
     init.signal,
     input instanceof Request ? input.signal : undefined,
   );
-  const result = await Result.tryPromise({
-    try: async () =>
-      await fetchPublicReadRequest({
-        capability,
-        input,
-        init: { ...init, signal },
-        fetcher,
-      }),
-    catch: (error: unknown) => error,
-  });
-  if (Result.isError(result)) {
-    finish();
-    const error = result.error;
-    throw error;
+  let ownership: "pending" | "owned" = "pending";
+  try {
+    const response = await fetchPublicReadRequest({
+      capability,
+      input,
+      init: { ...init, signal },
+      fetcher,
+    });
+    const owned =
+      context?.work === undefined
+        ? response
+        : ownedResponse({ response, signal, finish });
+    ownership = "owned";
+    return owned;
+  } finally {
+    if (ownership === "pending") {
+      finish();
+    }
   }
-  return context?.work === undefined
-    ? result.value
-    : ownedResponse({ response: result.value, signal, finish });
 };
 
 /** Capabilities capture their scope and cannot open I/O after it settles. */
@@ -307,27 +305,22 @@ export const withPublicReadIo = async <T>(
           init,
           fetcher,
         });
-        const outcome = await Result.tryPromise({
-          try: async () => await consume(response),
-          catch: (error: unknown) => error,
-        });
-        const body = response.body;
-        const cleanup =
-          body !== null && !body.locked
-            ? await Result.tryPromise({
-                try: async () => await body.cancel(),
-                catch: (error: unknown) => error,
-              })
-            : Result.ok(undefined);
-        if (Result.isError(outcome)) {
-          const error = outcome.error;
-          throw error;
+        let consumption: "pending" | "consumed" = "pending";
+        try {
+          const value = await consume(response);
+          consumption = "consumed";
+          return value;
+        } finally {
+          const body = response.body;
+          if (body !== null && !body.locked) {
+            if (consumption === "consumed") {
+              await body.cancel();
+            } else {
+              // Consumption failure takes precedence over a cleanup failure.
+              await Promise.allSettled([body.cancel()]);
+            }
+          }
         }
-        if (Result.isError(cleanup)) {
-          const error = cleanup.error;
-          throw error;
-        }
-        return outcome.value;
       },
     };
     return await run(io);

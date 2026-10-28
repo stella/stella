@@ -215,7 +215,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               } else {
                 pendingBody.finish();
               }
-              const outcome = await run;
+              const admittedOutcome = await run;
+              const outcome = admittedOutcome.andThen(({ value }) => value);
               expect(Result.isError(outcome)).toBe(true);
               expect(releaseAttempts).toBe(1);
               expect(
@@ -346,7 +347,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
 
           allowCancellation.resolve(undefined);
           await cancellationSettled.promise;
-          const outcome = await run;
+          const admittedOutcome = await run;
+          const outcome = admittedOutcome.andThen(({ value }) => value);
           if (Result.isOk(outcome) || !ActionAdmissionError.is(outcome.error)) {
             panic("Expected typed admission-unavailable cancellation");
           }

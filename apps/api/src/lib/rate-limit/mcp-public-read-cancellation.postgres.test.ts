@@ -159,7 +159,8 @@ describe.skipIf(!enabled)(
             }
             expect(contender.error.code).toBe("action_concurrency_busy");
             finishRelease.resolve(undefined);
-            const outcome = await admitted;
+            const admittedOutcome = await admitted;
+            const outcome = admittedOutcome.andThen(({ value }) => value);
             if (
               Result.isOk(outcome) ||
               !ActionAdmissionError.is(outcome.error)
@@ -267,7 +268,10 @@ describe.skipIf(!enabled)(
           await renewalFailed.promise;
           const outcome = await admitted;
           expect(outcome).toMatchObject(
-            Result.ok({ status: "degraded", value: "query-complete" }),
+            Result.ok({
+              status: "degraded",
+              value: Result.ok("query-complete"),
+            }),
           );
           expect(signalAborted).toBe(false);
         });

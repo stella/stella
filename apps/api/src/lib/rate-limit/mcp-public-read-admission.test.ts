@@ -101,7 +101,7 @@ for (const scenario of [
             reason:
               scenario === "invalid_reply" ? "invalid_reply" : "unavailable",
           },
-          value: "read",
+          value: Result.ok("read"),
         }),
       );
       expect(reads).toBe(1);
