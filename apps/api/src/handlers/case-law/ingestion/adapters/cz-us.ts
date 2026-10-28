@@ -26,7 +26,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -920,9 +919,16 @@ const NALUS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "Název soudu": legacyExcludedSourceField(
-    "the publisher naming itself; the deciding court is resolved from the record's own ECLI, because this database also republishes other courts' decisions",
-  ),
+  "Název soudu": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The record card retains the publisher court label and stated retrieval address exactly, independently of canonical court and URL resolution",
+    },
+  },
   "Spisová značka": {
     disposition: "stored",
     target: { type: "result", key: "caseNumber" },
@@ -1015,9 +1021,16 @@ const NALUS_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "note" },
   },
-  "URL adresa": legacyExcludedSourceField(
-    "the retrieval address of the document the row already stores as sourceUrl",
-  ),
+  "URL adresa": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "detail",
+      path: [],
+      reason:
+        "The record card retains the publisher court label and stated retrieval address exactly, independently of canonical court and URL resolution",
+    },
+  },
 } as const satisfies Record<keyof NalusPublisherRecord, SourceFieldDisposition>;
 
 /**

@@ -1,5 +1,7 @@
+// parser-output-unchanged: Registers the NSS publisher-reference URL schema; other adapters retain their own schemas.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/at-courts.metadata-urls";
+import { CZ_NSS_PUBLISHER_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-nss.metadata-urls";
 import { CZ_UOHS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs.metadata-urls";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
@@ -23,7 +25,7 @@ const DOCUMENT_SUPPLEMENTS_METADATA_URL_SCHEMA = {
 export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.CZ_REGIONAL]: undefined,
   [ADAPTER_KEYS.CZ_NS]: undefined,
-  [ADAPTER_KEYS.CZ_NSS]: undefined,
+  [ADAPTER_KEYS.CZ_NSS]: CZ_NSS_PUBLISHER_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.CZ_US]: undefined,
   [ADAPTER_KEYS.SK_COURTS]: SK_COURTS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.SK_US]: undefined,
