@@ -45,7 +45,10 @@ import {
 import type { getActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { DEMO_ACCOUNT_DAILY_ACTION_BUDGET } from "@/api/lib/rate-limit/demo-action-budget";
 import { sweepBoundStreams } from "@/api/lib/sse";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import {
   MCP_ALL_RESOURCE_SCOPES,
@@ -100,8 +103,34 @@ const listMcpToolsMock = mock(
     _scopes?: unknown,
   ): Promise<McpTool[]> => [],
 );
-const listMcpResourcesMock = mock((): Resource[] => []);
+const listMcpResourcesFake: Parameters<
+  typeof createMcpHttpRequestHandler
+>[0]["listMcpResources"] = async () => [];
+const listMcpResourcesMock = mock(listMcpResourcesFake);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
+
+beforeEach(() => {
+  actionSizePolicyMock.mockReset();
+  actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
+  authenticateMcpRequestMock.mockReset();
+  captureErrorMock.mockReset();
+  observeTransportFailureMock.mockReset();
+  getMcpToolDefinitionMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockImplementation(
+    (_toolName: string): readonly ToolScope[] | undefined => undefined,
+  );
+  handleMcpToolCallMock.mockReset();
+  listMcpToolsMock.mockReset();
+  listMcpToolsMock.mockImplementation(async () => []);
+  listMcpResourcesMock.mockReset();
+  listMcpResourcesMock.mockImplementation(async () => []);
+  readMcpResourceMock.mockReset();
+  readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
+  resolveMcpSessionContextMock.mockReset();
+  resetAnalyticsForTesting();
+  resetMetricLineSinkForTesting();
+});
 
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
@@ -229,29 +258,6 @@ type McpJsonRpcFailure = {
 };
 
 describe("handleMcpHttpRequest", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    observeTransportFailureMock.mockReset();
-    getMcpToolDefinitionMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockImplementation(
-      (_toolName: string): readonly ToolScope[] | undefined => undefined,
-    );
-    handleMcpToolCallMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    listMcpResourcesMock.mockReset();
-    listMcpResourcesMock.mockImplementation(() => []);
-    readMcpResourceMock.mockReset();
-    readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
-    resolveMcpSessionContextMock.mockReset();
-    resetAnalyticsForTesting();
-    resetMetricLineSinkForTesting();
-  });
-
   test("a real MCP transport request emits exactly one phase record", async () => {
     const toolProjectionDelayMs = 100;
     const lines: string[] = [];
@@ -1221,6 +1227,7 @@ describe("handleMcpHttpRequest", () => {
       expect(opened.structuredContent).toEqual(pickerResult);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "documents",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       expect(listMcpToolsMock).toHaveBeenCalledWith(context, "documents", [
         "stella:read",
@@ -1319,6 +1326,7 @@ describe("handleMcpHttpRequest", () => {
       });
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "law",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       expect(listMcpToolsMock).toHaveBeenCalledWith(context, "law", [
         "stella:search",
@@ -1419,6 +1427,7 @@ describe("handleMcpHttpRequest", () => {
     try {
       expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
         mode: "default",
+        resolveApiKeySession: resolveMachineApiKeySession,
       });
       await sweepBoundStreams(async () => new Set());
       expect(authenticateMcpRequestMock).toHaveBeenLastCalledWith("token", {
@@ -2096,7 +2105,7 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    listMcpResourcesMock.mockReturnValue([
+    listMcpResourcesMock.mockResolvedValue([
       {
         uri: "stella://reference/template-markers",
         name: "template-markers",
@@ -2116,9 +2125,7 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
-      type: "mcp-context",
-    });
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", { context });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);
@@ -2172,17 +2179,6 @@ describe("handleMcpHttpRequest", () => {
 });
 
 describe("MCP transport conformance", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    observeTransportFailureMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    resolveMcpSessionContextMock.mockReset();
-  });
-
   const authenticateSession = () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({

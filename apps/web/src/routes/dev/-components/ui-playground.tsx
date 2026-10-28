@@ -4,6 +4,7 @@ import type * as React from "react";
 import { useTranslations } from "use-intl";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
   Accordion,
   AccordionItem,
@@ -320,11 +321,11 @@ export function UiPlayground() {
     "delete this workspace",
   );
 
-  const filteredComboboxOptions = COMBOBOX_OPTIONS.filter((option) =>
-    `${option.label} ${option.detail}`
-      .toLowerCase()
-      .includes(comboboxQuery.toLowerCase()),
-  );
+  const filteredComboboxOptions = filterBySearchQuery({
+    items: COMBOBOX_OPTIONS,
+    query: comboboxQuery,
+    fields: ({ detail, label }) => [`${label} ${detail}`],
+  });
 
   return (
     <div className="min-h-0 flex-1">
@@ -359,6 +360,7 @@ export function UiPlayground() {
                 <div className="flex flex-wrap items-center gap-2">
                   <SplitButton
                     size="sm"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {
@@ -377,6 +379,7 @@ export function UiPlayground() {
                   </SplitButton>
                   <SplitButton
                     size="md"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {

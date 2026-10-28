@@ -66,11 +66,7 @@ export const fileSchema = ({ maxBytes }: { maxBytes: number }) =>
     v.maxSize(maxBytes, `The file is larger than ${String(maxBytes)} bytes`),
   );
 
-export const userIdSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.maxLength(128),
-);
+export { userIdSchema } from "@stll/api-contract/safe-id";
 
 export const defaultVarcharSchema = v.pipe(
   v.string(),

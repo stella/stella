@@ -38,6 +38,7 @@ import { queryEntities } from "@/api/lib/entities/query-entities";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 
 /**
  * Session-local copies of `tables` that shadow the shared ones on this
@@ -239,6 +240,7 @@ export const seedEntityReadScaling = async (db: GatedTestDb, size: number) => {
     versionEntityId: versionEntity.id,
     safeDb,
     cleanup: async () => {
+      await deleteMatterBillingRecords(db, { workspaceIds: [workspaceId] });
       await db
         .update(entities)
         .set({ currentVersionId: null })

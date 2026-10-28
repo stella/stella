@@ -15,7 +15,6 @@ on:
         options:
           - typecheck-repo
           - typecheck-package
-          - typecheck-parity
           - typecheck-probe
           - lint
           - test-files
@@ -115,30 +114,12 @@ jobs:
           case "$CHECK_CHECK" in
             typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;
             typecheck-package) bun --filter "$CHECK_TARGET" typecheck ;;
-            typecheck-parity) bun run check:typecheck-parity ;;
             typecheck-probe) bash scripts/typecheck-command-probe.sh ;;
             lint) bun run lint ;;
             test-files) bun scripts/run-manual-test-files.ts ;;
             verify-affected) bun run verify ;;
           esac 2>&1 | tee "$CHECK_LOG_FILE"
           echo "${PIPESTATUS[0]}" > "$CHECK_EXIT_FILE"
-
-      - name: Record typecheck parity report
-        if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
-        run: |
-          {
-            printf '# Bun typecheck parity report\n\n## CI parity output\n\n```text\n'
-            cat "$RUNNER_TEMP/manual-check.log"
-            printf '\n```\n'
-          } > "$RUNNER_TEMP/CLOUD_REPORT.md"
-
-      - name: Upload typecheck parity report
-        if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: typecheck-parity-report
-          path: ${{ runner.temp }}/CLOUD_REPORT.md
-          if-no-files-found: error
 
       - name: Write result
         if: always() && steps.validate.outcome != 'skipped'

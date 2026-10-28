@@ -138,7 +138,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -184,7 +184,10 @@ import {
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
-import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -580,7 +583,7 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
@@ -1267,8 +1270,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1293,7 +1296,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {

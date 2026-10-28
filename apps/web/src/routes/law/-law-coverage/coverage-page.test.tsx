@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -8,6 +9,7 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
+import { getByRole } from "@testing-library/dom";
 import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -20,6 +22,7 @@ import type {
   CaseLawCoverageCountry,
   CaseLawCoverageSource,
 } from "@/routes/law/-law-coverage/coverage.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const rootRoute = createRootRoute();
 
@@ -67,6 +70,8 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 996,
+  publishedDecisions: 990,
+  courts: [{ court: "Nejvyšší soud", decisions: 990 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 12,
   completeness: {
@@ -89,6 +94,8 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 4321,
+  publishedDecisions: 4200,
+  courts: [{ court: "Ústavní soud", decisions: 4200 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
@@ -105,6 +112,8 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: null,
+  publishedDecisions: 600,
+  courts: [{ court: "Nejvyšší správní soud", decisions: 600 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
@@ -147,6 +156,7 @@ const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
   totals: {
+    addedLastWeek: 12,
     searchable: 4_200_000,
     stored: { decisions: 4_500_000, asOf: COUNTED_AT },
   },
@@ -177,19 +187,18 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("4,200,000");
-    // What is held but not searchable is a source's own figure, in its
-    // decisions column; neither it nor a sum of the two heads the page.
+    // Stored completeness counts stay separate from the searchable total.
     expect(markup).not.toContain("4,500,000");
     expect(markup).not.toContain("8,700,000");
   });
 
-  test("a source states the decisions it holds, measured against a total or not", () => {
+  test("a source counts its published court rows separately from stored completeness", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
-    expect(markup).toContain(">996<");
-    expect(markup).toContain(">4,321<");
-    // A source nobody has counted holds no stated number, which is not zero.
-    expect(markup).toContain(">—<");
+    expect(markup).toContain(">990<");
+    expect(markup).toContain(">4,200<");
+    expect(markup).toContain(">600<");
+    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
     // The sweep's date is the page's own, stated once at the top, not per row.
     expect(markup).not.toContain("Sep 17, 2026");
   });
@@ -222,14 +231,6 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain(messages.caseLaw.coverage.healthStalled);
   });
 
-  test("a source whose gaps nobody reviewed states nothing about them", () => {
-    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
-
-    expect(markup).toContain(messages.caseLaw.coverage.pendingTexts);
-    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
-    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
-  });
-
   test("a corpus 99.6 % of the way there prints 99, never 100", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
@@ -253,7 +254,7 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain("50%");
   });
 
-  test("a source states its decision years, pending texts and known gaps", () => {
+  test("source rows omit decision years, pending texts and gap details", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{
@@ -269,20 +270,9 @@ describe("the coverage page states what it counts", () => {
                   pendingTextCount: 1234,
                   knownGaps: {
                     type: "reconciled",
-                    summary: { missing: 2, shortSlices: 2, unlistedSlices: 0 },
+                    summary: { missing: 11, shortSlices: 1, unlistedSlices: 0 },
                     years: [
-                      {
-                        year: 1969,
-                        type: "gaps",
-                        missing: 1,
-                        shortSlices: 1,
-                      },
-                      {
-                        year: 1989,
-                        type: "gaps",
-                        missing: 1,
-                        shortSlices: 1,
-                      },
+                      { year: 1969, type: "gaps", missing: 11, shortSlices: 1 },
                     ],
                   },
                 },
@@ -293,51 +283,11 @@ describe("the coverage page states what it counts", () => {
       />,
     );
 
-    // The source's own range, distinct from the country's 1993–2026.
-    expect(markup).toContain("1958–2011");
-    expect(markup).toContain(
-      `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
-    );
-    expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
-  });
-
-  test("unread listing periods are never counted as missing decisions", () => {
-    const markup = render(
-      <CaseLawCoveragePage
-        coverage={{
-          ...COVERAGE,
-          countries: [
-            {
-              ...CZECHIA,
-              sources: [
-                {
-                  ...NEARLY_COMPLETE,
-                  knownGaps: {
-                    type: "reconciled",
-                    summary: { missing: 0, shortSlices: 0, unlistedSlices: 3 },
-                    years: [
-                      {
-                        year: 2004,
-                        type: "unlisted",
-                        missing: 0,
-                        shortSlices: 0,
-                        unlistedSlices: 3,
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        }}
-      />,
-    );
-
-    expect(markup).toContain(
-      `${messages.caseLaw.coverage.unreadListingPeriods}: 3`,
-    );
-    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
-    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
+    expect(markup).not.toContain("1958–2011");
+    expect(markup).not.toContain("1,234");
+    expect(markup).not.toContain("Decision years:");
+    expect(markup).not.toContain("Pending texts:");
+    expect(markup).not.toContain("Known gaps:");
   });
 
   test("freshness is a word, with the dot only beside it", () => {
@@ -396,50 +346,68 @@ describe("the coverage page states what it counts", () => {
       />,
     );
 
-    // The court row still states its own week; only the source's is unknown.
-    expect(markup).toContain("+12");
+    expect(markup).not.toContain("+12");
     expect(markup).not.toContain(">0<");
   });
 
-  test("the courts beyond the listed ones close the breakdown as one row", () => {
+  test("each country has one source table with collapsed court rows that include every court", () => {
+    const source = {
+      ...NEARLY_COMPLETE,
+      publishedDecisions: 1000,
+      courts: [
+        { court: "Nejvyšší soud", decisions: 500 },
+        { court: "Okresní soud v Benešově", decisions: 20 },
+        { court: null, decisions: 480 },
+      ],
+    };
     const markup = render(
       <CaseLawCoveragePage
         coverage={{
           ...COVERAGE,
-          countries: [
-            {
-              ...CZECHIA,
-              courts: [
-                ...(CZECHIA.courts ?? []),
-                {
-                  type: "other-courts",
-                  tier: "other",
-                  courts: 5,
-                  decisions: 480,
-                },
-              ],
-            },
-          ],
+          countries: [{ ...CZECHIA, sources: [source] }],
         }}
       />,
     );
 
-    // The row names and counts the other courts, carries their decisions,
-    // and states no activity, because none was read for them.
+    expect(markup.match(/<table[ >]/gu)).toHaveLength(1);
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("aria-controls=");
+    expect(markup).toMatch(/<tbody[^>]*hidden=""/u);
+    expect(markup).toContain("Okresní soud v Benešově");
     expect(markup).toContain("Other courts");
-    expect(markup).toContain("5 courts");
-    expect(markup).toContain("480");
+    expect(markup).toContain(">480<");
+    expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
   });
 
-  test("a court breakdown the endpoint could not read says so", () => {
+  test("court toggles have distinct accessible names containing their source names", async () => {
+    GlobalRegistrator.register();
+    const { document: testDocument } = globalThis;
+    try {
+      // safe-html: React renderToStaticMarkup escapes the coverage fixture values.
+      testDocument.body.innerHTML = render(
+        <CaseLawCoveragePage coverage={COVERAGE} />,
+      );
+
+      const first = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEARLY_COMPLETE.name}`,
+      });
+      const second = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEVER_MEASURED.name}`,
+      });
+      expect(first).not.toBe(second);
+    } finally {
+      await unregisterDomEnvironment();
+    }
+  });
+
+  test("an unavailable country court breakdown leaves no separate section", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{ ...COVERAGE, countries: [{ ...CZECHIA, courts: null }] }}
       />,
     );
-
-    expect(markup).toContain(messages.caseLaw.coverage.courtsUnavailable);
-    expect(markup).not.toContain(messages.caseLaw.courtTiers.supreme);
+    expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
+    expect(markup).not.toContain("court=");
   });
 
   test("relative times follow the formatting locale, not the message language", () => {
