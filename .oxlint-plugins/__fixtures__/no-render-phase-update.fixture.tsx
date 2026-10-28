@@ -29,6 +29,7 @@ export const NavigationBefore = ({ router }) => {
 
 export const NavigationAfter = ({ router }) => {
   const [, dispatch] = useReducer((value) => value + 1, 0);
+  // expect-clean: no-render-phase-update/no-render-phase-update
   return (
     <button
       type="button"

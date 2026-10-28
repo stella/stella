@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link, useMatch, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
@@ -1034,9 +1034,13 @@ const useDocumentPaneRouting = ({
   workspaceId,
 }: DocumentPaneRoutingArgs): DocumentPaneRouting => {
   const navigate = useNavigate();
-  const documentMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId/document",
-    shouldThrow: false,
+  const documentMatch = useRouterState({
+    select: ({ matches }) =>
+      matches.find(
+        (match) =>
+          match.routeId ===
+          "/_protected/workspaces/$workspaceId/$viewId/document",
+      ),
   });
   const documentSearch = documentMatch?.search;
   const routeSearch =
