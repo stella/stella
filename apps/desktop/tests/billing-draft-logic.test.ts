@@ -260,7 +260,8 @@ describe("confirmed batch request", () => {
         ranges: [range("10:00", "10:06")],
       },
     ];
-    expect(
+    // JSON fixtures widen literal fields to string; compare as plain data.
+    expect<unknown>(
       items.map((item) =>
         confirmedBatchItem({
           item,
