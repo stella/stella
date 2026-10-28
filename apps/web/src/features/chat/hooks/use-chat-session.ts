@@ -9,6 +9,7 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -17,6 +18,7 @@ import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -78,6 +80,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
@@ -144,7 +147,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -156,7 +159,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -165,6 +168,10 @@ import {
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -175,6 +182,7 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 type UseChatSessionOptions = {
+  exceptionScope: HandlerExceptionScope;
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
@@ -242,7 +250,13 @@ const prepareCreateDocumentDraft = async (
   });
   switch (prepared.status) {
     case "failed":
-      getAnalytics().captureError(prepared.error);
+      getAnalytics().captureError(prepared.error, {
+        fingerprintKey: "prepareCreateDocumentDraft:failure",
+        scope: {
+          type: "handler",
+          handlerId: "prepareCreateDocumentDraft:failure",
+        },
+      });
       return null;
     case "ready":
       return { buffer: prepared.buffer, fileName };
@@ -254,14 +268,32 @@ const prepareCreateDocumentDraft = async (
   }
 };
 
+const downloadCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+) =>
+  Result.tryPromise(async () => {
+    const draft = await prepareCreateDocumentDraft(toolCallId, input);
+    if (draft === null) {
+      return { status: "invalid-source" } as const;
+    }
+    downloadFile(
+      new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+      draft.fileName,
+    );
+    return { status: "downloaded", fileName: draft.fileName } as const;
+  });
+
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
+  documentOnScreen: CurrentWorkspaceDocument,
 ) => {
-  await openEntityInInspector(
-    output.entityId,
-    output.fileName,
-    output.workspaceId,
-  );
+  await openEntityInInspector({
+    documentOnScreen,
+    entityId: output.entityId,
+    label: output.fileName,
+    workspaceId: output.workspaceId,
+  });
   const tab = useInspectorTabsStore
     .getState()
     .tabs.find(
@@ -294,6 +326,7 @@ const resetAskUserToolCall = (
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
 export const useChatSession = ({
+  exceptionScope: { handlerId: exceptionHandlerId },
   chat,
   conversationId,
   getDocxEditRepresentation,
@@ -311,6 +344,7 @@ export const useChatSession = ({
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const chatToolGrantsQuery = useQuery(
     chatToolGrantsOptions({
       activeOrganizationId: organizationId,
@@ -318,8 +352,8 @@ export const useChatSession = ({
       userId,
     }),
   );
-  const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
-  useQueryViewError(chatToolGrantsView);
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
+  useQueryViewError(chatToolGrantsView, "useChatSession:query");
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
       ? chatToolGrantsView.items.grants
@@ -536,7 +570,10 @@ export const useChatSession = ({
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            getAnalytics().captureError(settleResult.error);
+            getAnalytics().captureError(settleResult.error, {
+              fingerprintKey: "useChatSession:failure",
+              scope: { type: "handler", handlerId: exceptionHandlerId },
+            });
             chat.setMessages(
               terminalizeUnsettledCreateDocumentDraft(
                 chat.getSnapshot().messages,
@@ -552,7 +589,7 @@ export const useChatSession = ({
         "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
-  }, [addToolResult, chat, messages, status, t]);
+  }, [addToolResult, chat, messages, status, t, exceptionHandlerId]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, {
@@ -662,7 +699,10 @@ export const useChatSession = ({
       // for telemetry and surface a toast so the user knows the older history
       // failed to load. Keep the cursor but flag the error so auto-loading
       // pauses (the manual button retries) instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useChatSession:failure-2",
+        scope: { type: "handler", handlerId: exceptionHandlerId },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
@@ -689,7 +729,7 @@ export const useChatSession = ({
     }
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [chat, setMessages, t, threadRef]);
+  }, [chat, setMessages, t, threadRef, exceptionHandlerId]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -972,7 +1012,7 @@ export const useChatSession = ({
       toolCallId: string,
       decision: RequestSecretDecision,
     ): Promise<RequestSecretOutput> =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(conversationId) })
           .secrets({ toolCallId })
@@ -1002,7 +1042,7 @@ export const useChatSession = ({
         query: { connectorSlug },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     [conversationId],
   );
@@ -1103,7 +1143,7 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const createDocumentMattersView = useQueryView(
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>
@@ -1342,30 +1382,24 @@ export const useChatSession = ({
       input: CreateDocumentInput,
     ) => {
       if (destination.type === "download") {
-        const downloadResult = await Result.tryPromise(async () => {
-          const draft = await prepareCreateDocumentDraft(toolCallId, input);
-          if (draft === null) {
-            return { status: "invalid-source" } as const;
-          }
-          downloadFile(
-            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
-            draft.fileName,
-          );
-          return { status: "downloaded", fileName: draft.fileName } as const;
-        });
-
+        const downloadResult = await downloadCreateDocumentDraft(
+          toolCallId,
+          input,
+        );
+        if (Result.isError(downloadResult)) {
+          getAnalytics().captureError(downloadResult.error, {
+            fingerprintKey: "useChatSession:failure-3",
+            scope: { type: "handler", handlerId: exceptionHandlerId },
+          });
+        }
         if (
           Result.isError(downloadResult) ||
           downloadResult.value.status === "invalid-source"
         ) {
-          if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error);
-          }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
             t("chat.createDocument.failedHeader"),
           );
-          return;
         }
         return;
       }
@@ -1489,7 +1523,10 @@ export const useChatSession = ({
           getInspector: useInspectorTabsStore.getState,
           toolCallId,
         });
-        getAnalytics().captureError(createResult.error);
+        getAnalytics().captureError(createResult.error, {
+          fingerprintKey: "useChatSession:failure-4",
+          scope: { type: "handler", handlerId: exceptionHandlerId },
+        });
         notifyUserError(
           createResult.error,
           APIError.is(createResult.error)
@@ -1546,17 +1583,23 @@ export const useChatSession = ({
       );
 
       if (!promotedDraftInPlace) {
-        await openCreatedDocumentInInspector(output);
+        await openCreatedDocumentInInspector(
+          output,
+          getCurrentWorkspaceDocument(router.state.matches),
+        );
       }
     },
-    [chat, queryClient, setMessages, t, threadRef],
+    [chat, queryClient, router, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentMatterSuccess) => {
-      await openCreatedDocumentInInspector(output);
+      await openCreatedDocumentInInspector(
+        output,
+        getCurrentWorkspaceDocument(router.state.matches),
+      );
     },
-    [],
+    [router],
   );
   const streamdownComponents = useMemo(
     () => ({
@@ -1642,9 +1685,12 @@ export const useChatSession = ({
       return;
     }
     lastStopFailureRef.current = stopState.error;
-    getAnalytics().captureError(stopState.error);
+    getAnalytics().captureError(stopState.error, {
+      fingerprintKey: "useChatSession:failure-5",
+      scope: { type: "handler", handlerId: exceptionHandlerId },
+    });
     notifyUserError(stopState.error, t("chat.stopFailed"));
-  }, [stopState, t]);
+  }, [stopState, t, exceptionHandlerId]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { taskKeys } from "@/lib/workspaces/queries/tasks.logic";
 
@@ -21,7 +21,7 @@ export const taskDetailOptions = (workspaceId: string, taskId: string) =>
       const response = await endpoint.get({
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     enabled: !!taskId,
   });

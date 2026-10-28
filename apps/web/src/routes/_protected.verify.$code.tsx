@@ -16,7 +16,7 @@ import { getEntityDocumentRoute } from "@/components/search-dialog.logic";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
@@ -68,7 +68,7 @@ export const Route = createFileRoute("/_protected/verify/$code")({
       return NOT_FOUND;
     }
 
-    const match = unwrapEden(response);
+    const match = unwrapApiResponse(response);
     // The document opens on its file field, so resolve which one through the
     // owner of the entity-to-file projection rather than picking a field here;
     // only its id is needed, the tab itself is the inspector's business.
@@ -139,7 +139,10 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
   const navigate = useNavigate();
   const isSuperseded = match.versionNumber < match.currentVersionNumber;
   const refiledReference = refiledStamp(match);
+  // The verification page sits outside every matter view, so the document
+  // opens under its matter's default view.
   const documentRoute = getEntityDocumentRoute({
+    currentView: undefined,
     entityId: match.entityId,
     fileFieldId: match.fileFieldId,
     workspaceId: match.workspaceId,
@@ -156,7 +159,7 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId: match.workspaceId, viewId: "all" },
+        params: documentRoute.params,
         search: {
           entity: match.entityId,
           field: fileFieldId,

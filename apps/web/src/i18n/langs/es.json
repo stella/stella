@@ -507,11 +507,56 @@
     "addEntry": "Añadir entrada",
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
+    "approval": {
+      "approveAll": "{count, plural, one {Aprobar # registro} other {Aprobar los # registros}}",
+      "approveSelected": "Aprobar {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "billedTotal": "{duration} facturado",
+      "empty": "No hay nada pendiente de aprobación en este asunto.",
+      "emptyWeek": "No hay nada pendiente de aprobación esta semana. El tiempo enviado aparece aquí.",
+      "everyone": "Todos",
+      "failed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "myTime": "Mi tiempo",
+      "pending": "{count, plural, one {# registro por aprobar} other {# registros por aprobar}}",
+      "refusals": {
+        "invalidEntry": "Añada una descripción y revise la fecha de trabajo; después apruebe el registro.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede aprobar este registro.",
+        "notFound": "Este registro ya no existe. Actualice la lista.",
+        "notSubmitted": "Este registro aún no se ha enviado. Primero debe enviarlo quien lo registró.",
+        "runningTimer": "Detenga el temporizador en curso antes de aprobar este registro.",
+        "unpriced": "Este registro no tiene tarifa. Configure una tarifa para este asunto y después apruébelo.",
+        "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
+      },
+      "returnComment": "Motivo de devolución",
+      "returnRefusals": {
+        "invalidEntry": "Revise la fecha de trabajo del registro y después devuélvalo.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede devolver este registro.",
+        "notFound": "Este registro ya no existe, por lo que no se puede devolver. Actualice la lista.",
+        "notSubmitted": "Este borrador nunca se envió, así que no hay nada que devolver.",
+        "runningTimer": "Detenga el temporizador en curso antes de devolver este registro.",
+        "timePeriodLocked": "Este mes está bloqueado, por lo que el registro no se puede devolver. Pida a un administrador que lo desbloquee.",
+        "wrongStatus": "El tiempo facturado o dado de baja no se puede devolver a quien lo registró."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "selectEntry": "Seleccionar registro",
+      "timeEntries": "Registros de tiempo",
+      "title": "Aprobaciones"
+    },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
+    "clientComposer": {
+      "flatFeeNote": "Facture los asuntos con tarifa fija desde la página de facturas del asunto.",
+      "includeMatter": "Incluir {matterName}",
+      "invalidPeriod": "Elija una fecha de fin igual o posterior a la de inicio.",
+      "loadFailed": "No se pudo cargar el trabajo sin facturar. Inténtelo de nuevo.",
+      "matterSubtotal": "Total del asunto con IVA: {amount} · {share} de la factura",
+      "periodEnd": "Fin del período",
+      "periodStart": "Inicio del período",
+      "title": "Facturar al cliente",
+      "visibility": "Esta factura solo es visible para quienes tienen acceso a todos los asuntos incluidos y los administradores de facturación."
+    },
     "codes": {
       "activity": "Actividad",
       "activityCode": "Código de actividad",
@@ -594,6 +639,7 @@
       "openInvoice": "Abrir factura",
       "otherCurrency": "{count, plural, one {# concepto está registrado} other {# conceptos están registrados}} en una moneda distinta de {currency} y quedan pendientes para otra factura.",
       "outsideScope": "Fuera del ámbito del IVA, 0 %",
+      "pendingApprovals": "{count, plural, one {Hay # elemento pendiente} other {Hay # elementos pendientes}} de aprobación. Revisar aprobaciones.",
       "rate": "Tarifa",
       "readyDescription": "Al emitirla, la factura recibe el siguiente número de su serie y queda bloqueada. Un borrador se puede seguir editando.",
       "readyTitle": "Lista para emitir",
@@ -654,6 +700,11 @@
       "invoiceDate": "Fecha de factura",
       "invoiceDetail": "Detalle de factura",
       "invoiceNumber": "Número de factura",
+      "lineOverrides": {
+        "editedRecorded": "Editado · registrado: {description}, {quantity} × {rate}",
+        "quantity": "Cantidad",
+        "resetRecorded": "Restablecer valores registrados"
+      },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
       "markPaid": "Marcar como pagada",
@@ -678,6 +729,7 @@
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
+    "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",
@@ -792,13 +844,16 @@
       "approved": "Aprobado",
       "billed": "Facturado",
       "draft": "Borrador",
+      "submitted": "Enviado",
       "written_off": "Dado de baja"
     },
     "stopTimer": "Detener",
     "suggestions": {
       "actionCount": "{count, plural, one {# acción} many {# acciones} other {# acciones}}",
       "activeVsLogged": "{active} de actividad · {logged} registrados",
+      "alreadyCovered": "Ya cubierto por tiempo registrado",
       "chatEvidence": "{count, plural, one {# mensaje} many {# mensajes} other {# mensajes}} en «{title}»",
+      "engagedTime": "{duration} de actividad",
       "keyboardHint": "Enter acepta, E edita antes de aceptar, Supr descarta",
       "privacyNote": "Solo tú puedes ver estas sugerencias. No se registra nada hasta que la aceptas.",
       "title": "Sugerencias a partir de tu actividad",
@@ -892,9 +947,14 @@
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
+      "goToMention": "Ir a la mención {number}",
+      "goToParagraph": "Ir al apartado {paragraph}",
       "lastNegative": "última cita negativa en {year}",
+      "mentionMark": "mención {number}",
+      "mentionsInDecision": "{count, plural, one {Citada una vez en esta resolución} other {Citada # veces en esta resolución}}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Aún no hay citas registradas.",
+      "notInStella": "Aún no está en stella",
       "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
       "paragraphLabel": "Apartado {paragraph}",
@@ -937,33 +997,31 @@
       "supreme": "Tribunales supremos"
     },
     "coverage": {
+      "allCurrent": "Todas las fuentes están al día",
       "completeness": "Exhaustividad",
+      "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado.",
+      "countryNavigation": "Ir a un país",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
+      "decisionsAcross": "resoluciones de {count, plural, one {# jurisdicción} other {# jurisdicciones}}",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "generatedAt": "Datos a {date}",
-      "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
       "healthDelayed": "Con retraso",
       "healthDisabled": "Desactivado",
       "healthStalled": "Sin avance",
       "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
-      "knownGaps": "Lagunas conocidas",
       "lastSync": "Última sincronización",
-      "noGapsRecorded": "No hay lagunas registradas",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
-      "pendingTexts": "Textos pendientes",
-      "reportedByListing": "Contado a partir del listado del organismo publicador",
-      "reportedByOperator": "Introducido manualmente",
-      "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
+      "sourceExceptions": "{count, plural, one {# fuente requiere atención} other {# fuentes requieren atención}}",
+      "sourcesCurrent": "Fuentes al día",
+      "syncedAt": "Sincronizado {time}",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
-      "unreadListingPeriods": "Periodos del listado no leídos"
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {
@@ -1003,6 +1061,12 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "loadingMore": "Cargando más...",
+    "marginFilter": {
+      "label": "Filtro de disposiciones citadas",
+      "paragraph": "{count, plural, =0 {Ninguna disposición citada en el ¶{paragraph}} one {# disposición citada en el ¶{paragraph}} many {# de disposiciones citadas en el ¶{paragraph}} other {# disposiciones citadas en el ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Ninguna disposición citada en la selección} one {# disposición citada en la selección} many {# de disposiciones citadas en la selección} other {# disposiciones citadas en la selección}}",
+      "unnumberedParagraph": "{count, plural, =0 {Ninguna disposición citada en este párrafo} one {# disposición citada en este párrafo} many {# de disposiciones citadas en este párrafo} other {# disposiciones citadas en este párrafo}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# resolución ya estaba guardada aquí} other {# resoluciones ya estaban guardadas aquí}}",
       "empty": "Todavía no hay jurisprudencia guardada en este asunto.",
@@ -1024,8 +1088,10 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humanas"
+      "human": "Humanas",
+      "toggleState": "{label}: {state, select, on {activado} other {desactivado}}"
     },
+    "oldestDecisions": "Resoluciones más antiguas",
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
@@ -1087,8 +1153,7 @@
       "runEstimate": "{rows, plural, one {# resolución} other {# resoluciones}} × {columns, plural, one {# pregunta} other {# preguntas}} en esta página: {cells, plural, one {se generará # respuesta} other {se generarán # respuestas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Preguntas guardadas",
-      "title": "Tablas de investigación",
-      "updated": "Última edición {date}"
+      "title": "Tablas de investigación"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1197,8 @@
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",
+      "oldest": "Más antiguas",
+      "oldestUnavailable": "Una búsqueda se ordena por relevancia o de la más reciente a la más antigua. Borre la búsqueda para ver primero las resoluciones más antiguas.",
       "relevance": "Más relevantes"
     },
     "viewer": {
@@ -1147,6 +1214,7 @@
       "citedDecisionPassage": "Pasaje de la resolución",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir al párrafo} other {Ir a los párrafos}}",
       "judgeRole": {
         "advocateGeneral": "Abogado General",
         "dissenting": "Voto particular",
@@ -1486,7 +1554,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos los modelos ({count, number})",
+      "allModels": "Todos los modelos",
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
       "belowFrontier": "Por debajo de los mejores equilibrios",
@@ -1698,21 +1766,8 @@
       "describe-stella-function": "Preparando búsqueda de datos",
       "describe_template": "Leyendo campos de la plantilla",
       "discover_tools": "Preparando búsqueda de datos",
-      "docxCommentSummary": "Añadir un comentario a {blockId}",
-      "docxDeleteSummary": "Eliminar {blockId}",
-      "docxDeleteTableColumnSummary": "Eliminar columna de tabla en {blockId}",
-      "docxDeleteTableRowSummary": "Eliminar fila de tabla en {blockId}",
       "docxEditMore": "{count, plural, one {# edición más} many {# ediciones más} other {# ediciones más}}",
       "docxEditSummary": "{count, plural, one {# edición propuesta} many {# ediciones propuestas} other {# ediciones propuestas}}",
-      "docxInsertAfterSummary": "Insertar texto después de {blockId}",
-      "docxInsertBeforeSummary": "Insertar texto antes de {blockId}",
-      "docxInsertTableColumnSummary": "Insertar columna de tabla cerca de {blockId}",
-      "docxInsertTableRowSummary": "Insertar fila de tabla cerca de {blockId}",
-      "docxMergeTableCellsSummary": "Combinar celdas de tabla en {blockId}",
-      "docxReplaceBlockSummary": "Reemplazar {blockId}",
-      "docxReplaceSummary": "Reemplazar «{find}» por «{replace}»",
-      "docxSignatureTableSummary": "Insertar una tabla de firmas cerca de {blockId}",
-      "docxSplitTableCellSummary": "Dividir celda de tabla en {blockId}",
       "execute-typescript": "Leyendo datos del asunto",
       "execute_typescript": "Leyendo datos del asunto",
       "expand-chat-history": "Leyendo el historial del chat",
@@ -2056,8 +2111,6 @@
       "orLetUsKnowAt": "o escríbanos a",
       "viewDocumentation": "Ver documentación"
     },
-    "enterKey": "↵",
-    "error": "Error",
     "expenses": "Gastos",
     "export": {
       "citations": "Citas",
@@ -2131,6 +2184,7 @@
     "lastUpdated": "Última actualización",
     "layoutResetAfterProblem": "Se ha restablecido la disposición tras un problema.",
     "legalDatabase": "Base de datos jurídica",
+    "loadFailed": "No se ha podido cargar.",
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
@@ -2205,10 +2259,12 @@
     "scrollToTop": "Ir arriba",
     "search": "Buscar...",
     "searchIn": "Buscar en",
+    "searchMembers": "Buscar miembros…",
     "selectAMatter": "Selecciona un asunto",
     "selectARole": "Seleccione un rol",
     "selectAll": "Seleccionar todo",
     "selectDate": "Seleccionar fecha…",
+    "selected": "Seleccionado",
     "sessions": "Sesiones",
     "settings": "Configuración",
     "showAll": "Mostrar todo",
@@ -2217,7 +2273,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
@@ -2694,7 +2750,7 @@
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
-    "actionFailed": "Acción fallida",
+    "actionFailed": "No ha funcionado. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
@@ -3245,7 +3301,7 @@
     "saveSerializeFailedTitle": "No se pudo crear el DOCX",
     "savingDocument": "Guardando...",
     "showDetails": "Mostrar detalles",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "tableBordersAll": "Todos los bordes",
@@ -3830,6 +3886,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Un cliente",
+      "availabilityClientBadgeHelp": "Disponible solo en los asuntos de un cliente.",
+      "availabilityClientHelp": "Solo se puede usar en los asuntos de este cliente. No se puede cambiar después.",
+      "availabilityFixedHelp": "Se fijó al crear la habilidad. No se puede cambiar.",
+      "availabilityLabel": "Disponible en",
+      "availabilityMatter": "Un asunto",
+      "availabilityMatterBadgeHelp": "Disponible solo en un asunto.",
+      "availabilityMatterHelp": "Solo se puede usar en este asunto. No se puede cambiar después.",
+      "availabilityOrganization": "Toda la organización",
+      "availabilityTeamNeedsMatter": "Para compartir una habilidad con el equipo, elija el asunto al que está destinada. No se puede cambiar después.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Crea un playbook de revisión de contratos posición por posición, a partir de tus contratos firmados anteriormente, una breve entrevista y los estándares habituales del mercado.",
@@ -4243,6 +4309,8 @@
       "commentPlaceholder": "Escribe un comentario…",
       "commentText": "Texto del comentario",
       "commentedPassage": "Pasaje comentado",
+      "editComment": "Editar comentario",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Tú",
       "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
       "guestMigrationComplete": "Resaltados y notas guardados.",
@@ -4272,7 +4340,12 @@
       "styleHighlight": "Resaltado",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartido con la organización"
+      "visibilityShared": "Compartido con la organización",
+      "visibilitySharedWithMatter": "Compartido con el asunto"
+    },
+    "contents": {
+      "aiSection": "{section} (sección generada por IA)",
+      "headingWithAiSection": "{heading} (sección generada por IA: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cita en bloque con referencia",
@@ -4749,10 +4822,8 @@
   },
   "readerAnswers": {
     "budgetError": "Se ha agotado el presupuesto para respuestas.",
-    "citation": "¶{paragraph}",
     "expand": "Expandir respuesta",
     "explain": "Explicar",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Hacer una pregunta de seguimiento",
     "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
     "loading": "Generando respuesta…",
@@ -4760,7 +4831,7 @@
     "modelError": "El modelo no pudo completar esta respuesta.",
     "networkError": "La conexión se ha interrumpido. Inténtalo de nuevo.",
     "regenerate": "Regenerar respuesta",
-    "selectionError": "Selecciona texto dentro de un solo párrafo (hasta 2000 caracteres).",
+    "selectionError": "Seleccione texto de la propia resolución.",
     "send": "Enviar pregunta de seguimiento",
     "share": "Compartir con el equipo",
     "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",
@@ -5350,7 +5421,7 @@
     "importDescription": "Los estilos se extraen a un DOCX nuevo y sin contenido.",
     "importTitle": "Importar conjunto de estilos",
     "loadFailed": "No se pudieron cargar los conjuntos de estilos",
-    "newDocument": "Nuevo documento",
+    "newDocument": "Nuevo documento DOCX",
     "pickerDescription": "Elige el sistema de formato para el archivo nuevo.",
     "renameTitle": "Cambiar nombre del conjunto de estilos",
     "replace": "Reemplazar origen",
@@ -5634,7 +5705,7 @@
     "moveToMatter": "Guardar en asunto",
     "moveToMatterAnyway": "Guardar de todos modos",
     "myDefaultLookupFormat": "Mi predeterminado",
-    "newFromTemplate": "Nuevo documento desde plantilla",
+    "newFromTemplate": "Nuevo documento DOCX desde plantilla",
     "newFromTemplateFillHint": "Rellene los campos; el documento se creará en este asunto.",
     "newTemplate": "Nueva plantilla",
     "noTemplates": "Aún no hay plantillas",
@@ -5833,6 +5904,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Trabajo interno"
+    },
+    "week": {
+      "allLogged": "Todo está registrado. La nueva actividad aparecerá aquí mientras trabajas.",
+      "days": "Días de la semana",
+      "entriesTitle": "Tiempo registrado",
+      "nextWeek": "Semana siguiente",
+      "noActivity": "Aún no hay nada que registrar. Trabaja en un asunto y tu actividad aparecerá aquí para aceptarla.",
+      "pendingCount": "{count, plural, one {# sugerencia} other {# sugerencias}}",
+      "previousWeek": "Semana anterior",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Revisa la fecha de trabajo y luego envía este registro.",
+        "narrativeRequired": "Añade una descripción y luego envía este registro.",
+        "runningTimer": "Detén el temporizador en curso y luego envía este registro.",
+        "unpriced": "Este registro no tiene tarifa. Pide una tarifa para el asunto y luego envíalo."
+      },
+      "returned": "Devuelto: {comment}",
+      "submitAndApprove": "Enviar y aprobar",
+      "submitResult": "{submitted} enviados · {approved} aprobados · {refused} por corregir",
+      "submitWeek": "Enviar semana",
+      "title": "Mi semana",
+      "totals": "{logged} registrados · {billable} facturables"
     }
   },
   "translate": {
@@ -6005,6 +6098,7 @@
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
+        "editInApplication": "Editar en <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edita este archivo localmente y sincroniza los cambios con stella.",
         "forceRelease": "Forzar liberación",
         "notOpenedDescription": "stella desktop no confirmó que <bdi>{application}</bdi> se abriera. Inicia stella desktop e inténtalo de nuevo.",
@@ -6028,13 +6122,15 @@
         "alreadyInstalled": "¿Ya está instalado? Conéctalo",
         "connect": "Conectar stella desktop",
         "connected": "stella desktop está conectado",
+        "download": "Descargar stella desktop",
         "editNone": "Descarga stella desktop para editar este archivo",
         "editOutdated": "Actualiza stella desktop para editar",
         "editReason": "La edición en el escritorio abre el archivo en una aplicación de tu ordenador a través de stella desktop.",
         "signCurrent": "Firmar con stella desktop",
         "signNone": "Descarga stella desktop para firmar este PDF",
         "signOutdated": "Actualiza stella desktop para firmar",
-        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop."
+        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop.",
+        "update": "Actualizar stella desktop"
       },
       "downloadAs": "Descargar como…",
       "downloadAsZip": "Descargar archivo .zip",
@@ -6047,8 +6143,10 @@
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",
       "ocrAlreadyProcessed": "El reconocimiento de texto ya se completó",
+      "ocrBatchHelp": "Los documentos en cola se procesan en el próximo lote de OCR.",
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
-      "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
+      "ocrQueued": "Reconocimiento de texto puesto en cola",
+      "ocrQueuedForBatch": "Reconocimiento de texto añadido al próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Ya hay una firma en curso en stella desktop",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
@@ -6105,6 +6203,7 @@
         "waitingDescription": "Elige un certificado de firma en stella desktop para firmar este PDF.",
         "waitingTitle": "Esperando a stella desktop"
       },
+      "queueForOcr": "Poner en cola para OCR",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Qué hacer con {fileName}",
@@ -6116,7 +6215,6 @@
       "removeMetadata": "Eliminar metadatos del documento",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
-      "runOcr": "Poner OCR en cola",
       "scrubFailed": "No se pudieron eliminar los metadatos de este archivo, por lo que no se descargó nada",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
@@ -6195,8 +6293,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Definir responsable",
-        "noLead": "Sin responsable",
-        "searchMembers": "Buscar miembros…"
+        "noLead": "Sin responsable"
       },
       "to": "Hasta"
     },
@@ -6258,6 +6355,7 @@
       "deleteAll": "Eliminar todo",
       "deleteAllConfirm": "¿Eliminar los {count} elementos de \"{column}\"?",
       "hideColumn": "Ocultar columna",
+      "moveFailed": "{failed, plural, one {No se pudo mover # de {total} elementos.} other {No se pudieron mover # de {total} elementos.}}",
       "readOnlyGrouping": "Esta agrupación es de solo lectura",
       "selectPropertyHint": "Seleccione una propiedad para agrupar en la barra de herramientas",
       "uploadDocument": "Subir documento",
@@ -6276,10 +6374,10 @@
       "addMember": "Añadir miembro",
       "addMemberDescription": "Añadir un miembro del equipo a este asunto",
       "alreadyMember": "El usuario ya es miembro",
+      "alreadyOnMatter": "Ya está en este asunto",
       "cannotRemoveLast": "No se puede eliminar al último miembro",
       "noMembersFound": "No se encontraron miembros",
-      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?",
-      "selectMember": "Seleccionar miembro"
+      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?"
     },
     "newDocument": "Nuevo documento",
     "newFolder": "Nueva carpeta",
@@ -6317,7 +6415,6 @@
           "approvedBy": "Aprobado por",
           "channel": "Canal",
           "dateTime": "Fecha y hora",
-          "eventId": "ID del evento",
           "notAvailable": "No disponible",
           "openTarget": "Abrir elemento",
           "runId": "ID de ejecución",
@@ -6404,6 +6501,7 @@
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
       "client": "Cliente",
+      "movedToClient": "Asunto <bdi>{matterName}</bdi> movido a <bdi>{clientName}</bdi>",
       "noClient": "Sin cliente asignado",
       "noClientOptional": "Sin cliente (opcional)",
       "noParties": "No se han añadido partes a este asunto.",
@@ -6422,7 +6520,9 @@
       "personalLabel": "Personal",
       "promoteCta": "Promocionar a cliente",
       "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
+      "promoteToClientConfirm": "El asunto <bdi>{matterName}</bdi> se asignará a <bdi>{clientName}</bdi> y se compartirá con el equipo. No podrá volver a ser personal.",
       "promotedSuccess": "Asunto promocionado",
+      "recentClients": "Clientes recientes",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
       "removePartyConfirm": "¿Está seguro de que desea eliminar esta parte del asunto?",
@@ -6431,6 +6531,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo oscuro",
+      "annotations": {
+        "commentedBy": "Comentario de {name}",
+        "detachedHeading": "Fuera de esta versión",
+        "detachedOtherVersion": "Creado en la versión {version}; la página ahora dice otra cosa.",
+        "detachedTextChanged": "Estas palabras ya no están en la página {page}.",
+        "empty": "Selecciona palabras del documento y elige Comentario.",
+        "highlightedBy": "Resaltado por {name}",
+        "refusedNoText": "Esta página no tiene texto que marcar. Ejecuta primero el reconocimiento de texto del documento.",
+        "refusedNotFound": "Estas palabras no aparecen en el texto de la página. Vuelve a seleccionarlas.",
+        "refusedTooLong": "Este pasaje es demasiado largo para marcarlo. Selecciona uno más corto."
+      },
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
       "evidence": "Prueba documental",
@@ -6439,6 +6550,36 @@
       "pageEditor": {
         "addPDF": "Añadir PDF",
         "applyCrop": "Aplicar recorte",
+        "cleanScan": {
+          "applied": "Versión limpia aplicada",
+          "apply": "Aplicar",
+          "applyAll": "Aplicar todas",
+          "applyPage": "Aplicar la página limpia {number}",
+          "cleaned": "Limpia",
+          "cleaning": "Limpiando la página",
+          "contentCrop": "Recortar al contenido",
+          "description": "{count, plural, one {Revise la página limpia antes de usarla. El documento solo cambia cuando lo haga.} other {Revise cada una de las # páginas limpias antes de usarlas. El documento solo cambia cuando lo haga.}}",
+          "deskew": "Enderezar",
+          "failedEngine": "No se pudo limpiar. La página queda como está.",
+          "failedRender": "No se pudo preparar la página para limpiarla. Queda como está.",
+          "failedTimeout": "La limpieza tardó demasiado. La página queda como está.",
+          "heading": "Limpiar escaneo",
+          "output": "Modo de color",
+          "outputBinary": "Blanco y negro",
+          "outputGrayscale": "Escala de grises",
+          "pageLimit": "Puede limpiar hasta {max} páginas a la vez. Seleccione menos páginas.",
+          "preview": "Página limpia {number}",
+          "progress": "{done} de {total} páginas procesadas",
+          "reject": "Conservar original",
+          "rejectPage": "Conservar la página original {number}",
+          "rejected": "Original conservado",
+          "scope": "{count, plural, =0 {Enderezar y limpiar todas las páginas} one {Enderezar y limpiar la página seleccionada} other {Enderezar y limpiar las # páginas seleccionadas}}",
+          "unrecognized": "La página no se reconoció como un escaneo. Queda como está.",
+          "unrecognizedNoContent": "No se encontró contenido en esta página. Queda como está.",
+          "unrecognizedNoPage": "No se encontraron los bordes de la página. La página queda como está.",
+          "unrecognizedTooLarge": "La página es demasiado grande para limpiarla. Queda como está.",
+          "use": "{count, plural, =0 {Usar páginas limpias} one {Usar # página limpia} other {Usar # páginas limpias}}"
+        },
         "crop": "Recortar",
         "cropAdvanced": "Opciones avanzadas",
         "cropBottom": "Abajo (mm)",
@@ -6486,7 +6627,10 @@
         "saveVersion": "Guardar versión",
         "selectAll": "Seleccionar todo",
         "selectPage": "Seleccionar página {number}",
+        "signAfterSave": "Guarda las ediciones de páginas como una nueva versión y luego la firma",
+        "signSavedVersionMissing": "La nueva versión se guardó, pero no se pudo abrir para firmarla. Fírmela desde el visor del documento.",
         "signatureWarning": "Al editar este PDF, las firmas digitales dejarán de ser válidas.",
+        "signatureWarningWithSign": "Al editar, las firmas digitales existentes dejarán de ser válidas. Al firmar desde aquí, primero se guardan sus ediciones y se firma la nueva versión.",
         "sourceLimit": "El tamaño combinado de los archivos PDF no puede superar los 100 MB.",
         "title": "Editar páginas",
         "undo": "Deshacer edición de página",
@@ -6497,6 +6641,11 @@
       },
       "passwordLabel": "Introduzca la contraseña del PDF",
       "previousPage": "Página anterior",
+      "selection": {
+        "explainPassagePrompt": "Explica este pasaje de {citation}:\n\n«{quote}»",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "pp. {start}-{end}"
+      },
       "showOriginal": "Mostrar páginas originales",
       "unlock": "Desbloquear"
     },
@@ -6610,10 +6759,12 @@
       "selectOperator": "Seleccionar operador",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
       "singleSelect": "Selección única",
-      "sortAscending": "Orden ascendente",
       "sortAscendingDate": "Más antiguos primero",
-      "sortDescending": "Orden descendente",
+      "sortAscendingNumber": "Menor primero",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Más recientes primero",
+      "sortDescendingNumber": "Mayor primero",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Dividir en # opción} other {Dividir en # opciones}}",
       "suggestWithAI": "Sugerir con IA",
       "text": "Texto",
@@ -6634,6 +6785,12 @@
     "referenceTaken": "Este número de referencia ya está en uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Buscar un asunto…",
+      "trigger": "Cambiar de asunto",
+      "viewAll": "Ver todos los asuntos",
+      "viewAllForClient": "Ver todos los asuntos del cliente {clientName}"
     },
     "table": {
       "clearFlags": "Borrar marcas",

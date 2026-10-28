@@ -43,6 +43,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CONTACT: "contact",
   CONTACT_DIRECTORY: "contact_directory",
   CORRESPONDENCE: "correspondence",
+  DOCUMENT_ANNOTATION: "document_annotation",
   DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",

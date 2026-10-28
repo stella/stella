@@ -1,9 +1,12 @@
 import { useState } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { AnyRouter } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
@@ -36,7 +39,39 @@ const hit = {
   workspaceName: null,
 } as const satisfies GlobalSearchHit;
 
+const {
+  createMatterViewTestRouter,
+  EXPECTED_OTHER_TREE_REVEAL,
+  seedTestMatterTrees,
+  TEST_FOLDER_ID,
+  TEST_MATTER_ID,
+  TEST_OTHER_TREE_DOCUMENT_PATH,
+} = await import("@/lib/workspaces/matter-view-test-router");
+const folderResource = resourceRef({
+  type: RESOURCE_TYPE.ENTITY,
+  id: toSafeId<"entity">(TEST_FOLDER_ID),
+});
+const folderHit = {
+  id: `entity:${TEST_FOLDER_ID}`,
+  type: "folder",
+  resource: folderResource,
+  resourceName: toResourceName(folderResource),
+  title: "Pleadings",
+  headline: null,
+  updatedAt: "2026-10-22T00:00:00.000Z",
+  entityId: TEST_FOLDER_ID,
+  workspaceId: TEST_MATTER_ID,
+  workspaceName: "Civil proceeding",
+  parentId: null,
+  lastEditedByName: null,
+  lastEditedByImage: null,
+  fileFieldId: null,
+  filePropertyId: null,
+  mimeType: null,
+} as const satisfies GlobalSearchHit;
+
 const searchRequestBodies: unknown[] = [];
+let searchHits: readonly GlobalSearchHit[] = [hit];
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
@@ -44,7 +79,7 @@ globalThis.fetch = Object.assign(
     if (url.pathname.endsWith("/search")) {
       searchRequestBodies.push(await request.json());
       return Response.json({
-        hits: [hit],
+        hits: searchHits,
         nextCursor: null,
         totalCount: 1,
         facets: { editor: [], mimeType: [], type: [], workspace: [] },
@@ -74,6 +109,7 @@ const { ActionCapabilitiesProvider } =
 const { resolveActionCapabilities } =
   await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { useDevStore } = await import("@/lib/dev-store");
+const { assignUserStorage } = await import("@/lib/account/user-scoped-storage");
 const { SearchDialog } = await import("./search-dialog");
 
 const SearchDialogHarness = () => {
@@ -94,8 +130,9 @@ afterEach(() => {
   }
   clients.length = 0;
   searchRequestBodies.length = 0;
+  searchHits = [hit];
+  assignUserStorage(undefined);
   useDevStore.setState({ publicLawPreview: false });
-  jest.useRealTimers();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -114,21 +151,26 @@ const user = {
   wordEditShortcut: null,
 };
 
-const mount = async () => {
+const rootOnlyRouter = async () => {
+  const appRouter = router.createRouter({
+    routeTree: router.createRootRoute({ component: SearchDialogHarness }),
+    history: router.createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: false,
+  });
+  await appRouter.load();
+  return appRouter;
+};
+
+const mount = async (
+  createAppRouter: () => Promise<AnyRouter> = rootOnlyRouter,
+) => {
   const client = new query.QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   clients.push(client);
   client.setQueryData(rootKeys.role, "member");
-  const root = router.createRootRoute({
-    component: SearchDialogHarness,
-  });
-  const appRouter = router.createRouter({
-    routeTree: root,
-    history: router.createMemoryHistory({ initialEntries: ["/"] }),
-    isServer: false,
-  });
-  await appRouter.load();
+  seedTestMatterTrees(client);
+  const appRouter = await createAppRouter();
   testing.render(
     <AnalyticsContext value={noopAnalytics}>
       <query.QueryClientProvider client={client}>
@@ -140,7 +182,7 @@ const mount = async () => {
                   ai: false,
                   deepl: false,
                   desktop: "none",
-                  ocr: false,
+                  ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                   role: "member",
                   settings: undefined,
                 })}
@@ -153,9 +195,10 @@ const mount = async () => {
       </query.QueryClientProvider>
     </AnalyticsContext>,
   );
+  return appRouter;
 };
 
-const typeQuery = async () => {
+const typeQuery = async (expectedTitle: string = hit.title) => {
   const input = testing.screen.getByRole("combobox", {
     name: messages.common.search,
   });
@@ -166,10 +209,12 @@ const typeQuery = async () => {
   await testing.act(async () => {
     testing.fireEvent.input(input, { target: { value: "engagement" } });
     jest.advanceTimersByTime(301);
-    jest.useRealTimers();
+    restoreRealTimers();
   });
   await testing.waitFor(() =>
-    expect(testing.screen.getAllByText(hit.title).length).toBeGreaterThan(0),
+    expect(testing.screen.getAllByText(expectedTitle).length).toBeGreaterThan(
+      0,
+    ),
   );
   return input;
 };
@@ -242,3 +287,33 @@ test.each([
     );
   },
 );
+
+test("a folder result reveals the folder in the tree on screen, not the first tree", async () => {
+  searchHits = [folderHit];
+  assignUserStorage(user.id);
+  const appRouter = await mount(
+    async () =>
+      await createMatterViewTestRouter(
+        TEST_OTHER_TREE_DOCUMENT_PATH,
+        SearchDialogHarness,
+      ),
+  );
+  await typeQuery(folderHit.title);
+  const row = testing.screen
+    .getAllByText(folderHit.title)
+    .map((title) => title.closest<HTMLElement>("[data-slot=command-item]"))
+    .find((item) => item !== null);
+  if (!row) {
+    throw new TypeError("The folder result row must render");
+  }
+  await testing.act(async () => {
+    testing.fireEvent.click(row);
+  });
+
+  await testing.waitFor(() =>
+    expect({
+      pathname: appRouter.state.location.pathname,
+      search: appRouter.state.location.search,
+    }).toEqual(EXPECTED_OTHER_TREE_REVEAL),
+  );
+});

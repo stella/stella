@@ -10,7 +10,9 @@ import {
 } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import type { WebApiRoutes } from "@/lib/eden-client";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
+import type { WebApiRoutes } from "@/lib/api";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -546,7 +548,7 @@ describe("chat history page", () => {
         jest.advanceTimersByTime(1000);
       });
     } finally {
-      jest.useRealTimers();
+      restoreRealTimers();
     }
 
     expect(inputValue(field)).toBe("claim");

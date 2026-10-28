@@ -169,12 +169,29 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -303,7 +320,7 @@
         "sort": {
           "enum": ["relevance", "newest"],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -327,7 +344,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -408,7 +425,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "read_case_law_decision",
-    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource (ast or fulltext). Pass textVersion as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches and neighbours with position, publisher label, verbatim headingPath and deep links. Page 1 adds details (`url` reader, `source_url` publisher), metadata, textFields and citation summaries (citedBy reference counts, polarity, top citers: exact or bounded by candidateWindow 2048 edges; cites with held decisionIds). All citations: read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }). One id gets an outline with pages and links. `include` picks fields; [] returns text and identity only.",
+    "description": "Read `decision_ids[]` in order. `page` selects a `max_chars` window; entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as text_version; versionChanged flags changed text. `full: true` returns whole text up to 200000 chars. `query` returns matches, neighbours and deep links. Page 1 adds reader/publisher URL, metadata, textFields and citation summaries (top citers may be bounded by 2048 edges). Use read_case_law_citations for all citations. One id adds an outline. `include` picks fields; [] returns text and identity only.",
     "inputSchema": {
       "type": "object",
       "required": ["decision_ids"],
@@ -1719,7 +1736,7 @@
       "scope": "templates"
     },
     "name": "configure_template_fields",
-    "description": "Configure an existing template's fields: who fills each one, its input control, options and validation. The configuration lives in the document, so this rewrites what carries each field (its markers at every occurrence, the {% if %} tags a rule replaces, the keyed markers that render a registry hit) and publishes the result. Pass template_id and one entry per field path; every path must be one the document already carries, and a property you leave out keeps what the marker says. Read stella://reference/template-fields first. Returns the template's full field configuration afterwards, plus the entries that could not be applied.",
+    "description": "Configure an existing template's field owner, input control, options and validation. This rewrites its field markers and affected {% if %} or registry markers, then publishes the result. Pass template_id and entries for existing field paths; omitted properties keep their marker settings. Read stella://reference/template-fields first. Returns the full configuration and entries that could not be applied.",
     "inputSchema": {
       "type": "object",
       "required": ["template_id", "fields"],
@@ -2398,7 +2415,7 @@
       "requestTimeoutMs": 600000
     },
     "name": "compare_documents",
-    "description": "Create a tracked-changes DOCX redline. source versions compares an explicit stored base with up to 8 targets; source previous compares one stored version with its predecessor; source uploads compares two .docx files stella does not hold, staged by open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. base_tracked_changes and target_tracked_changes handle tracked changes each side already carries: accept (the usual choice) compares its final text. output_mode preview compares without writing; download returns each redline as an expiring link, not a version; version saves each redline as a derived version and needs a stored source. Results are independent, so read every status. Show the user each redline's openUrl or download link.",
+    "description": "Create a tracked-changes DOCX redline. source 'versions' compares a stored base with up to 8 targets; 'previous' uses its predecessor; 'uploads' compares two .docx files from open_file_comparison, prepare_file_comparison_from_links or prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' compares final text. output_mode 'preview' does not write, 'download' returns an expiring link, and 'version' saves a derived version from a stored source. Show every openUrl or download link.",
     "inputSchema": {
       "type": "object",
       "required": [
@@ -2776,7 +2793,7 @@
       "scope": "documents_write"
     },
     "name": "set_field_value",
-    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
+    "description": "Set a document property cell. Pass entity_id, property_id from list_properties, and content matching the property's type: 'text' string; 'single-select' string or null; 'multi-select' string array; 'date' ISO value or null; or 'int' with optional 3-letter currency. An empty value clears the cell.",
     "inputSchema": {
       "type": "object",
       "required": ["entity_id", "property_id", "content"],
@@ -2986,7 +3003,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -3374,7 +3391,7 @@
       }
     },
     "name": "check_counterparty",
-    "description": "Screen a company or person for due diligence. `check` picks the source. A register check returns one outcome: clear, found (adverse records), not-registered (no record; not a clearance), unavailable (no answer: NOT cleared) or not-covered (cannot screen this subject, or needs the tax ID). The sanctions check returns one outcome per list in `lists`, with whether it binds the firm: clear; possible-match (resembling entries with score and conflicting fields; each needs human review, none confirmed); incomplete (only a bounded subset screened, nothing matched: NOT cleared); or unavailable (stale, not loaded, or company name unreadable: NOT cleared, edition not screened). Top level is clear only if every list was fully screened clear. Person matches rest on name and birth date: compare the record first.",
+    "description": "Screen a company or person; `check` selects the source. Register outcomes are clear, found, not-registered (not a clearance), unavailable (not cleared), or not-covered. Sanctions returns each list's firm applicability and outcome: clear, possible-match requiring human review, incomplete (not cleared), or unavailable (not cleared). Only fully screened clear lists produce top-level clear. Verify person matches against name and birth date.",
     "inputSchema": {
       "type": "object",
       "required": ["check", "subject"],
@@ -4212,7 +4229,7 @@
       "scope": "knowledge_write"
     },
     "name": "save_playbook",
-    "description": "Create a review playbook, or add, change, and remove positions in one. Omit playbook_id to create (name required); pass playbook_id and expected_updated_at to update. positions lists only what is added or changed, never the whole playbook: an entry with source_id replaces that stored position whole, an entry without one is added. Entries are checked one by one; a refused entry comes back in issues with the fix and the rest are saved. A saved playbook is a draft that a person approves in the editor before it can run. Returns the playbook id, the updatedAt to pass as the next expected_updated_at, and each written position's sourceId.",
+    "description": "Create a review playbook or change its positions. Omit playbook_id to create (name required); to update, pass it with expected_updated_at. positions is a patch: source_id replaces one position, while no source_id adds one. Invalid entries return in issues; valid entries are saved. The result is a draft for human approval and returns the id, updatedAt for the next update, and written sourceIds.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -4889,7 +4906,7 @@
           }
         },
         "status": {
-          "enum": ["draft", "approved", "billed", "written_off"],
+          "enum": ["draft", "submitted", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
@@ -5127,7 +5144,7 @@
       "featureId": "time-billing"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5748,7 +5765,7 @@
       "itemsKey": "items"
     },
     "name": "list_capabilities",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write), or search ids, titles, and descriptions with query. Each item gives the capability id, description, access/destructive, its transport (whether this path can run it, which field takes a file, and what to use instead), handlerKind (workspace or root), and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5757,6 +5774,10 @@
         "domain": {
           "type": "string",
           "description": "Filter to one capability domain: the id prefix before the first dot (e.g. \"time-entries\", \"invoices\")."
+        },
+        "query": {
+          "type": "string",
+          "description": "Search capability ids, generated titles, and descriptions. Results are ranked by relevance."
         },
         "access": {
           "enum": ["all", "read", "write"],

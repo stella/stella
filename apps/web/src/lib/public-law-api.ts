@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 
 import { parseApiErrorValue } from "@stll/api-contract";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { isConnectionFailure } from "@stll/fetch";
 
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
@@ -18,27 +19,15 @@ const PUBLIC_LAW_AREA = "public-law";
  */
 export const SEARCH_UNAVAILABLE_STATUS = 503;
 
+/** Bound background reads as well as loader reads, including the response body. */
+export const PUBLIC_LAW_READ_TIMEOUT_MS = 10_000;
+
 /**
  * What the API answers when the public corpus is at its concurrency limit:
  * the request was admitted nowhere, so asking again shortly is the fix, the
  * same as an unreachable index.
  */
 const CORPUS_BUSY_STATUS = 429;
-
-/**
- * Whether a failed public-law read is the search backend being unreachable,
- * busy or too slow to answer rather than a real answer. Read from the typed
- * error's status, never from its message, so the surface that degrades cannot
- * drift from what the API grades as retryable. A read the page stopped
- * waiting for is the same missing answer: the API grades its own wait as 503
- * only after the page has given up, so the timeout must not reach the error
- * boundary as a crash of the whole page.
- */
-export const isSearchUnavailableError = (error: unknown): boolean =>
-  CriticalQueryTimeoutError.is(error) ||
-  (APIError.is(error) &&
-    (error.status === SEARCH_UNAVAILABLE_STATUS ||
-      error.status === CORPUS_BUSY_STATUS));
 
 /**
  * The deployment answers the public-law routes but keeps the surface off.
@@ -53,9 +42,50 @@ export class PublicLawUnavailableError extends TaggedError(
   message: string;
 }> {}
 
+/** The disposition for a failed public-law read. */
+export type PublicLawFailureDisposition = "retryable" | "rejected" | "render";
+
+const isTimeoutError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "name" in error &&
+  error.name === "TimeoutError";
+
 /**
- * The body the public route groups answer from their before-handle gate when
- * the surface is off. Eden types it into the success branch of every
+ * Separates transient public-law read failures from deliberate API answers
+ * and failures that indicate the route itself cannot render safely.
+ */
+export const publicLawFailureDisposition = (
+  error: unknown,
+): PublicLawFailureDisposition => {
+  if (
+    CriticalQueryTimeoutError.is(error) ||
+    isTimeoutError(error) ||
+    isConnectionFailure(error)
+  ) {
+    return "retryable";
+  }
+  if (PublicLawUnavailableError.is(error)) {
+    return "rejected";
+  }
+  if (APIError.is(error)) {
+    if (error.status === CORPUS_BUSY_STATUS || error.status >= 500) {
+      return "retryable";
+    }
+    if (error.status >= 400 && error.status < 500) {
+      return "rejected";
+    }
+  }
+  return "render";
+};
+
+/** Whether a failed public-law read can recover by retrying the read. */
+export const isSearchUnavailableError = (error: unknown): boolean =>
+  publicLawFailureDisposition(error) === "retryable";
+
+/**
+ * The body the public route groups answer from their gate when the surface
+ * is off. The API client types it into the success branch of every
  * public-law route, so the unwrap below excludes it from the data type.
  */
 type DisabledPublicLawData = {
@@ -63,7 +93,7 @@ type DisabledPublicLawData = {
 };
 
 /**
- * What a public-law Eden read answers once `unwrapPublicLawEden` has settled
+ * What a public-law API read answers once `unwrapPublicLawResponse` has settled
  * it. Web types that stand for a response derive from this, so a field the
  * API adds, drops, or tightens reaches every consumer.
  */
@@ -88,15 +118,15 @@ const isPublicLawData = <T>(
   data: T,
 ): data is Exclude<T, DisabledPublicLawData> => !isDisabledPublicLawData(data);
 
-// The gate answers with status 404, so Eden files the marker under `error`;
-// a missing resource on an enabled surface carries a different body, so the
-// marker is unambiguous.
+// The gate answers with status 404, so the API client files the marker under
+// `error`; a missing resource on an enabled surface carries a different body,
+// so the marker is unambiguous.
 type PublicLawErrorInput = {
   status: number;
   value: unknown;
 };
 
-type PublicLawEdenResponse<T> =
+type PublicLawApiResponse<T> =
   { data: T; error: null } | { data: null; error: PublicLawErrorInput };
 
 const isDisabledPublicLawResponse = (error: PublicLawErrorInput): boolean =>
@@ -111,8 +141,8 @@ const publicLawUnavailable = (action: string) =>
   });
 
 /**
- * Classifies a failed public-law Eden response. Eden files every non-2xx
- * answer under `error`, so the disabled marker has to be read there, before
+ * Classifies a failed public-law API response. The API client files every
+ * non-2xx answer under `error`, so the disabled marker has to be read there, before
  * the generic `APIError` is raised. Call sites that branch on the failure
  * themselves (a 404 that is a real answer, a search that degrades to empty)
  * classify first and decide second.
@@ -146,7 +176,7 @@ export const isPublicLawMissError = (error: unknown): boolean =>
 /**
  * Whether a failed public-law response is a plain miss rather than a
  * transport, gate, or server failure. Classifying first is what lets a caller
- * treat the miss as an answer while `unwrapPublicLawEden` still raises
+ * treat the miss as an answer while `unwrapPublicLawResponse` still raises
  * everything else, the disabled-surface marker included.
  */
 export const isPublicLawMiss = (
@@ -155,15 +185,15 @@ export const isPublicLawMiss = (
 ): boolean => isPublicLawMissError(toPublicLawError(error, action));
 
 /**
- * Unwraps a public-law Eden response, throwing the classified failure.
+ * Unwraps a public-law API response, throwing the classified failure.
  * Taking the whole response is what makes the classification structural: a
  * helper handed unwrapped data could never see the disabled marker. The
  * marker is also excluded from the data type (and checked at runtime, in
  * case a gate ever answers it with a success status), so callers read the
  * payload type alone.
  */
-export function unwrapPublicLawEden<T>(
-  response: PublicLawEdenResponse<T>,
+export function unwrapPublicLawResponse<T>(
+  response: PublicLawApiResponse<T>,
   action: string,
 ): Exclude<T, DisabledPublicLawData> {
   if (response.error) {

@@ -4,7 +4,16 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -32,32 +41,7 @@ type RecordedRequest = { method: string; path: string; body: unknown };
 const requests: RecordedRequest[] = [];
 const unexpectedRequests: string[] = [];
 const answers: (Response | Promise<Response>)[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      const text = await request.text();
-      requests.push({
-        method: request.method,
-        path: pathname,
-        body: text === "" ? null : JSON.parse(text),
-      });
-      const answer = answers.shift();
-      if (answer === undefined) {
-        unexpectedRequests.push(`${request.method} ${pathname}`);
-        return panic(
-          `Unexpected network request: ${request.method} ${pathname}`,
-        );
-      }
-      return await answer;
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { EditorState } = await import("@tiptap/pm/state");
@@ -164,7 +148,37 @@ const workspaceId = "0199a3c4-5b6d-7e8f-9a0b-000000009099";
 const actorId = "0199a3c4-5b6d-7e8f-9a0b-000000009098";
 const at = "2026-09-01T10:00:00Z";
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const { pathname } = new URL(request.url);
+        if (pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        const text = await request.text();
+        requests.push({
+          method: request.method,
+          path: pathname,
+          body: text === "" ? null : JSON.parse(text),
+        });
+        const answer = answers.shift();
+        if (answer === undefined) {
+          unexpectedRequests.push(`${request.method} ${pathname}`);
+          return panic(
+            `Unexpected network request: ${request.method} ${pathname}`,
+          );
+        }
+        return await answer;
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   hostDocument = null;
   hostLoading = null;

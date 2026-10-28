@@ -31,11 +31,9 @@ import type {
 export type JsonSchema = JsonSchemaType;
 
 /**
- * Every MCP tool accepts one named-argument object, never a scalar root. The
- * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
- * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
- * and validate the enumerable JSON recursively, so those symbols never enter
- * the protocol payload.
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
  */
 export type McpToolInputSchema = {
   type: "object";
@@ -521,6 +519,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
   requestId?: string;
 } & (

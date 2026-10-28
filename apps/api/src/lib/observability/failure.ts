@@ -188,7 +188,8 @@ export type FrameworkFailure =
   | "request_malformed"
   | "request_validation"
   | "response_invalid"
-  | "route_not_found";
+  | "route_not_found"
+  | "method_not_allowed";
 
 /**
  * AWS SDK service exception names. The name is the exception's code, and it

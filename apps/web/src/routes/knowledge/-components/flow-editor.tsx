@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -53,6 +53,7 @@ import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -652,7 +653,9 @@ const WorkspaceOptionsNotice = ({
     case "failed":
       return (
         <div className="flex items-center gap-2 p-2 text-xs">
-          <span className="text-muted-foreground">{t("common.error")}</span>
+          <span className="text-muted-foreground">
+            {t("common.loadFailed")}
+          </span>
           <Button onClick={workspaces.retry} size="sm" variant="ghost">
             {t("common.retry")}
           </Button>

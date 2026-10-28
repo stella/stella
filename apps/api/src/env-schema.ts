@@ -1,6 +1,7 @@
 import path from "node:path";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -14,6 +15,10 @@ import {
   ORIGIN_VERIFY_HEADER,
   SIGNUP_RATE_LIMIT_IP_SOURCE,
 } from "@/api/lib/client-ip-config";
+import {
+  type EmailEventsInput,
+  resolveEmailEvents,
+} from "@/api/lib/email/deliverability-config";
 import {
   type InboundMailReceivingInput,
   resolveInboundMailReceiving,
@@ -251,7 +256,7 @@ export const envApiServerSchema = {
             v.regex(/^[A-Za-z0-9_-]+$/u),
           ),
           sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
-          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+          notAfter: apiDateTimeSchema,
         }),
       ),
       v.minLength(1),
@@ -312,6 +317,18 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u)),
   ),
   INBOUND_MAIL_KEY_PREFIX: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  EMAIL_EVENTS_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
+  EMAIL_EVENTS_TOPIC_ARN: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(/^arn:aws[a-z-]*:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/u),
+    ),
+  ),
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.startsWith("https://")),
+  ),
   SES_REGION: v.optional(v.string()),
   SES_ACCESS_KEY_ID: v.optional(v.string()),
   SES_SECRET_ACCESS_KEY: v.optional(v.string()),
@@ -671,6 +688,17 @@ export const envApiServerSchema = {
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Concurrent public-law MCP reads admitted per authenticated caller.
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+    "4",
+  ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
@@ -937,46 +965,47 @@ export const envApiServerSchema = {
   ),
 };
 
-type EnvApiInvariantInput = InboundMailReceivingInput & {
-  APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
-  APP_REVIEW_ORGANIZATION_ID?: string | undefined;
-  AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
-  FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
-  MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
-  MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
-  OPENROUTER_API_KEY?: string | undefined;
-  OPENROUTER_WIF_POLICY_ID?: string | undefined;
-  OPENROUTER_WIF_AUDIENCE?: string | undefined;
-  OPENROUTER_WIF_STS_REGION?: string | undefined;
-  BETTER_AUTH_URL: string;
-  DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
-  E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
-  EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
-  FEATURE_ACTION_ADMISSION?: boolean | undefined;
-  FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
-  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
-  FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
-  FEATURE_FREE_TIER?: boolean | undefined;
-  FEATURE_USAGE?: boolean | undefined;
-  USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
-  PAYMENT_RETRY_WINDOW_MS?: number | undefined;
-  FRONTEND_URL: string;
-  GOTENBERG_URL: string;
-  MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
-  MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
-  MICROSOFT_AUTH_TENANT_ID?: string | undefined;
-  ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
-  PUBLIC_URL?: string | undefined;
-  REPORT_SPECS_DIR?: string | undefined;
-  REPORT_SPECS_S3_PREFIX?: string | undefined;
-  SES_REGION?: string | undefined;
-  SMTP_HOST?: string | undefined;
-  SMTP_PORT?: number | undefined;
-  TRANSACTIONAL_EMAIL_FROM?: string | undefined;
-  USE_MOCK_AI: boolean | "force";
-  nodeEnv: NodeEnvLabel;
-  runtimeMode: RuntimeMode;
-};
+type EnvApiInvariantInput = InboundMailReceivingInput &
+  EmailEventsInput & {
+    APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
+    APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
+    FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
+    OPENROUTER_API_KEY?: string | undefined;
+    OPENROUTER_WIF_POLICY_ID?: string | undefined;
+    OPENROUTER_WIF_AUDIENCE?: string | undefined;
+    OPENROUTER_WIF_STS_REGION?: string | undefined;
+    BETTER_AUTH_URL: string;
+    DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
+    E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
+    EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+    FEATURE_ACTION_ADMISSION?: boolean | undefined;
+    FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+    FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
+    FEATURE_CONFIGURED_ACCESS?: boolean | undefined;
+    FEATURE_FREE_TIER?: boolean | undefined;
+    FEATURE_USAGE?: boolean | undefined;
+    USAGE_ENFORCEMENT_ENABLED?: boolean | undefined;
+    PAYMENT_RETRY_WINDOW_MS?: number | undefined;
+    FRONTEND_URL: string;
+    GOTENBERG_URL: string;
+    MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
+    MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
+    MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+    ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
+    PUBLIC_URL?: string | undefined;
+    REPORT_SPECS_DIR?: string | undefined;
+    REPORT_SPECS_S3_PREFIX?: string | undefined;
+    SES_REGION?: string | undefined;
+    SMTP_HOST?: string | undefined;
+    SMTP_PORT?: number | undefined;
+    TRANSACTIONAL_EMAIL_FROM?: string | undefined;
+    USE_MOCK_AI: boolean | "force";
+    nodeEnv: NodeEnvLabel;
+    runtimeMode: RuntimeMode;
+  };
 
 type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
@@ -1076,6 +1105,7 @@ const reviewAccountInvariantViolation = ({
 const delegatedInvariantViolation = (
   input: ManagedProviderCheckInvariantInput &
     InboundMailReceivingInput &
+    EmailEventsInput &
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
@@ -1093,7 +1123,11 @@ const delegatedInvariantViolation = (
     return freeTierViolation;
   }
   const inboundMail = resolveInboundMailReceiving(input);
-  return inboundMail.isErr() ? inboundMail.error.message : null;
+  if (inboundMail.isErr()) {
+    return inboundMail.error.message;
+  }
+  const emailEvents = resolveEmailEvents(input);
+  return emailEvents.isErr() ? emailEvents.error.message : null;
 };
 
 export const envApiInvariantViolation = ({
@@ -1140,6 +1174,9 @@ export const envApiInvariantViolation = ({
   INBOUND_MAIL_TOPIC_ARN,
   INBOUND_MAIL_BUCKET,
   INBOUND_MAIL_KEY_PREFIX,
+  EMAIL_EVENTS_QUEUE_URL,
+  EMAIL_EVENTS_TOPIC_ARN,
+  EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
 }: EnvApiInvariantInput): string | null => {
   if (
     FEATURE_CONFIGURED_ACCESS &&
@@ -1168,6 +1205,9 @@ export const envApiInvariantViolation = ({
     INBOUND_MAIL_TOPIC_ARN,
     INBOUND_MAIL_BUCKET,
     INBOUND_MAIL_KEY_PREFIX,
+    EMAIL_EVENTS_QUEUE_URL,
+    EMAIL_EVENTS_TOPIC_ARN,
+    EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
     FEATURE_FREE_TIER,
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,

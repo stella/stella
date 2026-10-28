@@ -524,6 +524,7 @@ if (!databaseUrl || !runPostgresTests) {
           recordAuditEvent: async () => {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Audit unavailable",
             });
           },

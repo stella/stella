@@ -664,7 +664,7 @@ export const wp29Adapter = {
           sourceRaw: [
             {
               role: "source-page-0",
-              contentBase64: Buffer.from(response.bytes).toString("base64"),
+              contentBase64: Buffer.from(response.bytes).toBase64(),
               contentType: response.contentType,
             },
           ],
@@ -732,12 +732,12 @@ export const wp29Adapter = {
     const sourceRaw = [
       {
         role: "source-page-0",
-        contentBase64: Buffer.from(index.bytes).toString("base64"),
+        contentBase64: Buffer.from(index.bytes).toBase64(),
         contentType: index.contentType,
       },
       {
         role: "source-page-1",
-        contentBase64: Buffer.from(detail.bytes).toString("base64"),
+        contentBase64: Buffer.from(detail.bytes).toBase64(),
         contentType: detail.contentType,
       },
     ];

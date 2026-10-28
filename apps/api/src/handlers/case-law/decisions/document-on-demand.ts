@@ -49,11 +49,13 @@ import {
   type DeferredDocumentAdapterKey,
   isDeferredDocumentAdapterKey,
 } from "@/api/lib/legal-search/adapter-manifest";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import type {
   BackfilledDocument,
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -165,7 +167,13 @@ const recordFailure = (
   // that, and it must not be escalated into the read it was recording a
   // failure for.
   Result.try(() => {
-    captureError(error, { source: CAPTURE_SOURCE, decisionId });
+    captureError(
+      error,
+      handlerErrorContext("decisions.recordFailure", {
+        source: CAPTURE_SOURCE,
+        decisionId,
+      }),
+    );
   }).unwrapOr(undefined);
 
 export const recordDocumentPacingOutcome = (
@@ -338,10 +346,14 @@ export const readThroughDeferredDocument = async ({
   // failure, so it is the one error this does not report.
   const outcome = await Result.tryPromise(
     async () =>
-      await withTimeout(async () => await attempt(), {
-        label: READ_BUDGET_LABEL,
-        timeoutMs: READ_BUDGET_MS,
-      }),
+      await withTimeout(
+        async () =>
+          await withPublicReadIo("hydration", async () => await attempt()),
+        {
+          label: READ_BUDGET_LABEL,
+          timeoutMs: READ_BUDGET_MS,
+        },
+      ),
   );
   if (Result.isError(outcome)) {
     if (!isReadBudgetExpiry(outcome.error)) {

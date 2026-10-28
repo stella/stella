@@ -12,10 +12,16 @@ import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
   GIT_ORIGIN,
   parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import { isPrivilegedJobClosure, ReviewRequiredError } from "./review";
+import {
+  isPrivilegedJobClosure,
+  isRepositoryWritingJob,
+  ReviewRequiredError,
+} from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -287,7 +293,11 @@ const createDocumentDigest = ({
   return documentDigest;
 };
 
-export type DerivedJob = { digest: string; privileged: boolean };
+export type DerivedJob = {
+  digest: string;
+  privileged: boolean;
+  writesRepository: boolean;
+};
 type ReviewJobsOptions = DocumentDigestOptions & {
   decisions: v.InferOutput<typeof DECISIONS>;
   documentDigest: (id: string) => string;
@@ -368,16 +378,24 @@ const reviewJobs = ({
         const target = node.edges[reference];
         return target ? [target] : [];
       });
+      const reachable = reachableDocuments({
+        initialTargets: targets,
+        nodes,
+        parsedDocuments,
+      });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
         shape: job.shape,
-        reachableDocuments: reachableDocuments({
-          initialTargets: targets,
-          nodes,
-          parsedDocuments,
+        reachableDocuments: reachable,
+      });
+      derivedJobs.set(key, {
+        digest,
+        privileged,
+        writesRepository: isRepositoryWritingJob({
+          shape: job.shape,
+          reachableDocuments: reachable,
         }),
       });
-      derivedJobs.set(key, { digest, privileged });
       if (!decision || decision.reviewedDigest !== digest) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
@@ -443,19 +461,32 @@ export const generateClassification = ({
     try: () => {
       const nodes: MetadataNodes = new Map();
       const parsedDocuments = new Map<string, ParsedDocument>();
+      const mounts = new Map<string, string>();
       type VisitOptions = {
         repository: string;
         file: string;
         origin: MetadataOrigin;
+        mount?: string | null;
       };
-      const visit = ({ repository, file, origin }: VisitOptions): string => {
+      const visit = ({
+        repository,
+        file,
+        origin,
+        mount = null,
+      }: VisitOptions): string => {
         const id = `source-${sha256(`${repository}:${file}`)}`;
-        if (nodes.has(id)) {
-          return id;
-        }
         const parsed = parseDocument(reader.read(repository, file));
         if (parsed.isErr()) {
           throw parsed.error;
+        }
+        recordMetadataMount({
+          mounts,
+          identity: id,
+          mount,
+          document: parsed.value,
+        });
+        if (nodes.has(id)) {
+          return id;
         }
         const references: string[] = [];
         const edges: Record<string, string> = {};
@@ -479,8 +510,13 @@ export const generateClassification = ({
           let targetId: string;
           if (reference.startsWith("$/") || reference.startsWith("./")) {
             const relative = reference.slice(2);
-            const relocation = parsed.value.relocatedActions[reference]?.at(0);
-            const sourcePath = relocation?.path ?? relative;
+            const selected = resolveLocalMetadataPath({
+              reference,
+              kind,
+              relocations: parsed.value.relocatedActions[reference] ?? [],
+              inheritedMount: mount,
+            });
+            const sourcePath = selected.path;
             let targetPath: string;
             if (kind === "reusable-workflow") {
               targetPath = relative;
@@ -500,7 +536,12 @@ export const generateClassification = ({
               }
               targetPath = found;
             }
-            targetId = visit({ repository, file: targetPath, origin });
+            targetId = visit({
+              repository,
+              file: targetPath,
+              origin,
+              mount: selected.mount,
+            });
           } else {
             const source = findRemoteSource({ reference, kind, snapshots });
             if (source) {

@@ -51,11 +51,13 @@ import { useDecisionColumnPreferences } from "@/features/case-law/decision-colum
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
@@ -68,9 +70,12 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
   type LawScope,
@@ -93,7 +98,7 @@ const ACTS_PER_SHELF_SIDE = 3;
 /** Rows per column while the route's own data is still in flight. */
 const PENDING_ROW_KEYS = ["a", "b", "c"] as const;
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   country: v.optional(
     v.pipe(
       v.string(),
@@ -103,7 +108,7 @@ const searchSchema = v.object({
     ),
   ),
   /** Set by a decision link that resolved to nothing; shown once, then cleared. */
-  notFound: v.optional(v.boolean()),
+  notFound: optionalFlagSearchSchema,
 });
 
 type LawHomeSearch = v.InferOutput<typeof searchSchema>;
@@ -255,10 +260,9 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 );
 
 function LawHome() {
-  const { record: historyRecord } = useLawHistory();
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
@@ -284,6 +288,11 @@ function LawHome() {
   const scope =
     publicCaseLawCountryFromParam(country) ??
     panic("The law route rendered without a launch-ready country.");
+  // The same list Recent shows, so recording and listing share one query.
+  const { record: historyRecord } = useLawHistory({
+    filter: "all",
+    country: scope,
+  });
   const countryParam = toCaseLawCountryParam(scope);
   // The results page reads this jurisdiction's stored excerpt length too, so
   // the lookup below and the list it falls back to share one cached result set.
@@ -308,8 +317,8 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
-  useQueryViewError(shelfView);
+  const shelfView = queryView(shelfQuery);
+  useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
   /**
@@ -322,7 +331,7 @@ function LawHome() {
     if (trimmed.length === 0) {
       return;
     }
-    historyRecord.mutate({ kind: "search", query: trimmed });
+    historyRecord.mutate({ kind: "search", query: trimmed, country: scope });
 
     if (
       statuteCountry !== null &&
@@ -510,9 +519,9 @@ function LawHome() {
               })}
               to="/law/$country/statutes/$slug"
             >
-              <LandingItemText
+              <StatuteSignalText
                 meta={signalLine(side, item.versionValidFrom)}
-                title={item.title}
+                statute={item}
               />
             </Link>
           ))
@@ -520,7 +529,7 @@ function LawHome() {
           <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
         )}
       </LandingSection>
-      <LawRecent onSearch={rerunSearch} />
+      <LawRecent country={scope} onSearch={rerunSearch} />
     </LandingLayout>
   );
 }

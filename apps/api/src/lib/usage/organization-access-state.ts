@@ -8,6 +8,7 @@
 
 import { panic } from "better-result";
 import { and, eq, inArray, notExists, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -16,9 +17,11 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
   organizationAccessStates,
   organizationSettings,
 } from "@/api/db/schema";
+import type { AnyDrizzle } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import {
   AUDIT_ACTION,
@@ -26,9 +29,15 @@ import {
   recordAuditGroups,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockOrganizationSettingsWrites } from "@/api/lib/db/aggregate-lock";
+import {
+  lockOrganizationSettingsWrites,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
-import { transitionScopedBatch } from "@/api/lib/db/transitions";
+import {
+  transitionScopedBatch,
+  transitionScopedCount,
+} from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   MANAGED_MODEL_TIER,
@@ -117,36 +126,136 @@ type OrganizationAccessStateChange = {
   now: Date;
 };
 
+type OrganizationAccessStateWriter = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert" | "select" | "execute"
+> &
+  Pick<Transaction, "rollback">;
+
+type OrganizationAccessStateDatabase = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "insert"
+> &
+  AnyDrizzle<OrganizationAccessStateWriter>;
+
+const ORGANIZATION_CREATION_AUDIT_SOURCE = "organization-creation";
+
 /**
  * Records a new organization's state once. With the flag on it starts the
  * evaluation period; with it off the organization keeps today's
- * self-managed-keys path. The insert never overwrites, so a replayed call
- * cannot start a second evaluation or move an existing organization.
+ * self-managed-keys path. An enabled creation supersedes only a legacy
+ * reconciler row, which closes the rolling-deployment race between those
+ * writers. A replayed creation cannot restart or move a final state.
  */
 export const recordNewOrganizationAccessState = async (
-  db: Pick<Transaction, "insert">,
+  db: OrganizationAccessStateDatabase | OrganizationAccessStateWriter,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<void> => {
-  const values = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")
-    ? {
-        organizationId,
-        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        evaluationStartedAt: now,
-        evaluationEndsAt: addDays(
-          now,
-          // The env invariant refuses to boot with the flag on and no length.
-          env.ORG_EVALUATION_PERIOD_DAYS ??
-            panic("ORG_EVALUATION_PERIOD_DAYS is unset"),
-        ),
-      }
-    : {
+  const enforced = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE");
+  if (!enforced) {
+    // audit: skip - organization creation records the initial access state
+    await db
+      .insert(organizationAccessStates)
+      .values({
         organizationId,
         state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-      };
-  await db
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+      })
+      .onConflictDoNothing({ target: organizationAccessStates.organizationId });
+    return;
+  }
+  // Existing callers retain their transaction; owner-pool callers need one
+  // so a superseded legacy row and its audit commit together.
+  if (!("rollback" in db)) {
+    await withAggregateTransaction(
+      db,
+      async (tx) =>
+        await recordNewOrganizationAccessState(tx, { organizationId, now }),
+    );
+    return;
+  }
+  const evaluationEndsAt = addDays(
+    now,
+    // The env invariant refuses to boot with the flag on and no length.
+    env.ORG_EVALUATION_PERIOD_DAYS ??
+      panic("ORG_EVALUATION_PERIOD_DAYS is unset"),
+  );
+  // audit: skip - organization creation records the initial access state
+  const inserted = await db
     .insert(organizationAccessStates)
-    .values(values)
-    .onConflictDoNothing({ target: organizationAccessStates.organizationId });
+    .values({
+      organizationId,
+      state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+      evaluationStartedAt: now,
+      evaluationEndsAt,
+    })
+    .onConflictDoNothing({ target: organizationAccessStates.organizationId })
+    .returning({ organizationId: organizationAccessStates.organizationId });
+  if (inserted.length > 0) {
+    return;
+  }
+  await transitionScopedCount({
+    tx: db,
+    spec: TRANSITIONS.organizationAccessStates,
+    where:
+      and(
+        eq(organizationAccessStates.organizationId, organizationId),
+        eq(
+          organizationAccessStates.origin,
+          ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+        ),
+      ) ?? panic("Expected the legacy access-state transition predicate"),
+    options: {
+      from: [ORGANIZATION_ACCESS_STATE.selfManagedKeys],
+      to: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      set: {
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+        evaluationStartedAt: now,
+        evaluationEndsAt,
+        evaluationEndedAt: null,
+        updatedAt: now,
+      },
+    },
+    recordTransitionAuditEvent: async (auditTx) => {
+      await recordAuditGroups({
+        tx: auditTx,
+        groups: [
+          {
+            bindings: {
+              organizationId,
+              workspaceId: null,
+              userId: ORGANIZATION_CREATION_AUDIT_SOURCE,
+              execution: {
+                performer: {
+                  type: "service",
+                  id: ORGANIZATION_CREATION_AUDIT_SOURCE,
+                  name: ORGANIZATION_CREATION_AUDIT_SOURCE,
+                },
+                trigger: {
+                  type: "system",
+                  source: ORGANIZATION_CREATION_AUDIT_SOURCE,
+                },
+              },
+            },
+            events: [
+              {
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+                resourceId: organizationId,
+                changes: {
+                  state: {
+                    old: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+                    new: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  });
 };
 
 const addDays = (from: Date, days: number): Date =>
@@ -229,8 +338,8 @@ export const recordMissingOrganizationAccessStates = async (
   db: Pick<Transaction, "execute">,
 ): Promise<void> => {
   await db.execute(sql`
-    INSERT INTO ${organizationAccessStates} (organization_id, state)
-    SELECT ${organization.id}, ${ORGANIZATION_ACCESS_STATE.selfManagedKeys}
+    INSERT INTO ${organizationAccessStates} (organization_id, state, origin)
+    SELECT ${organization.id}, ${ORGANIZATION_ACCESS_STATE.selfManagedKeys}, ${ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile}
     FROM ${organization}
     ON CONFLICT (organization_id) DO NOTHING
   `);

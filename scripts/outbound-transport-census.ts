@@ -157,24 +157,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "Requests identity assertions from the configured identity service.",
     transports: ["module:@stll/fetch", "module:jose"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/decisions/dev-reparse.ts",
-    class: "third-party",
-    reason: "Reads decision content from the selected public publisher.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts",
     class: "third-party",
     reason: "Paces requests to the Czech court publisher.",
     transports: ["module:@stll/fetch"],
   },
-  {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts",
-    class: "third-party",
-    reason: "Sends paged and document requests to public court publishers.",
-    transports: ["module:@stll/fetch"],
-  },
+
   {
     path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
     class: "package-owned-client",
@@ -290,10 +280,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-s3"],
   },
   {
-    path: "apps/api/src/lib/email/inbound/sqs.ts",
+    path: "apps/api/src/lib/email/sns-queue-drain.ts",
     class: "vendor-sdk",
     reason:
-      "Reads inbound email queue messages from the configured AWS account.",
+      "Reads inbound mail and delivery event queue messages from the configured AWS account.",
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
@@ -450,23 +440,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Queries the configured corpus index service and records registry request metadata.",
-    transports: [
-      "module:@stll/business-registries/shared/request-observer",
-      "module:@stll/fetch",
-    ],
+    transports: ["module:@stll/business-registries/shared/request-observer"],
   },
   {
     path: "apps/api/src/lib/visual-preview.ts",
     class: "vendor-sdk",
     reason: "Invokes the configured AWS visual preview function.",
     transports: ["module:@aws-sdk/client-lambda"],
-  },
-  {
-    path: "apps/api/src/lib/scheduler/tasks/inbound-mail-receive.ts",
-    class: "vendor-sdk",
-    reason:
-      "Receives inbound mail notifications from the configured AWS account.",
-    transports: ["module:@aws-sdk/client-sqs"],
   },
   {
     path: "apps/api/src/lib/observability/otel.ts",
@@ -510,12 +490,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     path: "apps/api/src/lib/s3.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads and writes objects using configured S3-compatible services.",
-    transports: [
-      "global:fetch",
-      "module:@aws-sdk/client-s3",
-      "module:@stll/fetch",
-      "module:bun",
-    ],
+    transports: ["global:fetch", "module:@aws-sdk/client-s3", "module:bun"],
   },
   {
     path: "apps/api/src/lib/safe-outbound-fetch.ts",
@@ -523,6 +498,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Validates destinations and pins resolved addresses for HTTP requests.",
     transports: [
+      "module:@stll/fetch",
       "module:node:dns/promises",
       "module:node:http",
       "module:node:https",
@@ -941,6 +917,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/web/src/lib/public-law-api.ts",
+    class: "package-owned-client",
+    reason:
+      "Classifies public law read failures with the fetch package's connection-failure helper.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/lib/public-law-sitemap.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads public law sitemap shards from the configured API.",
@@ -983,7 +966,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    path: "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
     class: "operator-configured-infrastructure",
     reason: "Downloads invoice PDFs from API-issued storage URLs.",
     transports: ["module:@stll/fetch"],
@@ -1019,6 +1002,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
     transports: ["global:fetch"],
   },
   {

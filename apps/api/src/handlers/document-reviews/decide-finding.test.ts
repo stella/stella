@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -109,7 +110,8 @@ const createHarness = (rows: StoredFinding[]) => {
       `https://example.test/v1/workspaces/${WORKSPACE_ID}/document-reviews/findings/${FINDING_ID}`,
       { method: "PATCH" },
     ),
-    route: "/v1/workspaces/:workspaceId/document-reviews/findings/:findingId",
+    route:
+      "/v1/workspaces/:workspaceId/document-reviews/findings/:findingId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     workspaceId: WORKSPACE_ID,

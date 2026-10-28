@@ -507,11 +507,56 @@
     "addEntry": "Pridėti įrašą",
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
+    "approval": {
+      "approveAll": "{count, plural, one {Patvirtinti # įrašą} few {Patvirtinti visus # įrašus} many {Patvirtinti visus # įrašo} other {Patvirtinti visus # įrašų}}",
+      "approveSelected": "Patvirtinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "billedTotal": "Apmokestinta {duration}",
+      "empty": "Šioje byloje nieko nelaukia patvirtinimo.",
+      "emptyWeek": "Šią savaitę nieko nelaukia patvirtinimo. Pateiktas laikas rodomas čia.",
+      "everyone": "Visi",
+      "failed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+      "myTime": "Mano laikas",
+      "pending": "{count, plural, one {# įrašas laukia patvirtinimo} few {# įrašai laukia patvirtinimo} many {# įrašo laukia patvirtinimo} other {# įrašų laukia patvirtinimo}}",
+      "refusals": {
+        "invalidEntry": "Pridėkite aprašymą ir patikrinkite darbo datą, tada patvirtinkite įrašą.",
+        "notApprover": "Šį įrašą gali patvirtinti tik jam priskirtas tvirtintojas arba administratorius.",
+        "notFound": "Šio įrašo nebėra. Atnaujinkite sąrašą.",
+        "notSubmitted": "Šis įrašas dar nepateiktas. Pirmiausia jį turi pateikti jo autorius.",
+        "runningTimer": "Prieš tvirtindami įrašą sustabdykite veikiantį laikmatį.",
+        "unpriced": "Šis įrašas neturi įkainio. Nustatykite šios bylos įkainį ir tada patvirtinkite įrašą.",
+        "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
+      },
+      "returnComment": "Grąžinimo priežastis",
+      "returnRefusals": {
+        "invalidEntry": "Patikrinkite įrašo darbo datą ir tada jį grąžinkite.",
+        "notApprover": "Šį įrašą gali grąžinti tik jam priskirtas tvirtintojas arba administratorius.",
+        "notFound": "Šio įrašo nebėra, todėl jo grąžinti negalima. Atnaujinkite sąrašą.",
+        "notSubmitted": "Šis juodraštis niekada nebuvo pateiktas, todėl nėra ką grąžinti.",
+        "runningTimer": "Prieš grąžindami įrašą sustabdykite veikiantį laikmatį.",
+        "timePeriodLocked": "Šis mėnuo užrakintas, todėl įrašo grąžinti negalima. Paprašykite administratoriaus jį atrakinti.",
+        "wrongStatus": "Laiko, už kurį išrašyta sąskaita arba kuris nurašytas, grąžinti autoriui negalima."
+      },
+      "returnSelected": "Grąžinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "selectEntry": "Pasirinkti įrašą",
+      "timeEntries": "Laiko įrašai",
+      "title": "Patvirtinimai"
+    },
     "approve": "Patvirtinti",
     "approveSelected": "Patvirtinti pasirinktus",
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
+    "clientComposer": {
+      "flatFeeNote": "Bylų su fiksuotu atlygiu sąskaitas išrašykite bylos sąskaitų puslapyje.",
+      "includeMatter": "Įtraukti {matterName}",
+      "invalidPeriod": "Pasirinkite pabaigos datą, ne ankstesnę nei pradžios data.",
+      "loadFailed": "Nepavyko įkelti darbų, už kuriuos dar neišrašyta sąskaita. Bandykite dar kartą.",
+      "matterSubtotal": "Bylos suma su PVM: {amount} · {share} sąskaitos",
+      "periodEnd": "Laikotarpio pabaiga",
+      "periodStart": "Laikotarpio pradžia",
+      "title": "Išrašyti sąskaitą klientui",
+      "visibility": "Šią sąskaitą mato tik asmenys, turintys prieigą prie visų įtrauktų bylų, ir atsiskaitymo administratoriai."
+    },
     "codes": {
       "activity": "Veikla",
       "activityCode": "Veiklos kodas",
@@ -594,6 +639,7 @@
       "openInvoice": "Atidaryti sąskaitą",
       "otherCurrency": "{count, plural, one {# eilutė užregistruota} few {# eilutės užregistruotos} many {# eilutės užregistruota} other {# eilučių užregistruota}} kita valiuta nei {currency} ir lieka atskirai sąskaitai.",
       "outsideScope": "Nepatenka į PVM taikymo sritį, 0 %",
+      "pendingApprovals": "{count, plural, one {# elementas laukia} few {# elementai laukia} many {# elemento laukia} other {# elementų laukia}} patvirtinimo. Peržiūrėti patvirtinimus.",
       "rate": "Įkainis",
       "readyDescription": "Išrašant sąskaitai suteikiamas kitas jūsų numerių serijos numeris ir ji užrakinama. Juodraštį galima toliau redaguoti.",
       "readyTitle": "Paruošta išrašyti",
@@ -654,6 +700,11 @@
       "invoiceDate": "Sąskaitos data",
       "invoiceDetail": "Sąskaitos detalės",
       "invoiceNumber": "Sąskaitos numeris",
+      "lineOverrides": {
+        "editedRecorded": "Pakeista · užregistruota: {description}, {quantity} × {rate}",
+        "quantity": "Kiekis",
+        "resetRecorded": "Atkurti užregistruotas reikšmes"
+      },
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
       "markPaid": "Pažymėti kaip apmokėtą",
@@ -678,6 +729,7 @@
     "markNonBillableSelected": "Pažymėti kaip neapmokestinamus",
     "matterRequired": "Pasirinkite bylą",
     "minutes": "Minutės",
+    "moveEntryHint": "Išsaugojus įrašas perkeliamas į šią bylą ir įkainojamas pagal jos tarifus.",
     "narrative": "Aprašas",
     "narrativePlaceholder": "Aprašykite atliktą darbą...",
     "noActiveTimer": "Nėra aktyvaus laikmačio",
@@ -792,13 +844,16 @@
       "approved": "Patvirtintas",
       "billed": "Išrašyta sąskaita",
       "draft": "Juodraštis",
+      "submitted": "Pateikta",
       "written_off": "Nurašytas"
     },
     "stopTimer": "Stabdyti",
     "suggestions": {
       "actionCount": "{count, plural, one {# veiksmas} few {# veiksmai} many {# veiksmų} other {# veiksmo}}",
       "activeVsLogged": "Veikla: {active} · Užregistruota: {logged}",
+      "alreadyCovered": "Jau padengta užregistruotu laiku",
       "chatEvidence": "{count, plural, one {# žinutė} few {# žinutės} many {# žinučių} other {# žinutės}} pokalbyje „{title}“",
+      "engagedTime": "{duration} aktyvaus darbo",
       "keyboardHint": "Enter priima, E leidžia redaguoti prieš priimant, Delete atmeta",
       "privacyNote": "Šiuos pasiūlymus matote tik jūs. Niekas neįrašoma, kol pasiūlymo nepriimate.",
       "title": "Pasiūlymai pagal jūsų veiklą",
@@ -892,9 +947,14 @@
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "dateUnavailable": "Data nenurodyta",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
+      "goToMention": "Eiti į paminėjimą nr. {number}",
+      "goToParagraph": "Eiti į {paragraph} punktą",
       "lastNegative": "paskutinė neigiama citata {year} m.",
+      "mentionMark": "paminėjimas nr. {number}",
+      "mentionsInDecision": "{count, plural, one {Šiame sprendime cituojama # kartą} few {Šiame sprendime cituojama # kartus} many {Šiame sprendime cituojama # karto} other {Šiame sprendime cituojama # kartų}}",
       "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
       "none": "Citavimų dar neužfiksuota.",
+      "notInStella": "Programoje stella dar nėra",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
       "paragraphLabel": "{paragraph} punktas",
@@ -937,33 +997,31 @@
       "supreme": "Aukščiausieji teismai"
     },
     "coverage": {
+      "allCurrent": "Visi šaltiniai atnaujinti",
       "completeness": "Išsamumas",
+      "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi.",
+      "countryNavigation": "Pereiti prie šalies",
       "courtsHeading": "Pagal teismą",
-      "courtsUnavailable": "Suskirstymas pagal teismus šiuo metu nepasiekiamas.",
       "decisionYears": "Sprendimų metai",
+      "decisionsAcross": "sprendimai iš {count, plural, one {# jurisdikcijos} few {# jurisdikcijų} other {# jurisdikcijų}}",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "generatedAt": "Duomenys {date}",
-      "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
       "healthDelayed": "Vėluoja",
       "healthDisabled": "Išjungta",
       "healthStalled": "Sustojęs",
       "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",
-      "knownGaps": "Žinomos spragos",
       "lastSync": "Paskutinis sinchronizavimas",
-      "noGapsRecorded": "Spragų neužregistruota",
       "notCountedYet": "Dar nesuskaičiuota",
       "notMeasuredYet": "Dar neišmatuota",
-      "pendingTexts": "Laukiantys tekstai",
-      "reportedByListing": "Suskaičiuota pagal skelbėjo sąrašą",
-      "reportedByOperator": "Įvesta rankiniu būdu",
-      "reportedByPublisher": "Paties skelbėjo skaičius",
       "searchable": "Prieinami paieškai",
+      "sourceExceptions": "{count, plural, one {# šaltiniui reikia dėmesio} few {# šaltiniams reikia dėmesio} other {# šaltinių reikia dėmesio}}",
+      "sourcesCurrent": "Atnaujinti šaltiniai",
+      "syncedAt": "Sinchronizuota {time}",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
-      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami.",
-      "unreadListingPeriods": "Neperskaityti sąrašo laikotarpiai"
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
     },
     "decisionNotFound": "Sprendimas nerastas",
     "decisionTypes": {
@@ -1003,6 +1061,12 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "marginFilter": {
+      "label": "Cituojamų nuostatų filtras",
+      "paragraph": "{count, plural, =0 {¶{paragraph} necituojama jokių nuostatų} one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, =0 {Pažymėtame tekste necituojama jokių nuostatų} one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šioje pastraipoje necituojama jokių nuostatų} one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
       "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
@@ -1024,8 +1088,10 @@
     },
     "notesFilter": {
       "ai": "DI",
-      "human": "Žmonių"
+      "human": "Žmonių",
+      "toggleState": "{label}: {state, select, on {įjungta} other {išjungta}}"
     },
+    "oldestDecisions": "Seniausi sprendimai",
     "pagination": {
       "goToPage": "Eiti į {page} psl.",
       "label": "Rezultatų puslapiai",
@@ -1087,8 +1153,7 @@
       "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
       "runTitle": "Atsakyti šiame puslapyje",
       "savedQuestions": "Išsaugoti klausimai",
-      "title": "Tyrimo lentelės",
-      "updated": "Paskutinį kartą redaguota {date}"
+      "title": "Tyrimo lentelės"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1197,8 @@
     "showWholeHeadnote": "Rodyti visą santrauką",
     "sort": {
       "newest": "Naujausi",
+      "oldest": "Seniausi",
+      "oldestUnavailable": "Paieškos rezultatai rikiuojami pagal aktualumą arba nuo naujausių. Norėdami pirmiausia matyti seniausius sprendimus, išvalykite paiešką.",
       "relevance": "Tinkamiausi"
     },
     "viewer": {
@@ -1147,6 +1214,7 @@
       "citedDecisionPassage": "Sprendimo ištrauka",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Eiti į pastraipą} few {Eiti į pastraipas} many {Eiti į pastraipas} other {Eiti į pastraipas}}",
       "judgeRole": {
         "advocateGeneral": "Generalinis advokatas",
         "dissenting": "Atskiroji nuomonė",
@@ -1486,7 +1554,7 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
-      "allModels": "Visi modeliai ({count, number})",
+      "allModels": "Visi modeliai",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "belowFrontier": "Žemiau geriausių kompromisų",
@@ -1698,21 +1766,8 @@
       "describe-stella-function": "Ruošiama duomenų paieška",
       "describe_template": "Skaitomi šablono laukai",
       "discover_tools": "Ruošiama duomenų paieška",
-      "docxCommentSummary": "Pridėti komentarą prie {blockId}",
-      "docxDeleteSummary": "Ištrinti {blockId}",
-      "docxDeleteTableColumnSummary": "Ištrinti lentelės stulpelį ties {blockId}",
-      "docxDeleteTableRowSummary": "Ištrinti lentelės eilutę ties {blockId}",
       "docxEditMore": "{count, plural, one {dar # redagavimas} few {dar # redagavimai} many {dar # redagavimo} other {dar # redagavimų}}",
       "docxEditSummary": "{count, plural, one {# siūlomas redagavimas} few {# siūlomi redagavimai} many {# siūlomo redagavimo} other {# siūlomų redagavimų}}",
-      "docxInsertAfterSummary": "Įterpti tekstą po {blockId}",
-      "docxInsertBeforeSummary": "Įterpti tekstą prieš {blockId}",
-      "docxInsertTableColumnSummary": "Įterpti lentelės stulpelį prie {blockId}",
-      "docxInsertTableRowSummary": "Įterpti lentelės eilutę prie {blockId}",
-      "docxMergeTableCellsSummary": "Sujungti lentelės langelius ties {blockId}",
-      "docxReplaceBlockSummary": "Pakeisti {blockId}",
-      "docxReplaceSummary": "Pakeisti „{find}“ į „{replace}“",
-      "docxSignatureTableSummary": "Įterpti parašų lentelę prie {blockId}",
-      "docxSplitTableCellSummary": "Padalyti lentelės langelį ties {blockId}",
       "execute-typescript": "Skaitomi bylos duomenys",
       "execute_typescript": "Skaitomi bylos duomenys",
       "expand-chat-history": "Skaitoma pokalbio istorija",
@@ -2056,8 +2111,6 @@
       "orLetUsKnowAt": "arba parašykite mums adresu",
       "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
-    "enterKey": "↵",
-    "error": "Klaida",
     "expenses": "Išlaidos",
     "export": {
       "citations": "Citatos",
@@ -2131,6 +2184,7 @@
     "lastUpdated": "Paskutinis atnaujinimas",
     "layoutResetAfterProblem": "Po trikties atkurtas numatytasis išdėstymas.",
     "legalDatabase": "Teisinė duomenų bazė",
+    "loadFailed": "Nepavyko įkelti.",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
@@ -2205,10 +2259,12 @@
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
     "searchIn": "Ieškoti",
+    "searchMembers": "Ieškoti narių…",
     "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
     "selectAll": "Pasirinkti visus",
     "selectDate": "Pasirinkti datą…",
+    "selected": "Pasirinkta",
     "sessions": "Sesijos",
     "settings": "Nustatymai",
     "showAll": "Rodyti viską",
@@ -2217,7 +2273,7 @@
     "showMore": "Rodyti daugiau",
     "showSecretValue": "Rodyti slaptą reikšmę",
     "signOut": "Atsijungti",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
@@ -2694,7 +2750,7 @@
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
-    "actionFailed": "Veiksmas nepavyko",
+    "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
       "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
@@ -3245,7 +3301,7 @@
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
     "savingDocument": "Įrašoma...",
     "showDetails": "Rodyti detales",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "synced": "Sinchronizuota",
     "syncing": "Sinchronizuojama",
     "tableBordersAll": "Visos kraštinės",
@@ -3830,6 +3886,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Vienas klientas",
+      "availabilityClientBadgeHelp": "Prieinamas tik vieno kliento bylose.",
+      "availabilityClientHelp": "Naudojamas tik šio kliento bylose. Vėliau to pakeisti negalima.",
+      "availabilityFixedHelp": "Nustatyta kuriant įgūdį. To pakeisti negalima.",
+      "availabilityLabel": "Prieinama",
+      "availabilityMatter": "Viena byla",
+      "availabilityMatterBadgeHelp": "Prieinamas tik vienoje byloje.",
+      "availabilityMatterHelp": "Naudojamas tik šioje byloje. Vėliau to pakeisti negalima.",
+      "availabilityOrganization": "Visa organizacija",
+      "availabilityTeamNeedsMatter": "Norėdami bendrinti įgūdį su komanda, pasirinkite bylą, kuriai jis skirtas. Vėliau to pakeisti negalima.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
@@ -4243,6 +4309,8 @@
       "commentPlaceholder": "Rašykite komentarą…",
       "commentText": "Komentaro tekstas",
       "commentedPassage": "Pakomentuota ištrauka",
+      "editComment": "Redaguoti komentarą",
+      "editedAt": "Redaguota {time}",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šiame skirtuke galima laikyti iki {count} paryškinimų ir pastabų. Norėdami išsaugoti daugiau, sukurkite paskyrą.",
       "guestMigrationComplete": "Paryškinimai ir pastabos išsaugoti.",
@@ -4272,7 +4340,12 @@
       "styleHighlight": "Paryškinimas",
       "styleSquiggly": "Banguota linija",
       "styleStrikethrough": "Perbraukimas",
-      "visibilityShared": "Bendrinama su organizacija"
+      "visibilityShared": "Bendrinama su organizacija",
+      "visibilitySharedWithMatter": "Bendrinama su byla"
+    },
+    "contents": {
+      "aiSection": "{section} (DI sugeneruota dalis)",
+      "headingWithAiSection": "{heading} (DI sugeneruota dalis: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
@@ -4749,10 +4822,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
-    "citation": "¶{paragraph}",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Užduoti papildomą klausimą",
     "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
     "loading": "Generuojamas atsakymas…",
@@ -4760,7 +4831,7 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
-    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
+    "selectionError": "Pažymėkite tekstą iš paties sprendimo.",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
@@ -5350,7 +5421,7 @@
     "importDescription": "Stiliai ištraukiami į naują DOCX failą be turinio.",
     "importTitle": "Importuoti stilių rinkinį",
     "loadFailed": "Nepavyko įkelti stilių rinkinių",
-    "newDocument": "Naujas dokumentas",
+    "newDocument": "Naujas DOCX dokumentas",
     "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
     "renameTitle": "Pervadinti stilių rinkinį",
     "replace": "Pakeisti šaltinį",
@@ -5634,7 +5705,7 @@
     "moveToMatter": "Įrašyti į bylą",
     "moveToMatterAnyway": "Vis tiek įrašyti",
     "myDefaultLookupFormat": "Mano numatytasis",
-    "newFromTemplate": "Naujas dokumentas iš šablono",
+    "newFromTemplate": "Naujas DOCX dokumentas iš šablono",
     "newFromTemplateFillHint": "Užpildykite laukus; dokumentas bus sukurtas šioje byloje.",
     "newTemplate": "Naujas šablonas",
     "noTemplates": "Šablonų dar nėra",
@@ -5833,6 +5904,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Vidaus darbas"
+    },
+    "week": {
+      "allLogged": "Viskas užregistruota. Nauja veikla atsiras čia jums dirbant.",
+      "days": "Savaitės dienos",
+      "entriesTitle": "Užregistruotas laikas",
+      "nextWeek": "Kita savaitė",
+      "noActivity": "Kol kas nėra ką registruoti. Dirbkite byloje, ir jūsų veikla atsiras čia, kad galėtumėte ją priimti.",
+      "pendingCount": "{count, plural, one {# pasiūlymas} few {# pasiūlymai} many {# pasiūlymo} other {# pasiūlymų}}",
+      "previousWeek": "Ankstesnė savaitė",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Patikrinkite darbo datą, tada pateikite šį įrašą.",
+        "narrativeRequired": "Pridėkite aprašymą, tada pateikite šį įrašą.",
+        "runningTimer": "Sustabdykite veikiantį laikmatį, tada pateikite šį įrašą.",
+        "unpriced": "Šis įrašas neturi įkainio. Paprašykite įkainio bylai, tada jį pateikite."
+      },
+      "returned": "Grąžinta: {comment}",
+      "submitAndApprove": "Pateikti ir patvirtinti",
+      "submitResult": "Pateikta: {submitted} · patvirtinta: {approved} · taisytina: {refused}",
+      "submitWeek": "Pateikti savaitę",
+      "title": "Mano savaitė",
+      "totals": "Užregistruota: {logged} · apmokama: {billable}"
     }
   },
   "translate": {
@@ -6005,6 +6098,7 @@
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
+        "editInApplication": "Redaguoti programoje <bdi>{application}</bdi>",
         "editLocallyPrompt": "Redaguokite šį failą vietoje ir sinchronizuokite pakeitimus su stella.",
         "forceRelease": "Priverstinai atlaisvinti",
         "notOpenedDescription": "stella desktop nepatvirtino, kad atsidarė <bdi>{application}</bdi>. Paleiskite stella desktop ir bandykite dar kartą.",
@@ -6028,13 +6122,15 @@
         "alreadyInstalled": "Jau įdiegta? Prijunkite",
         "connect": "Prijungti stella desktop",
         "connected": "stella desktop prijungta",
+        "download": "Atsisiųsti stella desktop",
         "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
         "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
         "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
         "signCurrent": "Pasirašyti su stella desktop",
         "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
         "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
-        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop."
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
+        "update": "Atnaujinti stella desktop"
       },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
@@ -6047,8 +6143,10 @@
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
+      "ocrBatchHelp": "Eilėje esantys dokumentai apdorojami kitame OCR pakete.",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
-      "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
+      "ocrQueuedForBatch": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
         "alreadySigningTitle": "Pasirašymas stella desktop jau vyksta",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
@@ -6105,6 +6203,7 @@
         "waitingDescription": "Programoje stella desktop pasirinkite pasirašymo sertifikatą, kad pasirašytumėte šį PDF.",
         "waitingTitle": "Laukiama stella desktop"
       },
+      "queueForOcr": "Įtraukti į OCR eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ką daryti su failu {fileName}",
@@ -6116,7 +6215,6 @@
       "removeMetadata": "Pašalinti dokumento metaduomenis",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
-      "runOcr": "Įtraukti OCR į eilę",
       "scrubFailed": "Nepavyko pašalinti šio failo metaduomenų, todėl nieko neatsisiųsta",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
@@ -6195,8 +6293,7 @@
         "lead": "Atsakingas",
         "leadActive": "Atsakingas",
         "leadInactive": "Nustatyti atsakingą",
-        "noLead": "Nėra atsakingo",
-        "searchMembers": "Ieškoti narių…"
+        "noLead": "Nėra atsakingo"
       },
       "to": "Iki"
     },
@@ -6258,6 +6355,7 @@
       "deleteAll": "Ištrinti visus",
       "deleteAllConfirm": "Ištrinti visus {count} elementus stulpelyje \"{column}\"?",
       "hideColumn": "Slėpti stulpelį",
+      "moveFailed": "{failed, plural, one {Nepavyko perkelti # iš {total} elementų.} few {Nepavyko perkelti # iš {total} elementų.} other {Nepavyko perkelti # iš {total} elementų.}}",
       "readOnlyGrouping": "Šis grupavimas yra tik skaitomas",
       "selectPropertyHint": "Pasirinkite savybę grupavimui įrankių juostoje",
       "uploadDocument": "Įkelti dokumentą",
@@ -6276,10 +6374,10 @@
       "addMember": "Pridėti narį",
       "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
+      "alreadyOnMatter": "Jau yra šioje byloje",
       "cannotRemoveLast": "Negalima pašalinti paskutinio nario",
       "noMembersFound": "Narių nerasta",
-      "removeMemberConfirm": "Pašalinti šį narį iš bylos?",
-      "selectMember": "Pasirinkti narį"
+      "removeMemberConfirm": "Pašalinti šį narį iš bylos?"
     },
     "newDocument": "Naujas dokumentas",
     "newFolder": "Naujas aplankas",
@@ -6317,7 +6415,6 @@
           "approvedBy": "Patvirtino",
           "channel": "Kanalas",
           "dateTime": "Data ir laikas",
-          "eventId": "Įvykio ID",
           "notAvailable": "Nėra",
           "openTarget": "Atidaryti elementą",
           "runId": "Vykdymo ID",
@@ -6404,6 +6501,7 @@
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
+      "movedToClient": "Byla <bdi>{matterName}</bdi> perkelta klientui <bdi>{clientName}</bdi>",
       "noClient": "Klientas nepriskirtas",
       "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
@@ -6422,7 +6520,9 @@
       "personalLabel": "Asmeninė",
       "promoteCta": "Paaukštinti į klientinę",
       "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
+      "promoteToClientConfirm": "Byla <bdi>{matterName}</bdi> bus priskirta klientui <bdi>{clientName}</bdi> ir bendrinama su komanda. Jos nebebus galima grąžinti į asmeninę.",
       "promotedSuccess": "Byla paaukštinta",
+      "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6431,6 +6531,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
+      "annotations": {
+        "commentedBy": "Komentaras: {name}",
+        "detachedHeading": "Ne šioje versijoje",
+        "detachedOtherVersion": "Sukurta {version} versijoje; puslapio tekstas nuo tada pasikeitė.",
+        "detachedTextChanged": "Šių žodžių {page} puslapyje nebėra.",
+        "empty": "Pažymėkite dokumento žodžius ir pasirinkite Komentaras.",
+        "highlightedBy": "Paryškino: {name}",
+        "refusedNoText": "Šiame puslapyje nėra teksto, kurį būtų galima pažymėti. Pirmiausia paleiskite dokumento teksto atpažinimą.",
+        "refusedNotFound": "Šių žodžių puslapio tekste nerasta. Pažymėkite juos dar kartą.",
+        "refusedTooLong": "Ši ištrauka per ilga pažymėti. Pasirinkite trumpesnę."
+      },
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",
@@ -6439,6 +6550,36 @@
       "pageEditor": {
         "addPDF": "Pridėti PDF",
         "applyCrop": "Taikyti apkirpimą",
+        "cleanScan": {
+          "applied": "Pritaikyta išvalyta versija",
+          "apply": "Pritaikyti",
+          "applyAll": "Pritaikyti visus",
+          "applyPage": "Pritaikyti išvalytą {number} puslapį",
+          "cleaned": "Išvalyta",
+          "cleaning": "Valomas puslapis",
+          "contentCrop": "Apkirpti iki turinio",
+          "description": "{count, plural, one {Prieš naudodami peržiūrėkite išvalytą puslapį. Dokumentas pasikeis tik tada.} few {Prieš naudodami peržiūrėkite visus # išvalytus puslapius. Dokumentas pasikeis tik tada.} many {Prieš naudodami peržiūrėkite visus # išvalyto puslapio. Dokumentas pasikeis tik tada.} other {Prieš naudodami peržiūrėkite visus # išvalytų puslapių. Dokumentas pasikeis tik tada.}}",
+          "deskew": "Ištiesinti",
+          "failedEngine": "Išvalyti nepavyko. Puslapis lieka nepakeistas.",
+          "failedRender": "Puslapio nepavyko paruošti valymui. Jis lieka nepakeistas.",
+          "failedTimeout": "Valymas užtruko per ilgai. Puslapis lieka nepakeistas.",
+          "heading": "Išvalyti skenuotą vaizdą",
+          "output": "Spalvų režimas",
+          "outputBinary": "Nespalvotas",
+          "outputGrayscale": "Pilkos atspalviai",
+          "pageLimit": "Vienu metu galima išvalyti ne daugiau kaip {max} puslapių. Pasirinkite mažiau puslapių.",
+          "preview": "Išvalytas {number} puslapis",
+          "progress": "Apdorota puslapių: {done} iš {total}",
+          "reject": "Palikti originalą",
+          "rejectPage": "Palikti originalų {number} puslapį",
+          "rejected": "Paliktas originalas",
+          "scope": "{count, plural, =0 {Ištiesinti ir išvalyti visus puslapius} one {Ištiesinti ir išvalyti pasirinktą puslapį} few {Ištiesinti ir išvalyti # pasirinktus puslapius} many {Ištiesinti ir išvalyti # pasirinkto puslapio} other {Ištiesinti ir išvalyti # pasirinktų puslapių}}",
+          "unrecognized": "Puslapis neatpažintas kaip skenuotas. Jis lieka nepakeistas.",
+          "unrecognizedNoContent": "Šiame puslapyje nerasta turinio. Jis lieka nepakeistas.",
+          "unrecognizedNoPage": "Nepavyko rasti puslapio kraštų. Puslapis lieka nepakeistas.",
+          "unrecognizedTooLarge": "Puslapis per didelis, kad būtų išvalytas. Jis lieka nepakeistas.",
+          "use": "{count, plural, =0 {Naudoti išvalytus puslapius} one {Naudoti # išvalytą puslapį} few {Naudoti # išvalytus puslapius} many {Naudoti # išvalyto puslapio} other {Naudoti # išvalytų puslapių}}"
+        },
         "crop": "Apkirpti",
         "cropAdvanced": "Išplėstiniai nustatymai",
         "cropBottom": "Apačia (mm)",
@@ -6486,7 +6627,10 @@
         "saveVersion": "Išsaugoti versiją",
         "selectAll": "Pasirinkti viską",
         "selectPage": "Pasirinkti {number} puslapį",
+        "signAfterSave": "Išsaugo puslapių pakeitimus kaip naują versiją ir ją pasirašo",
+        "signSavedVersionMissing": "Nauja versija išsaugota, bet jos nepavyko atidaryti pasirašymui. Pasirašykite ją dokumento peržiūros lange.",
         "signatureWarning": "Redaguojant šį PDF skaitmeniniai parašai taps negaliojantys.",
+        "signatureWarningWithSign": "Redaguojant esami skaitmeniniai parašai tampa negaliojantys. Pasirašant iš čia pirmiausia išsaugomi jūsų pakeitimai ir pasirašoma nauja versija.",
         "sourceLimit": "Bendras PDF failų dydis negali viršyti 100 MB.",
         "title": "Redaguoti puslapius",
         "undo": "Anuliuoti puslapio pakeitimą",
@@ -6497,6 +6641,11 @@
       },
       "passwordLabel": "Įveskite PDF slaptažodį",
       "previousPage": "Ankstesnis puslapis",
+      "selection": {
+        "explainPassagePrompt": "Paaiškink šią {citation} ištrauką:\n\n„{quote}“",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}–{end}"
+      },
       "showOriginal": "Rodyti originalius puslapius",
       "unlock": "Atrakinti"
     },
@@ -6610,10 +6759,12 @@
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
-      "sortAscending": "Rūšiuoti didėjimo tvarka",
       "sortAscendingDate": "Seniausi pirmi",
-      "sortDescending": "Rūšiuoti mažėjimo tvarka",
+      "sortAscendingNumber": "Mažiausi pirmi",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Naujausi pirmi",
+      "sortDescendingNumber": "Didžiausi pirmi",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Skaidyti į # parinktį} few {Skaidyti į # parinktis} many {Skaidyti į # parinkties} other {Skaidyti į # parinkčių}}",
       "suggestWithAI": "Pasiūlyti su DI",
       "text": "Tekstas",
@@ -6634,6 +6785,12 @@
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rasti bylą…",
+      "trigger": "Pakeisti bylą",
+      "viewAll": "Rodyti visas bylas",
+      "viewAllForClient": "Rodyti visas kliento {clientName} bylas"
     },
     "table": {
       "clearFlags": "Išvalyti žymas",

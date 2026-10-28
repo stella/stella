@@ -1,5 +1,4 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -19,12 +18,12 @@ import {
 // property tool (defined in schema-validators) can embed them without an import
 // cycle. This module uses the leaf schemas to derive its position types.
 export { POSITION_SEVERITIES, POSITION_TERM_KINDS };
-export type PositionRule = Static<typeof positionRuleSchema>;
-export type PositionSeverity = Static<typeof positionSeveritySchema>;
-export type PositionTermKind = Static<typeof positionTermKindSchema>;
-export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
+export type PositionRule = v.InferOutput<typeof positionRuleSchema>;
+export type PositionSeverity = v.InferOutput<typeof positionSeveritySchema>;
+export type PositionTermKind = v.InferOutput<typeof positionTermKindSchema>;
+export type ResolvedTiers = v.InferOutput<typeof resolvedTiersSchema>;
 
-const version3 = t.Literal(3);
+const version3 = v.literal(3);
 
 // Named so the snake_case `save_playbook` input (`mcp/playbook-position-input.ts`)
 // advertises the bounds this schema enforces instead of a copy of them.
@@ -48,69 +47,74 @@ export const POSITION_LIMITS = {
 // ── Tier lines: identified plain-language rules and fallback entries ──
 // `id` is client-generated so reorder/DnD and finding citations reference a
 // stable identity, not the array index. Rank stays implicit in array order.
-const tierRuleSchema = t.Object({
-  id: t.String({ format: "uuid" }),
-  text: t.String({
-    minLength: 1,
-    maxLength: POSITION_LIMITS.tierRuleTextMaxLength,
-  }),
+const tierRuleSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  text: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(POSITION_LIMITS.tierRuleTextMaxLength),
+  ),
 });
-export type TierRule = Static<typeof tierRuleSchema>;
+export type TierRule = v.InferOutput<typeof tierRuleSchema>;
 
 // A fallback entry is simultaneously a rule and language (the accepted
 // alternative wording), so its text is capped like ideal language rather than
 // like a one-line rule.
-const fallbackEntrySchema = t.Object({
-  id: t.String({ format: "uuid" }),
-  text: t.String({
-    minLength: 1,
-    maxLength: POSITION_LIMITS.languageTextMaxLength,
-  }),
-  label: t.Optional(
-    t.String({ maxLength: POSITION_LIMITS.fallbackLabelMaxLength }),
+const fallbackEntrySchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  text: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(POSITION_LIMITS.languageTextMaxLength),
+  ),
+  label: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_LIMITS.fallbackLabelMaxLength)),
   ),
 });
-export type FallbackEntry = Static<typeof fallbackEntrySchema>;
+export type FallbackEntry = v.InferOutput<typeof fallbackEntrySchema>;
 
 // ── Ideal language: the acceptable tier's answer key ──
 // A clause link (resolved at run time) or inline text. FIX inserts this text
 // when a document deviates; the absence of ideal language is structural.
-const idealLanguageSchema = t.Union([
-  t.Object({
-    source: t.Literal("clause"),
-    clauseId: t.String({ format: "uuid" }),
-    // Pinned clause version; the latest is resolved at run time when absent.
-    clauseVersion: t.Optional(t.Integer({ minimum: 1 })),
+const idealLanguageSchema = v.union([
+  v.object({
+    source: v.literal("clause"),
+    clauseId: v.pipe(v.string(), v.uuid()),
+    clauseVersion: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   }),
-  t.Object({
-    source: t.Literal("inline"),
-    text: t.String({ maxLength: POSITION_LIMITS.languageTextMaxLength }),
+  v.object({
+    source: v.literal("inline"),
+    text: v.pipe(
+      v.string(),
+      v.maxLength(POSITION_LIMITS.languageTextMaxLength),
+    ),
   }),
 ]);
-export type IdealLanguage = Static<typeof idealLanguageSchema>;
+export type IdealLanguage = v.InferOutput<typeof idealLanguageSchema>;
 
 // ── Tiers: the Acceptable / Fallback / Not acceptable ladder ──
-const tiersSchema = t.Object({
-  acceptable: t.Object({
-    rules: t.Array(tierRuleSchema, {
-      maxItems: POSITION_LIMITS.tierRulesMaxItems,
-    }),
-    ideal: t.Optional(idealLanguageSchema),
+const tiersSchema = v.object({
+  acceptable: v.object({
+    rules: v.pipe(
+      v.array(tierRuleSchema),
+      v.maxLength(POSITION_LIMITS.tierRulesMaxItems),
+    ),
+    ideal: v.optional(idealLanguageSchema),
   }),
-  fallback: t.Object({
-    // Ranked by array order.
-    entries: t.Array(fallbackEntrySchema, {
-      maxItems: POSITION_LIMITS.fallbackEntriesMaxItems,
-    }),
+  fallback: v.object({
+    entries: v.pipe(
+      v.array(fallbackEntrySchema),
+      v.maxLength(POSITION_LIMITS.fallbackEntriesMaxItems),
+    ),
   }),
-  notAcceptable: t.Object({
-    // Red lines.
-    rules: t.Array(tierRuleSchema, {
-      maxItems: POSITION_LIMITS.tierRulesMaxItems,
-    }),
+  notAcceptable: v.object({
+    rules: v.pipe(
+      v.array(tierRuleSchema),
+      v.maxLength(POSITION_LIMITS.tierRulesMaxItems),
+    ),
   }),
 });
-export type Tiers = Static<typeof tiersSchema>;
+export type Tiers = v.InferOutput<typeof tiersSchema>;
 
 // ── Reference passage: one quoted block of a reference document ──
 // Provenance only. The words live in `document_review_reference_passages`,
@@ -118,84 +122,79 @@ export type Tiers = Static<typeof tiersSchema>;
 // and read under that matter's row security; `id` names that row. A position
 // therefore never carries another matter's text into the playbook or run that
 // holds it, and a reader sees the quote exactly when they can open its source.
-const referencePassageSchema = t.Object({
-  id: t.String({ format: "uuid" }),
-  workspaceId: t.String({ format: "uuid" }),
-  entityId: t.String({ format: "uuid" }),
-  fileFieldId: t.String({ format: "uuid" }),
-  entityVersionId: t.String({ format: "uuid" }),
-  blockId: t.String({ minLength: 1, maxLength: 128 }),
+const referencePassageSchema = v.object({
+  id: v.pipe(v.string(), v.uuid()),
+  workspaceId: v.pipe(v.string(), v.uuid()),
+  entityId: v.pipe(v.string(), v.uuid()),
+  fileFieldId: v.pipe(v.string(), v.uuid()),
+  entityVersionId: v.pipe(v.string(), v.uuid()),
+  blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
-export type ReferencePassage = Static<typeof referencePassageSchema>;
+export type ReferencePassage = v.InferOutput<typeof referencePassageSchema>;
 
 // ── Standard: what "how it should be" is, for one graded position ──
 // `tiers` is authored (an editor, a starter pack); `reference` is derived from
 // a document someone already negotiated. Grading dispatches on `source`, so a
 // position from either origin produces the same finding.
-const positionStandardSchema = t.Union([
-  t.Object({ source: t.Literal("tiers"), tiers: tiersSchema }),
-  t.Object({
-    source: t.Literal("reference"),
-    // What shape of term this position is about. Grading answers a position
-    // with exactly this kind of difference (or `language`, when the term
-    // turned out not to be locatable), so a changed number can never come
-    // back as a whole-clause rewrite.
+const positionStandardSchema = v.union([
+  v.object({ source: v.literal("tiers"), tiers: tiersSchema }),
+  v.object({
+    source: v.literal("reference"),
     termKind: positionTermKindSchema,
-    // Wide enough for an enumeration to quote every limb: a list-shaped term
-    // graded against a truncated list is graded against the wrong standard.
-    // Anything past this is not one term.
-    passages: t.Array(referencePassageSchema, { minItems: 1, maxItems: 12 }),
+    passages: v.pipe(
+      v.array(referencePassageSchema),
+      v.minLength(1),
+      v.maxLength(12),
+    ),
   }),
 ]);
-export type PositionStandard = Static<typeof positionStandardSchema>;
+export type PositionStandard = v.InferOutput<typeof positionStandardSchema>;
 export type PositionStandardSource = PositionStandard["source"];
 
 // ── Deterministic check: an Advanced-only override ──
 // When present, grading is deterministic (presence/condition, no LLM) and the
 // tiers provide language/fix only. `presence`/`propertyConstraint` from v1
 // survive here; `constraint` carries the shared @stll/conditions AST.
-export const deterministicCheckSchema = t.Union([
-  t.Object({
-    kind: t.Literal("presence"),
-    expectation: t.UnionEnum(["required", "restricted"]),
+export const deterministicCheckSchema = v.union([
+  v.object({
+    kind: v.literal("presence"),
+    expectation: v.picklist(["required", "restricted"]),
   }),
-  t.Object({
-    kind: t.Literal("constraint"),
-    condition: tConditionNode,
-  }),
+  v.object({ kind: v.literal("constraint"), condition: tConditionNode }),
 ]);
-export type DeterministicCheck = Static<typeof deterministicCheckSchema>;
+export type DeterministicCheck = v.InferOutput<typeof deterministicCheckSchema>;
 
 // ── ASK: what to read from each document ──────────────
 // An empty `question` means manual input (no AI extraction), mirroring v1.
-const askQuestionSchema = t.String({
-  maxLength: POSITION_LIMITS.askQuestionMaxLength,
-});
+const askQuestionSchema = v.pipe(
+  v.string(),
+  v.maxLength(POSITION_LIMITS.askQuestionMaxLength),
+);
 
-const askManualSchema = t.Object({
+const askManualSchema = v.object({
   question: askQuestionSchema,
   content: propertyContentSchema,
 });
-export type AskManual = Static<typeof askManualSchema>;
+export type AskManual = v.InferOutput<typeof askManualSchema>;
 
 // Extraction config for a graded position. `auto` derives the question/content
 // from the issue + tier rules at save time (slice B); `derived` is that stored
 // result and is consumed at run time exactly like a manual ask. `manual` is the
 // Advanced escape hatch. `derived` lives only on the `auto` variant, so a manual
 // ask structurally cannot carry one.
-const askConfigSchema = t.Union([
-  t.Object({
-    mode: t.Literal("auto"),
-    derived: t.Optional(
-      t.Object({
+const askConfigSchema = v.union([
+  v.object({
+    mode: v.literal("auto"),
+    derived: v.optional(
+      v.object({
         question: askQuestionSchema,
         content: propertyContentSchema,
-        rulesHash: t.String({ minLength: 1, maxLength: 128 }),
+        rulesHash: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
       }),
     ),
   }),
-  t.Object({
-    mode: t.Literal("manual"),
+  v.object({
+    mode: v.literal("manual"),
     question: askQuestionSchema,
     content: propertyContentSchema,
   }),
@@ -210,41 +209,39 @@ const askConfigSchema = t.Union([
 // document id (as in `referencePassageSchema`) because every consumer needs
 // the matter to locate the document. Extra properties are rejected, so no
 // writer can store a name next to the ids.
-const positionSourceSchema = t.Object(
-  {
-    workspaceId: t.String({ format: "uuid" }),
-    entityId: t.String({ format: "uuid" }),
-  },
-  { additionalProperties: false },
-);
-export type PositionSource = Static<typeof positionSourceSchema>;
+const positionSourceSchema = v.strictObject({
+  workspaceId: v.pipe(v.string(), v.uuid()),
+  entityId: v.pipe(v.string(), v.uuid()),
+});
+export type PositionSource = v.InferOutput<typeof positionSourceSchema>;
 
 // A position with no sources omits the field; an empty list is never stored.
-const positionSourcesSchema = t.Optional(
-  t.Array(positionSourceSchema, {
-    minItems: 1,
-    maxItems: POSITION_LIMITS.sourcesMaxItems,
-  }),
+const positionSourcesSchema = v.optional(
+  v.pipe(
+    v.array(positionSourceSchema),
+    v.minLength(1),
+    v.maxLength(POSITION_LIMITS.sourcesMaxItems),
+  ),
 );
 
 // ── Position: a discriminated union on `mode` ─────────
 // `sourceId` is a stable, client-supplied id that survives edits so re-running a
 // playbook maps a position back to the same materialized column/finding instead
 // of duplicating it. A disabled position is skipped by run, review, and auto-run.
-const extractPositionSchema = t.Object({
-  // Captures a value, no grading. Severity is meaningless here, so it is absent.
-  mode: t.Literal("extract"),
-  sourceId: t.String({ format: "uuid" }),
-  issue: t.String({
-    minLength: 1,
-    maxLength: POSITION_LIMITS.issueMaxLength,
-  }),
+const extractPositionSchema = v.object({
+  mode: v.literal("extract"),
+  sourceId: v.pipe(v.string(), v.uuid()),
+  issue: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(POSITION_LIMITS.issueMaxLength),
+  ),
   ask: askManualSchema,
-  guidance: t.Optional(
-    t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
+  guidance: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_LIMITS.guidanceMaxLength)),
   ),
   sources: positionSourcesSchema,
-  enabled: t.Boolean(),
+  enabled: v.boolean(),
 });
 
 // ── Negotiation: reviewer-facing guidance for a deviation/fallback verdict ──
@@ -252,24 +249,27 @@ const extractPositionSchema = t.Object({
 // knows what to say, not just that it is off-standard. Graded positions only:
 // an extract position never grades, so it never surfaces a verdict to
 // negotiate against.
-const negotiationSchema = t.Object({
-  rationale: t.Optional(
-    t.String({ maxLength: POSITION_LIMITS.rationaleMaxLength }),
+const negotiationSchema = v.object({
+  rationale: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_LIMITS.rationaleMaxLength)),
   ),
-  talkingPoints: t.Optional(
-    t.Array(
-      t.String({
-        minLength: 1,
-        maxLength: POSITION_LIMITS.talkingPointMaxLength,
-      }),
-      { maxItems: POSITION_LIMITS.talkingPointsMaxItems },
+  talkingPoints: v.optional(
+    v.pipe(
+      v.array(
+        v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(POSITION_LIMITS.talkingPointMaxLength),
+        ),
+      ),
+      v.maxLength(POSITION_LIMITS.talkingPointsMaxItems),
     ),
   ),
-  escalation: t.Optional(
-    t.String({ maxLength: POSITION_LIMITS.escalationMaxLength }),
+  escalation: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_LIMITS.escalationMaxLength)),
   ),
 });
-export type Negotiation = Static<typeof negotiationSchema>;
+export type Negotiation = v.InferOutput<typeof negotiationSchema>;
 
 // ── Purpose: what the term is FOR ─────────────────────
 // One sentence on the legal and economic function the term performs in this
@@ -287,67 +287,58 @@ export type Negotiation = Static<typeof negotiationSchema>;
 // it.
 export const POSITION_PURPOSE_MAX_LENGTH = 240;
 
-const gradedPositionSchema = t.Object({
-  mode: t.Literal("graded"),
-  sourceId: t.String({ format: "uuid" }),
-  issue: t.String({
-    minLength: 1,
-    maxLength: POSITION_LIMITS.issueMaxLength,
-  }),
+const gradedPositionSchema = v.object({
+  mode: v.literal("graded"),
+  sourceId: v.pipe(v.string(), v.uuid()),
+  issue: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(POSITION_LIMITS.issueMaxLength),
+  ),
   severity: positionSeveritySchema,
   standard: positionStandardSchema,
-  check: t.Optional(deterministicCheckSchema),
+  check: v.optional(deterministicCheckSchema),
   ask: askConfigSchema,
-  purpose: t.Optional(t.String({ maxLength: POSITION_PURPOSE_MAX_LENGTH })),
-  guidance: t.Optional(
-    t.String({ maxLength: POSITION_LIMITS.guidanceMaxLength }),
+  purpose: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_PURPOSE_MAX_LENGTH)),
   ),
-  negotiation: t.Optional(negotiationSchema),
+  guidance: v.optional(
+    v.pipe(v.string(), v.maxLength(POSITION_LIMITS.guidanceMaxLength)),
+  ),
+  negotiation: v.optional(negotiationSchema),
   sources: positionSourcesSchema,
-  enabled: t.Boolean(),
+  enabled: v.boolean(),
 });
 
-export const positionSchema = t.Union([
+export const positionSchema = v.union([
   extractPositionSchema,
   gradedPositionSchema,
 ]);
-export type Position = Static<typeof positionSchema>;
+export type Position = v.InferOutput<typeof positionSchema>;
 
 // ── Positions container (version-tagged JSONB) ────────
-// Hard `t.Literal(3)`: no multi-version dispatch. Each version is lifted once
+// Hard `v.literal(3)`: no multi-version dispatch. Each version is lifted once
 // by a migration and no runtime read path for an older one survives.
-export const playbookPositionsSchema = t.Object({
+export const playbookPositionsSchema = v.object({
   version: version3,
-  items: t.Array(positionSchema, {
-    maxItems: POSITION_LIMITS.positionsMaxItems,
-  }),
+  items: v.pipe(
+    v.array(positionSchema),
+    v.maxLength(POSITION_LIMITS.positionsMaxItems),
+  ),
 });
-export type PlaybookPositions = Static<typeof playbookPositionsSchema>;
+export type PlaybookPositions = v.InferOutput<typeof playbookPositionsSchema>;
 
 // ── Scope: what the playbook targets ──────────────────
 // Binds a playbook to a document TYPE (a stable slug from the org-owned
 // document-type taxonomy) and a review PERSPECTIVE. When `documentTypeKey` is
 // set, a files-table run gates each materialized column on the workspace's
 // "Document Type" classifier so only matching documents are extracted/graded.
-export const playbookScopeSchema = t.Object({
-  documentTypeKey: t.Optional(t.String({ maxLength: 128 })),
-  // t.Union([t.Literal(...)]) rather than t.Optional(t.UnionEnum(...)): an
-  // absent optional UnionEnum coerces to its first member instead of undefined.
-  // `perspective` has no safe default (buyer ≠ neutral), so it must stay
-  // genuinely absent when unset.
-  perspective: t.Optional(
-    t.Union([t.Literal("buyer"), t.Literal("seller"), t.Literal("neutral")]),
-  ),
-  // Routing trigger (slice D). `manual` = only runs on an explicit run/auto-run;
-  // `onClassified` = auto-routed when the Document Type classifier resolves.
-  // Same literal-union shape as `perspective` (the no-coerced-optional-union-enum
-  // rule bans optional UnionEnum): absent stays `undefined` on the wire, and
-  // `playbookTrigger` in the playbook routing service owns the default to `manual`.
-  trigger: t.Optional(
-    t.Union([t.Literal("manual"), t.Literal("onClassified")]),
-  ),
+export const playbookScopeSchema = v.object({
+  documentTypeKey: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  perspective: v.optional(v.picklist(["buyer", "seller", "neutral"])),
+  trigger: v.optional(v.picklist(["manual", "onClassified"])),
 });
-export type PlaybookScope = Static<typeof playbookScopeSchema>;
+export type PlaybookScope = v.InferOutput<typeof playbookScopeSchema>;
 export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
 
 // ── Definition-level status (v1 approvals, advisory only) ─────────
@@ -356,11 +347,8 @@ export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
 // positions into an immutable `playbook_definition_versions` row and flips
 // this to `approved`. This status is advisory: nothing in the run/review
 // path hard-blocks on it.
-const playbookDefinitionStatusSchema = t.Union([
-  t.Literal("draft"),
-  t.Literal("approved"),
-]);
-export type PlaybookDefinitionStatus = Static<
+const playbookDefinitionStatusSchema = v.picklist(["draft", "approved"]);
+export type PlaybookDefinitionStatus = v.InferOutput<
   typeof playbookDefinitionStatusSchema
 >;
 

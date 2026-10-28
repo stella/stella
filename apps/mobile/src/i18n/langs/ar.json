@@ -1,0 +1,101 @@
+{
+  "tabs": {
+    "chat": "الدردشة",
+    "tasks": "المهام",
+    "matters": "الملفات القانونية",
+    "settings": "الإعدادات"
+  },
+  "chat": {
+    "description": "أبقِ عملك الجاري في متناولك وتابعه من أي جهاز.",
+    "emptyTitle": "لا توجد محادثات بعد",
+    "emptyDescription": "ستظهر هنا المحادثات الجديدة والسلاسل الأخيرة.",
+    "noMatchesTitle": "لا توجد محادثات مطابقة",
+    "noMatchesDescription": "لا يحتوي أي عنوان محادثة أو ملف قانوني على \"{search}\".",
+    "search": "البحث في المحادثات",
+    "loadFailed": "تعذّر تحميل محادثاتك.",
+    "retry": "إعادة المحاولة",
+    "untitled": "محادثة بلا عنوان",
+    "loadMoreFailed": "تحميل المزيد",
+    "loadOlderFailed": "تحميل الرسائل السابقة",
+    "toolUsed": "تم استخدام: {tool}",
+    "threadTitle": "محادثة",
+    "threadLoadFailed": "تعذّر تحميل هذه المحادثة.",
+    "threadEmptyDescription": "لا تحتوي هذه المحادثة على رسائل بعد.",
+    "sections": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "week": "آخر 7 أيام",
+      "earlier": "سابقًا"
+    },
+    "newChat": "محادثة جديدة",
+    "composerPlaceholder": "اسأل stella",
+    "send": "إرسال",
+    "stop": "إيقاف",
+    "sendFailed": "تعذّر إرسال رسالتك. حاول مرة أخرى.",
+    "answerWorking": "جارٍ العمل…",
+    "answerStopped": "تم الإيقاف.",
+    "answerNeedsInput": "تحتاج هذه الإجابة إلى إدخالك. تابعها في stella على الويب.",
+    "answerFailed": "تعذّر إكمال الإجابة."
+  },
+  "tasks": {
+    "description": "اطّلع على ما يحتاج إلى اهتمامك دون فتح مساحة العمل بالكامل.",
+    "emptyTitle": "لا توجد مهام مفتوحة",
+    "emptyDescription": "ستظهر هنا المهام المسندة والقادمة."
+  },
+  "matters": {
+    "description": "ابحث عن ملف قانوني واحصل على سياقه الأساسي بسرعة.",
+    "emptyTitle": "لا توجد ملفات قانونية بعد",
+    "emptyDescription": "ستظهر هنا ملفاتك القانونية الأخيرة.",
+    "loadFailed": "تعذّر تحميل ملفاتك القانونية.",
+    "retry": "حاول مرة أخرى"
+  },
+  "matter": {
+    "documents": "المستندات",
+    "tasks": "المهام",
+    "emptyTitle": "لا يوجد شيء بعد",
+    "emptyDescription": "ستظهر هنا مستندات هذه القضية ومهامها.",
+    "loadFailed": "تعذّر تحميل هذه القضية.",
+    "loadMoreFailed": "تعذّر تحميل المزيد من العناصر.",
+    "loadMore": "تحميل المزيد",
+    "retry": "إعادة المحاولة",
+    "untitled": "بلا عنوان",
+    "updated": "عُدّل {time}",
+    "kind": {
+      "folder": "مجلد",
+      "document": "مستند",
+      "task": "مهمة"
+    },
+    "status": {
+      "open": "مفتوحة",
+      "in_progress": "قيد التنفيذ",
+      "in_review": "قيد المراجعة",
+      "done": "منجزة",
+      "cancelled": "ملغاة"
+    }
+  },
+  "entity": {
+    "type": "النوع",
+    "reference": "المرجع",
+    "currentVersion": "الإصدار الحالي",
+    "loadFailed": "تعذّر تحميل هذا العنصر."
+  },
+  "signIn": {
+    "title": "سجّل الدخول إلى stella",
+    "description": "أدخل عنوان خادم stella الخاص بك. ستوافق على تسجيل الدخول في المتصفح.",
+    "serverLabel": "عنوان الخادم",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "متابعة",
+    "sessionEnded": "انتهت جلستك. سجّل الدخول مرة أخرى.",
+    "errors": {
+      "address": "أدخل عنوان https، مثل stella.example.com.",
+      "unreachable": "لم يستجب أي خادم stella على هذا العنوان.",
+      "denied": "لم تتم الموافقة على تسجيل الدخول.",
+      "failed": "لم يكتمل تسجيل الدخول. حاول مرة أخرى."
+    }
+  },
+  "settings": {
+    "accountTitle": "الحساب",
+    "server": "الخادم",
+    "signOut": "تسجيل الخروج"
+  }
+}

@@ -1,28 +1,37 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+
+import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  auditLogs,
+  ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
   organizationAccessStates,
   organizationSettings,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   moveKeylessOrganizationsToFree,
-  ORGANIZATION_ACCESS_STATE,
+  recordNewOrganizationAccessState,
 } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type Database = PgAsyncDatabase<PgQueryResultHKT>;
 
@@ -42,6 +51,7 @@ const seedOrganizations = async (
     ids.map((organizationId) => ({
       organizationId,
       state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      origin: ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
     })),
   );
 };
@@ -69,6 +79,84 @@ if (!databaseUrl || !runPostgres) {
   });
 } else {
   describe("keyless organization move serialization (postgres)", () => {
+    test("concurrent creation supersedes one legacy row and audits once", async () => {
+      testState.setConfig("FEATURE_ORG_ACCESS_STATE", true);
+      testState.setConfig("ORG_EVALUATION_PERIOD_DAYS", 3);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db: firstDb } = openClient({ max: 1 });
+        const { db: secondDb } = openClient({ max: 1 });
+        const organizationId = mintAuthProviderId<"organization">();
+        const creationTimes = [
+          new Date("2026-10-27T10:00:00.000Z"),
+          new Date("2026-10-27T11:00:00.000Z"),
+        ] as const;
+        try {
+          await seedOrganizations(firstDb, [organizationId]);
+          await Promise.all([
+            recordNewOrganizationAccessState(firstDb, {
+              organizationId,
+              now: creationTimes[0],
+            }),
+            recordNewOrganizationAccessState(secondDb, {
+              organizationId,
+              now: creationTimes[1],
+            }),
+          ]);
+
+          const finalState = await firstDb
+            .select({
+              state: organizationAccessStates.state,
+              origin: organizationAccessStates.origin,
+              evaluationStartedAt: organizationAccessStates.evaluationStartedAt,
+              evaluationEndsAt: organizationAccessStates.evaluationEndsAt,
+            })
+            .from(organizationAccessStates)
+            .where(
+              inArray(organizationAccessStates.organizationId, [
+                organizationId,
+              ]),
+            );
+          expect(finalState).toHaveLength(1);
+          const final = finalState.at(0);
+          expect(final).toMatchObject({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+          });
+          expect(creationTimes.map((time) => time.getTime())).toContain(
+            final?.evaluationStartedAt?.getTime(),
+          );
+          expect(
+            creationTimes.map((time) => time.getTime() + 3 * DAY_IN_MS),
+          ).toContain(final?.evaluationEndsAt?.getTime());
+
+          expect(final?.evaluationEndsAt?.getTime()).toBe(
+            (final?.evaluationStartedAt?.getTime() ??
+              panic("Missing evaluation start")) +
+              3 * DAY_IN_MS,
+          );
+
+          const creationAudits = await firstDb
+            .select({ id: auditLogs.id })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, organizationId),
+                eq(
+                  auditLogs.resourceType,
+                  AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE,
+                ),
+                eq(auditLogs.triggerSource, "organization-creation"),
+              ),
+            );
+          expect(creationAudits).toHaveLength(1);
+        } finally {
+          await firstDb
+            .delete(organization)
+            .where(inArray(organization.id, [organizationId]));
+        }
+      });
+    });
+
     test.each([
       ["inserts the first settings row", false],
       ["updates an existing settings row", true],

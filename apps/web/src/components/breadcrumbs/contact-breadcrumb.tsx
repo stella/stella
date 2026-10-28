@@ -7,7 +7,7 @@ import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { contactOptions } from "@/lib/contacts/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 export const ContactBreadcrumb = ({
   contactId,
@@ -16,7 +16,7 @@ export const ContactBreadcrumb = ({
   const contactQuery = useQuery(
     contactOptions(activeOrganizationId, contactId),
   );
-  const contactView = useQueryView(contactQuery);
+  const contactView = queryView(contactQuery);
   const contact = contactView.type === "items" ? contactView.items : undefined;
 
   if (contactView.type !== "items") {

@@ -20,6 +20,7 @@ import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
 import type { TranslationKey } from "@/i18n/types";
+import type { WebApiRoutes } from "@/lib/api";
 import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
@@ -27,7 +28,6 @@ import type {
   ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
-import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError } from "@/lib/errors/api";
 import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 

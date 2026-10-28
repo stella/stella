@@ -1821,13 +1821,6 @@
     "reason": "Usage metering or counter row that is itself the accounting record."
   },
   {
-    "id": "apps/api/src/lib/usage/organization-access-state.ts::recordNewOrganizationAccessState",
-    "writes": {
-      "insert:organizationAccessStates": 1
-    },
-    "reason": "Usage metering or counter row that is itself the accounting record."
-  },
-  {
     "id": "apps/api/src/lib/usage/usage-ledger.ts::allocateUsage",
     "writes": {
       "insert:usageAllocations": 2
