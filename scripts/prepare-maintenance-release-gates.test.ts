@@ -392,6 +392,7 @@ describe("every release-tag gate is classified for the cut", () => {
     expect(tagPreCut.map(({ name }) => name)).toEqual([
       "dependency-audit",
       "npm-publish-lag",
+      "npm-publish-readiness",
     ]);
     for (const gate of tagPreCut) {
       switch (gate.check.kind) {

@@ -289,5 +289,14 @@
     "scripts/workflow-run-trust.test.ts",
     "scripts/workflow-skipped-needs.test.ts"
   ],
-  "changeScoped": []
+  "changeScoped": [
+    {
+      "path": "scripts/check-publish-reproducibility.sh",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package sources, manifests and packing inputs select that scope."
+    },
+    {
+      "path": "scripts/generate-npm-release-jobs.ts",
+      "reason": "Runs under published_exports_required in ci-checks-generated; package manifests, the publishing inventory and generator changes select that scope."
+    }
+  ]
 }

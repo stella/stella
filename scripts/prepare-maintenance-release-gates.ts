@@ -85,6 +85,16 @@ export const MAINTENANCE_CUT_GATES: readonly CutGate[] = [
     overriddenByAllowUnprovenMain: false,
   },
   {
+    name: "npm-publish-readiness",
+    source: "release-tag",
+    stage: "pre-cut",
+    check: {
+      kind: "command",
+      command: ["bun", "scripts/check-npm-publish-readiness.ts"],
+    },
+    overriddenByAllowUnprovenMain: false,
+  },
+  {
     name: "cli-coupling",
     source: "release-tag",
     stage: "post-cut",
