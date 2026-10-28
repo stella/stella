@@ -744,3 +744,144 @@ for (const change of ["added", "reassigned", "moved-all"] as const) {
     expect(boundary.draftRequests).toHaveLength(change === "added" ? 2 : 1);
   });
 }
+
+for (const mode of ["initial", "redraft", "steer"] as const) {
+  for (const change of ["ranges", "evidence"] as const) {
+    test(`${mode} response after ${change} changes stays a proposal until accepted`, async () => {
+      const boundary = installNativeBoundary();
+      const firstSegment = segments.at(0) ?? panic("Expected source activity");
+      const recorded = {
+        ...snapshot(),
+        segments: [
+          {
+            ...firstSegment,
+            document: "/work/Before.docx",
+            windowTitle: "Earlier note",
+          },
+        ],
+        captureDetails: true,
+        detailsAccess: "ready",
+      } as const satisfies ActivityDaySnapshot;
+      const view = mountReview(recorded);
+      await waitFor(() =>
+        expect(
+          view.getByRole("checkbox", {
+            name: messages.activity.includeMatter.replace(
+              "{matter}",
+              "Source matter",
+            ),
+          }),
+        ).toBeTruthy(),
+      );
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiDraft }),
+      );
+      await waitFor(() => expect(boundary.draftRequests).toHaveLength(1));
+      let request = firstDraftRequest(boundary.draftRequests);
+      expect(request.request).toMatchObject({
+        entries: [
+          {
+            durationMinutes: 60,
+            evidence: {
+              documentNames: ["Before.docx"],
+              windowTitles: ["Earlier note"],
+            },
+          },
+        ],
+      });
+      if (mode !== "initial") {
+        await resolveDraft(
+          request,
+          review([
+            draft("entry_1", "Initial work", [], BASE_LEDGER_CLASSIFICATION),
+          ]),
+        );
+        expect(
+          view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+        ).toHaveProperty("value", "Initial work");
+        if (mode === "redraft") {
+          fireEvent.click(
+            view.getByRole("button", { name: messages.activity.aiUndoAll }),
+          );
+          fireEvent.click(
+            view.getByRole("button", { name: messages.activity.aiDraft }),
+          );
+        } else {
+          fireEvent.change(
+            view.getByPlaceholderText(messages.activity.aiSteerAllPlaceholder),
+            { target: { value: "Make the draft shorter" } },
+          );
+          fireEvent.click(
+            view.getByRole("button", { name: messages.activity.aiSteerApply }),
+          );
+        }
+        await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+        request =
+          boundary.draftRequests.at(1) ?? panic("Expected follow-up request");
+      }
+      const updated = {
+        ...recorded,
+        segments:
+          change === "ranges"
+            ? [
+                ...recorded.segments,
+                {
+                  ...firstSegment,
+                  start: "2026-10-07T10:00:00Z",
+                  end: "2026-10-07T10:06:00Z",
+                },
+              ]
+            : recorded.segments.map((segment) => ({
+                ...segment,
+                document: "/work/After.docx",
+                windowTitle: "Changed note",
+              })),
+      } satisfies ActivityDaySnapshot;
+      view.rerender(
+        <DesktopIntlProvider language="en" messages={messages}>
+          <ActivityDayReview
+            snapshot={updated}
+            header={<span>Review</span>}
+            billingDrafts={billingDrafts}
+            onCopy={(_text, onSettled) => onSettled(true)}
+            onReviewStatusChange={() => undefined}
+          />
+        </DesktopIntlProvider>,
+      );
+      const narrativeBeforeResponse = view.getByRole("textbox", {
+        name: messages.activity.entryNarrative,
+      });
+      if (!(narrativeBeforeResponse instanceof HTMLTextAreaElement)) {
+        panic("Expected review narrative textarea");
+      }
+      const textBeforeResponse = narrativeBeforeResponse.value;
+      const codesBeforeResponse = visibleReviewCodes(view.container);
+      expect(textBeforeResponse).not.toBe("Delayed AI suggestion");
+      await resolveDraft(
+        request,
+        review([
+          draft(
+            "entry_1",
+            "Delayed AI suggestion",
+            [],
+            FIRST_OPERATION_CLASSIFICATION,
+          ),
+        ]),
+      );
+      expect(
+        view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+      ).toHaveProperty("value", textBeforeResponse);
+      expect(visibleReviewCodes(view.container)).toEqual(codesBeforeResponse);
+      expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiAccept }),
+      );
+      expect(
+        view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+      ).toHaveProperty("value", "Delayed AI suggestion");
+      expect(visibleReviewCodes(view.container)).toEqual([
+        ["TASK-101", "ACT-201"],
+      ]);
+    });
+  }
+}

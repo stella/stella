@@ -360,7 +360,24 @@ const singleItem = ({
   ranges: group.ranges,
 });
 
-/** A structure is accepted only for the exact source geometry it was reviewed on. */
+/** Snapshot the source itself so new request inputs cannot escape a hand-written projection. */
+export const captureReviewSources = (groups: readonly DraftableGroup[]) =>
+  groups.map((group) => structuredClone(group));
+
+/** Groups are JSON data from one producer; compare all activity, including evidence. */
+export const reviewSourcesCurrent = (
+  sources: readonly DraftableGroup[],
+  groups: ReadonlyMap<string, DraftableGroup>,
+) =>
+  sources.every((source) => {
+    const current = groups.get(source.id);
+    return (
+      current !== undefined &&
+      JSON.stringify(source) === JSON.stringify(current)
+    );
+  });
+
+/** A structure is accepted only for the source activity it was reviewed on. */
 export const currentReviewContent = (
   content: ReviewContent,
   groups: ReadonlyMap<string, DraftableGroup>,
@@ -368,18 +385,7 @@ export const currentReviewContent = (
   if (content.type !== "accepted") {
     return content;
   }
-  const unchanged = content.sources.every((source) => {
-    const current = groups.get(source.id);
-    return (
-      current !== undefined &&
-      current.roundedTenths === source.roundedTenths &&
-      current.ranges.length === source.ranges.length &&
-      current.ranges.every((range, index) => {
-        const previous = source.ranges.at(index);
-        return previous?.start === range.start && previous.end === range.end;
-      })
-    );
-  });
+  const unchanged = reviewSourcesCurrent(content.sources, groups);
   if (unchanged) {
     return content;
   }
@@ -573,7 +579,7 @@ export const resolveStructure = ({
  * entry ids refer to. */
 export type DraftResult = {
   draft: DesktopBillingDraft;
-  sentGroupIds: readonly string[];
+  sources: readonly DraftableGroup[];
 };
 
 type PreviousDraftTarget = { groupId: string; result: DraftResult };
@@ -589,11 +595,11 @@ export const previousDraftResult = (
   const positions = new Map(
     targets.map(({ groupId }, index) => [groupId, draftEntryId(index)]),
   );
-  const drafts = targets.map(({ groupId, result: { draft, sentGroupIds } }) => {
+  const drafts = targets.map(({ groupId, result: { draft, sources } }) => {
     const renumbered = (entryId: string) => {
-      const sourceGroupId = sentGroupIds.find(
+      const sourceGroupId = sources.find(
         (_, index) => draftEntryId(index) === entryId,
-      );
+      )?.id;
       return sourceGroupId === undefined
         ? undefined
         : positions.get(sourceGroupId);

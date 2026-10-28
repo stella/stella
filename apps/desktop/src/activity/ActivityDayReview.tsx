@@ -44,8 +44,10 @@ import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import {
   absorbedGroupIds,
+  captureReviewSources,
   confirmedBatchItem,
   reviewItems,
+  reviewSourcesCurrent,
 } from "./billing-draft-logic";
 import type {
   ConfirmedBatchItem,
@@ -62,6 +64,7 @@ import {
 import type {
   EntryEdit,
   ReviewAction,
+  ReviewEvent,
   ReviewState,
 } from "./billing-review-state";
 import "./day-review.css";
@@ -119,16 +122,26 @@ const canDiscardPending = (
   snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
 
 /** Each group's edits, defaulting to a narrative from what was recorded. */
+type ReviewEditStore = {
+  edits: ReviewState;
+  sources: readonly DraftableGroup[];
+};
+
 const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const [stored, setEdits] = useState<ReviewState>(new Map());
-  const edits = reviewStateForGroups(stored, groups);
-  if (edits !== stored) {
-    setEdits(edits);
+  const [stored, setReview] = useState<ReviewEditStore>(() => ({
+    edits: new Map(),
+    sources: captureReviewSources([...groups.values()]),
+  }));
+  const edits = reviewStateForGroups(stored.edits, groups);
+  if (
+    edits !== stored.edits ||
+    stored.sources.length !== groups.size ||
+    !reviewSourcesCurrent(stored.sources, groups)
+  ) {
+    setReview({ edits, sources: captureReviewSources([...groups.values()]) });
   }
-  const dispatch = (action: ReviewAction) =>
-    setEdits((current) => reviewReducer(current, action));
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
       ? t("narrativeEvidence", {
@@ -146,6 +159,34 @@ const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
       billable: true,
       narrative: narrative(group),
       classification: null,
+    });
+  const dispatch = (event: ReviewEvent) =>
+    setReview((current) => {
+      const latestGroups = new Map(
+        current.sources.map((group) => [group.id, group]),
+      );
+      const action =
+        event.type === "offer-results"
+          ? ({
+              type: "offer-results",
+              groups: latestGroups,
+              mode: event.mode,
+              offers: event.offers.map((offer) => {
+                const group = latestGroups.get(offer.groupId);
+                return {
+                  ...offer,
+                  initial:
+                    !current.edits.has(offer.groupId) && group
+                      ? initial(group)
+                      : offer.initial,
+                };
+              }),
+            } as const satisfies ReviewAction)
+          : event;
+      const next = reviewReducer(current.edits, action);
+      return next === current.edits
+        ? current
+        : { edits: next, sources: current.sources };
     });
   return {
     editFor: (group: DayReviewGroup) => edits.get(group.id) ?? initial(group),

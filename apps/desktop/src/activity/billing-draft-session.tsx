@@ -29,6 +29,7 @@ import {
 import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import {
   absorbedGroupIds,
+  captureReviewSources,
   draftFailureMessage,
   draftRequestEntries,
   draftsByGroup,
@@ -38,7 +39,11 @@ import {
 } from "./billing-draft-logic";
 import type { DraftableGroup, DraftResult } from "./billing-draft-logic";
 import { canAcceptStructure } from "./billing-review-state";
-import type { EntryEdit, ReviewAction } from "./billing-review-state";
+import type {
+  EntryEdit,
+  ReviewAction,
+  ReviewEvent,
+} from "./billing-review-state";
 
 type DraftingStatus =
   { type: "idle" } | { type: "drafting"; groupIds: readonly string[] };
@@ -89,7 +94,7 @@ const draftOffers = ({ groups, sentEdits, review }: DraftOffersOptions) => {
     const initial =
       sentEdits.get(group.id) ?? panic("Draft lost its starting revision");
     const draft = results.get(group.id) ?? panic("Draft missing for group");
-    const result: DraftResult = { draft, sentGroupIds };
+    const result: DraftResult = { draft, sources: groups };
     return {
       groupId: group.id,
       initial,
@@ -99,7 +104,7 @@ const draftOffers = ({ groups, sentEdits, review }: DraftOffersOptions) => {
   });
 };
 
-const useDraftReviewResults = (dispatch: (action: ReviewAction) => void) => {
+const useDraftReviewResults = (dispatch: (action: ReviewEvent) => void) => {
   const [earlierEntries, setEarlierEntries] = useState<
     ReadonlyMap<string, EarlierEntry>
   >(new Map());
@@ -152,7 +157,7 @@ type BillingDraftSessionOptions = {
   matters: readonly DesktopTimeEntryMatterCandidate[];
   editable: boolean;
   editFor: (group: DraftableGroup) => EntryEdit;
-  dispatch: (action: ReviewAction) => void;
+  dispatch: (action: ReviewEvent) => void;
   onError: (message: string | null) => void;
 };
 
@@ -216,7 +221,7 @@ export const useBillingDraftSession = ({
     groups: readonly DraftableGroup[];
     steer: string | null;
   }) => {
-    const groups = requestedGroups.filter(canDraft);
+    const groups = captureReviewSources(requestedGroups.filter(canDraft));
     if (groups.length === 0 || busy) {
       return;
     }
@@ -363,7 +368,7 @@ export const useBillingDraftSession = ({
     const proposedStructure = structure
       ? resolveStructure({
           structure,
-          groupIds: state.result.sentGroupIds,
+          groupIds: state.result.sources.map(({ id }) => id),
           candidates: matters,
         })
       : null;

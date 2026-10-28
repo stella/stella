@@ -6,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import {
   absorbedGroupIds,
+  captureReviewSources,
   reviewItems,
 } from "../src/activity/billing-draft-logic";
 import type {
@@ -71,7 +72,7 @@ const rows = (state: ReviewState) =>
     return edit?.selected ? [{ group, content: edit.content }] : [];
   });
 const result = (narrative: string): DraftResult => ({
-  sentGroupIds: ["first", "second"],
+  sources: captureReviewSources(groups),
   draft: {
     entryId: "entry_1",
     narrative,
@@ -262,6 +263,7 @@ test("late offers snapshot live edits only at the first actual application", () 
   const edited = entry(state).content;
   state = reviewReducer(state, {
     type: "offer-results",
+    groups: currentGroups,
     mode: "initial",
     offers: [{ ...target, expectedRevision: 0, result: result("AI one") }],
   });
@@ -284,6 +286,7 @@ test("late offers snapshot live edits only at the first actual application", () 
 test("unchanged offers apply atomically but accepted or absorbed groups only get proposals", () => {
   const offered = reviewReducer(new Map(), {
     type: "offer-results",
+    groups: currentGroups,
     mode: "initial",
     offers: [{ ...target, expectedRevision: 0, result: result("AI") }],
   });
@@ -292,6 +295,7 @@ test("unchanged offers apply atomically but accepted or absorbed groups only get
   const accepted = accept(merge);
   const state = reviewReducer(accepted, {
     type: "offer-results",
+    groups: currentGroups,
     mode: "initial",
     offers: ["first", "second"].map((groupId) => ({
       groupId,
@@ -311,6 +315,7 @@ test("unchanged offers apply atomically but accepted or absorbed groups only get
 test("undo all restores applied drafts and dismisses late proposals without touching edits", () => {
   let state = reviewReducer(new Map(), {
     type: "offer-results",
+    groups: currentGroups,
     mode: "initial",
     offers: [{ ...target, expectedRevision: 0, result: result("AI") }],
   });
@@ -324,6 +329,7 @@ test("undo all restores applied drafts and dismisses late proposals without touc
   const preserved = entry(state, "second").content;
   state = reviewReducer(state, {
     type: "offer-results",
+    groups: currentGroups,
     mode: "steer",
     offers: [
       {
@@ -359,6 +365,7 @@ test("scalar proposals never flatten accepted geometry or release its participan
     const accepted = entry(state).content;
     state = reviewReducer(state, {
       type: "offer-results",
+      groups: currentGroups,
       mode: "steer",
       offers: [
         {
@@ -379,6 +386,7 @@ test("scalar proposals never flatten accepted geometry or release its participan
   let merged = accept(merge);
   merged = reviewReducer(merged, {
     type: "offer-results",
+    groups: currentGroups,
     mode: "steer",
     offers: [
       {
@@ -414,6 +422,7 @@ test.each(["use-original", "undo-all"] as const)(
     const baseline = entry(state).content;
     state = reviewReducer(state, {
       type: "offer-results",
+      groups: currentGroups,
       mode: "initial",
       offers: [
         {
@@ -438,6 +447,7 @@ test.each(["use-original", "undo-all"] as const)(
     });
     state = reviewReducer(state, {
       type: "offer-results",
+      groups: currentGroups,
       mode: "steer",
       offers: [
         {
@@ -551,4 +561,82 @@ test("a changed merge participant releases the owner and an old split cannot omi
     groups: [{ group: extended, initial }],
   });
   expect(state.size).toBe(0);
+});
+
+test("billing-review.offers-are-bound-to-requested-activity", () => {
+  assertProperty(
+    "billing-review.offers-are-bound-to-requested-activity",
+    fc.property(
+      fc.constantFrom("initial", "redraft", "steer"),
+      fc.constantFrom("activity", "evidence", "context", "unchanged"),
+      fc.string({ maxLength: 40 }),
+      (mode, change, evidence) => {
+        const previous = reviewReducer(new Map(), {
+          type: "offer-results",
+          groups: currentGroups,
+          mode: "initial",
+          offers: [
+            { ...target, expectedRevision: 0, result: result("Previous work") },
+          ],
+        });
+        const state =
+          mode === "initial" ? new Map([[target.groupId, initial]]) : previous;
+        const current = entry(state);
+        const offered = result("New suggestion");
+        const live = new Map(currentGroups);
+        const source =
+          groups.at(change === "context" ? 1 : 0) ??
+          panic("Missing activity source");
+        if (change === "activity") {
+          live.set(source.id, {
+            ...source,
+            roundedTenths: 11,
+            durationMs: 3_960_000,
+            ranges: [
+              { start: "2026-10-24T07:00:00Z", end: "2026-10-24T08:06:00Z" },
+            ],
+          });
+        }
+        if (change === "evidence" || change === "context") {
+          live.set(source.id, { ...source, evidence: [`Changed ${evidence}`] });
+        }
+        const next = reviewReducer(state, {
+          type: "offer-results",
+          groups: live,
+          mode: mode === "steer" ? "steer" : "initial",
+          offers: [
+            { ...target, expectedRevision: current.revision, result: offered },
+          ],
+        });
+        const updated = entry(next);
+        if (
+          updated.content.type !== "single" ||
+          current.content.type !== "single"
+        ) {
+          panic("Expected scalar review content");
+        }
+        const autoApplied = change === "unchanged" && mode !== "steer";
+        if (autoApplied) {
+          expect(updated.content.narrative).toBe("New suggestion");
+          expect(updated.draft?.using).toBe("draft");
+          return;
+        }
+        expect(updated.content.narrative).toBe(current.content.narrative);
+        expect(updated.content.classification).toEqual(
+          current.content.classification,
+        );
+        expect(updated.revision).toBe(current.revision);
+        const pending = updated.draft;
+        if (pending === null) {
+          panic("Missing offered draft");
+        }
+        expect(
+          pending.using === "proposal" ? pending.result : pending.proposal,
+        ).toBe(offered);
+        if (change !== "unchanged") {
+          expect(updated.content).toMatchObject({ notice: "sourceChanged" });
+        }
+      },
+    ),
+  );
 });

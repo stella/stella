@@ -3,9 +3,11 @@ import { panic } from "better-result";
 import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
 
 import {
+  captureReviewSources,
   currentReviewContent,
   draftScalars,
   materializeStructure,
+  reviewSourcesCurrent,
 } from "./billing-draft-logic";
 import type {
   DraftableGroup,
@@ -25,7 +27,7 @@ export type SingleReviewContent = {
 export type AcceptedReviewContent = {
   type: "accepted";
   summary: StructureSummary;
-  sources: readonly Pick<DraftableGroup, "id" | "ranges" | "roundedTenths">[];
+  sources: readonly DraftableGroup[];
   items: readonly ReviewItem[];
   undoContent: SingleReviewContent;
 };
@@ -69,6 +71,7 @@ export type ReviewAction =
   | (ReviewTarget & { type: "set-selected"; selected: boolean })
   | {
       type: "offer-results";
+      groups: ReadonlyMap<string, DraftableGroup>;
       mode: "initial" | "steer";
       offers: readonly (ReviewTarget & {
         expectedRevision: number;
@@ -89,6 +92,11 @@ export type ReviewAction =
       groups: readonly { group: DraftableGroup; initial: EntryEdit }[];
     })
   | { type: "undo-all" };
+
+/** Source context is supplied by the review owner, never by a pending request. */
+export type ReviewEvent =
+  | Exclude<ReviewAction, { type: "offer-results" }>
+  | Omit<Extract<ReviewAction, { type: "offer-results" }>, "groups">;
 
 export const initialReviewEdit = (content: SingleReviewContent): EntryEdit => ({
   selected: true,
@@ -219,8 +227,13 @@ const offerResults = (
   let next = state;
   for (const offer of action.offers) {
     const current = next.get(offer.groupId) ?? offer.initial;
+    const sourceCurrent = reviewSourcesCurrent(
+      offer.result.sources,
+      action.groups,
+    );
     if (
       action.mode === "initial" &&
+      sourceCurrent &&
       current.revision === offer.expectedRevision &&
       current.content.type === "single" &&
       ownerOf(next, offer.groupId) === offer.groupId
@@ -240,7 +253,16 @@ const offerResults = (
     updated.set(offer.groupId, {
       selected: current.selected,
       revision: current.revision,
-      content: current.content,
+      content:
+        !sourceCurrent && current.content.type === "single"
+          ? {
+              type: "single",
+              narrative: current.content.narrative,
+              billable: current.content.billable,
+              classification: current.content.classification,
+              notice: "sourceChanged",
+            }
+          : current.content,
       draft,
     });
     next = updated;
@@ -399,13 +421,11 @@ const acceptStructure = (
       content: {
         type: "accepted",
         summary: action.proposal.summary,
-        sources: action.groups
-          .filter(({ group: source }) => ids.includes(source.id))
-          .map(({ group: source }) => ({
-            id: source.id,
-            roundedTenths: source.roundedTenths,
-            ranges: source.ranges.map(({ start, end }) => ({ start, end })),
-          })),
+        sources: captureReviewSources(
+          action.groups
+            .filter(({ group: source }) => ids.includes(source.id))
+            .map(({ group: source }) => source),
+        ),
         items,
         undoContent: content,
       },
