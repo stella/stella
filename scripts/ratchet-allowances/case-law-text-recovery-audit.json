@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
   "delta": 8,
-  "reason": "Seven state-owner writes maintain verified text proofs, typed publisher outcomes, legacy adoption, retry claims and fenced completions; one worker write paces a public source. These are public-corpus ingestion bookkeeping, not authenticated user actions. Existing ingestion events record payload writes, and the recovery worker emits structured source summaries and health breaches; per-row audit events would duplicate operational retry traffic."
+  "reason": "Seven state-owner writes maintain verified text proofs, typed publisher outcomes, legacy adoption, retry claims and fenced completions; one worker write paces a public source. These are public-corpus ingestion bookkeeping, not authenticated user actions. Normal ingestion retains publisher payloads with fenced source observation order; structured worker summaries and health breaches report recovery progress. Per-row user audit events would classify verification and polling traffic as user actions."
 }
