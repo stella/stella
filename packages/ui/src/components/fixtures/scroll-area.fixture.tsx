@@ -40,7 +40,7 @@ const Footer = () => (
     className="bg-background flex shrink-0 border-t p-3"
     data-slot="case-footer"
   >
-    <button className="min-h-11 w-full rounded border" type="button">
+    <button className="min-h-11 w-full rounded-sm border" type="button">
       Confirm
     </button>
   </div>
