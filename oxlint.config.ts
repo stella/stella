@@ -98,7 +98,8 @@ const colourExemptions = [
       "Theme values written outside a stylesheet because none is loaded " +
       "there: the sandboxed visual's fallback tokens (the host theme replaces " +
       "them), the browser's theme-color meta and the desktop pre-paint, " +
-      "which carry the theme's resolved background.",
+      "which carry the theme's resolved background. Tests pin the meta and " +
+      "the pre-paint to the resolved theme (apps/mobile/src/ui-theme.gen.ts).",
     files: [
       "apps/api/src/handlers/visual-sandbox/browser/presentation-css.ts",
       "apps/web/src/routes/-root-head.ts",
