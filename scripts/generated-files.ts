@@ -1659,7 +1659,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/scripts/sync-withdrawn-decision-labels.ts",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
