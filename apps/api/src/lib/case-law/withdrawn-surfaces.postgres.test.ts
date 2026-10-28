@@ -899,6 +899,88 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
+  test("filter-only chat browse pages directly beyond the text candidate ceiling", async () => {
+    const updatedAt = new Date("2026-10-22T10:00:00Z");
+    const rows = Array.from({ length: 1701 }, (_, index) => ({
+      id: createSafeId<"chatThread">(),
+      subjectDecisionId: index % 2 === 0 ? decisionId : activeId,
+    }));
+    seededThreads.push(...rows.map(({ id }) => id));
+    await scopedDb(async (tx) => {
+      await tx.insert(chatThreads).values(
+        rows.map((row) => ({
+          ...row,
+          organizationId,
+          userId,
+          workspaceId,
+          title: "Browse fixture",
+          titleSource: "ai" as const,
+          updatedAt,
+        })),
+      );
+      await tx.insert(chatThreadSearchDocuments).values(
+        rows.map(({ id }) => ({
+          threadId: id,
+          title: "Browse fixture",
+          searchableText: "",
+          tsv: chatSearchVectorSql(sql`'Browse fixture'`),
+          previewGeneration: CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
+          updatedAt,
+        })),
+      );
+    });
+    const expected = rows.toSorted((a, b) => compareCodeUnit(b.id, a.id));
+    let cursor: string | undefined;
+    for (let page = 0; page < 3; page++) {
+      const pageCursor = cursor;
+      const result = await request(
+        async () =>
+          await runWithQueryCounter(
+            async (counter) => {
+              const response = await searchGlobal(
+                {
+                  organizationId,
+                  userId,
+                  accessibleWorkspaceIds: [workspaceId],
+                  selectedWorkspaceIds: [],
+                  types: ["chat"],
+                  editedByUserIds: [],
+                  mimeTypes: [],
+                  query: "",
+                  updatedFrom: "2026-10-22T00:00:00Z",
+                  updatedTo: "2026-10-23T00:00:00Z",
+                  limit: 17,
+                  ...(pageCursor === undefined ? {} : { cursor: pageCursor }),
+                },
+                { scopedDb },
+              );
+              const pageReads = [...counter.fingerprints]
+                .filter(([key]) => key.includes("t.title_source"))
+                .reduce((total, [, count]) => total + count, 0);
+              expect(pageReads).toBe(1);
+              return response;
+            },
+            { detectRepeatedQueries: true },
+          ),
+      );
+      const expectedPage = expected.slice(page * 17, (page + 1) * 17);
+      expect(result.hits.map(({ id }) => id)).toEqual(
+        expectedPage.map(({ id }) => `chat:${id}`),
+      );
+      expect(result.hits.map(({ title }) => title)).toEqual(
+        expectedPage.map(({ subjectDecisionId }) =>
+          subjectDecisionId === decisionId ? marker : "Browse fixture",
+        ),
+      );
+      if (page === 0) {
+        expect(result.totalCount).toBe(rows.length);
+      }
+      expect(result.nextCursor).not.toBeNull();
+      cursor =
+        result.nextCursor ?? panic("Browse fixture requires another page");
+    }
+  });
+
   test.each([
     { query: "paginateplain", masked: 0, admitted: 125 },
     { query: "paginatemasked", masked: 120, admitted: 73 },
@@ -1328,6 +1410,103 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       expect(JSON.stringify(after)).toContain(own);
     },
   );
+
+  test("reconnecting at now emits the withdrawal marker for newly delivered text", async () => {
+    const id = createSafeId<"chatThread">();
+    seededThreads.push(id);
+    const incomingId = createSafeId<"chatMessage">();
+    const assistantId = createSafeId<"chatMessage">();
+    const execution = {
+      id: createSafeId<"chatTurn">(),
+      executionId: Bun.randomUUIDv7(),
+    };
+    const liveRunId = Bun.randomUUIDv7();
+    await scopedDb(async (tx) => {
+      await tx.insert(chatThreads).values({
+        id,
+        organizationId,
+        userId,
+        workspaceId,
+        title: own,
+        titleSource: "user",
+        subjectDecisionId: decisionId,
+      });
+      await tx.insert(chatMessages).values({
+        id: incomingId,
+        threadId: id,
+        userId,
+        workspaceId,
+        role: "user",
+        content: ownContent,
+      });
+      await tx.insert(chatTurns).values({
+        id: execution.id,
+        executionId: execution.executionId,
+        organizationId,
+        userId,
+        workspaceId,
+        threadId: id,
+        userMessageId: incomingId,
+        runId: liveRunId,
+        status: "running",
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      });
+    });
+    const options = { organizationId, runId: liveRunId, execution };
+    const writer = createChatRunLog({ ...options, db: scopedDb });
+    await writer.append([
+      { type: EventType.RUN_STARTED, runId: liveRunId, threadId: id },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: assistantId,
+        role: "assistant",
+      },
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: assistantId,
+        delta: secret,
+      },
+    ]);
+    const initialized = Promise.withResolvers<undefined>();
+    const observedDb = (async (read) => {
+      const result = await scopedDb(read);
+      initialized.resolve(undefined);
+      return result;
+    }) satisfies ScopedDb;
+    const reconnected = createChatRunLog({ ...options, db: observedDb });
+    await request(async () => {
+      const controller = new AbortController();
+      const delivery = reconnected.read("now", controller.signal);
+      const reader = delivery[Symbol.asyncIterator]();
+      const pending = reader.next();
+      try {
+        await initialized.promise;
+        await writer.append([
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: assistantId,
+            delta: secret,
+          },
+        ]);
+        await writer.close();
+        expect(await pending).toEqual({
+          done: false,
+          value: {
+            offset: "4",
+            chunk: {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: assistantId,
+              delta: marker,
+            },
+          },
+        });
+        expect(await reader.next()).toEqual({ done: true, value: undefined });
+      } finally {
+        controller.abort();
+        await reader.return?.();
+      }
+    });
+  });
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
     const id = createSafeId<"chatThread">();

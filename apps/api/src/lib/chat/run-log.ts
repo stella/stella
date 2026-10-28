@@ -436,6 +436,8 @@ const createRunLogReader = ({
       if (log === undefined) {
         return { entries: [], log };
       }
+      // Settlement releases the terminal suffix; projection state advances only for delivered entries.
+      const heldAfter = unsettledTailAfter(log);
       const storedEntries = await tx
         .select({
           chunk: chatRunLogEntries.chunk,
@@ -446,7 +448,10 @@ const createRunLogReader = ({
           and(
             entryKey(organizationId, runId),
             gt(chatRunLogEntries.seq, after),
-            lt(chatRunLogEntries.seq, log.nextSeq),
+            lt(
+              chatRunLogEntries.seq,
+              heldAfter === undefined ? log.nextSeq : heldAfter + 1n,
+            ),
           ),
         )
         .orderBy(asc(chatRunLogEntries.seq))
@@ -480,7 +485,7 @@ const createRunLogReader = ({
         after = offsetSequence(offset);
       }
       if (after === null) {
-        const { log } = await loadPage(0n, projection);
+        const log = await db(async (tx) => await loadHeader(tx, false));
         // "Now" excludes published history; the unsettled suffix still
         // belongs to the viewer because it has not passed the tail fence.
         after =
@@ -496,13 +501,6 @@ const createRunLogReader = ({
         // db-await-in-loop: tailing page walk; each read starts after the last yielded seq, a page holds at most READ_PAGE_SIZE rows, and the loop ends at the close marker, the not-found deadline, or the abort signal
         const { entries, log } = await loadPage(after, projection);
         for (const entry of entries) {
-          // Final append precedes the transaction that stores the transcript
-          // and closes the log. Hold an open tail terminal until that commit;
-          // intermediate finishes release once the next iteration appends.
-          const heldAfter = unsettledTailAfter(log);
-          if (heldAfter !== undefined && entry.seq > heldAfter) {
-            break;
-          }
           after = entry.seq;
           yield { offset: after.toString(), chunk: entry.chunk };
         }

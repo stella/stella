@@ -53,6 +53,7 @@ import {
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
+import type { GlobalSearchCursor } from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
   buildSearchPreviewPassageValueRows,
@@ -964,9 +965,11 @@ const readGlobalSearch = async (
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
     async () => {
-      const read = await readChatCandidateBatches({
-        readBatch: async (batchCursor) =>
-          await database.execute<ChatSearchCandidateRow>(sql`
+      const readPage = async (
+        pageCursor: GlobalSearchCursor | null,
+        rowLimit: number,
+      ) =>
+        await database.execute<ChatSearchCandidateRow>(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
@@ -1004,7 +1007,7 @@ const readGlobalSearch = async (
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         ${globalSearchCursorSql({
-          cursor: batchCursor,
+          cursor: pageCursor,
           score: searchScoreValue({
             tsv: sql`cst.tsv`,
             updatedAt: sql`t.updated_at`,
@@ -1012,8 +1015,14 @@ const readGlobalSearch = async (
           id: sql`'chat:' || cst.thread_id::text`,
         })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${LIMITS.searchChatCandidateThreadsMax + 1}
-    `),
+      LIMIT ${rowLimit}
+    `);
+      if (!hasSearchQuery) {
+        return await readPage(searchCursor, fetchLimit);
+      }
+      const read = await readChatCandidateBatches({
+        readBatch: async (batchCursor) =>
+          await readPage(batchCursor, LIMITS.searchChatCandidateThreadsMax + 1),
       });
       if (read.isErr()) {
         return abortTransaction(read.error);
