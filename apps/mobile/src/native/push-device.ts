@@ -39,8 +39,7 @@ export const currentPushDevice = async ({
   const token = await Notifications.getDevicePushTokenAsync();
   return typeof token.data === "string"
     ? {
-        apsEnvironment:
-          APP_VARIANT === "development" ? "sandbox" : "production",
+        environment: APP_VARIANT === "development" ? "sandbox" : "production",
         appVersion: Constants.expoConfig?.version ?? "0",
         bundleId: Constants.expoConfig?.ios?.bundleIdentifier ?? "",
         locale,

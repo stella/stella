@@ -18,11 +18,12 @@ const pushDataSchema = v.object({
  * the app and nothing more.
  */
 export const routeForPush = (data: unknown): Href => {
-  const parsed = v.safeParse(pushDataSchema, data);
+  // The server puts its part beside `aps`, under `stella`.
+  const parsed = v.safeParse(v.object({ stella: pushDataSchema }), data);
   if (!parsed.success) {
     return "/";
   }
-  const { entityId, entityType, workspaceId } = parsed.output;
+  const { entityId, entityType, workspaceId } = parsed.output.stella;
   if (workspaceId === null || workspaceId === undefined) {
     return "/";
   }

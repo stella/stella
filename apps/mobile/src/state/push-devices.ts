@@ -15,7 +15,7 @@ export type ApsEnvironment = "sandbox" | "production";
 export type PushDevice = {
   /** The APNs device token, as hex. */
   readonly token: string;
-  readonly apsEnvironment: ApsEnvironment;
+  readonly environment: ApsEnvironment;
   readonly bundleId: string;
   readonly appVersion: string;
   /** The language the alerts are written in. */
