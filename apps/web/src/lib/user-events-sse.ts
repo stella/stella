@@ -1,3 +1,6 @@
+import type { QueryKey } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+
 import { parseUserRealtimeEvent } from "@stll/api-contract";
 import type { UserRealtimeEvent } from "@stll/api-contract";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -5,6 +8,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { apiUrl } from "@/lib/api-url";
+import { getRealtimeRefreshScheduler } from "@/lib/realtime-refresh";
 
 const USER_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,
@@ -47,8 +51,10 @@ const reconnectDelayMs = (failures: number): number =>
  */
 export const useUserEventsSSE = (
   organizationId: string,
-  onEvent: (event: UserRealtimeEvent) => void,
+  onEvent: (event: UserRealtimeEvent) => QueryKey[],
 ): void => {
+  const queryClient = useQueryClient();
+  const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
   const handleEvent = useLatestCallback(onEvent);
 
   useExternalSyncEffect(() => {
@@ -70,7 +76,9 @@ export const useUserEventsSSE = (
       stream.addEventListener("message", (event: MessageEvent) => {
         const parsed = parseUserRealtimeEvent(jsonOrNull(String(event.data)));
         if (parsed) {
-          handleEvent(parsed);
+          for (const queryKey of handleEvent(parsed)) {
+            realtimeRefresh.refresh(queryKey);
+          }
         }
       });
       stream.addEventListener("error", () => {
@@ -96,7 +104,7 @@ export const useUserEventsSSE = (
       }
       source?.close();
     };
-  }, [handleEvent, organizationId]);
+  }, [handleEvent, organizationId, realtimeRefresh]);
 };
 
 const jsonOrNull = (raw: string): unknown => {

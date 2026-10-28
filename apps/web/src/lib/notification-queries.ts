@@ -56,6 +56,19 @@ export const refetchFirstNotificationsPage = async ({
 }: NotificationsKey & {
   queryClient: QueryClient;
 }): Promise<void> => {
+  const queryKey = prepareFirstNotificationsPageRefresh({
+    organizationId,
+    queryClient,
+    userId,
+  });
+  await queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+};
+
+export const prepareFirstNotificationsPageRefresh = ({
+  organizationId,
+  queryClient,
+  userId,
+}: NotificationsKey & { queryClient: QueryClient }) => {
   const queryKey = notificationsOptions({ organizationId, userId }).queryKey;
   queryClient.setQueryData(queryKey, (cached) =>
     cached === undefined
@@ -65,7 +78,7 @@ export const refetchFirstNotificationsPage = async ({
           pageParams: cached.pageParams.slice(0, 1),
         },
   );
-  await queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+  return queryKey;
 };
 
 type NotificationsQueryFn = NonNullable<
