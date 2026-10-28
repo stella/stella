@@ -1669,8 +1669,9 @@ export type SourceAdapter = {
    * decisions, one blob cannot be mapped back to one row, and the adapter
    * omits this rather than guessing.
    *
-   * The outcome may be returned directly by a parser that needs no I/O, or
-   * as a promise by one that does (an office-format extractor, say).
+   * Replays use retained publisher bytes and must not fetch the publisher.
+   * Await the outcome: common field inspection is asynchronous even for pure
+   * parsers; office-format extraction may also require local or service I/O.
    */
   reparseStoredRaw?: (
     stored: StoredRawReparseInput,

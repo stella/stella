@@ -434,30 +434,36 @@ const storedDecision = async (
   };
 };
 
-const reparse = (
+const reparse = async (
   stored: StoredDecision,
   caseNumber: string,
-): StoredRawReparseOutcome => {
-  const outcome = skCourtsAdapter.reparseStoredRaw?.({
-    raw: new TextEncoder().encode(stored.sourceRaw),
-    contentType: stored.sourceRawContentType,
-    caseNumber,
-    sourceDocumentId: null,
-    language: "sk",
-    court: "",
-    ecli: null,
-    decisionDate: null,
-    decisionType: null,
-    sourceUrl: null,
-    documentUrl: null,
-    metadata: {},
-  });
-  if (outcome === undefined) {
-    return panic("sk-courts declares no reparseStoredRaw");
+): Promise<StoredRawReparseOutcome> => {
+  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(() =>
+    panic("Stored SK replay must not fetch publisher responses"),
+  );
+  try {
+    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(stored.sourceRaw),
+      contentType: stored.sourceRawContentType,
+      caseNumber,
+      sourceDocumentId: null,
+      language: "sk",
+      court: "",
+      ecli: null,
+      decisionDate: null,
+      decisionType: null,
+      sourceUrl: null,
+      documentUrl: null,
+      metadata: {},
+    });
+    if (outcome === undefined) {
+      return panic("sk-courts declares no reparseStoredRaw");
+    }
+    expect(publisherFetch).not.toHaveBeenCalled();
+    return outcome;
+  } finally {
+    publisherFetch.mockRestore();
   }
-  return outcome instanceof Promise
-    ? panic("sk-courts reparseStoredRaw must answer without I/O")
-    : outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {
@@ -469,13 +475,13 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(stored.sourceRawContentType).toBe("application/json");
     expect(decodeSourceRawEnvelope(stored.sourceRaw)).toBeNull();
 
-    const outcome = reparse(stored, TRANSFERRED_FILE_DOCKET);
+    const outcome = await reparse(stored, TRANSFERRED_FILE_DOCKET);
 
     expect(outcome.type).toBe("parsed");
   });
 
   test("the three fields the adapter used to discard land in metadata", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -497,7 +503,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("the record's other labelled fields keep their targets", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -532,7 +538,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("re-parsing writes the envelope, whatever shape it read", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -551,7 +557,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("a payload naming another decision is refused", async () => {
-    const outcome = reparse(
+    const outcome = await reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       "9C/1/2026",
     );
@@ -562,8 +568,8 @@ describe("a stored record reaches the targets the inventory declares", () => {
     });
   });
 
-  test("a payload this adapter never wrote is refused, not guessed at", () => {
-    const outcome = reparse(
+  test("a payload this adapter never wrote is refused, not guessed at", async () => {
+    const outcome = await reparse(
       { sourceRaw: "<html></html>", sourceRawContentType: "text/html" },
       TRANSFERRED_FILE_DOCKET,
     );
@@ -643,8 +649,8 @@ describe("derived general-court metadata", () => {
     });
   });
 
-  test("stored listings without detail replay with unknown publisher URL availability", () => {
-    const outcome = reparse(
+  test("stored listings without detail replay with unknown publisher URL availability", async () => {
+    const outcome = await reparse(
       {
         sourceRaw: encodeSourceRawEnvelope({
           listing: JSON.stringify(item),

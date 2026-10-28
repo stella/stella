@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { writeZipEntry } from "@stll/docx-utils";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   euEcjAdapter,
@@ -29,16 +30,18 @@ test("every archive member survives stored replay and repeated bibliography stay
   writeZipEntry(zip, "documents/joined.xml", joined);
   const asset = new Uint8Array([0, 255, 128, 4]);
   writeZipEntry(zip, "assets/figure.bin", asset);
-  const formex = await readEcjFormexArchive(
-    await zip.generateAsync({ type: "arraybuffer" }),
-  );
+  const originalZip = await zip.generateAsync({ type: "arraybuffer" });
+  const originalZipDigest = sha256Hex(originalZip);
+  const formex = await readEcjFormexArchive(originalZip);
   expect(ecjFormexDocuments(formex).slice(0, 2)).toEqual([primary, joined]);
   const archive = decodeSourceRawEnvelope(
     formex.slice(FORMEX_ARCHIVE_PREFIX.length),
   );
   expect(Object.keys(archive ?? {})).toEqual([
+    "documents/",
     "documents/primary.xml",
     "documents/joined.xml",
+    "assets/",
     "assets/figure.bin",
   ]);
   expect(Buffer.from(archive?.["assets/figure.bin"] ?? "", "base64")).toEqual(
@@ -56,6 +59,7 @@ test("every archive member survives stored replay and repeated bibliography stay
         document:
           "<html><body><div class='listNotice'><p>Judgment body remains readable.</p></div></body></html>",
         formex,
+        "formex-original-zip": Buffer.from(originalZip).toBase64(),
       }),
     ),
     contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -91,4 +95,11 @@ test("every archive member survives stored replay and repeated bibliography stay
   ).toBe(true);
   const stored = decodeSourceRawEnvelope(outcome.result.sourceRaw ?? "");
   expect(stored?.["formex"]).toBe(formex);
+  expect(archive?.["documents/"]).toBe("");
+  const retainedZip = Buffer.from(
+    stored?.["formex-original-zip"] ?? "",
+    "base64",
+  );
+  expect(retainedZip).toEqual(Buffer.from(originalZip));
+  expect(sha256Hex(retainedZip)).toBe(originalZipDigest);
 });

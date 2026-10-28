@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { encodeHTML } from "entities";
 import fc from "fast-check";
 
@@ -14,7 +14,23 @@ import {
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
+
+const replay = async (stored: StoredRawReparseInput) => {
+  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(() =>
+    panic("Stored SK entity replay must not fetch publisher responses"),
+  );
+  try {
+    const parser =
+      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
+    const outcome = await parser(stored);
+    expect(publisherFetch).not.toHaveBeenCalled();
+    return outcome;
+  } finally {
+    publisherFetch.mockRestore();
+  }
+};
 
 const fixture = () =>
   ({
@@ -173,11 +189,9 @@ describe("Slovak court display text decodes publisher entities to stable text", 
     expect(skCourtsListingIdentity(item)).toEqual({ type: "unidentifiable" });
   });
 
-  test("stored raw replay preserves the same decoded fields", () => {
+  test("stored raw replay preserves the same decoded fields", async () => {
     const original =
       assembleSkCourtsDecision(fixture()) ?? panic("fixture is unkeyable");
-    const replay =
-      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
     const input = {
       raw: new TextEncoder().encode(
         original.sourceRaw ?? panic("fixture stores no raw"),
@@ -194,15 +208,13 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       documentUrl: null,
       metadata: {},
     };
-    const first = replay(input);
-    const second = replay(input);
+    const first = await replay(input);
+    const second = await replay(input);
     expect(first).toMatchObject({ type: "parsed", result: original });
     expect(second).toEqual(first);
   });
 
   describe("a row stored before decoding replays under its encoded docket", () => {
-    const replay =
-      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
     const storedRowFor = ({
       listedDocket,
       storedDocket,
@@ -236,8 +248,8 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       };
     };
 
-    test("the encoded docket a pre-decoding parser stored is the decoded one", () => {
-      const outcome = replay(
+    test("the encoded docket a pre-decoding parser stored is the decoded one", async () => {
+      const outcome = await replay(
         storedRowFor({
           listedDocket: "7C&#x2F;221/1991",
           storedDocket: "7C&#x2F;221/1991",
@@ -250,8 +262,8 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       });
     });
 
-    test("a docket stored as decoded needs no legacy match", () => {
-      const outcome = replay(
+    test("a docket stored as decoded needs no legacy match", async () => {
+      const outcome = await replay(
         storedRowFor({
           listedDocket: "7C&#x2F;221/1991",
           storedDocket: "7C/221/1991",
@@ -261,14 +273,14 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       expect(outcome).not.toHaveProperty("legacyCaseNumber");
     });
 
-    test("a genuinely different docket is still another decision", () => {
+    test("a genuinely different docket is still another decision", async () => {
       for (const storedDocket of [
         "7C&#x2F;222/1991",
         "7C/222/1991",
         "7c/221/1991",
       ]) {
         expect(
-          replay(
+          await replay(
             storedRowFor({ listedDocket: "7C&#x2F;221/1991", storedDocket }),
           ),
         ).toMatchObject({
@@ -278,7 +290,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       }
     });
 
-    test("every encoding layer of a docket reaches the same stored form on both sides", () => {
+    test("every encoding layer of a docket reaches the same stored form on both sides", async () => {
       // Both sides go through the one canonical form, however many times the
       // publisher or an earlier parser encoded the docket.
       for (const { listedDocket, storedDocket } of [
@@ -297,7 +309,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
         },
       ]) {
         expect(
-          replay(storedRowFor({ listedDocket, storedDocket })),
+          await replay(storedRowFor({ listedDocket, storedDocket })),
         ).toMatchObject({
           type: "parsed",
           result: { caseNumber: "7C/221/1991", sourceDocumentId: "sk-guid-1" },
@@ -306,9 +318,9 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       }
     });
 
-    test("a row keyed by its docket is not migrated to a new spelling", () => {
+    test("a row keyed by its docket is not migrated to a new spelling", async () => {
       expect(
-        replay(
+        await replay(
           storedRowFor({
             listedDocket: "7C&#x2F;221/1991",
             storedDocket: "7C&#x2F;221/1991",
