@@ -800,6 +800,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/invoicing/src/profiles/pdf-labels.ts",
     "packages/legal-ast/src/*",
     "packages/legal-atlas/src/*",
+    "packages/locales/src/*",
     "packages/money/src/cents.ts",
     "packages/money/src/format.ts",
     "packages/money/src/index.ts",
