@@ -35,7 +35,12 @@ export const REMOVAL_RETRY_KIND = {
   PENDING: "removal-pending",
   UNPROBEABLE: "removal-unprobeable",
 } as const;
-export const REMOVAL_RETRY_KINDS = Object.values(REMOVAL_RETRY_KIND);
+export const REMOVAL_RETRY_KINDS = [
+  REMOVAL_RETRY_KIND.ERASURE,
+  ...Object.values(REMOVAL_RETRY_KIND).filter(
+    (kind) => kind !== REMOVAL_RETRY_KIND.ERASURE,
+  ),
+] as const;
 
 export const REMOVAL_UNPROBEABLE_REASON = {
   MISSING_IDENTITY: "missing-source-document-id",

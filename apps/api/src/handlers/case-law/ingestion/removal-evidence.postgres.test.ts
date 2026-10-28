@@ -6,7 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisionAliases,
   caseLawDecisions,
-  caseLawReconciliationItems,
+  caseLawRemovalReconciliationItems,
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
@@ -92,8 +92,8 @@ if (!databaseUrl || !runPostgresTests) {
       (
         await db
           .select()
-          .from(caseLawReconciliationItems)
-          .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+          .from(caseLawRemovalReconciliationItems)
+          .where(eq(caseLawRemovalReconciliationItems.sourceId, sourceId))
       ).at(0);
     const queueAbsence = async (sourceId: SafeId<"caseLawSource">) => {
       let elapsed = 0;

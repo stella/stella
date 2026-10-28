@@ -1822,22 +1822,10 @@ export type ReconciliationItemStatus =
 
 export const RECONCILIATION_MAX_REVIVALS = 2;
 
-export const RECONCILIATION_ITEM_KINDS = [
-  "listing",
-  ...REMOVAL_RETRY_KINDS,
-] as const;
-export const RECONCILIATION_ITEM_KIND = {
-  LISTING: RECONCILIATION_ITEM_KINDS[0],
-} as const;
-
 export const caseLawReconciliationItems = p.pgTable(
   "case_law_reconciliation_items",
   {
     id: pUuid<"caseLawReconciliationItem">().primaryKey(),
-    kind: p
-      .varchar({ length: 32, enum: RECONCILIATION_ITEM_KINDS })
-      .default(RECONCILIATION_ITEM_KIND.LISTING)
-      .notNull(),
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
@@ -1866,16 +1854,6 @@ export const caseLawReconciliationItems = p.pgTable(
     p
       .uniqueIndex("case_law_reconciliation_items_source_identity_idx")
       .on(t.sourceId, t.identityKey),
-    p
-      .index("case_law_reconciliation_items_kind_due_idx")
-      .on(t.sourceId, t.kind, t.status, t.nextAttemptAt, t.id),
-    p.check(
-      "case_law_reconciliation_items_kind_values",
-      sql`${t.kind} IN (${sql.join(
-        RECONCILIATION_ITEM_KINDS.map((kind) => sql`${kind}`),
-        sql`, `,
-      )})`,
-    ),
     // The due-retry read is the loop's highest-priority work unit, and it
     // asks only about parked rows; terminal ones are dead weight in it.
     p
@@ -1910,6 +1888,47 @@ export const caseLawReconciliationItems = p.pgTable(
     p.check(
       "case_law_reconciliation_items_parked_is_scheduled",
       sql`${t.status} <> ${RECONCILIATION_ITEM_STATUS.PARKED} OR ${t.nextAttemptAt} IS NOT NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Removal work is physically separate from every listing worker version. */
+export const caseLawRemovalReconciliationItems = p.pgTable(
+  "case_law_removal_reconciliation_items",
+  {
+    id: pUuid<"caseLawRemovalReconciliationItem">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
+      .notNull()
+      .references(() => caseLawDecisions.id, { onDelete: "cascade" }),
+    kind: p.varchar({ length: 32, enum: REMOVAL_RETRY_KINDS }).notNull(),
+    payload: jsonb().$type<unknown>().notNull(),
+    attempts: p.integer().default(0).notNull(),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull(),
+    lastError: p.text("last_error").notNull(),
+    firstSeenAt: timestamptz("first_seen_at").defaultNow().notNull(),
+    lastAttemptAt: timestamptz("last_attempt_at").notNull(),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_removal_items_source_decision_idx")
+      .on(t.sourceId, t.decisionId),
+    p
+      .index("case_law_removal_items_due_idx")
+      .on(t.sourceId, t.kind, t.nextAttemptAt, t.id),
+    p.check(
+      "case_law_removal_items_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        REMOVAL_RETRY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_removal_items_attempts_nonnegative",
+      sql`${t.attempts} >= 0`,
     ),
     ...globalCaseLawPolicies(),
   ],

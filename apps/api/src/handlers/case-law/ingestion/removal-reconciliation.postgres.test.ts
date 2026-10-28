@@ -32,6 +32,7 @@ import {
   caseLawProvisionExtractions,
   caseLawRawSweeps,
   caseLawReconciliationItems,
+  caseLawRemovalReconciliationItems,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSitemapShardCounts,
@@ -606,17 +607,14 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         await db
           .select({
-            kind: caseLawReconciliationItems.kind,
-            payload: caseLawReconciliationItems.payload,
+            kind: caseLawRemovalReconciliationItems.kind,
+            payload: caseLawRemovalReconciliationItems.payload,
           })
-          .from(caseLawReconciliationItems)
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(
-                caseLawReconciliationItems.identityKey,
-                `removal:${decisionId}`,
-              ),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
             ),
           ),
       ).toMatchObject([
@@ -1057,14 +1055,14 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         await db
           .select({
-            kind: caseLawReconciliationItems.kind,
-            payload: caseLawReconciliationItems.payload,
+            kind: caseLawRemovalReconciliationItems.kind,
+            payload: caseLawRemovalReconciliationItems.payload,
           })
-          .from(caseLawReconciliationItems)
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, isolatedSourceId),
-              eq(caseLawReconciliationItems.identityKey, `removal:${id}`),
+              eq(caseLawRemovalReconciliationItems.sourceId, isolatedSourceId),
+              eq(caseLawRemovalReconciliationItems.decisionId, id),
             ),
           ),
       ).toMatchObject([

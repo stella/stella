@@ -1,4 +1,0 @@
-{
-  "drop-constraint": "The discriminator CHECK is replaced atomically in the migration transaction; catalog changes are bounded by 1s lock_timeout and 5s statement_timeout.",
-  "add-constraint": "The expanded discriminator CHECK is NOT VALID and scans no existing rows; the online constraint owner validates it after deployment."
-}

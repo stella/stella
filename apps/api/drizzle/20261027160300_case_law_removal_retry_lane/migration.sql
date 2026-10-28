@@ -2,10 +2,6 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
-ALTER TABLE "case_law_reconciliation_items" ADD COLUMN "kind" varchar(32) NOT NULL DEFAULT 'listing';--> statement-breakpoint
-ALTER TABLE "case_law_reconciliation_items" ADD CONSTRAINT "case_law_reconciliation_items_kind_values"
-  CHECK ("kind" IN ('listing', 'removal-pending', 'removal-unprobeable')) NOT VALID;--> statement-breakpoint
-
 CREATE TABLE "case_law_sitemap_country_generations" (
   "country" varchar(3) PRIMARY KEY,
   "generation" bigint NOT NULL DEFAULT 0

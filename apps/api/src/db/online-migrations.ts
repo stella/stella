@@ -105,11 +105,6 @@ import {
   READER_ANNOTATION_CONSTRAINTS,
 } from "./reader-annotation-constraint-validation";
 import {
-  REMOVAL_RETRY_CONSTRAINT,
-  REMOVAL_RETRY_INDEX,
-  REMOVAL_RETRY_VALIDATION,
-} from "./removal-reconciliation-migration";
-import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
@@ -223,7 +218,6 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
-  REMOVAL_RETRY_INDEX,
   CASE_LAW_PARSE_PENDING_INDEX,
   {
     createSql:
@@ -917,7 +911,6 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
-  REMOVAL_RETRY_VALIDATION,
   CLIENT_INVOICE_TENANT_KEY,
   CLIENT_INVOICE_BACKFILL,
   ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
@@ -952,7 +945,6 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
-    REMOVAL_RETRY_CONSTRAINT,
     ...CLIENT_INVOICE_CONSTRAINTS,
     ...MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,

@@ -1,16 +1,17 @@
 /**
- * Publisher removal retries share the durable reconciliation lane. Run only
+ * Publisher removal retries have a dedicated durable lane. Run only
  * against the migrated Postgres test database; skipped elsewhere.
  */
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, getTableName, isNull } from "drizzle-orm";
+import { and, eq, getTableName, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
   caseLawReconciliationItems,
+  caseLawRemovalReconciliationItems,
   caseLawSources,
   publishedCaseLawDecisions,
   RECONCILIATION_ITEM_STATUS,
@@ -32,6 +33,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawRawSweepOutcome } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import { selectDueReconciliationItems } from "@/api/lib/legal-search/reconciliation-store";
 import { REMOVAL_RETRY_KIND } from "@/api/lib/legal-search/removal-reconciliation-state";
 import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -213,20 +215,22 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(caseLawDecisions.id, availableId)),
       ).toMatchObject([{ redactedAt: expect.any(Date) }]);
 
-      const identityKey = `removal:${missingId}`;
+      const identityDecisionId = missingId;
       const retry = await db
         .select()
-        .from(caseLawReconciliationItems)
+        .from(caseLawRemovalReconciliationItems)
         .where(
           and(
-            eq(caseLawReconciliationItems.sourceId, sourceId),
-            eq(caseLawReconciliationItems.identityKey, identityKey),
+            eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+            eq(
+              caseLawRemovalReconciliationItems.decisionId,
+              identityDecisionId,
+            ),
           ),
         );
       expect(retry).toHaveLength(1);
       expect(retry.at(0)).toMatchObject({
         kind: REMOVAL_RETRY_KIND.UNPROBEABLE,
-        status: RECONCILIATION_ITEM_STATUS.PARKED,
         attempts: 1,
         nextAttemptAt: new Date(FIXED_NOW.getTime() + 60_000),
         payload: {
@@ -255,11 +259,14 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const persisted = await db
         .select()
-        .from(caseLawReconciliationItems)
+        .from(caseLawRemovalReconciliationItems)
         .where(
           and(
-            eq(caseLawReconciliationItems.sourceId, sourceId),
-            eq(caseLawReconciliationItems.identityKey, identityKey),
+            eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+            eq(
+              caseLawRemovalReconciliationItems.decisionId,
+              identityDecisionId,
+            ),
           ),
         );
       expect(persisted).toHaveLength(1);
@@ -338,20 +345,22 @@ if (!databaseUrl || !runPostgresTests) {
       expect(probes).toBe(4);
       expect(sweeps).toBe(2);
 
-      const identityKey = `removal:${firstDecisionId}`;
+      const identityDecisionId = firstDecisionId;
       const queued = await db
         .select()
-        .from(caseLawReconciliationItems)
+        .from(caseLawRemovalReconciliationItems)
         .where(
           and(
-            eq(caseLawReconciliationItems.sourceId, sourceId),
-            eq(caseLawReconciliationItems.identityKey, identityKey),
+            eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+            eq(
+              caseLawRemovalReconciliationItems.decisionId,
+              identityDecisionId,
+            ),
           ),
         );
       expect(queued).toHaveLength(1);
       expect(queued.at(0)).toMatchObject({
         kind: REMOVAL_RETRY_KIND.ERASURE,
-        status: RECONCILIATION_ITEM_STATUS.PARKED,
         attempts: 1,
         payload: {
           type: "pending",
@@ -379,11 +388,14 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         await db
           .select()
-          .from(caseLawReconciliationItems)
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(caseLawReconciliationItems.identityKey, identityKey),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(
+                caseLawRemovalReconciliationItems.decisionId,
+                identityDecisionId,
+              ),
             ),
           ),
       ).toEqual(queued);
@@ -422,12 +434,15 @@ if (!databaseUrl || !runPostgresTests) {
       expect(sweeps).toBe(3);
       expect(
         await db
-          .select({ id: caseLawReconciliationItems.id })
-          .from(caseLawReconciliationItems)
+          .select({ id: caseLawRemovalReconciliationItems.id })
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(caseLawReconciliationItems.identityKey, identityKey),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(
+                caseLawRemovalReconciliationItems.decisionId,
+                identityDecisionId,
+              ),
             ),
           ),
       ).toEqual([]);
@@ -600,9 +615,9 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([]);
       expect(
         await db
-          .select({ id: caseLawReconciliationItems.id })
-          .from(caseLawReconciliationItems)
-          .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
+          .select({ id: caseLawRemovalReconciliationItems.id })
+          .from(caseLawRemovalReconciliationItems)
+          .where(eq(caseLawRemovalReconciliationItems.sourceId, sourceId)),
       ).toEqual([]);
     });
 
@@ -675,6 +690,65 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    test("listing due-selection cannot see removal retries without a kind filter", async () => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await insertSource(sourceId);
+      const decisionId = createSafeId<"caseLawDecision">();
+      await insertDecision({
+        id: decisionId,
+        sourceId,
+        sourceDocumentId: null,
+        ordinal: "separate-lane",
+      });
+      const queued = await reconcile({
+        sourceId,
+        now: FIXED_NOW,
+        probe: async () => ({ type: "present", value: null }),
+      });
+      expect(queued.unwrap()).toMatchObject({ checked: 1, retried: 0 });
+      const listingId = createSafeId<"caseLawReconciliationItem">();
+      const dueAt = new Date(FIXED_NOW.getTime() + 60_000);
+      await db.insert(caseLawReconciliationItems).values({
+        id: listingId,
+        sourceId,
+        slice: "listing",
+        identityKey: "document:listing-only",
+        payload: { sourceDocumentId: "listing-only" },
+        nextAttemptAt: dueAt,
+      });
+      const current = await selectDueReconciliationItems(scopedDb, {
+        sourceId,
+        now: dueAt,
+        limit: 10,
+      });
+      expect(current.map(({ id }) => id)).toEqual([listingId]);
+      // The previous release selects directly from this table with no discriminator.
+      const previousRelease = await scopedDb(
+        async (tx) =>
+          await tx
+            .select({ id: caseLawReconciliationItems.id })
+            .from(caseLawReconciliationItems)
+            .where(
+              and(
+                eq(caseLawReconciliationItems.sourceId, sourceId),
+                eq(
+                  caseLawReconciliationItems.status,
+                  RECONCILIATION_ITEM_STATUS.PARKED,
+                ),
+                sql`${caseLawReconciliationItems.nextAttemptAt} <= ${dueAt.toISOString()}::timestamptz`,
+              ),
+            )
+            .limit(10),
+      );
+      expect(previousRelease).toEqual([{ id: listingId }]);
+      expect(
+        await db
+          .select({ decisionId: caseLawRemovalReconciliationItems.decisionId })
+          .from(caseLawRemovalReconciliationItems)
+          .where(eq(caseLawRemovalReconciliationItems.sourceId, sourceId)),
+      ).toEqual([{ decisionId }]);
+    });
+
     test("bounded retries leave the remainder due for the next run", async () => {
       const sourceId = createSafeId<"caseLawSource">();
       await insertSource(sourceId);
@@ -714,9 +788,9 @@ if (!databaseUrl || !runPostgresTests) {
         nextRetryAt: new Date(dueAt.getTime() + 5 * 60_000),
       });
       const items = await db
-        .select({ attempts: caseLawReconciliationItems.attempts })
-        .from(caseLawReconciliationItems)
-        .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+        .select({ attempts: caseLawRemovalReconciliationItems.attempts })
+        .from(caseLawRemovalReconciliationItems)
+        .where(eq(caseLawRemovalReconciliationItems.sourceId, sourceId));
       expect(items).toHaveLength(count);
       expect(items.every(({ attempts }) => attempts === 2)).toBe(true);
     });
@@ -770,15 +844,12 @@ if (!databaseUrl || !runPostgresTests) {
       ).toContain("synthetic checkpoint failure");
       expect(
         await db
-          .select({ id: caseLawReconciliationItems.id })
-          .from(caseLawReconciliationItems)
+          .select({ id: caseLawRemovalReconciliationItems.id })
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(
-                caseLawReconciliationItems.identityKey,
-                `removal:${decisionId}`,
-              ),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
             ),
           ),
       ).toEqual([]);
@@ -806,17 +877,14 @@ if (!databaseUrl || !runPostgresTests) {
       expect(
         await db
           .select({
-            id: caseLawReconciliationItems.id,
-            kind: caseLawReconciliationItems.kind,
+            id: caseLawRemovalReconciliationItems.id,
+            kind: caseLawRemovalReconciliationItems.kind,
           })
-          .from(caseLawReconciliationItems)
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(
-                caseLawReconciliationItems.identityKey,
-                `removal:${decisionId}`,
-              ),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
             ),
           ),
       ).toMatchObject([{ kind: REMOVAL_RETRY_KIND.UNPROBEABLE }]);

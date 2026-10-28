@@ -23,10 +23,7 @@ import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
-import {
-  REMOVAL_RETRY_KIND,
-  REMOVAL_RETRY_KINDS,
-} from "@/api/lib/legal-search/removal-reconciliation-state";
+import { removalReconciliationCountsQuery } from "@/api/lib/legal-search/removal-reconciliation-store";
 import {
   createUnrecognizedSourceReporter,
   SOURCE_REPORT_FEATURE,
@@ -34,7 +31,7 @@ import {
 } from "@/api/lib/legal-search/source-registry-membership";
 
 /**
- * Where the standing listing reconciliation stands for one source.
+ * Durable listing and removal reconciliation for one source.
  *
  * Null for a source it has never touched. The handler cannot see adapters, so
  * it cannot ask whether a source has the capability; the absence of both a
@@ -203,22 +200,13 @@ export const latestIngestionEventsQuery = (
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
-/** The kind-aware source index covers listing and removal health counts. */
+/** Each durable lane supplies its own source-scoped health counts. */
 export const reconciliationCountsQuery = (
   db: Transaction,
   sourceIds: SafeId<"caseLawSource">[],
 ) => {
   const counts = db
     .select({
-      pendingRemovals:
-        sql<number>`count(*) filter (where ${caseLawReconciliationItems.kind} IN (${sql.join(
-          REMOVAL_RETRY_KINDS.map((kind) => sql`${kind}`),
-          sql`, `,
-        )}))::int`.as("pending_removals"),
-      unprobeable:
-        sql<number>`count(*) filter (where ${caseLawReconciliationItems.kind} = ${REMOVAL_RETRY_KIND.UNPROBEABLE})::int`.as(
-          "unprobeable",
-        ),
       parked:
         sql<number>`count(*) filter (where ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED})::int`.as(
           "parked",
@@ -232,16 +220,20 @@ export const reconciliationCountsQuery = (
     .where(eq(caseLawReconciliationItems.sourceId, caseLawSources.id))
     .as("reconciliation_counts");
 
+  const removalCounts = removalReconciliationCountsQuery(db, sourceIds).as(
+    "removal_reconciliation_counts",
+  );
   return db
     .select({
       sourceId: caseLawSources.id,
       parked: counts.parked,
       terminal: counts.terminal,
-      pendingRemovals: counts.pendingRemovals,
-      unprobeable: counts.unprobeable,
+      pendingRemovals: removalCounts.pendingRemovals,
+      unprobeable: removalCounts.unprobeable,
     })
     .from(caseLawSources)
     .innerJoinLateral(counts, sql`true`)
+    .innerJoin(removalCounts, eq(removalCounts.sourceId, caseLawSources.id))
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
@@ -454,7 +446,8 @@ export const getIngestionStatus = async (
       const reconciliation: SourceReconciliationStatus | null =
         aggregate.slices === 0 &&
         aggregate.parked === 0 &&
-        aggregate.terminal === 0
+        aggregate.terminal === 0 &&
+        aggregate.pendingRemovals === 0
           ? null
           : {
               slices: aggregate.slices,

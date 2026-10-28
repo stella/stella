@@ -200,6 +200,10 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "invalidateCaseLawRemovalSnapshotsTx",
   },
+  case_law_removal_reconciliation_items: {
+    type: "tombstone",
+    owner: "removal-reconciliation-store",
+  },
   case_law_reconciliation_items: {
     type: "removed-by-owner",
     owner: "eraseDecisionReconciliationPayloadsTx",

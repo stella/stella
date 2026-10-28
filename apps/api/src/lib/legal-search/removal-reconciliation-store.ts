@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -7,11 +7,12 @@ import { DAY_IN_MS } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawReconciliationItems,
-  RECONCILIATION_ITEM_STATUS,
+  caseLawRemovalReconciliationItems,
+  caseLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  REMOVAL_RETRY_KIND,
   REMOVAL_RETRY_KINDS,
   removalRetryKind,
   removalRetryPayloadSchema,
@@ -20,9 +21,7 @@ import type {
   RemovalRetryPayload,
   RemovalStepOutcome,
 } from "@/api/lib/legal-search/removal-reconciliation-state";
-import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-const REMOVAL_RETRY_SLICE = "publisher-removal";
 const RETRY_DELAYS_MS = [
   60_000,
   5 * 60_000,
@@ -30,10 +29,9 @@ const RETRY_DELAYS_MS = [
   DAY_IN_MS,
   7 * DAY_IN_MS,
 ] as const;
-const removalIdentityKey = (id: SafeId<"caseLawDecision">) => `removal:${id}`;
 
 export type RemovalRetryItem = {
-  id: SafeId<"caseLawReconciliationItem">;
+  id: SafeId<"caseLawRemovalReconciliationItem">;
   decisionId: SafeId<"caseLawDecision">;
   attempts: number;
   payload: RemovalRetryPayload;
@@ -60,38 +58,39 @@ export const selectDueRemovalRetries = async ({
       async (tx) =>
         await tx
           .select({
-            id: caseLawReconciliationItems.id,
-            payload: caseLawReconciliationItems.payload,
-            attempts: caseLawReconciliationItems.attempts,
+            id: caseLawRemovalReconciliationItems.id,
+            payload: caseLawRemovalReconciliationItems.payload,
+            attempts: caseLawRemovalReconciliationItems.attempts,
+            decisionId: caseLawRemovalReconciliationItems.decisionId,
           })
-          .from(caseLawReconciliationItems)
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(caseLawReconciliationItems.kind, kind),
-              eq(
-                caseLawReconciliationItems.status,
-                RECONCILIATION_ITEM_STATUS.PARKED,
-              ),
-              sql`${caseLawReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(caseLawRemovalReconciliationItems.kind, kind),
+              sql`${caseLawRemovalReconciliationItems.nextAttemptAt} <= ${now.toISOString()}::timestamptz`,
             ),
           )
           .orderBy(
-            caseLawReconciliationItems.nextAttemptAt,
-            caseLawReconciliationItems.id,
+            caseLawRemovalReconciliationItems.nextAttemptAt,
+            caseLawRemovalReconciliationItems.id,
           )
           .limit(perKindLimit),
     );
     for (const row of rows) {
       const parsed = v.safeParse(removalRetryPayloadSchema, row.payload);
-      if (!parsed.success || removalRetryKind(parsed.output) !== kind) {
+      if (
+        !parsed.success ||
+        removalRetryKind(parsed.output) !== kind ||
+        parsed.output.decisionId !== row.decisionId
+      ) {
         return panic("Invalid publisher-removal retry item");
       }
       items.push({
         payload: parsed.output,
         id: row.id,
         attempts: row.attempts,
-        decisionId: brandPersistedCaseLawDecisionId(parsed.output.decisionId),
+        decisionId: row.decisionId,
       });
     }
   }
@@ -163,18 +162,17 @@ export const persistRemovalOutcomeTx = async (
   { sourceId, decisionId, outcome, now, origin }: PersistRemovalOutcomeOptions,
 ): Promise<boolean> => {
   // audit: skip — durable reconciliation outcome for the canonical removal audit.
-  const identityKey = removalIdentityKey(decisionId);
   const previous = (
     await tx
       .select({
-        id: caseLawReconciliationItems.id,
-        attempts: caseLawReconciliationItems.attempts,
+        id: caseLawRemovalReconciliationItems.id,
+        attempts: caseLawRemovalReconciliationItems.attempts,
       })
-      .from(caseLawReconciliationItems)
+      .from(caseLawRemovalReconciliationItems)
       .where(
         and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.identityKey, identityKey),
+          eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+          eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
         ),
       )
       .limit(1)
@@ -192,11 +190,11 @@ export const persistRemovalOutcomeTx = async (
   }
   if (outcome.type === "settled") {
     await tx
-      .delete(caseLawReconciliationItems)
+      .delete(caseLawRemovalReconciliationItems)
       .where(
         and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.identityKey, identityKey),
+          eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+          eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
         ),
       );
     return true;
@@ -229,28 +227,27 @@ export const persistRemovalOutcomeTx = async (
   if (outcome.type === "superseded") {
     // Close the old authorization and create a separately identified current-identity probe.
     await tx
-      .delete(caseLawReconciliationItems)
+      .delete(caseLawRemovalReconciliationItems)
       .where(
         and(
-          eq(caseLawReconciliationItems.sourceId, sourceId),
-          eq(caseLawReconciliationItems.identityKey, identityKey),
+          eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+          eq(caseLawRemovalReconciliationItems.decisionId, decisionId),
         ),
       );
-    await tx.insert(caseLawReconciliationItems).values({
+    await tx.insert(caseLawRemovalReconciliationItems).values({
       sourceId,
-      identityKey,
-      slice: REMOVAL_RETRY_SLICE,
+      decisionId,
       ...pending,
     });
     return true;
   }
   await tx
-    .insert(caseLawReconciliationItems)
-    .values({ sourceId, identityKey, slice: REMOVAL_RETRY_SLICE, ...pending })
+    .insert(caseLawRemovalReconciliationItems)
+    .values({ sourceId, decisionId, ...pending })
     .onConflictDoUpdate({
       target: [
-        caseLawReconciliationItems.sourceId,
-        caseLawReconciliationItems.identityKey,
+        caseLawRemovalReconciliationItems.sourceId,
+        caseLawRemovalReconciliationItems.decisionId,
       ],
       set: pending,
     });
@@ -268,32 +265,51 @@ export const nextRemovalRetryAt = async (
     const row = await scopedDb(async (tx) =>
       (
         await tx
-          .select({ at: caseLawReconciliationItems.nextAttemptAt })
-          .from(caseLawReconciliationItems)
+          .select({ at: caseLawRemovalReconciliationItems.nextAttemptAt })
+          .from(caseLawRemovalReconciliationItems)
           .where(
             and(
-              eq(caseLawReconciliationItems.sourceId, sourceId),
-              eq(caseLawReconciliationItems.kind, kind),
-              eq(
-                caseLawReconciliationItems.status,
-                RECONCILIATION_ITEM_STATUS.PARKED,
-              ),
+              eq(caseLawRemovalReconciliationItems.sourceId, sourceId),
+              eq(caseLawRemovalReconciliationItems.kind, kind),
             ),
           )
           .orderBy(
-            caseLawReconciliationItems.nextAttemptAt,
-            caseLawReconciliationItems.id,
+            caseLawRemovalReconciliationItems.nextAttemptAt,
+            caseLawRemovalReconciliationItems.id,
           )
           .limit(1)
       ).at(0),
     );
-    if (
-      row?.at !== null &&
-      row?.at !== undefined &&
-      (next === null || row.at < next)
-    ) {
+    if (row !== undefined && (next === null || row.at < next)) {
       next = row.at;
     }
   }
   return next;
+};
+
+/** The store owns health reads as well as durable retry transitions. */
+export const removalReconciliationCountsQuery = (
+  db: Transaction,
+  sourceIds: SafeId<"caseLawSource">[],
+) => {
+  const counts = db
+    .select({
+      pendingRemovals: sql<number>`count(*)::int`.as("pending_removals"),
+      unprobeable:
+        sql<number>`count(*) filter (where ${caseLawRemovalReconciliationItems.kind} = ${REMOVAL_RETRY_KIND.UNPROBEABLE})::int`.as(
+          "unprobeable",
+        ),
+    })
+    .from(caseLawRemovalReconciliationItems)
+    .where(eq(caseLawRemovalReconciliationItems.sourceId, caseLawSources.id))
+    .as("removal_counts");
+  return db
+    .select({
+      sourceId: caseLawSources.id,
+      pendingRemovals: counts.pendingRemovals,
+      unprobeable: counts.unprobeable,
+    })
+    .from(caseLawSources)
+    .innerJoinLateral(counts, sql`true`)
+    .where(inArray(caseLawSources.id, sourceIds));
 };
