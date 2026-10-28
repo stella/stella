@@ -216,10 +216,15 @@
     "search": "Otsi",
     "palette": "Käsupalett",
     "next": "Järgmine tulemus",
-    "previous": "Eelmine tulemus"
+    "previous": "Eelmine tulemus",
+    "toggleList": "Näita või peida loend"
   },
   "palette": {
     "placeholder": "Otsi asju ja vestlusi või käivita käsk",
     "noResults": "Päringule „{query}” ei vasta midagi"
+  },
+  "pane": {
+    "showList": "Näita loendit",
+    "hideList": "Peida loend"
   }
 }

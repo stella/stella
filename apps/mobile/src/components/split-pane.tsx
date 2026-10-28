@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { View } from "react-native";
 
-import { useLayout } from "@/components/selection";
+import { useLayout, useSelection } from "@/components/selection";
 import { Text } from "@/components/ui/text";
 import { useAppColors } from "@/theme";
 
@@ -11,7 +11,9 @@ import { useAppColors } from "@/theme";
  * beside the list, as t3code lays out an iPad: the list keeps a column of
  * its own and the selection fills the rest; on an unfolded foldable they
  * meet at the fold. With nothing selected the second column says what will
- * show there. One column shows the list alone.
+ * show there. One column shows the list alone. Put away, with ⌘\ or the
+ * selection's own button, the list leaves the selection the whole window,
+ * except across a fold, which still parts the two.
  */
 export const SplitPane = ({
   detail,
@@ -26,10 +28,18 @@ export const SplitPane = ({
   list: ReactNode;
 }) => {
   const layout = useLayout();
+  const selection = useSelection();
   const colors = useAppColors();
 
   if (!layout.usesSplitView) {
-    return list;
+    return <View className="flex-1">{list}</View>;
+  }
+  if (selection.listHidden && layout.divisionWidth === 0 && detail !== null) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: colors.background }}>
+        {detail}
+      </View>
+    );
   }
   return (
     <View className="flex-1 flex-row">

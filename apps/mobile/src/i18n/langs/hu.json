@@ -216,10 +216,15 @@
     "search": "Keresés",
     "palette": "Parancspaletta",
     "next": "Következő találat",
-    "previous": "Előző találat"
+    "previous": "Előző találat",
+    "toggleList": "Lista megjelenítése vagy elrejtése"
   },
   "palette": {
     "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
     "noResults": "Semmi sem felel meg ennek: „{query}”"
+  },
+  "pane": {
+    "showList": "Lista megjelenítése",
+    "hideList": "Lista elrejtése"
   }
 }

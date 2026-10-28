@@ -216,10 +216,15 @@
     "search": "Pesquisar",
     "palette": "Paleta de comandos",
     "next": "Próximo resultado",
-    "previous": "Resultado anterior"
+    "previous": "Resultado anterior",
+    "toggleList": "Mostrar ou ocultar a lista"
   },
   "palette": {
     "placeholder": "Pesquise casos e conversas ou execute um comando",
     "noResults": "Nada corresponde a “{query}”"
+  },
+  "pane": {
+    "showList": "Mostrar a lista",
+    "hideList": "Ocultar a lista"
   }
 }

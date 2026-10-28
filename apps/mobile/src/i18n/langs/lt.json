@@ -216,10 +216,15 @@
     "search": "Ieškoti",
     "palette": "Komandų paletė",
     "next": "Kitas rezultatas",
-    "previous": "Ankstesnis rezultatas"
+    "previous": "Ankstesnis rezultatas",
+    "toggleList": "Rodyti arba slėpti sąrašą"
   },
   "palette": {
     "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
     "noResults": "Niekas neatitinka „{query}“"
+  },
+  "pane": {
+    "showList": "Rodyti sąrašą",
+    "hideList": "Slėpti sąrašą"
   }
 }

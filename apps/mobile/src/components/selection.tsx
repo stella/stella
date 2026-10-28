@@ -36,6 +36,9 @@ type Selection = Selections & {
     kind: K,
     value: Selections[K],
   ) => void;
+  /** The list column put away, so a selection takes the whole window. */
+  readonly listHidden: boolean;
+  readonly toggleList: () => void;
 };
 
 const SelectionContext = createContext<Selection | null>(null);
@@ -44,19 +47,24 @@ const NOTHING: Selections = { matter: null, task: null, thread: null };
 
 /**
  * What each tab shows beside its list where the window has room for two
- * columns. It sits above the tabs, so a tab keeps its selection while
- * another is open, and narrowing the window to one column forgets nothing.
+ * columns, and whether the list is put away for now. It sits above the
+ * tabs, so a tab keeps its selection while another is open, and narrowing
+ * the window to one column forgets nothing.
  */
 export const SelectionProvider = ({ children }: React.PropsWithChildren) => {
   const [selections, setSelections] = useState(NOTHING);
+  const [listHidden, setListHidden] = useState(false);
   const select = <K extends keyof Selections>(
     kind: K,
     value: Selections[K],
   ) => {
     setSelections((current) => ({ ...current, [kind]: value }));
   };
+  const toggleList = () => {
+    setListHidden((hidden) => !hidden);
+  };
   return (
-    <SelectionContext value={{ ...selections, select }}>
+    <SelectionContext value={{ ...selections, listHidden, select, toggleList }}>
       {children}
     </SelectionContext>
   );

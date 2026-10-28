@@ -216,10 +216,15 @@
     "search": "Rechercher",
     "palette": "Palette de commandes",
     "next": "Résultat suivant",
-    "previous": "Résultat précédent"
+    "previous": "Résultat précédent",
+    "toggleList": "Afficher ou masquer la liste"
   },
   "palette": {
     "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
     "noResults": "Aucun résultat pour « {query} »"
+  },
+  "pane": {
+    "showList": "Afficher la liste",
+    "hideList": "Masquer la liste"
   }
 }

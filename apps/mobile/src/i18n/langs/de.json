@@ -216,10 +216,15 @@
     "search": "Suchen",
     "palette": "Befehlspalette",
     "next": "Nächstes Ergebnis",
-    "previous": "Vorheriges Ergebnis"
+    "previous": "Vorheriges Ergebnis",
+    "toggleList": "Liste ein- oder ausblenden"
   },
   "palette": {
     "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
     "noResults": "Nichts passt zu „{query}“"
+  },
+  "pane": {
+    "showList": "Liste einblenden",
+    "hideList": "Liste ausblenden"
   }
 }

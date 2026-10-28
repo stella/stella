@@ -216,10 +216,15 @@
     "search": "Hľadať",
     "palette": "Paleta príkazov",
     "next": "Ďalší výsledok",
-    "previous": "Predchádzajúci výsledok"
+    "previous": "Predchádzajúci výsledok",
+    "toggleList": "Zobraziť alebo skryť zoznam"
   },
   "palette": {
     "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
     "noResults": "Nič nezodpovedá „{query}“"
+  },
+  "pane": {
+    "showList": "Zobraziť zoznam",
+    "hideList": "Skryť zoznam"
   }
 }

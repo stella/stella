@@ -13,7 +13,7 @@ import {
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
-import { SelectionProvider } from "@/components/selection";
+import { SelectionProvider, useSelection } from "@/components/selection";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { KeyCommands } from "@/native/key-commands";
@@ -237,9 +237,9 @@ const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
 
 /**
  * A hardware keyboard's shortcuts, as t3code gives an iPad: ⌘N for the
- * open tab's "+", ⌘F to search it, ⌘K for the command palette, ⌘1 to ⌘4
- * for the tabs, ⌘, for the settings and Escape to close what is open over
- * them.
+ * open tab's "+", ⌘F to search it, ⌘K for the command palette, ⌘\ to put
+ * the list beside a selection away, ⌘1 to ⌘4 for the tabs, ⌘, for the
+ * settings and Escape to close what is open over them.
  */
 function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
   commands: readonly KeyCommand[];
@@ -249,6 +249,7 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
   const tabs = useTranslations("tabs");
   const router = useRouter();
   const { searchBar } = useHeaderSearch();
+  const selection = useSelection();
   const primary = tabItems.find(
     (item): item is NativeStackHeaderItemButton => item.type === "button",
   );
@@ -266,6 +267,7 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
         ]),
     { id: "search", input: "f", modifiers: ["command"], title: t("search") },
     { id: "palette", input: "k", modifiers: ["command"], title: t("palette") },
+    { id: "list", input: "\\", modifiers: ["command"], title: t("toggleList") },
     { id: "tab.chat", input: "1", modifiers: ["command"], title: tabs("chat") },
     {
       id: "tab.tasks",
@@ -294,6 +296,8 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
       primary?.onPress();
     } else if (id === "search") {
       searchBar.current?.focus();
+    } else if (id === "list") {
+      selection.toggleList();
     } else if (id === "palette") {
       router.push("/palette");
     } else if (id === "settings") {

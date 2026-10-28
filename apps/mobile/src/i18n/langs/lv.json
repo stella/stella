@@ -216,10 +216,15 @@
     "search": "Meklēt",
     "palette": "Komandu palete",
     "next": "Nākamais rezultāts",
-    "previous": "Iepriekšējais rezultāts"
+    "previous": "Iepriekšējais rezultāts",
+    "toggleList": "Rādīt vai paslēpt sarakstu"
   },
   "palette": {
     "placeholder": "Meklējiet lietas un sarunas vai izpildiet komandu",
     "noResults": "Nekas neatbilst “{query}”"
+  },
+  "pane": {
+    "showList": "Rādīt sarakstu",
+    "hideList": "Paslēpt sarakstu"
   }
 }

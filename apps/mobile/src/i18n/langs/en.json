@@ -216,10 +216,15 @@
     "search": "Search",
     "palette": "Command palette",
     "next": "Next result",
-    "previous": "Previous result"
+    "previous": "Previous result",
+    "toggleList": "Show or hide the list"
   },
   "palette": {
     "placeholder": "Search matters and chats, or run a command",
     "noResults": "Nothing matches “{query}”"
+  },
+  "pane": {
+    "showList": "Show the list",
+    "hideList": "Hide the list"
   }
 }

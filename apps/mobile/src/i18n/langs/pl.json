@@ -216,10 +216,15 @@
     "search": "Szukaj",
     "palette": "Paleta poleceń",
     "next": "Następny wynik",
-    "previous": "Poprzedni wynik"
+    "previous": "Poprzedni wynik",
+    "toggleList": "Pokaż lub ukryj listę"
   },
   "palette": {
     "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
     "noResults": "Nic nie pasuje do „{query}”"
+  },
+  "pane": {
+    "showList": "Pokaż listę",
+    "hideList": "Ukryj listę"
   }
 }
