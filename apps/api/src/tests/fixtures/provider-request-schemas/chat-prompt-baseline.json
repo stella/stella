@@ -168,10 +168,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33487
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 33263
       }
     ],
     "bedrock/extended": [
@@ -226,10 +222,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33975
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 33750
       }
     ],
     "google/default": [
@@ -280,10 +272,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 32597
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 32385
       }
     ],
     "google/extended": [
@@ -330,10 +318,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 33075
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 32862
       }
     ],
     "mistral/default": [
@@ -388,10 +372,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34781
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 34573
       }
     ],
     "mistral/extended": [
@@ -446,10 +426,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 35307
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 35098
       }
     ],
     "openai/default": [
@@ -504,10 +480,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34363
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 34144
       }
     ],
     "openai/extended": [
@@ -562,10 +534,6 @@
       {
         "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
         "tokens": 34878
-      },
-      {
-        "reason": "contact birth date rule shortened tool schemas",
-        "tokens": 34658
       }
     ],
     "openrouter-anthropic/default": [

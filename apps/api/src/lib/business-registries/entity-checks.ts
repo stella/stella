@@ -144,28 +144,27 @@ export const personDateOfBirth = ({
           month: Number(parts[2]),
           day: Number(parts[3]),
         };
-  for (const date of [fromBirthDate, dateOfBirth]) {
-    if (
-      date !== null &&
-      date !== undefined &&
-      !v.safeParse(contactBirthDateSchema, date).success
-    ) {
-      return invalidSubject(
-        "The birth date must be from 1900 through today",
-        "Send a date from 1900 through today at the precision known.",
-      );
-    }
-  }
-  if (fromBirthDate === null) {
-    return Result.ok(dateOfBirth ?? null);
-  }
-  if (dateOfBirth !== undefined && !agreesWith(fromBirthDate, dateOfBirth)) {
+  if (
+    fromBirthDate !== null &&
+    dateOfBirth !== undefined &&
+    !agreesWith(fromBirthDate, dateOfBirth)
+  ) {
     return invalidSubject(
       "The full birth date and the date of birth name different dates",
       "Send one of them: the full birth date, or the date of birth when only the year or month is known.",
     );
   }
-  return Result.ok(fromBirthDate);
+  const reconciledDate = fromBirthDate ?? dateOfBirth ?? null;
+  if (
+    reconciledDate !== null &&
+    !v.safeParse(contactBirthDateSchema, reconciledDate).success
+  ) {
+    return invalidSubject(
+      "The birth date must be from 1900 through today",
+      "Send a date from 1900 through today at the precision known.",
+    );
+  }
+  return Result.ok(reconciledDate);
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
