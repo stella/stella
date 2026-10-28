@@ -1,397 +1,480 @@
 version: 2
-
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: bun
+    directories:
+      - /
+      - /.claude/mcp
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    # Match minimumReleaseAge (5 days) in bunfig.toml
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: oxlint
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: oxlint-tsgolint
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: "@oxlint/plugins"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: "@stll/oxlint-plugin"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: lefthook
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: npm
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: pnpm
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: "@typescript/native"
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: bun-types
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: "@expo/*"
+        update-types:
+          - version-update:semver-major
+      - dependency-name: expo
+        update-types:
+          - version-update:semver-major
+      - dependency-name: expo-*
+        update-types:
+          - version-update:semver-major
+      - dependency-name: katex
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      - dependency-name: react-native
+        update-types:
+          - version-update:semver-minor
+      - dependency-name: react-native-screens
+        update-types:
+          - version-update:semver-minor
+  - package-ecosystem: cargo
+    directories:
+      - /apps/desktop/src-tauri
+      - /packages/scan-engine
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: docker
+    directories:
+      - /apps/api
+      - /apps/legal-atlas-runner
+      - /apps/visual-preview
+      - /apps/web
+      - /docker/audit
+      - /docker/postgres
+      - /packages/agent-engine/docker
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: index.docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/library/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/node
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/oven/bun
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: registry-1.docker.io/python
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
     cooldown:
       default-days: 5
     groups:
       stella-shared:
         patterns:
-          - "stella/.github/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
-      minor-and-patch:
+          - stella/.github/*
+      dependencies:
         patterns:
           - "*"
         update-types:
-          - "minor"
-          - "patch"
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-      - "nnad3N"
-
-  - package-ecosystem: "docker"
-    directory: "/apps/api"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    cooldown:
-      default-days: 5
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/apps/web"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    cooldown:
-      default-days: 5
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/apps/legal-atlas-runner"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    cooldown:
-      default-days: 5
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/packages/agent-engine/docker"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    cooldown:
-      default-days: 5
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    cooldown:
-      default-days: 5
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "cargo"
-    directory: "/apps/desktop/src-tauri"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    # Match minimumReleaseAge (5 days) in bunfig.toml
-    cooldown:
-      default-days: 5
-    open-pull-requests-limit: 10
-    groups:
-      minor-and-patch:
-        patterns:
-          - "*"
-        update-types:
-          - "minor"
-          - "patch"
-      tauri:
-        patterns:
-          - "tauri"
-          - "tauri-*"
-        update-types:
-          - "major"
-      async-runtime:
-        patterns:
-          - "tokio"
-          - "futures-*"
-        update-types:
-          - "major"
-      serialization:
-        patterns:
-          - "serde"
-          - "serde_*"
-        update-types:
-          - "major"
-      http:
-        patterns:
-          - "axum"
-          - "reqwest"
-          - "tower-*"
-        update-types:
-          - "major"
-    labels:
-      - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "jan-kubica"
-
-  - package-ecosystem: "bun"
-    # The monorepo resolves from the root lockfile. .claude/mcp keeps its own
-    # lockfile outside the workspace; CI's code-quality job installs it, so
-    # its bumps are validated like the root's, and they need the same cooldown
-    # (scripts/check-standalone-lockfiles.ts).
-    directories:
-      - "/"
-      - "/.claude/mcp"
-    labels:
-      - "📦 dependencies"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "03:00"
-      timezone: "Europe/Prague"
-    # Match minimumReleaseAge (5 days) in bunfig.toml
-    cooldown:
-      default-days: 5
-    open-pull-requests-limit: 10
-    # Group related updates so they validate together; unmatched updates receive
-    # standalone PRs.
-    groups:
-      # Executable installs derive this exact root version at build time.
-      minor-and-patch:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "@tauri-apps/*"
-        update-types:
-          - "minor"
-          - "patch"
-      tauri:
-        patterns:
-          - "@tauri-apps/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
-      turbo:
-        patterns:
-          - "turbo"
-        update-types:
-          - "major"
-      tanstack:
-        patterns:
-          - "@tanstack/*"
-        update-types:
-          - "major"
-      astro:
-        patterns:
-          - "astro"
-          - "@astrojs/*"
-        update-types:
-          - "major"
-      expo:
-        patterns:
-          - "expo"
-          - "expo-*"
-          - "@expo/*"
-        update-types:
-          - "major"
-      tailwind:
-        patterns:
-          - "tailwindcss"
-          - "@tailwindcss/*"
-        update-types:
-          - "major"
-      vite:
-        patterns:
-          - "vite"
-          - "@vitejs/*"
-        update-types:
-          - "major"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-        update-types:
-          - "major"
-      oxc:
-        patterns:
-          - "oxlint"
-          - "oxlint-tsgolint"
-          - "oxfmt"
-        update-types:
-          - "major"
-      ai:
-        patterns:
-          - "ai"
-          - "@ai-sdk/*"
-        update-types:
-          - "major"
-      convex:
-        patterns:
-          - "convex"
-          - "@convex-dev/*"
-        update-types:
-          - "major"
-      posthog:
-        patterns:
-          - "posthog*"
-          - "@posthog*"
-        update-types:
-          - "major"
-      tiptap:
-        patterns:
-          - "@tiptap/*"
-        update-types:
-          - "major"
-      hocuspocus:
-        patterns:
-          - "@hocuspocus/*"
-        update-types:
-          - "major"
-      atlaskit:
-        patterns:
-          - "@atlaskit/*"
-        update-types:
-          - "major"
-      drizzle:
-        patterns:
-          - "drizzle-orm"
-          - "drizzle-kit"
-        update-types:
-          - "major"
-      react-email:
-        patterns:
-          - "react-email"
-          - "@react-email/*"
-        update-types:
-          - "major"
-      rivetkit:
-        patterns:
-          - "rivetkit"
-          - "@rivetkit/*"
-        update-types:
-          - "major"
-      streamdown:
-        patterns:
-          - "streamdown*"
-          - "@streamdown/*"
-        update-types:
-          - "major"
-      aws-sdk:
-        patterns:
-          - "@aws-sdk/*"
-        update-types:
-          - "major"
-    versioning-strategy: increase
+          - minor
+          - patch
     ignore:
-      # Remove when @tanstack/ai-anthropic accepts a newer SDK.
-      - dependency-name: "@anthropic-ai/sdk"
-        versions:
-          - ">=0.98"
-      # Remove when @tanstack/ai-openai accepts a newer SDK.
-      - dependency-name: "openai"
-        versions:
-          - ">=7"
-      # Remove when @tanstack/ai-openrouter accepts a newer SDK.
-      - dependency-name: "@openrouter/sdk"
-        versions:
-          - ">=0.14"
-      # Remove when the streamdown math renderer and markdown editor move to KaTeX 0.17+.
-      - dependency-name: "katex"
-        versions:
-          - ">=0.17"
-      # Remove when intl-messageformat moves past 3.5.16.
-      - dependency-name: "@formatjs/icu-messageformat-parser"
-        versions:
-          - ">3.5.16"
-      # Expo packages ship as one SDK-coordinated major. Upgrade the complete
-      # SDK intentionally instead of mixing majors through partial PRs.
-      - dependency-name: "expo"
+      - dependency-name: actions/checkout
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "expo-*"
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: oven-sh/setup-bun
         update-types:
-          - "version-update:semver-major"
-      - dependency-name: "@expo/*"
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/setup-node
         update-types:
-          - "version-update:semver-major"
-      # Expo SDK 58 requires react-native-screens ~4.30.0. Remove this guard
-      # when Expo's supported range advances to 4.31 or newer.
-      - dependency-name: "react-native-screens"
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/setup-python
         update-types:
-          - "version-update:semver-minor"
-      # Expo SDK 58 requires react-native 0.88.x (`expo doctor` fails on
-      # 0.89). Remove this guard when the SDK upgrade moves react-native.
-      - dependency-name: "react-native"
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: astral-sh/setup-uv
         update-types:
-          - "version-update:semver-minor"
-    commit-message:
-      prefix: "chore"
-    reviewers:
-      - "nnad3N"
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/cache
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/cache/restore
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/cache/save
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/upload-artifact
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: actions/download-artifact
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: stella/.github/.github/workflows/package-consumer-compat.yml
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+  - package-ecosystem: pip
+    directory: /apps/desktop/dmg
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "07:00"
+      timezone: Europe/Prague
+    cooldown:
+      default-days: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

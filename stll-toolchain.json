@@ -39,5 +39,156 @@
       "dependency": "@astrojs/check",
       "reason": "astro check loads the TypeScript 6 language service."
     }
+  ],
+  "dynamicSelectors": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.ci-browser.container",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.postgres-service-suites.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.postgres-service-suites.services.dev_seed_postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.postgres-service-suites.services.dev_seed_rustfs",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.service-suites.services.redis",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.service-suites.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.service-suites.services.valkey",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.database-migrations-apply-fresh.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.database-migrations-apply-fresh.services.redis",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "image",
+      "at": "jobs.migration-upgrade-rehearsal.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/nightly-test.yml",
+      "kind": "image",
+      "at": "jobs.postgres-suites.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/nightly-test.yml",
+      "kind": "image",
+      "at": "jobs.valkey-suites.services.valkey",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/nightly-test.yml",
+      "kind": "image",
+      "at": "jobs.migration-exact-base-upgrade.services.postgres",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/workflows/nightly-test.yml",
+      "kind": "image",
+      "at": "jobs.migration-exact-base-upgrade.services.postgres-clean",
+      "reason": "The planner exposes scripts/ci-service-images.ts --resolve outputs from the digest-pinned scripts/ci-service-images.json inventory; mirrorImageReference preserves the exact source digest. Conditional service selectors may disable the service or retain a pinned fallback."
+    },
+    {
+      "path": ".github/actions/build-web-image/action.yml",
+      "kind": "bun-source",
+      "at": "runs.steps.setup-bun",
+      "reason": "The source-path is a caller-selected release checkout. The preceding validation requires its git HEAD to equal the exact release-sha and validates the source build contract; setup-bun reads that historical source package.json."
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "kind": "bun-source",
+      "at": "jobs.dependency-review.steps.workflow-yaml-parser",
+      "reason": "The preceding changes step writes package.json fetched from the GitHub compare API merge-base commit to a runner temporary directory. This parser-only step installs no dependencies and disables cache."
+    },
+    {
+      "path": "docker-compose.selfhost.yml",
+      "kind": "image",
+      "at": "services.api",
+      "reason": "The generated self-host contract requires STELLA_API_IMAGE; scripts/selfhost-tool.ts validates its digest-qualified reference before startup. Operators select the released application image."
+    },
+    {
+      "path": "docker-compose.selfhost.yml",
+      "kind": "image",
+      "at": "services.document-processing-worker",
+      "reason": "The generated self-host contract requires STELLA_API_IMAGE; scripts/selfhost-tool.ts validates its digest-qualified reference before startup. Operators select the released application image."
+    }
+  ],
+  "dependabotIgnores": [
+    {
+      "ecosystem": "bun",
+      "dependency": "katex",
+      "updateTypes": [
+        "version-update:semver-major",
+        "version-update:semver-minor"
+      ],
+      "reason": "Keep the KaTeX 0.16 renderer/CSS contract until Streamdown and the markdown editor support the same newer KaTeX release."
+    },
+    {
+      "ecosystem": "bun",
+      "dependency": "expo",
+      "updateTypes": ["version-update:semver-major"],
+      "reason": "Upgrade the Expo SDK and its coordinated package majors together."
+    },
+    {
+      "ecosystem": "bun",
+      "dependency": "expo-*",
+      "updateTypes": ["version-update:semver-major"],
+      "reason": "Upgrade the Expo SDK and its coordinated package majors together."
+    },
+    {
+      "ecosystem": "bun",
+      "dependency": "@expo/*",
+      "updateTypes": ["version-update:semver-major"],
+      "reason": "Upgrade the Expo SDK and its coordinated package majors together."
+    },
+    {
+      "ecosystem": "bun",
+      "dependency": "react-native-screens",
+      "updateTypes": ["version-update:semver-minor"],
+      "reason": "Expo SDK 58 requires react-native-screens ~4.30.0; remove when the supported range advances."
+    },
+    {
+      "ecosystem": "bun",
+      "dependency": "react-native",
+      "updateTypes": ["version-update:semver-minor"],
+      "reason": "Expo SDK 58 requires react-native 0.88.x; remove when the SDK supports a newer minor."
+    }
   ]
 }
