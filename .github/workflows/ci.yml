@@ -2064,8 +2064,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -2381,8 +2380,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -2725,8 +2723,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -2914,8 +2911,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -3282,7 +3278,6 @@ jobs:
             scripts/retry.sh \
             scripts/generated-files.ts \
             bunfig.toml \
-            .npmrc \
             VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
@@ -3374,8 +3369,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -3504,8 +3498,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -3663,8 +3656,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -3840,7 +3832,7 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
           # Run 38089283216: filtered API/CLI installs took 8–13 seconds,
@@ -4148,8 +4140,7 @@ jobs:
         timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Test migration safety rules and historical findings
@@ -4228,8 +4219,7 @@ jobs:
         timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Test Postgres owner replacement and helper replay
@@ -4454,8 +4444,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Configure test Postgres parity
@@ -4678,10 +4667,7 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the secret to install-time lifecycle scripts. The token is
-          # only required when publishing — never to read from the public
-          # npm registry. Match the ci-checks / landing-build pattern.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -4944,8 +4930,7 @@ jobs:
           cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
-          # .npmrc references NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
+          # PR installs must not expose registry credentials to lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Build landing
@@ -6797,7 +6782,7 @@ jobs:
 
       - name: Setup workflow YAML parser
         if: steps.changes.outputs.workflows == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: ${{ steps.changes.outputs.manifest }}
           # Parses YAML only; nothing is installed, so nothing is cached.
@@ -6975,7 +6960,7 @@ jobs:
       - *checkout_input_sha
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: "package.json"
       - name: Install Safe Chain
