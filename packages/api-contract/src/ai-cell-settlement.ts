@@ -6,7 +6,7 @@ export const AI_CELL_SETTLEMENT_TYPES = [
 ] as const;
 
 type SettlementMetadata = {
-  runId: string;
+  runId: string | null;
   settledAt: string;
 };
 
