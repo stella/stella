@@ -4,8 +4,10 @@ import * as v from "valibot";
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_HARNESS_STATE,
+  DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerHarnessReport,
+  type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
@@ -115,6 +117,7 @@ type ControlOptions = {
   doorbell: DesktopRunnerDoorbell;
   now?: () => Date;
   timing?: Partial<DesktopRunnerTiming>;
+  limits?: Partial<DesktopRunnerLimits>;
 };
 
 /** What every control operation reads from. */
@@ -123,6 +126,7 @@ type ControlDeps = {
   readonly doorbell: DesktopRunnerDoorbell;
   readonly now: () => Date;
   readonly timing: DesktopRunnerTiming;
+  readonly limits: DesktopRunnerLimits;
 };
 
 const toDatabaseError = (cause: unknown) =>
@@ -285,6 +289,7 @@ const queue = async (
         runId: message.runId,
         kind: message.type,
         payload: checked.output,
+        limits: deps.limits,
         ...commandKeyOf(message),
       }),
     catch: toDatabaseError,
@@ -341,12 +346,14 @@ export const createDesktopRunnerControl = ({
   doorbell,
   now = () => new Date(),
   timing,
+  limits,
 }: ControlOptions) => {
   const deps: ControlDeps = {
     db,
     doorbell,
     now,
     timing: { ...DESKTOP_RUNNER_TIMING, ...timing },
+    limits: { ...DESKTOP_RUNNER_LIMITS, ...limits },
   };
   return {
     pickDesktop: async (options: PickDesktopOptions) =>

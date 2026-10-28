@@ -640,7 +640,14 @@ export type PersistedRunMessage =
   | { type: "duplicate"; ackSeq: number }
   | { type: "gap"; ackSeq: number }
   | { type: "unknown_run" }
-  | { type: "invalid_state"; state: DesktopRunnerRunState };
+  | { type: "invalid_state"; state: DesktopRunnerRunState }
+  /** The message would take the run past what it may store; the run is lost. */
+  | { type: "run_limit" };
+
+type RunStorageLimits = Pick<
+  DesktopRunnerLimits,
+  "maxMessagesPerRun" | "maxMessageBytesPerRun"
+>;
 
 /** Run states that accept the next sequenced message. */
 const SEQUENCED_RUN_STATES = [
@@ -652,8 +659,11 @@ type AdvanceOptions = {
   tx: Transaction;
   binding: RunnerBinding;
   message: SequencedRunMessage;
+  /** UTF-8 bytes of the message as stored. */
+  bytes: number;
   now: Date;
   leaseMs: number;
+  limits: RunStorageLimits;
 };
 
 /**
@@ -664,12 +674,19 @@ const advanceRun = async ({
   tx,
   binding,
   message,
+  bytes,
   now,
   leaseMs,
+  limits,
 }: AdvanceOptions) => {
-  const guard = guarded(boundTo(binding), eq(runs.ackSeq, message.seq - 1));
+  const guard = guarded(
+    boundTo(binding),
+    eq(runs.ackSeq, message.seq - 1),
+    sql`${runs.messageBytes} + ${bytes} <= ${limits.maxMessageBytesPerRun}`,
+  );
   const advanced = {
     ackSeq: message.seq,
+    messageBytes: sql`${runs.messageBytes} + ${bytes}`,
     acceptedAt: acceptedNow(now),
     leaseExpiresAt: leaseUntil(now, leaseMs),
     updatedAt: now,
@@ -712,6 +729,7 @@ type PersistRunMessageOptions = {
   message: SequencedRunMessage;
   now: Date;
   leaseMs: number;
+  limits: RunStorageLimits;
 };
 
 /**
@@ -721,11 +739,23 @@ type PersistRunMessageOptions = {
  */
 export const persistRunMessage = async (
   db: DesktopRunnerDb,
-  { binding, message, now, leaseMs }: PersistRunMessageOptions,
+  { binding, message, now, leaseMs, limits }: PersistRunMessageOptions,
 ): Promise<PersistedRunMessage> =>
   await withAggregateTransaction(db, async (tx) => {
+    const bytes = Buffer.byteLength(JSON.stringify(message));
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const advanced = await advanceRun({ tx, binding, message, now, leaseMs });
+    const advanced =
+      message.seq > limits.maxMessagesPerRun
+        ? ({ type: "stale" } as const)
+        : await advanceRun({
+            tx,
+            binding,
+            message,
+            bytes,
+            now,
+            leaseMs,
+            limits,
+          });
     if (advanced.type === "transitioned") {
       await tx.insert(desktopRunnerEvents).values({
         runId: message.runId,
@@ -749,8 +779,79 @@ export const persistRunMessage = async (
     if (message.seq > run.ackSeq + 1) {
       return { type: "gap", ackSeq: run.ackSeq };
     }
-    return { type: "invalid_state", state: run.state };
+    if (!SEQUENCED_RUN_STATES.some((state) => state === run.state)) {
+      return { type: "invalid_state", state: run.state };
+    }
+    // The next position of an open run failed only on what the run may store.
+    const ended = await transitionLifecycle({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      id: message.runId,
+      moves: { state: { from: SEQUENCED_RUN_STATES, to: "lost" } },
+      guard: guarded(boundTo(binding)),
+      set: { updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    return ended.type === "transitioned"
+      ? { type: "run_limit" }
+      : { type: "invalid_state", state: run.state };
   });
+
+/** Run states after which nothing more happens to a run. */
+const ENDED_RUN_STATES = [
+  "finished",
+  "rejected",
+  "lost",
+] as const satisfies readonly DesktopRunnerRunState[];
+
+type PruneEndedRunsOptions = { now: Date; retentionMs: number; limit: number };
+
+/**
+ * Delete runs that ended more than the retention window ago; their commands
+ * and messages go with them by cascade.
+ */
+export const pruneEndedRuns = async (
+  db: DesktopRunnerDb,
+  { now, retentionMs, limit }: PruneEndedRunsOptions,
+): Promise<string[]> => {
+  const cutoff = new Date(now.getTime() - retentionMs);
+  return await withSkipLockedBatch({
+    database: db,
+    limit,
+    select: (tx) =>
+      tx
+        .select({ runId: runs.runId })
+        .from(runs)
+        .where(
+          and(
+            inArray(runs.state, ENDED_RUN_STATES),
+            sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
+          ),
+        )
+        .orderBy(asc(runs.updatedAt))
+        .limit(limit)
+        .$dynamic(),
+    run: async (tx, rows) => {
+      if (rows.length === 0) {
+        return [];
+      }
+      // audit: skip - retention of runner bookkeeping past its window
+      const deleted = await tx
+        .delete(runs)
+        .where(
+          and(
+            inArray(
+              runs.runId,
+              rows.map(({ runId }) => runId),
+            ),
+            inArray(runs.state, ENDED_RUN_STATES),
+          ),
+        )
+        .returning({ runId: runs.runId });
+      return deleted.map(({ runId }) => runId);
+    },
+  });
+};
 
 type ExpireLeasesOptions = { now: Date; limit: number };
 
@@ -1110,6 +1211,7 @@ type InsertCommandOptions = {
   payload: object;
   /** An approval answer names a request the run made. */
   answersRequestId: string | null;
+  limits: Pick<DesktopRunnerLimits, "maxCommandsPerRun">;
 };
 
 export type InsertedCommand =
@@ -1117,7 +1219,9 @@ export type InsertedCommand =
   | { type: "duplicate" }
   | { type: "run_not_found" }
   | { type: "run_ended"; state: DesktopRunnerRunState }
-  | { type: "approval_not_requested" };
+  | { type: "approval_not_requested" }
+  /** The run holds as many commands as one run may. */
+  | { type: "command_limit" };
 
 /**
  * Queue one command for an open run of `owner`. The command key makes a
@@ -1159,6 +1263,13 @@ export const insertRunCommand = async (
     }
     if (!DESKTOP_RUNNER_OPEN_RUN_STATES.some((state) => state === run.state)) {
       return { type: "run_ended", state: run.state };
+    }
+    const [queued] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(desktopRunnerCommands)
+      .where(eq(desktopRunnerCommands.runId, runId));
+    if ((queued?.count ?? 0) >= options.limits.maxCommandsPerRun) {
+      return { type: "command_limit" };
     }
     if (options.answersRequestId !== null) {
       const [request] = await tx

@@ -31,11 +31,19 @@ export const TABLE_RETENTION = {
   },
   desktop_runners: {
     boundedBy:
-      "One runner per account, organization and installation, overwritten by each socket and cascade-deleted with the account, the organization or the membership.",
+      "At most DESKTOP_RUNNER_LIMITS.maxRunnersPerAccount runners per account and organization, one per installation and device key, overwritten by each socket, evicted when idle at the cap, and cascade-deleted with the account, the organization or the membership.",
   },
   desktop_runner_runs: {
+    ttlColumn: "updated_at",
+    sweeper: "pruneEndedRuns",
+  },
+  desktop_runner_commands: {
     boundedBy:
-      "Runs assigned to one runner, cascade-deleted with it; their commands and events cascade with the run.",
+      "At most DESKTOP_RUNNER_LIMITS.maxCommandsPerRun commands per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
+  },
+  desktop_runner_events: {
+    boundedBy:
+      "At most DESKTOP_RUNNER_LIMITS.maxMessagesPerRun messages and maxMessageBytesPerRun bytes per run, cascade-deleted when pruneEndedRuns deletes the ended run.",
   },
   task_assignees: {
     boundedBy:

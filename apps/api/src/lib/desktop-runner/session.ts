@@ -368,6 +368,7 @@ const storeSequenced = async (
     message,
     now: state.context.now(),
     leaseMs: state.context.timing.leaseMs,
+    limits: state.context.limits,
   });
   switch (stored.type) {
     case "persisted":
@@ -396,6 +397,11 @@ const storeSequenced = async (
       return;
     case "invalid_state":
       close(state, policyViolation("run_state"));
+      return;
+    case "run_limit":
+      // The run is lost; the next `welcome` leaves it out, so the desktop stops it.
+      state.tokens.delete(message.runId);
+      close(state, policyViolation("run_limit"));
       return;
     default: {
       stored satisfies never;

@@ -31,6 +31,7 @@ import {
   type DesktopRunnerDb,
   expireAbandonedRuns,
   expireRunLeases,
+  pruneEndedRuns,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -170,6 +171,18 @@ export const createDesktopRunnerGateway = (
     );
     if (abandoned.isErr()) {
       observeFailure(abandoned.error, { sink: LEASE_SWEEP_SINK });
+    }
+    const pruned = await Result.tryPromise(
+      async () =>
+        await pruneEndedRuns(options.db, {
+          now: now(),
+          retentionMs: limits.endedRunRetentionMs,
+          limit: EXPIRY_BATCH,
+        }),
+    );
+    if (pruned.isErr()) {
+      // Retention catches up on the next sweep.
+      observeFailure(pruned.error, { sink: LEASE_SWEEP_SINK });
     }
     await Promise.all(
       [...sessions.values()].map(async (session) => await session.deliver()),

@@ -130,6 +130,11 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     acceptedAt: timestamptz("accepted_at"),
     /** Highest position of the run's desktop messages persisted without a gap. */
     ackSeq: p.bigint("ack_seq", { mode: "number" }).notNull().default(0),
+    /** UTF-8 bytes of the run's stored messages, bounded per run. */
+    messageBytes: p
+      .bigint("message_bytes", { mode: "number" })
+      .notNull()
+      .default(0),
     leaseExpiresAt: timestamptz("lease_expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -181,6 +186,10 @@ export const desktopRunnerRuns = p.pgTable.withRLS(
     p.check(
       "desktop_runner_runs_ack_seq_check",
       sql`${table.ackSeq} BETWEEN 0 AND 4294967295`,
+    ),
+    p.check(
+      "desktop_runner_runs_message_bytes_check",
+      sql`${table.messageBytes} >= 0`,
     ),
     ...ownerOnlyPolicies("desktop_runner_runs"),
   ],
