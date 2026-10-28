@@ -6010,7 +6010,7 @@
     }
   },
   "workspaces": {
-    "archivedReadOnly": "Dieses Mandat ist archiviert und schreibgeschützt.",
+    "archivedReadOnly": "Diese Akte ist archiviert und schreibgeschützt.",
     "calculations": {
       "choose": "Berechnen",
       "kinds": {
@@ -6839,7 +6839,7 @@
       "aiModel": "KI-Modell",
       "manualInput": "Manuell"
     },
-    "unarchiveBeforeDelete": "Heben Sie die Archivierung dieses Mandats auf, bevor Sie es löschen.",
+    "unarchiveBeforeDelete": "Heben Sie die Archivierung dieser Akte auf, bevor Sie sie löschen.",
     "unarchiveMatter": "Archivierung aufheben",
     "uploadDocuments": "Dokumente hochladen",
     "views": {
