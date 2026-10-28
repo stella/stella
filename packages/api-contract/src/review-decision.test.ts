@@ -44,7 +44,8 @@ describe("foldReviewDecisions", () => {
   });
 
   test("orders by instant, not by how the time is written", () => {
-    // 10:00+02:00 is 08:00Z, so the rejection at 09:00Z is the later event.
+    // The second time is written later but, once its offset is applied, it
+    // happened first: the rejection is the later event.
     expect(
       foldReviewDecisions([
         event("rejected", "2026-01-01T09:00:00Z"),
@@ -60,6 +61,12 @@ describe("foldReviewDecisions", () => {
         event("rejected", "yesterday"),
       ]),
     ).toThrow(/not an instant/u);
+  });
+
+  test("refuses a single event whose time is not an instant", () => {
+    expect(() => foldReviewDecisions([event("accepted", "yesterday")])).toThrow(
+      /not an instant/u,
+    );
   });
 
   test("ties keep their given order", () => {

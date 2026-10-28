@@ -39,9 +39,12 @@ const instantOf = (event: ReviewDecisionEvent): Temporal.Instant =>
 export const foldReviewDecisions = (
   events: readonly ReviewDecisionEvent[],
 ): CurrentReviewDecision => {
+  // Every time is read before sorting, so a lone malformed event is refused
+  // too: the comparator never runs for a history of one.
+  const timed = events.map((event) => ({ event, instant: instantOf(event) }));
   let state = OPEN_REVIEW_DECISION;
-  for (const event of events.toSorted((left, right) =>
-    Temporal.Instant.compare(instantOf(left), instantOf(right)),
+  for (const { event } of timed.toSorted((left, right) =>
+    Temporal.Instant.compare(left.instant, right.instant),
   )) {
     state =
       event.decision === null
