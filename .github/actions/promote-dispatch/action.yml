@@ -200,29 +200,36 @@ runs:
         # Production receipts prevent duplicate promotions. Staging dispatches
         # again because another deployment may have replaced the proved image.
         run_id=""
+        attempts=0
         if [[ "$TARGET_ENV" == production ]]; then
           if ! existing="$(
             bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate --slurp \
               "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=100" \
               | jq -r --arg title "$expected_title" '
-                  [.[].workflow_runs[] | select(.display_title == $title) |
-                    select(.status == "queued" or .status == "in_progress" or
-                      .status == "waiting" or .status == "pending" or .conclusion == "success")]
-                  | first // empty | [.id, .status, .conclusion] | @tsv
+                  [.[].workflow_runs[] | select(.display_title == $title)] as $all
+                  | ($all | map(select(.status == "queued" or .status == "in_progress" or
+                      .status == "waiting" or .status == "pending" or .conclusion == "success"))
+                    | first) as $live
+                  | [($live.id // ""), ($live.status // ""), ($live.conclusion // ""), ($all | length)]
+                  | @tsv
                 '
           )"; then
             echo "::error::Existing promote run lookup failed." >&2
             exit 1
           fi
           run_id="$(cut -f1 <<< "$existing")"
+          attempts="$(cut -f4 <<< "$existing")"
+          [[ "$attempts" =~ ^[0-9]+$ ]] || { echo '::error::Existing promote run lookup failed.' >&2; exit 1; }
           if [[ -n "$run_id" && "$(cut -f3 <<< "$existing")" == success ]]; then
             echo "Promotion already succeeded: ${run_id}"
             exit 0
           fi
         fi
-        # An active run may already serve the commit while its infrastructure
-        # work continues, so it is watched to completion below instead.
-        if [[ "$TARGET_ENV" == production && -z "$run_id" && -n "${EXPECTED_SHA:-}" ]]; then
+        # Serving the commit proves the promotion only when this workflow never
+        # attempted it: an active run may serve it while its infrastructure work
+        # continues (watched below), and a failed one may have stopped after the
+        # rollout (dispatched again below).
+        if [[ "$TARGET_ENV" == production && "$attempts" == 0 && -n "${EXPECTED_SHA:-}" ]]; then
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid expected-sha'; exit 1; }
           api_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://api.stll.app/ready | jq -r 'select(.status == "ok") | .commit // empty') || api_commit=""
           web_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://my.stll.app/version.json | jq -r '.commit // empty') || web_commit=""

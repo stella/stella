@@ -168,7 +168,9 @@ const promotionScenario = async ({
       targetEnvironment === "production" &&
         (priorRun === "success" ||
           priorRun === "active" ||
-          (expectedSha !== "" && expectedSha === deployedSha))
+          (priorRun === "none" &&
+            expectedSha !== "" &&
+            expectedSha === deployedSha))
         ? []
         : ["dispatch POST 1 ok"],
     );
@@ -282,6 +284,26 @@ test("an active promotion is watched to completion even when production already 
     "Production already serves",
   );
   expect(result.calls.some((call) => call.startsWith("poll "))).toBe(true);
+});
+
+// A failed run may have stopped after the rollout, so the served commit
+// alone cannot stand in for its unfinished infrastructure work.
+test("a failed promotion is dispatched again even when production already serves the SHA", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    priorRun: "failed",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
+  });
+  expect(result.exit, result.stderr).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain(
+    "Production already serves",
+  );
+  expect(
+    result.calls.filter((call) => call.startsWith("dispatch POST")),
+  ).toHaveLength(1);
 });
 
 test("a successful promotion on the second page prevents another dispatch", async () => {
