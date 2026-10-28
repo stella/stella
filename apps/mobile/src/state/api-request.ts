@@ -23,8 +23,9 @@ export type Load<T> = {
 type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly path: string;
   readonly schema: TSchema;
-  /** A JSON body makes the request a POST. */
+  /** A JSON body makes the request a POST, unless `method` says otherwise. */
   readonly body?: unknown;
+  readonly method?: "POST" | "PUT" | "PATCH";
 };
 
 const requestJson = async <TSchema extends v.GenericSchema>(
@@ -32,7 +33,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   url: string,
   /** Null for a public route, which answers anyone. */
   accessToken: string | null,
-  { schema, body }: Omit<ApiRequest<TSchema>, "path">,
+  { schema, body, method = "POST" }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const answered = await Result.tryPromise({
     try: async () => {
@@ -44,9 +45,7 @@ const requestJson = async <TSchema extends v.GenericSchema>(
             : { Authorization: `Bearer ${accessToken}` }),
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
-        ...(body === undefined
-          ? {}
-          : { method: "POST", body: JSON.stringify(body) }),
+        ...(body === undefined ? {} : { method, body: JSON.stringify(body) }),
       });
       if (!response.ok) {
         return { status: response.status, json: undefined };

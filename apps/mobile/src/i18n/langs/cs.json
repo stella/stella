@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Žádné otevřené úkoly",
-    "emptyDescription": "Zde se zobrazí přidělená a nadcházející práce."
+    "emptyDescription": "Zde se zobrazí otevřené úkoly, které vám byly přiděleny.",
+    "loadFailed": "Vaše úkoly se nepodařilo načíst.",
+    "retry": "Zkusit znovu",
+    "newTask": "Nový úkol",
+    "add": "Přidat",
+    "name": "Název úkolu",
+    "dueTitle": "Termín",
+    "matterTitle": "Spis",
+    "findMatter": "Najít spis",
+    "addFailed": "Úkol se nepodařilo přidat. Zkuste to znovu.",
+    "mattersFailed": "Vaše spisy se nepodařilo načíst.",
+    "dueOn": "termín {day}",
+    "dueChoice": {
+      "none": "Bez termínu",
+      "today": "Dnes",
+      "tomorrow": "Zítra",
+      "nextWeek": "Za týden"
+    },
+    "due": {
+      "overdue": "Po termínu",
+      "today": "Dnes",
+      "tomorrow": "Zítra",
+      "week": "Tento týden",
+      "later": "Později",
+      "none": "Bez termínu"
+    }
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",

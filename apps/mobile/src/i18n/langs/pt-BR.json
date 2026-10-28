@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Nenhuma tarefa em aberto",
-    "emptyDescription": "Tarefas atribuídas e futuras aparecerão aqui."
+    "emptyDescription": "As tarefas abertas atribuídas a você aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar suas tarefas.",
+    "retry": "Tentar novamente",
+    "newTask": "Nova tarefa",
+    "add": "Adicionar",
+    "name": "Nome da tarefa",
+    "dueTitle": "Prazo",
+    "matterTitle": "Caso",
+    "findMatter": "Encontrar um caso",
+    "addFailed": "Não foi possível adicionar a tarefa. Tente novamente.",
+    "mattersFailed": "Não foi possível carregar seus casos.",
+    "dueOn": "prazo {day}",
+    "dueChoice": {
+      "none": "Sem data",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "nextWeek": "Em uma semana"
+    },
+    "due": {
+      "overdue": "Atrasadas",
+      "today": "Hoje",
+      "tomorrow": "Amanhã",
+      "week": "Esta semana",
+      "later": "Mais tarde",
+      "none": "Sem prazo"
+    }
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

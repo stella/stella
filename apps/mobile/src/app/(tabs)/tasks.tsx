@@ -1,15 +1,20 @@
-import { useTranslations } from "use-intl";
+import { View } from "react-native";
 
-import { EmptyStateScreen } from "@/components/empty-state-screen";
+import { screenStyles } from "@/components/empty-state-screen";
+import { TasksList } from "@/components/tasks-list";
+import { useSession } from "@/connection/session-provider";
+import { useAppColors } from "@/theme";
 
 const TasksScreen = () => {
-  const t = useTranslations("tasks");
+  const colors = useAppColors();
+  const { state } = useSession();
 
   return (
-    <EmptyStateScreen
-      emptyDescription={t("emptyDescription")}
-      emptyTitle={t("emptyTitle")}
-    />
+    <View style={[screenStyles.screen, { backgroundColor: colors.background }]}>
+      {state.status === "signed-in" ? (
+        <TasksList source={state.source} />
+      ) : null}
+    </View>
   );
 };
 

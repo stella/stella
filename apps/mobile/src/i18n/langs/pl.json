@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Brak otwartych zadań",
-    "emptyDescription": "Tutaj pojawią się przypisane i nadchodzące zadania."
+    "emptyDescription": "Tutaj pojawią się otwarte zadania przypisane do Ciebie.",
+    "loadFailed": "Nie udało się wczytać Twoich zadań.",
+    "retry": "Spróbuj ponownie",
+    "newTask": "Nowe zadanie",
+    "add": "Dodaj",
+    "name": "Nazwa zadania",
+    "dueTitle": "Termin",
+    "matterTitle": "Sprawa",
+    "findMatter": "Znajdź sprawę",
+    "addFailed": "Nie udało się dodać zadania. Spróbuj ponownie.",
+    "mattersFailed": "Nie udało się wczytać Twoich spraw.",
+    "dueOn": "termin {day}",
+    "dueChoice": {
+      "none": "Bez terminu",
+      "today": "Dziś",
+      "tomorrow": "Jutro",
+      "nextWeek": "Za tydzień"
+    },
+    "due": {
+      "overdue": "Po terminie",
+      "today": "Dziś",
+      "tomorrow": "Jutro",
+      "week": "W tym tygodniu",
+      "later": "Później",
+      "none": "Bez terminu"
+    }
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

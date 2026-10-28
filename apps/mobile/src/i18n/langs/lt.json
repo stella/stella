@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Atvirų užduočių nėra",
-    "emptyDescription": "Čia bus rodomos priskirtos ir artėjančios užduotys."
+    "emptyDescription": "Čia bus rodomos jums priskirtos atviros užduotys.",
+    "loadFailed": "Nepavyko įkelti jūsų užduočių.",
+    "retry": "Bandyti dar kartą",
+    "newTask": "Nauja užduotis",
+    "add": "Pridėti",
+    "name": "Užduoties pavadinimas",
+    "dueTitle": "Terminas",
+    "matterTitle": "Byla",
+    "findMatter": "Rasti bylą",
+    "addFailed": "Nepavyko pridėti užduoties. Bandykite dar kartą.",
+    "mattersFailed": "Nepavyko įkelti jūsų bylų.",
+    "dueOn": "terminas {day}",
+    "dueChoice": {
+      "none": "Be datos",
+      "today": "Šiandien",
+      "tomorrow": "Rytoj",
+      "nextWeek": "Po savaitės"
+    },
+    "due": {
+      "overdue": "Pavėluotos",
+      "today": "Šiandien",
+      "tomorrow": "Rytoj",
+      "week": "Šią savaitę",
+      "later": "Vėliau",
+      "none": "Be termino"
+    }
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

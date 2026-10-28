@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Nav atvērtu uzdevumu",
-    "emptyDescription": "Šeit tiks parādīti piešķirtie un gaidāmie uzdevumi."
+    "emptyDescription": "Šeit parādīsies jums piešķirtie atvērtie uzdevumi.",
+    "loadFailed": "Jūsu uzdevumus neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz",
+    "newTask": "Jauns uzdevums",
+    "add": "Pievienot",
+    "name": "Uzdevuma nosaukums",
+    "dueTitle": "Termiņš",
+    "matterTitle": "Lieta",
+    "findMatter": "Meklēt lietu",
+    "addFailed": "Uzdevumu neizdevās pievienot. Mēģiniet vēlreiz.",
+    "mattersFailed": "Jūsu lietas neizdevās ielādēt.",
+    "dueOn": "termiņš {day}",
+    "dueChoice": {
+      "none": "Bez datuma",
+      "today": "Šodien",
+      "tomorrow": "Rīt",
+      "nextWeek": "Pēc nedēļas"
+    },
+    "due": {
+      "overdue": "Nokavēti",
+      "today": "Šodien",
+      "tomorrow": "Rīt",
+      "week": "Šonedēļ",
+      "later": "Vēlāk",
+      "none": "Bez termiņa"
+    }
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",

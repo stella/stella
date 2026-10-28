@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "لا توجد مهام مفتوحة",
-    "emptyDescription": "ستظهر هنا المهام المسندة والقادمة."
+    "emptyDescription": "ستظهر هنا المهام المفتوحة المسندة إليك.",
+    "loadFailed": "تعذّر تحميل مهامك.",
+    "retry": "إعادة المحاولة",
+    "newTask": "مهمة جديدة",
+    "add": "إضافة",
+    "name": "اسم المهمة",
+    "dueTitle": "الاستحقاق",
+    "matterTitle": "القضية",
+    "findMatter": "البحث عن قضية",
+    "addFailed": "تعذّرت إضافة المهمة. حاول مرة أخرى.",
+    "mattersFailed": "تعذّر تحميل قضاياك.",
+    "dueOn": "تستحق {day}",
+    "dueChoice": {
+      "none": "بلا تاريخ",
+      "today": "اليوم",
+      "tomorrow": "غدًا",
+      "nextWeek": "بعد أسبوع"
+    },
+    "due": {
+      "overdue": "متأخرة",
+      "today": "اليوم",
+      "tomorrow": "غدًا",
+      "week": "هذا الأسبوع",
+      "later": "لاحقًا",
+      "none": "بلا تاريخ استحقاق"
+    }
   },
   "matters": {
     "emptyTitle": "لا توجد ملفات قانونية بعد",

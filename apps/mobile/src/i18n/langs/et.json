@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Avatud ülesandeid pole",
-    "emptyDescription": "Määratud ja eelseisvad ülesanded ilmuvad siia."
+    "emptyDescription": "Siin kuvatakse teile määratud avatud ülesanded.",
+    "loadFailed": "Teie ülesandeid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "newTask": "Uus ülesanne",
+    "add": "Lisa",
+    "name": "Ülesande nimi",
+    "dueTitle": "Tähtaeg",
+    "matterTitle": "Asi",
+    "findMatter": "Leia asi",
+    "addFailed": "Ülesannet ei õnnestunud lisada. Proovige uuesti.",
+    "mattersFailed": "Teie asju ei õnnestunud laadida.",
+    "dueOn": "tähtaeg {day}",
+    "dueChoice": {
+      "none": "Kuupäevata",
+      "today": "Täna",
+      "tomorrow": "Homme",
+      "nextWeek": "Nädala pärast"
+    },
+    "due": {
+      "overdue": "Tähtaeg möödas",
+      "today": "Täna",
+      "tomorrow": "Homme",
+      "week": "Sel nädalal",
+      "later": "Hiljem",
+      "none": "Tähtajata"
+    }
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",

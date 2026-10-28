@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "No open tasks",
-    "emptyDescription": "Assigned and upcoming work will appear here."
+    "emptyDescription": "Open tasks assigned to you will appear here.",
+    "loadFailed": "Your tasks could not be loaded.",
+    "retry": "Try again",
+    "newTask": "New task",
+    "add": "Add",
+    "name": "Task name",
+    "dueTitle": "Due",
+    "matterTitle": "Matter",
+    "findMatter": "Find a matter",
+    "addFailed": "The task could not be added. Try again.",
+    "mattersFailed": "Your matters could not be loaded.",
+    "dueOn": "due {day}",
+    "dueChoice": {
+      "none": "No date",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "nextWeek": "In a week"
+    },
+    "due": {
+      "overdue": "Overdue",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "week": "This week",
+      "later": "Later",
+      "none": "No due date"
+    }
   },
   "matters": {
     "emptyTitle": "No matters yet",

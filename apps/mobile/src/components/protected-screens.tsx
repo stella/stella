@@ -8,6 +8,7 @@ import {
 } from "@/components/header-search";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
+import { TasksViewProvider } from "@/components/tasks-view";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
@@ -21,7 +22,9 @@ export const ProtectedScreens = () => {
   return (
     <HeaderSearchProvider activeTab={activeTab}>
       <MattersViewProvider>
-        <Screens />
+        <TasksViewProvider>
+          <Screens />
+        </TasksViewProvider>
       </MattersViewProvider>
     </HeaderSearchProvider>
   );
@@ -32,8 +35,8 @@ export const ProtectedScreens = () => {
  * glass where the system has it, laid out as GitHub's app lays its out: the
  * person's button leading, to the settings; no title, as the tab bar already
  * says where one is; the tab's own action and search trailing, together. The
- * action is the tab's "+", a new conversation over the chats, and how to
- * group the matters over theirs. Search is the system's field, which the list under it filters by;
+ * action is the tab's "+", a new conversation over the chats and a new task
+ * over the tasks, and how to group the matters over theirs. Search is the system's field, which the list under it filters by;
  * More has nothing to search.
  */
 const Screens = () => {
@@ -132,6 +135,15 @@ const Screens = () => {
         />
         <Stack.Screen name="thread/[threadId]" />
         <Stack.Screen
+          name="task/new"
+          options={{
+            ...pushedScreen,
+            presentation: "formSheet",
+            sheetAllowedDetents: [0.75, 1],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen
           name="law/index"
           options={{
             ...pushedScreen,
@@ -164,17 +176,31 @@ const Screens = () => {
 const useTabHeaderItems = (tab: string): NativeStackHeaderItem[] => {
   const chat = useTranslations("chat");
   const matters = useTranslations("matters");
+  const tasks = useTranslations("tasks");
+  const router = useRouter();
   const newChat = useNewChat();
   const { groupBy, setGroupBy } = useMattersView();
-  const newChatGlyph = useGlyphImage("plus");
+  const plusGlyph = useGlyphImage("plus");
   const groupGlyph = useGlyphImage("sliders-horizontal");
 
-  if (tab === "index" && newChatGlyph !== null) {
+  if (tab === "index" && plusGlyph !== null) {
     return [
       {
-        icon: { source: newChatGlyph, type: "image" },
+        icon: { source: plusGlyph, type: "image" },
         label: chat("newChat"),
         onPress: newChat,
+        type: "button",
+      },
+    ];
+  }
+  if (tab === "tasks" && plusGlyph !== null) {
+    return [
+      {
+        icon: { source: plusGlyph, type: "image" },
+        label: tasks("newTask"),
+        onPress: () => {
+          router.push("/task/new");
+        },
         type: "button",
       },
     ];

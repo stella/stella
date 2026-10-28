@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Aucune tâche en cours",
-    "emptyDescription": "Les tâches assignées et à venir apparaîtront ici."
+    "emptyDescription": "Les tâches ouvertes qui vous sont attribuées apparaîtront ici.",
+    "loadFailed": "Vos tâches n’ont pas pu être chargées.",
+    "retry": "Réessayer",
+    "newTask": "Nouvelle tâche",
+    "add": "Ajouter",
+    "name": "Nom de la tâche",
+    "dueTitle": "Échéance",
+    "matterTitle": "Dossier",
+    "findMatter": "Rechercher un dossier",
+    "addFailed": "La tâche n’a pas pu être ajoutée. Réessayez.",
+    "mattersFailed": "Vos dossiers n’ont pas pu être chargés.",
+    "dueOn": "échéance {day}",
+    "dueChoice": {
+      "none": "Sans date",
+      "today": "Aujourd’hui",
+      "tomorrow": "Demain",
+      "nextWeek": "Dans une semaine"
+    },
+    "due": {
+      "overdue": "En retard",
+      "today": "Aujourd’hui",
+      "tomorrow": "Demain",
+      "week": "Cette semaine",
+      "later": "Plus tard",
+      "none": "Sans échéance"
+    }
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

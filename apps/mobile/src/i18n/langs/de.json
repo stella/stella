@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Keine offenen Aufgaben",
-    "emptyDescription": "Zugewiesene und anstehende Aufgaben erscheinen hier."
+    "emptyDescription": "Hier erscheinen offene Aufgaben, die Ihnen zugewiesen sind.",
+    "loadFailed": "Ihre Aufgaben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "newTask": "Neue Aufgabe",
+    "add": "Hinzufügen",
+    "name": "Name der Aufgabe",
+    "dueTitle": "Fällig",
+    "matterTitle": "Akte",
+    "findMatter": "Akte suchen",
+    "addFailed": "Die Aufgabe konnte nicht hinzugefügt werden. Versuchen Sie es erneut.",
+    "mattersFailed": "Ihre Akten konnten nicht geladen werden.",
+    "dueOn": "fällig {day}",
+    "dueChoice": {
+      "none": "Kein Datum",
+      "today": "Heute",
+      "tomorrow": "Morgen",
+      "nextWeek": "In einer Woche"
+    },
+    "due": {
+      "overdue": "Überfällig",
+      "today": "Heute",
+      "tomorrow": "Morgen",
+      "week": "Diese Woche",
+      "later": "Später",
+      "none": "Ohne Fälligkeit"
+    }
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",

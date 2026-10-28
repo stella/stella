@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "Nincsenek nyitott feladatok",
-    "emptyDescription": "A hozzárendelt és a közelgő feladatok itt jelennek meg."
+    "emptyDescription": "Itt jelennek meg az Önhöz rendelt nyitott feladatok.",
+    "loadFailed": "A feladatait nem sikerült betölteni.",
+    "retry": "Újra",
+    "newTask": "Új feladat",
+    "add": "Hozzáadás",
+    "name": "Feladat neve",
+    "dueTitle": "Határidő",
+    "matterTitle": "Ügy",
+    "findMatter": "Ügy keresése",
+    "addFailed": "A feladatot nem sikerült hozzáadni. Próbálja újra.",
+    "mattersFailed": "Az ügyeit nem sikerült betölteni.",
+    "dueOn": "határidő: {day}",
+    "dueChoice": {
+      "none": "Nincs dátum",
+      "today": "Ma",
+      "tomorrow": "Holnap",
+      "nextWeek": "Egy hét múlva"
+    },
+    "due": {
+      "overdue": "Lejárt",
+      "today": "Ma",
+      "tomorrow": "Holnap",
+      "week": "Ezen a héten",
+      "later": "Később",
+      "none": "Nincs határidő"
+    }
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",

@@ -42,7 +42,32 @@
   },
   "tasks": {
     "emptyTitle": "No hay tareas abiertas",
-    "emptyDescription": "Aquí aparecerán las tareas asignadas y próximas."
+    "emptyDescription": "Aquí aparecerán las tareas abiertas que tiene asignadas.",
+    "loadFailed": "No se pudieron cargar sus tareas.",
+    "retry": "Reintentar",
+    "newTask": "Nueva tarea",
+    "add": "Añadir",
+    "name": "Nombre de la tarea",
+    "dueTitle": "Vencimiento",
+    "matterTitle": "Asunto",
+    "findMatter": "Buscar un asunto",
+    "addFailed": "No se pudo añadir la tarea. Inténtelo de nuevo.",
+    "mattersFailed": "No se pudieron cargar sus asuntos.",
+    "dueOn": "vence el {day}",
+    "dueChoice": {
+      "none": "Sin fecha",
+      "today": "Hoy",
+      "tomorrow": "Mañana",
+      "nextWeek": "En una semana"
+    },
+    "due": {
+      "overdue": "Vencidas",
+      "today": "Hoy",
+      "tomorrow": "Mañana",
+      "week": "Esta semana",
+      "later": "Más adelante",
+      "none": "Sin vencimiento"
+    }
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",
