@@ -72,8 +72,8 @@
             "generationConfig": {
               "maxOutputTokens": 4112,
               "thinkingConfig": {
-                "includeThoughts": false,
-                "thinkingLevel": "LOW"
+                "thinkingLevel": "LOW",
+                "includeThoughts": false
               }
             }
           }
