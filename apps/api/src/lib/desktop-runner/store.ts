@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  or,
   type SQL,
   sql,
 } from "drizzle-orm";
@@ -340,7 +341,14 @@ export const claimRunnerSession = async (
           workspaceIds: runs.workspaceIds,
         })
         .from(runs)
-        .where(and(boundTo(binding), inArray(runs.runId, [...heldIds])))
+        .where(
+          and(
+            boundTo(binding),
+            inArray(runs.runId, [...heldIds]),
+            // An ended run is left out of `welcome`, so the desktop drops it.
+            inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          ),
+        )
         .orderBy(asc(runs.runId)),
       MAX_HELD_RUNS,
     );
@@ -420,6 +428,12 @@ export const releaseRunnerSession = async (
 
 type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
 
+type RenewResult =
+  /** Another socket of the same installation and key is current. */
+  | { type: "superseded" }
+  /** The runs this socket holds that are still running, read with the renewal. */
+  | { type: "current"; running: ReadonlySet<string> };
+
 /**
  * A heartbeat of the current socket: the runner is seen, and every open run it
  * holds keeps its lease. A run whose lease lapsed while the socket stayed open
@@ -429,7 +443,7 @@ type RenewOptions = SessionOptions & { now: Date; leaseMs: number };
 export const renewRunnerSession = async (
   db: DesktopRunnerDb,
   { binding, sessionId, now, leaseMs }: RenewOptions,
-): Promise<boolean> =>
+): Promise<RenewResult> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
     const seen = await tx
@@ -438,7 +452,7 @@ export const renewRunnerSession = async (
       .where(and(runnerKey(binding), eq(runner.sessionId, sessionId)))
       .returning({ sessionId: runner.sessionId });
     if (seen.length === 0) {
-      return false;
+      return { type: "superseded" };
     }
     const lapsed = (
       await tx
@@ -474,7 +488,14 @@ export const renewRunnerSession = async (
           inArray(runs.state, DESKTOP_RUNNER_LEASED_RUN_STATES),
         ),
       );
-    return true;
+    const running = await tx
+      .select({ runId: runs.runId })
+      .from(runs)
+      .where(and(boundTo(binding), eq(runs.state, "running")));
+    return {
+      type: "current",
+      running: new Set(running.map(({ runId }) => runId)),
+    };
   });
 
 type HarnessStatusOptions = SessionOptions & {
@@ -777,6 +798,72 @@ export const expireRunLeases = async (
       });
     },
   });
+
+type ExpireAbandonedOptions = { now: Date; abandonedMs: number; limit: number };
+
+/**
+ * End runs nobody accepted within the abandon window, and runs whose computer
+ * has not come back within it, as `lost`. A run is never handed to another
+ * computer, so this is how the API ends one its desktop no longer serves.
+ */
+export const expireAbandonedRuns = async (
+  db: DesktopRunnerDb,
+  { now, abandonedMs, limit }: ExpireAbandonedOptions,
+): Promise<string[]> => {
+  const cutoff = new Date(now.getTime() - abandonedMs);
+  return await withSkipLockedBatch({
+    database: db,
+    limit,
+    select: (tx) =>
+      tx
+        .select({ runId: runs.runId })
+        .from(runs)
+        .where(
+          or(
+            // A heartbeat renews an assigned run's lease, so its age counts.
+            and(
+              eq(runs.state, "assigned"),
+              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
+            ),
+            and(
+              eq(runs.state, "waiting_for_computer"),
+              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
+            ),
+          ),
+        )
+        .orderBy(asc(runs.updatedAt))
+        .limit(limit)
+        .$dynamic(),
+    run: async (tx, rows) => {
+      if (rows.length === 0) {
+        return [];
+      }
+      // audit: skip - runner socket bookkeeping; the run's caller audits the work
+      return await transitionLifecycleBatch({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        ids: rows.map(({ runId }) => runId),
+        moves: {
+          state: { from: ["assigned", "waiting_for_computer"], to: "lost" },
+        },
+        guard: guarded(
+          or(
+            and(
+              eq(runs.state, "assigned"),
+              sql`${runs.createdAt} <= ${cutoff}::timestamptz`,
+            ),
+            and(
+              eq(runs.state, "waiting_for_computer"),
+              sql`${runs.updatedAt} <= ${cutoff}::timestamptz`,
+            ),
+          ),
+        ),
+        set: { updatedAt: now },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
+    },
+  });
+};
 
 export type PendingCommand = {
   readonly id: number;

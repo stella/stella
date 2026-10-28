@@ -40,10 +40,16 @@ export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
 export type DesktopRunnerLimits = {
   /** Installations (installation id and device key) per account and organization. */
   readonly maxRunnersPerAccount: number;
+  /**
+   * How long a run may wait to be accepted, or for its computer to return,
+   * before the API ends it as lost.
+   */
+  readonly abandonedRunMs: number;
 };
 
 export const DESKTOP_RUNNER_LIMITS = {
   maxRunnersPerAccount: 10,
+  abandonedRunMs: 24 * 60 * 60_000,
 } as const satisfies DesktopRunnerLimits;
 
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {

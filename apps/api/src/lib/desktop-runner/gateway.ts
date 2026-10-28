@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/desktop-runner/session";
 import {
   type DesktopRunnerDb,
+  expireAbandonedRuns,
   expireRunLeases,
 } from "@/api/lib/desktop-runner/store";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -158,6 +159,17 @@ export const createDesktopRunnerGateway = (
     if (expired.isErr()) {
       // The next sweep expires them; a late expiry only delays the state.
       observeFailure(expired.error, { sink: LEASE_SWEEP_SINK });
+    }
+    const abandoned = await Result.tryPromise(
+      async () =>
+        await expireAbandonedRuns(options.db, {
+          now: now(),
+          abandonedMs: limits.abandonedRunMs,
+          limit: EXPIRY_BATCH,
+        }),
+    );
+    if (abandoned.isErr()) {
+      observeFailure(abandoned.error, { sink: LEASE_SWEEP_SINK });
     }
     await Promise.all(
       [...sessions.values()].map(async (session) => await session.deliver()),
