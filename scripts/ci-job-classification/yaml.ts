@@ -148,6 +148,83 @@ const secretRefs = (value: unknown): string[] => {
   return [...new Set(children.flatMap(secretRefs))].toSorted();
 };
 
+const containsCredential = (value: unknown): boolean => {
+  if (typeof value === "string") {
+    return /secrets(?:\.|\[)|github_token|(?:^|[^a-z])token(?:[^a-z]|$)|app-token/iu.test(
+      value,
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.some(containsCredential);
+  }
+  return (
+    isRecord(value) &&
+    Object.entries(value).some(
+      ([key, child]) => /secret|token/iu.test(key) || containsCredential(child),
+    )
+  );
+};
+
+const hasWritePermission = (value: unknown) =>
+  value === "write-all" ||
+  (isRecord(value) &&
+    Object.values(value).some((permission) => permission === "write"));
+
+const privilegedStepSurface = (
+  candidate: unknown,
+  includeAll: boolean,
+): JsonRecord | undefined => {
+  const step = requireRecord(candidate, "step must be mapping");
+  if ("parallel" in step) {
+    if (!Array.isArray(step["parallel"])) {
+      throw new AdmissionError({ message: "parallel must be array" });
+    }
+    const parallel = step["parallel"].flatMap((child) => {
+      const surface = privilegedStepSurface(child, includeAll);
+      return surface ? [surface] : [];
+    });
+    return parallel.length ? { parallel } : undefined;
+  }
+  if (includeAll) {
+    return project(step, "step");
+  }
+  const surface: JsonRecord = {};
+  const uses = step["uses"];
+  if (typeof uses === "string") {
+    surface["uses"] = uses;
+  }
+  for (const key of ["env", "with", "run"] as const) {
+    const value = step[key];
+    if (containsCredential(value)) {
+      surface[key] = value;
+    }
+  }
+  return Object.keys(surface).length ? surface : undefined;
+};
+
+const privilegedJobSurface = (job: JsonRecord) => {
+  const includeAllSteps =
+    hasWritePermission(job["permissions"]) || containsCredential(job);
+  const surface: JsonRecord = {};
+  for (const key of ["permissions", "secrets", "uses"] as const) {
+    if (key in job) {
+      surface[key] = job[key];
+    }
+  }
+  for (const key of ["env", "with"] as const) {
+    if (containsCredential(job[key])) {
+      surface[key] = job[key];
+    }
+  }
+  if (Array.isArray(job["steps"])) {
+    surface["steps"] = job["steps"].flatMap((step) => {
+      const projected = privilegedStepSurface(step, includeAllSteps);
+      return projected ? [projected] : [];
+    });
+  }
+  return surface;
+};
+
 const stepShapes = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
     throw new AdmissionError({ message: "steps must be array" });
@@ -295,7 +372,9 @@ const parse = (text: string): ParsedDocument => {
     shape["runs"] = { ...runs, steps: stepShapes(runs["steps"]) };
   }
   const context = Object.fromEntries(
-    Object.entries(shape).filter(([key]) => key !== "jobs"),
+    ["on", "permissions"].flatMap((key) =>
+      key in data ? [[key, data[key]]] : [],
+    ),
   );
   const jobs: ParsedDocument["jobs"] = {};
   const dependencies: Record<string, DependencyKind> = {};
@@ -326,10 +405,7 @@ const parse = (text: string): ParsedDocument => {
         jobDependencies[job["uses"]] = "reusable-workflow";
       }
       addActionDependencies(jobDependencies, steps, {});
-      const jobShape = project(job, "job");
-      if ("steps" in job) {
-        jobShape["steps"] = stepShapes(job["steps"]);
-      }
+      const jobShape = privilegedJobSurface(job);
       const jobContext = { document: context, job: jobShape };
       jobs[id] = {
         digest: digest(jobContext),

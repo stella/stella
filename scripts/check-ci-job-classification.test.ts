@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readDecisions } from "./ci-job-classification/decisions";
+import {
+  readDecisions,
+  writeDecision,
+} from "./ci-job-classification/decisions";
 import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
@@ -108,9 +111,7 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       force: true,
     });
     for (const [key, decision] of Object.entries(decisions)) {
-      const file = path.join(root, decisionPathForKey(key));
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, `${JSON.stringify(decision, null, 2)}\n`);
+      writeDecision(root, key, decision);
     }
   };
   const git = (...args: string[]) => {
@@ -163,31 +164,37 @@ const run = (root: string, ...args: string[]) => {
 
 const decisionsIn = (root: string) =>
   readDecisions({ type: "working-tree", root });
-
-const BEFORE = "jobs: {check: {env: {MODE: one}, steps: []}}";
-const AFTER = "jobs: {check: {env: {MODE: two}, steps: []}}";
-
-test("a digest-only change to an ordinary job is refreshed and then passes", () => {
-  const decisions = reviewed(BEFORE, "check");
-  const { root } = repository(
-    { workflow: BEFORE, decisions },
-    { workflow: AFTER, decisions },
+const storedDecisions = (decisions: Record<string, Decision>) =>
+  Object.fromEntries(
+    Object.entries(decisions).map(([key, decision]) => [
+      key,
+      {
+        kind: decision.kind,
+        qualifier: decision.qualifier,
+        approvedDigests: [decision.reviewedDigest],
+      },
+    ]),
   );
-  expect(run(root, "--check").exitCode).toBe(1);
+
+const BEFORE =
+  "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}";
+const AFTER =
+  "jobs: {check: {steps: [{uses: acme/check@1111111111111111111111111111111111111111}]}}";
+
+test("an ordinary step change needs no refreshed approval", () => {
+  const ordinaryBefore = "jobs: {check: {steps: [{run: bun test one}]}}";
+  const ordinaryAfter = "jobs: {check: {steps: [{run: bun test two}]}}";
+  const decisions = reviewed(ordinaryBefore, "check");
+  const { root } = repository(
+    { workflow: ordinaryBefore, decisions },
+    { workflow: ordinaryAfter, decisions },
+  );
+  expect(run(root, "--check").exitCode).toBe(0);
 
   const write = run(root, "--write");
   expect(write.exitCode).toBe(0);
-  expect(write.stdout).toBe(
-    `Refreshed 1 mechanical classification digest(s): ${keyOf("check")}\n`,
-  );
-  // Only the digest moves; the human decision is kept byte for byte.
-  expect(decisionsIn(root)).toEqual({
-    [keyOf("check")]: {
-      kind: "ordinary",
-      qualifier: "Reviewed checks",
-      reviewedDigest: digestOf(AFTER, "check"),
-    },
-  });
+  expect(write.stdout).toBe("");
+  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
   expect(run(root, "--check")).toEqual({
     exitCode: 0,
     stdout: "Classified 1 workflows\n",
@@ -195,6 +202,36 @@ test("a digest-only change to an ordinary job is refreshed and then passes", () 
   });
   // A second refresh is a no-op.
   expect(run(root, "--write")).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+});
+
+test.each([
+  [
+    "renamed secret",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.OLD}, steps: []}}",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.NEW}, steps: []}}",
+  ],
+  [
+    "removed secret",
+    "on: push\njobs: {check: {env: {TOKEN: secrets.OLD}, steps: []}}",
+    "on: push\njobs: {check: {steps: []}}",
+  ],
+  [
+    "write permission",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: push\njobs: {check: {permissions: {contents: write}, steps: []}}",
+  ],
+  [
+    "third-party action",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: push\njobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}}",
+  ],
+  [
+    "trigger",
+    "on: push\njobs: {check: {steps: []}}",
+    "on: pull_request_target\njobs: {check: {steps: []}}",
+  ],
+] as const)("%s changes the privileged-surface digest", (_, before, after) => {
+  expect(digestOf(after, "check")).not.toBe(digestOf(before, "check"));
 });
 
 for (const scenario of [
@@ -235,7 +272,7 @@ for (const scenario of [
       stdout: "",
       stderr: "",
     });
-    expect(decisionsIn(root)).toEqual(decisions);
+    expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
     const check = run(root, "--check");
     expect(check.exitCode).toBe(1);
     expect(check.stdout).toContain(
@@ -247,13 +284,13 @@ for (const scenario of [
 test("a new job is never classified by the refresh", () => {
   const decisions = reviewed(BEFORE, "check");
   const head =
-    "jobs: {check: {env: {MODE: one}, steps: []}, added: {steps: []}}";
+    "jobs: {check: {steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}, added: {steps: []}}";
   const { root } = repository(
     { workflow: BEFORE, decisions },
     { workflow: head, decisions },
   );
   expect(run(root, "--write").exitCode).toBe(0);
-  expect(decisionsIn(root)).toEqual(decisions);
+  expect(decisionsIn(root)).toEqual(storedDecisions(decisions));
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
   expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
@@ -295,7 +332,7 @@ for (const change of [
       { workflow: AFTER, decisions: edited },
     );
     expect(run(root, "--write").exitCode).toBe(0);
-    expect(decisionsIn(root)).toEqual(edited);
+    expect(decisionsIn(root)).toEqual(storedDecisions(edited));
     expect(run(root, "--check").exitCode).toBe(1);
   });
 }

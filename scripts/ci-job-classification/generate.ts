@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { decisionPathForKey } from "./inputs";
+import { approvalPathForKey, decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -30,7 +30,7 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
 const REVISION_DECISIONS = v.record(
@@ -38,7 +38,9 @@ const REVISION_DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    approvedDigests: v.optional(
+      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    ),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -173,7 +175,7 @@ export const readClassificationInputsAtRevision = (
           key,
           {
             ...decision,
-            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+            approvedDigests: decision.approvedDigests ?? [],
           },
         ]),
       ),
@@ -340,7 +342,10 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<string, unknown> = {};
+  const entries: Record<
+    string,
+    { kind: string; qualifier: string; approvedDigest: string }
+  > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
@@ -396,12 +401,12 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || decision.reviewedDigest !== digest) {
+      if (!decision || !decision.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
-          reviewedDigest: digest,
+          approvedDigest: digest,
         };
         if (privileged) {
           privilegedJobs.push(key);
@@ -435,7 +440,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.approvedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,

@@ -1,9 +1,8 @@
 import { Result } from "better-result";
-import { deepEquals } from "bun";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
-import { writeDecision } from "./ci-job-classification/decisions";
+import { writeApproval } from "./ci-job-classification/decisions";
 import {
   generateClassification,
   readClassificationInputs,
@@ -57,8 +56,9 @@ const sensitiveChanges = ({
     const previousDecision = baseDecisions[key];
     if (
       current !== undefined &&
-      previousDecision?.reviewedDigest === current.digest &&
-      deepEquals(previousDecision, headDecisions[key])
+      previousDecision?.approvedDigests.includes(current.digest) &&
+      previousDecision.kind === headDecisions[key]?.kind &&
+      previousDecision.qualifier === headDecisions[key].qualifier
     ) {
       return [];
     }
@@ -81,7 +81,7 @@ const mechanicalRefreshes = ({
     const previous = base.jobs.get(key);
     if (
       decision === undefined ||
-      decision.reviewedDigest === job.digest ||
+      decision.approvedDigests.includes(job.digest) ||
       previousDecision === undefined ||
       previous === undefined ||
       decision.kind !== previousDecision.kind ||
@@ -127,7 +127,7 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
               message: `Decision disappeared while refreshing: ${key}`,
             });
           }
-          writeDecision(root, key, { ...decision, reviewedDigest: digest });
+          writeApproval(root, key, digest, decision);
         }
       }
       return { refreshed: refreshes.map(({ key }) => key) };
@@ -153,7 +153,7 @@ const misclassifiedWriters = (
     const decision = decisions[key];
     return job.writesRepository &&
       decision !== undefined &&
-      decision.reviewedDigest === job.digest &&
+      decision.approvedDigests.includes(job.digest) &&
       decision.kind !== "priority"
       ? [key]
       : [];
@@ -301,14 +301,13 @@ const decisionsFileChanged = (root: string) =>
       "git",
       "-C",
       root,
-      "diff",
-      "--quiet",
-      "HEAD",
+      "status",
+      "--porcelain",
       "--",
       CLASSIFICATION_DECISIONS_PATH,
     ],
-    { stdout: "ignore", stderr: "ignore" },
-  ).exitCode !== 0;
+    { stdout: "pipe", stderr: "ignore" },
+  ).stdout.length > 0;
 
 const runCheck = (root: string, base: string) => {
   const result = checkJobClassification(root, base);
