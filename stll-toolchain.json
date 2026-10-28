@@ -140,13 +140,13 @@
     {
       "path": "docker-compose.selfhost.yml",
       "kind": "image",
-      "at": "services.api",
+      "at": "services.api.image",
       "reason": "The generated self-host contract requires STELLA_API_IMAGE; scripts/selfhost-tool.ts validates its digest-qualified reference before startup. Operators select the released application image."
     },
     {
       "path": "docker-compose.selfhost.yml",
       "kind": "image",
-      "at": "services.document-processing-worker",
+      "at": "services.document-processing-worker.image",
       "reason": "The generated self-host contract requires STELLA_API_IMAGE; scripts/selfhost-tool.ts validates its digest-qualified reference before startup. Operators select the released application image."
     }
   ],
