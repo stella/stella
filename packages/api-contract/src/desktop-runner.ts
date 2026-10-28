@@ -53,6 +53,10 @@ export type DesktopRunnerLimits = {
   readonly maxCommandsPerRun: number;
   /** How long an ended run, with its messages and commands, is kept. */
   readonly endedRunRetentionMs: number;
+  /** UTF-8 bytes of frames one socket may have waiting to be stored. */
+  readonly maxQueuedBytesPerSocket: number;
+  /** Runner sockets one account may hold open on one API task. */
+  readonly maxSocketsPerAccount: number;
 };
 
 export const DESKTOP_RUNNER_LIMITS = {
@@ -62,6 +66,8 @@ export const DESKTOP_RUNNER_LIMITS = {
   maxMessageBytesPerRun: 64 * 1024 * 1024,
   maxCommandsPerRun: 2000,
   endedRunRetentionMs: 30 * 24 * 60 * 60_000,
+  maxQueuedBytesPerSocket: 4 * DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  maxSocketsPerAccount: 4,
 } as const satisfies DesktopRunnerLimits;
 
 export const DESKTOP_RUNNER_DESKTOP_MESSAGE = {

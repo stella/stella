@@ -136,6 +136,18 @@ export const createDesktopRunnerGateway = (
   const now = options.now ?? (() => new Date());
   const random = options.random ?? Math.random;
   const sessions = new Map<string, RunnerSession>();
+  /** Open sockets per account and organization on this task. */
+  const openByAccount = new Map<string, number>();
+  const accountOf = ({ userId, organizationId }: DesktopRunnerCaller) =>
+    JSON.stringify([userId, organizationId]);
+  const release = (account: string) => {
+    const open = (openByAccount.get(account) ?? 1) - 1;
+    if (open <= 0) {
+      openByAccount.delete(account);
+    } else {
+      openByAccount.set(account, open);
+    }
+  };
   let draining = false;
   let sweepTimer: ReturnType<typeof setTimeout> | null = null;
   let stopListening: (() => Promise<void>) | null = null;
@@ -252,20 +264,30 @@ export const createDesktopRunnerGateway = (
         caller.error.code,
       );
     }
+    // Each socket holds memory on this task, so one account holds only a few.
+    const account = accountOf(caller.value);
+    if ((openByAccount.get(account) ?? 0) >= limits.maxSocketsPerAccount) {
+      return refusal(429, "Too many runner connections for this account");
+    }
     const sessionId = Bun.randomUUIDv7();
     const session = createRunnerSession({
       context,
       binding: { ...caller.value, desktopId: desktopId.output },
       sessionId,
       onClosed: (closed) => {
-        sessions.delete(closed);
+        if (sessions.delete(closed)) {
+          release(account);
+        }
       },
     });
     sessions.set(sessionId, session);
+    openByAccount.set(account, (openByAccount.get(account) ?? 0) + 1);
     if (
       !server.upgrade(request, { data: { session: session.socketSession } })
     ) {
-      sessions.delete(sessionId);
+      if (sessions.delete(sessionId)) {
+        release(account);
+      }
       return refusal(400, "The WebSocket upgrade failed");
     }
     return null;
