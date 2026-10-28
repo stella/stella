@@ -23,7 +23,7 @@
     "@stll/time": "0.4.2",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
-    "crossws": "^0.4.15",
+    "crossws": "^0.4.16",
     "ioredis": "~6.0.0",
     "valibot": "catalog:",
     "yjs": "^13.6.33"
