@@ -63,6 +63,10 @@ const isCi = (): boolean => {
   return raw !== undefined && raw !== "" && raw !== "false" && raw !== "0";
 };
 
+type PropertyParameters<Ts> = Omit<fc.Parameters<Ts>, "seed"> & {
+  seed?: number | undefined;
+};
+
 /**
  * Build low-level `fc.check` parameters: pass the per-test
  * tuning you want in PR CI (typically just `numRuns`) and this scales it for
@@ -76,9 +80,7 @@ const isCi = (): boolean => {
  * ```
  */
 export const propertyConfig = <Ts>(
-  options: Omit<fc.Parameters<Ts>, "seed"> & {
-    seed?: number | undefined;
-  } = {},
+  options: PropertyParameters<Ts> = {},
 ): fc.Parameters<Ts> => {
   const { seed: requestedSeed, ...params } = options;
   const seed = "seed" in options ? requestedSeed : propertySeed();
@@ -291,7 +293,7 @@ type PropertyRunOptions<Ts> = {
   file: string;
   id: string;
   property: fc.IRawProperty<Ts>;
-  params: fc.Parameters<Ts>;
+  params: PropertyParameters<Ts>;
   pinned: readonly PinnedSeed[];
 };
 
@@ -403,17 +405,17 @@ export function runProperty<Ts>({
 export function assertProperty<Ts>(
   id: string,
   property: fc.IAsyncProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): Promise<void>;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IProperty<Ts>,
-  params?: fc.Parameters<Ts>,
+  params?: PropertyParameters<Ts>,
 ): void;
 export function assertProperty<Ts>(
   id: string,
   property: fc.IRawProperty<Ts>,
-  params: fc.Parameters<Ts> = {},
+  params: PropertyParameters<Ts> = {},
 ): void | Promise<void> {
   if (id.trim() === "") {
     throw new PropertyTestConfigError(

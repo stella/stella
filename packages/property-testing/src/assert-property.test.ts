@@ -1,6 +1,7 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import fc from "fast-check";
 
+import { createTestState } from "../../../apps/api/src/tests/helpers/test-state";
 import {
   assertProperty,
   failureFingerprint,
@@ -8,6 +9,8 @@ import {
   propertyConfig,
   runProperty,
 } from "./index";
+
+const testState = createTestState({ file: import.meta.filename, config: {} });
 
 const ENV_KEYS = [
   "CI",
@@ -54,6 +57,20 @@ test("identifies the calling test with an explicit id", () => {
       fc.property(fc.constant(1), () => false),
     ),
   ).toThrow(`"${FILE}::identifies the calling test with an explicit id"`);
+});
+
+test("raw runner parameters apply one run factor with an unset seed", () => {
+  neutralEnv();
+  testState.setEnv("PROPERTY_TEST_NUM_RUNS_FACTOR", "3");
+  const values: number[] = [];
+  assertProperty(
+    "raw runner parameters apply one run factor with an unset seed",
+    fc.property(fc.constant(1), (value) => {
+      values.push(value);
+    }),
+    { numRuns: 2, seed: undefined },
+  );
+  expect(values).toEqual([1, 1, 1, 1, 1, 1]);
 });
 
 test("replays pins before examples and generation for sync and async properties", async () => {
