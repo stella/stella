@@ -593,15 +593,18 @@ export const buildSkDecisionPdfBlocks = ({
     `Súd: ${metadata.court}`,
     `Spisová značka: ${metadata.caseNumber}`,
   ]);
-  if (metadata.ecli) {
-    repeatedHeaders.add(`ECLI: ${metadata.ecli}`);
+  const ecliHeader = metadata.ecli ? `ECLI: ${metadata.ecli}` : undefined;
+  if (ecliHeader !== undefined) {
+    repeatedHeaders.add(ecliHeader);
   }
   // The publisher's first-page metadata table is bounded by court/docket
   // and ECLI. Strip the intervening labelled rows only inside that table,
   // never a matching phrase in the decision body or an unknown header row.
-  const tableEnd = lines.findIndex(
-    (line) => line.text.trim() === `ECLI: ${metadata.ecli}`,
-  );
+  // Without an ECLI the table has no known end, so nothing is stripped.
+  const tableEnd =
+    ecliHeader === undefined
+      ? -1
+      : lines.findIndex((line) => line.text.trim() === ecliHeader);
   const table = lines.slice(0, tableEnd + 1);
   const metadataRow =
     /^(?:Identifikačné číslo súdneho spisu: \d+|Dátum vydania rozhodnutia: \d{1,2}\.\s*\d{1,2}\.\s*\d{4}|Meno a priezvisko sudcu, VSÚ: .+)$/u;
