@@ -53,6 +53,8 @@ const RENEW_BEFORE_EXPIRY_MS: i64 = 60_000;
 const REFRESH_TIMEOUT: Duration = Duration::from_secs(20);
 const REVOKE_ATTEMPTS: usize = 3;
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
+/// Discovery documents and key sets are a few kilobytes.
+const MAX_METADATA_BYTES: usize = 64 * 1024;
 
 /// Refresh errors after which the stored tokens can never work again.
 const UNUSABLE_REFRESH_ERRORS: &[&str] = &[
@@ -295,6 +297,53 @@ enum Transient {
 
 fn now_ms() -> i64 {
   chrono::Utc::now().timestamp_millis()
+}
+
+/// When a token issued at `saved_at` (Unix milliseconds) with `expires_in`
+/// seconds expires; never overflows, and never lies in the past of issue.
+fn expiry_at(saved_at: i64, expires_in: i64) -> i64 {
+  saved_at.saturating_add(expires_in.max(0).saturating_mul(1000))
+}
+
+/// Reads a response body of at most `cap` bytes; a longer one is refused
+/// before it is buffered.
+async fn read_capped(
+  mut response: reqwest::Response,
+  cap: usize,
+) -> Result<Vec<u8>, Capped> {
+  if response
+    .content_length()
+    .is_some_and(|length| length > cap as u64)
+  {
+    return Err(Capped::TooLarge);
+  }
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(|_unreachable| Capped::Unreachable)?
+  {
+    if body.len() + chunk.len() > cap {
+      return Err(Capped::TooLarge);
+    }
+    body.extend_from_slice(&chunk);
+  }
+  Ok(body)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Capped {
+  Unreachable,
+  TooLarge,
+}
+
+impl Capped {
+  fn failure(self) -> ChatGptFailure {
+    match self {
+      Self::Unreachable => ChatGptFailure::Unreachable,
+      Self::TooLarge => ChatGptFailure::Verification,
+    }
+  }
 }
 
 /// Binds a broker request to the sign-in a run started with, without
@@ -725,7 +774,7 @@ impl ChatGptAuth {
       session_id: oauth::random_token(32),
       access_token: tokens.access_token.clone(),
       refresh_token: tokens.refresh_token.clone(),
-      expires_at: saved_at + tokens.expires_in.saturating_mul(1000),
+      expires_at: expiry_at(saved_at, tokens.expires_in),
       earliest_refresh_at: tokens.earliest_refresh_at_ms(),
       scopes,
       saved_at,
@@ -848,10 +897,11 @@ impl ChatGptAuth {
     if !response.status().is_success() {
       return Err(ChatGptFailure::Unreachable);
     }
-    let discovery: Discovery = response
-      .json()
+    let body = read_capped(response, MAX_METADATA_BYTES)
       .await
-      .map_err(|_invalid| ChatGptFailure::Unreachable)?;
+      .map_err(Capped::failure)?;
+    let discovery: Discovery =
+      serde_json::from_slice(&body).map_err(|_invalid| ChatGptFailure::Unreachable)?;
     let issuer = reqwest::Url::parse(&self.0.config.issuer)
       .map_err(|_invalid| ChatGptFailure::Verification)?;
     let endpoints_trusted = discovery.issuer == self.0.config.issuer
@@ -895,10 +945,11 @@ impl ChatGptAuth {
     if !response.status().is_success() {
       return Err(ChatGptFailure::Unreachable);
     }
-    let jwks: id_token::Jwks = response
-      .json()
+    let body = read_capped(response, MAX_METADATA_BYTES)
       .await
-      .map_err(|_invalid| ChatGptFailure::Verification)?;
+      .map_err(Capped::failure)?;
+    let jwks: id_token::Jwks =
+      serde_json::from_slice(&body).map_err(|_invalid| ChatGptFailure::Verification)?;
     *cached = Some(jwks.clone());
     Ok(jwks)
   }
@@ -922,14 +973,13 @@ impl ChatGptAuth {
       .await
       .map_err(|_unreachable| ExchangeError::Unreachable)?;
     let status = response.status();
-    let bytes = response
-      .bytes()
+    let body = read_capped(response, MAX_RESPONSE_BYTES)
       .await
-      .map_err(|_unreachable| ExchangeError::Unreachable)?;
-    if bytes.len() > MAX_RESPONSE_BYTES {
-      return Err(ExchangeError::Invalid);
-    }
-    Ok((status, bytes.to_vec()))
+      .map_err(|capped| match capped {
+        Capped::Unreachable => ExchangeError::Unreachable,
+        Capped::TooLarge => ExchangeError::Invalid,
+      })?;
+    Ok((status, body))
   }
 
   async fn post_token(
@@ -1035,7 +1085,7 @@ impl ChatGptAuth {
     let session = ChatGptSession {
       access_token: renewed.access_token.clone(),
       refresh_token: Some(rotated),
-      expires_at: saved_at + renewed.expires_in.saturating_mul(1000),
+      expires_at: expiry_at(saved_at, renewed.expires_in),
       earliest_refresh_at: renewed.earliest_refresh_at_ms(),
       scopes: renewed.scopes(),
       saved_at,

@@ -62,6 +62,9 @@ struct FakeState {
   /// The scopes a renewal grants.
   refresh_scope: String,
   revoke_status: StatusCode,
+  /// Bytes of padding added to the discovery document and the key set.
+  discovery_padding: usize,
+  jwks_padding: usize,
 }
 
 type Shared = Arc<Mutex<FakeState>>;
@@ -95,6 +98,8 @@ impl FakeOpenAi {
       refresh_errors: VecDeque::new(),
       refresh_scope: ALL_SCOPES.into(),
       revoke_status: StatusCode::OK,
+      discovery_padding: 0,
+      jwks_padding: 0,
     }));
     let router = Router::new()
       .route("/.well-known/openid-configuration", get(discovery))
@@ -124,8 +129,12 @@ impl FakeOpenAi {
 }
 
 async fn discovery(State(state): State<Shared>) -> Json<Value> {
-  let base = state.lock().unwrap().base.clone();
+  let (base, padding) = {
+    let fake = state.lock().unwrap();
+    (fake.base.clone(), fake.discovery_padding)
+  };
   Json(json!({
+    "padding": "x".repeat(padding),
     "issuer": base,
     "authorization_endpoint": format!("{base}/api/accounts/authorize"),
     "token_endpoint": format!("{base}/api/accounts/oauth/token"),
@@ -135,7 +144,10 @@ async fn discovery(State(state): State<Shared>) -> Json<Value> {
 }
 
 async fn jwks(State(state): State<Shared>) -> Json<Value> {
-  Json(state.lock().unwrap().issuer.jwks_json())
+  let fake = state.lock().unwrap();
+  let mut jwks = fake.issuer.jwks_json();
+  jwks["padding"] = json!("x".repeat(fake.jwks_padding));
+  Json(jwks)
 }
 
 fn oauth_error(status: StatusCode, error: &str) -> Response {
@@ -1140,6 +1152,43 @@ async fn a_sign_in_without_plan_usage_revokes_old_and_new_tokens() {
   let mut dropped = revoked(&harness);
   dropped.sort();
   assert_eq!(dropped, ["refresh-1", "refresh-2"]);
+}
+
+#[tokio::test]
+async fn oversized_discovery_or_key_sets_are_refused() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness
+    .fake
+    .with(|fake| fake.discovery_padding = MAX_METADATA_BYTES);
+  harness.auth.start(SignInIntent::SameAccount);
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::Verification
+    }
+  );
+
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness
+    .fake
+    .with(|fake| fake.jwks_padding = MAX_METADATA_BYTES);
+  harness.sign_in(SignInIntent::SameAccount).await;
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::Verification
+    }
+  );
+  assert!(harness.record().registrations.is_empty());
+  // The issued tokens were revoked, as for any refused sign-in.
+  assert_eq!(revoked(&harness), ["refresh-1"]);
+}
+
+#[test]
+fn expiry_never_overflows_or_precedes_issue() {
+  assert_eq!(expiry_at(1_000, 3_600), 3_601_000);
+  assert_eq!(expiry_at(1_000, -5), 1_000);
+  assert_eq!(expiry_at(i64::MAX - 10, i64::MAX), i64::MAX);
 }
 
 #[test]
