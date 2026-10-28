@@ -23,14 +23,11 @@ export const PDF_NEUTRALS = {
   stampText: grey(0.1),
 } as const satisfies Record<string, SrgbColor>;
 
-// A channel as a content-stream number: at most three decimals, no trailing
-// zeros, so `0.35` stays `0.35` and `0.34902` is `0.349`.
-const pdfChannel = (value: number): string => {
-  const fixed = Math.min(1, Math.max(0, value))
-    .toFixed(3)
-    .replace(/\.?0+$/u, "");
-  return fixed === "" ? "0" : fixed;
-};
+// A channel as a content-stream number: rounded to three decimals and printed
+// in its shortest form, so `0.35` stays `0.35`, `0.34902` is `0.349` and the
+// ends are `0` and `1`.
+const pdfChannel = (value: number): string =>
+  String(Math.round(Math.min(1, Math.max(0, value)) * 1000) / 1000);
 
 const channels = ([red, green, blue]: SrgbColor): string =>
   `${pdfChannel(red)} ${pdfChannel(green)} ${pdfChannel(blue)}`;

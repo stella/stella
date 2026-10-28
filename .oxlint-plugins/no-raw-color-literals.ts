@@ -37,9 +37,96 @@ const HEX_CANDIDATE =
   /(?<![\w&#/$\\-])#(?<digits>[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])/giu;
 
 // Where a digits-only hex is a CSS value rather than an issue reference: after
-// a colour-bearing property, an attribute, a length or a border style.
-const CSS_VALUE_BEFORE =
-  /(?:(?:\b(?:color|background(?:-color)?|border(?:-[a-z]+)*|outline(?:-color)?|fill|stroke|stop-color|flood-color|lighting-color|caret-color|accent-color|column-rule(?:-color)?|text-decoration(?:-color)?|(?:box|text)-shadow)|--[\w-]+)\s*:\s*|=\s*["']|(?:\d(?:px|em|rem|pt|%)|(?:^|\s)0)\s+|\b(?:solid|dashed|dotted|double|groove|ridge|inset|outset)\s+|\[)$/iu;
+// a colour-bearing property, an attribute, a length or a border style. Read
+// by scanning back from the hex, so the check stays linear in the string.
+const COLOR_PROPERTIES: ReadonlySet<string> = new Set([
+  "accent-color",
+  "background",
+  "background-color",
+  "box-shadow",
+  "caret-color",
+  "color",
+  "column-rule",
+  "column-rule-color",
+  "fill",
+  "flood-color",
+  "lighting-color",
+  "outline",
+  "outline-color",
+  "stop-color",
+  "stroke",
+  "text-decoration",
+  "text-decoration-color",
+  "text-shadow",
+]);
+const BORDER_STYLES: ReadonlySet<string> = new Set([
+  "dashed",
+  "dotted",
+  "double",
+  "groove",
+  "inset",
+  "outset",
+  "ridge",
+  "solid",
+]);
+const LENGTH_UNITS = ["px", "rem", "em", "pt", "%"] as const;
+const WORD_CHARACTERS = "abcdefghijklmnopqrstuvwxyz0123456789_-";
+const DIGITS = "0123456789";
+
+const isWordCharacter = (character: string): boolean =>
+  character !== "" && WORD_CHARACTERS.includes(character.toLowerCase());
+
+// The run of word characters (letters, digits, `_`, `-`) that ends `text`.
+const trailingWord = (text: string): string => {
+  let start = text.length;
+  while (start > 0 && isWordCharacter(text.charAt(start - 1))) {
+    start -= 1;
+  }
+  return text.slice(start);
+};
+
+const isColorProperty = (property: string): boolean => {
+  const name = property.toLowerCase();
+  return (
+    COLOR_PROPERTIES.has(name) ||
+    name === "border" ||
+    name.startsWith("border-") ||
+    (name.startsWith("--") && name.length > 2)
+  );
+};
+
+const isLength = (token: string): boolean =>
+  token === "0" ||
+  LENGTH_UNITS.some(
+    (unit) =>
+      token.endsWith(unit) &&
+      DIGITS.includes(token.charAt(token.length - unit.length - 1) || "x"),
+  );
+
+const isCssValueBefore = (before: string): boolean => {
+  const trimmed = before.trimEnd();
+  const last = trimmed.slice(-1);
+  if (before.endsWith("[")) {
+    return true;
+  }
+  if (last === ":") {
+    return isColorProperty(trailingWord(trimmed.slice(0, -1).trimEnd()));
+  }
+  if (before.endsWith('"') || before.endsWith("'")) {
+    return before.slice(0, -1).trimEnd().endsWith("=");
+  }
+  if (trimmed.length === before.length) {
+    return false;
+  }
+  const word = trailingWord(trimmed);
+  const precededBySpace =
+    trimmed.length === word.length ||
+    trimmed.charAt(trimmed.length - word.length - 1).trim() === "";
+  return (
+    BORDER_STYLES.has(word.toLowerCase()) ||
+    (isLength(word) && (word !== "0" || precededBySpace))
+  );
+};
 
 // Functions whose arguments are colours, so a hex inside them is one.
 const COLOR_ARGUMENT_FUNCTION =
@@ -53,7 +140,7 @@ const isCssValuePosition = (
   const before = value.slice(0, index);
   return (
     value.trim() === candidate ||
-    CSS_VALUE_BEFORE.test(before) ||
+    isCssValueBefore(before) ||
     COLOR_ARGUMENT_FUNCTION.test(before)
   );
 };
@@ -82,7 +169,7 @@ export const findRawColor = (value: string): string | null => {
   );
 };
 
-const PDF_NUMBER = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)`;
+const PDF_NUMBER = String.raw`[-+]?(?:\d+(?:\.\d*)?|\.\d+)`;
 // `r g b rg` / `RG` and `c m y k k` / `K` anywhere in a content stream.
 const PDF_CHANNEL_OPERATOR = new RegExp(
   String.raw`(?:^|\s)(?:${PDF_NUMBER}\s+){2}${PDF_NUMBER}\s+(?:rg|RG)(?=\s|$)|(?:^|\s)(?:${PDF_NUMBER}\s+){3}${PDF_NUMBER}\s+[kK](?=\s|$)`,
@@ -90,15 +177,18 @@ const PDF_CHANNEL_OPERATOR = new RegExp(
 );
 // `n g` / `G` reads as prose ("5 g") inside a sentence, so it counts only as a
 // whole line of a content stream.
-const PDF_GRAY_OPERATOR = new RegExp(
-  String.raw`(?:^|\n)\s*${PDF_NUMBER}\s+[gG]\s*(?=\n|$)`,
+const PDF_GRAY_OPERATOR_LINE = new RegExp(
+  String.raw`^[ \t]*${PDF_NUMBER}[ \t]+[gG][ \t]*$`,
   "u",
 );
 
 /** The first PDF colour operator written with literal operands, or null. */
 export const findPdfColorOperator = (value: string): string | null =>
   PDF_CHANNEL_OPERATOR.exec(value)?.[0].trim() ??
-  PDF_GRAY_OPERATOR.exec(value)?.[0].trim() ??
+  value
+    .split("\n")
+    .find((line) => PDF_GRAY_OPERATOR_LINE.test(line))
+    ?.trim() ??
   null;
 
 const PDF_LIBRARIES = ["@libpdf/core", "pdf-lib"] as const;
