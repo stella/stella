@@ -88,8 +88,18 @@ impl ChatGptAuthConfig {
 
 /// What a window may know about the connection. It carries no token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatGptStatus {
+  #[serde(flatten)]
+  pub state: ChatGptState,
+  /// Tokens are stored on this computer. Whenever they are, the user can
+  /// disconnect, whatever the state.
+  pub session_stored: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
-pub enum ChatGptStatus {
+pub enum ChatGptState {
   SignedOut,
   SigningIn,
   Connected {
@@ -178,7 +188,10 @@ struct Inner {
   vault: Arc<dyn ChatGptVault>,
   http: DesktopHttpClient,
   hooks: ChatGptAuthHooks,
-  status: Mutex<Option<ChatGptStatus>>,
+  /// What the stored record shows, refreshed by every save.
+  stored: Mutex<Option<ChatGptStatus>>,
+  /// A sign-in in progress or its failure, shown over the stored state.
+  transient: Mutex<Transient>,
   attempt: Mutex<Option<Attempt>>,
   next_attempt: AtomicU64,
   /// Serializes every read-modify-write of the stored tokens.
@@ -257,8 +270,15 @@ enum ExchangeError {
 }
 
 enum AttemptEnd {
-  Settled(Result<ChatGptStatus, ChatGptFailure>),
+  Settled(Result<(), ChatGptFailure>),
   Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Transient {
+  Idle,
+  SigningIn,
+  Failed(ChatGptFailure),
 }
 
 fn now_ms() -> i64 {
@@ -274,25 +294,30 @@ fn profile_key(session: &ChatGptSession) -> String {
 }
 
 fn stored_status(record: &ChatGptRecord) -> ChatGptStatus {
-  if let Some(session) = record
-    .session
-    .as_ref()
-    .filter(|session| session.grants(PLAN_USAGE_SCOPE))
-  {
-    return ChatGptStatus::Connected {
+  let state = match (&record.session, &record.registration) {
+    (Some(session), _) if session.grants(PLAN_USAGE_SCOPE) => ChatGptState::Connected {
       email: session.email.clone(),
       plan: session.plan.clone(),
-    };
-  }
-  match &record.registration {
-    Some(registration) if registration.reconnect_required => {
-      ChatGptStatus::NeedsReconnect {
+    },
+    (_, Some(registration)) if registration.reconnect_required => {
+      ChatGptState::NeedsReconnect {
         email: registration.email.clone(),
       }
     }
-    _ => ChatGptStatus::SignedOut,
+    _ => ChatGptState::SignedOut,
+  };
+  ChatGptStatus {
+    state,
+    session_stored: record.session.is_some(),
   }
 }
+
+const STORAGE_FAILURE: ChatGptStatus = ChatGptStatus {
+  state: ChatGptState::Failed {
+    reason: ChatGptFailure::Storage,
+  },
+  session_stored: false,
+};
 
 fn same_origin(url: &str, origin: &reqwest::Url) -> bool {
   reqwest::Url::parse(url).is_ok_and(|url| url.origin() == origin.origin())
@@ -310,7 +335,8 @@ impl ChatGptAuth {
       vault,
       http,
       hooks,
-      status: Mutex::new(None),
+      stored: Mutex::new(None),
+      transient: Mutex::new(Transient::Idle),
       attempt: Mutex::new(None),
       next_attempt: AtomicU64::new(1),
       session: tokio::sync::Mutex::new(()),
@@ -320,27 +346,41 @@ impl ChatGptAuth {
   }
 
   pub(crate) async fn status(&self) -> ChatGptStatus {
-    if let Some(status) = self.0.status.lock().ok().and_then(|status| status.clone()) {
-      return status;
-    }
-    let status = match self.with_vault(|vault| vault.load()).await {
-      Ok(record) => stored_status(&record),
-      Err(VaultUnavailable) => ChatGptStatus::Failed {
-        reason: ChatGptFailure::Storage,
-      },
+    let cached = self.0.stored.lock().ok().and_then(|stored| stored.clone());
+    let stored = match cached {
+      Some(stored) => stored,
+      None => {
+        let loaded = match self.with_vault(|vault| vault.load()).await {
+          Ok(record) => stored_status(&record),
+          Err(VaultUnavailable) => STORAGE_FAILURE,
+        };
+        if let Ok(mut stored) = self.0.stored.lock()
+          && stored.is_none()
+        {
+          *stored = Some(loaded.clone());
+        }
+        loaded
+      }
     };
-    if let Ok(mut cached) = self.0.status.lock()
-      && cached.is_none()
-    {
-      *cached = Some(status.clone());
+    let transient = self
+      .0
+      .transient
+      .lock()
+      .map_or(Transient::Idle, |transient| *transient);
+    ChatGptStatus {
+      state: match transient {
+        Transient::Idle => stored.state,
+        Transient::SigningIn => ChatGptState::SigningIn,
+        Transient::Failed(reason) => ChatGptState::Failed { reason },
+      },
+      session_stored: stored.session_stored,
     }
-    status
   }
 
-  fn set_status(&self, status: ChatGptStatus) {
-    let changed = self.0.status.lock().is_ok_and(|mut current| {
-      let changed = current.as_ref() != Some(&status);
-      *current = Some(status);
+  fn set_transient(&self, next: Transient) {
+    let changed = self.0.transient.lock().is_ok_and(|mut current| {
+      let changed = *current != next;
+      *current = next;
       changed
     });
     if changed {
@@ -348,16 +388,19 @@ impl ChatGptAuth {
     }
   }
 
-  async fn refresh_stored_status(&self) {
-    // After any sign-out or renewal in progress has saved its outcome.
-    let _guard = self.0.session.lock().await;
-    let status = match self.with_vault(|vault| vault.load()).await {
-      Ok(record) => stored_status(&record),
-      Err(VaultUnavailable) => ChatGptStatus::Failed {
-        reason: ChatGptFailure::Storage,
-      },
-    };
-    self.set_status(status);
+  /// The one way a record is written: the shown state follows every save.
+  async fn save(&self, record: ChatGptRecord) -> Result<(), VaultUnavailable> {
+    let shown = stored_status(&record);
+    self.with_vault(move |vault| vault.save(&record)).await?;
+    let changed = self.0.stored.lock().is_ok_and(|mut stored| {
+      let changed = stored.as_ref() != Some(&shown);
+      *stored = Some(shown);
+      changed
+    });
+    if changed {
+      (self.0.hooks.changed)();
+    }
+    Ok(())
   }
 
   async fn with_vault<T: Send + 'static>(
@@ -371,7 +414,7 @@ impl ChatGptAuth {
   }
 
   /// Starts a browser sign-in, replacing any attempt in progress.
-  pub(crate) fn start(&self, intent: SignInIntent) -> ChatGptStatus {
+  pub(crate) fn start(&self, intent: SignInIntent) {
     let id = self.0.next_attempt.fetch_add(1, Ordering::Relaxed);
     let (deliver, delivered) = oneshot::channel();
     let (cancel, cancelled) = oneshot::channel();
@@ -385,16 +428,15 @@ impl ChatGptAuth {
         _cancel: cancel,
       });
     }
-    self.set_status(ChatGptStatus::SigningIn);
+    self.set_transient(Transient::SigningIn);
     let auth = self.clone();
     tokio::spawn(async move {
       let end = tokio::select! {
         result = auth.run_attempt(id, intent, slot, delivered) => AttemptEnd::Settled(result),
         _ = cancelled => AttemptEnd::Cancelled,
       };
-      auth.finish_attempt(id, end).await;
+      auth.finish_attempt(id, end);
     });
-    ChatGptStatus::SigningIn
   }
 
   /// Stops the attempt in progress, if any.
@@ -404,7 +446,7 @@ impl ChatGptAuth {
     }
   }
 
-  async fn finish_attempt(&self, id: u64, end: AttemptEnd) {
+  fn finish_attempt(&self, id: u64, end: AttemptEnd) {
     let superseded = self.0.attempt.lock().map_or(true, |mut attempt| {
       match attempt.as_ref().map(|current| current.id) {
         Some(current) if current == id => {
@@ -418,13 +460,10 @@ impl ChatGptAuth {
     if superseded {
       return;
     }
-    match end {
-      AttemptEnd::Settled(Ok(status)) => self.set_status(status),
-      AttemptEnd::Settled(Err(reason)) => {
-        self.set_status(ChatGptStatus::Failed { reason })
-      }
-      AttemptEnd::Cancelled => self.refresh_stored_status().await,
-    }
+    self.set_transient(match end {
+      AttemptEnd::Settled(Err(reason)) => Transient::Failed(reason),
+      AttemptEnd::Settled(Ok(())) | AttemptEnd::Cancelled => Transient::Idle,
+    });
   }
 
   fn record_callback(&self, id: u64, redirect_uri: &str, state: &str) -> bool {
@@ -477,7 +516,7 @@ impl ChatGptAuth {
     intent: SignInIntent,
     slot: CallbackSlot,
     delivered: oneshot::Receiver<DeliveredCallback>,
-  ) -> Result<ChatGptStatus, ChatGptFailure> {
+  ) -> Result<(), ChatGptFailure> {
     let discovery = self.discover().await?;
     let (host_id, record) = self
       .with_vault(|vault| Ok((vault.host_id()?, vault.load()?)))
@@ -527,7 +566,7 @@ impl ChatGptAuth {
     let result = self.complete(&pending, &url).await;
     if let Some(page) = page {
       let _ = page.send(match result {
-        Ok(ChatGptStatus::Connected { .. }) => CallbackPage::Connected,
+        Ok(()) => CallbackPage::Connected,
         _ => CallbackPage::NotConnected,
       });
     }
@@ -538,7 +577,7 @@ impl ChatGptAuth {
     &self,
     pending: &PendingSignIn<'_>,
     url: &str,
-  ) -> Result<ChatGptStatus, ChatGptFailure> {
+  ) -> Result<(), ChatGptFailure> {
     let (code, returned_client) =
       match oauth::parse_callback(url, pending.redirect_uri, pending.state) {
         Err(CallbackRejection::StateMismatch) => {
@@ -633,6 +672,7 @@ impl ChatGptAuth {
         email: identity.email.clone(),
         plan_usage_granted,
         reconnect_required: false,
+        client_rejected: false,
       }),
       // Without plan usage the tokens cannot run a request; keep only the
       // registration, so the next sign-in asks for consent again.
@@ -653,14 +693,11 @@ impl ChatGptAuth {
     };
     let _guard = self.0.session.lock().await;
     self
-      .with_vault(move |vault| vault.save(&record))
+      .save(record)
       .await
       .map_err(|VaultUnavailable| ChatGptFailure::Storage)?;
     if plan_usage_granted {
-      Ok(ChatGptStatus::Connected {
-        email: identity.email,
-        plan: identity.plan,
-      })
+      Ok(())
     } else {
       Err(ChatGptFailure::PlanUsageNotGranted)
     }
@@ -669,19 +706,21 @@ impl ChatGptAuth {
   async fn keep_registration(&self, client_id: &str) -> Result<(), ChatGptFailure> {
     let client_id = client_id.to_owned();
     let _guard = self.0.session.lock().await;
+    let record = self
+      .with_vault(|vault| vault.load())
+      .await
+      .map_err(|VaultUnavailable| ChatGptFailure::Storage)?;
     self
-      .with_vault(move |vault| {
-        let record = vault.load()?;
-        vault.save(&ChatGptRecord {
-          registration: Some(ChatGptRegistration {
-            client_id,
-            subject: None,
-            email: None,
-            plan_usage_granted: true,
-            reconnect_required: false,
-          }),
-          session: record.session,
-        })
+      .save(ChatGptRecord {
+        registration: Some(ChatGptRegistration {
+          client_id,
+          subject: None,
+          email: None,
+          plan_usage_granted: true,
+          reconnect_required: false,
+          client_rejected: false,
+        }),
+        session: record.session,
       })
       .await
       .map_err(|VaultUnavailable| ChatGptFailure::Storage)
@@ -875,7 +914,7 @@ impl ChatGptAuth {
       };
     }
     let Some(refresh_token) = session.refresh_token.clone() else {
-      self.require_reconnect(record).await;
+      self.require_reconnect(record, false).await;
       return Err(AccessError::NeedsReconnect);
     };
     let discovery = self
@@ -898,13 +937,12 @@ impl ChatGptAuth {
       Ok(Err(ExchangeError::Rejected(error)))
         if UNUSABLE_REFRESH_ERRORS.contains(&error.as_str()) =>
       {
-        self.require_reconnect(record).await;
+        self.require_reconnect(record, false).await;
         return Err(AccessError::NeedsReconnect);
       }
       Ok(Err(ExchangeError::Rejected(error))) if error == "invalid_client" => {
-        self.set_status(ChatGptStatus::Failed {
-          reason: ChatGptFailure::ClientRejected,
-        });
+        // This client can no longer renew; the next sign-in registers anew.
+        self.require_reconnect(record, true).await;
         return Err(AccessError::ClientRejected);
       }
       // Keep the tokens through a temporary failure.
@@ -926,50 +964,60 @@ impl ChatGptAuth {
       saved_at,
       ..session
     };
-    let granted = session.grants(PLAN_USAGE_SCOPE);
     let token = session.access_token.clone();
-    let next = ChatGptRecord {
-      registration: record.registration.map(|registration| ChatGptRegistration {
-        plan_usage_granted: granted,
-        ..registration
-      }),
-      session: Some(session),
-    };
+    if !session.grants(PLAN_USAGE_SCOPE) {
+      // Tokens that cannot use the plan are never kept: the renewed set is
+      // revoked and deleted, and the user signs in again to allow it.
+      let renewed = ChatGptRecord {
+        registration: record.registration.map(|registration| ChatGptRegistration {
+          plan_usage_granted: false,
+          ..registration
+        }),
+        session: Some(session),
+      };
+      self.require_reconnect(renewed, false).await;
+      return Err(AccessError::PlanUsageNotGranted);
+    }
     // Access token, expiry, scopes and the rotated refresh token change
     // together, or not at all.
     self
-      .with_vault(move |vault| vault.save(&next))
+      .save(ChatGptRecord {
+        registration: record.registration,
+        session: Some(session),
+      })
       .await
       .map_err(|VaultUnavailable| AccessError::Unavailable)?;
-    if !granted {
-      self.set_status(ChatGptStatus::Failed {
-        reason: ChatGptFailure::PlanUsageNotGranted,
-      });
-      return Err(AccessError::PlanUsageNotGranted);
-    }
     Ok(token)
   }
 
-  async fn require_reconnect(&self, record: ChatGptRecord) {
+  /// Ends a session whose tokens cannot be used: its refresh token is
+  /// revoked, the tokens are deleted, and the registration asks for a new
+  /// sign-in. With `client_rejected`, that sign-in registers a new client.
+  async fn require_reconnect(&self, record: ChatGptRecord, client_rejected: bool) {
     let email = record
       .session
       .as_ref()
       .and_then(|session| session.email.clone());
+    if let Some(session) = record.session.as_ref()
+      && let Some(refresh_token) = session.refresh_token.as_deref()
+      && !self.revoke(&session.client_id, refresh_token).await
+    {
+      tracing::warn!(
+        "unusable ChatGPT tokens were deleted without confirmed revocation"
+      );
+    }
     let next = ChatGptRecord {
       registration: record.registration.map(|registration| ChatGptRegistration {
         reconnect_required: true,
+        client_rejected: registration.client_rejected || client_rejected,
+        email: registration.email.or(email),
         ..registration
       }),
       session: None,
     };
-    if self
-      .with_vault(move |vault| vault.save(&next))
-      .await
-      .is_err()
-    {
-      tracing::warn!("expired ChatGPT tokens were not cleared");
+    if self.save(next).await.is_err() {
+      tracing::warn!("unusable ChatGPT tokens were not deleted");
     }
-    self.set_status(ChatGptStatus::NeedsReconnect { email });
   }
 
   /// The key a run's token requests must present: it changes with every
@@ -1008,9 +1056,9 @@ impl ChatGptAuth {
       }),
       session: None,
     };
-    self.with_vault(move |vault| vault.save(&next)).await?;
+    self.save(next).await?;
     (self.0.hooks.clear_harness_sign_in)();
-    self.set_status(ChatGptStatus::SignedOut);
+    self.set_transient(Transient::Idle);
     Ok(confirmed)
   }
 
@@ -1066,6 +1114,9 @@ fn select_client(record: &ChatGptRecord, intent: SignInIntent) -> ClientSelectio
   else {
     return ClientSelection::Register;
   };
+  if registration.client_rejected {
+    return ClientSelection::Register;
+  }
   ClientSelection::Returning {
     client_id: registration.client_id.clone(),
     login_hint: registration.email.clone(),

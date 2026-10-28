@@ -36,14 +36,14 @@ export const ChatGptCard = ({
             </Button>
           ) : null}
           {status.state === "connected" ? (
-            <>
-              <Button onClick={onManageUsage} variant="link">
-                {t("manageUsage")}
-              </Button>
-              <Button onClick={onDisconnect} variant="outline">
-                {t("disconnect")}
-              </Button>
-            </>
+            <Button onClick={onManageUsage} variant="link">
+              {t("manageUsage")}
+            </Button>
+          ) : null}
+          {status.sessionStored ? (
+            <Button onClick={onDisconnect} variant="outline">
+              {t("disconnect")}
+            </Button>
           ) : null}
           {offerNewAccount ? (
             <Button

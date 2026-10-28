@@ -25,12 +25,22 @@ describe("ChatGPT connection status", () => {
 
   test("accepts the shapes the native side sends", () => {
     for (const status of [
-      { state: "signed_out" },
-      { state: "signing_in" },
-      { email: "person@example.com", plan: null, state: "connected" },
-      { email: null, plan: "plus", state: "connected" },
-      { email: null, state: "needs_reconnect" },
-      { reason: "plan_usage_not_granted", state: "failed" },
+      { sessionStored: false, state: "signed_out" },
+      { sessionStored: true, state: "signed_out" },
+      { sessionStored: false, state: "signing_in" },
+      {
+        email: "person@example.com",
+        plan: null,
+        sessionStored: true,
+        state: "connected",
+      },
+      { email: null, plan: "plus", sessionStored: true, state: "connected" },
+      { email: null, sessionStored: false, state: "needs_reconnect" },
+      {
+        reason: "plan_usage_not_granted",
+        sessionStored: true,
+        state: "failed",
+      },
     ]) {
       expect(isChatGptStatus(status)).toBe(true);
     }
@@ -40,9 +50,11 @@ describe("ChatGPT connection status", () => {
     for (const value of [
       null,
       "connected",
-      { state: "connected", email: 1, plan: null },
-      { state: "failed", reason: "unknown" },
-      { state: "token", token: "secret" },
+      { state: "signed_out" },
+      { sessionStored: "yes", state: "signed_out" },
+      { email: 1, plan: null, sessionStored: true, state: "connected" },
+      { reason: "unknown", sessionStored: false, state: "failed" },
+      { sessionStored: true, state: "token", token: "secret" },
     ]) {
       expect(isChatGptStatus(value)).toBe(false);
     }

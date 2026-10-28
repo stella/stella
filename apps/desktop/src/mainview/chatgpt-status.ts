@@ -22,7 +22,12 @@ export const CHATGPT_FAILURES = [
 
 export type ChatGptFailure = (typeof CHATGPT_FAILURES)[number];
 
-export type ChatGptStatus =
+export type ChatGptStatus = ChatGptState & {
+  /** Tokens are stored on this computer, so Disconnect is offered. */
+  sessionStored: boolean;
+};
+
+type ChatGptState =
   | { state: "signed_out" }
   | { state: "signing_in" }
   | { state: "connected"; email: string | null; plan: string | null }
@@ -39,7 +44,7 @@ const isFailure = (value: unknown): value is ChatGptFailure =>
   CHATGPT_FAILURES.some((failure) => failure === value);
 
 export const isChatGptStatus = (value: unknown): value is ChatGptStatus => {
-  if (!isRecord(value)) {
+  if (!isRecord(value) || typeof value["sessionStored"] !== "boolean") {
     return false;
   }
   switch (value["state"]) {

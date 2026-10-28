@@ -82,7 +82,9 @@ pub async fn chatgpt_auth_start(
   } else {
     SignInIntent::SameAccount
   };
-  Ok(auth(&app, &gates)?.start(intent))
+  let auth = auth(&app, &gates)?;
+  auth.start(intent);
+  Ok(auth.status().await)
 }
 
 #[tauri::command]

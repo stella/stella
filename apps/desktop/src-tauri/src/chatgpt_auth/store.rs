@@ -29,6 +29,9 @@ pub(crate) struct ChatGptRegistration {
   pub plan_usage_granted: bool,
   /// The tokens stopped working; the user has to sign in again.
   pub reconnect_required: bool,
+  /// OpenAI no longer accepts this client; the next sign-in registers anew.
+  #[serde(default)]
+  pub client_rejected: bool,
 }
 
 /// One signed-in token set.
@@ -335,6 +338,7 @@ mod tests {
         email: Some("person@example.com".into()),
         plan_usage_granted: true,
         reconnect_required: false,
+        client_rejected: false,
       }),
       session: Some(session("access-secret", "refresh-secret")),
     };

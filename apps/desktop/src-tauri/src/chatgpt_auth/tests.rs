@@ -51,6 +51,8 @@ struct FakeState {
   live_refresh: Option<String>,
   issued: u32,
   refresh_errors: VecDeque<&'static str>,
+  /// The scopes a renewal grants.
+  refresh_scope: String,
   revoke_status: StatusCode,
 }
 
@@ -81,6 +83,7 @@ impl FakeOpenAi {
       live_refresh: None,
       issued: 0,
       refresh_errors: VecDeque::new(),
+      refresh_scope: ALL_SCOPES.into(),
       revoke_status: StatusCode::OK,
     }));
     let router = Router::new()
@@ -211,7 +214,7 @@ async fn token(
         "refresh_token": refresh,
         "token_type": "Bearer",
         "expires_in": 3600,
-        "scope": ALL_SCOPES,
+        "scope": fake.refresh_scope,
       }))
       .into_response()
     }
@@ -235,11 +238,11 @@ struct Browser {
 }
 
 /// Waits, without polling a clock, until the attempt in progress settles.
-async fn settle(auth: &ChatGptAuth, changed: &tokio::sync::Notify) -> ChatGptStatus {
+async fn settle(auth: &ChatGptAuth, changed: &tokio::sync::Notify) -> ChatGptState {
   loop {
     let status = auth.status().await;
-    if status != ChatGptStatus::SigningIn {
-      return status;
+    if status.state != ChatGptState::SigningIn {
+      return status.state;
     }
     tokio::time::timeout(Duration::from_secs(10), changed.notified())
       .await
@@ -255,6 +258,7 @@ struct Harness {
   browser: Browser,
   cleared_harness: Arc<Mutex<u32>>,
   http: DesktopHttpClient,
+  sign_in_timeout: Duration,
 }
 
 fn http() -> DesktopHttpClient {
@@ -271,14 +275,36 @@ impl Harness {
     crate::i18n::init_en();
     let fake = FakeOpenAi::start().await;
     let vault = Arc::new(MemoryVault::default());
-    let (open, opened) = mpsc::unbounded_channel();
     let cleared_harness = Arc::new(Mutex::new(0));
-    let cleared = Arc::clone(&cleared_harness);
     let changed = Arc::new(tokio::sync::Notify::new());
-    let notify = Arc::clone(&changed);
+    let (auth, browser) =
+      Self::app(&fake, sign_in_timeout, &vault, &cleared_harness, &changed);
+    Self {
+      changed,
+      fake,
+      auth,
+      vault,
+      browser,
+      cleared_harness,
+      http: http(),
+      sign_in_timeout,
+    }
+  }
+
+  /// One app process over the shared vault and fake issuer.
+  fn app(
+    fake: &FakeOpenAi,
+    sign_in_timeout: Duration,
+    vault: &Arc<MemoryVault>,
+    cleared_harness: &Arc<Mutex<u32>>,
+    changed: &Arc<tokio::sync::Notify>,
+  ) -> (ChatGptAuth, Browser) {
+    let (open, opened) = mpsc::unbounded_channel();
+    let cleared = Arc::clone(cleared_harness);
+    let notify = Arc::clone(changed);
     let auth = ChatGptAuth::new(
       fake.config(sign_in_timeout),
-      Arc::clone(&vault) as Arc<dyn store::ChatGptVault>,
+      Arc::clone(vault) as Arc<dyn store::ChatGptVault>,
       http(),
       ChatGptAuthHooks {
         open_browser: Box::new(move |url| open.send(url.to_owned()).is_ok()),
@@ -286,15 +312,20 @@ impl Harness {
         clear_harness_sign_in: Box::new(move || *cleared.lock().unwrap() += 1),
       },
     );
-    Self {
-      changed,
-      fake,
-      auth,
-      vault,
-      browser: Browser { opened },
-      cleared_harness,
-      http: http(),
-    }
+    (auth, Browser { opened })
+  }
+
+  /// Quits and starts the app again over the same stored connection.
+  fn restart(&mut self) {
+    let (auth, browser) = Self::app(
+      &self.fake,
+      self.sign_in_timeout,
+      &self.vault,
+      &self.cleared_harness,
+      &self.changed,
+    );
+    self.auth = auth;
+    self.browser = browser;
   }
 
   /// Waits for the browser to open and records the request at the fake, as
@@ -337,7 +368,7 @@ impl Harness {
     self.http.get(url).send().await.unwrap().status()
   }
 
-  async fn settled(&self) -> ChatGptStatus {
+  async fn settled(&self) -> ChatGptState {
     settle(&self.auth, &self.changed).await
   }
 
@@ -350,7 +381,7 @@ impl Harness {
   }
 
   async fn sign_in(&mut self, intent: SignInIntent) -> HashMap<String, String> {
-    assert_eq!(self.auth.start(intent), ChatGptStatus::SigningIn);
+    self.auth.start(intent);
     let params = self.authorization().await;
     let register = params["client_id"] == oauth::DYNAMIC_CLIENT_ID;
     let url = Self::callback_url(&params, &params["state"], register);
@@ -367,11 +398,11 @@ impl Harness {
 #[tokio::test]
 async fn first_sign_in_registers_verifies_and_stores_the_connection() {
   let mut harness = Harness::new(Duration::from_secs(30)).await;
-  assert_eq!(harness.auth.status().await, ChatGptStatus::SignedOut);
+  assert_eq!(harness.auth.status().await.state, ChatGptState::SignedOut);
   let params = harness.sign_in(SignInIntent::SameAccount).await;
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Connected {
+    ChatGptState::Connected {
       email: Some("person@example.com".into()),
       plan: Some("plus".into()),
     }
@@ -424,7 +455,7 @@ async fn first_sign_in_registers_verifies_and_stores_the_connection() {
   assert_ne!(again["code_challenge"], params["code_challenge"]);
   assert!(matches!(
     harness.settled().await,
-    ChatGptStatus::Connected { .. }
+    ChatGptState::Connected { .. }
   ));
 }
 
@@ -445,7 +476,7 @@ async fn a_sign_in_without_plan_usage_is_a_typed_failure() {
   );
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::PlanUsageNotGranted
     }
   );
@@ -466,7 +497,7 @@ async fn a_sign_in_without_plan_usage_is_a_typed_failure() {
   assert_eq!(params["prompt"], "consent");
   assert!(matches!(
     harness.settled().await,
-    ChatGptStatus::Connected { .. }
+    ChatGptState::Connected { .. }
   ));
 }
 
@@ -482,7 +513,7 @@ async fn a_callback_with_another_state_is_refused_without_an_exchange() {
   );
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::StateMismatch
     }
   );
@@ -499,7 +530,7 @@ async fn an_unanswered_sign_in_times_out_and_closes_its_listener() {
   let params = harness.authorization().await;
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::TimedOut
     }
   );
@@ -530,7 +561,7 @@ async fn a_pasted_final_url_completes_the_sign_in() {
       .complete_from_url(&pasted.replace("127.0.0.1", "localhost")),
     Err(CallbackUrlError::NotThisSignIn)
   );
-  assert_eq!(harness.auth.status().await, ChatGptStatus::SigningIn);
+  assert_eq!(harness.auth.status().await.state, ChatGptState::SigningIn);
   // Without the scheme, as an address bar shows it.
   harness
     .auth
@@ -538,7 +569,7 @@ async fn a_pasted_final_url_completes_the_sign_in() {
     .unwrap();
   assert!(matches!(
     harness.settled().await,
-    ChatGptStatus::Connected { .. }
+    ChatGptState::Connected { .. }
   ));
   // Used once: neither a second paste nor the browser can complete it again.
   assert_eq!(
@@ -558,7 +589,7 @@ async fn an_id_token_from_another_key_is_refused() {
     .await;
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::Verification
     }
   );
@@ -578,7 +609,7 @@ async fn a_returning_sign_in_with_another_account_keeps_the_saved_one() {
   harness.sign_in(SignInIntent::SameAccount).await;
   assert_eq!(
     harness.settled().await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::DifferentAccount
     }
   );
@@ -591,7 +622,7 @@ async fn cancelling_returns_to_the_saved_state_and_closes_the_listener() {
   harness.auth.start(SignInIntent::SameAccount);
   let params = harness.authorization().await;
   harness.auth.cancel();
-  assert_eq!(harness.settled().await, ChatGptStatus::SignedOut);
+  assert_eq!(harness.settled().await, ChatGptState::SignedOut);
   let late = Harness::callback_url(&params, &params["state"], true);
   harness.assert_refused(late).await;
 }
@@ -671,8 +702,8 @@ async fn an_unusable_refresh_token_requires_a_new_sign_in() {
   assert!(record.session.is_none());
   assert!(record.registration.unwrap().reconnect_required);
   assert_eq!(
-    harness.auth.status().await,
-    ChatGptStatus::NeedsReconnect {
+    harness.auth.status().await.state,
+    ChatGptState::NeedsReconnect {
       email: Some("person@example.com".into())
     }
   );
@@ -715,7 +746,7 @@ async fn disconnect_revokes_and_wipes_the_tokens_but_keeps_the_registration() {
   let record = harness.record();
   assert!(record.session.is_none());
   assert_eq!(record.registration.unwrap().client_id, ISSUED_CLIENT);
-  assert_eq!(harness.auth.status().await, ChatGptStatus::SignedOut);
+  assert_eq!(harness.auth.status().await.state, ChatGptState::SignedOut);
   assert_eq!(
     harness.auth.access(None).await,
     Err(AccessError::NotConnected)
@@ -756,7 +787,7 @@ async fn a_new_account_registers_a_new_client() {
   assert!(!params.contains_key("id_token_hint"));
   assert!(matches!(
     harness.settled().await,
-    ChatGptStatus::Connected { .. }
+    ChatGptState::Connected { .. }
   ));
   assert_eq!(
     harness.record().registration.unwrap().subject.as_deref(),
@@ -785,28 +816,159 @@ async fn discovery_naming_another_origin_is_not_trusted() {
   auth.start(SignInIntent::SameAccount);
   assert_eq!(
     settle(&auth, &changed).await,
-    ChatGptStatus::Failed {
+    ChatGptState::Failed {
       reason: ChatGptFailure::Verification
     }
   );
 }
 
+fn revoked(harness: &Harness) -> Vec<String> {
+  harness.fake.with(|fake| {
+    fake
+      .revocations
+      .iter()
+      .map(|revocation| revocation["token"].clone())
+      .collect()
+  })
+}
+
+#[tokio::test]
+async fn a_renewal_without_plan_usage_revokes_and_deletes_the_tokens() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  expire(&harness);
+  harness.fake.with(|fake| {
+    fake.refresh_scope = "email offline_access openid profile resource.invoke".into();
+  });
+  assert_eq!(
+    harness.auth.access(None).await,
+    Err(AccessError::PlanUsageNotGranted)
+  );
+  // The renewed refresh token was revoked, not kept.
+  assert_eq!(revoked(&harness), ["refresh-2"]);
+  assert!(harness.record().session.is_none());
+  let after_restart = |status: ChatGptStatus| {
+    assert_eq!(
+      status,
+      ChatGptStatus {
+        state: ChatGptState::NeedsReconnect {
+          email: Some("person@example.com".into())
+        },
+        session_stored: false,
+      }
+    );
+  };
+  after_restart(harness.auth.status().await);
+  harness.restart();
+  after_restart(harness.auth.status().await);
+  // The next sign-in asks for consent again.
+  harness
+    .fake
+    .with(|fake| fake.refresh_scope = ALL_SCOPES.into());
+  let params = harness.sign_in(SignInIntent::SameAccount).await;
+  assert_eq!(params["prompt"], "consent");
+}
+
+#[tokio::test]
+async fn a_rejected_client_loses_its_tokens_and_registers_anew() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  expire(&harness);
+  harness
+    .fake
+    .with(|fake| fake.refresh_errors.push_back("invalid_client"));
+  assert_eq!(
+    harness.auth.access(None).await,
+    Err(AccessError::ClientRejected)
+  );
+  assert_eq!(revoked(&harness), ["refresh-1"]);
+  assert!(harness.record().session.is_none());
+  harness.restart();
+  let status = harness.auth.status().await;
+  assert!(!status.session_stored);
+  assert!(matches!(status.state, ChatGptState::NeedsReconnect { .. }));
+  let params = harness.sign_in(SignInIntent::SameAccount).await;
+  assert_eq!(params["client_id"], oauth::DYNAMIC_CLIENT_ID);
+}
+
+#[tokio::test]
+async fn stored_tokens_always_offer_disconnect() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  harness.sign_in(SignInIntent::SameAccount).await;
+  harness.settled().await;
+  // A failed later attempt shows its failure; the tokens are still there.
+  harness.auth.start(SignInIntent::SameAccount);
+  let params = harness.authorization().await;
+  let declined = format!(
+    "{}?error=access_denied&state={}",
+    params["redirect_uri"], params["state"]
+  );
+  harness.browser_returns(&declined).await;
+  assert_eq!(
+    harness.settled().await,
+    ChatGptState::Failed {
+      reason: ChatGptFailure::Declined
+    }
+  );
+  assert!(harness.auth.status().await.session_stored);
+
+  // A stored session that cannot use the plan still counts after a restart.
+  harness
+    .vault
+    .record
+    .lock()
+    .unwrap()
+    .session
+    .as_mut()
+    .unwrap()
+    .scopes
+    .retain(|scope| scope != oauth::PLAN_USAGE_SCOPE);
+  harness.restart();
+  assert_eq!(
+    harness.auth.status().await,
+    ChatGptStatus {
+      state: ChatGptState::SignedOut,
+      session_stored: true,
+    }
+  );
+  assert_eq!(harness.auth.disconnect().await, Ok(true));
+  assert_eq!(revoked(&harness), ["refresh-1"]);
+  assert!(!harness.auth.status().await.session_stored);
+}
+
 #[test]
 fn statuses_serialize_without_tokens() {
   assert_eq!(
-    serde_json::to_value(ChatGptStatus::Connected {
-      email: Some("person@example.com".into()),
-      plan: None
+    serde_json::to_value(ChatGptStatus {
+      state: ChatGptState::Connected {
+        email: Some("person@example.com".into()),
+        plan: None
+      },
+      session_stored: true,
     })
     .unwrap(),
-    json!({ "state": "connected", "email": "person@example.com", "plan": null })
+    json!({
+      "state": "connected",
+      "email": "person@example.com",
+      "plan": null,
+      "sessionStored": true,
+    })
   );
   assert_eq!(
-    serde_json::to_value(ChatGptStatus::Failed {
-      reason: ChatGptFailure::PlanUsageNotGranted
+    serde_json::to_value(ChatGptStatus {
+      state: ChatGptState::Failed {
+        reason: ChatGptFailure::PlanUsageNotGranted
+      },
+      session_stored: false,
     })
     .unwrap(),
-    json!({ "state": "failed", "reason": "plan_usage_not_granted" })
+    json!({
+      "state": "failed",
+      "reason": "plan_usage_not_granted",
+      "sessionStored": false,
+    })
   );
   let record = store::ChatGptRecord {
     registration: None,
