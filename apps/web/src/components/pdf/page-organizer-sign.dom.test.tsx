@@ -98,6 +98,8 @@ type MountOptions = {
 
 const mount = ({ isDirty, saved }: MountOptions) => {
   const operationOwner = createPageOrganizerOperationOwner();
+  let buttonRequest: Parameters<typeof operationOwner.isCurrent>[0] | null =
+    null;
   operationOwnerForFlow = operationOwner;
   const events: string[] = [];
   const pending: Promise<void>[] = [];
@@ -115,14 +117,20 @@ const mount = ({ isDirty, saved }: MountOptions) => {
           })}
         >
           <PageOrganizerSignAction
-            beginRequest={operationOwner.beginRequest}
+            beginRequest={(operation) => {
+              const request = operationOwner.beginRequest(operation);
+              buttonRequest = request;
+              return request;
+            }}
             closeEditor={() => {
               events.push("close editor");
             }}
             disabled={false}
             isDirty={isDirty}
             operation={operationOwner.operation}
-            saveVersion={async () => {
+            saveVersion={async (request) => {
+              expect(request === buttonRequest).toBe(true);
+              expect(operationOwner.isCurrent(request)).toBe(true);
               events.push("save");
               return await Promise.resolve(saved);
             }}
@@ -141,7 +149,11 @@ test("with unsaved page edits, signing saves a version first and signs that vers
   fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
   await Promise.all(pending);
 
-  expect(events).toEqual(["save", `sign ${savedVersion.fieldId}`]);
+  expect(events).toEqual([
+    "save",
+    `sign ${savedVersion.fieldId}`,
+    "close editor",
+  ]);
 });
 
 test("with no page edits, signing places the stamp on the open version in the viewer", () => {

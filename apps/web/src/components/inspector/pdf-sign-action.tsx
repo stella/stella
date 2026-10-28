@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -26,7 +26,6 @@ import type {
   DesktopActionStatus,
   DesktopSetupStep,
 } from "@/features/desktop/desktop-action-gate.logic";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -71,25 +70,35 @@ export type PdfSignFlow = {
  * desktop through this flow.
  */
 export const usePdfSignFlow = (
-  documentFieldId?: string | null,
+  activeDocumentId: string | undefined,
 ): PdfSignFlow => {
   const t = useTranslations();
   const gate = useDesktopActionGate("sign-pdf");
   const signing = useDesktopPdfSign({ connectDesktop: gate.connect });
   const sessionRef = useRef<SigningAuthority | null>(null);
-  useExternalSyncEffect(() => {
+  const activeDocumentIdRef = useRef(activeDocumentId);
+  useLayoutEffect(() => {
+    activeDocumentIdRef.current = activeDocumentId;
     const session = sessionRef.current;
     if (
-      session === null ||
-      documentFieldId === undefined ||
-      documentFieldId === session.fieldId
+      session !== null &&
+      (activeDocumentId === undefined ||
+        activeDocumentId !== session.documentId)
     ) {
-      return;
+      session.cancelled = true;
+      sessionRef.current = null;
+      endPdfSignPlacement();
     }
-    session.cancelled = true;
-    sessionRef.current = null;
-    endPdfSignPlacement();
-  }, [documentFieldId]);
+    return () => {
+      activeDocumentIdRef.current = undefined;
+      const ownedSession = sessionRef.current;
+      if (ownedSession !== null) {
+        ownedSession.cancelled = true;
+        sessionRef.current = null;
+        endPdfSignPlacement();
+      }
+    };
+  }, [activeDocumentId]);
   const run = (perform: () => void) => {
     if (signing.isSigning) {
       signing.notifyAlreadySigning();
@@ -103,7 +112,9 @@ export const usePdfSignFlow = (
   ) => {
     sessionRef.current = authority;
     const isCurrent = () =>
-      sessionRef.current === authority && !authority.cancelled;
+      sessionRef.current === authority &&
+      !authority.cancelled &&
+      activeDocumentIdRef.current === authority.documentId;
     const cancel = () => {
       authority.cancelled = true;
       if (sessionRef.current === authority) {
@@ -179,10 +190,14 @@ export const usePdfSignFlow = (
   };
 };
 
-type SigningAuthority = { cancelled: boolean; fieldId: string; id: symbol };
+type SigningAuthority = {
+  cancelled: boolean;
+  documentId: string;
+  id: symbol;
+};
 const createAuthority = (target: PdfSignTarget): SigningAuthority => ({
   cancelled: false,
-  fieldId: target.fieldId,
+  documentId: target.entityId,
   id: Symbol("pdf-signing-session"),
 });
 
@@ -204,7 +219,7 @@ export const usePdfSignFromList = ({
   target,
   workspaceId,
 }: PdfSignFromListOptions) => {
-  const flow = usePdfSignFlow();
+  const flow = usePdfSignFlow(target?.entityId);
   const sign = () => {
     if (target === null) {
       return;
@@ -234,7 +249,7 @@ type PdfSignButtonProps = {
  * placement and, pressed again while placing, back out of it.
  */
 export const PdfSignButton = ({ target }: PdfSignButtonProps) => {
-  const flow = usePdfSignFlow();
+  const flow = usePdfSignFlow(target.entityId);
   const isPlacing = usePdfSignPlacementStore(
     (state) => state.session?.fieldId === target.fieldId,
   );

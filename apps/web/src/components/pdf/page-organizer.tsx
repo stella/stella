@@ -1542,11 +1542,8 @@ const LoadedPDFPageOrganizer = ({
               operationOwner.beginRequest(operationToken)
             }
             operation={operationOwner.operation}
-            saveVersion={async () =>
-              await saveVersionForSigning(
-                operationOwner.beginRequest(operationOwner.operation),
-                pdfSign.target,
-              )
+            saveVersion={async (request) =>
+              await saveVersionForSigning(request, pdfSign.target)
             }
             sign={pdfSign}
           />

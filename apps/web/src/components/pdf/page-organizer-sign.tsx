@@ -33,7 +33,9 @@ type PageOrganizerSignActionProps = {
   ) => OrganizerOperationRequest;
   operation: LiveOrganizerOperation;
   /** Saves the page edits as a new version and resolves that version, or `null`. */
-  saveVersion: () => Promise<PdfSignTarget | null>;
+  saveVersion: (
+    request: OrganizerOperationRequest,
+  ) => Promise<PdfSignTarget | null>;
   sign: PageOrganizerSign;
 };
 
@@ -61,11 +63,15 @@ export const PageOrganizerSignAction = ({
             const request = beginRequest(operation);
             if (isDirty) {
               pdfSignFlow.startWith(async () => {
-                const savedTarget = await saveVersion();
+                const savedTarget = await saveVersion(request);
                 if (savedTarget === null) {
                   return null;
                 }
-                pdfSignFlow.transferToSigning(request, savedTarget);
+                pdfSignFlow.transferToSigning(
+                  request,
+                  savedTarget,
+                  closeEditor,
+                );
                 return null;
               });
               return;
