@@ -1144,8 +1144,6 @@ export type RunHolder = {
 
 export type InsertedRun =
   | { type: "assigned"; holder: RunHolder }
-  | { type: "duplicate" }
-  | { type: "conflict" }
   | { type: "no_computer" }
   | {
       type: "harness_unavailable";
@@ -1156,8 +1154,8 @@ export type InsertedRun =
 /**
  * Bind a new run to a connected runner and queue its `run.start`, both or
  * neither. The runner must report the harness ready at the requested version
- * with the requested model. The run id is the idempotency key: assigning it
- * again to the same desktop is a duplicate, to another one a conflict.
+ * with the requested model. The caller mints the run id, so nothing here
+ * answers for a run id another tenant holds.
  */
 export const insertAssignedRun = async (
   db: DesktopRunnerDb,
@@ -1165,22 +1163,6 @@ export const insertAssignedRun = async (
 ): Promise<InsertedRun> =>
   await withAggregateTransaction(db, async (tx) => {
     const { owner, runId, desktopId, harness, harnessVersion, now } = options;
-    const [existingRun] = await tx
-      .select({
-        userId: runs.userId,
-        organizationId: runs.organizationId,
-        desktopId: runs.desktopId,
-      })
-      .from(runs)
-      .where(eq(runs.runId, runId))
-      .limit(1);
-    if (existingRun !== undefined) {
-      return existingRun.userId === owner.userId &&
-        existingRun.organizationId === owner.organizationId &&
-        existingRun.desktopId === desktopId
-        ? { type: "duplicate" }
-        : { type: "conflict" };
-    }
     const [target] = await tx
       .select({
         deviceJkt: runner.deviceJkt,
@@ -1214,27 +1196,20 @@ export const insertAssignedRun = async (
       return { type: "model_unavailable" };
     }
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const inserted = await tx
-      .insert(runs)
-      .values({
-        runId,
-        userId: owner.userId,
-        organizationId: owner.organizationId,
-        desktopId,
-        deviceJkt: target.deviceJkt,
-        harness,
-        harnessVersion,
-        workspaceIds: [...options.workspaceIds],
-        state: "assigned",
-        leaseExpiresAt: leaseUntil(now, options.leaseMs),
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoNothing()
-      .returning({ runId: runs.runId });
-    if (inserted.length === 0) {
-      return { type: "duplicate" };
-    }
+    await tx.insert(runs).values({
+      runId,
+      userId: owner.userId,
+      organizationId: owner.organizationId,
+      desktopId,
+      deviceJkt: target.deviceJkt,
+      harness,
+      harnessVersion,
+      workspaceIds: [...options.workspaceIds],
+      state: "assigned",
+      leaseExpiresAt: leaseUntil(now, options.leaseMs),
+      createdAt: now,
+      updatedAt: now,
+    });
     await tx.insert(desktopRunnerCommands).values({
       runId,
       kind: "run.start",

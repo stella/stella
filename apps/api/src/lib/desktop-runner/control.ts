@@ -74,7 +74,6 @@ export type PickedDesktop =
 
 export type StartLocalRunInput = {
   owner: RunOwner;
-  runId: string;
   desktopId: string;
   harness: AgentHarness;
   harnessVersion: string;
@@ -89,10 +88,8 @@ export type StartLocalRunInput = {
 };
 
 export type StartLocalRunOutcome =
-  | { type: "assigned" }
-  | { type: "duplicate" }
-  /** The run id is already bound to another computer or member. */
-  | { type: "conflict" }
+  /** The run's id is minted here, so no caller-chosen id can name another's run. */
+  | { type: "assigned"; runId: string }
   | { type: "no_computer" }
   | {
       type: "harness_unavailable";
@@ -204,9 +201,10 @@ const startRun = async (
   deps: ControlDeps,
   input: StartLocalRunInput,
 ): Promise<Result<StartLocalRunOutcome, DesktopRunnerControlError>> => {
+  const runId = Bun.randomUUIDv7();
   const message = {
     type: DESKTOP_RUNNER_SERVER_MESSAGE.runStart,
-    runId: input.runId,
+    runId,
     harness: input.harness,
     harnessVersion: input.harnessVersion,
     model: input.model,
@@ -234,7 +232,7 @@ const startRun = async (
     try: async () =>
       await insertAssignedRun(deps.db, {
         owner: input.owner,
-        runId: input.runId,
+        runId,
         desktopId: input.desktopId,
         harness: input.harness,
         harnessVersion: input.harnessVersion,
@@ -253,7 +251,7 @@ const startRun = async (
   const outcome = inserted.value;
   if (outcome.type === "assigned") {
     deps.doorbell.ring(outcome.holder);
-    return Result.ok({ type: "assigned" });
+    return Result.ok({ type: "assigned", runId });
   }
   return Result.ok(outcome);
 };
