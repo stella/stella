@@ -1,13 +1,11 @@
 export type {
   AgentEngine,
-  AgentHarness,
   SandboxMcp,
   StellaSandboxInput,
   StellaSandboxMcpBinding,
 } from "./sandbox";
 export {
   AGENT_ENGINES,
-  AGENT_HARNESSES,
   defineStellaSandbox,
   isAgentEngine,
   isAgentHarness,

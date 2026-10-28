@@ -54,6 +54,8 @@ mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
+#[cfg(test)]
+mod runner_protocol;
 mod session_manager;
 mod session_store;
 mod sse;

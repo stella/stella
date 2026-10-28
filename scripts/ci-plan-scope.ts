@@ -326,6 +326,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-handoff.ts",
     "packages/api-contract/src/desktop-presence-policy.json",
     "packages/api-contract/src/desktop-presence-request.fixture.json",
+    "packages/api-contract/src/desktop-runner.fixtures.json",
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",

@@ -8,6 +8,11 @@ import {
 } from "@tanstack/ai-sandbox";
 import { panic } from "better-result";
 
+import {
+  AGENT_HARNESSES,
+  type AgentHarness,
+} from "@stll/api-contract/agent-harness";
+
 import { UserDefinedDockerNetwork } from "./bun-docker/api";
 import { bunDockerSandbox } from "./bun-docker/provider";
 import { stellaSandboxPolicy } from "./policy";
@@ -20,13 +25,6 @@ import { stellaSandboxPolicy } from "./policy";
  */
 export const AGENT_ENGINES = ["cloud", "local"] as const;
 export type AgentEngine = (typeof AGENT_ENGINES)[number];
-
-/**
- * Which coding-agent harness drives the run. `codex` is the launch harness
- * (sanctioned integration surface); others land behind their own approvals.
- */
-export const AGENT_HARNESSES = ["codex", "claude-code", "opencode"] as const;
-export type AgentHarness = (typeof AGENT_HARNESSES)[number];
 
 const AGENT_ENGINE_SET: ReadonlySet<string> = new Set(AGENT_ENGINES);
 const AGENT_HARNESS_SET: ReadonlySet<string> = new Set(AGENT_HARNESSES);
