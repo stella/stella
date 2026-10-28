@@ -40,7 +40,7 @@ CREATE POLICY "document_review_finding_decisions_workspace_select"
 
 CREATE POLICY "document_review_finding_decisions_workspace_insert"
   ON "document_review_finding_decisions" AS PERMISSIVE FOR INSERT TO stella
-  WITH CHECK (CASE
+  WITH CHECK ((CASE
     WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting(
       'app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[]))
     THEN true
@@ -48,7 +48,11 @@ CREATE POLICY "document_review_finding_decisions_workspace_insert"
       SELECT aw.authorized_workspace_id
       FROM public.stella_authorized_workspaces aw
     )
-  END);--> statement-breakpoint
+  END) AND EXISTS (
+    SELECT 1 FROM public.document_review_findings decided_finding
+    WHERE decided_finding.id = document_review_finding_decisions.finding_id
+      AND decided_finding.workspace_id = document_review_finding_decisions.workspace_id
+  ));--> statement-breakpoint
 
 CREATE POLICY "document_review_finding_decisions_owner_access"
   ON "document_review_finding_decisions" AS PERMISSIVE FOR ALL TO public

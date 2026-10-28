@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
@@ -6,11 +7,35 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "../../db/document-review-finding-decision-backfill";
+import { createUngatedTableGateForTests } from "../../db/online-ddl";
+import type { OnlineMigrationConnection } from "../../db/online-migration-connection";
+
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
+/** The production repair, pointed at this test's schema instead of public. */
+const connectionIn = (
+  client: SQL,
+  schema: string,
+): OnlineMigrationConnection => {
+  const scoped = (statement: string) =>
+    statement.replaceAll(
+      "public.document_review_",
+      () => `${schema}.document_review_`,
+    );
+  return {
+    query: async (statement, parameters = []) =>
+      await client.unsafe<unknown[]>(scoped(statement), [...parameters]),
+    execute: async (statement, parameters = []) => {
+      await client.unsafe(scoped(statement), [...parameters]);
+    },
+    release: () => {},
+  };
+};
+
 describe.skipIf(!enabled)("document review finding decision history", () => {
-  test("backfills decisions and enforces append-only workspace isolation", async () => {
+  test("backfills through the production repair, converges, and enforces append-only workspace isolation", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL required");
     }
@@ -42,6 +67,7 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
             SELECT NULL::uuid AS authorized_workspace_id WHERE false;
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           GRANT SELECT ON stella_authorized_workspaces TO stella;
+          GRANT SELECT ON document_review_findings TO stella;
           INSERT INTO "user" VALUES ('${actorId}');
           INSERT INTO document_review_findings VALUES
             ('${acceptedFinding}', '${visibleWorkspace}', 'accepted', '${actorId}', '2026-01-01T00:00:00Z'),
@@ -61,26 +87,48 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
               "public.stella_authorized_workspaces",
               () => `${schema}.stella_authorized_workspaces`,
             )
+            .replaceAll(
+              "public.document_review_",
+              () => `${schema}.document_review_`,
+            )
             .split("--> statement-breakpoint")) {
             await tx.execute(sql.raw(statement));
           }
         });
+
+        // The accepted finding already has history (a handler write after
+        // the migration); the backfill must not give it a second event.
         await client.unsafe(`
           INSERT INTO document_review_finding_decisions
-            (id, workspace_id, finding_id, decision, reason, actor_id, created_at)
-          SELECT gen_random_uuid(), workspace_id, id,
-            CASE decision WHEN 'accepted' THEN 'accepted' WHEN 'dismissed' THEN 'rejected' END,
-            NULL, decided_by, decided_at
-          FROM document_review_findings WHERE decision <> 'open'
+            (id, workspace_id, finding_id, decision, actor_id, created_at)
+          VALUES (gen_random_uuid(), '${visibleWorkspace}', '${acceptedFinding}',
+            'accepted', '${actorId}', '2026-01-01T00:00:00Z')
         `);
 
+        const connection = connectionIn(client, schema);
+        const tables = createUngatedTableGateForTests(connection);
+        const repair = DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL;
+        expect(await repair.readCompletion(connection)).toMatchObject({
+          type: "incomplete",
+        });
+        expect(await repair.repair(connection, tables)).toEqual({
+          type: "complete",
+        });
+        expect(await repair.readCompletion(connection)).toEqual({
+          type: "complete",
+        });
+        // A second run on a completed database changes nothing.
+        expect(await repair.repair(connection, tables)).toEqual({
+          type: "complete",
+        });
+
         const backfill = await client<
-          { findingId: string; decision: string | null }[]
-        >`SELECT finding_id AS "findingId", decision
+          { findingId: string; decision: string | null; actorId: string }[]
+        >`SELECT finding_id AS "findingId", decision, actor_id AS "actorId"
           FROM document_review_finding_decisions ORDER BY created_at`;
         expect([...backfill]).toEqual([
-          { findingId: acceptedFinding, decision: "accepted" },
-          { findingId: dismissedFinding, decision: "rejected" },
+          { findingId: acceptedFinding, decision: "accepted", actorId },
+          { findingId: dismissedFinding, decision: "rejected", actorId },
         ]);
 
         await client.unsafe(`SET ROLE stella`);
@@ -93,6 +141,28 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
         expect([...visible]).toEqual([
           { findingId: acceptedFinding, decision: "accepted" },
         ]);
+
+        // A finding in the event's own workspace can be decided.
+        await client.unsafe(`
+          INSERT INTO document_review_finding_decisions
+            (id, workspace_id, finding_id, decision, actor_id)
+          VALUES (gen_random_uuid(), '${visibleWorkspace}', '${openFinding}',
+            'accepted', '${actorId}')
+        `);
+        // A visible workspace cannot be paired with another workspace's
+        // finding to forge that finding's history.
+        expect(
+          await rejectionOf(
+            client.unsafe(`
+              INSERT INTO document_review_finding_decisions
+                (id, workspace_id, finding_id, decision, actor_id)
+              VALUES (gen_random_uuid(), '${visibleWorkspace}', '${dismissedFinding}',
+                'accepted', '${actorId}')
+            `),
+          ),
+        ).toMatchObject({
+          message: expect.stringMatching(/row-level security/u),
+        });
         expect(
           await rejectionOf(
             client`UPDATE document_review_finding_decisions SET reason = 'changed'`,

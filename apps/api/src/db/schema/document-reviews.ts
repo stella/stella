@@ -411,7 +411,14 @@ export const documentReviewFindingDecisions = p.pgTable(
     p.pgPolicy("document_review_finding_decisions_workspace_insert", {
       for: "insert",
       to: stella,
-      withCheck: workspaceCheck,
+      // The foreign key checks only the finding's id: the finding must also
+      // be in the event's workspace, or one workspace could write another's
+      // history. Outer columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND EXISTS (
+        SELECT 1 FROM public.document_review_findings decided_finding
+        WHERE decided_finding.id = document_review_finding_decisions.finding_id
+          AND decided_finding.workspace_id = document_review_finding_decisions.workspace_id
+      )`,
     }),
     p.pgPolicy("document_review_finding_decisions_owner_access", {
       for: "all",
