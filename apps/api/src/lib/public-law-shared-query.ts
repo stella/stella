@@ -7,6 +7,7 @@ export const PUBLIC_LAW_SHARED_QUERY = {
   caseLawCourtCount: "case-law.court-count",
   caseLawCourtWeights: "case-law.court-weights",
   caseLawCoverageArrivals: "case-law.coverage-arrivals",
+  caseLawCoverageSummary: "case-law.coverage-summary",
   caseLawCoverageSources: "case-law.coverage-sources",
   caseLawDecisionRead: "case-law.decision-read",
   caseLawDecisionTextPresence: "case-law.decision-text-presence",

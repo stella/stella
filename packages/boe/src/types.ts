@@ -7,6 +7,14 @@ export type BoeSearchHit = {
   titulo?: string;
   fecha_publicacion?: string;
   fecha_disposicion?: string;
+  fecha_actualizacion?: string;
+  fecha_vigencia?: string;
+  numero_oficial?: string;
+  diario?: string;
+  diario_numero?: string;
+  /** "S" when the norm is no longer in force, "N" otherwise. */
+  vigencia_agotada?: string;
+  ambito?: { codigo?: string; texto?: string };
   departamento?: { codigo?: string; texto?: string };
   rango?: { codigo?: string; texto?: string };
   estado_consolidacion?: { codigo?: string; texto?: string };

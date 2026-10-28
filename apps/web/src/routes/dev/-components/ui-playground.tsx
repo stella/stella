@@ -360,6 +360,7 @@ export function UiPlayground() {
                 <div className="flex flex-wrap items-center gap-2">
                   <SplitButton
                     size="sm"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {
@@ -378,6 +379,7 @@ export function UiPlayground() {
                   </SplitButton>
                   <SplitButton
                     size="md"
+                    primaryContent="icon"
                     primaryLabel={t("common.download")}
                     menuLabel={t("workspaces.files.downloadAs")}
                     onPrimaryClick={() => {

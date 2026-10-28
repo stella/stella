@@ -146,14 +146,19 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo/fingerprint",
       "expo",
       "expo-constants",
+      "expo-crypto",
+      "expo-dev-client",
       "expo-doctor",
       "expo-linking",
       "expo-router",
+      "expo-secure-store",
       "expo-status-bar",
       "expo-system-ui",
       "expo-updates",
+      "expo-web-browser",
       "react-native-safe-area-context",
       "react-native-screens",
     ],
@@ -525,6 +530,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   ["jszip", ["https://raw.githubusercontent.com/Stuk/jszip/HEAD/llms.txt"]],
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
+  [
+    "lightningcss",
+    [
+      "https://lightningcss.dev/llms.txt",
+      "https://raw.githubusercontent.com/parcel-bundler/lightningcss/HEAD/llms.txt",
+    ],
+  ],
   [
     "nodemailer",
     ["https://nodemailer.com/llms.txt", "https://nodemailer.com/docs/llms.txt"],

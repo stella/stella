@@ -407,6 +407,7 @@ const submitSecret = createSafeRootHandler(
           return abortTransaction(
             new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Private input storage is unavailable",
             }),
           );

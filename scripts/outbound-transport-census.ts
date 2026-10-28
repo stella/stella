@@ -929,6 +929,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/web/src/lib/public-law-api.ts",
+    class: "package-owned-client",
+    reason:
+      "Classifies public law read failures with the fetch package's connection-failure helper.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/lib/public-law-sitemap.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads public law sitemap shards from the configured API.",
@@ -971,7 +978,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button.tsx",
+    path: "apps/web/src/components/billing/invoice-pdf-download-button.tsx",
     class: "operator-configured-infrastructure",
     reason: "Downloads invoice PDFs from API-issued storage URLs.",
     transports: ["module:@stll/fetch"],

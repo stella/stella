@@ -1,6 +1,6 @@
 import { linkOptions } from "@tanstack/react-router";
 
-import { statuteActLabel } from "@stll/api-contract/statute-act-number";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 
 import { yearDateRange } from "@/features/case-law/case-law-index-search.logic";
@@ -12,6 +12,7 @@ import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 export const statuteLawCrumbTrailOf = ({
   eli,
   title,
+  documentType,
   country,
   status,
   versionValidFrom,
@@ -26,9 +27,14 @@ export const statuteLawCrumbTrailOf = ({
   | "versionValidFrom"
   | "expressionKind"
   | "windowDisposition"
->) => {
+> & { documentType?: string | null }) => {
   const identity = statuteDocumentIdentity(eli);
-  const label = statuteActLabel({ eli, title });
+  const label = statuteDisplayLabel({
+    eli,
+    title,
+    country,
+    documentType: documentType ?? null,
+  });
   const year = identity.year === null ? null : Number(identity.year);
   return {
     kind: "statute",
@@ -36,9 +42,9 @@ export const statuteLawCrumbTrailOf = ({
     validFrom: versionValidFrom,
     expression: { expressionKind, windowDisposition },
     identity,
-    citation: label.number,
-    shortTitle: label.name,
-    fullTitle: title,
+    citation: label.identity,
+    shortTitle: label.subject,
+    fullTitle: label.text,
     yearLink:
       year === null
         ? null

@@ -303,6 +303,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-first-observer-entry.fixture.ts", [
     "no-first-observer-entry/no-first-observer-entry",
   ]),
+  fixtureRuleOverride("no-hookless-use-function.fixture.ts", [
+    "no-hookless-use-function/no-hookless-use-function",
+  ]),
   fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
@@ -439,6 +442,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
     "no-justified-reader-text/no-justified-reader-text",
+  ]),
+  fixtureRuleOverride("no-sm-breakpoint-in-desktop.fixture.tsx", [
+    "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop",
   ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
@@ -1721,6 +1727,7 @@ const config = defineConfig({
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
     "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
+    "**/*.config.cjs",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
     "types/**/*.d.ts",
@@ -1780,6 +1787,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
@@ -1831,6 +1839,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -1975,6 +1984,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
     "./.oxlint-plugins/no-justified-reader-text.ts",
+    "./.oxlint-plugins/no-sm-breakpoint-in-desktop.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -2025,6 +2035,7 @@ const config = defineConfig({
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
+    "./.oxlint-plugins/no-lazy-wrapped-content.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
     "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
@@ -2957,6 +2968,16 @@ const config = defineConfig({
       },
     },
     {
+      // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
+      // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
+      // fresh array instead (apps/mobile/src/architecture.test.ts).
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
+    },
+    {
       // Two guards contradict each other in apps/web; this override picks one.
       //
       // React Compiler: bails out of any component or hook containing a logical
@@ -3755,6 +3776,16 @@ const config = defineConfig({
       },
     },
     {
+      // Desktop windows start `sm` at zero so the design system's pointer
+      // sizes apply in every window; a layout that follows the window's
+      // width names that width instead (apps/desktop/src/mainview/index.css).
+      files: ["apps/desktop/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-sm-breakpoint-in-desktop/no-sm-breakpoint-in-desktop": "error",
+      },
+    },
+    {
       // `type="search"` is the whole contract: the @stll/ui Input draws the
       // search icon and reserves its inline-start space. A caller that adds a
       // second icon or its own leading padding doubles the glyph and shifts
@@ -3817,6 +3848,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
+      },
+    },
+    {
+      // React mounts a Suspense boundary's content in place of its fallback,
+      // so a lazy chunk mounted around content already on screen (a reader,
+      // a viewer) replaces it, DOM node, scroll position and focus included.
+      // Lazy chunks mount beside the content they add to.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-lazy-wrapped-content.fixture.tsx",
+      ],
+      rules: {
+        "no-lazy-wrapped-content/no-lazy-wrapped-content": "error",
       },
     },
     {
@@ -4174,6 +4219,25 @@ const config = defineConfig({
       excludeFiles: ["**/*.{test,spec}.{ts,tsx}", "**/__tests__/**"],
       rules: {
         "tooltip-provider-owner/tooltip-provider-owner": "error",
+      },
+    },
+    {
+      // Sources the React Compiler compiles: the web and MCP app bundles
+      // with the workspace packages they import, and the Expo app. The
+      // compiler skips a `use*` function that calls no hook.
+      files: [
+        ...PRODUCT_FRONTEND_FILES,
+        "packages/*/src/**/*.{ts,tsx}",
+        "apps/mobile/src/**/*.{ts,tsx}",
+      ],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        // The compiler's own exclusion (REACT_COMPILER_EXCLUDE).
+        "**/src/hooks/use-effect.ts",
+      ],
+      rules: {
+        "no-hookless-use-function/no-hookless-use-function": "error",
       },
     },
     {
@@ -4831,6 +4895,26 @@ const config = defineConfig({
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
+      },
+    },
+    {
+      // Tabs can remain open while another route family is active. Context
+      // belongs to shared providers, including for tabs owned outside inspector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
+        "apps/web/src/**/*inspector*.tsx",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
+        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
+        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
+        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
+        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
+        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+      ],
+      rules: {
+        "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
           "error",
       },
     },
@@ -5961,10 +6045,6 @@ const config = defineConfig({
         "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
       ],
-      // Open pull request 6989 rewrites this file's teardown and migrates it.
-      excludeFiles: [
-        "apps/web/src/components/legal-reader/reader-breadcrumb.dom.test.tsx",
-      ],
       rules: {
         "no-dropped-fake-timers/no-dropped-fake-timers": "error",
       },
@@ -6513,14 +6593,11 @@ const config = defineConfig({
       // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize/search-query-matcher,
       // which fold case, accents and ß/ł/ø alike in every UI locale; a
       // lowercase-only compare misses "Dvořák" for "dvorak". The decision
-      // reader's find and query marks fold through the same key. The table
-      // find highlighter is exempt: it marks what the server's
-      // accent-sensitive ILIKE matched, and marking more would claim matches
-      // the server never made. The contact import derives custom field ids
-      // from labels with stripDiacritics, an id rather than a match, and ids
-      // already minted must not change. Tests compute expected values
-      // independently of the owner, and the design system's browser fixtures
-      // render primitives bare.
+      // reader's find and query marks fold through the same key. The contact
+      // import derives custom field ids from labels with stripDiacritics, an
+      // id rather than a match, and ids already minted must not change. Tests
+      // compute expected values independently of the owner, and the design
+      // system's browser fixtures render primitives bare.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "packages/decision-reader/src/**/*.{ts,tsx}",
@@ -6530,7 +6607,6 @@ const config = defineConfig({
       ],
       excludeFiles: [
         "**/*.test.{ts,tsx}",
-        "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
         "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
         "packages/ui/src/components/fixtures/**",
       ],
