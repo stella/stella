@@ -2,8 +2,7 @@ import { panic } from "better-result";
 import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 export type PostgresTestSelection =
-  | { mode: "all" | "none" }
-  | { mode: "selected"; files: readonly string[] };
+  { mode: "all" | "none" } | { mode: "selected"; files: readonly string[] };
 
 const encodeJson = (value: unknown) =>
   deflateRawSync(JSON.stringify(value), { level: 9 }).toString("base64");
