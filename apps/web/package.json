@@ -37,6 +37,7 @@
     "test:e2e:anonymized-export": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.anonymized-export.config.ts",
     "test:e2e:stack-redaction": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.stack-redaction.config.ts",
     "test:e2e:collab": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.collab.config.ts",
+    "test:e2e:phone": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.phone.config.ts --project phone-layout",
     "test:e2e:ui-playground": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts",
     "test:e2e:ui-playground:update": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.ui-playground.config.ts --update-snapshots=all",
     "test:e2e:marketing": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.marketing.config.ts --project app",

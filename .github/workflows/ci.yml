@@ -5101,7 +5101,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-phone-layouts.json
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_OUTPUT_DIR: test-results/phone-layout
-        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- phone-layout.spec.ts --project=phone-layout
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:phone
 
       - name: Upload phone layout report
         if: always() && steps.phone-layout.outcome != 'skipped'

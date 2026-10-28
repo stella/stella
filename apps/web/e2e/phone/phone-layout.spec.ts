@@ -20,8 +20,8 @@ import {
 } from "../helpers/smoke-route-defs";
 import { createTestWorkspace } from "../helpers/workspace";
 
-// Walks the route smoke table on the narrowest current iPhone (see the
-// phone-layout project) and holds every page to the phone layout rules.
+// Walks the route smoke table on the narrowest current iPhone (see
+// playwright.phone.config.ts) and holds every page to the phone layout rules.
 // Redirect aliases are skipped: each target is its own entry in the table.
 
 const NETWORK_QUIET_MS = 500;
@@ -75,7 +75,7 @@ test.describe.serial("pages fit a phone", () => {
   test("the browser reports a touch screen", async ({ page }) => {
     // Without these the touch rules (hover-only controls, enlarged hit
     // areas) would be checked against a desktop pointer.
-    await page.goto("/workspaces");
+    await page.goto("/workspaces", { waitUntil: "domcontentloaded" });
     expect(
       await page.evaluate(() => ({
         coarse: matchMedia("(pointer: coarse)").matches,
