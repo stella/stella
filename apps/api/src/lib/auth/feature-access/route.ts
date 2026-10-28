@@ -44,11 +44,7 @@ export const featureAccessGate = (
       // route's scope) hears the challenge, so its client can refresh or ask
       // for the scope again; it already proved it is a client of this
       // server. Every other refusal still answers like an absent route.
-      if (
-        (authorization.statusCode === 401 ||
-          authorization.statusCode === 403) &&
-        bearerChallenge(ctx.set.headers)
-      ) {
+      if (bearerChallenge(ctx.set.headers)) {
         return toResponse(
           status(
             authorization.statusCode,
