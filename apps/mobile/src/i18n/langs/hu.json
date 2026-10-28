@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",
     "signInAgain": "Újra bejelentkezés"
+  },
+  "timers": {
+    "title": "Időzítők",
+    "start": "Időzítő indítása",
+    "newTimer": "Új időzítő",
+    "description": "Min dolgozik?",
+    "matterTitle": "Ügy",
+    "noMatter": "Nincs ügy",
+    "noDescription": "Nincs leírás",
+    "running": "Fut",
+    "paused": "Szüneteltetve",
+    "pause": "Szüneteltetés",
+    "resume": "Folytatás",
+    "save": "Mentés",
+    "discard": "Elvetés",
+    "emptyTitle": "Nincsenek időzítők",
+    "emptyDescription": "Indítson időzítőt a + gombbal, és a végén mentse időbejegyzésként.",
+    "loadFailed": "Az időzítőit nem sikerült betölteni.",
+    "retry": "Újra",
+    "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
+    "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
   }
 }

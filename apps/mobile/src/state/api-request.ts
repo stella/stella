@@ -34,7 +34,8 @@ type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly schema: TSchema;
   /** A JSON body makes the request a POST, unless `method` says otherwise. */
   readonly body?: unknown;
-  readonly method?: "POST" | "PUT" | "PATCH";
+  /** Without one, a request with a body is a POST and one without a GET. */
+  readonly method?: "POST" | "PUT" | "PATCH" | "DELETE";
 };
 
 const requestJson = async <TSchema extends v.GenericSchema>(
@@ -42,7 +43,11 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   url: string,
   /** Null for a public route, which answers anyone. */
   accessToken: string | null,
-  { schema, body, method = "POST" }: Omit<ApiRequest<TSchema>, "path">,
+  {
+    schema,
+    body,
+    method = body === undefined ? "GET" : "POST",
+  }: Omit<ApiRequest<TSchema>, "path">,
 ): Promise<Result<v.InferOutput<TSchema>, ApiRequestError>> => {
   const answered = await Result.tryPromise({
     try: async () => {
@@ -54,7 +59,8 @@ const requestJson = async <TSchema extends v.GenericSchema>(
             : { Authorization: `Bearer ${accessToken}` }),
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
-        ...(body === undefined ? {} : { method, body: JSON.stringify(body) }),
+        method,
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       if (!response.ok) {
         const insufficientScope =

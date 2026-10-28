@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",
     "signInAgain": "Se reconnecter"
+  },
+  "timers": {
+    "title": "Minuteurs",
+    "start": "Démarrer un minuteur",
+    "newTimer": "Nouveau minuteur",
+    "description": "Sur quoi travaillez-vous ?",
+    "matterTitle": "Dossier",
+    "noMatter": "Sans dossier",
+    "noDescription": "Sans description",
+    "running": "En cours",
+    "paused": "En pause",
+    "pause": "Mettre en pause",
+    "resume": "Reprendre",
+    "save": "Enregistrer",
+    "discard": "Abandonner",
+    "emptyTitle": "Aucun minuteur",
+    "emptyDescription": "Démarrez un minuteur avec + et enregistrez-le comme saisie de temps une fois terminé.",
+    "loadFailed": "Vos minuteurs n’ont pas pu être chargés.",
+    "retry": "Réessayer",
+    "unavailable": "Le suivi du temps n’est pas activé pour votre organisation.",
+    "startFailed": "Le minuteur n’a pas pu être démarré. Réessayez.",
+    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez."
   }
 }

@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
     "signInAgain": "Logi uuesti sisse"
+  },
+  "timers": {
+    "title": "Taimerid",
+    "start": "Käivita taimer",
+    "newTimer": "Uus taimer",
+    "description": "Mille kallal töötate?",
+    "matterTitle": "Asi",
+    "noMatter": "Asjata",
+    "noDescription": "Kirjelduseta",
+    "running": "Käib",
+    "paused": "Peatatud",
+    "pause": "Peata",
+    "resume": "Jätka",
+    "save": "Salvesta",
+    "discard": "Loobu",
+    "emptyTitle": "Taimereid pole",
+    "emptyDescription": "Käivitage taimer nupuga + ja salvestage see lõpus ajakandena.",
+    "loadFailed": "Teie taimereid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
+    "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
   }
 }

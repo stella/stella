@@ -22,8 +22,8 @@ type MoreRow = {
 
 /**
  * Everything beyond the three tabs, as GitHub's app lists its sections: a
- * coloured tile, the name and a chevron, in grouped cards. Case law and the
- * settings open from here; timers and voice input are on their way.
+ * coloured tile, the name and a chevron, in grouped cards. Case law, your
+ * timers and the settings open from here; voice input is on its way.
  */
 const MoreScreen = () => {
   const t = useTranslations();
@@ -39,7 +39,7 @@ const MoreScreen = () => {
       },
       {
         glyph: "timer",
-        href: null,
+        href: "/timers",
         label: t("more.timers"),
         tile: "Amber",
       },

@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",
     "signInAgain": "Pieteikties vēlreiz"
+  },
+  "timers": {
+    "title": "Taimeri",
+    "start": "Sākt taimeri",
+    "newTimer": "Jauns taimeris",
+    "description": "Pie kā strādājat?",
+    "matterTitle": "Lieta",
+    "noMatter": "Bez lietas",
+    "noDescription": "Bez apraksta",
+    "running": "Darbojas",
+    "paused": "Apturēts",
+    "pause": "Apturēt",
+    "resume": "Turpināt",
+    "save": "Saglabāt",
+    "discard": "Atmest",
+    "emptyTitle": "Nav taimeru",
+    "emptyDescription": "Sāciet taimeri ar + un beigās saglabājiet to kā laika ierakstu.",
+    "loadFailed": "Jūsu taimerus neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz",
+    "unavailable": "Jūsu organizācijā laika uzskaite nav ieslēgta.",
+    "startFailed": "Taimeri neizdevās sākt. Mēģiniet vēlreiz.",
+    "changeFailed": "Taimeri neizdevās mainīt. Mēģiniet vēlreiz."
   }
 }

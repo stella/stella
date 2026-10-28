@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Aby aplikácia mohla robiť zmeny, stella potrebuje vaše povolenie. Prihláste sa znova a udeľte ho.",
     "signInAgain": "Prihlásiť sa znova"
+  },
+  "timers": {
+    "title": "Časovače",
+    "start": "Spustiť časovač",
+    "newTimer": "Nový časovač",
+    "description": "Na čom pracujete?",
+    "matterTitle": "Spis",
+    "noMatter": "Bez spisu",
+    "noDescription": "Bez popisu",
+    "running": "Beží",
+    "paused": "Pozastavené",
+    "pause": "Pozastaviť",
+    "resume": "Pokračovať",
+    "save": "Uložiť",
+    "discard": "Zahodiť",
+    "emptyTitle": "Žiadne časovače",
+    "emptyDescription": "Spustite časovač tlačidlom + a po dokončení ho uložte ako výkaz času.",
+    "loadFailed": "Vaše časovače sa nepodarilo načítať.",
+    "retry": "Skúsiť znova",
+    "unavailable": "Vaša organizácia nemá zapnuté vykazovanie času.",
+    "startFailed": "Časovač sa nepodarilo spustiť. Skúste to znova.",
+    "changeFailed": "Časovač sa nepodarilo zmeniť. Skúste to znova."
   }
 }

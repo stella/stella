@@ -9,6 +9,7 @@ import {
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { TasksViewProvider } from "@/components/tasks-view";
+import { TimersViewProvider } from "@/components/timers-view";
 import { useGlyphImage } from "@/components/ui/use-glyph-image";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
@@ -23,7 +24,9 @@ export const ProtectedScreens = () => {
     <HeaderSearchProvider activeTab={activeTab}>
       <MattersViewProvider>
         <TasksViewProvider>
-          <Screens />
+          <TimersViewProvider>
+            <Screens />
+          </TimersViewProvider>
         </TasksViewProvider>
       </MattersViewProvider>
     </HeaderSearchProvider>
@@ -141,6 +144,16 @@ const Screens = () => {
             ...pushedScreen,
             presentation: "formSheet",
             sheetAllowedDetents: [0.5, 1],
+            sheetGrabberVisible: true,
+          }}
+        />
+        <Stack.Screen name="timers/index" options={pushedScreen} />
+        <Stack.Screen
+          name="timers/new"
+          options={{
+            ...pushedScreen,
+            presentation: "formSheet",
+            sheetAllowedDetents: [0.75, 1],
             sheetGrabberVisible: true,
           }}
         />

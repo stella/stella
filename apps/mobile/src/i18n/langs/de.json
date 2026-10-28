@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
     "signInAgain": "Erneut anmelden"
+  },
+  "timers": {
+    "title": "Timer",
+    "start": "Timer starten",
+    "newTimer": "Neuer Timer",
+    "description": "Woran arbeiten Sie?",
+    "matterTitle": "Akte",
+    "noMatter": "Keine Akte",
+    "noDescription": "Keine Beschreibung",
+    "running": "Läuft",
+    "paused": "Pausiert",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "save": "Speichern",
+    "discard": "Verwerfen",
+    "emptyTitle": "Keine Timer",
+    "emptyDescription": "Starten Sie einen Timer mit + und speichern Sie ihn danach als Zeiteintrag.",
+    "loadFailed": "Ihre Timer konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
+    "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
+    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
   }
 }

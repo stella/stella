@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
     "signInAgain": "Volver a iniciar sesión"
+  },
+  "timers": {
+    "title": "Temporizadores",
+    "start": "Iniciar un temporizador",
+    "newTimer": "Nuevo temporizador",
+    "description": "¿En qué está trabajando?",
+    "matterTitle": "Asunto",
+    "noMatter": "Sin asunto",
+    "noDescription": "Sin descripción",
+    "running": "En marcha",
+    "paused": "En pausa",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "save": "Guardar",
+    "discard": "Descartar",
+    "emptyTitle": "No hay temporizadores",
+    "emptyDescription": "Inicie un temporizador con + y guárdelo como registro de tiempo al terminar.",
+    "loadFailed": "No se pudieron cargar sus temporizadores.",
+    "retry": "Reintentar",
+    "unavailable": "El registro de tiempo no está activado en su organización.",
+    "startFailed": "No se pudo iniciar el temporizador. Inténtelo de nuevo.",
+    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo."
   }
 }

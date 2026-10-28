@@ -1,4 +1,4 @@
-import { Suspense, use, useState, useTransition } from "react";
+import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
@@ -6,17 +6,15 @@ import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
 import { screenStyles } from "@/components/empty-state-screen";
+import { MatterPicker } from "@/components/matter-picker";
 import { useTasksView } from "@/components/tasks-view";
-import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text, TextInput } from "@/components/ui/text";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { CheckIcon } from "@/icons.gen";
 import { listMatters } from "@/state/matters";
-import type { MatterSummary } from "@/state/matters";
 import { createTask, dayAt } from "@/state/tasks";
 import { useAppColors, useUiColors } from "@/theme";
 
@@ -29,9 +27,6 @@ const DUE_CHOICES = [
 ] as const;
 
 type DueChoice = (typeof DUE_CHOICES)[number]["key"];
-
-/** The most matters the picker lists at once; a search narrows the rest. */
-const MATTERS_SHOWN = 40;
 
 /**
  * A new task, presented as a sheet over the tasks: its name, when it is due
@@ -185,80 +180,6 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         </View>
       </ScrollView>
     </>
-  );
-};
-
-/** The person's matters to put the task in, narrowed by what is typed. */
-const MatterPicker = ({
-  matters,
-  onSelect,
-  selected,
-}: {
-  matters: Promise<Result<MatterSummary[], unknown>>;
-  onSelect: (matterId: string) => void;
-  selected: string | null;
-}) => {
-  const t = useTranslations("tasks");
-  const ui = useUiColors();
-  const [search, setSearch] = useState("");
-  const result = use(matters);
-
-  if (Result.isError(result)) {
-    return <Text variant="error">{t("mattersFailed")}</Text>;
-  }
-  const needle = search.trim().toLocaleLowerCase();
-  const shown = result.value
-    .filter(
-      (matter) =>
-        matter.id === selected ||
-        needle === "" ||
-        [matter.name, matter.reference, matter.client?.displayName].some(
-          (field) => field?.toLocaleLowerCase().includes(needle) === true,
-        ),
-    )
-    .slice(0, MATTERS_SHOWN);
-
-  return (
-    <View className="gap-2">
-      <TextInput
-        accessibilityLabel={t("findMatter")}
-        autoCapitalize="none"
-        onChangeText={setSearch}
-        placeholder={t("findMatter")}
-        value={search}
-        variant="search"
-      />
-      <View className="border-border bg-card rounded-xl border px-3">
-        {shown.map((matter, index) => (
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ selected: matter.id === selected }}
-            className={`active:bg-accent flex-row items-center gap-3 py-3 ${
-              index === shown.length - 1 ? "" : "border-border border-b"
-            }`}
-            key={matter.id}
-            onPress={() => {
-              onSelect(matter.id);
-            }}
-          >
-            <MatterIcon matter={matter} size={18} />
-            <View className="flex-1 gap-0.5">
-              <Text numberOfLines={1} variant="rowTitle">
-                {matter.name}
-              </Text>
-              {matter.client?.displayName === undefined ? null : (
-                <Text numberOfLines={1} variant="caption">
-                  {matter.client.displayName}
-                </Text>
-              )}
-            </View>
-            {matter.id === selected ? (
-              <CheckIcon color={ui.foreground} size={18} />
-            ) : null}
-          </Pressable>
-        ))}
-      </View>
-    </View>
   );
 };
 

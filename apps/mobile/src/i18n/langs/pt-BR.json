@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
     "signInAgain": "Entrar novamente"
+  },
+  "timers": {
+    "title": "Cronômetros",
+    "start": "Iniciar um cronômetro",
+    "newTimer": "Novo cronômetro",
+    "description": "No que você está trabalhando?",
+    "matterTitle": "Caso",
+    "noMatter": "Sem caso",
+    "noDescription": "Sem descrição",
+    "running": "Em andamento",
+    "paused": "Pausado",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "save": "Salvar",
+    "discard": "Descartar",
+    "emptyTitle": "Nenhum cronômetro",
+    "emptyDescription": "Inicie um cronômetro com + e salve-o como lançamento de horas ao terminar.",
+    "loadFailed": "Não foi possível carregar seus cronômetros.",
+    "retry": "Tentar novamente",
+    "unavailable": "O controle de horas não está ativado na sua organização.",
+    "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
+    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente."
   }
 }

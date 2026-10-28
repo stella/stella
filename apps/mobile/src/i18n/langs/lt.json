@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
     "signInAgain": "Prisijungti iš naujo"
+  },
+  "timers": {
+    "title": "Laikmačiai",
+    "start": "Paleisti laikmatį",
+    "newTimer": "Naujas laikmatis",
+    "description": "Prie ko dirbate?",
+    "matterTitle": "Byla",
+    "noMatter": "Be bylos",
+    "noDescription": "Be aprašymo",
+    "running": "Veikia",
+    "paused": "Pristabdytas",
+    "pause": "Pristabdyti",
+    "resume": "Tęsti",
+    "save": "Išsaugoti",
+    "discard": "Atmesti",
+    "emptyTitle": "Laikmačių nėra",
+    "emptyDescription": "Paleiskite laikmatį mygtuku + ir baigę išsaugokite jį kaip laiko įrašą.",
+    "loadFailed": "Nepavyko įkelti jūsų laikmačių.",
+    "retry": "Bandyti dar kartą",
+    "unavailable": "Jūsų organizacijoje laiko apskaita neįjungta.",
+    "startFailed": "Nepavyko paleisti laikmačio. Bandykite dar kartą.",
+    "changeFailed": "Nepavyko pakeisti laikmačio. Bandykite dar kartą."
   }
 }

@@ -167,5 +167,27 @@
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
     "signInAgain": "Zaloguj się ponownie"
+  },
+  "timers": {
+    "title": "Liczniki czasu",
+    "start": "Uruchom licznik",
+    "newTimer": "Nowy licznik",
+    "description": "Nad czym pracujesz?",
+    "matterTitle": "Sprawa",
+    "noMatter": "Bez sprawy",
+    "noDescription": "Bez opisu",
+    "running": "Działa",
+    "paused": "Wstrzymany",
+    "pause": "Wstrzymaj",
+    "resume": "Wznów",
+    "save": "Zapisz",
+    "discard": "Odrzuć",
+    "emptyTitle": "Brak liczników",
+    "emptyDescription": "Uruchom licznik przyciskiem + i po zakończeniu zapisz go jako wpis czasu.",
+    "loadFailed": "Nie udało się wczytać Twoich liczników.",
+    "retry": "Spróbuj ponownie",
+    "unavailable": "Rejestrowanie czasu nie jest włączone w Twojej organizacji.",
+    "startFailed": "Nie udało się uruchomić licznika. Spróbuj ponownie.",
+    "changeFailed": "Nie udało się zmienić licznika. Spróbuj ponownie."
   }
 }
