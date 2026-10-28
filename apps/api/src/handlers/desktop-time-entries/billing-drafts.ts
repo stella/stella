@@ -91,6 +91,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Billing draft response is invalid",
             }),
             "response_invalid",
@@ -131,6 +132,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Billing draft contains an unknown reference",
             }),
             "response_invalid",
@@ -465,6 +467,7 @@ export const createDesktopBillingDraftEndpoint = ({
                       classifyFailure(
                         new HandlerError({
                           status: 502,
+                          code: "internal_error",
                           message: "Billing draft proposals failed validation",
                         }),
                         "response_invalid",
