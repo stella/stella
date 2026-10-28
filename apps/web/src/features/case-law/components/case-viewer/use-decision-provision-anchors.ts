@@ -7,6 +7,7 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -393,7 +394,7 @@ export const useDecisionProvisionAnchors = ({
             row,
             renderPart,
           ),
-          statuteTitle: document.title,
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount,
           versionValidFrom: document.versionValidFrom,
         },
@@ -453,7 +454,7 @@ export const useDecisionProvisionAnchors = ({
             reference.reference,
             renderPart,
           ),
-          statuteTitle: document.title,
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount: versionsByWork.get(key)?.length ?? 1,
           versionValidFrom: document.versionValidFrom,
         },
