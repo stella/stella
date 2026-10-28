@@ -18,7 +18,12 @@ import {
   desktopRunners,
 } from "@/api/db/schema";
 import type { HttpServer } from "@/api/http/context";
-import { apiWebSocketHandler } from "@/api/http/websocket";
+import {
+  type ApiServerWebSocket,
+  type ApiSocketData,
+  type ApiSocketSession,
+  apiWebSocketHandler,
+} from "@/api/http/websocket";
 import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
@@ -1363,5 +1368,138 @@ describe("socket memory", () => {
     for (const desktop of [...rest, admitted]) {
       await desktop.close();
     }
+  });
+});
+
+describe("outbound frames", () => {
+  test("a command that would not fit one frame is refused before it is queued", async () => {
+    const { desktopId, runId, desktop } = await acceptedRun(first);
+    const huge = "x".repeat(DESKTOP_RUNNER_MAX_FRAME_BYTES);
+    expect(
+      (
+        await control.sendInput({
+          owner,
+          runId,
+          inputId: Bun.randomUUIDv7(),
+          message: { role: "user", content: huge },
+        })
+      ).unwrap(),
+    ).toEqual({ type: "too_large" });
+    const tooLarge = Bun.randomUUIDv7();
+    expect(
+      (
+        await control.startRun({
+          ...startInput(desktopId, tooLarge),
+          messages: [{ role: "user", content: huge }],
+        })
+      ).unwrap(),
+    ).toEqual({ type: "too_large" });
+    expect(await runState(tooLarge)).toBeNull();
+    await desktop.close();
+  });
+
+  test("delivery waits while the socket reports backpressure and resumes when it drains", async () => {
+    const gateway = createDesktopRunnerGateway({
+      db: gatewayDb,
+      doorbell: sharedDoorbell,
+      instanceId: "api-backpressure",
+      authorize: authorizeRunnerWith(credentials.authorizeDesktopAccount),
+      mintRunToken,
+      now,
+      random: () => 0.5,
+      timing: TIMING,
+    });
+    await gateway.start();
+    const accepted: { session: ApiSocketSession | null } = { session: null };
+    const server = asTestRaw<HttpServer>({
+      upgrade: (_request: Request, upgrade: { data: ApiSocketData }) => {
+        accepted.session = upgrade.data.session;
+        return true;
+      },
+    });
+    const desktopId = Bun.randomUUIDv7();
+    expect(
+      await gateway.upgrade(await upgradeRequest(first, desktopId), server),
+    ).toBeNull();
+    const session =
+      accepted.session ?? panic("the gateway took the upgrade over");
+
+    const sent: DesktopRunnerServerMessage[] = [];
+    const waiters = new Set<{
+      matches: (message: DesktopRunnerServerMessage) => boolean;
+      arrived: PromiseWithResolvers<undefined>;
+    }>();
+    const arrival = (
+      matches: (message: DesktopRunnerServerMessage) => boolean,
+    ) => {
+      const waiter = { matches, arrived: Promise.withResolvers<undefined>() };
+      if (sent.some(matches)) {
+        waiter.arrived.resolve(undefined);
+      } else {
+        waiters.add(waiter);
+      }
+      return waiter.arrived.promise;
+    };
+    /** Send statuses to answer with, in order; then every send succeeds. */
+    const statuses: number[] = [];
+    const socket = asTestRaw<ApiServerWebSocket>({
+      send: (text: string) => {
+        const message = v.parse(
+          desktopRunnerServerMessageSchema,
+          JSON.parse(text),
+        );
+        sent.push(message);
+        for (const waiter of waiters) {
+          if (waiter.matches(message)) {
+            waiters.delete(waiter);
+            waiter.arrived.resolve(undefined);
+          }
+        }
+        return message.type === "run.start" ? (statuses.shift() ?? 1) : 1;
+      },
+      close: () => undefined,
+      ping: () => undefined,
+    });
+    session.open(socket);
+    clock.now += 1000;
+    session.message(
+      socket,
+      JSON.stringify({
+        ...helloFrame(),
+        harnesses: [
+          {
+            id: "codex",
+            state: "ready",
+            version: HARNESS_VERSION,
+            capabilities: ["approvals", "interrupt"],
+            models: [{ id: MODEL, label: "GPT-5 Codex" }],
+          },
+        ],
+      }),
+    );
+    await arrival(({ type }) => type === "welcome");
+
+    const [buffered, waiting] = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+    // Bun buffers the first start: the socket takes nothing more until it drains.
+    statuses.push(-1);
+    expect(
+      (await control.startRun(startInput(desktopId, buffered))).unwrap(),
+    ).toEqual({ type: "assigned" });
+    await arrival(ofRun(buffered));
+    expect(
+      (await control.startRun(startInput(desktopId, waiting))).unwrap(),
+    ).toEqual({ type: "assigned" });
+    // A delivery attempt has run once the sweep's own delivery resolves.
+    await gateway.sweep();
+    const starts = () =>
+      sent.flatMap((message) =>
+        message.type === "run.start" ? [message.runId] : [],
+      );
+    expect(starts()).toEqual([buffered]);
+    session.drain(socket);
+    await arrival(ofRun(waiting));
+    expect(starts()).toEqual([buffered, waiting]);
+    session.close(socket, 1000, "done");
+    await gateway.drain();
   });
 });

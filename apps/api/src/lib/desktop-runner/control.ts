@@ -5,6 +5,8 @@ import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import {
   DESKTOP_RUNNER_HARNESS_STATE,
   DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_MAX_FRAME_BYTES,
+  DESKTOP_RUNNER_MAX_TOKEN_LENGTH,
   DESKTOP_RUNNER_SERVER_MESSAGE,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
@@ -96,10 +98,15 @@ export type StartLocalRunOutcome =
       type: "harness_unavailable";
       report: DesktopRunnerHarnessReport | null;
     }
-  | { type: "model_unavailable" };
+  | { type: "model_unavailable" }
+  /** The message would not fit one frame, even with the longest token. */
+  | { type: "too_large" };
 
 export type QueueCommandOutcome =
-  { type: "queued" } | Exclude<InsertedCommand, { type: "queued" }>;
+  | { type: "queued" }
+  | Exclude<InsertedCommand, { type: "queued" }>
+  /** The message would not fit one frame. */
+  | { type: "too_large" };
 
 export type DesktopRunnerEventPage = {
   readonly items: readonly StoredRunEvent[];
@@ -107,8 +114,15 @@ export type DesktopRunnerEventPage = {
   readonly nextAfterSeq: number | null;
 };
 
-/** A token of valid shape, standing in for the one minted on every send. */
-const TOKEN_SHAPE = "minted-when-sent";
+/**
+ * The longest token a send may mint, standing in for it: a message checked
+ * with it fits a frame with any token.
+ */
+const TOKEN_SHAPE = "t".repeat(DESKTOP_RUNNER_MAX_TOKEN_LENGTH);
+
+/** Whether `message`, as sent, fits one frame. */
+const fitsOneFrame = (message: unknown) =>
+  Buffer.byteLength(JSON.stringify(message)) <= DESKTOP_RUNNER_MAX_FRAME_BYTES;
 const MAX_EVENT_PAGE = 500;
 const MAX_CANDIDATE_RUNNERS = 10;
 
@@ -213,6 +227,9 @@ const startRun = async (
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
   }
+  if (!fitsOneFrame(checked.output)) {
+    return Result.ok({ type: "too_large" });
+  }
   const inserted = await Result.tryPromise({
     try: async () =>
       await insertAssignedRun(deps.db, {
@@ -281,6 +298,9 @@ const queue = async (
   const checked = v.safeParse(desktopRunnerServerMessageSchema, message);
   if (!checked.success) {
     return Result.err(invalid(message.type, checked.issues));
+  }
+  if (!fitsOneFrame(checked.output)) {
+    return Result.ok({ type: "too_large" });
   }
   const inserted = await Result.tryPromise({
     try: async () =>
