@@ -387,7 +387,7 @@ export const DraggableRow = ({
             }
           : null
       }
-      triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! focus-visible:opacity-100!"
+      triggerClassName="size-11 min-h-11 min-w-11 opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100! focus-visible:opacity-100!"
       workspaceId={workspaceId}
     />
   );
