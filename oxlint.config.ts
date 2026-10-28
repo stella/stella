@@ -104,6 +104,9 @@ const colourExemptions = [
       "apps/api/src/handlers/visual-sandbox/browser/presentation-css.ts",
       "apps/web/src/routes/-root-head.ts",
       "apps/desktop/src/mainview/public/prepaint-theme.js",
+      // React Native reads no CSS: the mobile theme is theme.css resolved to
+      // sRGB by scripts/generate-mobile-ui-theme.ts, checked in CI.
+      "apps/mobile/src/ui-theme.gen.ts",
     ],
   },
   {
