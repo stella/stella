@@ -4,6 +4,7 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+// parser-output-unchanged: [eu-ecj] the Formex archive reader keeps the same file entries in the same order.
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
