@@ -164,7 +164,11 @@ export const CaseLawCoveragePage = ({
       </CoverageHeading>
 
       <Hero>
-        <Headline>{format.number(coverage.totals.searchable)}</Headline>
+        <Headline>
+          {coverage.totals.searchable === null
+            ? NO_VALUE
+            : format.number(coverage.totals.searchable)}
+        </Headline>
         <CoverageGlobe countries={coverage.countries} />
       </Hero>
 

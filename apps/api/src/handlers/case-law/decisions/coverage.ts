@@ -6,7 +6,7 @@ import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawBrowseFacetCounts,
@@ -189,7 +189,8 @@ type CaseLawCoverage = {
    * decision twice and imply that an in-preparation country can be searched.
    */
   totals: {
-    searchable: number;
+    addedLastWeek: number | null;
+    searchable: number | null;
     stored: { decisions: number; asOf: string | null };
   };
   countries: readonly CaseLawCoverageCountry[];
@@ -418,6 +419,27 @@ const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
   return total;
 };
 
+const searchableCoverageTotals = (
+  countries: readonly CaseLawCoverageCountry[],
+) => {
+  // Admission determines who contributes; a failed facet read has no observed country count.
+  const searchable = countries
+    .filter(({ country }) => isPublicCaseLawCountry(country))
+    .map((country) =>
+      country.availability === CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE
+        ? country
+        : null,
+    );
+  return {
+    searchable: sumOfKnown(
+      searchable.map((country) => country?.searchable ?? null),
+    ),
+    addedLastWeek: sumOfKnown(
+      searchable.map((country) => country?.addedLastWeek ?? null),
+    ),
+  };
+};
+
 /** A part of the answer that can fail without failing the page. */
 export type CaseLawCoveragePart =
   | "arrivals"
@@ -595,7 +617,6 @@ export const loadCaseLawCoverage = async ({
   }
 
   const countries: CaseLawCoverageCountry[] = [];
-  let searchableTotal = 0;
   let storedTotal = 0;
   let storedAsOf: string | null = null;
 
@@ -626,10 +647,7 @@ export const loadCaseLawCoverage = async ({
       storedAsOf = entry.storedAsOf;
     }
 
-    const isAdmitted = PUBLIC_CASE_LAW_COUNTRIES.some(
-      (candidate) => candidate === country,
-    );
-    if (!isAdmitted) {
+    if (!isPublicCaseLawCountry(country)) {
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
@@ -652,7 +670,6 @@ export const loadCaseLawCoverage = async ({
     }
     const bucket = facets.value.country.find(({ value }) => value === country);
     const searchable = bucket?.count ?? 0;
-    searchableTotal += searchable;
     const searchableSources = entry.sources.filter(
       ({ decisionYearFrom, decisionYearTo }) =>
         decisionYearFrom !== null && decisionYearTo !== null,
@@ -702,7 +719,7 @@ export const loadCaseLawCoverage = async ({
   return Result.ok({
     generatedAt: now.toISOString(),
     totals: {
-      searchable: searchableTotal,
+      ...searchableCoverageTotals(countries),
       stored: { decisions: storedTotal, asOf: storedAsOf },
     },
     countries,
