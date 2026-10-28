@@ -1,3 +1,5 @@
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
@@ -6,8 +8,11 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ModelOutputIncompleteError } from "@/api/lib/errors/provider-call-error";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import * as textGeneration from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -17,7 +22,10 @@ import {
 
 import getSuggestedPrompts, {
   cleanSuggestionsText,
+  generateSuggestedPrompts,
   latestAssistantTurnAwaitsUser,
+  MAX_SUGGESTION_LENGTH,
+  parseSuggestionLine,
 } from "./get-suggested-prompts";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -189,6 +197,125 @@ describe("cleanSuggestionsText", () => {
     expect(cleanSuggestionsText(text)).toEqual([
       "3D print analysis?",
       "2nd amendment summary?",
+    ]);
+  });
+});
+
+describe("suggestion lines are kept whole or dropped", () => {
+  test("drops a line over the length limit instead of shortening it", () => {
+    const longest = `${"a".repeat(MAX_SUGGESTION_LENGTH - 1)}?`;
+    const tooLong = `${longest}x`;
+
+    expect(parseSuggestionLine(longest)).toEqual({
+      type: "complete",
+      prompt: longest,
+    });
+    expect(parseSuggestionLine(tooLong)).toEqual({
+      type: "dropped",
+      reason: "over-length",
+    });
+    expect(cleanSuggestionsText(`${tooLong}\nWhat changed?`)).toEqual([
+      "What changed?",
+    ]);
+  });
+});
+
+// The real generation engine runs; only the provider stream is faked, so the
+// finish a provider reports is graded exactly as production grades it.
+const providerRun = (
+  deltas: readonly string[],
+  finishReason: "length" | "stop",
+): ResolvedTanStackTextModel => {
+  const adapter: AnyTextAdapter = {
+    kind: "text",
+    name: "suggestions-fixture",
+    model: "suggestions-fixture",
+    "~types": {
+      providerOptions: {},
+      inputModalities: ["text"],
+      messageMetadataByModality: {},
+      toolCapabilities: [],
+      toolCallMetadata: {},
+      systemPromptMetadata: undefined,
+    },
+    async *chatStream() {
+      yield {
+        type: EventType.RUN_STARTED,
+        runId: "run-1",
+        threadId: "thread-1",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "message-1",
+        role: "assistant",
+      } satisfies StreamChunk;
+      for (const delta of deltas) {
+        yield {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: "message-1",
+          delta,
+        } satisfies StreamChunk;
+      }
+      yield {
+        type: EventType.TEXT_MESSAGE_END,
+        messageId: "message-1",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        finishReason,
+        runId: "run-1",
+        threadId: "thread-1",
+      } satisfies StreamChunk;
+    },
+    structuredOutput: () =>
+      panic("Suggested prompts never request structured output"),
+  };
+  // SAFETY: `adapter` is a real `AnyTextAdapter` the engine drives as it
+  // drives a provider; the other fields are bookkeeping this test never reads.
+  return {
+    adapter,
+    keySource: "instance",
+    modelId: "suggestions-fixture",
+    modelOptions: {},
+    provider: "openai",
+  } as ResolvedTanStackTextModel;
+};
+
+const generateFrom = async (model: ResolvedTanStackTextModel) =>
+  await generateSuggestedPrompts("User: Co se změnilo v zákoně?", {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
+    caching: { enabled: false, reason: "org-disabled" },
+    dataClass: "customer",
+    managedAIResidency: "eu",
+    orgAIConfig: null,
+    organizationId: null,
+    resolveTextModel: () => model,
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+    userId: null,
+  });
+
+describe("suggested prompts from a provider run", () => {
+  const lines = [
+    "Jak funguje strop podpory podle § 3a?\n",
+    "Co se změnilo od 1. 7. 2025, kd",
+  ];
+
+  test("a run cut at the output ceiling yields no prompt, not a cut one", async () => {
+    const caught = await generateFrom(providerRun(lines, "length")).then(
+      (prompts) => prompts,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+  });
+
+  test("a run that stopped on its own yields every line whole", async () => {
+    const whole = [...lines.slice(0, 1), "Co se změnilo od 1. 7. 2025?"];
+
+    expect(await generateFrom(providerRun(whole, "stop"))).toEqual([
+      "Jak funguje strop podpory podle § 3a?",
+      "Co se změnilo od 1. 7. 2025?",
     ]);
   });
 });
