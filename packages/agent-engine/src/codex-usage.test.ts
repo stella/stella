@@ -32,16 +32,15 @@ test("Codex usage preserves independent cache-read and cache-write counters", as
   await assertProperty(
     "agent-engine.codex-usage.cache-counters",
     fc.asyncProperty(
-      fc.record({
-        input_tokens: fc.nat({ max: 1_000_000 }),
-        output_tokens: fc.nat({ max: 1_000_000 }),
-        cached_input_tokens: fc.option(fc.nat({ max: 1000 }), {
-          nil: undefined,
-        }),
-        cache_write_input_tokens: fc.option(fc.nat({ max: 1000 }), {
-          nil: undefined,
-        }),
-      }),
+      fc.record(
+        {
+          input_tokens: fc.nat({ max: 1_000_000 }),
+          output_tokens: fc.nat({ max: 1_000_000 }),
+          cached_input_tokens: fc.nat({ max: 1000 }),
+          cache_write_input_tokens: fc.nat({ max: 1000 }),
+        },
+        { requiredKeys: ["input_tokens", "output_tokens"] },
+      ),
       async (usage) => {
         const translated = await translateUsage(usage);
         expect(translated).toMatchObject({
