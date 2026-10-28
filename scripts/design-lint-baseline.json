@@ -458,7 +458,6 @@
     "apps/api/src/scripts/corpus-snippet-compare-report.ts": 3
   },
   "no-unbounded-response-body/no-unbounded-response-body": {
-    "apps/api/src/handlers/case-law/decisions/dev-reparse.ts": 1,
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
     "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
     "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts": 1,
@@ -480,7 +479,6 @@
     "apps/api/src/lib/files/office-evidence.ts": 1,
     "apps/api/src/lib/health/readiness.ts": 1,
     "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
-    "apps/api/src/lib/legal-search/corpus-index-client.ts": 3,
     "apps/api/src/lib/s3-presign.ts": 1,
     "apps/api/src/lib/web-search/jina.ts": 1,
     "apps/api/src/lib/web-search/tavily.ts": 2,
@@ -869,7 +867,6 @@
   },
   "require-polite-publisher-fetch/require-polite-publisher-fetch": {
     "apps/api/src/handlers/case-law/ingestion/adapters/cz-us-throttle.ts": 1,
-    "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 1,
     "scripts/check-api-deployment.ts": 1,
     "scripts/check-public-law-pages.ts": 1,
     "scripts/check-railway-smoke.ts": 1,
@@ -1052,6 +1049,7 @@
     "apps/api/src/handlers/entities/versions/delete.ts": 2,
     "apps/api/src/handlers/entities/versions/list.ts": 1,
     "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts": 1,
+    "apps/api/src/handlers/memories/update.ts": 1,
     "apps/api/src/handlers/organization-settings/update.ts": 1,
     "apps/api/src/handlers/properties/update.ts": 2,
     "apps/api/src/handlers/sharepoint/oauth-callback.ts": 2,

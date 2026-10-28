@@ -1492,20 +1492,6 @@
   },
   {
     "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchCredentialJson",
-    "kind": "total-timeout-body",
-    "count": 2,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
-    "function": "module/fetchImdsCredentials",
-    "kind": "total-timeout-body",
-    "count": 6,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
-    "file": "apps/api/src/lib/s3.ts",
     "function": "module/fetchObject",
     "kind": "numeric-timeout",
     "count": 1,

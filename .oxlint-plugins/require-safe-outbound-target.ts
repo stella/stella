@@ -57,15 +57,21 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  publicReadIoMethod,
+  publicReadIoMethodKind,
+} from "./public-read-io-provenance.ts";
+import {
   type AstNode,
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
+  isSingleAssignment,
   isStringLiteral,
   isUnshadowedGlobalIdentifier as hasGlobalBinding,
   memberPropertyName,
+  repoRelativeFilename,
   resolveImport,
   resolveVariable,
   stableInitializer,
@@ -90,7 +96,7 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 const SOFT_LAW_HANDLER_PATH = /(?:^|\/)apps\/api\/src\/handlers\/soft-law\//u;
 const SOFT_LAW_TRANSPORT_PATH =
   /(?:^|\/)apps\/api\/src\/handlers\/soft-law\/publisher-access\.ts$/u;
-const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/safe-outbound-fetch";
+const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/auth/authorized-outbound-fetch";
 const SAFE_OUTBOUND_FETCHES: ReadonlySet<string> = new Set([
   "safeOutboundFetchBytes",
   "safeOutboundFetchStream",
@@ -431,6 +437,10 @@ export default eslintCompatPlugin({
               sinkKind(expression.left, visited) ??
               sinkKind(expression.right, visited)
             );
+          }
+          const publicRead = publicReadIoMethod(context, expression);
+          if (publicReadIoMethodKind(publicRead?.method ?? null) === "http") {
+            return "fetch";
           }
           const resolved = resolveImport(context, expression);
           if (resolved !== null) {
@@ -800,10 +810,10 @@ export default eslintCompatPlugin({
         };
 
         // An object-store client whose endpoint Stella configured, so the
-        // URLs it presigns point at that store: the result of an imported S3
-        // module client factory, or a stable alias of one. Any other client,
-        // a parameter included, may carry an endpoint from anywhere, so it
-        // proves nothing.
+        // URLs it presigns point at that store: a canonical S3 module client
+        // factory, imported or called in its owning module, or a stable alias.
+        // Any other client, a parameter included, may carry an endpoint from
+        // anywhere, so it proves nothing.
         const isConfiguredObjectStore = (
           node: unknown,
           visited: Set<Variable>,
@@ -811,9 +821,23 @@ export default eslintCompatPlugin({
           const store = unwrapExpression(node);
           if (store?.type === "CallExpression") {
             const producer = resolveImport(context, store.callee);
-            return (
+            if (
               producer?.moduleId === S3_MODULE &&
               S3_CLIENT_FACTORIES.has(producer.imported)
+            ) {
+              return true;
+            }
+            const callee = unwrapExpression(store.callee);
+            if (
+              repoRelativeFilename(context) !== `${S3_MODULE}.ts` ||
+              !isIdentifierReference(callee) ||
+              !S3_CLIENT_FACTORIES.has(callee.name)
+            ) {
+              return false;
+            }
+            const factory = resolveVariable(context, callee);
+            return (
+              factory?.scope.type === "module" && isSingleAssignment(factory)
             );
           }
           if (!isIdentifierReference(store)) {
