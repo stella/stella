@@ -41,7 +41,8 @@ export const openMaintenanceDb = ({
       TRow extends Record<string, unknown> = Record<string, unknown>,
     >(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
     transaction,
   };
 };
