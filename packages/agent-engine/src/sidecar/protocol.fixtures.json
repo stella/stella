@@ -1,0 +1,278 @@
+{
+  "vocabulary": {
+    "protocol": 1,
+    "maxLineBytes": 8388608,
+    "hostMessageTypes": [
+      "hello",
+      "harness.probe",
+      "run.start",
+      "run.approval",
+      "run.interrupt",
+      "run.cancel",
+      "run.token",
+      "shutdown"
+    ],
+    "messageTypes": [
+      "hello",
+      "harness.probed",
+      "run.event",
+      "run.approval_request",
+      "run.finished",
+      "rejected"
+    ],
+    "rejections": [
+      "too_large",
+      "not_json",
+      "unknown_type",
+      "invalid",
+      "hello_required",
+      "hello_repeated",
+      "protocol_mismatch",
+      "unknown_run",
+      "duplicate_run"
+    ],
+    "probeFailures": [
+      "harness_unavailable",
+      "protocol_violation",
+      "unsupported"
+    ]
+  },
+  "valid": {
+    "host": [
+      {
+        "type": "hello",
+        "protocol": 1,
+        "appVersion": "1.4.0",
+        "apiOrigin": "https://api.example.test"
+      },
+      {
+        "type": "harness.probe",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "codex",
+        "executable": "/data/harness/codex/0.165.0/codex",
+        "configDir": "/data/harness-home/codex"
+      },
+      {
+        "type": "run.start",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "threadId": "thread-1",
+        "harness": "codex",
+        "executable": "C:\\data\\harness\\codex\\0.165.0\\codex.exe",
+        "configDir": "C:\\data\\harness-home\\codex",
+        "workspaceDir": "C:\\data\\runs\\0b6f5c8e",
+        "model": "gpt-test",
+        "instructions": "Answer briefly.",
+        "messages": [{ "role": "user", "content": "Find the lease decision." }],
+        "harnessSessionId": null,
+        "policy": { "network": "open", "fs": "workspace" },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T12:00:00.000Z"
+        }
+      },
+      {
+        "type": "run.start",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "threadId": "thread-1",
+        "harness": "codex",
+        "executable": "/data/harness/codex/0.165.0/codex",
+        "configDir": "/data/harness-home/codex",
+        "workspaceDir": "/data/runs/0b6f5c8e",
+        "model": "gpt-test",
+        "instructions": "",
+        "messages": [
+          { "role": "user", "content": "First question." },
+          { "role": "assistant", "content": "First answer." },
+          { "role": "user", "content": "Second question." }
+        ],
+        "harnessSessionId": "thread-old",
+        "policy": { "network": "open", "fs": "workspace" },
+        "mcp": {
+          "serverName": "stella",
+          "url": "https://api.example.test/mcp",
+          "token": "run-token-1",
+          "expiresAt": "2026-10-28T12:00:00.000Z"
+        }
+      },
+      {
+        "type": "run.approval",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "decision": "approve_for_session"
+      },
+      {
+        "type": "run.interrupt",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      },
+      {
+        "type": "run.cancel",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      },
+      {
+        "type": "run.token",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "token": "run-token-2",
+        "expiresAt": "2026-10-28T13:00:00.000Z"
+      },
+      { "type": "shutdown" }
+    ],
+    "sidecar": [
+      { "type": "hello", "protocol": 1, "sidecarVersion": "1.4.0" },
+      {
+        "type": "harness.probed",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "codex",
+        "outcome": {
+          "type": "ready",
+          "version": "0.165.0",
+          "capabilities": ["approvals", "interrupt", "resume"],
+          "models": [
+            { "id": "gpt-test", "label": "GPT Test", "isDefault": true }
+          ]
+        }
+      },
+      {
+        "type": "harness.probed",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "codex",
+        "outcome": { "type": "needs_login", "version": "0.165.0" }
+      },
+      {
+        "type": "harness.probed",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "claude-code",
+        "outcome": {
+          "type": "failed",
+          "reason": "unsupported",
+          "message": "This harness has no local adapter yet."
+        }
+      },
+      {
+        "type": "run.event",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "chunk": {
+          "type": "TEXT_MESSAGE_CONTENT",
+          "messageId": "m-1",
+          "delta": "One decision",
+          "content": "One decision",
+          "model": "gpt-test",
+          "timestamp": 1
+        }
+      },
+      {
+        "type": "run.approval_request",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "kind": "command",
+        "summary": "Deletes a file"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "outcome": "completed",
+        "harnessSessionId": "thread-a"
+      },
+      {
+        "type": "run.finished",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+        "outcome": "failed",
+        "harnessSessionId": null
+      },
+      {
+        "type": "rejected",
+        "reason": "unknown_type",
+        "messageType": "run.input",
+        "runId": null
+      },
+      {
+        "type": "rejected",
+        "reason": "unknown_run",
+        "messageType": "run.token",
+        "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+      }
+    ]
+  },
+  "rejected": {
+    "host": [
+      { "name": "not JSON", "line": "{\"type\":", "reason": "not_json" },
+      { "name": "no type", "line": "{\"runId\":\"x\"}", "reason": "invalid" },
+      {
+        "name": "unknown type",
+        "line": "{\"type\":\"run.input\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\"}",
+        "reason": "unknown_type"
+      },
+      {
+        "name": "relative executable",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"codex\",\"executable\":\"codex\",\"configDir\":\"/data/harness-home/codex\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "unknown harness",
+        "line": "{\"type\":\"harness.probe\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"harness\":\"other\",\"executable\":\"/x\",\"configDir\":\"/y\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "api origin with a path",
+        "line": "{\"type\":\"hello\",\"protocol\":1,\"appVersion\":\"1.4.0\",\"apiOrigin\":\"https://api.example.test/v1\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "unknown decision",
+        "line": "{\"type\":\"run.approval\",\"runId\":\"0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f\",\"requestId\":\"6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f\",\"decision\":\"maybe\"}",
+        "reason": "invalid"
+      },
+      {
+        "name": "run id that is not a UUID",
+        "line": "{\"type\":\"run.cancel\",\"runId\":\"run-1\"}",
+        "reason": "invalid"
+      }
+    ],
+    "sidecar": [
+      {
+        "name": "unknown type",
+        "message": {
+          "type": "run.progress",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f"
+        }
+      },
+      {
+        "name": "unknown outcome",
+        "message": {
+          "type": "run.finished",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "outcome": "paused",
+          "harnessSessionId": null
+        }
+      },
+      {
+        "name": "unknown approval kind",
+        "message": {
+          "type": "run.approval_request",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+          "kind": "network",
+          "summary": "Opens a socket"
+        }
+      },
+      {
+        "name": "unknown rejection",
+        "message": {
+          "type": "rejected",
+          "reason": "busy",
+          "messageType": null,
+          "runId": null
+        }
+      },
+      {
+        "name": "chunk without a type",
+        "message": {
+          "type": "run.event",
+          "runId": "0b6f5c8e-2d3a-4f1b-9c7e-5a4d3b2c1e0f",
+          "chunk": { "delta": "x" }
+        }
+      }
+    ]
+  }
+}
