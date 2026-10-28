@@ -98,8 +98,9 @@ jobs:
 
       - name: Check migration identity against current main
         id: migration_identity
+        timeout-minutes: 5
         run: |
-          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           bun scripts/check-migration-order.ts origin/main
 
       - name: Run deterministic manifest checks
