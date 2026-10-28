@@ -76,6 +76,13 @@
   },
   "crawlPosture": "unserved",
   "expo": {
+    "autolinking": {
+      "android": {
+        "exclude": [
+          "expo-widgets"
+        ]
+      }
+    },
     "install": {
       "exclude": [
         "react",
