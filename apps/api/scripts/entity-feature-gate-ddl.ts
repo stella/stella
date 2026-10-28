@@ -56,34 +56,46 @@ export const entityFeatureGateTableSql = async (
   descriptors: readonly EntityFeatureGateDescriptor[],
   effective: EffectiveEntityFeatureGateDefinitions,
 ): Promise<string[]> => {
+  // Each piece is checked on its own: a table's schema migration may already
+  // have created its visibility policy (`entityFeaturePolicies` declares it)
+  // without the gate triggers or the gate role's grants.
+  const has = (table: string, name: string) =>
+    effective.policies.has(`${table}.${name}`);
+  const hasTrigger = (table: string, name: string) =>
+    effective.triggers.has(`${table}.${name}`);
   const missing = descriptors.filter(
     ({ tableName }) =>
-      !effective.policies.has(`${tableName}.workspace_entity_feature`),
+      !has(tableName, "workspace_entity_feature") ||
+      !has(tableName, "entity_feature_gate_maintenance") ||
+      !hasTrigger(tableName, "entity_feature_gate_write") ||
+      !hasTrigger(tableName, "entity_feature_gate_repair_missing") ||
+      !effective.grants.has(tableName),
   );
   const missingNames = new Set(missing.map(({ tableName }) => tableName));
+  // The checks are idempotent DO blocks, so a table missing any piece gets them.
   const statements = missing.flatMap(checkStatements);
   for (const policyName of [
     "workspace_entity_feature",
     "entity_feature_gate_maintenance",
   ]) {
     const policies = entityFeaturePolicyDefinitions(tables, policyName).filter(
-      ({ tableName }) => missingNames.has(tableName),
+      ({ tableName }) =>
+        missingNames.has(tableName) && !has(tableName, policyName),
     );
     statements.push(...(await createPolicyStatementsOf(policies)));
   }
   for (const descriptor of missing) {
-    statements.push(
-      trigger(
-        descriptor.tableName,
-        "entity_feature_gate_write",
-        "BEFORE INSERT OR UPDATE",
-      ),
-      trigger(
-        descriptor.tableName,
-        "entity_feature_gate_repair_missing",
-        "AFTER INSERT OR UPDATE",
-      ),
-    );
+    for (const [name, timing] of [
+      ["entity_feature_gate_write", "BEFORE INSERT OR UPDATE"],
+      ["entity_feature_gate_repair_missing", "AFTER INSERT OR UPDATE"],
+    ] as const) {
+      if (!hasTrigger(descriptor.tableName, name)) {
+        statements.push(trigger(descriptor.tableName, name, timing));
+      }
+    }
+    if (effective.grants.has(descriptor.tableName)) {
+      continue;
+    }
     const selected = [
       ...new Set([
         ...[...descriptor.projection.matchAll(/'([^']+)', p\."([^"]+)"/gu)].map(

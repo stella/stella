@@ -57,7 +57,7 @@ export const effectiveEntityFeatureGateDefinitions = (
       );
     }
     for (const match of migration.matchAll(
-      /CREATE (?:UNIQUE )?INDEX(?: CONCURRENTLY)?(?: IF NOT EXISTS)? "?([a-z0-9_]*entity_feature[a-z0-9_]*)"? ON (?:public\.)?"?([a-z0-9_]+)"?[\s\S]*?;/giu,
+      /CREATE (?:UNIQUE )?INDEX(?: CONCURRENTLY)?(?: IF NOT EXISTS)? "?([a-z0-9_]*(?:entity_feature|_ef_)[a-z0-9_]*)"? ON (?:public\.)?"?([a-z0-9_]+)"?[\s\S]*?;/giu,
     )) {
       indexes.set(
         statementKey(match[2] ?? "", match[1] ?? ""),
