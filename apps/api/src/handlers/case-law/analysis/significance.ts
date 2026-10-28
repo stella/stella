@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 /**
  * The significance layer: what later courts made of a decision.
  *
@@ -151,7 +151,7 @@ export const readCitationGraphFacts = async ({
       publishedCaseLawDecisions,
       eq(publishedCaseLawDecisions.id, cited.relatedId),
     )
-    .where(cited.canonical);
+    .where(sql`${cited.canonical}`);
 
   const reporter = await tx
     .select({ decisionId: caseLawDecisionIdentifiers.decisionId })

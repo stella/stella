@@ -201,7 +201,9 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  // The printing version is internal: it locates a passage, and no response
+  // carries it.
+  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
   v.GenericSchema
 >);
 // A leading citation always names a held decision; only the general list
