@@ -103,7 +103,10 @@ const listMcpToolsMock = mock(
     _scopes?: unknown,
   ): Promise<McpTool[]> => [],
 );
-const listMcpResourcesMock = mock((): Resource[] => []);
+const listMcpResourcesFake: Parameters<
+  typeof createMcpHttpRequestHandler
+>[0]["listMcpResources"] = async () => [];
+const listMcpResourcesMock = mock(listMcpResourcesFake);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 beforeEach(() => {
@@ -121,7 +124,7 @@ beforeEach(() => {
   listMcpToolsMock.mockReset();
   listMcpToolsMock.mockImplementation(async () => []);
   listMcpResourcesMock.mockReset();
-  listMcpResourcesMock.mockImplementation(() => []);
+  listMcpResourcesMock.mockImplementation(async () => []);
   readMcpResourceMock.mockReset();
   readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
   resolveMcpSessionContextMock.mockReset();
@@ -437,10 +440,17 @@ describe("handleMcpHttpRequest", () => {
         "unavailable",
       ] as const) {
         captureErrorMock.mockClear();
-        const refusalError = new ActionAdmissionError({
-          reason,
-          message: "Private internal detail",
-        });
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+                retryAfterMs: 1250,
+              })
+            : new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+              });
         authenticateMcpRequestMock.mockResolvedValue(
           Result.ok({
             organizationId: "org_1",
@@ -489,6 +499,7 @@ describe("handleMcpHttpRequest", () => {
           code: refusalError.code,
           message: refusal.message,
           retryable: refusal.retryable,
+          ...(reason === "busy" ? { retryAfterMs: 1250 } : {}),
           ...(contact ? { contactUrl: "https://example.invalid/contact" } : {}),
           hint: contact
             ? `${refusal.hint} Contact: https://example.invalid/contact`
@@ -2102,7 +2113,7 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
     resolveMcpSessionContextMock.mockResolvedValue(context);
-    listMcpResourcesMock.mockReturnValue([
+    listMcpResourcesMock.mockResolvedValue([
       {
         uri: "stella://reference/template-markers",
         name: "template-markers",
@@ -2122,9 +2133,7 @@ describe("handleMcpHttpRequest", () => {
       await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
 
     expect(response.status).toBe(200);
-    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", {
-      type: "mcp-context",
-    });
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default", { context });
     expect(body.result.resources.map((resource) => resource.uri)).toEqual([
       "stella://reference/template-markers",
     ]);

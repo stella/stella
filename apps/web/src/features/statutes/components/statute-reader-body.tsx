@@ -2,6 +2,7 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -79,7 +80,7 @@ export const StatuteReaderBody = ({
         masthead={masthead}
         provisionCitationCounts={provisionCitationCounts}
         scrollContainerRef={scrollContainerRef}
-        statuteTitle={statute.title}
+        statuteTitle={statuteDisplayLabel(statute).text}
         versionCount={versionCount}
         versionValidFrom={statute.versionValidFrom}
       />

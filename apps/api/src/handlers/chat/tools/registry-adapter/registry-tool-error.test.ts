@@ -18,6 +18,28 @@ import {
 } from "./registry-tool-error";
 
 describe("registry tool error projection", () => {
+  test("keeps public read timeouts recoverable through chat", () => {
+    const error = {
+      type: "structured",
+      code: "public_read_timeout",
+      message: "The public read exceeded its statement budget.",
+      hint: "Narrow the request and retry.",
+      retryable: true,
+    } as const satisfies InternalToolError;
+
+    const projected = toRegistryChatToolError(error);
+
+    expect(projected.kind).toBe("transient");
+    expect(JSON.parse(projected.message)).toEqual({
+      error: {
+        code: error.code,
+        message: error.message,
+        hint: error.hint,
+        retryable: true,
+      },
+    });
+  });
+
   test("preserves admission recovery fields when projecting to chat", () => {
     for (const [code, metadata] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
       if (!isActionAdmissionCode(code)) {
@@ -29,6 +51,9 @@ describe("registry tool error projection", () => {
         message: metadata.message,
         hint: metadata.hint,
         retryable: metadata.retryable,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       } as const satisfies InternalToolError;
       const projected = toRegistryChatToolError(error);
@@ -45,6 +70,9 @@ describe("registry tool error projection", () => {
           message: metadata.message,
           hint: metadata.hint,
           retryable: metadata.retryable,
+          ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+            ? { retryAfterMs: 1250 }
+            : {}),
           contactUrl: error.contactUrl,
         },
       });

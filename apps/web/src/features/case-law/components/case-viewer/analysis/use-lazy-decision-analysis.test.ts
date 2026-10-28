@@ -17,29 +17,22 @@ const sourceOf = (relativePath: string) =>
 
 const importedCalls = (source: ParsedSource, exportedName: string) => {
   const localNames = new Set<string>();
-  for (const statement of source.program.body) {
-    if (
-      statement.type !== "ImportDeclaration" ||
-      statement.importKind === "type"
-    ) {
-      continue;
-    }
+  for (const statement of source.module.staticImports) {
     if (
       exportedName === "useLazyDecisionAnalysis" &&
-      statement.source.value !==
+      statement.moduleRequest.value !==
         "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis"
     ) {
       continue;
     }
-    for (const binding of statement.specifiers) {
+    for (const entry of statement.entries) {
+      // `isType` covers both `import type { … }` and inline `type` bindings.
       if (
-        binding.type === "ImportSpecifier" &&
-        binding.importKind !== "type" &&
-        (binding.imported.type === "Identifier"
-          ? binding.imported.name
-          : binding.imported.value) === exportedName
+        !entry.isType &&
+        // Only named bindings carry a name; default and namespace are null.
+        entry.importName.name === exportedName
       ) {
-        localNames.add(binding.local.name);
+        localNames.add(entry.localName.value);
       }
     }
   }

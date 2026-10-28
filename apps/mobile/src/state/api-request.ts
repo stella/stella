@@ -14,6 +14,12 @@ export class ApiRequestError extends TaggedError("ApiRequestError")<{
 
 export type ApiError = ApiRequestError | SignedOutError | TokenError;
 
+/** One load of a screen's data, stamped with when it returned so rows can say "2 hours ago" without reading the clock while rendering. */
+export type Load<T> = {
+  readonly loadedAt: number;
+  readonly result: Result<T, ApiError>;
+};
+
 type ApiRequest<TSchema extends v.GenericSchema> = {
   readonly path: string;
   readonly schema: TSchema;
@@ -68,10 +74,28 @@ const requestOnce = async <TSchema extends v.GenericSchema>(
 };
 
 /**
+ * Runs `request` on a current access token. A rejected token is spent
+ * whatever its clock says, so it is dropped and the request runs once more
+ * on a fresh one; a second rejection is the server's answer.
+ */
+export const withAccessToken = async <T>(
+  source: AccessTokenSource,
+  request: (accessToken: string) => Promise<Result<T, ApiRequestError>>,
+): Promise<Result<T, ApiError>> =>
+  await Result.gen(async function* () {
+    const token = yield* Result.await(source.accessToken());
+    const first = await request(token);
+    if (Result.isOk(first) || first.error.status !== 401) {
+      return first;
+    }
+    source.invalidate();
+    const fresh = yield* Result.await(source.accessToken());
+    return await request(fresh);
+  });
+
+/**
  * One JSON request to the API, validated against `schema`: a phone runs
- * whatever build it installed, so the server may be newer than the app. A
- * rejected token is spent whatever its clock says, so it is dropped and the
- * request runs once more on a fresh one; a second rejection is the answer.
+ * whatever build it installed, so the server may be newer than the app.
  */
 export const requestApi = async <TSchema extends v.GenericSchema>({
   fetch,
@@ -80,15 +104,10 @@ export const requestApi = async <TSchema extends v.GenericSchema>({
 }: ApiRequest<TSchema> & {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
-}): Promise<Result<v.InferOutput<TSchema>, ApiError>> =>
-  await Result.gen(async function* () {
-    const { serverUrl } = source.session();
-    const token = yield* Result.await(source.accessToken());
-    const first = await requestOnce(fetch, serverUrl, token, request);
-    if (Result.isOk(first) || first.error.status !== 401) {
-      return first;
-    }
-    source.invalidate();
-    const fresh = yield* Result.await(source.accessToken());
-    return await requestOnce(fetch, serverUrl, fresh, request);
-  });
+}): Promise<Result<v.InferOutput<TSchema>, ApiError>> => {
+  const { serverUrl } = source.session();
+  return await withAccessToken(
+    source,
+    async (token) => await requestOnce(fetch, serverUrl, token, request),
+  );
+};

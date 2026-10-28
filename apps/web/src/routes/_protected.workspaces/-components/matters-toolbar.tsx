@@ -14,7 +14,6 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import {
   Menu,
   MenuGroup,
@@ -23,6 +22,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
@@ -67,9 +67,11 @@ export const MattersToolbar = ({
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
-        onChange={(e) => onSearchChange(e.currentTarget.value)}
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={onSearchChange}
         placeholder={t("common.search")}
         ref={searchRef}
         size="sm"

@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Ahora",
       "currentSession": "Actual",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} en {os}",
@@ -508,19 +509,35 @@
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
     "approval": {
+      "approveAll": "{count, plural, one {Aprobar # registro} other {Aprobar los # registros}}",
       "approveSelected": "Aprobar {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "billedTotal": "{duration} facturado",
       "empty": "No hay nada pendiente de aprobación en este asunto.",
+      "emptyWeek": "No hay nada pendiente de aprobación esta semana. El tiempo enviado aparece aquí.",
+      "everyone": "Todos",
       "failed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
       "myTime": "Mi tiempo",
+      "pending": "{count, plural, one {# registro por aprobar} other {# registros por aprobar}}",
       "refusals": {
         "invalidEntry": "Añada una descripción y revise la fecha de trabajo; después apruebe el registro.",
         "notApprover": "Solo el aprobador asignado o un administrador puede aprobar este registro.",
         "notFound": "Este registro ya no existe. Actualice la lista.",
+        "notSubmitted": "Este registro aún no se ha enviado. Primero debe enviarlo quien lo registró.",
         "runningTimer": "Detenga el temporizador en curso antes de aprobar este registro.",
         "unpriced": "Este registro no tiene tarifa. Configure una tarifa para este asunto y después apruébelo.",
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
       },
       "returnComment": "Motivo de devolución",
+      "returnRefusals": {
+        "invalidEntry": "Revise la fecha de trabajo del registro y después devuélvalo.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede devolver este registro.",
+        "notFound": "Este registro ya no existe, por lo que no se puede devolver. Actualice la lista.",
+        "notSubmitted": "Este borrador nunca se envió, así que no hay nada que devolver.",
+        "runningTimer": "Detenga el temporizador en curso antes de devolver este registro.",
+        "timePeriodLocked": "Este mes está bloqueado, por lo que el registro no se puede devolver. Pida a un administrador que lo desbloquee.",
+        "wrongStatus": "El tiempo facturado o dado de baja no se puede devolver a quien lo registró."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
       "selectEntry": "Seleccionar registro",
       "timeEntries": "Registros de tiempo",
       "title": "Aprobaciones"
@@ -530,6 +547,17 @@
     "batchActions": "Acciones en lote",
     "billable": "Facturable",
     "billedAmount": "Importe facturado",
+    "clientComposer": {
+      "flatFeeNote": "Facture los asuntos con tarifa fija desde la página de facturas del asunto.",
+      "includeMatter": "Incluir {matterName}",
+      "invalidPeriod": "Elija una fecha de fin igual o posterior a la de inicio.",
+      "loadFailed": "No se pudo cargar el trabajo sin facturar. Inténtelo de nuevo.",
+      "matterSubtotal": "Total del asunto con IVA: {amount} · {share} de la factura",
+      "periodEnd": "Fin del período",
+      "periodStart": "Inicio del período",
+      "title": "Facturar al cliente",
+      "visibility": "Esta factura solo es visible para quienes tienen acceso a todos los asuntos incluidos y los administradores de facturación."
+    },
     "codes": {
       "activity": "Actividad",
       "activityCode": "Código de actividad",
@@ -673,6 +701,11 @@
       "invoiceDate": "Fecha de factura",
       "invoiceDetail": "Detalle de factura",
       "invoiceNumber": "Número de factura",
+      "lineOverrides": {
+        "editedRecorded": "Editado · registrado: {description}, {quantity} × {rate}",
+        "quantity": "Cantidad",
+        "resetRecorded": "Restablecer valores registrados"
+      },
       "linkedExpenses": "Gastos vinculados",
       "linkedTimeEntries": "Registros de tiempo vinculados",
       "markPaid": "Marcar como pagada",
@@ -697,6 +730,7 @@
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
+    "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",
@@ -811,6 +845,7 @@
       "approved": "Aprobado",
       "billed": "Facturado",
       "draft": "Borrador",
+      "submitted": "Enviado",
       "written_off": "Dado de baja"
     },
     "stopTimer": "Detener",
@@ -963,33 +998,31 @@
       "supreme": "Tribunales supremos"
     },
     "coverage": {
+      "allCurrent": "Todas las fuentes están al día",
       "completeness": "Exhaustividad",
+      "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado.",
+      "countryNavigation": "Ir a un país",
       "courtsHeading": "Por tribunal",
-      "courtsUnavailable": "El desglose por tribunal no está disponible en este momento.",
       "decisionYears": "Años de las resoluciones",
+      "decisionsAcross": "resoluciones de {count, plural, one {# jurisdicción} other {# jurisdicciones}}",
       "description": "Cuánta jurisprudencia contiene el corpus, por país y por tribunal, y cuán actualizada está cada fuente.",
       "generatedAt": "Datos a {date}",
-      "globeLabel": "Países cuya jurisprudencia contiene el corpus, en un globo terráqueo",
       "healthCurrent": "Actualizado",
       "healthDelayed": "Con retraso",
       "healthDisabled": "Desactivado",
       "healthStalled": "Sin avance",
       "healthUnknown": "Nunca ejecutado",
       "inPreparation": "En preparación",
-      "knownGaps": "Lagunas conocidas",
       "lastSync": "Última sincronización",
-      "noGapsRecorded": "No hay lagunas registradas",
       "notCountedYet": "Aún sin contar",
       "notMeasuredYet": "Aún sin medir",
-      "pendingTexts": "Textos pendientes",
-      "reportedByListing": "Contado a partir del listado del organismo publicador",
-      "reportedByOperator": "Introducido manualmente",
-      "reportedByPublisher": "Recuento del organismo publicador",
       "searchable": "Consultables",
+      "sourceExceptions": "{count, plural, one {# fuente requiere atención} other {# fuentes requieren atención}}",
+      "sourcesCurrent": "Fuentes al día",
+      "syncedAt": "Sincronizado {time}",
       "title": "Cobertura de jurisprudencia",
       "totalFrom": "Total a {date}",
-      "unavailable": "Los datos de cobertura no están disponibles ahora mismo.",
-      "unreadListingPeriods": "Periodos del listado no leídos"
+      "unavailable": "Los datos de cobertura no están disponibles ahora mismo."
     },
     "decisionNotFound": "Resolución no encontrada",
     "decisionTypes": {
@@ -1177,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
+      "caseFileDocuments": "Documentos de este expediente judicial",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Pasaje de la resolución",
@@ -1403,6 +1437,17 @@
         "webSearch": "Activa la búsqueda web para usar esta habilidad"
       }
     },
+    "connectConnector": {
+      "checkAction": "Comprobar conexión",
+      "description": "El asistente solicita conectar {connector} para usar sus herramientas en esta conversación.",
+      "error": "No se pudo iniciar la conexión. Inténtalo de nuevo.",
+      "notConnected": "Aún no está conectado. Termina de iniciar sesión y vuelve a comprobarlo.",
+      "openTools": "Abrir herramientas",
+      "scopes": "Acceso solicitado: {scopes}",
+      "title": "Conectar un conector",
+      "tokenRequired": "{connector} necesita un token de acceso. Añádelo en la página de herramientas y luego comprueba la conexión.",
+      "waiting": "Termina de iniciar sesión en la ventana que se abrió."
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
@@ -1477,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
+      "unnamed": "{count, plural, one {# más} many {# más} other {# más}}"
     },
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
@@ -1718,6 +1763,7 @@
       "business_registry_lookup": "Buscando en el registro de empresas",
       "compare_versions": "Comparando versiones",
       "configure_template_fields": "Configurar campos de la plantilla",
+      "connect_connector": "Solicitando conectar un conector",
       "counterparty_check": "Verificando la contraparte",
       "create-document": "Preparando documento",
       "create_matter_document": "Creando documento",
@@ -2005,6 +2051,7 @@
     "confirm": "Confirmar",
     "confirmAction": "¿Está seguro?",
     "connect": "Conectar",
+    "connected": "Conectado",
     "connectionLost": "Conexión perdida",
     "connectionLostDescription": "Se perdió la conexión con el servidor. Reintentando automáticamente.",
     "convertTo": "Convertir a",
@@ -2079,7 +2126,6 @@
       "orLetUsKnowAt": "o escríbanos a",
       "viewDocumentation": "Ver documentación"
     },
-    "error": "Error",
     "expenses": "Gastos",
     "export": {
       "citations": "Citas",
@@ -2153,6 +2199,7 @@
     "lastUpdated": "Última actualización",
     "layoutResetAfterProblem": "Se ha restablecido la disposición tras un problema.",
     "legalDatabase": "Base de datos jurídica",
+    "loadFailed": "No se ha podido cargar.",
     "loadMore": "Cargar más",
     "loading": "Cargando",
     "logTime": "Registrar tiempo",
@@ -2173,6 +2220,8 @@
     "noResults": "Sin resultados",
     "noVersions": "Sin historial de versiones",
     "none": "Ninguno",
+    "notConnected": "No conectado",
+    "notNow": "Ahora no",
     "notStated": "No indicado",
     "notes": "Notas",
     "open": "Abrir",
@@ -2241,7 +2290,7 @@
     "showMore": "Mostrar más",
     "showSecretValue": "Mostrar valor secreto",
     "signOut": "Cerrar sesión",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "sort": "Ordenar",
     "source": "Fuente",
     "stale": "Obsoleto",
@@ -2421,10 +2470,10 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
-    "deleteContact": "Eliminar cliente",
+    "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
-    "editContact": "Editar cliente",
+    "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
       "personal": "Personal",
@@ -2437,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
-      "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
       "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
@@ -2718,7 +2767,7 @@
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
-    "actionFailed": "Acción fallida",
+    "actionFailed": "No ha funcionado. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "api": {
       "badRequest": "No se pudo completar la solicitud.",
       "caseLawCountryUnavailable": "La jurisprudencia de este país no está disponible. Elige otro país.",
@@ -3269,7 +3318,7 @@
     "saveSerializeFailedTitle": "No se pudo crear el DOCX",
     "savingDocument": "Guardando...",
     "showDetails": "Mostrar detalles",
-    "somethingWentWrong": "Algo salió mal",
+    "somethingWentWrong": "Algo salió mal. Inténtalo de nuevo o recarga la página si vuelve a ocurrir.",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
     "tableBordersAll": "Todos los bordes",
@@ -4581,7 +4630,6 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA",
       "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
@@ -5009,7 +5057,7 @@
         "title": "Autenticación de dos factores"
       },
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
-      "wordEditShortcut": "Abreviatura de edición en Word",
+      "wordEditShortcut": "Iniciales para ediciones de Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
       "wordEditShortcutPlaceholder": "p. ej. JK"
     },
@@ -5020,7 +5068,6 @@
       "cliInstallLabel": "Instalación",
       "cliLoginLabel": "Inicio de sesión",
       "cliTitle": "Interfaz de línea de comandos",
-      "connected": "Conectada",
       "connectedAgo": "Conectada {time}",
       "connectedAppsDescription": "Aplicaciones en las que iniciaste sesión con stella. Desconecta las que ya no uses.",
       "connectedAppsEmpty": "Aún nada. Configura Claude o ChatGPT arriba y aparecerá aquí.",
@@ -5043,7 +5090,6 @@
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL del servidor",
       "noMatches": "Ninguna conexión coincide con «{query}»",
-      "notConnected": "Sin conectar",
       "permissionCount": "{count, plural, one {# permiso} other {# permisos}}",
       "privateCredentialOnly": "Solo credencial privada",
       "searchPlaceholder": "Buscar conexiones",
@@ -5158,7 +5204,6 @@
       "usageLimitDescriptionNoEntitlement": "Las funciones de IA necesitan una autorización de uso activa para esta organización.",
       "usageLimitDescriptionUsageLimitExceeded": "Esta acción no se puede ejecutar con el estado de uso actual de la organización.",
       "usageLimitNeeded": "Necesario",
-      "usageLimitNotNow": "Ahora no",
       "usageLimitTitleEntitlementInactive": "La autorización de uso no está activa",
       "usageLimitTitleNoEntitlement": "Se requiere autorización de uso",
       "usageLimitTitleUsageLimitExceeded": "Límite de uso de IA alcanzado",
@@ -5399,16 +5444,16 @@
     "savedDescription": "Conjunto de estilos guardado",
     "sourceDocument": "DOCX de origen",
     "stellaDescription": "Formato jurídico completo y neutro de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sin título"
   },
   "success": {
     "aiConfigDeleted": "Configuración de IA eliminada",
     "aiConfigUpdated": "Configuración de IA actualizada",
-    "clientUpdated": "Cliente actualizado",
-    "contactCreated": "Cliente creado",
-    "contactDeleted": "Cliente eliminado",
+    "clientUpdated": "Contacto actualizado",
+    "contactCreated": "Contacto creado",
+    "contactDeleted": "Contacto eliminado",
     "documentCreated": "Documento creado",
     "folderCreated": "Carpeta creada",
     "invitationCanceled": "Invitación cancelada",
@@ -5882,6 +5927,16 @@
       "pendingCount": "{count, plural, one {# sugerencia} other {# sugerencias}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Revisa la fecha de trabajo y luego envía este registro.",
+        "narrativeRequired": "Añade una descripción y luego envía este registro.",
+        "runningTimer": "Detén el temporizador en curso y luego envía este registro.",
+        "unpriced": "Este registro no tiene tarifa. Pide una tarifa para el asunto y luego envíalo."
+      },
+      "returned": "Devuelto: {comment}",
+      "submitAndApprove": "Enviar y aprobar",
+      "submitResult": "{submitted} enviados · {approved} aprobados · {refused} por corregir",
+      "submitWeek": "Enviar semana",
       "title": "Mi semana",
       "totals": "{logged} registrados · {billable} facturables"
     }
@@ -5935,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Introduce una dirección de correo electrónico válida.",
     "organizationNameRequired": "El nombre de la organización es obligatorio",
     "slugFormat": "El slug debe contener solo letras minúsculas, números y guiones",
     "slugRequired": "El slug es obligatorio"

@@ -10280,14 +10280,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/analytics/posthog-node.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/analytics/source-map.artifact.test.ts": {
       "peakMb": 224,
       "baselineMb": 216,

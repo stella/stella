@@ -18,8 +18,8 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -413,11 +413,15 @@ const MattersToolbarSkeleton = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Input
-        className="w-64 max-w-[40%]"
+      <SearchField
+        aria-label={t("common.search")}
+        clearLabel={t("common.clearSearch")}
         disabled
+        groupClassName="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
+        onValueChange={() => undefined}
         placeholder={t("common.search")}
         size="sm"
+        value=""
       />
       <Separator className="mx-1 h-4" orientation="vertical" />
       <Button disabled size="xs" variant="ghost">
