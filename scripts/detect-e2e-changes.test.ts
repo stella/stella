@@ -625,6 +625,7 @@ describe("detect-e2e-changes", () => {
     expect(declaredEnv).toContain("ROUTE_SMOKE_REQUIRED");
     const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
     const output = path.join(root, "outputs");
+    const selectedPlan = path.join(root, "selection.json");
     try {
       for (const event of [
         "pull_request",
@@ -640,14 +641,24 @@ describe("detect-e2e-changes", () => {
               ["false", "false"],
             ] as const) {
               writeFileSync(output, "fixture=preserved\n");
+              if (matrix) {
+                writeFileSync(
+                  selectedPlan,
+                  JSON.stringify({
+                    matrix: JSON.parse(matrix),
+                    specs: JSON.parse(selectedSpecs),
+                  }),
+                );
+              } else {
+                rmSync(selectedPlan, { force: true });
+              }
               const env = {
                 PATH: "/usr/bin:/bin",
                 GITHUB_OUTPUT: output,
                 EVENT_NAME: event,
                 SELECTOR_OUTCOME: outcome,
-                SELECTED_MATRIX: matrix,
                 SELECTED_MODE: "selected",
-                SELECTED_SPECS: selectedSpecs,
+                SELECTED_PLAN_PATH: selectedPlan,
                 E2E_PRODUCTION_REQUIRED: required,
                 ROUTE_SMOKE_REQUIRED: routeSmoke,
                 FULL_MATRIX: fullMatrix,
