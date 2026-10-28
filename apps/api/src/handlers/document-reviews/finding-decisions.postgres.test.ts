@@ -76,7 +76,7 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
 
         const source = await Bun.file(
           new URL(
-            "../../../drizzle/20261028120100_document_review_finding_decision_history/migration.sql",
+            "../../../drizzle/20261028130100_document_review_finding_decision_history/migration.sql",
             import.meta.url,
           ),
         ).text();
