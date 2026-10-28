@@ -429,10 +429,35 @@ const withoutInvisibles = (text: string) =>
  * text itself.
  */
 const pdfJsWords = async (bytes: Uint8Array) => {
-  const { appearanceRef, page, pdf } = await readStamp(bytes);
+  const { appearance, appearanceRef, page, pdf, widget } =
+    await readStamp(bytes);
   if (!page) {
     throw new Error("no page");
   }
+  // Draw the appearance where a viewer does, its transformed BBox moved onto
+  // the widget Rect (ISO 32000-1, 12.5.5). At the page origin part of it
+  // would sit outside the CropBox, and pdf.js leaves out text off the page.
+  const numbers = (array: PdfArray | undefined) =>
+    (array?.toArray() ?? []).map((entry) =>
+      entry instanceof PdfNumber ? entry.value : Number.NaN,
+    );
+  const rect = numbers(widget?.getArray("Rect"));
+  const [a = 1, b = 0, c = 0, d = 1] = numbers(appearance.getArray("Matrix"));
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = numbers(appearance.getArray("BBox"));
+  const corners = (
+    [
+      [x1, y1],
+      [x1, y2],
+      [x2, y1],
+      [x2, y2],
+    ] as const
+  ).map(([x, y]) => ({ x: a * x + c * y, y: b * x + d * y }));
+  const shiftX =
+    Math.min(rect.at(0) ?? 0, rect.at(2) ?? 0) -
+    Math.min(...corners.map(({ x }) => x));
+  const shiftY =
+    Math.min(rect.at(1) ?? 0, rect.at(3) ?? 0) -
+    Math.min(...corners.map(({ y }) => y));
   page.dict.set(
     "Resources",
     PdfDict.of({ XObject: PdfDict.of({ Stamp: appearanceRef }) }),
@@ -440,7 +465,12 @@ const pdfJsWords = async (bytes: Uint8Array) => {
   page.dict.set(
     "Contents",
     pdf.context.registry.register(
-      new PdfStream(new PdfDict(), new TextEncoder().encode("/Stamp Do")),
+      new PdfStream(
+        new PdfDict(),
+        new TextEncoder().encode(
+          `q 1 0 0 1 ${shiftX.toFixed(3)} ${shiftY.toFixed(3)} cm /Stamp Do Q`,
+        ),
+      ),
     ),
   );
   page.dict.delete("Annots");
