@@ -429,53 +429,101 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
+type UniquenessToken = { kind: "word" | "punctuation"; value: string };
+
+const isUniquenessWordCharacter = (char: string): boolean => {
+  const code = char.codePointAt(0) ?? -1;
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  );
+};
+
+const uniquenessTokens = (statement: string): UniquenessToken[] => {
+  const tokens: UniquenessToken[] = [];
+  for (let index = 0; index < statement.length;) {
+    const char = statement[index] ?? "";
+    if (char === "(" || char === ")" || char === ",") {
+      tokens.push({ kind: "punctuation", value: char });
+      index++;
+      continue;
+    }
+    if (!isUniquenessWordCharacter(char)) {
+      index++;
+      continue;
+    }
+    const start = index;
+    while (
+      index < statement.length &&
+      isUniquenessWordCharacter(statement[index] ?? "")
+    ) {
+      index++;
+    }
+    tokens.push({
+      kind: "word",
+      value: statement.slice(start, index).toUpperCase(),
+    });
+  }
+  return tokens;
+};
+
+const isUniquenessKeyword = (
+  tokens: UniquenessToken[],
+  index: number,
+): boolean => {
+  const token = tokens[index];
+  return (
+    token?.kind === "word" &&
+    (token.value === "UNIQUE" ||
+      token.value === "EXCLUDE" ||
+      (token.value === "PRIMARY" && tokens[index + 1]?.value === "KEY"))
+  );
+};
+
 // ALTER TABLE's ADD grammar has two uniqueness-producing branches: table
-// constraints and column definitions. In both branches the contract keyword is
-// at the action's top level; modifiers such as INCLUDE keep their commas inside
-// parentheses. Splitting only on top-level commas therefore covers named and
-// unnamed constraints, USING INDEX forms, and inline column constraints without
-// coupling the check to every optional grammar tail.
-const addsUniquenessContract = (statement: string): boolean => {
-  if (!ALTER_TABLE_PATTERN.test(statement)) {
+// constraints and column definitions. Their contract keyword is at the action's
+// top level, while commas in modifiers such as INCLUDE are parenthesized.
+const addsUniquenessContract = (tokens: UniquenessToken[]): boolean => {
+  if (tokens[0]?.value !== "ALTER" || tokens[1]?.value !== "TABLE") {
     return false;
   }
 
-  let actionStart = 0;
   let depth = 0;
-  const actions: string[] = [];
-
-  for (let index = 0; index < statement.length; index++) {
-    const char = statement[index];
-    if (char === "(") {
+  let actionIsAdd = false;
+  for (let index = 2; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token?.value === "(") {
       depth++;
-    } else if (char === ")") {
+      continue;
+    }
+    if (token?.value === ")") {
       depth = Math.max(0, depth - 1);
-    } else if (char === "," && depth === 0) {
-      actions.push(statement.slice(actionStart, index));
-      actionStart = index + 1;
+      continue;
+    }
+    if (depth !== 0) {
+      continue;
+    }
+    if (token?.value === ",") {
+      actionIsAdd = false;
+      continue;
+    }
+    if (!actionIsAdd) {
+      actionIsAdd = token?.value === "ADD";
+      continue;
+    }
+    if (isUniquenessKeyword(tokens, index)) {
+      return true;
     }
   }
-  actions.push(statement.slice(actionStart));
-
-  return actions.some((action) => {
-    const words = wordsWithDepth(action).filter(
-      ({ depth: wordDepth }) => wordDepth === 0,
-    );
-    const addIndex = words.findIndex(({ word }) => word === "ADD");
-    if (addIndex === -1) {
-      return false;
-    }
-
-    return words
-      .slice(addIndex + 1)
-      .some(
-        ({ word }, index, tail) =>
-          word === "UNIQUE" ||
-          word === "EXCLUDE" ||
-          (word === "PRIMARY" && tail[index + 1]?.word === "KEY"),
-      );
-  });
+  return false;
 };
+
+const addsUniqueIndex = (tokens: UniquenessToken[]): boolean =>
+  tokens[0]?.value === "CREATE" &&
+  tokens[1]?.value === "UNIQUE" &&
+  tokens[2]?.value === "INDEX";
 
 const GUARDED_RULES = [
   {
@@ -483,9 +531,10 @@ const GUARDED_RULES = [
     description:
       "adds a uniqueness contract to a table that predates this migration",
     category: "schema-contract",
-    matches: (statement) =>
-      /^\s*CREATE\s+UNIQUE\s+INDEX\b/iu.test(statement) ||
-      addsUniquenessContract(statement),
+    matches: (statement) => {
+      const tokens = uniquenessTokens(statement);
+      return addsUniqueIndex(tokens) || addsUniquenessContract(tokens);
+    },
   },
   {
     id: "drop-object",
@@ -2407,8 +2456,25 @@ const ALTER_TABLE_RELATION_PATTERN = new RegExp(
   `^\\s*ALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?(?:ONLY\\s+)?(?<relation>${SQL_RELATION_SOURCE})`,
   "iu",
 );
-const UNIQUENESS_WRITERS_PATTERN =
-  /^writers:\s*[A-Za-z0-9_./#:-]+(?:\s*,\s*[A-Za-z0-9_./#:-]+)*;\s*.{12,}$/u;
+const UNIQUENESS_WRITER_PATTERN = /^[A-Za-z0-9_./#:-]+$/u;
+
+const hasUniquenessWriters = (reason: string): boolean => {
+  if (!reason.startsWith("writers:")) {
+    return false;
+  }
+  const separator = reason.indexOf(";");
+  if (separator === -1) {
+    return false;
+  }
+  const reviewReason = reason.slice(separator + 1);
+  if (reviewReason.length < 12 || reviewReason.includes("\n")) {
+    return false;
+  }
+  return reason
+    .slice("writers:".length, separator)
+    .split(",")
+    .every((writer) => UNIQUENESS_WRITER_PATTERN.test(writer.trim()));
+};
 
 const normalizeSqlRelation = (relation: string): string => {
   const parts = relation
@@ -2557,7 +2623,7 @@ const checkSource = (
         acknowledgement.usedRuleIds.add(rule.id);
         if (
           rule.id === "add-unique-constraint" &&
-          !UNIQUENESS_WRITERS_PATTERN.test(acknowledgement.reason)
+          !hasUniquenessWriters(acknowledgement.reason)
         ) {
           acknowledgementErrors.push({
             file,
