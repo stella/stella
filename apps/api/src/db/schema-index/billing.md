@@ -7,8 +7,8 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## time_daily_targets · `timeDailyTargets` · billing.ts:79 · rls
 
 ```text
-time_daily_targets.organization_id  safeOrganizationId  not null          billing.ts:82
-time_daily_targets.user_id          text                not null          billing.ts:83
+time_daily_targets.organization_id  safeOrganizationId  fk,not null       billing.ts:82
+time_daily_targets.user_id          text                fk,not null       billing.ts:83
 time_daily_targets.minutes          integer             null              billing.ts:84
 time_daily_targets.updated_at       timestamptz         default,not null  billing.ts:85
 ```
@@ -19,7 +19,7 @@ time_daily_targets.updated_at       timestamptz         default,not null  billin
 time_entries.id                   pUuid               pk,not null       billing.ts:145
 time_entries.organization_id      safeOrganizationId  fk,not null       billing.ts:146
 time_entries.activity_group       text                default,not null  billing.ts:149
-time_entries.workspace_id         safeWorkspaceId     null              billing.ts:155  The matter this work bills; null for internal time.
+time_entries.workspace_id         safeWorkspaceId     fk,null           billing.ts:155  The matter this work bills; null for internal time.
 time_entries.user_id              text                fk,null           billing.ts:156
 time_entries.approver_user_id     text                fk,null           billing.ts:159
 time_entries.approved_by_user_id  text                null              billing.ts:163  Retain historical actor identifiers after account records are removed.
@@ -27,7 +27,7 @@ time_entries.approved_at          timestamptz         null              billing.
 time_entries.returned_by_user_id  text                null              billing.ts:165
 time_entries.returned_at          timestamptz         null              billing.ts:166
 time_entries.return_comment       text                null              billing.ts:167
-time_entries.work_item_id         safeUuid            null              billing.ts:170  A workspace is the legal matter.
+time_entries.work_item_id         safeUuid            fk,null           billing.ts:170  A workspace is the legal matter.
 time_entries.date_worked          date                not null          billing.ts:171
 time_entries.timezone_id          text                not null          billing.ts:172
 time_entries.duration_minutes     integer             not null          billing.ts:173
@@ -156,7 +156,7 @@ seller_profiles.updated_at        timestamptz         default,not null  billing.
 ```text
 number_series.id                 pUuid               pk,not null       billing.ts:711
 number_series.organization_id    safeOrganizationId  fk,not null       billing.ts:712
-number_series.seller_profile_id  safeUuid            null              billing.ts:715
+number_series.seller_profile_id  safeUuid            fk,null           billing.ts:715
 number_series.document_type      text                not null          billing.ts:716
 number_series.name               varchar             not null          billing.ts:719
 number_series.pattern            varchar             not null          billing.ts:720
@@ -170,20 +170,20 @@ number_series.updated_at         timestamptz         default,not null  billing.t
 ## number_series_counters · `numberSeriesCounters` · billing.ts:771 · rls
 
 ```text
-number_series_counters.organization_id  safeOrganizationId  not null  billing.ts:774
-number_series_counters.series_id        safeUuid            not null  billing.ts:775
-number_series_counters.period_key       varchar             not null  billing.ts:776
-number_series_counters.last_value       integer             not null  billing.ts:777
+number_series_counters.organization_id  safeOrganizationId  fk,not null  billing.ts:774
+number_series_counters.series_id        safeUuid            fk,not null  billing.ts:775
+number_series_counters.period_key       varchar             not null     billing.ts:776
+number_series_counters.last_value       integer             not null     billing.ts:777
 ```
 
 ## number_series_allocations · `numberSeriesAllocations` · billing.ts:798 · rls
 
 ```text
-number_series_allocations.organization_id  safeOrganizationId  not null  billing.ts:801
-number_series_allocations.series_id        safeUuid            not null  billing.ts:802
-number_series_allocations.document_type    text                not null  billing.ts:803
-number_series_allocations.number           varchar             not null  billing.ts:806
-number_series_allocations.issued_at        timestamptz         not null  billing.ts:807
+number_series_allocations.organization_id  safeOrganizationId  fk,not null  billing.ts:801
+number_series_allocations.series_id        safeUuid            fk,not null  billing.ts:802
+number_series_allocations.document_type    text                not null     billing.ts:803
+number_series_allocations.number           varchar             not null     billing.ts:806
+number_series_allocations.issued_at        timestamptz         not null     billing.ts:807
 ```
 
 ## rate_tables · `rateTables` · billing.ts:831
@@ -219,7 +219,7 @@ rate_entries.created_at      timestamptz      default,not null  billing.ts:881
 ```text
 expenses.id                   pUuid               pk,not null       billing.ts:909
 expenses.organization_id      safeOrganizationId  fk,not null       billing.ts:910
-expenses.workspace_id         safeWorkspaceId     not null          billing.ts:915  The matter this cost bills.
+expenses.workspace_id         safeWorkspaceId     fk,not null       billing.ts:915  The matter this cost bills.
 expenses.user_id              text                fk,null           billing.ts:916
 expenses.matter_id            safeUuid            fk,not null       billing.ts:919
 expenses.date_incurred        date                not null          billing.ts:922
@@ -243,10 +243,10 @@ expenses.updated_at           timestamptz         default,null      billing.ts:9
 invoices.id                           pUuid               pk,not null       billing.ts:983
 invoices.organization_id              safeOrganizationId  fk,not null       billing.ts:984
 invoices.client_id                    safeUuid            fk,null           billing.ts:987
-invoices.workspace_id                 safeWorkspaceId     null              billing.ts:990
+invoices.workspace_id                 safeWorkspaceId     fk,null           billing.ts:990
 invoices.invoice_number               varchar             null              billing.ts:991
 invoices.document_type                text                default,not null  billing.ts:992
-invoices.original_invoice_id          safeUuid            null              billing.ts:996
+invoices.original_invoice_id          safeUuid            fk,null           billing.ts:996
 invoices.billing_mode                 text                default,not null  billing.ts:997
 invoices.flat_fee_amount              centsColumn         null              billing.ts:1001
 invoices.finalized_at                 timestamptz         null              billing.ts:1003  Retained on revert to draft so document type and original stay frozen.
