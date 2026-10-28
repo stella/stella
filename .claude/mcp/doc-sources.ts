@@ -694,6 +694,17 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
+    (dependency) =>
+      ({
+        checkedAt: "2026-10-28T00:00:00.000Z",
+        dependency,
+        explanation:
+          "https://raw.githubusercontent.com/clauderic/dnd-kit/master/llms.txt returns 404; https://dndkit.com/llms.txt and https://docs.dndkit.com/llms.txt reject retrieval with 403. No retrievable index was found. Use the official legacy API reference at https://dndkit.com/legacy/ directly for the retained Kanban consumer contract.",
+        expiresAt: "2026-11-27T00:00:00.000Z",
+        reason: "no-llms-txt",
+      }) satisfies NoLlmsTxtExclusion,
+  ),
   ...[
     "prosemirror-commands",
     "prosemirror-dropcursor",
