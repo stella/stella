@@ -362,7 +362,9 @@ impl HarnessInstallation {
       return Err(HarnessError::NotCurrent);
     }
     cancel.send_modify(|cancelled| *cancelled = true);
-    Ok(slot.state.borrow().clone())
+    let state = slot.state.borrow().clone();
+    drop(slot);
+    Ok(state)
   }
 
   pub fn cancel_all(&self) {
@@ -470,6 +472,7 @@ impl Inner {
       Err(Stop::Failed(reason)) => HarnessInstallState::Failed { reason, active },
     };
     replace_state(&slot, state);
+    drop(slot);
   }
 
   async fn install(
@@ -678,25 +681,26 @@ impl Inner {
   }
 
   fn verifying(&self, harness: ManagedHarness, id: &str) {
-    let slot = self.slot(harness);
-    let current = slot.state.borrow().clone();
-    if let HarnessInstallState::Downloading {
-      operation_id,
-      version,
-      active,
-      ..
-    } = current
-      && operation_id == id
-    {
-      replace_state(
-        &slot,
-        HarnessInstallState::Verifying {
+    self
+      .slot(harness)
+      .state
+      .send_if_modified(|state| match state {
+        HarnessInstallState::Downloading {
           operation_id,
           version,
           active,
-        },
-      );
-    }
+          ..
+        } if operation_id == id => {
+          let verifying = HarnessInstallState::Verifying {
+            operation_id: operation_id.clone(),
+            version: version.clone(),
+            active: active.clone(),
+          };
+          *state = verifying;
+          true
+        }
+        _ => false,
+      });
   }
 
   /// Points new runs at `version`, keeping the release it replaces, and
