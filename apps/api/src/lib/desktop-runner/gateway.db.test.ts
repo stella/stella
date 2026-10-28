@@ -1504,7 +1504,7 @@ describe("outbound frames", () => {
       matches: (message: DesktopRunnerServerMessage) => boolean;
       arrived: PromiseWithResolvers<undefined>;
     }>();
-    const arrival = (
+    const arrival = async (
       matches: (message: DesktopRunnerServerMessage) => boolean,
     ) => {
       const waiter = { matches, arrived: Promise.withResolvers<undefined>() };
@@ -1513,7 +1513,7 @@ describe("outbound frames", () => {
       } else {
         waiters.add(waiter);
       }
-      return waiter.arrived.promise;
+      await waiter.arrived.promise;
     };
     /** Send statuses to answer with, in order; then every send succeeds. */
     const statuses: number[] = [];
