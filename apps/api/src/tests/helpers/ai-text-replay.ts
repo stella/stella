@@ -104,12 +104,6 @@ const FINISH_POLICY_OUTCOMES = {
     content_filter: "refusal",
     tool_calls: "unfinished",
   },
-  "allow-incomplete": {
-    stop: "success",
-    length: "success",
-    content_filter: "success",
-    tool_calls: "success",
-  },
 } as const satisfies Record<
   TanStackTextFinishPolicy,
   Record<NonNullable<TanStackTextFinishReason>, FinishedOutcomeType>

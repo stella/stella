@@ -197,10 +197,11 @@ type TanStackTextForTaskOptions = GenerateTanStackBaseOptions &
  * everything but `stop`. `allow-output-ceiling` also accepts `length`, the
  * finish a run reports when it spends the whole `maxOutputTokens` budget, and
  * still rejects a moderated (`content_filter`), tool-bearing, or unfinished
- * run. `allow-incomplete` returns whatever text arrived.
+ * run. No policy returns text from a run that never reported a finish: such
+ * text stops wherever the stream did, often mid-word.
  */
 export type TanStackTextFinishPolicy =
-  "allow-incomplete" | "allow-output-ceiling" | "require-complete";
+  "allow-output-ceiling" | "require-complete";
 
 /**
  * A bound on one awaited model call, owned by the call rather than threaded in
@@ -419,8 +420,6 @@ const finishAccepted = (
   finish: TextRunFinish,
 ): boolean => {
   switch (finishPolicy) {
-    case "allow-incomplete":
-      return true;
     case "allow-output-ceiling":
       return (
         finish.kind === "finished" &&
@@ -555,9 +554,9 @@ const generateTanStackTextWithin = async (
   // A cancelled run leaves the chat loop through a plain `break` on the next
   // chunk: no `RUN_FINISHED`, nothing thrown. Whether a cancellation instead
   // surfaces as an adapter rejection races the provider stream, so without
-  // this the same cancellation is sometimes an error and sometimes a truncated
-  // answer the caller cannot tell from a whole one. A reported finish
-  // separates the two: that run completed before the signal fired.
+  // this the same cancellation is sometimes a cancellation and sometimes an
+  // unfinished run, and a failure sink grades the two differently. A reported
+  // finish separates them: that run completed before the signal fired.
   if (run.finish.kind === "unfinished" && abortSignal?.aborted === true) {
     throw cancelledGenerationError();
   }

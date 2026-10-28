@@ -90,7 +90,6 @@ const seamDriver = (
 export const SEAM_DRIVERS = {
   "require-complete": seamDriver("require-complete"),
   "allow-output-ceiling": seamDriver("allow-output-ceiling"),
-  "allow-incomplete": seamDriver("allow-incomplete"),
 } as const satisfies Record<TanStackTextFinishPolicy, TextCallSiteDriver>;
 
 // --- Chat compaction --------------------------------------------------------
