@@ -116,3 +116,159 @@ test("edge access headers reach the server without appearing in output", async (
     errors.mockRestore();
   }
 });
+
+const runFault = async (fault: string) => {
+  const { mkdtemp, mkdir, rm, writeFile, readFile } =
+    await import("node:fs/promises");
+  const { default: path } = await import("node:path");
+  const directory = await mkdtemp(
+    path.resolve(import.meta.dir, "../.proof-cli-test-"),
+  );
+  const statePath = path.join(directory, "state.json");
+  const output = path.join(directory, "output");
+  const summary = path.join(directory, "summary");
+  const env = {
+    PATH: process.env["PATH"] ?? "",
+    STAGING_PROOF_STATE_PATH: statePath,
+    STAGING_PROOF_PREFLIGHT: "ready",
+    E2E_API_URL: "https://example.invalid",
+    EXPECTED_COMMIT: COMMIT,
+    GITHUB_OUTPUT: output,
+    GITHUB_STEP_SUMMARY: summary,
+  };
+  let mode = "finish";
+  try {
+    if (fault === "malformed-state") {
+      await writeFile(statePath, "not JSON");
+    } else if (fault === "invalid-state") {
+      await writeFile(statePath, JSON.stringify({ status: "unknown" }));
+    } else if (fault === "report-output" || fault === "report-summary") {
+      await writeFile(statePath, JSON.stringify({ status: "ready" }));
+      await mkdir(fault === "report-output" ? output : summary);
+    } else if (fault === "invalid-url") {
+      mode = "wait";
+      env.E2E_API_URL = "invalid\n::warning::untrusted";
+    } else if (fault === "unknown-mode") {
+      mode = "unknown";
+    } else if (fault === "monitor-write") {
+      mode = "monitor";
+      env.STAGING_PROOF_STATE_PATH = path.join(directory, "absent", "state");
+    }
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
+        mode,
+      ],
+      {
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(exitCode).toBe(80);
+    expect(stdout).toContain(
+      "::error title=proof-tooling-failure::Staging proof tooling failed;",
+    );
+    expect(stdout).not.toContain("::warning::untrusted");
+    expect(stdout).not.toContain("rerun");
+    expect(stderr).toBe("");
+    if (fault !== "report-output" && fault !== "report-summary") {
+      expect(await readFile(output, "utf-8")).toBe(
+        "status=proof-tooling-failure\n",
+      );
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+};
+
+for (const fault of [
+  "missing-state",
+  "malformed-state",
+  "invalid-state",
+  "report-output",
+  "report-summary",
+  "invalid-url",
+  "unknown-mode",
+  "monitor-write",
+]) {
+  test(`${fault} produces a proof tooling failure with a fixed diagnostic`, async () => {
+    await runFault(fault);
+  });
+}
+
+test("current deployment initialization failures stop proof with an escaped summary", async () => {
+  const { mkdtemp, readFile, rm, writeFile } = await import("node:fs/promises");
+  const { default: path } = await import("node:path");
+  const directory = await mkdtemp(
+    path.resolve(import.meta.dir, "../.proof-ecs-test-"),
+  );
+  const statePath = path.join(directory, "state.json");
+  const summary = path.join(directory, "summary");
+  const output = path.join(directory, "output");
+  const reason = "ResourceInitializationError: <registry>\n::warning::fixture%";
+  try {
+    await writeFile(
+      `${statePath}.ecs.json`,
+      JSON.stringify({
+        commit: COMMIT,
+        scope: ["api"],
+        services: [
+          {
+            service: "api",
+            deploymentId: "ecs-svc/current",
+            tasks: [
+              { startedBy: "ecs-svc/current", lastStatus: "RUNNING" },
+              {
+                startedBy: "ecs-svc/current",
+                lastStatus: "STOPPED",
+                stoppedReason: reason,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        path.join(import.meta.dir, "staging-proof-readiness-cli.ts"),
+        "wait",
+      ],
+      {
+        env: {
+          PATH: process.env["PATH"] ?? "",
+          STAGING_PROOF_STATE_PATH: statePath,
+          EXPECTED_COMMIT: COMMIT,
+          E2E_API_URL: "https://example.invalid",
+          GITHUB_STEP_SUMMARY: summary,
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [exitCode, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(exitCode).toBe(78);
+    expect(await readFile(output, "utf-8")).toBe(
+      "status=environment-unavailable\n",
+    );
+    const report = await readFile(summary, "utf-8");
+    expect(report).toContain("ResourceInitializationError: &lt;registry&gt;");
+    expect(report).toContain("rerun");
+    expect(stdout).not.toContain("::warning::fixture");
+    expect(stderr).toBe("");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

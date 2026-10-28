@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 
 import { readApiDeployment } from "./check-api-deployment";
+import { readStagingEcsReadiness } from "./staging-ecs-readiness";
 import {
   monitorStagingReadiness,
   type ReadinessGateOutcome,
@@ -44,8 +45,13 @@ export const readStagingReadiness = async ({
 };
 
 type ProofStatus =
-  ReadinessGateOutcome["status"] | ReadinessMonitorOutcome["status"];
-type MonitorState = { status: "monitoring" } | ReadinessMonitorOutcome;
+  | ReadinessGateOutcome["status"]
+  | ReadinessMonitorOutcome["status"]
+  | "proof-tooling-failure";
+type MonitorState =
+  | { status: "monitoring" }
+  | ReadinessMonitorOutcome
+  | { status: "proof-tooling-failure" };
 
 const readMonitorState = async (statePath: string): Promise<MonitorState> => {
   const body: unknown = JSON.parse(await readFile(statePath, "utf-8"));
@@ -54,12 +60,13 @@ const readMonitorState = async (statePath: string): Promise<MonitorState> => {
     if (
       status === "monitoring" ||
       status === "ready" ||
-      status === "environment-interrupted"
+      status === "environment-interrupted" ||
+      status === "proof-tooling-failure"
     ) {
       return { status };
     }
   }
-  return { status: "environment-interrupted" };
+  return { status: "proof-tooling-failure" };
 };
 
 const writeMonitorState = async (statePath: string, state: MonitorState) => {
@@ -68,29 +75,45 @@ const writeMonitorState = async (statePath: string, state: MonitorState) => {
   await rename(temporary, statePath);
 };
 
-const report = async (status: ProofStatus) => {
-  const output = process.env["GITHUB_OUTPUT"];
-  if (output !== undefined) {
-    await appendFile(output, `status=${status}\n`);
-  }
+const toolingFailureMessage =
+  "Staging proof tooling failed; inspect the proof tooling configuration and logs.";
+
+const annotationData = (value: string) =>
+  value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+
+const report = async (status: ProofStatus, detail = "") => {
   const message = {
     ready: "Staging proof environment is ready.",
     "environment-unavailable":
       "Staging proof environment unavailable; rerun after readiness recovers.",
     "environment-interrupted":
       "Environment interrupted during proof; rerun the staging proof.",
+    "proof-tooling-failure": toolingFailureMessage,
   } as const satisfies Record<ProofStatus, string>;
   const line = message[status];
   const summary = process.env["GITHUB_STEP_SUMMARY"];
   if (summary !== undefined) {
-    await appendFile(summary, `${line}\n`);
+    await appendFile(
+      summary,
+      `${line}\n${detail === "" ? "" : `<pre>${detail.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>\n`}`,
+    );
+  }
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined) {
+    await appendFile(output, `status=${status}\n`);
   }
   if (status === "ready") {
     console.log(line);
     return 0;
   }
-  console.error(`::error title=${status}::${line}`);
-  return status === "environment-unavailable" ? 78 : 79;
+  console.log(`::error title=${status}::${annotationData(line)}`);
+  const exitCodes = {
+    ready: 0,
+    "environment-unavailable": 78,
+    "environment-interrupted": 79,
+    "proof-tooling-failure": 80,
+  } as const satisfies Record<ProofStatus, number>;
+  return exitCodes[status];
 };
 
 const finishMonitor = async (statePath: string): Promise<ProofStatus> => {
@@ -110,13 +133,20 @@ const run = async (): Promise<number> => {
   const mode = process.argv.at(2);
   const statePath = process.env["STAGING_PROOF_STATE_PATH"];
   if (statePath === undefined) {
-    return await report("environment-unavailable");
+    return await report("proof-tooling-failure");
+  }
+  if (mode !== "wait" && mode !== "monitor" && mode !== "finish") {
+    return await report("proof-tooling-failure");
   }
   if (mode === "finish") {
+    const preflight = process.env["STAGING_PROOF_PREFLIGHT"];
+    if (preflight === "ready") {
+      return await report(await finishMonitor(statePath));
+    }
     return await report(
-      process.env["STAGING_PROOF_PREFLIGHT"] === "ready"
-        ? await finishMonitor(statePath)
-        : "environment-unavailable",
+      preflight === "environment-unavailable"
+        ? "environment-unavailable"
+        : "proof-tooling-failure",
     );
   }
   const apiUrl = process.env["E2E_API_URL"];
@@ -126,7 +156,7 @@ const run = async (): Promise<number> => {
     expectedCommit === undefined ||
     !/^[a-f0-9]{40}$/u.test(expectedCommit)
   ) {
-    return await report("environment-unavailable");
+    return await report("proof-tooling-failure");
   }
   const url = new URL("/ready", apiUrl);
   const headers = new Headers();
@@ -155,6 +185,13 @@ const run = async (): Promise<number> => {
       rm(statePath, { force: true }),
       rm(`${statePath}.stop`, { force: true }),
     ]);
+    const ecs = await readStagingEcsReadiness(
+      `${statePath}.ecs.json`,
+      expectedCommit,
+    );
+    if (ecs.status === "environment-unavailable") {
+      return await report(ecs.status, ecs.reason);
+    }
     return await report(
       (
         await waitForStagingReadiness({
@@ -164,32 +201,36 @@ const run = async (): Promise<number> => {
       ).status,
     );
   }
-  if (mode === "monitor") {
-    await writeMonitorState(statePath, { status: "monitoring" });
-    const outcome = await monitorStagingReadiness({
-      ...options,
-      deadlineMs: performance.now() + MONITOR_DEADLINE_MS,
-      signal: controller.signal,
-    });
-    await writeMonitorState(statePath, outcome);
-    return 0;
-  }
-  return await report("environment-unavailable");
+  await writeMonitorState(statePath, { status: "monitoring" });
+  const outcome = await monitorStagingReadiness({
+    ...options,
+    deadlineMs: performance.now() + MONITOR_DEADLINE_MS,
+    signal: controller.signal,
+  });
+  await writeMonitorState(statePath, outcome);
+  return 0;
 };
 
 if (import.meta.main) {
   try {
     process.exitCode = await run();
   } catch {
-    const status =
-      process.argv.at(2) === "wait"
-        ? "environment-unavailable"
-        : "environment-interrupted";
+    process.exitCode = 80;
+    // Reporting and monitor persistence can fail independently of the gate.
+    console.log(
+      `::error title=proof-tooling-failure::${annotationData(toolingFailureMessage)}`,
+    );
     const statePath = process.env["STAGING_PROOF_STATE_PATH"];
-    if (process.argv.at(2) === "monitor" && statePath !== undefined) {
-      await writeMonitorState(statePath, { status: "environment-interrupted" });
-    } else {
-      process.exitCode = await report(status);
+    const reports = await Promise.allSettled([
+      report("proof-tooling-failure"),
+      ...(process.argv.at(2) === "monitor" && statePath !== undefined
+        ? [writeMonitorState(statePath, { status: "proof-tooling-failure" })]
+        : []),
+    ]);
+    if (reports.some((result) => result.status === "rejected")) {
+      console.log(
+        `::error title=proof-tooling-failure::${annotationData(toolingFailureMessage)}`,
+      );
     }
   }
 }

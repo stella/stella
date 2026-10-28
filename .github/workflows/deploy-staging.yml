@@ -661,6 +661,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/staging-proof-readiness.ts
             scripts/staging-proof-readiness-cli.ts
+            scripts/staging-ecs-readiness.ts
             scripts/check-api-deployment.ts
             scripts/api-health.ts
           sparse-checkout-cone-mode: false
@@ -669,9 +670,12 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      - name: Preserve staging proof tooling across source checkouts
+        run: |
           mkdir -p "$RUNNER_TEMP/staging-proof-readiness"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"staging-proof-readiness*.ts "$RUNNER_TEMP/staging-proof-readiness/"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health}.ts "$RUNNER_TEMP/staging-proof-readiness/"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health,staging-ecs-readiness}.ts "$RUNNER_TEMP/staging-proof-readiness/"
           echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/staging-proof-readiness" >> "$GITHUB_ENV"
           echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/staging-proof-readiness/state.json" >> "$GITHUB_ENV"
 
@@ -707,6 +711,7 @@ jobs:
           image-digest: ${{ needs.build-api.outputs.digest }}
           web-image-digest: ${{ needs.build-web.outputs.digest }}
           git-sha: ${{ needs.resolve.outputs.sha }}
+          proof-state-path: ${{ env.STAGING_PROOF_STATE_PATH }}
 
       # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
@@ -1016,7 +1021,10 @@ jobs:
           set -euo pipefail
           state=failure
           description="Staging smoke failure: run ${GITHUB_RUN_ID}"
-          if [[ "$PROOF_READINESS" != "ready" ]]; then
+          if [[ "$PROOF_READINESS" == "proof-tooling-failure" || "$PROOF_ENVIRONMENT" == "proof-tooling-failure" || -z "$PROOF_READINESS" ]]; then
+            state=error
+            description="Staging proof tooling failure: ${GITHUB_RUN_ID}"
+          elif [[ "$PROOF_READINESS" != "ready" ]]; then
             state=error
             description="Staging environment unavailable; rerun proof: ${GITHUB_RUN_ID}"
           elif [[ "$PROOF_ENVIRONMENT" != "ready" ]]; then

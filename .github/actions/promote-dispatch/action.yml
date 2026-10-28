@@ -49,6 +49,10 @@ inputs:
       includes the frontend.
     required: false
     default: ""
+  proof-state-path:
+    description: Local proof state path for the deployment ECS receipt
+    required: false
+    default: ""
   git-sha:
     description: >
       Full 40-char commit SHA the synthetic ref points at. Only valid with
@@ -73,6 +77,7 @@ runs:
         IMAGE_DIGEST: ${{ inputs.image-digest }}
         WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
+        STAGING_PROOF_STATE_PATH: ${{ inputs.proof-state-path }}
       run: |
         set -euo pipefail
 
@@ -248,6 +253,19 @@ runs:
           fi
           sleep "$WATCH_POLL_SECONDS"
         done
+
+        if [[ -n "${STAGING_PROOF_STATE_PATH:-}" ]]; then
+          receipt_directory="${STAGING_PROOF_STATE_PATH}.ecs"
+          mkdir -p "$receipt_directory"
+          rm -f "${STAGING_PROOF_STATE_PATH}.ecs.json" "$receipt_directory/receipt.json"
+          if bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" run download "$run_id" \
+            --repo "$INFRA_REPO" --name staging-ecs-readiness --dir "$receipt_directory" \
+            >/dev/null 2>&1 && [[ -f "$receipt_directory/receipt.json" ]]; then
+            cp "$receipt_directory/receipt.json" "${STAGING_PROOF_STATE_PATH}.ecs.json"
+          else
+            echo "::warning::Deployment ECS readiness receipt is unavailable."
+          fi
+        fi
 
         if [[ "$conclusion" == "success" ]]; then
           echo "Promote run completed successfully: ${run_url}"

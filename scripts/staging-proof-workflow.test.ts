@@ -176,7 +176,7 @@ test("proof tooling is preserved from the workflow revision before target checko
   );
   const preserve = steps.findIndex(
     (step) =>
-      step["name"] === "Preserve GitHub API tooling across source checkouts",
+      step["name"] === "Preserve staging proof tooling across source checkouts",
   );
   const target = steps.findIndex(
     (step) => step["name"] === "Checkout deployed source",
@@ -185,7 +185,7 @@ test("proof tooling is preserved from the workflow revision before target checko
   expect(preserve).toBeLessThan(target);
   expect(
     text(
-      stepNamed("Preserve GitHub API tooling across source checkouts"),
+      stepNamed("Preserve staging proof tooling across source checkouts"),
       "run",
     ),
   ).toContain("STAGING_PROOF_GATE_DIR=");
@@ -307,7 +307,7 @@ const exercisePreservation = (preserveScript: string) => {
 
 test("preserved workflow tooling contains its complete relative import closure", () => {
   const script = text(
-    stepNamed("Preserve GitHub API tooling across source checkouts"),
+    stepNamed("Preserve staging proof tooling across source checkouts"),
     "run",
   );
   expect(exercisePreservation(script)).toBeGreaterThan(1);
@@ -373,7 +373,7 @@ const recordProof = (overrides: Record<string, string>, candidate = source) => {
 
 test("environment conclusions remain errors before any named waiver is considered", () => {
   expect(recordProof({})).toStartWith("success|waived:");
-  for (const status of ["", "environment-unavailable"]) {
+  for (const status of ["environment-unavailable"]) {
     expect(recordProof({ PROOF_READINESS: status })).toStartWith(
       "error|Staging environment unavailable; rerun proof:",
     );
@@ -388,8 +388,21 @@ test("environment conclusions remain errors before any named waiver is considere
     '"ready" != "ready"',
   );
   expect(mutated).not.toBe(source);
-  expect(recordProof({ PROOF_READINESS: "" }, mutated)).toStartWith(
-    "success|waived:",
-  );
+  expect(
+    recordProof({ PROOF_READINESS: "environment-unavailable" }, mutated),
+  ).toStartWith("success|waived:");
   expect(recordProof({ PROOF_READINESS: "" })).toStartWith("error|");
+});
+
+test("proof tooling failures remain distinct before waiver evaluation", () => {
+  for (const overrides of [
+    { PROOF_READINESS: "proof-tooling-failure" },
+    { PROOF_ENVIRONMENT: "proof-tooling-failure" },
+    { PROOF_READINESS: "" },
+  ]) {
+    const result = recordProof(overrides);
+    expect(result).toStartWith("error|Staging proof tooling failure:");
+    expect(result).not.toContain("rerun");
+    expect(result).not.toContain("waived:");
+  }
 });
