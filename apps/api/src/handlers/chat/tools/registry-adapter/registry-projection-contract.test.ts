@@ -40,6 +40,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import {
   deriveRefMediationEntry,
   projectForChat,
@@ -252,6 +253,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
+        readWithdrawnCopies: async () =>
+          new WithdrawnCopyProjection([], "Withdrawn by publisher"),
         // Billing reads are enrolment-gated; this caller is enrolled so every
         // projectable read runs.
         featureAccessSnapshot: enrolledTimeBillingSnapshot({

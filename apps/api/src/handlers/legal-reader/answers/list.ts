@@ -230,15 +230,24 @@ export const listReaderAnswersHandler = async function* ({
   return Result.ok({ items, nextCursor: page.nextCursor, limit: page.limit });
 };
 
-const listReaderAnswers = createSafeRootHandler(
-  config,
-  async function* ({ query, safeDb, session, user }) {
-    return yield* listReaderAnswersHandler({
-      query,
-      safeDb,
-      organizationId: session.activeOrganizationId,
-      userId: user.id,
-    });
-  },
-);
-export default listReaderAnswers;
+type ReadDependencies = Pick<
+  Parameters<typeof listReaderAnswersHandler>[0],
+  "readCopies"
+>;
+
+export const createListReaderAnswers = ({
+  readCopies,
+}: ReadDependencies = {}) =>
+  createSafeRootHandler(
+    config,
+    async function* ({ query, safeDb, session, user }) {
+      return yield* listReaderAnswersHandler({
+        query,
+        safeDb,
+        readCopies,
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      });
+    },
+  );
+export default createListReaderAnswers();

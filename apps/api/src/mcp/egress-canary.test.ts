@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -250,6 +251,8 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so

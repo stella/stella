@@ -18,7 +18,7 @@ import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annot
  * HTTP routes and the agent tools pass the same scope to the same handlers.
  */
 export type AnnotationAuthorScope = {
-  readCopies?: typeof readWithdrawnCopyProjection;
+  readCopies?: typeof readWithdrawnCopyProjection | undefined;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;

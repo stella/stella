@@ -158,16 +158,17 @@ const config = {
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 
-const listMatterLinks = createSafeHandler(
-  config,
-  async function* ({ route, scopedDb, workspaceId }) {
+export const createListMatterLinks = ({
+  caseLawDb = caseLawPublicReadDb,
+}: { caseLawDb?: CaseLawPublicReadDb } = {}) =>
+  createSafeHandler(config, async function* ({ route, scopedDb, workspaceId }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
           await listMatterLinksHandler({
             workspaceId,
             scopedDb,
-            caseLawDb: caseLawPublicReadDb,
+            caseLawDb,
             audience:
               route === capabilityRoute(MATTER_LINKS_LIST_CAPABILITY)
                 ? "model"
@@ -177,7 +178,6 @@ const listMatterLinks = createSafeHandler(
     );
 
     return Result.ok(response);
-  },
-);
+  });
 
-export default listMatterLinks;
+export default createListMatterLinks();

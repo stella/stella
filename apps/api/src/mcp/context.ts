@@ -81,6 +81,7 @@ import type {
   readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
+import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
@@ -131,6 +132,7 @@ import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-worksp
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
+import type { loadCapabilityEndpoint } from "@/api/mcp/capability-tools";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
 import type {
@@ -165,6 +167,8 @@ export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    loadCapabilityEndpoint?: typeof loadCapabilityEndpoint;
+    readWithdrawnCopies?: typeof readWithdrawnCopyProjection | undefined;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */

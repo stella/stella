@@ -29,55 +29,65 @@ const config = {
 
 type ReadResearchAnswersOptions = {
   safeDb: SafeDb;
+  readCopies?: typeof readWithdrawnCopyProjection | undefined;
   organizationId: SafeId<"organization">;
   decisionIds: SafeId<"caseLawDecision">[];
 };
 
 export const readResearchAnswers = async ({
   safeDb,
+  readCopies = readWithdrawnCopyProjection,
   organizationId,
   decisionIds,
 }: ReadResearchAnswersOptions) =>
-  await safeDb(async (tx) => {
-    const rows = await tx
-      .select()
-      .from(caseLawResearchAnswers)
-      .where(
-        and(
-          inArray(caseLawResearchAnswers.decisionId, decisionIds),
-          eq(caseLawResearchAnswers.organizationId, organizationId),
-        ),
-      )
-      // At most one cell per (column, decision): the decisions named times
-      // the columns an organization may hold bounds the read. The held
-      // ceiling, not the create cap, so a grandfathered organization sees
-      // every cell rather than a silently cut rectangle.
-      .limit(
-        decisionIds.length * LIMITS.caseLawResearchColumnsPerOrganizationMax,
-      );
-    const withdrawal = await readWithdrawnCopyProjection({ values: rows });
+  await Result.gen(async function* () {
+    const rows = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await tx
+            .select()
+            .from(caseLawResearchAnswers)
+            .where(
+              and(
+                inArray(caseLawResearchAnswers.decisionId, decisionIds),
+                eq(caseLawResearchAnswers.organizationId, organizationId),
+              ),
+            )
+            // The held-column ceiling preserves every cell for existing columns.
+            .limit(
+              decisionIds.length *
+                LIMITS.caseLawResearchColumnsPerOrganizationMax,
+            ),
+      ),
+    );
+    const withdrawal = yield* Result.await(
+      Result.tryPromise(async () => await readCopies({ values: rows })),
+    );
     const now = new Date();
-    return rows.map((row) =>
-      toResearchAnswerResponse(
-        row,
-        now,
-        withdrawal.marker(null, row.decisionId),
+    return Result.ok(
+      rows.map((row) =>
+        toResearchAnswerResponse(
+          row,
+          now,
+          withdrawal.marker(null, row.decisionId),
+        ),
       ),
     );
   });
 
-const lookupResearchAnswers = createSafeRootHandler(
-  config,
-  async function* ({ body, safeDb, session }) {
+export const createLookupResearchAnswers = ({
+  readCopies,
+}: Pick<ReadResearchAnswersOptions, "readCopies"> = {}) =>
+  createSafeRootHandler(config, async function* ({ body, safeDb, session }) {
     const answers = yield* Result.await(
       readResearchAnswers({
         safeDb,
+        readCopies,
         organizationId: session.activeOrganizationId,
         decisionIds: [...new Set(body.decisionIds)],
       }),
     );
     return Result.ok({ items: answers });
-  },
-);
+  });
 
-export default lookupResearchAnswers;
+export default createLookupResearchAnswers();
