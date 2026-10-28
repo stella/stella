@@ -131,6 +131,7 @@ const BUTTON_SIZE_CONTENT = {
   lg: BUTTON_CONTENT.text,
   row: BUTTON_CONTENT.text,
   sm: BUTTON_CONTENT.text,
+  touch: BUTTON_CONTENT.text,
   xl: BUTTON_CONTENT.text,
   xs: BUTTON_CONTENT.text,
 } as const satisfies {
