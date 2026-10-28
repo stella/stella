@@ -14,6 +14,7 @@
   "scripts/flake-gate.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/gdp-proof-lint.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/generated-files.test.ts": "Runs a real web catalog checker and exhaustive generator dependency plans.",
+  "scripts/generated-conflicts.test.ts": "Exercises Git-backed generated-conflict collection, resolution, and publish flows.",
   "scripts/generated-markdown-merge.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/generated-web-merge.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/gh-retry-processes.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
@@ -22,6 +23,7 @@
   "scripts/precommit-lint.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/selfhost-contract.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/source-fingerprint-baseline.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
+  "scripts/staging-named-waiver.test.ts": "Runs the staging status writer in separate shells across the outcome matrix.",
   "scripts/typecheck-cache.test.ts": "Starts compilers for referenced-project fixture cases.",
   "scripts/verify-release-tree-proof.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
   "scripts/workflow-install-baseline.test.ts": "Creates a Git remote for each installing-job fixture."
