@@ -413,17 +413,22 @@ const renew = async (state: SessionState) => {
     return;
   }
   const now = state.context.now();
-  const current = await renewRunnerSession(state.context.db, {
+  const renewed = await renewRunnerSession(state.context.db, {
     binding: state.binding,
     sessionId: state.sessionId,
     now,
     leaseMs: state.context.timing.leaseMs,
   });
-  if (!current) {
+  if (renewed.type === "superseded") {
     close(state, DESKTOP_RUNNER_CLOSE.superseded);
     return;
   }
   for (const [runId, tracked] of state.tokens) {
+    // A run the API ended gets no new token, whatever this socket last sent.
+    if (!renewed.running.has(runId)) {
+      state.tokens.delete(runId);
+      continue;
+    }
     if (
       tracked.expiresAt - now.getTime() <
       state.context.timing.tokenRefreshMarginMs

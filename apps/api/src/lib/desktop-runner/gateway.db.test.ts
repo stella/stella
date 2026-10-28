@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_PROTOCOL,
   type DesktopRunnerLimits,
@@ -1109,5 +1110,76 @@ describe("socket lifecycle", () => {
     expect(pending.size).toBe(0);
     expect(desktop.received).toEqual([]);
     expect(recorded.gateway.openSessions()).toBe(0);
+  });
+});
+
+describe("runs the API ends", () => {
+  test("a run whose computer never returns ends as lost, and listing it again does not revive it", async () => {
+    const { desktopId, runId, desktop } = await acceptedRun(first);
+    desktop.send(textEvent(runId, 1, "Working"));
+    await desktop.receive("ack");
+    await desktop.close();
+    clock.now += TIMING.leaseMs + 1;
+    await first.gateway.sweep();
+    expect((await runState(runId))?.state).toBe("waiting_for_computer");
+    clock.now += DESKTOP_RUNNER_LIMITS.abandonedRunMs + 1;
+    await first.gateway.sweep();
+    expect((await runState(runId))?.state).toBe("lost");
+
+    const back = await openDesktop(first, desktopId);
+    back.send(helloFrame([{ runId, lastSeq: 1 }]));
+    expect((await back.receive("welcome")).resume).toEqual([]);
+    expect((await runState(runId))?.state).toBe("lost");
+    expect(back.received.map(({ type }) => type)).toEqual(["welcome"]);
+    await back.close();
+  });
+
+  test("a run nobody accepts ends as lost after the abandon window", async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(first, desktopId);
+    await desktop.hello();
+    const runId = Bun.randomUUIDv7();
+    expect(
+      (await control.startRun(startInput(desktopId, runId))).unwrap(),
+    ).toEqual({ type: "assigned" });
+    await desktop.receive("run.start", ofRun(runId));
+    clock.now += DESKTOP_RUNNER_LIMITS.abandonedRunMs + 1;
+    await first.gateway.sweep();
+    expect((await runState(runId))?.state).toBe("lost");
+    await desktop.close();
+  });
+
+  test("a heartbeat refreshes tokens only for runs that are still running", async () => {
+    const beating = await startInstance("api-tokens", sharedDoorbell, {
+      timing: { pingIntervalMs: 50 },
+    });
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(beating, desktopId);
+    await desktop.hello();
+    // The ended run is started first, so a refresh for it would arrive first.
+    const [ended, running] = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+    for (const runId of [ended, running]) {
+      expect(
+        (await control.startRun(startInput(desktopId, runId))).unwrap(),
+      ).toEqual({ type: "assigned" });
+      await desktop.receive("run.start", ofRun(runId));
+      desktop.send({ type: "run.accepted", runId });
+      // Frames are handled in order: this ack follows the stored acceptance.
+      desktop.send(textEvent(runId, 1, "Working"));
+      await desktop.receive("ack", ofRun(runId));
+    }
+    // Ended by the API while the socket stays open.
+    await db
+      .update(desktopRunnerRuns)
+      .set({ state: "lost" })
+      .where(eq(desktopRunnerRuns.runId, ended));
+    clock.now += 15 * 60_000;
+    await desktop.receive("run.token", ofRun(running));
+    expect(
+      desktop.received.filter(
+        (message) => message.type === "run.token" && message.runId === ended,
+      ),
+    ).toEqual([]);
+    await desktop.close();
   });
 });
