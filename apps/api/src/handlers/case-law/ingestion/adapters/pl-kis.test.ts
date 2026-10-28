@@ -23,6 +23,7 @@ import {
   parsePlKisProvision,
   parsePlKisSlice,
   PL_KIS_INCLUDED_CATEGORIES,
+  PL_KIS_LISTING_COLUMNS,
   PL_KIS_UNDATED_SLICE,
   plKisAdapter,
   plKisCategoryById,
@@ -272,8 +273,11 @@ describe("the search request", () => {
     const body: unknown = JSON.parse(
       plKisListingBody({
         categories: [1],
-        issuedFrom: "2010-03-01",
-        issuedTo: "2010-03-31",
+        issueDateWindow: {
+          field: "DT_WYD",
+          from: "2010-03-01",
+          to: "2010-03-31",
+        },
       }),
     );
     expect(body).toMatchObject({
@@ -333,9 +337,25 @@ describe("every ingested category, as the service served it", () => {
       expect(decision.sourceDocumentId).toBe(plKisDocumentIdOf(row));
       expect(decision.sourceDocumentId).toMatch(/^\d+$/u);
       expect(decision.decisionType === category.decisionType).toBe(true);
-      expect(decision.caseNumber === String(row["SYG"]).trim()).toBe(true);
-      expect(decision.court.length).toBeGreaterThan(0);
-      expect(decision.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+      const signature =
+        category.fields.signature === null
+          ? undefined
+          : row[category.fields.signature];
+      if (signature !== undefined && typeof signature !== "string") {
+        throw new TypeError("The captured publisher signature is not a string");
+      }
+      expect(
+        decision.caseNumber === (signature?.trim() ?? plKisDocumentIdOf(row)),
+      ).toBe(true);
+
+      const authorities =
+        category.fields.authority === null
+          ? []
+          : row[category.fields.authority];
+      expect(decision.court).toBe(
+        Array.isArray(authorities) ? (authorities.at(0) ?? "") : "",
+      );
+      expect(decision.decisionDate === row[category.fields.date]).toBe(true);
       expect(decision.fulltext?.length ?? 0).toBeGreaterThan(100);
       expect(decision.isListingOnly).toBeUndefined();
       // Nothing the service states is a field the inventory has not decided.
@@ -356,6 +376,9 @@ describe("every ingested category, as the service served it", () => {
       }
     });
 
+    if (category.fields.signature !== "SYG") {
+      continue;
+    }
     test(`${category.slug}: the signature is a Polish docket`, async () => {
       const rows = await readListingFixture(category.slug);
       for (const row of rows) {
@@ -707,8 +730,7 @@ describe("the document", () => {
           : [];
       const html = Array.isArray(fields)
         ? fields.find(
-            (field) =>
-              isRecord(field) && field["key"] === "TRESC_INTERESARIUSZ",
+            (field) => isRecord(field) && field["key"] === category.fields.body,
           )
         : undefined;
       const source =
@@ -857,11 +879,17 @@ describe("the reconciliation slices", () => {
     );
     expect(PL_KIS_UNDATED_SLICE < plKisSlice("2004-07", "01-ind")).toBe(true);
     expect(plKisPreviousSlice(plKisSlice("2004-08", "01-ind"))).toBe(
-      plKisSlice("2004-07", "19-spor"),
+      plKisSlice(
+        "2004-07",
+        PL_KIS_INCLUDED_CATEGORIES.at(-1)?.slug ?? panic("No categories"),
+      ),
     );
     expect(
       plKisNextSlice(
-        plKisSlice("2026-09", "19-spor"),
+        plKisSlice(
+          "2026-09",
+          PL_KIS_INCLUDED_CATEGORIES.at(-1)?.slug ?? panic("No categories"),
+        ),
         new Date("2026-09-23T10:00:00Z"),
       ),
     ).toBeNull();
@@ -1450,5 +1478,97 @@ test("quarantine identities retain the legacy SHA-256 serialization", () => {
         thesis: null,
       }),
     )}`,
+  );
+});
+
+test("category month requests use the publisher template date discriminator", async () => {
+  for (const category of PL_KIS_INCLUDED_CATEGORIES) {
+    const stub = stubPublisher(() => json({ results: [], totalHits: 0 }));
+    try {
+      await plKisAdapter.reconciliation.listSlicePage({
+        slice: plKisSlice("2026-08", category.slug),
+        page: 0,
+      });
+      expect(bodyOf(stub.calls.at(0))["filter"]).toMatchObject({
+        KATEGORIA_INFORMACJI: [category.id],
+        [`${category.fields.date}_start`]: "2026-08-01",
+        [`${category.fields.date}_end`]: "2026-08-31",
+      });
+    } finally {
+      stub.restore();
+    }
+  }
+});
+test("all source categories are admitted by total and crawl requests without widening a page", async () => {
+  const stub = stubPublisher(() => json({ results: [], totalHits: 1 }));
+  try {
+    await plKisAdapter.getTotalCount(AbortSignal.timeout(5000));
+    expect(bodyOf(stub.calls.at(0))["filter"]).toMatchObject({
+      KATEGORIA_INFORMACJI: PL_KIS_INCLUDED_CATEGORIES.map(({ id }) => id),
+    });
+    const requested = new URL(stub.calls.at(0)?.url ?? "https://invalid.test");
+    expect(requested.searchParams.get("size")).toBe("1");
+  } finally {
+    stub.restore();
+  }
+});
+test("newsletter missing-id identities distinguish the publisher's title and date", () => {
+  const first = {
+    KATEGORIA_INFORMACJI: ["Newsletter"],
+    TYTUL_NEWS: "First",
+    DATA_WYSLANIA_NEWSLETTERA: "2026-08-05",
+  };
+  expect(plKisQuarantineId(first)).not.toBe(
+    plKisQuarantineId({ ...first, TYTUL_NEWS: "Second" }),
+  );
+});
+
+test("newsletter HTML uses the declared body field through fetch and replay without a PDF request", async () => {
+  const row =
+    (await readListingFixture("23-newsletter")).at(0) ??
+    panic("Newsletter capture missing");
+  const detail = await readDetailFixture("23-newsletter");
+  const stub = stubPublisher((call) =>
+    call.url.includes("/informacje/703485") && !call.url.includes("/eksport/")
+      ? new Response(detail, {
+          headers: { "Content-Type": "application/json" },
+        })
+      : new Response("unexpected request", { status: 400 }),
+  );
+  try {
+    const built = await plKisAdapter.reconciliation.buildDecision(row);
+    if (built.type !== "built") {
+      return panic("Newsletter capture did not build");
+    }
+    expect(stub.calls).toHaveLength(1);
+    expect(stub.calls.at(0)?.url).not.toContain("/eksport/");
+    const decision = built.decision;
+    const replayed = await plKisAdapter.reparseStoredRaw?.({
+      raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      caseNumber: decision.caseNumber,
+      sourceDocumentId: decision.sourceDocumentId ?? null,
+      language: decision.language,
+      court: decision.court,
+      ecli: null,
+      decisionDate: decision.decisionDate ?? null,
+      decisionType: decision.decisionType ?? null,
+      sourceUrl: decision.sourceUrl ?? null,
+      documentUrl: decision.documentUrl ?? null,
+      metadata: decision.metadata,
+    });
+    expect(replayed?.type).toBe("parsed");
+    if (replayed?.type === "parsed") {
+      expect(replayed.result.fulltext).toBe(decision.fulltext);
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test("publisher listing columns remain a closed schema for exhaustive dispositions", () => {
+  // @ts-expect-error Widening the publisher column union would silently admit unmapped fields.
+  expect(PL_KIS_LISTING_COLUMNS.includes("unmapped-publisher-field")).toBe(
+    false,
   );
 });
