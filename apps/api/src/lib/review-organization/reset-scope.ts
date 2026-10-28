@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -196,6 +196,18 @@ export const REVIEW_RESET_CLEARED_TABLES = [
 ] as const;
 
 /**
+ * Cleared tables the sweep empties in one statement, each group contiguous in
+ * the sweep order. Every member is deleted on the owner connection, never in
+ * a member-scoped transaction (the sweep refuses a group that is not).
+ */
+export const REVIEW_RESET_SHARED_STATEMENTS: readonly (readonly (typeof REVIEW_RESET_CLEARED_TABLES)[number][])[] =
+  [
+    // A desktop's presence and its runner rows: device bookkeeping the owner
+    // removes directly, with the runs' commands and events by cascade.
+    ["desktop_presence", "desktop_runner_runs", "desktop_runners"],
+  ];
+
+/**
  * Matters leave through the authorized matter deletion before the sweep runs
  * (its own coverage test proves what goes with a matter); the sweep only runs
  * once none is left.
@@ -351,12 +363,31 @@ export const sweepReviewOrganization = async (
     ).map(({ name }) => name),
   );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
+    const shared = REVIEW_RESET_SHARED_STATEMENTS.find((group) =>
+      group.includes(name),
+    );
+    if (shared !== undefined && shared[0] !== name) {
+      // Removed by the statement its group's first table runs.
+      return Result.ok(undefined);
+    }
+    const names: readonly string[] = shared ?? [name];
     const clear = async (deleteTx: Transaction) => {
-      const rows = await removeOrganizationRows(deleteTx, organizationId, [
-        name,
-      ]);
-      removed.set(name, rows.get(name) ?? 0);
+      const rows = await removeOrganizationRows(
+        deleteTx,
+        organizationId,
+        names,
+      );
+      for (const cleared of names) {
+        removed.set(cleared, rows.get(cleared) ?? 0);
+      }
     };
+    if (shared !== undefined) {
+      if (shared.some((member) => applicationTables.has(member))) {
+        return panic("A shared reset statement holds a member-scoped table");
+      }
+      await clear(tx);
+      return Result.ok(undefined);
+    }
     // Explicit owner cleanup policies cover user and feature-hidden rows.
     // The remaining application policies use the entire organization matter set.
     if (applicationTables.has(name)) {
