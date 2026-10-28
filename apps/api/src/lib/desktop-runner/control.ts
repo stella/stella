@@ -36,7 +36,7 @@ type ReadyHarnessReport = Extract<
 >;
 
 /** A command whose fields the wire contract refuses. */
-export class DesktopRunnerCommandInvalid extends TaggedError(
+class DesktopRunnerCommandInvalid extends TaggedError(
   "DesktopRunnerCommandInvalid",
 )<{ message: string; kind: DesktopRunnerServerMessage["type"] }> {}
 

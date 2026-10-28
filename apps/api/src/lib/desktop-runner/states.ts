@@ -20,8 +20,6 @@ export const DESKTOP_RUNNER_CONNECTIONS = [
   "connected",
   "disconnected",
 ] as const;
-export type DesktopRunnerConnection =
-  (typeof DESKTOP_RUNNER_CONNECTIONS)[number];
 
 /**
  * Where a run assigned to a desktop stands.
@@ -119,5 +117,3 @@ true satisfies Same<
   (typeof DESKTOP_RUNNER_EVENT_TYPES)[number],
   Extract<DesktopRunnerDesktopMessage, { seq: number }>["type"]
 >;
-export type DesktopRunnerEventType =
-  (typeof DESKTOP_RUNNER_EVENT_TYPES)[number];

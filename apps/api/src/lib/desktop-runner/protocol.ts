@@ -53,10 +53,10 @@ export const DESKTOP_RUNNER_CLOSE = {
   helloTimeout: { code: 4005, reason: "hello_timeout" },
   unknownRun: { code: 4006, reason: "unknown_run" },
 } as const;
-export const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
+const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
 
 /** The reason a `policyViolation` close carries. */
-export const DESKTOP_RUNNER_POLICY_REASONS = [
+const DESKTOP_RUNNER_POLICY_REASONS = [
   "not_json",
   "unknown_type",
   "invalid",
