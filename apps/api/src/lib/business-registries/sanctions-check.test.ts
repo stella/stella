@@ -483,7 +483,7 @@ describe("person birth date", () => {
       expect(result.isErr() && result.error).toMatchObject({
         status: 400,
         code: "validation_error",
-        message: "The birth date is not a valid calendar date",
+        message: "The birth date must be from 1900 through today",
       });
     },
   );
@@ -495,6 +495,18 @@ describe("person birth date", () => {
         dateOfBirth: { precision: "day", year: 1988, month: 2, day: 29 },
       }).unwrap(),
     ).toEqual({ precision: "day", year: 1988, month: 2, day: 29 });
+  });
+
+  test.each([
+    { precision: "year" as const, year: 1899 },
+    { precision: "month" as const, year: 2027, month: 1 },
+  ])("refuses an out-of-range $precision date", (dateOfBirth) => {
+    const result = personDateOfBirth({ birthDate: undefined, dateOfBirth });
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 400,
+      code: "validation_error",
+      message: "The birth date must be from 1900 through today",
+    });
   });
 
   test.each([

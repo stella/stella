@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import {
   ENTITY_CHECK_KINDS,
   runEntityCheck,
@@ -11,7 +13,6 @@ import type {
 } from "@stll/business-registries/entity-checks";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { CountryCode } from "@stll/country-codes";
-import { Temporal } from "@stll/time";
 
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
@@ -92,12 +93,6 @@ const ISO_BIRTH_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 
 type DayDateOfBirth = Extract<DateOfBirth, { precision: "day" }>;
 
-/** Whether a day-precision date exists in the calendar: 1990-02-31 does not. */
-const isCalendarDate = ({ year, month, day }: DayDateOfBirth): boolean =>
-  Result.try(() =>
-    Temporal.PlainDate.from({ year, month, day }, { overflow: "reject" }),
-  ).isOk();
-
 /** Whether a date at any precision says nothing the full date denies. */
 const agreesWith = (full: DayDateOfBirth, partial: DateOfBirth): boolean => {
   if (partial.year !== full.year) {
@@ -150,10 +145,14 @@ export const personDateOfBirth = ({
           day: Number(parts[3]),
         };
   for (const date of [fromBirthDate, dateOfBirth]) {
-    if (date?.precision === "day" && !isCalendarDate(date)) {
+    if (
+      date !== null &&
+      date !== undefined &&
+      !v.safeParse(contactBirthDateSchema, date).success
+    ) {
       return invalidSubject(
-        "The birth date is not a valid calendar date",
-        "Send a date that exists in the calendar, or the date of birth at the precision known.",
+        "The birth date must be from 1900 through today",
+        "Send a date from 1900 through today at the precision known.",
       );
     }
   }

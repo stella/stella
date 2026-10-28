@@ -9,9 +9,23 @@ export const CONTACT_BIRTH_YEAR_MIN = 1900;
 // UTC+14 reaches each calendar date first, so a user's current date is never future.
 export const CONTACT_DATE_TIME_ZONE = "Pacific/Kiritimati";
 
-const yearSchema = v.pipe(v.number(), v.integer());
-const monthSchema = v.pipe(v.number(), v.integer());
-const daySchema = v.pipe(v.number(), v.integer());
+const yearSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(CONTACT_BIRTH_YEAR_MIN),
+);
+const monthSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(12),
+);
+const daySchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(1),
+  v.maxValue(31),
+);
 
 const contactDateShapeSchema = v.variant("precision", [
   v.strictObject({ precision: v.literal("year"), year: yearSchema }),

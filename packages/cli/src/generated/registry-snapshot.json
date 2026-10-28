@@ -3163,7 +3163,8 @@
                       "type": "string"
                     },
                     "year": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1900
                     }
                   },
                   "required": ["precision", "year"],
@@ -3177,10 +3178,13 @@
                       "type": "string"
                     },
                     "year": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1900
                     },
                     "month": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 12
                     }
                   },
                   "required": ["precision", "year", "month"],
@@ -3194,13 +3198,18 @@
                       "type": "string"
                     },
                     "year": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1900
                     },
                     "month": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 12
                     },
                     "day": {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 31
                     }
                   },
                   "required": ["precision", "year", "month", "day"],
@@ -3485,7 +3494,8 @@
                           "type": "string"
                         },
                         "year": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1900
                         }
                       },
                       "required": ["precision", "year"],
@@ -3499,10 +3509,13 @@
                           "type": "string"
                         },
                         "year": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1900
                         },
                         "month": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12
                         }
                       },
                       "required": ["precision", "year", "month"],
@@ -3516,13 +3529,18 @@
                           "type": "string"
                         },
                         "year": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1900
                         },
                         "month": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12
                         },
                         "day": {
-                          "type": "integer"
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 31
                         }
                       },
                       "required": ["precision", "year", "month", "day"],

@@ -2434,7 +2434,8 @@
       "aresNotFound": "Selle IČO järgi ettevõtet ei leitud.",
       "aresTitle": "Tšehhi register (ARES)",
       "contactName": "Kontakti nimi",
-      "displayNameHint": "Optional override; otherwise generated from the first and last name.",
+      "displayNameOrganizationHint": "Valikuline asendus; muul juhul luuakse organisatsiooni nimest.",
+      "displayNamePersonHint": "Valikuline asendus; muul juhul luuakse ees- ja perekonnanimest.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Sisesta 8-kohaline IČO."
     },

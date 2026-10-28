@@ -835,7 +835,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+    return validationErrorResult(parsed.issues, undefined, {
+      date_of_birth: "dateOfBirth",
+    });
   }
   const input = parsed.output;
 

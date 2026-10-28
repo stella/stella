@@ -2434,7 +2434,8 @@
       "aresNotFound": "Šim IČO uzņēmums netika atrasts.",
       "aresTitle": "Čehijas reģistrs (ARES)",
       "contactName": "Kontakta nosaukums",
-      "displayNameHint": "Optional override; otherwise generated from the first and last name.",
+      "displayNameOrganizationHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no organizācijas nosaukuma.",
+      "displayNamePersonHint": "Neobligāta pārrakstīšana; citādi tiek izveidots no vārda un uzvārda.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Ievadiet 8 ciparu IČO."
     },

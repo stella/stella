@@ -2434,7 +2434,8 @@
       "aresNotFound": "لم يُعثر على أي شركة لرقم IČO هذا.",
       "aresTitle": "السجل التشيكي (ARES)",
       "contactName": "اسم جهة الاتصال",
-      "displayNameHint": "Optional override; otherwise generated from the first and last name.",
+      "displayNameOrganizationHint": "تجاوز اختياري؛ وإلا فسيُنشأ من اسم المؤسسة.",
+      "displayNamePersonHint": "تجاوز اختياري؛ وإلا فسيُنشأ من الاسم الأول واسم العائلة.",
       "icoPlaceholder": "IČO",
       "invalidIco": "أدخل رقم IČO مكوّناً من 8 أرقام."
     },

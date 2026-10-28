@@ -2434,7 +2434,8 @@
       "aresNotFound": "Pagal šį IČO įmonė nerasta.",
       "aresTitle": "Čekijos registras (ARES)",
       "contactName": "Kontakto pavadinimas",
-      "displayNameHint": "Pasirenkamas perrašymas; kitu atveju sukuriamas iš vardo ir pavardės.",
+      "displayNameOrganizationHint": "Pasirenkamas perrašymas; kitu atveju sukuriamas iš organizacijos pavadinimo.",
+      "displayNamePersonHint": "Pasirenkamas perrašymas; kitu atveju sukuriamas iš vardo ir pavardės.",
       "icoPlaceholder": "IČO",
       "invalidIco": "Įveskite 8 skaitmenų IČO."
     },

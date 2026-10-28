@@ -10584,7 +10584,12 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(validationEnvelope(result)).toMatchObject({
       code: "validation_error",
-      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+      issues: [
+        {
+          path: "dateOfBirth",
+          message: "Expected a valid birth date from 1900 through today",
+        },
+      ],
     });
   });
 

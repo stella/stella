@@ -1295,7 +1295,11 @@ const CreateContactDialog = ({
                       value={field.state.value}
                     />
                     <p className="text-muted-foreground text-xs">
-                      {t("contacts.create.displayNameHint")}
+                      {t(
+                        contactType === "person"
+                          ? "contacts.create.displayNamePersonHint"
+                          : "contacts.create.displayNameOrganizationHint",
+                      )}
                     </p>
                     <FieldError />
                   </Field>

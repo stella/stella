@@ -70,7 +70,6 @@ export const PersonDetailsFields = ({
         <FieldLabel>{t("common.anonymizationLabels.dateOfBirth")}</FieldLabel>
         <div className="flex flex-wrap gap-2" dir="ltr">
           <Select
-            aria-label={t("contacts.datePrecision")}
             onValueChange={(precision) => {
               if (precision === null) {
                 return;
@@ -84,7 +83,10 @@ export const PersonDetailsFields = ({
             }}
             value={birthDate.precision}
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger
+              aria-label={t("contacts.datePrecision")}
+              className="w-32"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>

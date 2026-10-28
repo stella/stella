@@ -132,6 +132,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 32854
       }
     ],
     "bedrock/extended": [
@@ -174,6 +178,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 33342
       }
     ],
     "google/default": [
@@ -212,6 +220,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 31976
       }
     ],
     "google/extended": [
@@ -246,6 +258,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 32453
       }
     ],
     "mistral/default": [
@@ -288,6 +304,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 34122
       }
     ],
     "mistral/extended": [
@@ -330,6 +350,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 34648
       }
     ],
     "openai/default": [
@@ -372,6 +396,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 33714
       }
     ],
     "openai/extended": [
@@ -414,6 +442,10 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "contact birth date rule shortened tool schemas",
+        "tokens": 34229
       }
     ],
     "openrouter-anthropic/default": [
