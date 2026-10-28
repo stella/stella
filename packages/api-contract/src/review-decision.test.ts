@@ -43,6 +43,25 @@ describe("foldReviewDecisions", () => {
     ).toMatchObject({ decision: "rejected", decidedBy: "user-2" });
   });
 
+  test("orders by instant, not by how the time is written", () => {
+    // 10:00+02:00 is 08:00Z, so the rejection at 09:00Z is the later event.
+    expect(
+      foldReviewDecisions([
+        event("rejected", "2026-01-01T09:00:00Z"),
+        event("accepted", "2026-01-01T10:00:00+02:00"),
+      ]).decision,
+    ).toBe("rejected");
+  });
+
+  test("refuses an event time that is not an instant", () => {
+    expect(() =>
+      foldReviewDecisions([
+        event("accepted", "2026-01-01T00:00:00Z"),
+        event("rejected", "yesterday"),
+      ]),
+    ).toThrow(/not an instant/u);
+  });
+
   test("ties keep their given order", () => {
     const at = "2026-01-01T00:00:00Z";
     expect(
