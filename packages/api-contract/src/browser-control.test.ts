@@ -5,6 +5,7 @@ import {
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   type BrowserControlCommand,
   type BrowserControlResult,
   formatElementReference,
@@ -20,15 +21,30 @@ const PAGE = {
   revision: "revision-1",
   url: "https://example.com/",
 } as const;
-const TARGET = { name: "Submit", ref: "e:0:0.12.3", role: "button" } as const;
+const ABSENT_TARGET_METADATA = {
+  type: BROWSER_CONTROL_TARGET_METADATA.absent,
+} as const;
+const TARGET = {
+  context: ABSENT_TARGET_METADATA,
+  href: ABSENT_TARGET_METADATA,
+  name: "Submit",
+  ref: "e:0:0.12.3",
+  role: "button",
+} as const;
 
 const COMMAND_EXAMPLES = {
   [BROWSER_CONTROL_ACTION.click]: {
     action: "click",
     page: PAGE,
     target: {
-      context: "Case 12 C 345/2024 Next",
-      href: "https://example.com/next",
+      context: {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "Case 12 C 345/2024 Next",
+      },
+      href: {
+        type: BROWSER_CONTROL_TARGET_METADATA.present,
+        value: "https://example.com/next",
+      },
       name: "Next",
       ref: "e:0:1.s.0.2",
       role: "link",
@@ -37,7 +53,7 @@ const COMMAND_EXAMPLES = {
   [BROWSER_CONTROL_ACTION.fill]: {
     action: "fill",
     page: PAGE,
-    target: { name: "Search", ref: "e:1:2", role: "textbox" },
+    target: { ...TARGET, name: "Search", ref: "e:1:2", role: "textbox" },
     value: "search text",
   },
   [BROWSER_CONTROL_ACTION.goBack]: { action: "go-back" },
@@ -49,12 +65,12 @@ const COMMAND_EXAMPLES = {
     action: "press-key",
     key: "Enter",
     page: PAGE,
-    target: { name: "Search", ref: "e:2:0", role: "textbox" },
+    target: { ...TARGET, name: "Search", ref: "e:2:0", role: "textbox" },
   },
   [BROWSER_CONTROL_ACTION.select]: {
     action: "select",
     page: PAGE,
-    target: { name: "Court", ref: "e:0:3.1", role: "select" },
+    target: { ...TARGET, name: "Court", ref: "e:0:3.1", role: "select" },
     value: "option-1",
   },
   [BROWSER_CONTROL_ACTION.snapshot]: { action: "snapshot", textOffset: 48_000 },
@@ -123,6 +139,26 @@ describe("browser control command contract", () => {
       parseBrowserControlCommand({
         action: "click",
         page: PAGE,
+        target: { name: "Submit", ref: "e:0:0.12.3", role: "button" },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "click",
+        page: PAGE,
+        target: {
+          ...TARGET,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.absent,
+            value: "https://example.com/unapproved",
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseBrowserControlCommand({
+        action: "click",
+        page: PAGE,
         target: { ...TARGET, ref: "#submit" },
       }),
     ).toBeNull();
@@ -149,12 +185,23 @@ describe("browser control result contract", () => {
       contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
       elements: [
         {
-          href: "https://example.com/next",
+          context: ABSENT_TARGET_METADATA,
+          href: {
+            type: BROWSER_CONTROL_TARGET_METADATA.present,
+            value: "https://example.com/next",
+          },
           name: "Next",
           ref: "e:0:0.1",
           role: "link",
         },
-        { name: "Search", ref: "e:1:0.2.s.1", role: "textbox", value: "" },
+        {
+          context: ABSENT_TARGET_METADATA,
+          href: ABSENT_TARGET_METADATA,
+          name: "Search",
+          ref: "e:1:0.2.s.1",
+          role: "textbox",
+          value: "",
+        },
       ],
       revision: "revision-1",
       tabId: 7,
@@ -192,7 +239,15 @@ describe("browser control result contract", () => {
           ...success,
           snapshot: {
             ...success.snapshot,
-            elements: [{ name: "Submit", ref: "e:not-a-path", role: "button" }],
+            elements: [
+              {
+                context: ABSENT_TARGET_METADATA,
+                href: ABSENT_TARGET_METADATA,
+                name: "Submit",
+                ref: "e:not-a-path",
+                role: "button",
+              },
+            ],
           },
         },
         source: "stella-browser-extension",

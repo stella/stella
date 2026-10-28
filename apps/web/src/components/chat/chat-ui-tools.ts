@@ -145,13 +145,11 @@ type ToolNameWithPolicyKind<K extends string> = {
     Name in keyof BuiltInChatToolPolicyKindByName
   ]: BuiltInChatToolPolicyKindByName[Name] extends K ? Name : never;
 }[keyof BuiltInChatToolPolicyKindByName];
-type PublicOfficialToolName = Extract<
-  BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"public_official">
->;
+// Tools that send model-chosen arguments to a third party show them on the
+// approval card, official public registries included.
 type ExternalInputToolName = Extract<
   BuiltInApprovalToolName,
-  ToolNameWithPolicyKind<"external">
+  ToolNameWithPolicyKind<"external" | "public_official">
 >;
 const TOOL_CALL_STATE_IS_RUNNING = {
   "awaiting-input": true,
@@ -352,20 +350,17 @@ const CHAT_TOOL_DISPLAY_TITLE_KEYS = {
 const UNKNOWN_CHAT_TOOL_TITLE_KEY =
   "chat.tool.unknown" satisfies TranslationKey;
 
-const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
+const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
   boe_find_related_laws: true,
   boe_get_law: true,
   boe_get_law_block: true,
   boe_get_law_structure: true,
+  boe_search_legislation: true,
   borme_get_summary: true,
   business_registry_lookup: true,
   counterparty_check: true,
-  infosoud_lookup_case: true,
-} as const satisfies Record<PublicOfficialToolName, true>;
-
-const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
-  boe_search_legislation: true,
   fetch_url: true,
+  infosoud_lookup_case: true,
   use_connector_secret: true,
   "use-browser": true,
   web_search: true,
@@ -412,11 +407,6 @@ export const isToolApprovedByGrant = (
   toolName: ApprovalToolName,
 ) => grants.has(toolName) || grants.has(getToolApprovalGrant(toolName));
 
-export const isPublicOfficialChatToolName = (
-  toolName: string,
-): toolName is PublicOfficialToolName =>
-  toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
-
 // The grant policy is shared with the API, which enforces it when storing a
 // grant and when deciding which calls skip the approval prompt.
 export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
@@ -436,7 +426,14 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   add_comment: false,
+  boe_find_related_laws: false,
+  boe_get_law: false,
+  boe_get_law_block: false,
+  boe_get_law_structure: false,
   boe_search_legislation: false,
+  borme_get_summary: false,
+  business_registry_lookup: false,
+  counterparty_check: false,
   "create-current-skill-resource": false,
   create_matter_document: false,
   create_reader_annotation: true,
@@ -449,6 +446,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
   delete_time_entry: true,
   fetch_url: false,
   fill_template: true,
+  infosoud_lookup_case: false,
   link_matter_contact: true,
   add_matter_member: true,
   remove_matter_member: true,
