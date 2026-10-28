@@ -45,6 +45,9 @@
     "packages/analytics-config": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/brand": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
     },

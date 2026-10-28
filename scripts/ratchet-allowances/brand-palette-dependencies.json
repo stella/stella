@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The @stll/brand palette package declares the repository's existing better-result catalog version for its hex validation and bun-types for its tests, as every workspace package does."
+}
