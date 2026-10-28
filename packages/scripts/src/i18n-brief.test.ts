@@ -113,13 +113,17 @@ describe("translation brief", () => {
       glossary,
       files: [],
     });
+    const conventions = ["SKILL.md", "TERMINOLOGY.md"];
     const brief = renderBrief({
       locale: "cs",
       localeFile: "langs/cs.json",
       items,
+      conventions,
     });
 
-    expect(brief).toStartWith("# Translate 2 messages from en into cs (Czech)");
+    expect(brief).toStartWith(
+      "# Translate 2 messages from en into cs (Czech)\n\nRead first: `SKILL.md`, `TERMINOLOGY.md`.",
+    );
     expect(brief).toContain(
       '- Glossary: "Matter" → "věc"; never "kauza"; A client engagement.',
     );
@@ -127,7 +131,12 @@ describe("translation brief", () => {
     expect(brief).toContain("`bun run i18n:accept nav.knowledge`");
     expect(brief).not.toContain("i18n:accept matters.title");
     expect(
-      renderBrief({ locale: "cs", localeFile: "cs.json", items: [] }),
+      renderBrief({
+        locale: "cs",
+        localeFile: "cs.json",
+        items: [],
+        conventions,
+      }),
     ).toBe("# Nothing to translate into cs (Czech)\n");
   });
 });

@@ -307,7 +307,7 @@
           "question": "S čím pomáhá?"
         }
       },
-      "metaDescription": "Odeberte jména, organizace a identifikační údaje dříve, než se podklady dostanou k AI, přímo z chatu i z revize dokumentů, s výsledkem, který si zkontrolujete.",
+      "metaDescription": "Odeberte jména, organizace a identifikační údaje dříve, než se podklady dostanou k AI, přímo z chatu i z revize dokumentů, s výsledkem ke kontrole.",
       "metaTitle": "Anonymizace dokumentů pro právní AI | stella",
       "quickAnswer": {
         "answer": "Odebere jména, organizace a identifikační údaje dříve, než podklady vstoupí do pracovního postupu s AI, a ukáže vám upravený výsledek, takže si potvrdíte, co ze spisu odchází. Je zabudovaná přímo do chatu a revize dokumentů.",

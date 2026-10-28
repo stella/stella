@@ -16,6 +16,8 @@
 import { panic } from "better-result";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { parseGlossary } from "./glossary-gen";
 import type { Glossary, Term } from "./glossary-gen";
 import {
@@ -113,6 +115,8 @@ export const buildBriefItems = ({
 };
 
 const USAGES_SHOWN = 3;
+// Relative to this file; the CLI fails when it no longer resolves.
+const CONVENTIONS_SKILL = "../../../.agents/skills/conventions-i18n/SKILL.md";
 
 const renderTerm = (term: Term, locale: string): string => {
   const rendering = Object.entries(term.translations).find(
@@ -179,6 +183,8 @@ type RenderBriefOptions = {
   locale: string;
   localeFile: string;
   items: readonly BriefItem[];
+  /** The translation conventions and the terminology tables a translator reads first. */
+  conventions: readonly string[];
 };
 
 /** Plain Markdown, for a person or an agent. */
@@ -186,6 +192,7 @@ export const renderBrief = ({
   locale,
   localeFile,
   items,
+  conventions,
 }: RenderBriefOptions): string => {
   const name = new Intl.DisplayNames(["en"], { type: "language" }).of(locale);
   const target = name === undefined ? locale : `${locale} (${name})`;
@@ -196,7 +203,9 @@ export const renderBrief = ({
     .filter((item) => item.lockedSource !== null)
     .map((item) => item.key);
   const lines = [
-    `# Translate ${items.length} messages from en into ${target}`,
+    `# Translate ${items.length} ${items.length === 1 ? "message" : "messages"} from en into ${target}`,
+    "",
+    `Read first: ${conventions.map((file) => `\`${file}\``).join(", ")}.`,
     "",
     "## Rules",
     "",
@@ -274,5 +283,16 @@ if (import.meta.main) {
     glossary: parseGlossary(await Bun.file(glossaryPath).text()),
     files: await readUsageSources({ dirs: valuesOf("--usage-in="), langsDir }),
   });
-  process.stdout.write(renderBrief({ locale, localeFile, items }));
+  // The terminology tables are generated beside the glossary they render.
+  const conventions = await Promise.all(
+    [
+      path.resolve(import.meta.dir, CONVENTIONS_SKILL),
+      path.join(path.dirname(glossaryPath), "TERMINOLOGY.md"),
+    ].map(async (file) =>
+      (await Bun.file(file).exists())
+        ? repoRelativePath(process.cwd(), file)
+        : panic(`${file} is missing; the brief points translators at it`),
+    ),
+  );
+  process.stdout.write(renderBrief({ locale, localeFile, items, conventions }));
 }
