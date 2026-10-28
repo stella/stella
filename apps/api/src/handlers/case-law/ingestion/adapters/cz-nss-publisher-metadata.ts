@@ -24,8 +24,24 @@ const publisherReferenceUrl = (raw: string | undefined) => {
   return toMetadataUrl(new URL(raw, NSS_DETAIL_ORIGIN).href, "constructed");
 };
 
+type NssPublisherMetadata = {
+  publisherFields: Record<string, string[]>;
+  publisherTables: {
+    columns: string[];
+    rows: { cells: { field: string; occurrence: number; value: string }[] }[];
+  }[];
+  publisherReferences: {
+    field: string;
+    occurrence: number;
+    text: string;
+    sourceUrl: ReturnType<typeof toMetadataUrl>;
+  }[];
+};
+
 /** Keep occurrences and table tuples: related proceedings must not trade cells. */
-export const extractNssPublisherMetadata = (html: string) => {
+export const extractNssPublisherMetadata = (
+  html: string,
+): NssPublisherMetadata => {
   const $ = load(html);
   const publisherFields = new Map<string, string[]>();
   // A header without a value states a column, not its label as legal content.
