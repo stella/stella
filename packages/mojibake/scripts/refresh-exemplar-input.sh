@@ -27,6 +27,14 @@ source_commit="$(jq -r '.sourceCommit' "$manifest")"
 source_root="$work_directory/source/cldr-$source_commit"
 bun "$repo_root/packages/mojibake/scripts/refresh-exemplar-input.ts" prepare "$work_directory"
 
+# Select the official characters mapping, not calendars, units and currencies.
+# The pinned source still owns both the package and path mapping definitions.
+awk '
+  /^package=misc ;/ || /^section=characters ;/ { print; count++ }
+  END { if (count != 2) exit 1 }
+' "$source_root/tools/cldr-code/src/main/resources/org/unicode/cldr/json/JSON_config.txt" \
+  > "$work_directory/characters-config.txt"
+
 # Production-data generation removes below-Basic locales. Resolve the immutable
 # full release source directly with Unicode's own converter instead.
 "$java_binary" -Xmx3g -XX:ActiveProcessorCount=2 \
@@ -34,6 +42,7 @@ bun "$repo_root/packages/mojibake/scripts/refresh-exemplar-input.ts" prepare "$w
   "-DCLDR_DIR=$source_root" \
   -cp "$work_directory/converter.download" org.unicode.cldr.json.Ldml2JsonConverter \
   -c "$source_root/common/" -d "$work_directory/converted" \
+  -k "$work_directory/characters-config.txt" \
   -m "$(cat "$work_directory/locales.regex")" \
   -r "$(jq -r '.converterOptions.resolved' "$manifest")" \
   -s "$(jq -r '.converterOptions.draftstatus' "$manifest")" \

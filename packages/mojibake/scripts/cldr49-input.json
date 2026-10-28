@@ -20,6 +20,7 @@
     "draftstatus": "contributed",
     "coverage": "optional",
     "packages": true,
-    "type": "main"
+    "type": "main",
+    "section": "characters"
   }
 }
