@@ -43,7 +43,7 @@ bun --filter @stll/mobile build
 ```
 
 The app intentionally shares the repository's React 19 patch release. React
-Native 0.86 supports that range, and using one copy prevents Metro and native
+Native 0.88 supports that range, and using one copy prevents Metro and native
 autolinking from seeing duplicate React runtimes. Expo's exact bundled React
 pin is therefore excluded from its package-version comparison; all native
 module versions remain checked.

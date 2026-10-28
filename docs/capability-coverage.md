@@ -555,6 +555,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `tasks.entity-links.delete` | write, destructive | stella:matters_write | — | covered by `save_task` |
 | `tasks.entity-links.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.get` | read | stella:read | — | covered by `list_tasks` |
+| `tasks.list` | read | stella:read | — | covered by `list_tasks` |
 | `tasks.update` | write | stella:matters_write | — | covered by `save_task` |
 
 ## template-packs

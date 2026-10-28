@@ -9,6 +9,7 @@ import {
   caseLawBrowseFacetCounts,
   caseLawCourtWeights,
   caseLawDecisions,
+  caseLawSourceArrivals,
   caseLawSources,
   publishedCaseLawDecisions,
   unredactedCaseLawDecisions,
@@ -49,6 +50,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
       try {
         for (const table of [
           "case_law_sources",
+          "case_law_source_arrivals",
           "case_law_decisions",
           "case_law_search_documents",
           "case_law_browse_facet_counts",
@@ -83,6 +85,9 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
               storedTotalAsOf: new Date(),
             }),
           );
+          await tx
+            .insert(caseLawSourceArrivals)
+            .values({ sourceId, addedLastWeek: 7, countedAt: new Date() });
           await tx.insert(caseLawDecisions).values({
             id: decisionId,
             sourceId,
@@ -114,6 +119,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             panic("The fixture must produce a coverage answer");
           }
           expect(answer.totals.searchable).toBe(1);
+          expect(answer.totals.addedLastWeek).toBe(7);
           const coverageCountry = answer.countries.find(
             ({ country }) => country === "CZE",
           );
@@ -221,6 +227,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           if ("message" in result.answer) {
             panic("The corpus must produce coverage");
           }
+          expect(result.answer.totals.addedLastWeek).toBeNull();
           const computedCountry = result.answer.countries.find(
             ({ country }) => country === "CZE",
           );
