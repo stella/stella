@@ -26,12 +26,9 @@ import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
-import {
-  getApiRequestHeaders,
-  waitForSimulatedApiDelay,
-} from "@/lib/api-request-context";
-import { apiUrl } from "@/lib/api-url";
+import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
@@ -121,47 +118,61 @@ const refreshResponseSchema = v.object({
   tokenExpiresAt: v.string(),
 });
 
-type PostFolioCollabJsonOptions = {
-  body: Record<string, string>;
-  path: `/${string}`;
+const throwIfCollaborationSeedIsPreparing = (
+  error: {
+    status: number;
+    value: unknown;
+  } | null,
+) => {
+  if (error?.status !== 409) {
+    return;
+  }
+  const preparing = v.safeParse(
+    v.object({ code: v.literal(FOLIO_COLLAB_SEED_PREPARING_CODE) }),
+    error.value,
+  );
+  if (preparing.success) {
+    throw new FolioCollaborationSeedPreparingError({
+      message: "Collaborative editing room is still preparing.",
+    });
+  }
 };
 
-const postFolioCollabJson = async ({
-  body,
-  path,
-}: PostFolioCollabJsonOptions) => {
-  await waitForSimulatedApiDelay();
-  const response = await fetchWithTimeout(apiUrl(path), {
-    body: JSON.stringify(body),
-    credentials: "include",
-    headers: {
-      ...getApiRequestHeaders(),
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-    timeoutMs: COLLAB_FLUSH_TIMEOUT_MS,
+const joinFolioCollaborationRoom = async ({
+  entityId,
+  propertyId,
+  workspaceId,
+}: {
+  entityId: string;
+  propertyId: string;
+  workspaceId: string;
+}) => {
+  const entitiesRoute = api.entities({ workspaceId });
+  const response = await entitiesRoute["folio-collab-rooms"].join.post({
+    entityId,
+    propertyId,
   });
-  if (!response.ok) {
-    const preparing =
-      response.status === 409
-        ? v.safeParse(
-            v.object({ code: v.literal(FOLIO_COLLAB_SEED_PREPARING_CODE) }),
-            await response.json(),
-          )
-        : null;
-    throw preparing?.success
-      ? new FolioCollaborationSeedPreparingError({
-          message: "Collaborative editing room is still preparing.",
-        })
-      : new FetchBoundaryError({
-          message: "Collaboration API request failed.",
-          status: response.status,
-          statusText: response.statusText,
-          url: response.url,
-        });
-  }
-  const data: unknown = await response.json();
-  return data;
+  throwIfCollaborationSeedIsPreparing(response.error);
+  return unwrapApiResponse(response);
+};
+
+const refreshFolioCollaborationToken = async (body: {
+  roomId: string;
+  token: string;
+}) => {
+  const response = await api["folio-collab-rooms"]["refresh-token"].post(body);
+  throwIfCollaborationSeedIsPreparing(response.error);
+  return unwrapApiResponse(response);
+};
+
+const acknowledgeFolioCollaborationSeed = async (body: {
+  roomId: string;
+  token: string;
+  snapshotSha256Hex: string;
+}) => {
+  const response = await api["folio-collab-rooms"].snapshot.seed.post(body);
+  throwIfCollaborationSeedIsPreparing(response.error);
+  return unwrapApiResponse(response);
 };
 
 class CollaborationFlushError extends TaggedError("CollaborationFlushError")<{
@@ -344,8 +355,6 @@ export const useFolioCollaborationRoom = ({
 
     detached(
       (async () => {
-        const joinPath =
-          `/entities/${encodeURIComponent(workspaceId)}/folio-collab-rooms/join` satisfies `/${string}`;
         const cachedJoin = pendingGenerationJoin.current;
         pendingGenerationJoin.current = null;
         const data =
@@ -356,9 +365,10 @@ export const useFolioCollaborationRoom = ({
                   join: async () =>
                     v.parse(
                       joinResponseSchema,
-                      await postFolioCollabJson({
-                        body: { entityId, propertyId },
-                        path: joinPath,
+                      await joinFolioCollaborationRoom({
+                        entityId,
+                        propertyId,
+                        workspaceId,
                       }),
                     ),
                   signal: generationRejoinAbortController.signal,
@@ -399,10 +409,7 @@ export const useFolioCollaborationRoom = ({
           }
           const refreshed = v.parse(
             refreshResponseSchema,
-            await postFolioCollabJson({
-              body: { roomId, token },
-              path: "/folio-collab-rooms/refresh-token",
-            }),
+            await refreshFolioCollaborationToken({ roomId, token }),
           );
           token = refreshed.token;
           tokenExpiresAtMs = new Date(refreshed.tokenExpiresAt).getTime();
@@ -459,9 +466,10 @@ export const useFolioCollaborationRoom = ({
                   try: async () =>
                     v.parse(
                       joinResponseSchema,
-                      await postFolioCollabJson({
-                        body: { entityId, propertyId },
-                        path: joinPath,
+                      await joinFolioCollaborationRoom({
+                        entityId,
+                        propertyId,
+                        workspaceId,
                       }),
                     ),
                   catch: (cause) => cause,
@@ -726,9 +734,10 @@ export const useFolioCollaborationRoom = ({
                 if (!isCurrentReceipt()) {
                   return;
                 }
-                await postFolioCollabJson({
-                  body: { roomId, token, snapshotSha256Hex },
-                  path: "/folio-collab-rooms/snapshot/seed",
+                await acknowledgeFolioCollaborationSeed({
+                  roomId,
+                  token,
+                  snapshotSha256Hex,
                 });
               },
               flushSnapshot,

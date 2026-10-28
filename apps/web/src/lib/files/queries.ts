@@ -1,13 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import * as v from "valibot";
 
 import type {
   AuthoredDocumentPropertyKey,
   EmailAttachmentDescriptor,
   EmailCitationBlock,
 } from "@stll/api-contract";
-import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -64,18 +62,9 @@ type TextFileData = {
   text: string;
 };
 
-const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
-  entityId: v.string(),
-  fieldId: v.string(),
-  fileName: v.string(),
-  workspaceId: v.string(),
-});
-
 export const filesKeys = {
   all: filesQueryRoot,
   byFieldId: fileContentQueryKey,
-  /** Purpose-agnostic prefix of `byFieldId`: invalidating it sweeps every
-   * purpose variant of a field's downloaded bytes after a version write. */
   contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
@@ -277,40 +266,13 @@ export const saveEmailAttachment = async ({
   fieldId: string;
   parentId: string | null;
   sourceWorkspaceId: string;
-}) => {
-  const response = await fetchWithTimeout(
-    apiUrl(
-      `/files/${encodeURIComponent(sourceWorkspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}/save`,
-    ),
-    {
-      body: JSON.stringify({
-        destinationWorkspaceId,
-        parentId,
-      }),
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      timeoutMs: 60_000,
-    },
+}) =>
+  unwrapApiResponse(
+    await api
+      .files({ workspaceId: sourceWorkspaceId })
+      ["email-attachment"]({ fieldId })({ attachmentId })
+      .save.post({ destinationWorkspaceId, parentId }),
   );
-  if (!response.ok) {
-    throw new APIError({
-      status: response.status,
-      message: "Failed to save email attachment",
-    });
-  }
-  const parsed = v.safeParse(
-    EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
-    await response.json(),
-  );
-  if (!parsed.success) {
-    throw new APIError({
-      status: 502,
-      message: "Invalid email attachment save response",
-    });
-  }
-  return parsed.output;
-};
 
 /**
  * The file's own embedded properties (DOCX Author and Company, PDF Producer,
@@ -322,31 +284,13 @@ const readDocumentProperties = async ({
   workspaceId,
   fieldId,
   signal,
-}: FileOptionsProps & { signal: AbortSignal }) => {
-  const response = await fetchWithTimeout(
-    apiUrl(
-      `/files/${encodeURIComponent(workspaceId)}/document-properties/${encodeURIComponent(fieldId)}`,
-    ),
-    { credentials: "include", signal, timeoutMs: 30_000 },
+}: FileOptionsProps & { signal: AbortSignal }) =>
+  unwrapApiResponse(
+    await api
+      .files({ workspaceId })
+      ["document-properties"]({ fieldId })
+      .get({ fetch: { signal } }),
   );
-  if (!response.ok) {
-    throw new APIError({
-      status: response.status,
-      message: "Failed to read document properties",
-    });
-  }
-  const parsed = v.safeParse(
-    DOCUMENT_PROPERTIES_RESULT_SCHEMA,
-    await response.json(),
-  );
-  if (!parsed.success) {
-    throw new APIError({
-      status: 502,
-      message: "Invalid document properties response",
-    });
-  }
-  return parsed.output;
-};
 
 /**
  * Shared by the metadata panel's subscriber and the document route loader.
@@ -375,24 +319,11 @@ export const updateDocumentProperty = async ({
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
 }): Promise<void> => {
-  const response = await fetchWithTimeout(
-    apiUrl(
-      `/files/${encodeURIComponent(workspaceId)}/document-properties/${encodeURIComponent(fieldId)}`,
-    ),
-    {
-      body: JSON.stringify({ [propertyKey]: value }),
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      method: "PATCH",
-      timeoutMs: 60_000,
-    },
-  );
-  if (!response.ok) {
-    throw new APIError({
-      status: response.status,
-      message: "Failed to update document properties",
-    });
-  }
+  const response = await api
+    .files({ workspaceId })
+    ["document-properties"]({ fieldId })
+    .patch({ [propertyKey]: value });
+  unwrapApiResponse(response);
 };
 
 export const textFileOptions = (props: FileOptionsProps) =>
