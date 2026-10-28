@@ -2197,6 +2197,7 @@
     "moveDown": "Mover abajo",
     "moveUp": "Mover arriba",
     "name": "Nombre",
+    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "newMatter": "Nuevo asunto",
     "newRow": "Nueva fila",
     "next": "Siguiente",
@@ -3280,7 +3281,6 @@
       "simple": "Revisión sencilla"
     },
     "moreFormatting": "Más formato",
-    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "nextChange": "Cambio siguiente",
     "numberedList": "Lista numerada",
     "parseError": "No se pudo analizar el documento. Puede que esté dañado o en un formato no compatible.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "timeout": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo."
   },
   "validation": {

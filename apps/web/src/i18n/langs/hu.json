@@ -2197,6 +2197,7 @@
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
@@ -3280,7 +3281,6 @@
       "simple": "Az egyszerű korrektúra"
     },
     "moreFormatting": "További formázás",
-    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "nextChange": "Következő módosítás",
     "numberedList": "Számozott lista",
     "parseError": "A dokumentumot nem sikerült feldolgozni. Lehet, hogy sérült, vagy nem támogatott formátumú.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "timeout": "Lejárt a válaszadás időkorlátja. Próbálja újra."
   },
   "validation": {

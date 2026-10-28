@@ -159,7 +159,7 @@ export const useDocxSessionFinish = ({
           fingerprintKey: "useDocxSessionFinish:failure",
           scope: { type: "handler", handlerId: "useDocxSessionFinish:failure" },
         });
-        notifyUserError(flushResult.error, t("folio.networkError"));
+        notifyUserError(flushResult.error, t("common.networkError"));
         throw flushResult.error;
       }
       if (
@@ -176,7 +176,7 @@ export const useDocxSessionFinish = ({
             handlerId: "useDocxSessionFinish:failure-2",
           },
         });
-        notifyUserError(error, t("folio.networkError"));
+        notifyUserError(error, t("common.networkError"));
         throw error;
       }
       cancelCollaboration();
@@ -188,7 +188,7 @@ export const useDocxSessionFinish = ({
       async () => await cancelDesktopSession(),
     );
     if (Result.isError(cancelResult)) {
-      notifyUserError(cancelResult.error, t("folio.networkError"));
+      notifyUserError(cancelResult.error, t("common.networkError"));
       throw cancelResult.error;
     }
   }, [

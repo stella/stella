@@ -2197,6 +2197,7 @@
     "moveDown": "Pārvietot lejup",
     "moveUp": "Pārvietot augšup",
     "name": "Nosaukums",
+    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "newMatter": "Jauna lieta",
     "newRow": "Jauna rinda",
     "next": "Tālāk",
@@ -3280,7 +3281,6 @@
       "simple": "Vienkāršas atzīmes"
     },
     "moreFormatting": "Papildu formatēšana",
-    "networkError": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "nextChange": "Nākamā izmaiņa",
     "numberedList": "Numurēts saraksts",
     "parseError": "Dokumentu neizdevās apstrādāt. Iespējams, tas ir bojāts vai neatbalstītā formātā.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
     "timeout": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz."
   },
   "validation": {

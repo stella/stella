@@ -2197,6 +2197,7 @@
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
     "name": "Nimi",
+    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
@@ -3280,7 +3281,6 @@
       "simple": "Lihtmärgistus"
     },
     "moreFormatting": "Veel vormindust",
-    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "nextChange": "Järgmine muudatus",
     "numberedList": "Nummerdatud loend",
     "parseError": "Dokumenti ei õnnestunud sõeluda. See võib olla rikutud või toetamata vormingus.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "timeout": "Vastuse loomise aeg sai otsa. Proovi uuesti."
   },
   "validation": {

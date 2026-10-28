@@ -2197,6 +2197,7 @@
     "moveDown": "Descendre",
     "moveUp": "Monter",
     "name": "Nom",
+    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
@@ -3280,7 +3281,6 @@
       "simple": "Marques simples"
     },
     "moreFormatting": "Plus de mise en forme",
-    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "nextChange": "Modification suivante",
     "numberedList": "Liste numérotée",
     "parseError": "Le document n’a pas pu être analysé. Il est peut-être corrompu ou dans un format non pris en charge.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "timeout": "Le délai de génération de la réponse a expiré. Réessayez."
   },
   "validation": {

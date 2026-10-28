@@ -57,7 +57,7 @@ describe("API request retries", () => {
 
 describe("user-visible transport and client failures", () => {
   test.each([
-    ["network", messages.transportErrors.network],
+    ["network", messages.common.networkError],
     ["timeout", messages.transportErrors.timeout],
   ] as const)("localizes a %s transport failure", (kind, expected) => {
     try {

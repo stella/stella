@@ -2197,6 +2197,7 @@
     "moveDown": "Move down",
     "moveUp": "Move up",
     "name": "Name",
+    "networkError": "Network error. Please check your internet connection and try again.",
     "newMatter": "New matter",
     "newRow": "New row",
     "next": "Next",
@@ -3280,7 +3281,6 @@
       "simple": "Simple Markup"
     },
     "moreFormatting": "More formatting",
-    "networkError": "Network error. Please check your internet connection and try again.",
     "nextChange": "Next Change",
     "numberedList": "Numbered List",
     "parseError": "The document could not be parsed. It may be corrupted or in an unsupported format.",
@@ -5977,7 +5977,6 @@
     }
   },
   "transportErrors": {
-    "network": "Network error. Please check your internet connection and try again.",
     "timeout": "The answer timed out. Try again."
   },
   "validation": {

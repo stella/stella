@@ -16,7 +16,7 @@ import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
 import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { APIError } from "@/lib/errors/api";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -130,7 +130,7 @@ export const notifyUserError = (
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
-  if (APIError.is(error) && error.transportKind === "aborted") {
+  if (isCancellation(error)) {
     return false;
   }
   if (notifyStepUp(error)) {

@@ -84,7 +84,7 @@ describe("server errors outside AI", () => {
 
 describe("transport failures", () => {
   test.each([
-    ["network", messages.transportErrors.network],
+    ["network", messages.common.networkError],
     ["timeout", messages.transportErrors.timeout],
   ] as const)("localizes %s failures", (kind, expectedMessage) => {
     const error = toAPIError({ status: 0, value: null, kind });
@@ -101,7 +101,7 @@ describe("transport failures", () => {
     });
 
     expect(error.transportKind).toBe("aborted");
-    expect(error.message).not.toBe(messages.transportErrors.network);
+    expect(error.message).not.toBe(messages.common.networkError);
   });
 });
 

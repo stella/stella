@@ -93,7 +93,7 @@ describe("detachedUserAction", () => {
 });
 
 describe("notifyUserError", () => {
-  test("an aborted fetch is neither shown nor reported", () => {
+  test("aborted fetch errors are neither shown nor reported", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
@@ -107,6 +107,7 @@ describe("notifyUserError", () => {
     });
 
     expect(notifyUserError(error, FAILURE)).toBe(false);
+    expect(notifyUserError(abort, FAILURE)).toBe(false);
     expect(userVisibleReports(capture)).toEqual([]);
     expect(add).not.toHaveBeenCalled();
   });

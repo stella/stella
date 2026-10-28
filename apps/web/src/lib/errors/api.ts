@@ -55,6 +55,12 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   cause?: unknown;
 }> {}
 
+export const isCancellation = (error: unknown): boolean =>
+  (APIError.is(error) && error.transportKind === "aborted") ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    error.name === "AbortError");
+
 const MAX_API_RETRY_COUNT = 3;
 const CLIENT_ERROR_STATUS = 400;
 const TOO_MANY_REQUESTS_STATUS = 429;
@@ -120,7 +126,7 @@ export const toAPIError = (error: ToAPIErrorProps): APIError => {
     let message: string;
     switch (error.kind) {
       case "network":
-        message = t("transportErrors.network");
+        message = t("common.networkError");
         break;
       case "timeout":
         message = t("transportErrors.timeout");
