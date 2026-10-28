@@ -129,12 +129,13 @@ export const createCategoryHandler = async function* ({
     );
   }
 
-  if (body.parentId) {
+  const parentId = body.parentId;
+  if (parentId) {
     const parent = yield* Result.await(
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: { eq: body.parentId },
+            id: { eq: parentId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },
