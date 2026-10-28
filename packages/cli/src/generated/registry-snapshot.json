@@ -169,12 +169,29 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "search_case_law",
-    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use `url` for the reader and `source_url` for the publisher.",
+    "description": "Search case law. `queries` merges phrasings; matchedQueries names each hit's phrasings. `limit` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use `url` for the reader and `source_url` for the publisher.",
     "inputSchema": {
       "type": "object",
       "required": ["country"],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -2986,7 +3003,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter with its documents, tasks, fields and chat history; irreversible. Refused (409) when it has time, expenses or invoices: archive it instead.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
@@ -4889,7 +4906,7 @@
           }
         },
         "status": {
-          "enum": ["draft", "approved", "billed", "written_off"],
+          "enum": ["draft", "submitted", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
@@ -5127,7 +5144,7 @@
       "featureId": "time-billing"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter or read one. Pass invoice_id for one invoice: lines with their recorded source values, totals with the VAT breakdown, taxable supply date, seller profile id, buyer, and attached time entries and expenses; a client invoice needs access to every matter it bills. Otherwise pass matter_id to list. Returns id, number (null before numbering), document type, original invoice id, reference, status, dates, currency and total (integer minor units).",
     "inputSchema": {
       "type": "object",
       "required": [],

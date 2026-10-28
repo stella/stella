@@ -225,6 +225,55 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// The status icon and its owning screen in one logical coordinate space;
+/// `None` when there is no icon or the OS cannot place it (an icon in
+/// Windows' hidden overflow area). The handle is read and dropped on the
+/// main thread, like every other tray handle.
+#[cfg(target_os = "macos")]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let handle = app.clone();
+  crate::window_placement::on_main_thread(app, None, move || {
+    let main_thread = TrayMainThread::new()?;
+    status_icon_placement_on_main_thread(&handle, &main_thread)
+  })
+}
+
+/// The status icon and its owning screen; see the macOS twin.
+#[cfg(not(target_os = "macos"))]
+pub fn status_icon_placement(
+  app: &AppHandle,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  status_icon_placement_on_main_thread(app, &TrayMainThread)
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn status_icon_placement_on_main_thread(
+  app: &AppHandle,
+  _main_thread: &TrayMainThread,
+) -> Option<crate::window_placement::ScreenPlacement> {
+  let tray = app.tray_by_id("main")?;
+  #[cfg(target_os = "macos")]
+  {
+    tray
+      .with_inner_tray_icon(|inner| {
+        let main_thread = TrayMainThread::new()?;
+        let window = inner.ns_status_item()?.button(main_thread)?.window()?;
+        crate::window_placement::native_window_placement(&window, main_thread)
+      })
+      .ok()
+      .flatten()
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    crate::window_placement::physical_rect_placement(app, tray.rect().ok().flatten()?)
+  }
+}
+
 #[allow(
   clippy::disallowed_methods,
   reason = "the tray owner: the main-thread proof keeps every native handle local"

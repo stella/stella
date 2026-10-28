@@ -1961,7 +1961,11 @@ const persistAdmissionLoss = async ({
       control.abort(controlReason);
     }
     if (exit === "throw") {
-      throw new HandlerError({ status: 503, message: "Provider aborted" });
+      throw new HandlerError({
+        status: 503,
+        code: "internal_error",
+        message: "Provider aborted",
+      });
     }
     if (exit === "adapter-error") {
       yield {
@@ -2001,7 +2005,11 @@ describe("admission loss before message production identifies the persisted assi
           }),
         );
         if (exit === "throw") {
-          throw new HandlerError({ status: 503, message: "Provider aborted" });
+          throw new HandlerError({
+            status: 503,
+            code: "internal_error",
+            message: "Provider aborted",
+          });
         }
         if (exit === "adapter-error") {
           yield {
@@ -2189,6 +2197,7 @@ describe("late admission loss retains a completed and charged response", () => {
           if (exit === "throw") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Upstream cleanup aborted",
             });
           }
@@ -2272,6 +2281,7 @@ describe("admission lost before continuation production retains the original che
         if (exit === "throw") {
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Already aborted provider",
           });
         }
