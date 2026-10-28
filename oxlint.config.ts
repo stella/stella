@@ -5020,7 +5020,6 @@ const config = defineConfig({
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
               "apps/web/src/runtime.ts",
-              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading
