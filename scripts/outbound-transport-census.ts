@@ -41,6 +41,13 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/web/src/lib/preload-error-recovery.ts",
+    class: "package-owned-client",
+    reason:
+      "Probes the bounded same-origin version manifest to distinguish deployment skew from transient chunk transport failures.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/api/src/db/sql-client.ts",
     class: "operator-configured-infrastructure",
     reason: "Creates every Bun SQL client and drizzle database for the API.",
@@ -449,10 +456,11 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-lambda"],
   },
   {
-    path: "apps/api/src/lib/observability/otel.ts",
+    path: "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
     class: "operator-configured-infrastructure",
-    reason: "Exports sanitized logs to the configured OTLP endpoint.",
-    transports: ["module:@opentelemetry/exporter-logs-otlp-http"],
+    reason:
+      "Posts analytics batches and log records to the endpoints configured in the API environment.",
+    transports: ["module:@stll/fetch"],
   },
   {
     path: "apps/api/src/lib/stella-openrouter-text-adapter.ts",
@@ -589,12 +597,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "package-owned-client",
     reason: "Uses InfoSoud package errors when shaping workspace handlers.",
     transports: ["module:@stll/infosoud"],
-  },
-  {
-    path: "apps/api/src/lib/analytics/posthog-node.ts",
-    class: "vendor-sdk",
-    reason: "Sends configured analytics events to the PostHog service.",
-    transports: ["module:posthog-node"],
   },
   {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
@@ -1258,6 +1260,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/mcp-connectors/probe-connector.ts",
     reason: "Issues request authority for the connector probe route.",
+  },
+  {
+    path: "apps/api/src/handlers/mobile-updates/read.ts",
+    reason:
+      "Public direct boundary relaying the mobile app's signed updates from the downloads CDN.",
   },
   {
     path: "apps/api/src/handlers/organization-settings/business-registry-credentials.ts",

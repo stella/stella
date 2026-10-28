@@ -217,7 +217,7 @@ const IDENTITY_CANDIDATE_SCAN_MAX = LIMITS.caseLawSearchPageSizeMax;
 type IdentifierRowMatchOptions = {
   /** Whose key the column holds: the jurisdiction the reference is read in. */
   jurisdiction: string | undefined;
-  tx: CaseLawPublicReadTransaction;
+  tx: Pick<CaseLawPublicReadTransaction, "select">;
   type: DecisionIdentifierType;
   /** As the reference spells them; normalized here for the column. */
   values: readonly string[];
@@ -293,7 +293,7 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
  * transaction, so the grant takes effect without a restart.
  */
 const canReadDocketFamilyKey = async (
-  tx: CaseLawPublicReadTransaction,
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
 ): Promise<boolean> => {
   const [permission] = await tx
     .select({
@@ -318,7 +318,7 @@ export const docketFamilyKeyToRead = async ({
 }: {
   country: string | undefined;
   locator: DecisionIdentityLocator;
-  tx: CaseLawPublicReadTransaction;
+  tx: Pick<CaseLawPublicReadTransaction, "select">;
 }): Promise<string | null> => {
   if (
     locator.kind !== "docket" ||
@@ -357,7 +357,7 @@ export const decisionIdsNamedBy = ({
   country: string | undefined;
   familyKey: string | null;
   locator: DecisionIdentityLocator;
-  tx: CaseLawPublicReadTransaction;
+  tx: Pick<CaseLawPublicReadTransaction, "select">;
 }) => {
   const published = identifierRowDecisionIds({
     jurisdiction: country,

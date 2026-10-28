@@ -32,7 +32,10 @@ import {
   resolveEditSessionFailure,
   resolveTakenOverSession,
 } from "./use-edit-session.logic";
-import type { EditSessionState } from "./use-edit-session.logic";
+import type {
+  CheckpointOutcome,
+  EditSessionState,
+} from "./use-edit-session.logic";
 
 type FinalizeEditSessionResult =
   | {
@@ -58,13 +61,6 @@ type UseEditSessionOptions = {
 };
 
 const CHECKPOINT_DEBOUNCE_MS = 5000;
-
-/**
- * What a checkpoint did with the bytes it was handed. `released` is not a
- * failure to report: the lock moved to another tab mid-save, and the released
- * session already tells the user so.
- */
-type CheckpointOutcome = "failed" | "released" | "saved";
 
 type EditSessionReleaseContext = {
   workspaceId: string;
@@ -232,19 +228,29 @@ export const useEditSession = ({
   ): Promise<CheckpointOutcome> => {
     const session = sessionRef.current;
     if (!session) {
-      return "failed";
+      return { type: "noSession" };
     }
 
     const file = new File([docxBuffer], session.fileName, {
       type: DOCX_MIME,
     });
 
-    const response = await api["desktop-edit-sessions"]({
-      sessionId: session.sessionId,
-    }).checkpoint.post({
-      file,
-      sessionToken: session.sessionToken,
+    // A request that never gets an answer still has a cause to report.
+    const sent = await Result.tryPromise(async () => {
+      const answered = await api["desktop-edit-sessions"]({
+        sessionId: session.sessionId,
+      }).checkpoint.post({
+        file,
+        sessionToken: session.sessionToken,
+      });
+      return answered.error
+        ? ({ error: answered.error, data: null } as const)
+        : ({ error: null, data: answered.data } as const);
     });
+    if (Result.isError(sent)) {
+      return { type: "unreachable", error: sent.error };
+    }
+    const response = sent.value;
 
     if (response.error) {
       // The checkpoint that lost the race holds the only copy of the user's
@@ -256,13 +262,13 @@ export const useEditSession = ({
         status: response.error.status,
       });
       if (takenOver === null) {
-        return "failed";
+        return { type: "refused", error: toAPIError(response.error) };
       }
 
       sessionRef.current = null;
       setIsDirty(false);
       setState(takenOver);
-      return "released";
+      return { type: "released" };
     }
 
     if (response.data.rotatedSessionToken) {
@@ -273,7 +279,7 @@ export const useEditSession = ({
       };
     }
     setIsDirty(false);
-    return "saved";
+    return { type: "saved" };
   };
 
   const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {

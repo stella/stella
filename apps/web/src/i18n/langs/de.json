@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Jetzt",
       "currentSession": "Aktuell",
       "device": "Gerät",
       "deviceOnOs": "{browser} auf {os}",
@@ -1189,7 +1190,7 @@
       "searchEveryWord": "Alle Wörter suchen"
     },
     "seo": {
-      "collectionName": "Stella Rechtsprechung",
+      "collectionName": "stella Rechtsprechung",
       "description": "Öffentliche Rechtsprechungsdatenbank mit indexierbaren Gerichtsentscheidungen und Rechtsquellen.",
       "homeDescription": "Öffentliche Rechtsdatenbank mit Gerichtsentscheidungen und konsolidierten Rechtsvorschriften; Suche nach Kennung oder Stichwörtern.",
       "scopedDescription": "Öffentliche Rechtsprechungsdatenbank für {scope} mit indexierbaren Gerichtsentscheidungen und Rechtsquellen."
@@ -1209,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Angegeben: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Am {date} geltende Fassung} until {Bis einschließlich {date} geltende Fassung} from {Ab {date} geltende Fassung} other {Am {date} geltende Fassung}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Angegeben: {date}} until {Angegeben: bis {date}} from {Angegeben: ab {date}} other {Angegeben: {date}}}",
+      "caseFileDocuments": "Dokumente dieser Gerichtsakte",
       "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "citedDecisionPassage": "Textstelle in der Entscheidung",
@@ -1435,6 +1437,17 @@
         "webSearch": "Schalten Sie die Websuche ein, um diesen Skill zu nutzen"
       }
     },
+    "connectConnector": {
+      "checkAction": "Verbindung prüfen",
+      "description": "Der Assistent bittet darum, {connector} zu verbinden, um dessen Tools in dieser Unterhaltung zu nutzen.",
+      "error": "Die Verbindung konnte nicht gestartet werden. Versuchen Sie es erneut.",
+      "notConnected": "Noch nicht verbunden. Schließen Sie die Anmeldung ab und prüfen Sie die Verbindung dann erneut.",
+      "openTools": "Tools öffnen",
+      "scopes": "Angeforderter Zugriff: {scopes}",
+      "title": "Connector verbinden",
+      "tokenRequired": "{connector} benötigt ein Zugriffstoken. Fügen Sie es auf der Tools-Seite hinzu und prüfen Sie dann die Verbindung.",
+      "waiting": "Schließen Sie die Anmeldung im geöffneten Fenster ab."
+    },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
       "autoCompact": "Bei 100 % fasst stella ältere Nachrichten automatisch zusammen, um Platz zu schaffen.",
@@ -1509,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
+      "unnamed": "{count, plural, one {# weiteres} other {# weitere}}"
     },
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",
@@ -1750,6 +1763,7 @@
       "business_registry_lookup": "Handelsregister durchsuchen",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
+      "connect_connector": "Bitte um Verbindung eines Connectors",
       "counterparty_check": "Gegenpartei prüfen",
       "create-document": "Dokument vorbereiten",
       "create_matter_document": "Dokument erstellen",
@@ -2037,6 +2051,7 @@
     "confirm": "Bestätigen",
     "confirmAction": "Sind Sie sicher?",
     "connect": "Verbinden",
+    "connected": "Verbunden",
     "connectionLost": "Verbindung verloren",
     "connectionLostDescription": "Die Verbindung zum Server wurde unterbrochen. Automatische Wiederholung.",
     "convertTo": "Konvertieren zu",
@@ -2205,6 +2220,8 @@
     "noResults": "Keine Ergebnisse",
     "noVersions": "Kein Versionsverlauf",
     "none": "Keine",
+    "notConnected": "Nicht verbunden",
+    "notNow": "Nicht jetzt",
     "notStated": "Nicht angegeben",
     "notes": "Notizen",
     "open": "Öffnen",
@@ -2453,10 +2470,10 @@
       "value": "Feldwert"
     },
     "datePrecision": "Datumsgenauigkeit",
-    "deleteContact": "Klient löschen",
+    "deleteContact": "Kontakt löschen",
     "deleteContactBlockedByMatters": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
     "deleteContactConfirmDescription": "Möchten Sie diesen Kontakt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
-    "editContact": "Klient bearbeiten",
+    "editContact": "Kontakt bearbeiten",
     "emailTypes": {
       "other": "Sonstige",
       "personal": "Privat",
@@ -2469,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Vollmacht (.docx) hier ablegen oder klicken, um eine Datei auszuwählen",
       "extracting": "Vollmachtgeber werden ermittelt…",
-      "fileHint": "Stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",
+      "fileHint": "stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",
       "fileTooLarge": "Die Vollmachtsdatei darf höchstens 50 MB groß sein.",
       "invalidFileType": "Bitte wählen Sie eine .docx-Datei aus.",
       "noOutorganteFound": "In diesem Dokument konnte kein Vollmachtgeber erkannt werden.",
@@ -4618,7 +4635,6 @@
       "selectAtLeastOneRole": "Wählen Sie mindestens eine Rolle für diesen Schlüssel aus.",
       "selectModelForEachRole": "Fügen Sie einen Provider hinzu und wählen Sie für jede Kategorie ein Modell aus.",
       "selectedProvider": "{provider}",
-      "title": "KI-Konfiguration",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
     "invitations": {
@@ -5046,7 +5062,7 @@
         "title": "Zwei-Faktor-Authentifizierung"
       },
       "wordEditIdentitySaved": "Word-Bearbeitungsidentität aktualisiert",
-      "wordEditShortcut": "Word-Bearbeitungskürzel",
+      "wordEditShortcut": "Initialen für Word-Änderungen",
       "wordEditShortcutDescription": "Kurzes Kürzel für Ihre Initialen bei Word-Bearbeitungen.",
       "wordEditShortcutPlaceholder": "z. B. JK"
     },
@@ -5057,7 +5073,6 @@
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",
       "cliTitle": "Kommandozeile",
-      "connected": "Verbunden",
       "connectedAgo": "Verbunden {time}",
       "connectedAppsDescription": "Apps, bei denen Sie sich mit stella angemeldet haben. Trennen Sie alle, die Sie nicht mehr nutzen.",
       "connectedAppsEmpty": "Noch nichts. Richten Sie oben Claude oder ChatGPT ein, dann erscheint es hier.",
@@ -5080,7 +5095,6 @@
       "mcpTitle": "MCP-Server",
       "mcpUrlLabel": "Server-URL",
       "noMatches": "Keine Verbindung passt zu „{query}“",
-      "notConnected": "Nicht verbunden",
       "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
       "privateCredentialOnly": "Nur private Zugangsdaten",
       "searchPlaceholder": "Verbindungen durchsuchen",
@@ -5195,7 +5209,6 @@
       "usageLimitDescriptionNoEntitlement": "KI-Funktionen benötigen eine aktive Nutzungsberechtigung für diese Organisation.",
       "usageLimitDescriptionUsageLimitExceeded": "Diese Aktion kann mit dem aktuellen Nutzungsstatus der Organisation nicht ausgeführt werden.",
       "usageLimitNeeded": "Erforderlich",
-      "usageLimitNotNow": "Nicht jetzt",
       "usageLimitTitleEntitlementInactive": "Nutzungsberechtigung ist nicht aktiv",
       "usageLimitTitleNoEntitlement": "Nutzungsberechtigung erforderlich",
       "usageLimitTitleUsageLimitExceeded": "KI-Nutzungslimit erreicht",
@@ -5436,16 +5449,16 @@
     "savedDescription": "Gespeichertes Stilset",
     "sourceDocument": "Quell-DOCX",
     "stellaDescription": "Vollständige, neutrale Formatierung für Rechtsdokumente von stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Stilsets",
     "untitledDocument": "Unbenanntes Dokument"
   },
   "success": {
     "aiConfigDeleted": "KI-Konfiguration entfernt",
     "aiConfigUpdated": "KI-Konfiguration aktualisiert",
-    "clientUpdated": "Klient aktualisiert",
-    "contactCreated": "Klient erstellt",
-    "contactDeleted": "Klient gelöscht",
+    "clientUpdated": "Kontakt aktualisiert",
+    "contactCreated": "Kontakt erstellt",
+    "contactDeleted": "Kontakt gelöscht",
     "documentCreated": "Dokument erstellt",
     "folderCreated": "Ordner erstellt",
     "invitationCanceled": "Einladung storniert",
@@ -5982,6 +5995,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
     "organizationNameRequired": "Organisationsname ist erforderlich",
     "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
     "slugRequired": "Slug ist erforderlich"

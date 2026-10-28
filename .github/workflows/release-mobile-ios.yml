@@ -69,6 +69,17 @@ jobs:
         timeout-minutes: 10
         run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter '@stll/mobile...' --filter '!stella'
 
+      # The build's runtime version is its native fingerprint, the same value
+      # publish-mobile-update.yml targets, so only updates built for this
+      # native shell ever reach it. Taken before any signing input is set, as
+      # the publish workflow takes it.
+      - name: Stamp the native fingerprint as the runtime version
+        working-directory: apps/mobile
+        run: |
+          fingerprint="$(bun scripts/fingerprint.ts ios)"
+          echo "MOBILE_RUNTIME_VERSION=$fingerprint" >> "$GITHUB_ENV"
+          echo "Runtime version: \`$fingerprint\`" >> "$GITHUB_STEP_SUMMARY"
+
       # The profile is a public record of what may be signed, not a key; the
       # app config reads its UUID to sign the app target with it.
       - name: Install the variant's App Store profile

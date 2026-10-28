@@ -19,7 +19,7 @@ import { isDocxFile } from "@/lib/consts";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
   ImportCandidate,
@@ -148,14 +148,11 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
 
   const extractFile = async (file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(
-        undefined,
-        t("contacts.extractProcuracao.invalidFileType"),
-      );
+      notifyUserProblem(t("contacts.extractProcuracao.invalidFileType"));
       return;
     }
     if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
-      notifyUserError(undefined, t("contacts.extractProcuracao.fileTooLarge"));
+      notifyUserProblem(t("contacts.extractProcuracao.fileTooLarge"));
       return;
     }
 
