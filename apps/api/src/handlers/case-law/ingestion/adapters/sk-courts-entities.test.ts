@@ -18,8 +18,10 @@ import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-typ
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 
 const replay = async (stored: StoredRawReparseInput) => {
-  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(() =>
-    panic("Stored SK entity replay must not fetch publisher responses"),
+  const rejectPublisherIo = () =>
+    panic("Stored SK entity replay must not fetch publisher responses");
+  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(rejectPublisherIo, { preconnect: rejectPublisherIo }),
   );
   try {
     const parser =

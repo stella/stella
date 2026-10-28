@@ -438,8 +438,10 @@ const reparse = async (
   stored: StoredDecision,
   caseNumber: string,
 ): Promise<StoredRawReparseOutcome> => {
-  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(() =>
-    panic("Stored SK replay must not fetch publisher responses"),
+  const rejectPublisherIo = () =>
+    panic("Stored SK replay must not fetch publisher responses");
+  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(rejectPublisherIo, { preconnect: rejectPublisherIo }),
   );
   try {
     const outcome = await skCourtsAdapter.reparseStoredRaw?.({

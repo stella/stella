@@ -69,8 +69,10 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const replayStoredRaw = async (stored: StoredRawReparseInput) => {
-  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(() =>
-    panic("Stored PL replay must not fetch publisher responses"),
+  const rejectPublisherIo = () =>
+    panic("Stored PL replay must not fetch publisher responses");
+  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(rejectPublisherIo, { preconnect: rejectPublisherIo }),
   );
   try {
     const outcome = await plNcourtAdapter.reparseStoredRaw?.(stored);

@@ -31,7 +31,7 @@ test("every archive member survives stored replay and repeated bibliography stay
   const asset = new Uint8Array([0, 255, 128, 4]);
   writeZipEntry(zip, "assets/figure.bin", asset);
   const originalZip = await zip.generateAsync({ type: "arraybuffer" });
-  const originalZipDigest = sha256Hex(originalZip);
+  const originalZipDigest = sha256Hex(new Uint8Array(originalZip));
   const formex = await readEcjFormexArchive(originalZip);
   expect(ecjFormexDocuments(formex).slice(0, 2)).toEqual([primary, joined]);
   const archive = decodeSourceRawEnvelope(
