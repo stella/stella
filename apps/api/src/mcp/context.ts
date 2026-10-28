@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
+import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -181,6 +182,8 @@ export type McpRequestContext = {
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
     contextFidelityWaivers?: ReadonlyMap<string, string>;
+    /** Replaces the shipped skill catalog, for a skill shape no shipped skill has yet. */
+    listShippedSkillMetadata?: typeof listSkillMetadata;
     materializePlaybookRun?: typeof materializePlaybookRun;
     startWorkflow?: typeof startWorkflow;
     loadLatestApprovedVersion?: typeof loadLatestApprovedVersion;

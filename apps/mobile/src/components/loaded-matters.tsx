@@ -1,13 +1,7 @@
 import { use } from "react";
 
 import { Result } from "better-result";
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-} from "react-native";
+import { FlatList, RefreshControl } from "react-native";
 import { useTranslations } from "use-intl";
 
 import {
@@ -16,6 +10,7 @@ import {
   screenStyles,
 } from "@/components/empty-state-screen";
 import { MatterRow } from "@/components/matter-row";
+import { RetryButton } from "@/components/retry-button";
 import type { MattersLoad } from "@/state/matters";
 import { useAppColors } from "@/theme";
 
@@ -52,15 +47,7 @@ export const LoadedMatters = ({
           />
         ) : (
           <EmptyCard description={t("loadFailed")} title={t("emptyTitle")}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={onReload}
-              style={[styles.retry, { borderColor: colors.border }]}
-            >
-              <Text style={[styles.retryLabel, { color: colors.accent }]}>
-                {t("retry")}
-              </Text>
-            </Pressable>
+            <RetryButton label={t("retry")} onPress={onReload} />
           </EmptyCard>
         )
       }
@@ -78,17 +65,3 @@ export const LoadedMatters = ({
     />
   );
 };
-
-const styles = StyleSheet.create({
-  retry: {
-    borderRadius: 12,
-    borderWidth: 1,
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  retryLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

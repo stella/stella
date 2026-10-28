@@ -8,7 +8,22 @@
   "chat": {
     "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
     "emptyTitle": "Ainda não há conversas",
-    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui."
+    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar suas conversas.",
+    "retry": "Tentar novamente",
+    "untitled": "Conversa sem título",
+    "loadMoreFailed": "Carregar mais",
+    "loadOlderFailed": "Carregar mensagens anteriores",
+    "toolUsed": "Usado: {tool}",
+    "threadTitle": "Conversa",
+    "threadLoadFailed": "Não foi possível carregar esta conversa.",
+    "threadEmptyDescription": "Esta conversa ainda não tem mensagens.",
+    "sections": {
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "week": "Últimos 7 dias",
+      "earlier": "Anteriores"
+    }
   },
   "tasks": {
     "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
