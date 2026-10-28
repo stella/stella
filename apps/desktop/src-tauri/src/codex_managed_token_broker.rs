@@ -9,18 +9,32 @@
 //! environment variable, a command line, a file or a log.
 //!
 //! The channel is a Unix socket (mode 0600) in a fresh directory (mode 0700)
-//! owned by this user, or a local-only named pipe on Windows; never a TCP
-//! listener. A request names the sign-in it was launched for, so a run
-//! started before a different sign-in receives nothing.
+//! owned by this user, or a named pipe only the current user can open and no
+//! remote client can reach; never a TCP listener. The broker answers only a
+//! peer process descended from a Codex process the desktop started and
+//! registered with [`CodexChatGptLaunch::authorize`], and only for the
+//! sign-in that run was launched with. The broker endpoint and that sign-in's
+//! key reach the helper through Codex's environment, never a command line.
 //!
 //! Ported from t3code's `CodexManagedTokenBroker`, `CodexManagedTokenProtocol`
 //! and `managedChatGptToken` helper (MIT).
 
+// The desktop runner's harness host takes the launch and its grant; until it
+// lands only the tests do.
+#![cfg_attr(
+  not(all(test, unix)),
+  allow(
+    dead_code,
+    reason = "the desktop runner's harness host consumes the launch"
+  )
+)]
+
 use std::{
+  collections::HashMap,
   future::Future,
   io::{Read, Write},
   path::Path,
-  sync::Arc,
+  sync::{Arc, Mutex},
   time::Duration,
 };
 
@@ -34,6 +48,10 @@ use crate::chatgpt_auth::{AGENT_NAME, AccessError, ChatGptAuth};
 
 /// The argument that starts the desktop executable as the token helper.
 pub const TOKEN_HELPER_ARGUMENT: &str = "--codex-chatgpt-token";
+/// Where the helper finds the broker.
+pub(crate) const BROKER_ENVIRONMENT: &str = "STELLA_CODEX_TOKEN_BROKER";
+/// The sign-in the run was launched with.
+pub(crate) const PROFILE_ENVIRONMENT: &str = "STELLA_CODEX_TOKEN_PROFILE";
 /// The provider ID Codex records in its rollouts; resuming needs it unchanged.
 pub(crate) const PROVIDER_ID: &str = "openai_chatgpt_plan";
 const PROTOCOL_VERSION: u8 = 1;
@@ -46,6 +64,8 @@ const SOCKET_IDLE: Duration = Duration::from_secs(5);
 /// A renewal (20 s) plus storage and startup headroom.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(80);
 const MAX_CONNECTIONS: usize = 32;
+/// How many ancestors of a peer are checked for an authorized Codex process.
+const MAX_ANCESTRY: usize = 32;
 /// Stays below macOS's 104-byte and Linux's 108-byte socket path limits.
 #[cfg(unix)]
 const UNIX_SOCKET_PATH_BYTES: usize = 100;
@@ -97,6 +117,85 @@ impl TokenSource for ChatGptAuth {
   }
 }
 
+/// The Codex processes the desktop started whose descendants may ask.
+#[derive(Debug, Default)]
+pub(crate) struct AuthorizedProcesses(Mutex<HashMap<u32, usize>>);
+
+impl AuthorizedProcesses {
+  fn contains(&self, pid: u32) -> bool {
+    self
+      .0
+      .lock()
+      .is_ok_and(|granted| granted.contains_key(&pid))
+  }
+
+  /// Whether `peer` is an authorized process or descends from one.
+  fn admits(&self, peer: u32) -> bool {
+    let mut pid = peer;
+    for _ in 0..MAX_ANCESTRY {
+      if self.contains(pid) {
+        return true;
+      }
+      match parent_process_id(pid) {
+        Some(parent) if parent != pid && parent != 0 => pid = parent,
+        _ => return false,
+      }
+    }
+    false
+  }
+}
+
+/// Lets a Codex process and its descendants use the broker until dropped.
+/// Drop it when the process exits, so a reused process ID is not trusted.
+#[derive(Debug)]
+pub struct BrokerGrant {
+  processes: Arc<AuthorizedProcesses>,
+  pid: u32,
+}
+
+impl BrokerGrant {
+  fn new(processes: &Arc<AuthorizedProcesses>, pid: u32) -> Self {
+    if let Ok(mut granted) = processes.0.lock() {
+      *granted.entry(pid).or_default() += 1;
+    }
+    Self {
+      processes: Arc::clone(processes),
+      pid,
+    }
+  }
+}
+
+impl Drop for BrokerGrant {
+  fn drop(&mut self) {
+    if let Ok(mut granted) = self.processes.0.lock()
+      && let Some(count) = granted.get_mut(&self.pid)
+    {
+      *count -= 1;
+      if *count == 0 {
+        granted.remove(&self.pid);
+      }
+    }
+  }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn parent_process_id(pid: u32) -> Option<u32> {
+  stella_desktop_macos::parent_process_id(pid)
+}
+
+#[cfg(target_os = "linux")]
+fn parent_process_id(pid: u32) -> Option<u32> {
+  // `pid (comm) state ppid …`; the command name can hold spaces and `)`.
+  let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+  let (_, fields) = stat.rsplit_once(')')?;
+  fields.split_whitespace().nth(1)?.parse().ok()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn parent_process_id(_pid: u32) -> Option<u32> {
+  None
+}
+
 /// Reads one newline-terminated frame of at most `max` bytes. Anything after
 /// the newline, or no newline before EOF, is an invalid frame.
 async fn read_frame<R: AsyncRead + Unpin>(
@@ -124,11 +223,20 @@ async fn read_frame<R: AsyncRead + Unpin>(
   }
 }
 
-async fn serve_connection<S, C>(source: Arc<S>, mut connection: C)
-where
+async fn serve_connection<S, C>(
+  source: Arc<S>,
+  processes: Arc<AuthorizedProcesses>,
+  peer: Option<u32>,
+  mut connection: C,
+) where
   S: TokenSource,
   C: AsyncRead + AsyncWrite + Unpin,
 {
+  // Only a process the desktop's own Codex started is answered at all.
+  if !peer.is_some_and(|peer| processes.admits(peer)) {
+    tracing::info!("token broker refused a process outside the managed Codex runs");
+    return;
+  }
   // Send nothing until a complete, valid request arrived: a peer that can
   // only read learns nothing.
   let Ok(Some(frame)) =
@@ -168,6 +276,7 @@ where
 /// directory.
 pub struct CodexManagedTokenBroker {
   endpoint: String,
+  processes: Arc<AuthorizedProcesses>,
   task: tokio::task::JoinHandle<()>,
   /// Removed with the broker.
   #[cfg(unix)]
@@ -201,25 +310,36 @@ impl CodexManagedTokenBroker {
       .to_str()
       .ok_or_else(|| std::io::Error::other("token broker path is not UTF-8"))?
       .to_owned();
+    let processes = Arc::new(AuthorizedProcesses::default());
     let admitted = Arc::new(Semaphore::new(MAX_CONNECTIONS));
-    let task = tokio::spawn(async move {
-      loop {
-        let Ok((stream, _)) = listener.accept().await else {
-          tokio::time::sleep(Duration::from_millis(50)).await;
-          continue;
-        };
-        let Ok(permit) = Arc::clone(&admitted).try_acquire_owned() else {
-          continue;
-        };
-        let source = Arc::clone(&source);
-        tokio::spawn(async move {
-          serve_connection(source, stream).await;
-          drop(permit);
-        });
+    let task = tokio::spawn({
+      let processes = Arc::clone(&processes);
+      async move {
+        loop {
+          let Ok((stream, _)) = listener.accept().await else {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            continue;
+          };
+          let Ok(permit) = Arc::clone(&admitted).try_acquire_owned() else {
+            continue;
+          };
+          let peer = stream
+            .peer_cred()
+            .ok()
+            .and_then(|credentials| credentials.pid())
+            .and_then(|pid| u32::try_from(pid).ok());
+          let source = Arc::clone(&source);
+          let processes = Arc::clone(&processes);
+          tokio::spawn(async move {
+            serve_connection(source, processes, peer, stream).await;
+            drop(permit);
+          });
+        }
       }
     });
     Ok(Self {
       endpoint,
+      processes,
       task,
       _directory: directory,
     })
@@ -227,45 +347,60 @@ impl CodexManagedTokenBroker {
 
   #[cfg(windows)]
   pub(crate) fn start<S: TokenSource>(source: Arc<S>) -> std::io::Result<Self> {
+    use std::os::windows::io::AsHandle;
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 
     let endpoint = format!(r"\\.\pipe\stella-token-{}", uuid::Uuid::new_v4());
-    // Remote clients are refused; the first instance claims the name, so
-    // no other process can have created it first.
+    // Remote clients are refused, only the current user may open the pipe,
+    // and the first instance claims the name, so no other process can have
+    // created it first.
     let create = |name: &str, first: bool| -> std::io::Result<NamedPipeServer> {
-      ServerOptions::new()
+      let mut options = ServerOptions::new();
+      options
         .first_pipe_instance(first)
-        .reject_remote_clients(true)
-        .create(name)
+        .reject_remote_clients(true);
+      stella_desktop_macos::create_owner_only_pipe(&options, name)
     };
     let mut server = create(&endpoint, true)?;
     let name = endpoint.clone();
+    let processes = Arc::new(AuthorizedProcesses::default());
     let admitted = Arc::new(Semaphore::new(MAX_CONNECTIONS));
-    let task = tokio::spawn(async move {
-      loop {
-        let connected = server.connect().await;
-        let next = match create(&name, false) {
-          Ok(next) => next,
-          Err(error) => {
-            tracing::warn!(kind = ?error.kind(), "token broker pipe stopped accepting requests");
-            return;
+    let task = tokio::spawn({
+      let processes = Arc::clone(&processes);
+      async move {
+        loop {
+          let connected = server.connect().await;
+          let next = match create(&name, false) {
+            Ok(next) => next,
+            Err(error) => {
+              tracing::warn!(kind = ?error.kind(), "token broker pipe stopped accepting requests");
+              return;
+            }
+          };
+          let instance = std::mem::replace(&mut server, next);
+          if connected.is_err() {
+            continue;
           }
-        };
-        let instance = std::mem::replace(&mut server, next);
-        if connected.is_err() {
-          continue;
+          let Ok(permit) = Arc::clone(&admitted).try_acquire_owned() else {
+            continue;
+          };
+          let peer =
+            stella_desktop_macos::named_pipe_client_process_id(instance.as_handle())
+              .ok();
+          let source = Arc::clone(&source);
+          let processes = Arc::clone(&processes);
+          tokio::spawn(async move {
+            serve_connection(source, processes, peer, instance).await;
+            drop(permit);
+          });
         }
-        let Ok(permit) = Arc::clone(&admitted).try_acquire_owned() else {
-          continue;
-        };
-        let source = Arc::clone(&source);
-        tokio::spawn(async move {
-          serve_connection(source, instance).await;
-          drop(permit);
-        });
       }
     });
-    Ok(Self { endpoint, task })
+    Ok(Self {
+      endpoint,
+      processes,
+      task,
+    })
   }
 
   #[cfg(not(any(unix, windows)))]
@@ -356,15 +491,26 @@ impl Drop for OwnedDirectory {
 }
 
 /// What a managed Codex app-server run needs to use the ChatGPT plan.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct CodexChatGptLaunch {
   /// Passed to `codex app-server` as `-c <override>`, in this order.
   pub config_overrides: Vec<String>,
+  /// Set in the run's environment; the helper Codex starts reads them.
+  pub environment: Vec<(&'static str, String)>,
   /// Removed from the environment the run inherits.
   pub removed_environment: &'static [&'static str],
   /// `initialize`'s `clientInfo.name`, matching the registration's
   /// `agent_name_hint`.
   pub client_name: &'static str,
+  processes: Arc<AuthorizedProcesses>,
+}
+
+impl CodexChatGptLaunch {
+  /// Lets the Codex process started with this launch, and its descendants,
+  /// ask the broker for a token while the grant is held.
+  pub fn authorize(&self, codex_pid: u32) -> BrokerGrant {
+    BrokerGrant::new(&self.processes, codex_pid)
+  }
 }
 
 fn toml_string(value: &str) -> String {
@@ -376,22 +522,26 @@ pub(crate) fn launch_for(
   helper: &Path,
   endpoint: &str,
   profile_key: &str,
+  processes: Arc<AuthorizedProcesses>,
 ) -> CodexChatGptLaunch {
-  let args = [TOKEN_HELPER_ARGUMENT, endpoint, profile_key]
-    .map(toml_string)
-    .join(",");
   let provider = format!(
     "model_providers.{PROVIDER_ID}={{name=\"ChatGPT plan\",base_url={base},wire_api=\"responses\",\
-     requires_openai_auth=false,supports_websockets=false,auth={{command={command},args=[{args}],\
+     requires_openai_auth=false,supports_websockets=false,auth={{command={command},args=[{arg}],\
      timeout_ms={timeout},refresh_interval_ms=0}}}}",
     base = toml_string(crate::chatgpt_auth::RESOURCE),
     command = toml_string(&helper.to_string_lossy()),
+    arg = toml_string(TOKEN_HELPER_ARGUMENT),
     timeout = COMMAND_TIMEOUT.as_millis(),
   );
   CodexChatGptLaunch {
     config_overrides: vec![format!("model_provider=\"{PROVIDER_ID}\""), provider],
+    environment: vec![
+      (BROKER_ENVIRONMENT, endpoint.to_owned()),
+      (PROFILE_ENVIRONMENT, profile_key.to_owned()),
+    ],
     removed_environment: REMOVED_ENVIRONMENT,
     client_name: AGENT_NAME,
+    processes,
   }
 }
 
@@ -405,7 +555,7 @@ pub enum CodexLaunchError {
 
 /// The launch configuration for the next Codex run on the user's ChatGPT
 /// plan. It starts the broker on first use and fails early when there is no
-/// usable connection.
+/// usable connection. The caller authorizes the Codex process once it runs.
 pub(crate) async fn codex_chatgpt_launch(
   auth: &ChatGptAuth,
   broker: &tokio::sync::OnceCell<CodexManagedTokenBroker>,
@@ -422,23 +572,25 @@ pub(crate) async fn codex_chatgpt_launch(
   auth.access(None).await.map_err(CodexLaunchError::Access)?;
   let profile_key = auth.profile_key().await.map_err(CodexLaunchError::Access)?;
   let helper = std::env::current_exe().map_err(|_unknown| CodexLaunchError::Broker)?;
-  Ok(launch_for(&helper, broker.endpoint(), &profile_key))
+  Ok(launch_for(
+    &helper,
+    broker.endpoint(),
+    &profile_key,
+    Arc::clone(&broker.processes),
+  ))
 }
 
-/// Token-helper mode: when `args` start the helper, asks the broker and
-/// returns the exit code. Codex reads a bare token from stdout.
+/// Token-helper mode: when `args` start the helper, asks the broker named in
+/// the environment and returns the exit code. Codex reads a bare token from
+/// stdout.
 pub fn run_token_helper(args: &[std::ffi::OsString]) -> Option<i32> {
   if args.get(1).and_then(|arg| arg.to_str()) != Some(TOKEN_HELPER_ARGUMENT) {
     return None;
   }
-  let (Some(endpoint), Some(profile_key), None) = (
-    args.get(2).and_then(|arg| arg.to_str()),
-    args.get(3).and_then(|arg| arg.to_str()),
-    args.get(4),
-  ) else {
+  if args.len() != 2 {
     return Some(fail_helper());
-  };
-  match request_token(endpoint, profile_key) {
+  }
+  match helper_token(|name| std::env::var(name).ok()) {
     Some(token) => {
       let mut stdout = std::io::stdout().lock();
       if stdout
@@ -453,6 +605,13 @@ pub fn run_token_helper(args: &[std::ffi::OsString]) -> Option<i32> {
     }
     None => Some(fail_helper()),
   }
+}
+
+fn helper_token(environment: impl Fn(&str) -> Option<String>) -> Option<String> {
+  request_token(
+    &environment(BROKER_ENVIRONMENT)?,
+    &environment(PROFILE_ENVIRONMENT)?,
+  )
 }
 
 fn fail_helper() -> i32 {
@@ -498,12 +657,19 @@ fn connect(endpoint: &str) -> Option<std::os::unix::net::UnixStream> {
 
 #[cfg(windows)]
 fn connect(endpoint: &str) -> Option<std::fs::File> {
+  use std::os::windows::fs::OpenOptionsExt;
+
+  /// `SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION`: a server answering
+  /// on this name can identify the helper but never act as it.
+  const IDENTIFY_ONLY: u32 = 0x0010_0000 | 0x0001_0000;
+
   if !endpoint.starts_with(r"\\.\pipe\stella-token-") {
     return None;
   }
   std::fs::OpenOptions::new()
     .read(true)
     .write(true)
+    .security_qos_flags(IDENTIFY_ONLY)
     .open(endpoint)
     .ok()
 }
@@ -539,11 +705,30 @@ mod tests {
     response
   }
 
+  fn good_request() -> String {
+    format!("{{\"version\":1,\"profileKey\":\"{KEY}\"}}\n")
+  }
+
+  /// A broker that answers this test process, as if it were a managed Codex.
+  fn started() -> (CodexManagedTokenBroker, BrokerGrant) {
+    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let grant = BrokerGrant::new(&broker.processes, std::process::id());
+    (broker, grant)
+  }
+
+  /// A same-user process that is not part of any managed Codex run.
+  fn unrelated_process() -> std::process::Child {
+    std::process::Command::new("/bin/sleep")
+      .arg("30")
+      .spawn()
+      .unwrap()
+  }
+
   #[tokio::test(flavor = "multi_thread")]
   async fn the_socket_is_private_to_this_user() {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let (broker, _grant) = started();
     let socket = Path::new(broker.endpoint());
     assert!(socket.as_os_str().len() <= UNIX_SOCKET_PATH_BYTES);
     let socket_mode = std::fs::metadata(socket).unwrap().permissions().mode();
@@ -562,13 +747,53 @@ mod tests {
   }
 
   #[tokio::test(flavor = "multi_thread")]
-  async fn only_a_complete_request_for_the_current_sign_in_gets_a_token() {
+  async fn an_unrelated_same_user_process_is_refused() {
     let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let mut codex = unrelated_process();
+    // Only the "Codex" process tree is authorized; this test process is not
+    // in it, although it runs as the same user and holds the right key.
+    let codex_grant = BrokerGrant::new(&broker.processes, codex.id());
+    let endpoint = broker.endpoint().to_owned();
+    let processes = Arc::clone(&broker.processes);
+    tokio::task::spawn_blocking(move || {
+      assert!(exchange(&endpoint, good_request().as_bytes()).is_empty());
+      let own = BrokerGrant::new(&processes, std::process::id());
+      assert_eq!(
+        exchange(&endpoint, good_request().as_bytes()),
+        b"{\"token\":\"access-fixture\"}\n"
+      );
+      // A grant ends with its run.
+      drop(own);
+      assert!(exchange(&endpoint, good_request().as_bytes()).is_empty());
+    })
+    .await
+    .unwrap();
+    drop(codex_grant);
+    codex.kill().unwrap();
+    codex.wait().unwrap();
+  }
+
+  #[test]
+  fn descendants_of_an_authorized_process_are_admitted() {
+    let mut child = unrelated_process();
+    let parent = AuthorizedProcesses::default();
+    let parent_grant = BrokerGrant::new(&Arc::new(parent), std::process::id());
+    assert!(parent_grant.processes.admits(child.id()));
+    assert!(parent_grant.processes.admits(std::process::id()));
+    let only_child = Arc::new(AuthorizedProcesses::default());
+    let child_grant = BrokerGrant::new(&only_child, child.id());
+    assert!(!child_grant.processes.admits(std::process::id()));
+    child.kill().unwrap();
+    child.wait().unwrap();
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn only_a_complete_request_for_the_current_sign_in_gets_a_token() {
+    let (broker, _grant) = started();
     let endpoint = broker.endpoint().to_owned();
     tokio::task::spawn_blocking(move || {
-      let good = format!("{{\"version\":1,\"profileKey\":\"{KEY}\"}}\n");
       assert_eq!(
-        exchange(&endpoint, good.as_bytes()),
+        exchange(&endpoint, good_request().as_bytes()),
         b"{\"token\":\"access-fixture\"}\n"
       );
       let other_key = "f".repeat(64);
@@ -590,13 +815,21 @@ mod tests {
           "{refused}"
         );
       }
-      // The helper speaks the same protocol.
+      // The helper speaks the same protocol, from its environment.
+      let environment = |broker: String, key: String| {
+        move |name: &str| match name {
+          BROKER_ENVIRONMENT => Some(broker.clone()),
+          PROFILE_ENVIRONMENT => Some(key.clone()),
+          _ => None,
+        }
+      };
       assert_eq!(
-        request_token(&endpoint, KEY).as_deref(),
+        helper_token(environment(endpoint.clone(), KEY.into())).as_deref(),
         Some("access-fixture")
       );
-      assert_eq!(request_token(&endpoint, &other_key), None);
-      assert_eq!(request_token(&endpoint, "short"), None);
+      assert_eq!(helper_token(environment(endpoint.clone(), other_key)), None);
+      assert_eq!(helper_token(environment(endpoint, "short".into())), None);
+      assert_eq!(helper_token(|_| None), None);
     })
     .await
     .unwrap();
@@ -604,7 +837,7 @@ mod tests {
 
   #[tokio::test(flavor = "multi_thread")]
   async fn a_silent_peer_is_disconnected() {
-    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let (broker, _grant) = started();
     let endpoint = broker.endpoint().to_owned();
     tokio::task::spawn_blocking(move || {
       let mut stream = std::os::unix::net::UnixStream::connect(&endpoint).unwrap();
@@ -626,17 +859,22 @@ mod tests {
       None
     );
     assert_eq!(
-      run_token_helper(&["stella-desktop".into(), TOKEN_HELPER_ARGUMENT.into()]),
+      run_token_helper(&[
+        "stella-desktop".into(),
+        TOKEN_HELPER_ARGUMENT.into(),
+        "extra".into()
+      ]),
       Some(1)
     );
   }
 
   #[test]
-  fn the_launch_names_the_helper_and_broker_but_no_token() {
+  fn the_launch_keeps_the_broker_and_sign_in_off_the_command_line() {
     let launch = launch_for(
       Path::new("/Applications/Stella.app/Contents/MacOS/stella-desktop"),
       "/tmp/stella-token-abc/s",
       KEY,
+      Arc::default(),
     );
     assert_eq!(
       launch.config_overrides[0],
@@ -644,18 +882,53 @@ mod tests {
     );
     assert_eq!(
       launch.config_overrides[1],
-      format!(
-        "model_providers.openai_chatgpt_plan={{name=\"ChatGPT plan\",\
-         base_url=\"https://api.openai.com/v1\",wire_api=\"responses\",\
-         requires_openai_auth=false,supports_websockets=false,\
-         auth={{command=\"/Applications/Stella.app/Contents/MacOS/stella-desktop\",\
-         args=[\"--codex-chatgpt-token\",\"/tmp/stella-token-abc/s\",\"{KEY}\"],\
-         timeout_ms=80000,refresh_interval_ms=0}}}}"
-      )
+      "model_providers.openai_chatgpt_plan={name=\"ChatGPT plan\",\
+       base_url=\"https://api.openai.com/v1\",wire_api=\"responses\",\
+       requires_openai_auth=false,supports_websockets=false,\
+       auth={command=\"/Applications/Stella.app/Contents/MacOS/stella-desktop\",\
+       args=[\"--codex-chatgpt-token\"],timeout_ms=80000,refresh_interval_ms=0}}"
     );
+    assert_eq!(
+      launch.environment,
+      [
+        (BROKER_ENVIRONMENT, "/tmp/stella-token-abc/s".to_owned()),
+        (PROFILE_ENVIRONMENT, KEY.to_owned()),
+      ]
+    );
+    for argument in &launch.config_overrides {
+      assert!(!argument.contains(KEY));
+      assert!(!argument.contains("stella-token-abc"));
+    }
     assert_eq!(launch.client_name, "Stella");
     assert!(launch.removed_environment.contains(&"OPENAI_API_KEY"));
     assert!(launch.removed_environment.contains(&"ACCESS_TOKEN"));
+  }
+
+  #[tokio::test(flavor = "multi_thread")]
+  async fn a_launch_authorizes_its_codex_process_until_the_grant_ends() {
+    let broker = CodexManagedTokenBroker::start(Arc::new(FixedSource)).unwrap();
+    let launch = launch_for(
+      Path::new("/bin/true"),
+      broker.endpoint(),
+      KEY,
+      Arc::clone(&broker.processes),
+    );
+    let endpoint = broker.endpoint().to_owned();
+    let grant = launch.authorize(std::process::id());
+    let served = tokio::task::spawn_blocking({
+      let endpoint = endpoint.clone();
+      move || exchange(&endpoint, good_request().as_bytes())
+    })
+    .await
+    .unwrap();
+    assert_eq!(served, b"{\"token\":\"access-fixture\"}\n");
+    drop(grant);
+    let refused = tokio::task::spawn_blocking(move || {
+      exchange(&endpoint, good_request().as_bytes())
+    })
+    .await
+    .unwrap();
+    assert!(refused.is_empty());
   }
 
   #[test]
@@ -664,11 +937,11 @@ mod tests {
       Path::new(r"C:\Program Files\Stella\stella-desktop.exe"),
       r"\\.\pipe\stella-token-1",
       KEY,
+      Arc::default(),
     );
     assert!(
       launch.config_overrides[1]
         .contains(r#"command="C:\\Program Files\\Stella\\stella-desktop.exe""#)
     );
-    assert!(launch.config_overrides[1].contains(r#""\\\\.\\pipe\\stella-token-1""#));
   }
 }
