@@ -21,6 +21,7 @@ import type {
   McpConnectionStatus,
 } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { safeOutboundFetchStream } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -52,10 +53,7 @@ import type {
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import {
-  safeOutboundFetchStream,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
 import {
   errorResult,
