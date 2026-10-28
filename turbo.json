@@ -1678,6 +1678,7 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },
@@ -1717,6 +1718,21 @@
         "$TURBO_ROOT$/packages/**",
         "$TURBO_ROOT$/scripts/**"
       ]
+    },
+    // The pre-paint test compares the desktop pre-paint with the resolved theme
+    // and the web pre-paint.
+    "@stll/desktop#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/mobile/src/ui-theme.gen.ts",
+        "$TURBO_ROOT$/apps/web/public/prepaint-init.js"
+      ]
+    },
+    // The palette test pins DESIGN.md's brand colour table.
+    "@stll/brand#test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/DESIGN.md"]
     },
     "@stll/api-contract#test": {
       "dependsOn": ["transit"],
