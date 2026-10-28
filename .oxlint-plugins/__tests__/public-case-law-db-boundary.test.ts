@@ -593,45 +593,41 @@ describe.serial("public-law relation scan", () => {
         "void readHandle;",
         "export const query = sql`select id from case_law_decisions`;",
       ].join("\n");
-    const typeNames = ["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"];
-    const typeResults = await Promise.all(
-      typeNames.map(async (typeName) => ({
-        typeName,
-        reported: (
-          await lint(
-            caseLawReadTypeSource(typeName),
-            `apps/api/src/handlers/case-law/${typeName}.ts`,
-          )
-        ).length,
+    const cases = [
+      ...["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"].map(
+        (typeName) => ({
+          source: caseLawReadTypeSource(typeName),
+          sourcePath: `apps/api/src/handlers/case-law/${typeName}.ts`,
+        }),
+      ),
+      {
+        source: [
+          'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
+          'import { sql } from "drizzle-orm";',
+          "export const query = definePublicLawSharedQuery(",
+          "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
+          "  async () => await sql`select id from case_law_decisions`,",
+          ");",
+        ].join("\n"),
+        sourcePath: "apps/api/src/handlers/case-law/registered-query.ts",
+      },
+      {
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from case_law_decisions`;",
+        ].join("\n"),
+        sourcePath: "apps/api/src/lib/public-law-shared-query.ts",
+      },
+    ];
+    const results = await Promise.all(
+      cases.map(async ({ source, sourcePath }) => ({
+        sourcePath,
+        reported: (await lint(source, sourcePath)).length,
       })),
     );
-    expect(typeResults).toEqual(
-      typeNames.map((typeName) => ({ typeName, reported: 1 })),
+    expect(results).toEqual(
+      cases.map(({ sourcePath }) => ({ sourcePath, reported: 1 })),
     );
-    const registeredQuery = [
-      'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
-      'import { sql } from "drizzle-orm";',
-      "export const query = definePublicLawSharedQuery(",
-      "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
-      "  async () => await sql`select id from case_law_decisions`,",
-      ");",
-    ].join("\n");
-    expect(
-      await lint(
-        registeredQuery,
-        "apps/api/src/handlers/case-law/registered-query.ts",
-      ),
-    ).toHaveLength(1);
-    const sharedQueryRegistry = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from case_law_decisions`;",
-    ].join("\n");
-    expect(
-      await lint(
-        sharedQueryRegistry,
-        "apps/api/src/lib/public-law-shared-query.ts",
-      ),
-    ).toHaveLength(1);
   });
 
   test("covers a legislation read", async () => {
