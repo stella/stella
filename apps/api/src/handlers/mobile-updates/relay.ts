@@ -79,7 +79,9 @@ export const cdnFetch =
     await safeOutboundFetchBytes({
       maxBytes: MANIFEST_MAX_BYTES,
       permit,
-      timeout: { type: "headers", ms: CDN_TIMEOUT_MS },
+      // The whole read, body included: a CDN that sends headers and then
+      // stalls must not hold the request open.
+      timeoutMs: CDN_TIMEOUT_MS,
       url,
     });
 

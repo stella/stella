@@ -132,9 +132,10 @@ describe("a published update", () => {
     });
   });
 
-  test("the same content is the same update; new content is a new one", () => {
+  test("the same manifest is the same update; any change to it is a new one", () => {
     const first = publish("bundle-1");
-    expect(publish("bundle-1", "2026-10-22T08:00:00Z").updateId).toBe(
+    expect(publish("bundle-1").updateId).toBe(first.updateId);
+    expect(publish("bundle-1", "2026-10-22T08:00:00Z").updateId).not.toBe(
       first.updateId,
     );
     expect(publish("bundle-2").updateId).not.toBe(first.updateId);
