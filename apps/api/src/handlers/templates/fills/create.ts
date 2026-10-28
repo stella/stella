@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { memberAIAccessError } from "@/api/lib/ai-config-response";
+import {
+  memberAIAccessError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -167,43 +170,6 @@ const fillTemplateToWorkspace = createSafeHandler(
       actionKind: "templates.fill",
     });
 
-    // Built only when the manifest declares an AI field: the fill service
-    // defers this, so a deterministic fill opens no metered trace.
-    const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
-      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-        dataClass: "customer",
-        usageMetering: {
-          actionType: "chat",
-          organizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId: user.id,
-          workspaceId,
-        },
-        feature: "templates.fill",
-        modelTask: "short-text",
-        orgAIConfig,
-        modelTier: admission.modelTier,
-        properties: { organization_id: organizationId },
-        traceId: Bun.randomUUIDv7(),
-      });
-      const shared = {
-        admission,
-        operationSignal: signal,
-        orgAIConfig,
-        managedAIResidency,
-        organizationId,
-        skillContext: { organizationId, safeDb, userId: user.id },
-        aiAnalytics,
-        tenantWorkspaceIds: [workspaceId],
-      };
-      return {
-        generateAiValue: buildAiFieldGenerator(shared),
-        decideAiCondition: buildAiConditionDecider(shared),
-        adaptAiValue: buildAiOccurrenceAdapter(shared),
-      };
-    };
-
     // The fill service runs this only when the manifest declares AI fields,
     // before any model call, so a deterministic fill never spends AI quota
     // and stays open to every member. A member the organization does not
@@ -231,8 +197,49 @@ const fillTemplateToWorkspace = createSafeHandler(
           }
         : undefined;
     const accessError = memberAIAccessError(orgAIConfigStatus);
-    const aiFill: AiFillAdmission<HandlerError> = async (fill) =>
-      await runAdmittedAiFill({
+    const aiFill: AiFillAdmission<HandlerError> = async (fill) => {
+      if (managedAIResidency === null) {
+        return {
+          type: "refused",
+          rejection: storedAIConfigUnreadableError(undefined),
+        };
+      }
+      // Constructed only for AI fields; deterministic fills need no provider.
+      const aiCollaborators = ({ signal, admission }: AdmittedModelAction) => {
+        const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
+          usageMetering: {
+            actionType: "chat",
+            organizationId,
+            safeDb,
+            serviceTier: "standard",
+            userId: user.id,
+            workspaceId,
+          },
+          feature: "templates.fill",
+          modelTask: "short-text",
+          orgAIConfig,
+          modelTier: admission.modelTier,
+          properties: { organization_id: organizationId },
+          traceId: Bun.randomUUIDv7(),
+        });
+        const shared = {
+          admission,
+          operationSignal: signal,
+          orgAIConfig,
+          managedAIResidency,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId: user.id },
+          aiAnalytics,
+          tenantWorkspaceIds: [workspaceId],
+        };
+        return {
+          generateAiValue: buildAiFieldGenerator(shared),
+          decideAiCondition: buildAiConditionDecider(shared),
+          adaptAiValue: buildAiOccurrenceAdapter(shared),
+        };
+      };
+      return await runAdmittedAiFill({
         admitModelAction,
         preflight: async () => {
           if (accessError !== null) {
@@ -243,6 +250,7 @@ const fillTemplateToWorkspace = createSafeHandler(
         collaborators: aiCollaborators,
         fill,
       });
+    };
 
     // A missing template is a 404, and a stored file the scan refuses (or a
     // scanner outage) answers as it would for an upload: 422 or 503.
