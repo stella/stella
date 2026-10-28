@@ -28,12 +28,15 @@ const OPEN_REVIEW_DECISION: CurrentReviewDecision = {
 
 /** An event's moment as an instant: spellings with different offsets
  *  compare by when they happened, not by how they were written. */
-const instantOf = (event: ReviewDecisionEvent): Temporal.Instant =>
-  Result.try(() => Temporal.Instant.from(event.at)).match({
-    ok: (instant) => instant,
-    err: () =>
-      panic(`Review decision event time is not an instant: ${event.at}`),
-  });
+const instantOf = (event: ReviewDecisionEvent): Temporal.Instant => {
+  // Panicking outside `match`: a throw inside its handler is rewrapped and
+  // loses this message.
+  const parsed = Result.try(() => Temporal.Instant.from(event.at));
+  if (Result.isError(parsed)) {
+    return panic(`Review decision event time is not an instant: ${event.at}`);
+  }
+  return parsed.value;
+};
 
 /** Fold immutable decisions chronologically. Stable sorting preserves input order for ties. */
 export const foldReviewDecisions = (
