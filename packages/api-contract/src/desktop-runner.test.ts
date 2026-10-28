@@ -131,14 +131,10 @@ describe("desktop runner fixtures", () => {
     const desktop = fixtures.valid.desktop.map(parsedDesktop);
     const server = fixtures.valid.server.map(parsedServer);
     const reports: DesktopRunnerHarnessReport[] = desktop.flatMap((message) => {
-      switch (message.type) {
-        case "hello":
-          return message.harnesses;
-        case "harness.status":
-          return [message.harness];
-        default:
-          return [];
+      if (message.type === "hello") {
+        return message.harnesses;
       }
+      return message.type === "harness.status" ? [message.harness] : [];
     });
     const starts = server.flatMap((message) =>
       message.type === "run.start" ? [message] : [],
