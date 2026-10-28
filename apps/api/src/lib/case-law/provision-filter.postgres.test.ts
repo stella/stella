@@ -7,7 +7,10 @@ import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts"
 import { provisionDecisionPageQuery } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import {
+  provisionLinkOutcomeEmitsHit,
+  readCaseLawProvisionScope,
+} from "@/api/lib/case-law/provision-filter";
 import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
@@ -38,6 +41,17 @@ const TABLES = [
   "corpus_index_jurisdiction_serving",
   "corpus_index_projection_states",
 ] as const;
+
+test("only a verified provision membership outcome emits a decision", () => {
+  expect(provisionLinkOutcomeEmitsHit({ type: "match" })).toBe(true);
+  expect(provisionLinkOutcomeEmitsHit({ type: "noMatch" })).toBe(false);
+  expect(
+    provisionLinkOutcomeEmitsHit({
+      type: "incomplete",
+      after: { spanStart: 128, anchor: "cl_36" },
+    }),
+  ).toBe(false);
+});
 
 const nodesOf = (root: Record<string, unknown>): Record<string, unknown>[] => {
   const children = root["Plans"];
@@ -310,10 +324,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           expect(examined).toBeLessThanOrEqual(SCOPE_LIMIT + 1);
         }
 
-        // A decision can cite thousands of unrelated provisions. The
-        // correlated probe must stop at its sentinel and preserve the row as
-        // incomplete, so a continuation can examine it rather than proving a
-        // false non-match.
+        // A decision can cite thousands of unrelated provisions. Membership
+        // seeks the requested subtree, so those links can neither manufacture
+        // a hit nor hide a real citation that follows them in text order.
         await db.execute(sql`TRUNCATE ${schema}.case_law_provision_citations`);
         const adversarialDecision = (
           await db
@@ -334,6 +347,20 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             'cl_' || (100 + n) || '-odst_1', DATE '2020-01-01',
             'unrelated citation before the match', n, n + 1, 1
           FROM generate_series(1, ${probeBudget + 1}::int) n`);
+        await db.execute(
+          sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
+        );
+        await db.execute(sql`SET enable_seqscan = off`);
+        const noMatchProbe = provisionDecisionPageQuery(tx, {
+          body: { country: "CZE", query: "", provision: PROVISION },
+          generation: GENERATION,
+          after: undefined,
+          orderBy: [desc(publishedCaseLawDecisions.id)],
+          limit: 1,
+          decisionIds: [adversarialDecision],
+        });
+        expect(await noMatchProbe).toEqual([]);
+
         await db.execute(sql`INSERT INTO case_law_provision_citations
           (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
            work_collection, unit, section, subsection, anchor, decision_date,
@@ -345,7 +372,6 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         await db.execute(
           sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
         );
-        await db.execute(sql`SET enable_seqscan = off`);
         const continuationProbe = provisionDecisionPageQuery(tx, {
           body: { country: "CZE", query: "", provision: PROVISION },
           generation: GENERATION,
@@ -366,8 +392,15 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           const examined =
             Number(scan["Actual Rows"]) +
             Number(scan["Rows Removed by Filter"] ?? 0);
-          expect(examined).toBeLessThanOrEqual(probeBudget + 1);
+          if (String(scan["Index Name"]).includes("decision_work_subtree")) {
+            expect(examined).toBeLessThanOrEqual(1);
+          }
         }
+        expect(
+          citationScans(continuationPlan).some((scan) =>
+            String(scan["Index Name"]).includes("decision_work_subtree"),
+          ),
+        ).toBe(true);
         await db.execute(sql`SET enable_seqscan = on`);
       } finally {
         await db.execute(sql`SET statement_timeout = 0`);

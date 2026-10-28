@@ -2316,6 +2316,17 @@ export const caseLawProvisionCitations = p.pgTable(
     p
       .index("case_law_provision_citations_work_subtree_idx")
       .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+    // Candidate membership starts with a decision and then seeks only the
+    // requested work's anchor subtree. Unrelated links from the same decision
+    // never enter the range.
+    p
+      .index("case_law_provision_citations_decision_work_subtree_idx")
+      .on(
+        t.decisionId,
+        t.jurisdiction,
+        t.workIdentifier,
+        sql`${t.anchor} COLLATE "C"`,
+      ),
     p
       .index("case_law_provision_citations_eli_subtree_idx")
       .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)

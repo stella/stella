@@ -1,0 +1,3 @@
+{
+  "create-index": "The concurrent build takes only its online SHARE UPDATE EXCLUSIVE lock on the populated citation table; lock acquisition is bounded to one second before leaving the migration transaction."
+}

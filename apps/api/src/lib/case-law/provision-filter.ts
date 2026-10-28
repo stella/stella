@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
@@ -242,82 +243,78 @@ export const readProvisionWorkLinked = async (
  * OFFSET 0 prevents decorrelation into every citing decision before the
  * ranked page can apply its LIMIT.
  */
-export type ProvisionLinkReadOutcome = "match" | "noMatch" | "incomplete";
+export type ProvisionLinkReadOutcome =
+  | { type: "match" }
+  | { type: "noMatch" }
+  | { type: "incomplete"; after: { spanStart: number; anchor: string } };
 
-/** The sole correlated citation-link reader: bound rows first, then classify. */
+/** Only a proved match may pass candidate eligibility. */
+export const provisionLinkOutcomeEmitsHit = (
+  outcome: ProvisionLinkReadOutcome,
+): boolean => {
+  switch (outcome.type) {
+    case "match":
+      return true;
+    case "noMatch":
+    case "incomplete":
+      return false;
+    default: {
+      outcome satisfies never;
+      return panic("Unhandled provision-link read outcome");
+    }
+  }
+};
+
+/** The sole correlated citation-link reader: seek its exact range, then classify. */
 const provisionLinkReadOutcomeSql = ({
   decisionId,
   ...scope
 }: ProvisionScopeOptions & {
   /** The decision id the predicate is correlated with. */
   decisionId: SQL;
-}): SQL<ProvisionLinkReadOutcome> => {
+}): SQL<ProvisionLinkReadOutcome["type"]> => {
   const link = caseLawProvisionCitations;
-  const budget = LIMITS.caseLawProvisionLinkProbeMax;
-  const boundedLinks = sql`(
-    SELECT ${link.decisionId}, ${link.jurisdiction}, ${link.workIdentifier},
-      ${link.anchor}, ${link.subsection}, ${link.letter}, ${link.point}
-    FROM ${link}
-    WHERE ${link.decisionId} = ${decisionId}
-    ORDER BY ${link.decisionId}, ${link.spanStart}, ${link.anchor}
-    LIMIT ${budget + 1}
-  ) AS provision_link_slice`;
-  const slice = {
-    decisionId: sql`provision_link_slice.decision_id`,
-    jurisdiction: sql`provision_link_slice.jurisdiction`,
-    workIdentifier: sql`provision_link_slice.work_identifier`,
-    anchor: sql`provision_link_slice.anchor`,
-    subsection: sql`provision_link_slice.subsection`,
-    letter: sql`provision_link_slice.letter`,
-    point: sql`provision_link_slice.point`,
-  };
   const { jurisdiction, provision } = scope;
   const linkJurisdiction = linkJurisdictionOf(scope);
   const matchConditions: SQL[] = [
-    sql`${slice.jurisdiction} = ${linkJurisdiction}`,
-    sql`${slice.workIdentifier} = ${provision.work}`,
-    provisionAnchorSubtreeSql(slice.anchor, {
+    sql`${link.decisionId} = ${decisionId}`,
+    sql`${link.jurisdiction} = ${linkJurisdiction}`,
+    sql`${link.workIdentifier} = ${provision.work}`,
+    provisionAnchorSubtreeSql(link.anchor, {
       jurisdiction: linkJurisdiction,
       anchor: provision.anchor,
     }),
   ];
   if (provision.subsection !== undefined) {
     matchConditions.push(
-      sql`${slice.subsection} = ${canonicalPathValue(provision.subsection)}`,
+      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
     );
   }
   if (provision.letter !== undefined) {
     matchConditions.push(
-      sql`${slice.letter} = ${canonicalPathValue(provision.letter)}`,
+      sql`${link.letter} = ${canonicalPathValue(provision.letter)}`,
     );
   }
   if (provision.point !== undefined) {
     matchConditions.push(
-      sql`${slice.point} = ${canonicalPathValue(provision.point)}`,
+      sql`${link.point} = ${canonicalPathValue(provision.point)}`,
     );
   }
   if (provision.jurisdiction === "EU") {
     matchConditions.push(sql`EXISTS (
       SELECT 1 FROM ${publishedCaseLawDecisions}
       INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${publishedCaseLawDecisions.sourceId}
-      WHERE ${publishedCaseLawDecisions.id} = ${slice.decisionId}
+      WHERE ${publishedCaseLawDecisions.id} = ${link.decisionId}
         AND ${publishedCaseLawDecisions.country} = ${jurisdiction}
         AND ${redistributableCaseLawSource}
     )`);
   }
 
-  // A full bounded slice proves `noMatch`; a sentinel proves only that more
-  // links remain. Treat that incomplete proof as eligible so the ranked walk
-  // carries the decision into its continuation instead of dropping it.
-  return sql<ProvisionLinkReadOutcome>`COALESCE((
-    SELECT CASE
-      WHEN bool_or(CASE WHEN ${sql.join(matchConditions, sql` AND `)} THEN TRUE ELSE FALSE END)
-        THEN 'match'
-      WHEN count(*) > ${budget} THEN 'incomplete'
-      ELSE 'noMatch'
-    END
-    FROM ${boundedLinks}
-  ), 'noMatch')`;
+  return sql<ProvisionLinkReadOutcome["type"]>`CASE WHEN EXISTS (
+    SELECT 1 FROM ${link}
+    WHERE ${sql.join(matchConditions, sql` AND `)}
+    LIMIT 1 OFFSET 0
+  ) THEN 'match' ELSE 'noMatch' END`;
 };
 
 export const provisionCitedSql = (
@@ -325,7 +322,7 @@ export const provisionCitedSql = (
     /** The decision id the predicate is correlated with. */
     decisionId: SQL;
   },
-): SQL => sql`${provisionLinkReadOutcomeSql(options)} <> 'noMatch'`;
+): SQL => sql`${provisionLinkReadOutcomeSql(options)} = 'match'`;
 
 /** A complete small set, or a scope that needs candidate-by-candidate probes. */
 export type CaseLawProvisionScope =
