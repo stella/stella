@@ -29,13 +29,21 @@ import {
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import { treatmentOf } from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  CITATION_SUMMARY_SCAN_LIMIT,
+  treatmentOf,
+} from "@/api/handlers/case-law/decisions/citation-graph";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
+import {
+  isSingleManifestationWork,
+  readDecisionWork,
+  workCitationStream,
+} from "@/api/lib/case-law/decision-work";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 
 /**
@@ -116,26 +124,34 @@ export const readCitationGraphFacts = async ({
     return null;
   }
 
+  // The judgment's cited-by neighbourhood, whichever language version each
+  // citation landed on, each citation once. A work of several versions reads
+  // the bounded window the citation summary counts.
+  const work = await readDecisionWork(tx, decisionId);
+  const cited = workCitationStream({
+    tx,
+    work,
+    direction: "incoming",
+    where: eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
+    limit: isSingleManifestationWork(work)
+      ? undefined
+      : CITATION_SUMMARY_SCAN_LIMIT,
+  });
   const rows = await tx
     .select({
-      citingId: caseLawCitations.citingDecisionId,
-      polarity: caseLawCitations.polarity,
+      citingId: publishedCaseLawDecisions.id,
+      polarity: cited.polarity,
       court: publishedCaseLawDecisions.court,
       country: publishedCaseLawDecisions.country,
       courtId: publishedCaseLawDecisions.courtId,
       decisionDate: publishedCaseLawDecisions.decisionDate,
     })
-    .from(caseLawCitations)
+    .from(cited)
     .innerJoin(
       publishedCaseLawDecisions,
-      eq(publishedCaseLawDecisions.id, caseLawCitations.citingDecisionId),
+      eq(publishedCaseLawDecisions.id, cited.relatedId),
     )
-    .where(
-      and(
-        eq(caseLawCitations.citedDecisionId, decisionId),
-        eq(caseLawCitations.kind, CITATION_KIND.PRECEDENT),
-      ),
-    );
+    .where(cited.canonical);
 
   const reporter = await tx
     .select({ decisionId: caseLawDecisionIdentifiers.decisionId })

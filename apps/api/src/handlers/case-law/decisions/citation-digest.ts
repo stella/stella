@@ -43,7 +43,10 @@ export type DecisionCitationDigest = {
   /** At most `CITATION_DIGEST_TOP_CITING`, most authoritative first. */
   topCiting: TopCitingDecisionsResult;
   /** The first page of what this decision cites, unresolved rows included. */
-  cites: (Omit<DecisionCitationRow, "citationText" | "evidenceQuote"> & {
+  cites: (Omit<
+    DecisionCitationRow,
+    "citationText" | "evidenceQuote" | "printedBy"
+  > & {
     citationText: string | null;
     textWithheldReason: DecisionTextWithheldReason | null;
   })[];
@@ -106,7 +109,11 @@ export const readGatedDecisionCitationDigest = async ({
         doctrineSummary,
         topCiting,
         cites: cites.items.map(
-          ({ evidenceQuote: _evidenceQuote, ...item }) => ({
+          ({
+            evidenceQuote: _evidenceQuote,
+            printedBy: _printedBy,
+            ...item
+          }) => ({
             ...item,
             citationText:
               textWithheldReason === null ? item.citationText : null,

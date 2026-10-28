@@ -10,6 +10,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
+import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 
 export const READER_ANSWER_RELATED_LIMITS = {
@@ -48,13 +49,15 @@ const readRelatedDecisionCandidates = async (
     caseLawDb,
     "search",
     { kind: "id", id: decisionId },
-    async ({ tx, id, countries }) => {
+    async (subject) => {
+      const { tx, countries } = subject;
+      const work = await decisionWorkOf(subject);
       const [outgoing, incoming] = await Promise.all([
         direction === "citing"
           ? null
           : listOutgoingDecisionCitations({
               tx,
-              decisionId: id,
+              work,
               cursor: undefined,
               countries,
             }),
@@ -62,7 +65,7 @@ const readRelatedDecisionCandidates = async (
           ? null
           : listIncomingDecisionCitations({
               tx,
-              decisionId: id,
+              work,
               cursor: undefined,
               countries,
             }),
@@ -109,7 +112,10 @@ const readRelatedDecisionCandidates = async (
           outgoingCandidates.at(index),
           incomingCandidates.at(index),
         ]) {
-          if (candidate === undefined || candidate.decisionId === id) {
+          if (
+            candidate === undefined ||
+            work.manifestationIds.includes(candidate.decisionId)
+          ) {
             continue;
           }
           const key = JSON.stringify([

@@ -33,6 +33,14 @@ import type {
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
+import {
+  canonicalRuleApplies,
+  DECISION_WORK_MANIFESTATIONS_MAX,
+  decisionWorkOf,
+  isSingleManifestationWork,
+  workCitationStream,
+} from "@/api/lib/case-law/decision-work";
+import type { DecisionWork } from "@/api/lib/case-law/decision-work";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
@@ -96,6 +104,9 @@ const doctrineOf = (
  * The stored doctrine when the reader may see it. Both branches share one
  * SQL type so the subqueries built over it keep their field types.
  */
+/** A read that shows no quotes still selects the column, as NULL. */
+const NO_EVIDENCE_QUOTE = sql<string | null>`NULL::text`.as("evidence_quote");
+
 const doctrinalTreatmentField = (available: boolean) =>
   (available
     ? sql<DoctrineTreatment | null>`${caseLawCitations.doctrinalTreatment}`
@@ -223,6 +234,13 @@ const withLanguageAlternates = async (
 
 export type DecisionCitationRow = {
   id: SafeId<"caseLawCitation">;
+  /**
+   * The language version whose text prints the citation: the subject's work
+   * lists each citation once, as the version that holds its canonical rows,
+   * so an outgoing row may come from another version than the one read. Not
+   * part of any response; a passage is looked up in this version's text.
+   */
+  printedBy: SafeId<"caseLawDecision">;
   citationText: string;
   sectionIndex: number | null;
   treatment: CitationTreatment;
@@ -313,7 +331,12 @@ type ScannedRow = {
   polarity: string | null;
   doctrinalTreatment: DoctrineTreatment | null;
   evidenceQuote: string | null;
+  printedBy: SafeId<"caseLawDecision">;
   visible: boolean;
+  /** Not a duplicate of another language version's row. */
+  canonical: boolean;
+  /** 1-based position in the page's raw window. */
+  ordinal: number;
   decision: RankedRelatedDecisionRow | null;
 };
 
@@ -321,6 +344,8 @@ type CreateScannedPageOptions = {
   doctrineAvailable: boolean;
   rows: readonly ScannedRow[];
   limit: number;
+  /** Raw rows the query's window examined at most. */
+  windowSize: number;
   toRelatedDecision: (row: RankedRelatedDecisionRow) => RankedRelatedDecision;
   query: Omit<ListDecisionCitationsQuery, "cursor">;
 };
@@ -329,15 +354,22 @@ type CreateScannedPageOptions = {
  * The page keeps the scan's own boundary: the cursor advances over every
  * examined row, visible or not, so a run of hidden rows can never stall it,
  * and a page may legitimately hold fewer than `limit` items.
+ *
+ * Duplicates of another version's rows are skipped inside a raw window of
+ * `windowSize` rows; when the window fills before the page does, the page
+ * ends at the window's last row (`ordinal === windowSize`), which the query
+ * returns whether or not it is canonical, so the next page resumes after it.
  */
 const createScannedPage = ({
   doctrineAvailable,
   rows,
   limit,
+  windowSize,
   toRelatedDecision,
   query,
 }: CreateScannedPageOptions): Page<DecisionCitationRow> => {
-  const scanned = rows.slice(0, limit);
+  const canonical = rows.filter((row) => row.canonical);
+  const scanned = canonical.slice(0, limit);
   const items: DecisionCitationRow[] = [];
   for (const row of scanned) {
     if (!row.visible) {
@@ -345,6 +377,7 @@ const createScannedPage = ({
     }
     items.push({
       id: row.id,
+      printedBy: row.printedBy,
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
@@ -354,41 +387,37 @@ const createScannedPage = ({
     });
   }
   const lastScanned = scanned.at(-1);
+  const windowEnd = rows.find((row) => row.ordinal === windowSize);
+  let boundary: SafeId<"caseLawCitation"> | null = null;
+  if (canonical.length > limit && lastScanned !== undefined) {
+    boundary = lastScanned.id;
+  } else if (windowEnd !== undefined) {
+    boundary = windowEnd.id;
+  }
 
   return {
     items,
     limit,
     nextCursor:
-      rows.length > limit && lastScanned !== undefined
-        ? encodeCitationPageCursor({ id: lastScanned.id, query })
-        : null,
+      boundary === null
+        ? null
+        : encodeCitationPageCursor({ id: boundary, query }),
   };
 };
 
-type CitationEndpointColumn =
-  | typeof caseLawCitations.citedDecisionId
-  | typeof caseLawCitations.citingDecisionId;
-
+/**
+ * Which end of a row a read anchors on, and which it shows as `relatedId`,
+ * belongs to `decision-work.ts`: every read here anchors on the subject's
+ * work, never on the subject row alone.
+ */
 type DirectionSpec = {
-  /** The column that anchors the scan to the decision being read. */
-  anchor: CitationEndpointColumn;
-  /** The column that names the decision at the far end. */
-  related: CitationEndpointColumn;
   /** Whether an unresolved row (no far end) still belongs to the reader. */
   keepsUnresolved: boolean;
 };
 
 const DIRECTION_SPECS = {
-  incoming: {
-    anchor: caseLawCitations.citedDecisionId,
-    related: caseLawCitations.citingDecisionId,
-    keepsUnresolved: false,
-  },
-  outgoing: {
-    anchor: caseLawCitations.citingDecisionId,
-    related: caseLawCitations.citedDecisionId,
-    keepsUnresolved: true,
-  },
+  incoming: { keepsUnresolved: false },
+  outgoing: { keepsUnresolved: true },
 } as const satisfies Record<CitationDirection, DirectionSpec>;
 
 /**
@@ -451,10 +480,11 @@ type ListDecisionCitationsOptions = {
 };
 
 export const listDecisionCitationsHandler = async ({
-  subject: { id: decisionId, countries, tx },
+  subject,
   query,
   limit = LIMITS.caseLawDecisionCitationPageSize,
 }: ListDecisionCitationsOptions) => {
+  const { countries, tx } = subject;
   const { cursor: _cursor, ...cursorQuery } = query;
   const cursorId = decodeCitationCursor(query.cursor, cursorQuery);
   if (cursorId === null) {
@@ -467,10 +497,11 @@ export const listDecisionCitationsHandler = async ({
   if (query.doctrine !== undefined && !doctrineAvailable) {
     return status(422, { message: "Doctrine filtering is unavailable" });
   }
+  const work = await decisionWorkOf(subject);
   const rows = await decisionCitationPageQuery({
     doctrineAvailable,
     cursorId,
-    decisionId,
+    work,
     direction: query.direction,
     ...(query.doctrine === undefined ? {} : { doctrine: query.doctrine }),
     ...(query.polarity === undefined ? {} : { polarity: query.polarity }),
@@ -480,7 +511,7 @@ export const listDecisionCitationsHandler = async ({
   });
   const toRelatedDecision = await withLanguageAlternates(
     tx,
-    rows.map((row) => (row.visible ? row.decision : null)),
+    rows.map((row) => (row.visible && row.canonical ? row.decision : null)),
   );
 
   return {
@@ -488,6 +519,11 @@ export const listDecisionCitationsHandler = async ({
       doctrineAvailable,
       rows,
       limit: pageSize,
+      windowSize: citationPageWindowSize({
+        direction: query.direction,
+        limit: pageSize,
+        work,
+      }),
       toRelatedDecision,
       query: cursorQuery,
     }),
@@ -501,7 +537,8 @@ type DecisionCitationPageQueryOptions = {
   /** Whether this reader holds the doctrine grants. */
   doctrineAvailable: boolean;
   cursorId: SafeId<"caseLawCitation"> | undefined;
-  decisionId: SafeId<"caseLawDecision">;
+  /** The subject's work: the page lists the citations of every version. */
+  work: DecisionWork;
   direction: CitationDirection;
   doctrine?: Exclude<DoctrineTreatment, "not_stated">;
   polarity?: CitationTreatment;
@@ -510,10 +547,29 @@ type DecisionCitationPageQueryOptions = {
   tx: CaseLawPublicReadTransaction;
 };
 
+/**
+ * Raw rows one page examines at most. A row the canonical rule drops belongs
+ * to a citing judgment with at most the work ceiling of versions, so this
+ * window holds a full page unless the rows of other versions crowd it, and a
+ * page that must skip more ends at the window instead of reading on.
+ */
+export const citationPageWindowSize = ({
+  direction,
+  limit,
+  work,
+}: {
+  direction: CitationDirection;
+  limit: number;
+  work: DecisionWork;
+}): number =>
+  canonicalRuleApplies(direction, work)
+    ? (limit + 1) * DECISION_WORK_MANIFESTATIONS_MAX
+    : limit + 1;
+
 export const decisionCitationPageQuery = ({
   doctrineAvailable,
   cursorId,
-  decisionId,
+  work,
   direction,
   doctrine,
   polarity,
@@ -535,27 +591,35 @@ export const decisionCitationPageQuery = ({
     polarityFilter = eq(caseLawCitations.polarity, polarity);
   }
 
-  const candidates = tx
-    .select({
-      id: caseLawCitations.id,
-      citationText: caseLawCitations.citationText,
-      relatedId: spec.related,
-      sectionIndex: caseLawCitations.sectionIndex,
-      polarity: caseLawCitations.polarity,
+  const windowSize = citationPageWindowSize({ direction, limit, work });
+  const window = workCitationStream({
+    tx,
+    work,
+    direction,
+    fields: {
       doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
       evidenceQuote: doctrineEvidenceQuoteField(doctrineAvailable),
+    },
+    where: and(precedentOnly, doctrineFilter, polarityFilter),
+    after: cursorId,
+    limit: windowSize,
+  });
+  const candidates = tx
+    .select({
+      id: window.id,
+      citationText: window.citationText,
+      relatedId: window.relatedId,
+      sectionIndex: window.sectionIndex,
+      polarity: window.polarity,
+      doctrinalTreatment: window.doctrinalTreatment,
+      evidenceQuote: window.evidenceQuote,
+      printedBy: window.citingDecisionId,
+      ordinal: window.ordinal,
+      canonical: window.canonical,
     })
-    .from(caseLawCitations)
-    .where(
-      and(
-        sql`${spec.anchor} = ${decisionId}`,
-        precedentOnly,
-        doctrineFilter,
-        polarityFilter,
-        cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
-      ),
-    )
-    .orderBy(asc(caseLawCitations.id))
+    .from(window)
+    .where(sql`(${window.ordinal} = ${windowSize} OR ${window.canonical})`)
+    .orderBy(asc(window.id))
     .limit(limit + 1)
     .as("citation_graph_candidates");
   const relatedDecision = relatedDecisionLookup(tx, candidates.relatedId);
@@ -567,6 +631,9 @@ export const decisionCitationPageQuery = ({
       polarity: candidates.polarity,
       doctrinalTreatment: candidates.doctrinalTreatment,
       evidenceQuote: candidates.evidenceQuote,
+      printedBy: candidates.printedBy,
+      ordinal: candidates.ordinal,
+      canonical: candidates.canonical,
       visible: visibleFor({
         countries,
         keepsUnresolved: spec.keepsUnresolved,
@@ -740,16 +807,23 @@ export const exactDecisionCitationSummaryQuery = ({
  * incoming ones by year.
  *
  * Counts only what the list would show, so the rollup and the rows agree:
- * a citation whose far end may not be redistributed is absent from both.
- * Exact projections serve totals and the timeline after per-decision backfill.
- * Pending projections keep the bounded edge scan and advertise lower bounds.
+ * a citation whose far end may not be redistributed is absent from both, and
+ * so is a language version's copy of a citation another version holds.
+ * Exact projections serve totals and the timeline after per-decision backfill,
+ * for a decision that is its work's only version: the projection counts one
+ * row's edges and cannot tell several versions' copies of one citation apart.
+ * Every other read keeps the bounded edge scan over the work and advertises
+ * lower bounds.
  */
 export const summarizeDecisionCitationsHandler = async ({
-  subject: { id: decisionId, countries, tx },
+  subject,
   currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
-  const canReadStats = await canReadDecisionCitationStats(tx);
-  if (!canReadStats) {
+  const { id: decisionId, countries, tx } = subject;
+  const work = await decisionWorkOf(subject);
+  const projectable = isSingleManifestationWork(work);
+  const canReadStats = projectable && (await canReadDecisionCitationStats(tx));
+  if (projectable && !canReadStats) {
     logger.warn("case_law.citation_stats.bounded_fallback", {
       reason: "reader_grant_pending",
     });
@@ -775,7 +849,7 @@ export const summarizeDecisionCitationsHandler = async ({
       })
     : await decisionCitationSummaryQuery({
         currentYear,
-        decisionId,
+        work,
         countries,
         tx,
       }).summary;
@@ -825,48 +899,44 @@ export type DecisionCitationSummary = Awaited<
   ReturnType<typeof summarizeDecisionCitationsHandler>
 >;
 
+type DecisionCitationScanOptions = {
+  currentYear: number;
+  /** The subject's work: the scan reads the edges of every version. */
+  work: DecisionWork;
+  countries: readonly string[];
+  tx: CaseLawPublicReadTransaction;
+  doctrineAvailable?: boolean;
+};
+
 /**
  * The bounded summary and top-citer ranking share the raw incoming window.
  * Ranking precision is independent of the summary's projection precision:
- * non-precedent and hidden edges still occupy places in this window.
+ * non-precedent and hidden edges, and other versions' copies of a citation,
+ * still occupy places in this window.
  */
 export const decisionCitationSummaryQuery = ({
   doctrineAvailable = false,
   currentYear,
-  decisionId,
+  work,
   countries,
   tx,
-}: DecisionCitationSummaryQueryOptions) => {
+}: DecisionCitationScanOptions) => {
   const candidatesFor = (direction: CitationDirection) => {
-    const spec = DIRECTION_SPECS[direction];
-    const candidates = tx
-      .select({
-        id: caseLawCitations.id,
-        relatedId: spec.related,
-        polarity: caseLawCitations.polarity,
+    const window = workCitationStream({
+      tx,
+      work,
+      direction,
+      fields: {
         doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
-        kind: caseLawCitations.kind,
-      })
-      .from(caseLawCitations)
-      .where(eq(spec.anchor, decisionId))
-      .orderBy(asc(caseLawCitations.id))
-      .limit(CITATION_SUMMARY_SCAN_LIMIT + 1)
-      .as(`${direction}_summary_candidates`);
-    return tx
-      .select({
-        relatedId: candidates.relatedId,
-        polarity: candidates.polarity,
-        doctrinalTreatment: candidates.doctrinalTreatment,
-        kind: candidates.kind,
-        ordinal: sql<number>`row_number() OVER (ORDER BY ${candidates.id})`.as(
-          "ordinal",
-        ),
-      })
-      .from(candidates)
-      .as(`${direction}_summary_numbered`);
+        evidenceQuote: NO_EVIDENCE_QUOTE,
+      },
+      limit: CITATION_SUMMARY_SCAN_LIMIT + 1,
+    });
+    return { window, canonical: window.canonical };
   };
 
-  const incomingCandidates = candidatesFor("incoming");
+  const { window: incomingCandidates, canonical: incomingCanonical } =
+    candidatesFor("incoming");
   const relatedDecision = relatedDecisionLookup(
     tx,
     incomingCandidates.relatedId,
@@ -891,7 +961,7 @@ export const decisionCitationSummaryQuery = ({
       polarity: incomingCandidates.polarity,
       doctrinalTreatment: incomingCandidates.doctrinalTreatment,
       count:
-        sql<number>`count(*) FILTER (WHERE ${incomingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(incomingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${incomingVisible})::int`.as(
+        sql<number>`count(*) FILTER (WHERE ${incomingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(incomingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${incomingVisible} AND ${incomingCanonical})::int`.as(
           "count",
         ),
       capped:
@@ -910,7 +980,8 @@ export const decisionCitationSummaryQuery = ({
       incomingCandidates.doctrinalTreatment,
     );
 
-  const outgoingCandidates = candidatesFor("outgoing");
+  const { window: outgoingCandidates, canonical: outgoingCanonical } =
+    candidatesFor("outgoing");
   const outgoingDecision = relatedDecisionLookup(
     tx,
     outgoingCandidates.relatedId,
@@ -929,7 +1000,7 @@ export const decisionCitationSummaryQuery = ({
       polarity: outgoingCandidates.polarity,
       doctrinalTreatment: outgoingCandidates.doctrinalTreatment,
       count:
-        sql<number>`count(*) FILTER (WHERE ${outgoingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(outgoingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${outgoingVisible})::int`.as(
+        sql<number>`count(*) FILTER (WHERE ${outgoingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(outgoingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${outgoingVisible} AND ${outgoingCanonical})::int`.as(
           "count",
         ),
       capped:
@@ -949,10 +1020,11 @@ export const decisionCitationSummaryQuery = ({
    * The few decisions citing this one a reader should see first, one row per
    * decision however often it cites the case: the most authoritative by the
    * materialized citation authority search ranks by, the most recent among
-   * equals. Only citations the counts above count take part.
+   * equals. Only citations the counts above count take part, so a citing
+   * judgment appears once, as the version that holds its canonical rows.
    */
   const topCiting = (limit: number) => {
-    const candidates = candidatesFor("incoming");
+    const { window: candidates, canonical } = candidatesFor("incoming");
     const citingDecision = relatedDecisionLookup(tx, candidates.relatedId);
     const publishedBy = eq(relatedSource.id, citingDecision.sourceId);
     const columns = {
@@ -986,6 +1058,7 @@ export const decisionCitationSummaryQuery = ({
             related: candidates.relatedId,
             country: citingDecision.country,
           }),
+          canonical,
         ),
       )
       .groupBy(...Object.values(columns))
@@ -1026,14 +1099,15 @@ export type DecisionDoctrineSummary =
     };
 
 export const summarizeDecisionDoctrineHandler = async ({
-  subject: { id: decisionId, countries, tx },
+  subject,
 }: SummarizeDecisionCitationsOptions): Promise<DecisionDoctrineSummary> => {
+  const { countries, tx } = subject;
   if (!(await canReadCitationDoctrine(tx))) {
     return { status: "unavailable" };
   }
   const rows = await decisionCitationSummaryQuery({
     currentYear: 0,
-    decisionId,
+    work: await decisionWorkOf(subject),
     countries,
     tx,
     doctrineAvailable: true,
@@ -1104,13 +1178,14 @@ export type TopCitingDecisionsResult = { items: RankedRelatedDecision[] } & (
  * decision cited mostly one way still names `limit` citing decisions.
  */
 export const listTopCitingDecisionsHandler = async ({
-  subject: { id: decisionId, countries, tx },
+  subject,
   summary,
   limit,
 }: TopCitingDecisionsOptions): Promise<TopCitingDecisionsResult> => {
+  const { countries, tx } = subject;
   const query = decisionCitationSummaryQuery({
     currentYear: TOP_CITING_TIMELINE_YEAR,
-    decisionId,
+    work: await decisionWorkOf(subject),
     countries,
     tx,
   });
@@ -1175,11 +1250,11 @@ type ListLeadingCitationsOptions = {
  * module and is rendered inline rather than bound: the expression appears
  * twice in one statement and the planner must see the same text.
  */
-const treatmentSql = sql<string>`CASE
-  WHEN ${caseLawCitations.polarity} IS NULL
-    OR ${caseLawCitations.polarity} = ${sql.raw(`'${POLARITY.UNKNOWN}'`)}
+const treatmentSqlFor = (polarity: SQLWrapper) => sql<string>`CASE
+  WHEN ${polarity} IS NULL
+    OR ${polarity} = ${sql.raw(`'${POLARITY.UNKNOWN}'`)}
   THEN 'unclassified'
-  ELSE ${caseLawCitations.polarity}
+  ELSE ${polarity}
 END`;
 
 /**
@@ -1188,44 +1263,64 @@ END`;
  * decision even where it cites the case several times. Ranked by the far
  * decision's materialized citation authority, which search ranks by too,
  * so the two surfaces agree on what "leading" means.
+ *
+ * A decision that is its work's only version ranks every edge it holds. A
+ * work of several versions holds each citation once per version that prints
+ * it, so its leaders are ranked within the same bounded window the summary
+ * counts; a far decision appears once, as the version holding the canonical
+ * rows.
  */
 export const listLeadingCitationsHandler = async ({
-  subject: { id: decisionId, countries, tx },
+  subject,
   query,
 }: ListLeadingCitationsOptions): Promise<{ items: LeadingCitationRow[] }> => {
-  const spec = DIRECTION_SPECS[query.direction];
-  const relatedDecision = relatedDecisionLookup(tx, spec.related);
+  const { countries, tx } = subject;
+  const work = await decisionWorkOf(subject);
+  const window = workCitationStream({
+    tx,
+    work,
+    direction: query.direction,
+    fields: {
+      doctrinalTreatment: doctrinalTreatmentField(false),
+      evidenceQuote: NO_EVIDENCE_QUOTE,
+    },
+    where: precedentOnly,
+    limit: isSingleManifestationWork(work)
+      ? undefined
+      : CITATION_SUMMARY_SCAN_LIMIT,
+  });
+  const relatedDecision = relatedDecisionLookup(tx, window.relatedId);
+  const treatment = treatmentSqlFor(window.polarity);
 
   // One row per (treatment, far decision): its first citation in the text.
   const mentions = tx
     .select({
-      id: caseLawCitations.id,
-      citationText: caseLawCitations.citationText,
-      sectionIndex: caseLawCitations.sectionIndex,
-      polarity: caseLawCitations.polarity,
-      treatment: treatmentSql.as("treatment"),
-      relatedId: sql<string>`${spec.related}`.as("related_id"),
+      id: window.id,
+      citationText: window.citationText,
+      sectionIndex: window.sectionIndex,
+      polarity: window.polarity,
+      treatment: treatment.as("treatment"),
+      relatedId: sql<string>`${window.relatedId}`.as("leading_related_id"),
       authority: relatedDecision.citationAuthority,
       mentionRank: sql<number>`row_number() OVER (
-        PARTITION BY ${treatmentSql}, ${spec.related}
-        ORDER BY ${caseLawCitations.id}
+        PARTITION BY ${treatment}, ${window.relatedId}
+        ORDER BY ${window.id}
       )`.as("mention_rank"),
     })
-    .from(caseLawCitations)
+    .from(window)
     .innerJoinLateral(relatedDecision, sql`true`)
     .innerJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .where(
       and(
-        eq(spec.anchor, decisionId),
-        precedentOnly,
         // Before ranking, so a hidden decision cannot take a leader's place.
         // Only a held decision can lead, whatever the direction keeps.
         visibleFor({
           countries,
           keepsUnresolved: false,
-          related: spec.related,
+          related: window.relatedId,
           country: relatedDecision.country,
         }),
+        window.canonical,
       ),
     )
     .as("leading_mentions");

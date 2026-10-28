@@ -61,7 +61,7 @@ export type CitationPassage = {
 
 export type CitationWithPassage = Omit<
   DecisionCitationRow,
-  "citationText" | "evidenceQuote"
+  "citationText" | "evidenceQuote" | "printedBy"
 > & {
   citationText: string | null;
   textWithheldReason: DecisionTextWithheldReason | null;
@@ -390,20 +390,15 @@ export const readGatedDecisionCitations = async ({
         }
         return panic(`Unexpected citation list status ${String(statusCode)}`);
       }
-      // Whose text holds the citing block: this decision for its own outgoing
-      // citations, the citing decision for every incoming one.
-      const citingIds =
-        direction === "cites"
-          ? [decisionId]
-          : [
-              ...new Map(
-                page.items.flatMap((item) =>
-                  item.decision === null
-                    ? []
-                    : [[String(item.decision.id), item.decision.id] as const],
-                ),
-              ).values(),
-            ];
+      // Whose text holds the citing block: the version of this decision that
+      // prints an outgoing citation, the citing decision for an incoming one.
+      const citingIds = [
+        ...new Map(
+          page.items.map(
+            (item) => [String(item.printedBy), item.printedBy] as const,
+          ),
+        ).values(),
+      ];
       return {
         page,
         sources: await readPassageSourcePointers(subject.tx, citingIds),
@@ -433,14 +428,13 @@ export const readGatedDecisionCitations = async ({
     ),
   );
   const items = gated.page.items.map((item): CitationWithPassage => {
-    const citingId =
-      direction === "cites" ? String(decisionId) : String(item.decision?.id);
+    const citingId = String(item.printedBy);
     const text = textByDecision.get(citingId);
     const textWithheldReason = withholdingByDecision.get(citingId);
     if (textWithheldReason === undefined) {
       return panic(`No source disposition for citing decision ${citingId}`);
     }
-    const { evidenceQuote, ...citation } = item;
+    const { evidenceQuote, printedBy: _printedBy, ...citation } = item;
     return {
       ...citation,
       citationText: textWithheldReason === null ? item.citationText : null,

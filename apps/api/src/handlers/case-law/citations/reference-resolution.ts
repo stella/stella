@@ -37,6 +37,7 @@ import {
 import type { CitationResolutionRule } from "@/api/handlers/case-law/citation-resolution-status";
 import type { DecisionReferenceHints } from "@/api/handlers/case-law/citations/decision-references";
 import type { SafeId } from "@/api/lib/branded-types";
+import { languageGroupWorkKey } from "@/api/lib/case-law/decision-work";
 
 /** A decision holding the reference's identity, as stored. */
 export type ReferenceHolder = {
@@ -112,9 +113,7 @@ const byCodeUnit = (a: string, b: string): number => {
 };
 
 const workKey = (holder: ReferenceHolder): string =>
-  holder.languageGroupKey === null
-    ? `decision:${holder.decisionId}`
-    : `group:${holder.languageGroupKey}`;
+  languageGroupWorkKey(holder);
 
 /** Ascending, with the citing language first. */
 const compareManifestations =

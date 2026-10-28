@@ -363,10 +363,28 @@
   "case-law.citation-page-incoming": {
     "scans": [
       {
-        "position": "root/0/0/0/0/0",
+        "position": "root/0/0/0/0/0/0/0/0/0",
         "relation": "case_law_citations",
         "nodeType": "Bitmap Heap Scan",
         "index": "case_law_citations_precedent_cited_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
       },
       {
         "position": "root/0/0/1/0",
@@ -379,10 +397,28 @@
   "case-law.citation-page-incoming-doctrine": {
     "scans": [
       {
-        "position": "root/0/0/0/1/0",
+        "position": "root/0/0/0/0/0/0/0/1/0",
         "relation": "case_law_citations",
         "nodeType": "Index Scan",
         "index": "case_law_citations_doctrine_cited_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
       },
       {
         "position": "root/0/0/1/0",
@@ -395,7 +431,7 @@
   "case-law.citation-page-outgoing": {
     "scans": [
       {
-        "position": "root/0/0/0/0",
+        "position": "root/0/0/0/0/0/0/0/0",
         "relation": "case_law_citations",
         "nodeType": "Index Scan",
         "index": "case_law_citations_citing_page_idx"
@@ -411,10 +447,28 @@
   "case-law.citation-summary": {
     "scans": [
       {
-        "position": "root/0/0/0/0/0/0/0/0",
+        "position": "root/0/0/0/0/0/0/0/0/0",
         "relation": "case_law_citations",
         "nodeType": "Index Scan",
         "index": "case_law_citations_cited_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
       },
       {
         "position": "root/0/0/0/0/0/1/0",
@@ -423,7 +477,7 @@
         "index": "case_law_decisions_search_candidate_published_idx"
       },
       {
-        "position": "root/0/1/0/0/0/0/0/0",
+        "position": "root/0/1/0/0/0/0/0/0/0",
         "relation": "case_law_citations",
         "nodeType": "Index Scan",
         "index": "case_law_citations_citing_page_idx"
@@ -465,9 +519,223 @@
         "index": "case_law_citations_cited_page_idx"
       },
       {
+        "position": "root/0/0/0/1/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/1/0/0/1/0/0/0/1/0/0/0/0/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/1/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
         "position": "root/0/0/0/1/1/0/0",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      }
+    ]
+  },
+  "case-law.decision-work": {
+    "scans": [
+      {
+        "position": "root/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      }
+    ]
+  },
+  "case-law.citation-page-incoming-work": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/0/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_precedent_cited_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/1/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_precedent_cited_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/2/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_precedent_cited_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/1/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      }
+    ]
+  },
+  "case-law.citation-page-outgoing-work": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/0/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/1/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/2/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0/0/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/1/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      }
+    ]
+  },
+  "case-law.citation-summary-work": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/0/0/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_cited_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/0/1/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_cited_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/0/0/0/0/2/0",
+        "relation": "case_law_citations",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_citations_cited_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/1/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/0/0/0/0/0/0/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/0/0/0/0/0/1/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/0/0/0/0/0/2/0",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/1/0/0/0/0/0/1/0/0/0/0/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/1/0/0/0/0/0/1/0/0/0/0/0/1/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/0/1/1",
+        "relation": "case_law_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_citations_citing_page_idx"
+      },
+      {
+        "position": "root/0/1/0/0/0/1/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
         "index": "case_law_decisions_search_candidate_published_idx"
       }
     ]

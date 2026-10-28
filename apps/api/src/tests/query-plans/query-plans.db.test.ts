@@ -311,6 +311,31 @@ test("outstanding-document probe is an index-only LIMIT 1 lookup", async () => {
   expect(scans[0]?.limitRows).toBeLessThanOrEqual(1);
 });
 
+/**
+ * A work-anchored citation read scans the citation table two ways: its anchor
+ * ranges, keyed by a version id the statement binds, and the canonical rule's
+ * rival probes, keyed by a citing version the row names.
+ */
+const citationScansOf = (scans: readonly ScanOccurrence[]) => {
+  const citations = scans.filter(
+    ({ relation }) => relation === "case_law_citations",
+  );
+  const isAnchor = ({ indexCond }: ScanOccurrence) =>
+    indexCond?.includes("'::uuid") ?? false;
+  return {
+    anchors: citations.filter(isAnchor),
+    probes: citations.filter((scan) => !isAnchor(scan)),
+  };
+};
+
+/** Rivals are found through a citing version's own rows, never the cited side. */
+const expectCitingSideProbes = (probes: readonly ScanOccurrence[]) => {
+  for (const probe of probes) {
+    expect(probe.index).toBe("case_law_citations_citing_page_idx");
+    expect(probe.indexCond ?? "").toContain("citing_decision_id");
+  }
+};
+
 test("citation summary caps both indexed citation scans before joining decisions", async () => {
   const entry = QUERY_PLAN_REGISTRY.find(
     (candidate) => candidate.id === "case-law.citation-summary",
@@ -319,9 +344,8 @@ test("citation summary caps both indexed citation scans before joining decisions
     panic("Citation summary has no query-plan entry");
   }
   const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
-  const citations = scans.filter(
-    ({ relation }) => relation === "case_law_citations",
-  );
+  const { anchors: citations, probes } = citationScansOf(scans);
+  expectCitingSideProbes(probes);
   expect(citations).toHaveLength(2);
   expect(
     citations.map(({ index }) => index ?? "").toSorted(compareCodeUnit),
@@ -343,9 +367,8 @@ test("top citing decisions cap the indexed citation scan before joining decision
     panic("Top citing decisions have no query-plan entry");
   }
   const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
-  const citations = scans.filter(
-    ({ relation }) => relation === "case_law_citations",
-  );
+  const { anchors: citations, probes } = citationScansOf(scans);
+  expectCitingSideProbes(probes);
   expect(citations).toHaveLength(1);
   expect(citations.map(({ index }) => index)).toEqual([
     "case_law_citations_cited_page_idx",
