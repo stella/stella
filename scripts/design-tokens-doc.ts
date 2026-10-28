@@ -1,6 +1,7 @@
 // Renders DESIGN.md's semantic token table and font stack from
-// packages/ui/src/styles/theme.css, the design system's source of truth, so
-// the documented values cannot drift from what ships.
+// packages/ui/src/styles/theme.css, the design system's source of truth, and
+// its brand colour table from @stll/brand's palette, so the documented values
+// cannot drift from what ships.
 //
 //   bun scripts/design-tokens-doc.ts --check   fail when DESIGN.md is stale
 //   bun scripts/design-tokens-doc.ts --write   regenerate the marked sections
@@ -9,6 +10,7 @@ import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { BRAND_PALETTE } from "../packages/brand/src/palette";
 import { formattedLikeRepository } from "./generated-artifacts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -18,6 +20,11 @@ const DOC_PATH = "DESIGN.md";
 const TOKEN_MARKERS = {
   begin: "<!-- BEGIN GENERATED DESIGN TOKENS -->",
   end: "<!-- END GENERATED DESIGN TOKENS -->",
+} as const;
+
+const BRAND_MARKERS = {
+  begin: "<!-- BEGIN GENERATED BRAND COLOURS -->",
+  end: "<!-- END GENERATED BRAND COLOURS -->",
 } as const;
 
 const FONT_MARKERS = {
@@ -139,6 +146,22 @@ const renderTokens = (css: string): string => {
   ].join("\n");
 };
 
+const renderBrandColours = (): string =>
+  [
+    BRAND_MARKERS.begin,
+    "",
+    ...renderTable([
+      ["Name", "Hex", "Usage"],
+      ...Object.values(BRAND_PALETTE).map(({ label, hex, usage }) => [
+        label,
+        `\`${hex}\``,
+        usage,
+      ]),
+    ]),
+    "",
+    BRAND_MARKERS.end,
+  ].join("\n");
+
 const FONT_SANS = /--font-sans:\s*([^;\s][^;]*);/u;
 
 const renderFontStack = (css: string): string => {
@@ -173,7 +196,11 @@ const replaceSection = (
 
 const renderDesignDoc = (doc: string, css: string): string =>
   replaceSection(
-    replaceSection(doc, TOKEN_MARKERS, renderTokens(css)),
+    replaceSection(
+      replaceSection(doc, TOKEN_MARKERS, renderTokens(css)),
+      BRAND_MARKERS,
+      renderBrandColours(),
+    ),
     FONT_MARKERS,
     renderFontStack(css),
   );
@@ -200,7 +227,7 @@ const main = async (argv: readonly string[]): Promise<number> => {
   }
   if (committed !== rendered) {
     console.error(
-      `${DOC_PATH} does not match ${THEME_PATH}; regenerate with \`bun scripts/design-tokens-doc.ts --write\``,
+      `${DOC_PATH} does not match ${THEME_PATH} and @stll/brand; regenerate with \`bun scripts/design-tokens-doc.ts --write\``,
     );
     return 1;
   }

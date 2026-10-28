@@ -5,6 +5,18 @@
   "reportNeedlessDisables": true,
   "reportUnscopedDisables": true,
   "rules": {
+    "color-named": [
+      "never",
+      {
+        "message": "Named colour: use a theme token (`var(--token)`, `var(--color-white)`, `var(--color-black)`). Raw colours live only in the theme stylesheets (DESIGN.md, Colour Discipline)."
+      }
+    ],
+    "color-no-hex": [
+      true,
+      {
+        "message": "Raw hex colour: use a theme token (`var(--token)`). Raw colours live only in the theme stylesheets (DESIGN.md, Colour Discipline)."
+      }
+    ],
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": [
       true,
@@ -22,6 +34,23 @@
       }
     ],
     "declaration-property-value-no-unknown": true,
+    "function-disallowed-list": [
+      [
+        "rgb",
+        "rgba",
+        "hsl",
+        "hsla",
+        "hwb",
+        "lab",
+        "lch",
+        "oklab",
+        "oklch",
+        "color"
+      ],
+      {
+        "message": "Raw colour function: use a theme token, or `color-mix()` over tokens. Raw colours live only in the theme stylesheets (DESIGN.md, Colour Discipline)."
+      }
+    ],
     "property-no-unknown": true,
     "rule-selector-property-disallowed-list": [
       {
@@ -46,5 +75,20 @@
         "message": "conventions-ux (Viewport & Responsive): `vh` resolves against the largest viewport and ignores mobile browser chrome. Use `dvh`, or `svh` for a length that must not move while the toolbar collapses."
       }
     ]
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "packages/ui/src/styles/theme.css",
+        "apps/landing/src/styles/global.css",
+        "apps/landing/src/styles/docs.css",
+        "apps/extension/src/entrypoints/popup/theme.css"
+      ],
+      "rules": {
+        "color-named": null,
+        "color-no-hex": null,
+        "function-disallowed-list": null
+      }
+    }
+  ]
 }

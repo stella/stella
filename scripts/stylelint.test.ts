@@ -1,13 +1,49 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import stylelint from "stylelint";
 
 const configFile = fileURLToPath(
   new URL("../.stylelintrc.json", import.meta.url),
 );
+const repositoryRoot = path.dirname(configFile);
 
-const lintCss = async (code: string) =>
-  await stylelint.lint({ code, codeFilename: "guard.css", configFile });
+const lintCss = async (code: string, codeFilename = "guard.css") =>
+  await stylelint.lint({
+    code,
+    codeFilename: path.join(repositoryRoot, codeFilename),
+    configFile,
+  });
+
+// The only stylesheets that may write a raw colour, each with its reason. Every
+// other stylesheet takes colour from their tokens with `var(--token)`.
+const THEME_STYLESHEETS = [
+  {
+    file: "packages/ui/src/styles/theme.css",
+    reason: "The design system's theme: every palette's semantic tokens.",
+  },
+  {
+    file: "apps/landing/src/styles/global.css",
+    reason:
+      "The marketing site's own tokens; it does not load the app theme, whose base layer would restyle the site.",
+  },
+  {
+    file: "apps/landing/src/styles/docs.css",
+    reason: "Starlight's `--sl-*` tokens, mapped onto the landing palette.",
+  },
+  {
+    file: "apps/extension/src/entrypoints/popup/theme.css",
+    reason:
+      "The browser extension popup's tokens; the popup loads no app stylesheet.",
+  },
+] as const;
+
+const COLOUR_RULES = [
+  "color-named",
+  "color-no-hex",
+  "function-disallowed-list",
+] as const;
 
 describe("CSS correctness guard", () => {
   test.each([
@@ -59,6 +95,20 @@ describe("CSS correctness guard", () => {
     ],
     // conventions-ux: dynamic viewport units, never the largest viewport.
     ["unit-disallowed-list", ".sample { max-height: calc(100vh - 3rem); }"],
+    // DESIGN.md, Colour Discipline: colour is a theme token.
+    ["color-no-hex", ".sample { color: #59a1d4; }"],
+    ["color-no-hex", ".sample { color: var(--ink, #fff); }"],
+    ["color-named", ".sample { border-color: white; }"],
+    [
+      "color-named",
+      ".sample { background: color-mix(in srgb, black 8%, transparent); }",
+    ],
+    ["function-disallowed-list", ".sample { box-shadow: 0 1px rgb(0 0 0); }"],
+    ["function-disallowed-list", ".sample { color: oklch(0.7 0.1 240); }"],
+    [
+      "function-disallowed-list",
+      ".sample { color: rgb(from var(--info) r g b / 0.12); }",
+    ],
     [
       "rule-selector-property-disallowed-list",
       "@keyframes shift { 0%, 40% { inset-inline-start: 0; } 100% { inset-inline-start: 1rem; } }",
@@ -74,13 +124,14 @@ describe("CSS correctness guard", () => {
   test("accepts Tailwind v4 directives, modern CSS, and deliberate fallbacks", async () => {
     const result = await lintCss(`
       @import "tailwindcss";
-      @theme { --color-brand: oklch(0.7 0.1 250); }
+      @theme { --color-surface: var(--background); }
       @custom-variant dark (&:where(.dark, .dark *));
       @utility content-auto { content-visibility: auto; }
       .sample {
         @apply flex;
-        color: red;
+        color: var(--color-brand);
         color: color-mix(in oklch, var(--color-brand), transparent 20%);
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--color-black) 8%, transparent);
         padding-inline: 1rem;
         max-height: calc(100dvh - 3rem);
         min-height: 100svh;
@@ -105,6 +156,29 @@ describe("CSS correctness guard", () => {
     expect(result.errored).toBe(false);
     expect(result.results.flatMap((file) => file.warnings)).toEqual([]);
   });
+
+  test("the colour rules are off in exactly the theme stylesheets", () => {
+    const config: unknown = JSON.parse(readFileSync(configFile, "utf-8"));
+    expect(config).toMatchObject({
+      overrides: [
+        {
+          files: THEME_STYLESHEETS.map(({ file }) => file),
+          rules: Object.fromEntries(COLOUR_RULES.map((rule) => [rule, null])),
+        },
+      ],
+    });
+  });
+
+  test.each(THEME_STYLESHEETS)(
+    "$file may define raw colours: $reason",
+    async ({ file }) => {
+      const result = await lintCss(
+        ":root { --ink: #171717; --scrim: rgb(0 0 0 / 0.4); --paper: white; }",
+        file,
+      );
+      expect(result.results.flatMap((entry) => entry.warnings)).toEqual([]);
+    },
+  );
 
   test("does not silently retain stale suppressions", async () => {
     const result = await lintCss(`

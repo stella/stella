@@ -346,6 +346,19 @@ export const SHADCN_LINT_SETTINGS = {
   note: "Design rules: DESIGN.md, Component Conventions.",
 } as const;
 
+/**
+ * Third-party brand artwork (file-type, sign-in provider, AI provider, and
+ * chat-client logos and window mockups), drawn in the owner's colours rather
+ * than the theme's. Both the SVG attribute check below and
+ * `no-raw-color-literals` exempt exactly these files.
+ */
+export const THIRD_PARTY_ARTWORK_FILES = [
+  "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
+  "apps/web/src/components/ai-provider-icons.tsx",
+  "apps/web/src/components/auth/sign-in-panel.tsx",
+  "apps/web/src/components/document-icon.tsx",
+] as const;
+
 export const SHADCN_LINT_POLICY_OVERRIDES = [
   {
     // Plugin fixtures are inputs for the local rules' tests, written to
@@ -374,14 +387,8 @@ export const SHADCN_LINT_POLICY_OVERRIDES = [
     rules: { "shadcn/no-arbitrary-values": "off" },
   },
   {
-    // Third-party brand artwork (file-type, sign-in provider, AI provider,
-    // and chat-client logos) is drawn in the owner's colours, not the theme's.
-    files: [
-      "apps/landing/src/components/react/previews/CliMcpPreview.tsx",
-      "apps/web/src/components/ai-provider-icons.tsx",
-      "apps/web/src/components/auth/sign-in-panel.tsx",
-      "apps/web/src/components/document-icon.tsx",
-    ],
+    // Third-party brand artwork is drawn in the owner's colours, not the theme's.
+    files: [...THIRD_PARTY_ARTWORK_FILES],
     rules: { "shadcn/no-raw-colors": "off" },
   },
 ] as const satisfies readonly OxlintOverride[];

@@ -363,6 +363,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/api-contract/src/*",
     "packages/auth-model/src/contract.ts",
     "packages/boe/src/*",
+    "packages/brand/src/*",
     "packages/business-registries/src/default-formats.ts",
     "packages/business-registries/src/format-clauses.ts",
     "packages/business-registries/src/ares/*",
@@ -1529,12 +1530,18 @@ const GENERATOR_DECLARATIONS = [
       },
       {
         path: "DESIGN.md",
+        begin: "<!-- BEGIN GENERATED BRAND COLOURS -->",
+        end: "<!-- END GENERATED BRAND COLOURS -->",
+      },
+      {
+        path: "DESIGN.md",
         begin: "<!-- BEGIN GENERATED FONT STACK -->",
         end: "<!-- END GENERATED FONT STACK -->",
       },
     ],
     inputs: [
       "packages/ui/src/styles/theme.css",
+      "packages/brand/src/palette.ts",
       "scripts/design-tokens-doc.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
