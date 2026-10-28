@@ -4,7 +4,9 @@ import baselineCounts from "./no-render-phase-update-baseline.json" with { type:
 import {
   getPropertyName,
   isIdentifier,
+  isIdentifierReference,
   repoRelativeFilename,
+  resolveVariable,
 } from "./utils.ts";
 
 const FUNCTIONS = new Set([
@@ -63,7 +65,7 @@ const isRouteHandler = (fn) => {
   return name !== null && ROUTE_HANDLERS.has(name);
 };
 
-const isGuardedAdjustment = (node, setters) => {
+const isGuardedAdjustment = (node, setters, context, owner) => {
   const sameExpression = (left, right) =>
     left === right ||
     (left?.type === "Identifier" &&
@@ -73,9 +75,10 @@ const isGuardedAdjustment = (node, setters) => {
       right?.type === "MemberExpression" &&
       sameExpression(left.object, right.object) &&
       getPropertyName(left.property) === getPropertyName(right.property));
+  let descendant = node;
   let current = node.parent;
   while (current && !FUNCTIONS.has(current.type)) {
-    if (current.type === "IfStatement") {
+    if (current.type === "IfStatement" && descendant === current.consequent) {
       const test = current.test;
       if (
         test?.type === "BinaryExpression" &&
@@ -86,13 +89,17 @@ const isGuardedAdjustment = (node, setters) => {
           [test.right, test.left],
         ];
         for (const [previousNode, valueNode] of pairs) {
-          if (!isIdentifier(previousNode)) {
+          if (!isIdentifierReference(previousNode)) {
             continue;
           }
-          const setter = `set${previousNode.name.slice(0, 1).toUpperCase()}${previousNode.name.slice(1)}`;
-          if (!setters.has(setter)) {
+          const previous = resolveVariable(context, previousNode);
+          const setterEntry = [...setters.entries()].find(
+            ([, setter]) => setter.owner === owner && setter.state === previous,
+          );
+          if (!setterEntry) {
             continue;
           }
+          const [setterVariable] = setterEntry;
           const statements =
             current.consequent.type === "BlockStatement"
               ? current.consequent.body
@@ -102,7 +109,9 @@ const isGuardedAdjustment = (node, setters) => {
               (statement) =>
                 statement.type === "ExpressionStatement" &&
                 statement.expression.type === "CallExpression" &&
-                isIdentifier(statement.expression.callee, setter) &&
+                isIdentifierReference(statement.expression.callee) &&
+                resolveVariable(context, statement.expression.callee) ===
+                  setterVariable &&
                 sameExpression(statement.expression.arguments[0], valueNode),
             )
           ) {
@@ -111,6 +120,7 @@ const isGuardedAdjustment = (node, setters) => {
         }
       }
     }
+    descendant = current;
     current = current.parent;
   }
   return false;
@@ -128,7 +138,7 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const setters = new Set();
+        const setters = new Map();
         const findings: Parameters<typeof context.report>[0][] = [];
         return {
           Program() {
@@ -145,8 +155,16 @@ export default eslintCompatPlugin({
               return;
             }
             const binding = node.id.elements[1];
-            if (isIdentifier(binding)) {
-              setters.add(binding.name);
+            const state = node.id.elements[0];
+            if (isIdentifierReference(binding)) {
+              const variable = resolveVariable(context, binding);
+              const stateVariable = isIdentifierReference(state)
+                ? resolveVariable(context, state)
+                : null;
+              const owner = enclosingReactOwner(node);
+              if (variable && owner) {
+                setters.set(variable, { owner, state: stateVariable });
+              }
             }
           },
           CallExpression(node) {
@@ -160,13 +178,16 @@ export default eslintCompatPlugin({
             }
             let forbidden = false;
             if (isIdentifier(node.callee)) {
+              const setter = isIdentifierReference(node.callee)
+                ? setters.get(resolveVariable(context, node.callee))
+                : undefined;
               forbidden =
                 node.callee.name === "navigate" ||
                 node.callee.name === "redirect" ||
-                setters.has(node.callee.name);
+                setter?.owner === owner;
               if (
-                setters.has(node.callee.name) &&
-                isGuardedAdjustment(node, setters)
+                setter?.owner === owner &&
+                isGuardedAdjustment(node, setters, context, owner)
               ) {
                 forbidden = false;
               }

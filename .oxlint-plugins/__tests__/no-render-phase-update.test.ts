@@ -28,3 +28,33 @@ test("allows callbacks, route handlers, and guarded render adjustments", async (
     ),
   ).toEqual([]);
 });
+
+test("reports an adjustment in the guard's else branch", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      "function Page({ value }) { const [prev, setPrev] = useState(value); if (prev !== value) { setPrev(value); } else { setPrev(value + 1); } }",
+    ),
+  ).toEqual([1]);
+});
+
+test("distinguishes same-named setter bindings between components", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      [
+        "function Stateful() { const [value, setValue] = useState(0); setValue(1); }",
+        "function Stateless({ setValue }) { setValue(1); }",
+      ].join("\n"),
+    ),
+  ).toEqual([1]);
+});
+
+test("allows a shadowed setter inside a nested function", async () => {
+  expect(
+    await lintSingleRule(
+      RULE,
+      "function Page() { const [value, setValue] = useState(0); function update(setValue) { setValue(value + 1); } return update; }",
+    ),
+  ).toEqual([]);
+});
