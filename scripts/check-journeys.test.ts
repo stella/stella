@@ -503,8 +503,11 @@ rm -f "$response"
       );
       for (const failure of failures) {
         const name = failure.split(" ").at(1);
+        expect(name).toBeDefined();
         expect(
-          lines.filter((line) => line.startsWith(`journey-detail ${name} `)),
+          lines.filter((line) =>
+            line.startsWith(`journey-detail ${name ?? ""} `),
+          ),
         ).toHaveLength(1);
       }
       for (const line of lines.filter(
