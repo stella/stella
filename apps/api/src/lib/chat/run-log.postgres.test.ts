@@ -149,6 +149,7 @@ if (!databaseUrl || !runPostgresTests) {
         organizationId,
         userId,
         title: "Replay fence test",
+        subjectDecisionId: createSafeId<"caseLawDecision">(),
       });
       await db.insert(chatMessages).values({
         id: incomingMessageId,

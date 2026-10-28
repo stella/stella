@@ -21,6 +21,7 @@ import {
   chatMessageRevisions,
   chatMessages,
   chatMessageSearchDocuments,
+  chatRunLogs,
   chatThreadCompactions,
   chatThreads,
   chatThreadSearchDocuments,
@@ -55,7 +56,12 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readChatExportSource } from "@/api/lib/chat/export-source";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
-import { createChatRunLog } from "@/api/lib/chat/run-log";
+import {
+  createChatRunLog,
+  createChatRunLogReplay,
+  MAX_CHUNK_BYTES,
+  MAX_RUN_BYTES,
+} from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
@@ -1516,10 +1522,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       { split: "scheme", deltas: 3, delivery: "existing" },
       { split: "id", deltas: 2, delivery: "existing" },
       { split: "id", deltas: 3, delivery: "existing" },
-      { split: "scheme", deltas: 2, delivery: "tail" },
-      { split: "scheme", deltas: 3, delivery: "tail" },
-      { split: "id", deltas: 2, delivery: "tail" },
-      { split: "id", deltas: 3, delivery: "tail" },
       { split: "id", deltas: 2, delivery: "separate messages" },
     ].flatMap((testCase) =>
       (
@@ -1527,7 +1529,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       ).map((event) => ({ ...testCase, event })),
     ),
   )(
-    "running generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
+    "completed generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
     async ({ split, deltas, delivery, event }) => {
       const id = createSafeId<"chatThread">();
       seededThreads.push(id);
@@ -1632,15 +1634,14 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           : [textDelta(final)]
       ) satisfies StreamChunk[];
       await log.append(initial);
-      if (delivery !== "tail") {
-        await log.append(suffix);
-        const snapshot = await request(async () => await log.snapshot());
-        expect(JSON.stringify(snapshot)).toContain(
-          delivery === "separate messages" ? secret : marker,
-        );
-        if (delivery !== "separate messages") {
-          expect(JSON.stringify(snapshot)).not.toContain(secret);
-        }
+      await log.append(suffix);
+      await log.close();
+      const snapshot = await request(async () => await log.snapshot());
+      expect(JSON.stringify(snapshot)).toContain(
+        delivery === "separate messages" ? secret : marker,
+      );
+      if (delivery !== "separate messages") {
+        expect(JSON.stringify(snapshot)).not.toContain(secret);
       }
       await request(async () => {
         const controller = new AbortController();
@@ -1655,9 +1656,6 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             }
             expect(entry.value.chunk.type).toBe(expectedChunk.type);
             entries.push(entry.value);
-          }
-          if (delivery === "tail") {
-            await log.append(suffix);
           }
           for (const expectedChunk of suffix) {
             const entry = await reader.next();
@@ -1699,6 +1697,236 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       });
     },
   );
+
+  const genericLogFixture = async () => {
+    const id = createSafeId<"chatThread">();
+    seededThreads.push(id);
+    const incomingId = createSafeId<"chatMessage">();
+    const execution = {
+      id: createSafeId<"chatTurn">(),
+      executionId: Bun.randomUUIDv7(),
+    };
+    const liveRunId = Bun.randomUUIDv7();
+    await scopedDb(async (tx) => {
+      await tx.insert(chatThreads).values({
+        id,
+        organizationId,
+        userId,
+        workspaceId,
+        title: own,
+        titleSource: "user",
+      });
+      await tx.insert(chatMessages).values({
+        id: incomingId,
+        threadId: id,
+        userId,
+        workspaceId,
+        role: "user",
+        content: ownContent,
+      });
+      await tx.insert(chatTurns).values({
+        id: execution.id,
+        executionId: execution.executionId,
+        organizationId,
+        userId,
+        workspaceId,
+        threadId: id,
+        userMessageId: incomingId,
+        runId: liveRunId,
+        status: "running",
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      });
+    });
+    const options = { organizationId, runId: liveRunId, execution };
+    return {
+      options,
+      threadId: id,
+      writer: createChatRunLog({ ...options, db: scopedDb }),
+    };
+  };
+
+  test.each(
+    (["direct", "replay", "compact"] as const).flatMap((mode) =>
+      (["withdrawn", "active"] as const).map((source) => ({ mode, source })),
+    ),
+  )(
+    "generic $mode holds text until later references are resolved ($source)",
+    async ({ mode, source }) => {
+      const {
+        writer,
+        options,
+        threadId: genericThreadId,
+      } = await genericLogFixture();
+      const assistantId = createSafeId<"chatMessage">();
+      const prefix = [
+        {
+          type: EventType.RUN_STARTED,
+          runId: options.runId,
+          threadId: genericThreadId,
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: assistantId,
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: assistantId,
+          delta: secret,
+        },
+        ...Array.from(
+          { length: mode === "compact" ? 260 : 0 },
+          () =>
+            ({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: assistantId,
+              delta: ".",
+            }) as const,
+        ),
+      ] satisfies StreamChunk[];
+      await writer.append(prefix);
+      const polled = Promise.withResolvers<undefined>();
+      let reads = 0;
+      const observedDb = (async (read) => {
+        reads++;
+        if (reads === 2) {
+          polled.resolve(undefined);
+        }
+        return await scopedDb(read);
+      }) satisfies ScopedDb;
+      const delivery =
+        mode === "direct"
+          ? createChatRunLog({ ...options, db: observedDb })
+          : ((await createChatRunLogReplay({
+              db: observedDb,
+              organizationId,
+              runId: options.runId,
+              resumeOffset: "-1",
+            })) ?? panic("Expected generic replay"));
+      reads = 0;
+      await request(async () => {
+        const controller = new AbortController();
+        const entries: Awaited<ReturnType<typeof writer.snapshot>> = [];
+        const consume = (async () => {
+          for await (const entry of delivery.read("-1", controller.signal)) {
+            entries.push(entry);
+          }
+        })();
+        try {
+          await polled.promise;
+          expect(entries).toEqual([]);
+          expect(await writer.snapshot()).toEqual([]);
+          const link = ` [decision](#stella-decision=${source === "withdrawn" ? decisionId : activeId})`;
+          const suffix = [
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: assistantId,
+              delta: link,
+            },
+            { type: EventType.TEXT_MESSAGE_END, messageId: assistantId },
+            {
+              type: EventType.RUN_FINISHED,
+              runId: options.runId,
+              threadId: genericThreadId,
+            },
+          ] satisfies StreamChunk[];
+          await writer.append(suffix);
+          expect(await writer.snapshot()).toEqual([]);
+          await writer.close();
+          await consume;
+          const capture = createStreamMessageCapture({
+            initialMessages: [],
+            capture: (message) => message,
+          });
+          for (const entry of entries) {
+            capture.processor.processChunk(entry.chunk);
+          }
+          const messages = JSON.stringify(capture.processor.getMessages());
+          if (source === "withdrawn") {
+            expect(JSON.stringify(entries)).not.toContain(secret);
+            expect(messages).toContain(marker);
+            expect(messages).not.toContain(secret);
+          } else {
+            expect(entries.map(({ chunk }) => chunk)).toEqual([
+              ...prefix,
+              ...suffix,
+            ]);
+            expect(capture.processor.getMessages().at(0)?.parts).toEqual([
+              {
+                type: "text",
+                content: `${secret}${".".repeat(mode === "compact" ? 260 : 0)}${link}`,
+              },
+            ]);
+          }
+          expect(entries.map(({ offset }) => BigInt(offset))).toEqual(
+            entries
+              .map(({ offset }) => BigInt(offset))
+              .toSorted((a, b) => {
+                if (a === b) {
+                  return 0;
+                }
+                return a < b ? -1 : 1;
+              }),
+          );
+        } finally {
+          controller.abort();
+          await consume;
+        }
+      });
+    },
+  );
+
+  test("unchecked generic output stays inside the durable run byte bound", async () => {
+    const {
+      writer,
+      options,
+      threadId: genericThreadId,
+    } = await genericLogFixture();
+    await writer.append([
+      {
+        type: EventType.RUN_STARTED,
+        runId: options.runId,
+        threadId: genericThreadId,
+      },
+    ]);
+    const readHeader = async () =>
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .select({
+              bytes: chatRunLogs.bytesUsed,
+              nextSeq: chatRunLogs.nextSeq,
+            })
+            .from(chatRunLogs)
+            .where(eq(chatRunLogs.runId, options.runId))
+            .limit(1),
+      );
+    const before = await readHeader();
+    const delta = "x".repeat(MAX_CHUNK_BYTES / 2);
+    const overflow = await Result.tryPromise(
+      async () =>
+        await writer.append(
+          Array.from(
+            { length: Math.ceil(MAX_RUN_BYTES / delta.length) + 1 },
+            () =>
+              ({
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId,
+                delta,
+              }) as const,
+          ),
+        ),
+    );
+    expect(overflow.isErr()).toBe(true);
+    if (overflow.isErr()) {
+      expect(overflow.error.cause).toMatchObject({
+        message: "Chat run log exceeds its size limit",
+      });
+    }
+    expect(await readHeader()).toEqual(before);
+    expect(await writer.snapshot()).toEqual([]);
+    await writer.close();
+  });
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
     const id = createSafeId<"chatThread">();
@@ -1748,7 +1976,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     await log.append([
       { type: EventType.RUN_STARTED, runId: laterRunId, threadId: id },
     ]);
-    await request(async () => await log.snapshot());
+    expect(await request(async () => await log.snapshot())).toEqual([]);
     await log.append([
       { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" },
       {
@@ -1759,6 +1987,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       { type: EventType.TEXT_MESSAGE_END, messageId },
       { type: EventType.RUN_FINISHED, runId: laterRunId, threadId: id },
     ]);
+    await log.close();
     const checked = await request(async () => await log.snapshot());
     expect(JSON.stringify(checked)).toContain(marker);
     expect(JSON.stringify(checked)).not.toContain(secret);
