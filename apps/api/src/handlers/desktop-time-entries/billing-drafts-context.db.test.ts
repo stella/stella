@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -29,7 +38,6 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import { loadBillingDraftContext } from "./billing-drafts-context";
 
 const today = Temporal.PlainDate.from("2026-10-09");
-const clock = spyOn(Temporal.Now, "plainDateISO").mockReturnValue(today);
 const ids = createTestIds();
 let db: Awaited<ReturnType<typeof getTestDb>>;
 const historyIds = {
@@ -227,6 +235,7 @@ beforeAll(async () => {
 }, 120_000);
 
 beforeEach(async () => {
+  spyOn(Temporal.Now, "plainDateISO").mockReturnValue(today);
   await db
     .insert(billingGuidelineFiles)
     .values({
@@ -253,8 +262,11 @@ beforeEach(async () => {
     );
 });
 
+afterEach(() => {
+  mock.restore();
+});
+
 afterAll(async () => {
-  clock.mockRestore();
   await releaseTestDb();
 });
 
