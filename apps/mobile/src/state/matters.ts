@@ -46,6 +46,9 @@ export const listMatters = async ({
     return Result.ok(workspaces);
   });
 
+/** The name of a new matter's documents column, as the web and MCP name it. */
+const FILE_PROPERTY_NAME = "Documents";
+
 const createdMatterSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
 });
@@ -56,17 +59,23 @@ const createdMatterSchema = v.object({
  */
 export const createMatter = async ({
   fetch,
+  id,
   name,
   source,
 }: {
   readonly fetch: Fetch;
+  /**
+   * The new matter's id, which the app names as the web does, so the
+   * request repeated on a fresh token cannot open a second matter.
+   */
+  readonly id: string;
   readonly name: string;
   readonly source: AccessTokenSource;
 }): Promise<Result<string, ApiError>> =>
   await Result.gen(async function* () {
-    const { id } = yield* Result.await(
+    const created = yield* Result.await(
       requestApi({
-        body: { name },
+        body: { filePropertyName: FILE_PROPERTY_NAME, id, name },
         fetch,
         method: "PUT",
         path: MATTERS_PATH,
@@ -74,5 +83,5 @@ export const createMatter = async ({
         source,
       }),
     );
-    return Result.ok(id);
+    return Result.ok(created.id);
   });

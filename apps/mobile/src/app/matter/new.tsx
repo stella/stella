@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
 
 import { Result } from "better-result";
+import { randomUUID } from "expo-crypto";
 import { Stack, useRouter } from "expo-router";
 import { ScrollView } from "react-native";
 import { useTranslations } from "use-intl";
@@ -8,6 +9,8 @@ import { useTranslations } from "use-intl";
 import { screenStyles } from "@/components/empty-state-screen";
 import { useMattersView } from "@/components/matters-view";
 import { Text, TextInput } from "@/components/ui/text";
+import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
+import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import { createMatter } from "@/state/matters";
@@ -30,8 +33,11 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
   const router = useRouter();
   const { end } = useSession();
   const { matterAdded } = useMattersView();
+  // One id for the sheet, so pressing Create again after a failure
+  // retries the same matter rather than opening another.
+  const [matterId] = useState(randomUUID);
   const [name, setName] = useState("");
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [creating, startCreating] = useTransition();
   const ready = name.trim() !== "" && !creating;
 
@@ -40,9 +46,10 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
       return;
     }
     startCreating(async () => {
-      setFailed(false);
+      setFailure(null);
       const created = await createMatter({
         fetch,
+        id: matterId,
         name: name.trim(),
         source,
       });
@@ -58,7 +65,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
         end();
         return;
       }
-      setFailed(true);
+      setFailure(writeFailure(created.error));
     });
   };
 
@@ -103,7 +110,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
           value={name}
         />
         <Text variant="caption">{t("personalHint")}</Text>
-        {failed ? <Text variant="error">{t("createFailed")}</Text> : null}
+        <WriteFailureNotice failure={failure} message={t("createFailed")} />
       </ScrollView>
     </>
   );

@@ -163,5 +163,9 @@
     "soon": "Em breve",
     "timers": "Cronômetros",
     "voiceInput": "Entrada por voz"
+  },
+  "writes": {
+    "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
+    "signInAgain": "Entrar novamente"
   }
 }

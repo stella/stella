@@ -13,6 +13,8 @@ import type { TaskStatus } from "@stll/api-contract/entity-options";
 import { useTasksView } from "@/components/tasks-view";
 import { Button } from "@/components/ui/button";
 import { Text } from "@/components/ui/text";
+import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
+import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { ApiError } from "@/state/api-request";
@@ -83,7 +85,7 @@ const LoadedTaskStatus = ({
   const [status, setStatus] = useState(
     Result.isOk(loaded) ? (loaded.value.status ?? TASK_STATUS.OPEN) : null,
   );
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [saving, startSaving] = useTransition();
 
   if (Result.isError(loaded) || status === null) {
@@ -95,7 +97,7 @@ const LoadedTaskStatus = ({
 
   const change = () => {
     startSaving(async () => {
-      setFailed(false);
+      setFailure(null);
       const saved = await setTaskStatus({
         fetch,
         matterId,
@@ -112,7 +114,7 @@ const LoadedTaskStatus = ({
         end();
         return;
       }
-      setFailed(true);
+      setFailure(writeFailure(saved.error));
     });
   };
 
@@ -141,7 +143,7 @@ const LoadedTaskStatus = ({
         onPress={change}
         variant={done ? "outline" : "default"}
       />
-      {failed ? <Text variant="error">{t("statusFailed")}</Text> : null}
+      <WriteFailureNotice failure={failure} message={t("statusFailed")} />
     </View>
   );
 };

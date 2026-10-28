@@ -163,5 +163,9 @@
     "soon": "Netrukus",
     "timers": "Laikmačiai",
     "voiceInput": "Balso įvestis"
+  },
+  "writes": {
+    "consentNeeded": "Kad galėtumėte keisti duomenis programėlėje, stella reikia jūsų leidimo. Prisijunkite iš naujo, kad jį suteiktumėte.",
+    "signInAgain": "Prisijungti iš naujo"
   }
 }

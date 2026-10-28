@@ -163,5 +163,9 @@
     "soon": "Drīzumā",
     "timers": "Taimeri",
     "voiceInput": "Balss ievade"
+  },
+  "writes": {
+    "consentNeeded": "Lai lietotnē veiktu izmaiņas, stella nepieciešama jūsu atļauja. Piesakieties vēlreiz, lai to piešķirtu.",
+    "signInAgain": "Pieteikties vēlreiz"
   }
 }

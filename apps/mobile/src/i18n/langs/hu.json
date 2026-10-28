@@ -163,5 +163,9 @@
     "soon": "Hamarosan",
     "timers": "Időmérők",
     "voiceInput": "Hangbevitel"
+  },
+  "writes": {
+    "consentNeeded": "Ahhoz, hogy az alkalmazásból módosíthasson, a stellának szüksége van az engedélyére. Jelentkezzen be újra a megadásához.",
+    "signInAgain": "Újra bejelentkezés"
   }
 }

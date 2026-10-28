@@ -163,5 +163,9 @@
     "soon": "Bientôt disponible",
     "timers": "Chronomètres",
     "voiceInput": "Saisie vocale"
+  },
+  "writes": {
+    "consentNeeded": "Pour modifier depuis l’app, stella a besoin de votre autorisation. Reconnectez-vous pour la donner.",
+    "signInAgain": "Se reconnecter"
   }
 }

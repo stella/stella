@@ -163,5 +163,9 @@
     "soon": "Již brzy",
     "timers": "Časovače",
     "voiceInput": "Hlasové zadávání"
+  },
+  "writes": {
+    "consentNeeded": "Aby aplikace mohla provádět změny, potřebuje stella vaše svolení. Přihlaste se znovu a udělte ho.",
+    "signInAgain": "Přihlásit se znovu"
   }
 }

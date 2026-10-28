@@ -163,5 +163,9 @@
     "soon": "Tulemas peagi",
     "timers": "Taimerid",
     "voiceInput": "Häälsisestus"
+  },
+  "writes": {
+    "consentNeeded": "Et rakendusest muudatusi teha, vajab stella teie luba. Selle andmiseks logige uuesti sisse.",
+    "signInAgain": "Logi uuesti sisse"
   }
 }

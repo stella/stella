@@ -163,5 +163,9 @@
     "soon": "Coming soon",
     "timers": "Timers",
     "voiceInput": "Voice input"
+  },
+  "writes": {
+    "consentNeeded": "To make changes from the app, stella needs your permission. Sign in again to give it.",
+    "signInAgain": "Sign in again"
   }
 }

@@ -9,6 +9,8 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { useTasksView } from "@/components/tasks-view";
 import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text, TextInput } from "@/components/ui/text";
+import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
+import type { WriteFailure } from "@/components/write-failure";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -56,7 +58,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const [name, setName] = useState("");
   const [due, setDue] = useState<DueChoice>("none");
   const [matterId, setMatterId] = useState(params.matterId ?? null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [adding, startAdding] = useTransition();
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
@@ -73,7 +75,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
     startAdding(async () => {
-      setFailed(false);
+      setFailure(null);
       const created = await createTask({
         dueDate:
           days === null
@@ -93,7 +95,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         end();
         return;
       }
-      setFailed(true);
+      setFailure(writeFailure(created.error));
     });
   };
 
@@ -137,6 +139,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
           returnKeyType="done"
           value={name}
         />
+        <WriteFailureNotice failure={failure} message={t("addFailed")} />
         <View className="gap-2">
           <View className="px-1">
             <Text variant="section">{t("dueTitle")}</Text>
@@ -180,7 +183,6 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             />
           </Suspense>
         </View>
-        {failed ? <Text variant="error">{t("addFailed")}</Text> : null}
       </ScrollView>
     </>
   );

@@ -163,5 +163,9 @@
     "soon": "Wkrótce",
     "timers": "Stopery",
     "voiceInput": "Wprowadzanie głosowe"
+  },
+  "writes": {
+    "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
+    "signInAgain": "Zaloguj się ponownie"
   }
 }

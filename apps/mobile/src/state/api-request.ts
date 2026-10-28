@@ -9,8 +9,17 @@ import type { AccessTokenSource } from "@/connection/session";
 export class ApiRequestError extends TaggedError("ApiRequestError")<{
   message: string;
   status?: number | undefined;
+  /**
+   * The token lacks a scope the route needs (RFC 6750 §3.1), as a session
+   * from before the app asked for that scope does; signing in again grants it.
+   */
+  insufficientScope?: boolean | undefined;
   cause?: unknown;
 }> {}
+
+/** Whether `error` is the server asking for a scope this sign-in never granted. */
+export const needsConsent = (error: ApiError): boolean =>
+  error._tag === "ApiRequestError" && error.insufficientScope === true;
 
 export type ApiError = ApiRequestError | SignedOutError | TokenError;
 
@@ -48,10 +57,14 @@ const requestJson = async <TSchema extends v.GenericSchema>(
         ...(body === undefined ? {} : { method, body: JSON.stringify(body) }),
       });
       if (!response.ok) {
-        return { status: response.status, json: undefined };
+        const insufficientScope =
+          response.headers
+            .get("WWW-Authenticate")
+            ?.includes('error="insufficient_scope"') === true;
+        return { status: response.status, json: undefined, insufficientScope };
       }
       const json: unknown = await response.json();
-      return { status: response.status, json };
+      return { status: response.status, json, insufficientScope: false };
     },
     catch: (cause) =>
       new ApiRequestError({ message: `The request to ${url} failed`, cause }),
@@ -59,12 +72,13 @@ const requestJson = async <TSchema extends v.GenericSchema>(
   if (Result.isError(answered)) {
     return Result.err(answered.error);
   }
-  const { status, json } = answered.value;
+  const { status, json, insufficientScope } = answered.value;
   if (json === undefined) {
     return Result.err(
       new ApiRequestError({
         message: `The request to ${url} responded ${status}`,
         status,
+        insufficientScope,
       }),
     );
   }

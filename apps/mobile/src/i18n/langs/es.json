@@ -163,5 +163,9 @@
     "soon": "Próximamente",
     "timers": "Temporizadores",
     "voiceInput": "Entrada de voz"
+  },
+  "writes": {
+    "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
+    "signInAgain": "Volver a iniciar sesión"
   }
 }

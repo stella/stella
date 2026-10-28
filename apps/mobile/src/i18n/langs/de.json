@@ -163,5 +163,9 @@
     "soon": "Demnächst verfügbar",
     "timers": "Timer",
     "voiceInput": "Spracheingabe"
+  },
+  "writes": {
+    "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
+    "signInAgain": "Erneut anmelden"
   }
 }

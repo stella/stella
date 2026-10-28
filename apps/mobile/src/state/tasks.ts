@@ -58,7 +58,7 @@ export const listMyTasks = async ({
     return Result.ok(page.items);
   });
 
-/** Adds a task to a matter; the server assigns nothing, so it is the creator's. */
+/** Adds a task to a matter; the server assigns it to its creator, so it lists here. */
 export const createTask = async ({
   dueDate,
   fetch,
