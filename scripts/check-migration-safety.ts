@@ -429,6 +429,54 @@ const isCreateTableAsQuery = (statement: string): boolean => {
   return firstParenthesis === -1 || asQuery.index < firstParenthesis;
 };
 
+// ALTER TABLE's ADD grammar has two uniqueness-producing branches: table
+// constraints and column definitions. In both branches the contract keyword is
+// at the action's top level; modifiers such as INCLUDE keep their commas inside
+// parentheses. Splitting only on top-level commas therefore covers named and
+// unnamed constraints, USING INDEX forms, and inline column constraints without
+// coupling the check to every optional grammar tail.
+const addsUniquenessContract = (statement: string): boolean => {
+  if (!ALTER_TABLE_PATTERN.test(statement)) {
+    return false;
+  }
+
+  let actionStart = 0;
+  let depth = 0;
+  const actions: string[] = [];
+
+  for (let index = 0; index < statement.length; index++) {
+    const char = statement[index];
+    if (char === "(") {
+      depth++;
+    } else if (char === ")") {
+      depth = Math.max(0, depth - 1);
+    } else if (char === "," && depth === 0) {
+      actions.push(statement.slice(actionStart, index));
+      actionStart = index + 1;
+    }
+  }
+  actions.push(statement.slice(actionStart));
+
+  return actions.some((action) => {
+    const words = wordsWithDepth(action).filter(
+      ({ depth: wordDepth }) => wordDepth === 0,
+    );
+    const addIndex = words.findIndex(({ word }) => word === "ADD");
+    if (addIndex === -1) {
+      return false;
+    }
+
+    return words
+      .slice(addIndex + 1)
+      .some(
+        ({ word }, index, tail) =>
+          word === "UNIQUE" ||
+          word === "EXCLUDE" ||
+          (word === "PRIMARY" && tail[index + 1]?.word === "KEY"),
+      );
+  });
+};
+
 const GUARDED_RULES = [
   {
     id: "add-unique-constraint",
@@ -437,11 +485,7 @@ const GUARDED_RULES = [
     category: "schema-contract",
     matches: (statement) =>
       /^\s*CREATE\s+UNIQUE\s+INDEX\b/iu.test(statement) ||
-      (/\bALTER\s+TABLE\b/iu.test(statement) &&
-        (/\bADD\s+CONSTRAINT\b[\s\S]*?\b(?:UNIQUE|PRIMARY\s+KEY|EXCLUDE)\b/iu.test(
-          statement,
-        ) ||
-          /\bADD\s+(?:COLUMN\s+)?[^,;]+\bUNIQUE\b/iu.test(statement))),
+      addsUniquenessContract(statement),
   },
   {
     id: "drop-object",

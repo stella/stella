@@ -191,13 +191,47 @@ describe("check-migration-safety", () => {
       );
     });
 
-    it.each([
-      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_unique UNIQUE (external_id);`,
-      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_pkey PRIMARY KEY (external_id);`,
-      `ALTER TABLE documents ADD CONSTRAINT documents_validity_exclude EXCLUDE USING gist (validity WITH &&);`,
-      `ALTER TABLE documents ADD COLUMN external_id text UNIQUE;`,
-    ])("flags an added table uniqueness contract: %s", (sql) => {
-      expectFinding(runChecker(sql), "add-unique-constraint");
+    const addedUniquenessContracts = [
+      `ALTER TABLE documents ADD UNIQUE NULLS NOT DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE INITIALLY DEFERRED NOT VALID;`,
+      `ALTER TABLE documents ADD PRIMARY KEY NULLS DISTINCT (external_id) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE;`,
+      `ALTER TABLE documents ADD EXCLUDE USING gist (validity WITH &&) INCLUDE (source) USING INDEX TABLESPACE fastspace DEFERRABLE NOT VALID;`,
+      `ALTER TABLE documents ADD CONSTRAINT documents_external_id_unique UNIQUE USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD PRIMARY KEY USING INDEX documents_external_id_idx;`,
+      `ALTER TABLE documents ADD COLUMN external_id text PRIMARY KEY;`,
+      `ALTER TABLE documents ADD external_id text UNIQUE;`,
+      `ALTER TABLE documents ADD COLUMN IF NOT EXISTS external_id text CONSTRAINT documents_external_id_key UNIQUE;`,
+      `ALTER TABLE documents ADD IF NOT EXISTS external_id text CONSTRAINT documents_external_id_pkey PRIMARY KEY;`,
+      `AlTeR TaBlE "legal"."Documents" ADD CONSTRAINT "External Id Key" UNIQUE ("External Id");`,
+    ];
+
+    it.each(addedUniquenessContracts)(
+      "flags an added table uniqueness contract: %s",
+      (sql) => {
+        expectFinding(runChecker(sql), "add-unique-constraint");
+      },
+    );
+
+    it.each(addedUniquenessContracts)(
+      "allows an added uniqueness contract on a table created in the migration: %s",
+      (sql) => {
+        const qualified = sql.includes('"legal"."Documents"');
+        const create = qualified
+          ? `CREATE TABLE "legal"."Documents" (seed text);`
+          : `CREATE TABLE documents (seed text);`;
+
+        expectClean(runChecker(`${create}\n${sql}`));
+      },
+    );
+
+    it("flags a uniqueness contract in the second ALTER TABLE action", () => {
+      expectFinding(
+        runChecker(`
+          ALTER TABLE "legal"."Documents"
+            ADD COLUMN "status" text,
+            ADD COLUMN IF NOT EXISTS "External Id" text UNIQUE;
+        `),
+        "add-unique-constraint",
+      );
     });
 
     it("allows the same SQL in the pending-contract registry", () => {
