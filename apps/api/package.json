@@ -244,7 +244,7 @@
     "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@myriaddreamin/typst-ts-renderer": "0.7.0",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.1",
     "@standard-schema/spec": "^1.1.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",
