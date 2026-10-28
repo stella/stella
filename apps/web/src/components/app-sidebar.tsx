@@ -75,6 +75,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
+import { PendingApprovalsNavBadge } from "@/components/pending-approvals-nav-badge";
 import {
   Sidebar,
   SidebarContent,
@@ -118,7 +119,7 @@ import {
 } from "@/features/guides/guide-drawer-store";
 import type { GuideWorkspaceListState } from "@/features/guides/guide-help-drawer";
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
@@ -195,8 +196,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
-  const { state, toggleSidebar, isMobile } = useSidebar();
+  const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const router = useRouter();
+  // On compact layouts the sidebar is a sheet over the page, so a navigation
+  // started from it would land behind it. Close it once the new location
+  // resolves, whichever item (link, button or matter sub-row) started it.
+  useMountEffect(() =>
+    router.subscribe("onResolved", ({ hrefChanged }) => {
+      if (hrefChanged) {
+        setOpenMobile(false);
+      }
+    }),
+  );
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
@@ -725,6 +737,14 @@ export const AppSidebar = (props: AppSidebarProps) => {
                                 )}
                               </kbd>
                             </SidebarMenuBadge>
+                          );
+                        }
+                        if (item.id === "timesheets") {
+                          return (
+                            <PendingApprovalsNavBadge
+                              organizationId={user.activeOrganizationId}
+                              userId={user.id}
+                            />
                           );
                         }
                         if (item.id === "inbox" && openInboxCount > 0) {

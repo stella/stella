@@ -341,6 +341,7 @@ import {
   isDisposableEmailAddress,
 } from "@/api/lib/signup-abuse";
 import { revokeUserSseAccess } from "@/api/lib/sse";
+import type { SseStreamBinding } from "@/api/lib/sse";
 import { createSyntheticPrincipalAuthHooks } from "@/api/lib/synthetic-principal/auth-hooks";
 import {
   isSyntheticPrincipal,
@@ -3495,6 +3496,8 @@ type ResolvedIdentity = {
   sessionId: string;
   /** Set when the browser session came from an MCP web handoff. */
   originConsentId: string | null;
+  /** Keeps a stream authorized when no browser session backs the request. */
+  stream?: SseStreamBinding;
   organizationId: SafeId<"organization">;
   authorization: { role: MemberRole } & Pick<
     MemberAuthorization,
@@ -3654,6 +3657,28 @@ const resolveAccessTokenIdentity = async ({
       sessionId: `oauth-client:${tokenSession.clientId}`,
       // An app's token is never a handoff session.
       originConsentId: null,
+      // An event stream holds while this token still authenticates on the
+      // membership it was issued under: a genuine rejection ends it, an
+      // outage leaves it to the next sweep.
+      stream: {
+        kind: "credential",
+        revalidate: async () => {
+          const again = await authenticateApiAccessToken(token, {
+            reviewAccount: getReviewAccountConfig(),
+          });
+          if (Result.isError(again)) {
+            return again.error.reason === "rejected"
+              ? false
+              : await Promise.reject(again.error);
+          }
+          const current = await resolveCredentialMemberAuthorization({
+            userId,
+            organizationId,
+            workspaceId: undefined,
+          });
+          return current?.memberId === tokenSession.memberId;
+        },
+      },
       organizationId,
       authorization: { ...authorization, role: authorization.role },
     },
@@ -3696,6 +3721,7 @@ const resolveValidateAuth = async ({
     organizationId: activeOrganizationId,
     originConsentId,
     sessionId,
+    stream,
     userId,
   } = resolved.identity;
   // A signed-in account uses the product only once it has accepted the
@@ -3848,6 +3874,7 @@ const resolveValidateAuth = async ({
       id: sessionId,
       activeOrganizationId,
       originConsentId,
+      ...(stream === undefined ? {} : { stream }),
     },
     getActiveWorkspaceIds,
     getAccessibleWorkspaces,

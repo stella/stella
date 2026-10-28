@@ -1440,12 +1440,6 @@
     "reason": "rollback to savepoint in apps/api/src/handlers/hosted-usage-webhook/replay.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
   },
   {
-    "file": "apps/api/src/handlers/invoices/document-type.ts",
-    "fingerprint": "04c4864c40ca369cffa87c626eb992d3f079a7477396832620e3dea2780849fe",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/invoices/document-type.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/invoices/lines/create.ts",
     "fingerprint": "0f2e8449ee672932545b6ae451a31fe87d20c2d7a96156856238a37a7efaf197",
     "count": 1,
@@ -1456,12 +1450,6 @@
     "fingerprint": "3966aea5af7239eec9ed02e516d5a2d40af867f55c3b2164061e09b3070acdbf",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/invoices/lines/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/invoices/lock-invoice.ts",
-    "fingerprint": "0c39b43defa802eb5ffb1a72c2a14d6916c622b7b879d9cf8c00ce91a4af288f",
-    "count": 1,
-    "reason": "The invoice lock also reads the stored invoice language; the lock scope and order are unchanged."
   },
   {
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
@@ -1806,22 +1794,10 @@
     "reason": "builder-for in apps/api/src/handlers/templates/lookup-formats/default/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/time-entries/approval-queue/return.ts",
-    "fingerprint": "70ab4c7191c68e21c3a9feb15656bbe87d2115f0afe57b4e56a7ee0761d6fdd2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/approval-queue/return.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
     "fingerprint": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/time-entries/batch/delete.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "09bcd29cc83236c3d3328814cac960bbefd73faba4e76a0ab41ab04a5a3e8846",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
@@ -1834,6 +1810,12 @@
     "fingerprint": "79b524ca823812018b5fb66c7f9c92ce2b38bd5703a8c07b07c5a9d213d7ef91",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "fingerprint": "bc51ffce8fe7227ad57efae890ed95d71f13edd7c73013aaa974a25c9787bc6f",
+    "count": 1,
+    "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft, and reads each row's status for its audit."
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
@@ -2167,12 +2149,6 @@
   },
   {
     "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
     "fingerprint": "86e86b48a33efe2319b7ef02a9159bace150fbfb4216c448d54196c201af76a1",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2182,12 +2158,6 @@
     "fingerprint": "e2b4b6e3a17c005240702eb246339afa1581b4a4798e2528cc69a78844feed15",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/arrangements.ts",
-    "fingerprint": "e7ab61f96abd40bcc7fb027ae53ba4700e4579eeec11c41b03a7fdbd444ef03c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/arrangements.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/billing/daily-target.ts",
@@ -2203,9 +2173,9 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-approval.ts",
-    "fingerprint": "00ad883a7d690bee58227f10fc2b0e668089a9071cc0cd4c307aa00710db044e",
+    "fingerprint": "1062846dc1709bc585d5006f940b566082038d494103626fc7a6bd1f5a8a12db",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-approval.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Approval and return share one locked read of the reviewed entries; the single-entry return's own acquisition is removed."
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-insert.ts",
@@ -2215,25 +2185,7 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2c7c57ce23d0b4126039dd033c46b966411d63e36fe63cbbf15dab2aa4ec9ec5",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2e7e640a1c6f753b5d5271a42be4dcbbc0564f06ef4c3f6aae1a3549439ee26f",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
     "fingerprint": "843c3c089ea63ede290e9f4599e4ad419f56006954fa15d36605b00060457b36",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "f9516d9c578f8199357badb9ece69d53392631b50201d0fcc28893dec4c0be2f",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -3649,15 +3601,15 @@
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "43dcac559efabea48919abdb2853456c6bcb5a803e4bafd6cdadd8caaa86dc7e",
+    "fingerprint": "175f666c3662b5398246fd148f90d65f4fbdf3fba83e500d9d9672e450dfbcaf",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on external.database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "8cd7517024c8b2fa6124cb97c69c43970c9dcb254b872ddcb786278600319dcb",
+    "fingerprint": "f5b5976998e8b3259d75c0037e2a325e0bef6c406dae071974c2ec4547205404",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",

@@ -8,7 +8,12 @@ import { IntlProvider } from "use-intl";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { repoRelativePath } from "@stll/portable-path";
-import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
+import {
+  isObjectLiteralProperty,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
@@ -182,24 +187,26 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
     const adapters = new Set<string>();
     let mountsTable = false;
     let ownsAiColumnFactory = false;
-    for (const statement of source.program.body) {
-      if (
-        statement.type !== "ImportDeclaration" ||
-        statement.importKind === "type"
-      ) {
-        continue;
-      }
-      const specifier = statement.source.value;
-      const bindings = statement.specifiers;
-      if (
-        bindings.length > 0 &&
-        bindings.every(
-          (element) =>
-            element.type === "ImportSpecifier" && element.importKind === "type",
+    const typeOnlyDeclarations = new Set(
+      source.program.body
+        .filter(
+          (statement) =>
+            statement.type === "ImportDeclaration" &&
+            statement.importKind === "type",
         )
+        .map((statement) => statement.start),
+    );
+    for (const statement of source.module.staticImports) {
+      // Empty type-only declarations have no binding entries. Mixed imports
+      // retain their runtime bindings, including a default import.
+      if (
+        typeOnlyDeclarations.has(statement.start) ||
+        (statement.entries.length > 0 &&
+          statement.entries.every((entry) => entry.isType))
       ) {
         continue;
       }
+      const specifier = statement.moduleRequest.value;
       let resolved: string | undefined;
       if (specifier.startsWith("@/")) {
         resolved = path.resolve(sourceRoot, specifier.slice(2));
@@ -227,73 +234,79 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
       }
       const names =
         target === "components/workspaces/ai-cell" ? aiCellNames : tableNames;
-      for (const element of bindings) {
-        if (
-          element.type === "ImportSpecifier" &&
-          element.importKind !== "type" &&
-          exports.has(
-            element.imported.type === "Identifier"
-              ? element.imported.name
-              : element.imported.value,
-          )
-        ) {
-          names.add(element.local.name);
+      for (const entry of statement.entries) {
+        if (entry.isType) {
+          continue;
         }
-        if (element.type === "ImportNamespaceSpecifier") {
+        if (
+          entry.importName.name !== null &&
+          exports.has(entry.importName.name)
+        ) {
+          names.add(entry.localName.value);
+        }
+        // oxc-parser declares ImportNameKind as an ambient const enum of
+        // strings.
+        const kind: string = entry.importName.kind;
+        if (kind === "NamespaceObject") {
           for (const name of exports) {
-            names.add(`${element.local.name}.${name}`);
+            names.add(`${entry.localName.value}.${name}`);
           }
         }
       }
     }
-    const hasCellFactory = (node: Node): boolean => {
+    const hasCellFactory = (root: Node): boolean => {
       let found = false;
-      walk(node, (child) => {
+      walk(root, (node, ancestors) => {
         if (
-          (child.type === "Property" &&
-            text.slice(child.key.start, child.key.end) === "cell") ||
-          (child.type === "CallExpression" &&
-            child.callee.type === "Identifier" &&
-            child.callee.name === "getPropertyColumnRender")
+          found ||
+          (isObjectLiteralProperty(node, ancestors.at(-1)) &&
+            ((node.key.type === "Identifier" && node.key.name === "cell") ||
+              (node.key.type === "Literal" && node.key.value === "cell"))) ||
+          (node.type === "CallExpression" &&
+            node.callee.type === "Identifier" &&
+            node.callee.name === "getPropertyColumnRender")
         ) {
           found = true;
+          return "skip-children";
         }
+        return undefined;
       });
       return found;
+    };
+    // Each node's owner is the nearest enclosing named variable or function
+    // declaration, the node itself included.
+    const ownerOf = (node: Node, ancestors: readonly Node[]) => {
+      for (const current of [...ancestors, node].toReversed()) {
+        if (
+          current.type === "VariableDeclarator" &&
+          current.id.type === "Identifier"
+        ) {
+          return current.id.name;
+        }
+        if (current.type === "FunctionDeclaration") {
+          return current.id?.name;
+        }
+      }
+      return undefined;
     };
     walk(source.program, (node, ancestors) => {
       if (
         node.type === "SwitchCase" &&
         node.test?.type === "Literal" &&
-        typeof node.test.value === "string" &&
-        ["question", "property"].includes(node.test.value) &&
+        (node.test.value === "question" || node.test.value === "property") &&
         hasCellFactory(node)
       ) {
         ownsAiColumnFactory = true;
       }
-      if (node.type !== "JSXOpeningElement") {
-        return;
-      }
-      let owner: string | undefined;
-      for (const ancestor of ancestors.toReversed()) {
-        if (
-          ancestor.type === "VariableDeclarator" &&
-          ancestor.id.type === "Identifier"
-        ) {
-          owner = ancestor.id.name;
-          break;
+      if (node.type === "JSXOpeningElement") {
+        const tag = source.sourceText.slice(node.name.start, node.name.end);
+        const owner = ownerOf(node, ancestors);
+        if (aiCellNames.has(tag) && owner !== undefined) {
+          adapters.add(owner);
         }
-        if (ancestor.type === "FunctionDeclaration") {
-          owner = ancestor.id?.name;
-          break;
+        if (tableNames.has(tag)) {
+          mountsTable = true;
         }
-      }
-      const tag = text.slice(node.name.start, node.name.end);
-      if (aiCellNames.has(tag) && owner !== undefined) {
-        adapters.add(owner);
-      }
-      if (tableNames.has(tag)) {
-        mountsTable = true;
       }
     });
     modules.set(file.replace(/\.tsx?$/u, ""), {
@@ -348,6 +361,96 @@ const assertHostsUseSharedAdapters = (
 };
 
 describe("AI table host census", () => {
+  test.each([
+    { declaration: 'import columns from "./factory";', runtime: true },
+    { declaration: 'import { columns } from "./factory";', runtime: true },
+    { declaration: 'import * as columns from "./factory";', runtime: true },
+    {
+      declaration: 'import columns, { type Shape } from "./factory";',
+      runtime: true,
+    },
+    {
+      declaration:
+        'import columns, { type Shape, type Other } from "./factory";',
+      runtime: true,
+    },
+    { declaration: 'import {} from "./factory";', runtime: true },
+    { declaration: 'import "./factory";', runtime: true },
+    { declaration: 'import { type Shape } from "./factory";', runtime: false },
+    { declaration: 'import type columns from "./factory";', runtime: false },
+    { declaration: 'import type { Shape } from "./factory";', runtime: false },
+    { declaration: 'import type {} from "./factory";', runtime: false },
+  ])(
+    "preserves runtime dependency semantics for $declaration",
+    ({ declaration, runtime }) => {
+      const census = sourceCensus(
+        new Map([
+          [
+            "synthetic/adapter.tsx",
+            'import { AiCell } from "@/components/workspaces/ai-cell"; export const SyntheticCell = () => <AiCell state={{type: "running"}} />;',
+          ],
+          [
+            "synthetic/factory.tsx",
+            'import { SyntheticCell } from "./adapter"; export const columns = (kind) => { switch(kind) { case "question": return { cell: () => <SyntheticCell /> }; } };',
+          ],
+          [
+            "synthetic/host.tsx",
+            `import { PublicLawTable } from "@/components/public-law-table/public-law-table"; ${declaration} export const Host = () => <PublicLawTable />;`,
+          ],
+        ]),
+      );
+      expect(census.hosts.map((host) => host.file)).toEqual(
+        runtime ? ["synthetic/host"] : [],
+      );
+      if (runtime) {
+        expect([...census.hosts.flatMap((host) => [...host.adapters])]).toEqual(
+          ["SyntheticCell"],
+        );
+      }
+    },
+  );
+  test.each([
+    { form: "property", entry: "cell: renderer" },
+    { form: "method", entry: "cell() { return <SyntheticCell />; }" },
+    { form: "shorthand", entry: "cell" },
+    { form: "getter", entry: "get cell() { return renderer; }" },
+    { form: "quoted property", entry: '"cell": renderer' },
+    { form: "computed literal", entry: '["cell"]: renderer' },
+  ])(
+    "discovers $form cell factories and their adapter dependencies",
+    ({ entry }) => {
+      const sources = new Map([
+        [
+          "synthetic/adapter.tsx",
+          'import { AiCell } from "@/components/workspaces/ai-cell"; export const SyntheticCell = () => <AiCell state={{type: "running"}} />;',
+        ],
+        [
+          "synthetic/factory.tsx",
+          `import { SyntheticCell } from "./adapter"; const renderer = () => <SyntheticCell />; const cell = renderer; export const columns = (kind) => { switch(kind) { case "question": return { ${entry} }; } };`,
+        ],
+        [
+          "synthetic/host.tsx",
+          'import { PublicLawTable } from "@/components/public-law-table/public-law-table"; import { columns } from "./factory"; export const Host = () => <PublicLawTable columns={columns("question")} />;',
+        ],
+      ]);
+      const valid = sourceCensus(sources);
+      expect(valid.hosts.map((host) => host.file)).toEqual(["synthetic/host"]);
+      expect([...valid.adapters]).toEqual(["SyntheticCell"]);
+      assertHostsUseSharedAdapters(valid);
+      sources.set(
+        "synthetic/adapter.tsx",
+        "export const SyntheticCell = () => <span />;",
+      );
+      const broken = sourceCensus(sources);
+      expect(broken.hosts.map((host) => host.file)).toEqual(
+        valid.hosts.map((host) => host.file),
+      );
+      expect(() => assertHostsUseSharedAdapters(broken)).toThrow(
+        "must reach a shared AI adapter",
+      );
+    },
+  );
+
   test("discovers aliased and namespace table hosts even when their shared adapter is removed", () => {
     const sources = new Map([
       [

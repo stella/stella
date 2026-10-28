@@ -508,19 +508,35 @@
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
     "approval": {
+      "approveAll": "{count, plural, one {Zatwierdź # wpis} few {Zatwierdź # wpisy} many {Zatwierdź wszystkie # wpisów} other {Zatwierdź wszystkie # wpisu}}",
       "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "billedTotal": "Rozliczono {duration}",
       "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "emptyWeek": "W tym tygodniu nic nie czeka na zatwierdzenie. Przesłany czas pojawi się tutaj.",
+      "everyone": "Wszyscy",
       "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
       "myTime": "Mój czas",
+      "pending": "{count, plural, one {# wpis do zatwierdzenia} few {# wpisy do zatwierdzenia} many {# wpisów do zatwierdzenia} other {# wpisu do zatwierdzenia}}",
       "refusals": {
         "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
         "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
         "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "notSubmitted": "Ten wpis nie został jeszcze przesłany. Najpierw musi go przesłać jego autor.",
         "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
         "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
         "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
       },
       "returnComment": "Powód zwrotu",
+      "returnRefusals": {
+        "invalidEntry": "Sprawdź datę pracy we wpisie, a potem go zwróć.",
+        "notApprover": "Ten wpis może zwrócić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje, więc nie można go zwrócić. Odśwież listę.",
+        "notSubmitted": "Ta wersja robocza nigdy nie została przesłana, więc nie ma czego zwracać.",
+        "runningTimer": "Zatrzymaj działający stoper przed zwróceniem wpisu.",
+        "timePeriodLocked": "Ten miesiąc jest zablokowany, więc wpisu nie można zwrócić. Poproś administratora o jego odblokowanie.",
+        "wrongStatus": "Zafakturowanego ani odpisanego czasu nie można zwrócić autorowi."
+      },
+      "returnSelected": "Zwróć {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
       "selectEntry": "Wybierz wpis",
       "timeEntries": "Wpisy czasu",
       "title": "Zatwierdzenia"
@@ -530,6 +546,17 @@
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
+    "clientComposer": {
+      "flatFeeNote": "Sprawy z wynagrodzeniem ryczałtowym rozliczaj na stronie faktur danej sprawy.",
+      "includeMatter": "Uwzględnij {matterName}",
+      "invalidPeriod": "Wybierz datę końcową nie wcześniejszą niż początkowa.",
+      "loadFailed": "Nie udało się wczytać niezafakturowanej pracy. Spróbuj ponownie.",
+      "matterSubtotal": "Suma sprawy z VAT: {amount} · {share} faktury",
+      "periodEnd": "Koniec okresu",
+      "periodStart": "Początek okresu",
+      "title": "Wystaw fakturę klientowi",
+      "visibility": "Ta faktura jest widoczna tylko dla osób z dostępem do wszystkich uwzględnionych spraw i administratorów rozliczeń."
+    },
     "codes": {
       "activity": "Czynność",
       "activityCode": "Kod czynności",
@@ -673,6 +700,11 @@
       "invoiceDate": "Data wystawienia",
       "invoiceDetail": "Szczegóły faktury",
       "invoiceNumber": "Numer faktury",
+      "lineOverrides": {
+        "editedRecorded": "Zmieniono · zapisano: {description}, {quantity} × {rate}",
+        "quantity": "Ilość",
+        "resetRecorded": "Przywróć zapisane wartości"
+      },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
       "markPaid": "Oznacz jako zapłaconą",
@@ -697,6 +729,7 @@
     "markNonBillableSelected": "Oznacz jako nierozliczalne",
     "matterRequired": "Wybierz sprawę",
     "minutes": "Minuty",
+    "moveEntryHint": "Zapisanie przeniesie wpis do tej sprawy i wyceni go według jej stawek.",
     "narrative": "Opis",
     "narrativePlaceholder": "Opisz wykonaną pracę...",
     "noActiveTimer": "Brak aktywnego timera",
@@ -811,6 +844,7 @@
       "approved": "Zatwierdzony",
       "billed": "Zafakturowany",
       "draft": "Wersja robocza",
+      "submitted": "Przesłano",
       "written_off": "Odpisany"
     },
     "stopTimer": "Zatrzymaj",
@@ -969,7 +1003,6 @@
     "coverage": {
       "completeness": "Kompletność",
       "courtsHeading": "Według sądu",
-      "courtsUnavailable": "Zestawienie według sądów jest obecnie niedostępne.",
       "decisionYears": "Lata orzeczeń",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "generatedAt": "Dane na {date}",
@@ -980,20 +1013,16 @@
       "healthStalled": "Bez postępu",
       "healthUnknown": "Jeszcze nieuruchomione",
       "inPreparation": "W przygotowaniu",
-      "knownGaps": "Znane luki",
       "lastSync": "Ostatnia synchronizacja",
-      "noGapsRecorded": "Brak zarejestrowanych luk",
       "notCountedYet": "Jeszcze niepoliczone",
       "notMeasuredYet": "Jeszcze niezmierzone",
-      "pendingTexts": "Oczekujące teksty",
       "reportedByListing": "Policzone z wykazu wydawcy",
       "reportedByOperator": "Wpisane ręcznie",
       "reportedByPublisher": "Własne dane wydawcy",
       "searchable": "Wyszukiwalne",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
-      "unavailable": "Dane o zakresie są chwilowo niedostępne.",
-      "unreadListingPeriods": "Nieodczytane okresy wykazu"
+      "unavailable": "Dane o zakresie są chwilowo niedostępne."
     },
     "decisionNotFound": "Nie znaleziono orzeczenia",
     "decisionTypes": {
@@ -2083,7 +2112,6 @@
       "orLetUsKnowAt": "albo napisz do nas na",
       "viewDocumentation": "Zobacz dokumentację"
     },
-    "error": "Błąd",
     "expenses": "Wydatki",
     "export": {
       "citations": "Cytowania",
@@ -2157,6 +2185,7 @@
     "lastUpdated": "Ostatnia aktualizacja",
     "layoutResetAfterProblem": "Po wystąpieniu problemu przywrócono domyślny układ.",
     "legalDatabase": "Baza danych prawnych",
+    "loadFailed": "Nie udało się wczytać.",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
@@ -2245,7 +2274,7 @@
     "showMore": "Pokaż więcej",
     "showSecretValue": "Pokaż tajną wartość",
     "signOut": "Wyloguj się",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
@@ -2722,7 +2751,7 @@
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },
-    "actionFailed": "Akcja nie powiodła się",
+    "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
       "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
@@ -3273,7 +3302,7 @@
     "saveSerializeFailedTitle": "Nie udało się utworzyć pliku DOCX",
     "savingDocument": "Zapisywanie...",
     "showDetails": "Pokaż szczegóły",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "synced": "Zsynchronizowano",
     "syncing": "Synchronizowanie",
     "tableBordersAll": "Wszystkie krawędzie",
@@ -5888,6 +5917,16 @@
       "pendingCount": "{count, plural, one {# sugestia} few {# sugestie} many {# sugestii} other {# sugestii}}",
       "previousWeek": "Poprzedni tydzień",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Sprawdź datę pracy, a potem prześlij ten wpis.",
+        "narrativeRequired": "Dodaj opis, a potem prześlij ten wpis.",
+        "runningTimer": "Zatrzymaj działający licznik czasu, a potem prześlij ten wpis.",
+        "unpriced": "Ten wpis nie ma stawki. Poproś o stawkę dla sprawy, a potem go prześlij."
+      },
+      "returned": "Zwrócono: {comment}",
+      "submitAndApprove": "Prześlij i zatwierdź",
+      "submitResult": "Przesłano: {submitted} · zatwierdzono: {approved} · do poprawy: {refused}",
+      "submitWeek": "Prześlij tydzień",
       "title": "Mój tydzień",
       "totals": "Zarejestrowano: {logged} · rozliczalne: {billable}"
     }
