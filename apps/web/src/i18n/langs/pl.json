@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, number} więcej"
+      "unnamed": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
     },
     "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",

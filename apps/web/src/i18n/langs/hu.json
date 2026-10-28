@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "még {count, number}"
+      "unnamed": "{count, plural, one {még #} other {még #}}"
     },
     "historyTrimmed": "A korábbi üzeneteket nem sikerült összefoglalni, ezért ez a válasz csak a beszélgetés legutóbbi részét veszi figyelembe.",
     "improvePrompt": "Prompt javítása",

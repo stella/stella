@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, number} más"
+      "unnamed": "{count, plural, one {# más} many {# más} other {# más}}"
     },
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",

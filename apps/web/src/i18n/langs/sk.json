@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, number} ďalších"
+      "unnamed": "{count, plural, one {# ďalší} few {# ďalšie} other {# ďalších}}"
     },
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",

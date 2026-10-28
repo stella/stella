@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, number} آخر"
+      "unnamed": "{count, plural, zero {لا شيء آخر} one {عنصر واحد آخر} two {عنصران آخران} few {# عناصر أخرى} many {# عنصرًا آخر} other {# عنصر آخر}}"
     },
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",

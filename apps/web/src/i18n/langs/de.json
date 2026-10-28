@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, number} weitere"
+      "unnamed": "{count, plural, one {# weiteres} other {# weitere}}"
     },
     "historyTrimmed": "Ältere Nachrichten konnten nicht zusammengefasst werden. Diese Antwort berücksichtigt daher nur den jüngsten Teil der Unterhaltung.",
     "improvePrompt": "Prompt verbessern",

@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "dar {count, number}"
+      "unnamed": "{count, plural, one {dar #} few {dar #} many {dar #} other {dar #}}"
     },
     "historyTrimmed": "Ankstesnių žinučių nepavyko apibendrinti, todėl šiame atsakyme atsižvelgta tik į naujausią pokalbio dalį.",
     "improvePrompt": "Patobulinti užklausą",

@@ -1521,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "veel {count, number}"
+      "unnamed": "{count, plural, one {veel #} other {veel #}}"
     },
     "historyTrimmed": "Varasemaid sõnumeid ei õnnestunud kokku võtta, seega arvestab see vastus ainult vestluse viimast osa.",
     "improvePrompt": "Täiusta viipa",
