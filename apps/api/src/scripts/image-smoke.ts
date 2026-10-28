@@ -21,6 +21,7 @@ import {
   loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
+import { RegexSet } from "@stll/regex-set";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import { TextSearch } from "@stll/text-search";
 
@@ -340,6 +341,19 @@ await probe("every split script runs its main block", async () => {
         `${script} exited ${String(subprocess.exitCode)} without output; its main block did not run`,
       );
     }
+  }
+});
+
+// Exercise RegexSet itself: the literal TextSearch probe selects Aho-Corasick.
+await probe("regex-set native binding", () => {
+  const search = new RegexSet(["token"]);
+  const matches = search.findIter("token token");
+  if (
+    matches.length !== 2 ||
+    matches[0]?.start !== 0 ||
+    matches[1]?.start !== 6
+  ) {
+    panic("regex-set native binding returned incorrect match ranges");
   }
 });
 

@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
-import { escapeRegExp } from "@stll/text-normalize";
 
 import {
   buildMarkedPair,
@@ -20,6 +19,12 @@ import {
   resolveMarkedSegments,
   splitClauseLabel,
 } from "@/components/ai-suggestions/review-key-terms";
+
+import {
+  PHRASE_RANGE_CASES,
+  PHRASE_REGEX_CASES,
+  scalarPhraseRanges,
+} from "./review-key-terms.test-fixtures";
 
 /** The substrings a set of ranges covers, in source order. */
 const marked = (text: string, kind: KeyTermKind) =>
@@ -196,26 +201,7 @@ describe("phraseRanges", () => {
     ).toEqual(["12 (twelve)\nmonths"]);
   });
 
-  test.each([
-    ["😀 ČAPKOVĚ\n návrhu", "čapkově návrhu", [[3, 18]]],
-    ["[a+b] [aab]", "[a+b]", [[0, 5]]],
-    ["a a a", "a a", [[0, 3]]],
-    ["a\uFEFFb", "a b", [[0, 3]]],
-    ["a\u0085b", "a b", []],
-    [
-      "ſoren SOREN",
-      "soren",
-      [
-        [0, 5],
-        [6, 11],
-      ],
-    ],
-    ["Čapek Capek", "capek", [[6, 11]]],
-    ["C\u030capek Čapek", "Čapek", [[7, 12]]],
-    ["Straße", "strasse", []],
-    ["\ud801", "\ud800", [[0, 1]]],
-    ["\ud800", "\ud800", [[0, 1]]],
-  ])(
+  test.each(PHRASE_RANGE_CASES)(
     "preserves whitespace, case and scalar boundary spans for %s",
     (text, phrase, expected) => {
       expect(
@@ -394,23 +380,7 @@ test("phrase engine agrees with scalar JavaScript regex oracle", () => {
   assertProperty(
     "phrase engine agrees with scalar JavaScript regex oracle",
     fc.property(phraseText, phraseText, (rawText, phrase) => {
-      const text = rawText.toWellFormed();
-      const words = phrase
-        .toWellFormed()
-        .trim()
-        .split(/\s+/u)
-        .filter((word) => word.length > 0);
-      const expected =
-        words.length === 0
-          ? []
-          : [
-              ...text.matchAll(
-                new RegExp(
-                  words.map(escapeRegExp).join(String.raw`\s+`),
-                  "giu",
-                ),
-              ),
-            ].map(({ index, 0: match }) => [index, index + match.length]);
+      const expected = scalarPhraseRanges(rawText, phrase);
       expect(
         phraseRanges(rawText, phrase).map(({ start, end }) => [start, end]),
       ).toEqual(expected);
@@ -455,3 +425,20 @@ test("reuses alternating phrase configurations and evicts the oldest at capacity
   expect(phraseMatcher(nextOldest.source)).toBe(nextOldest.matcher);
   expect(phraseMatcher(oldest.source)).not.toBe(oldest.matcher);
 });
+
+test.each(PHRASE_REGEX_CASES)(
+  "phrase regex spans and replacement agree with JavaScript: $source",
+  ({ source, text }) => {
+    const matcher = phraseMatcher(source);
+    expect(
+      matcher.findIter(text).map(({ start, end }) => [start, end]),
+    ).toEqual(
+      [...text.matchAll(new RegExp(source, "giu"))].map(
+        ({ index, 0: match }) => [index, index + match.length],
+      ),
+    );
+    expect(matcher.replaceAll(text, ["<match>"])).toBe(
+      text.replaceAll(new RegExp(source, "giu"), "<match>"),
+    );
+  },
+);

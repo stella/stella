@@ -31,8 +31,9 @@ export default defineConfig({
   testDir: "./ui-playground",
   // `*.visual.spec.ts` compares screenshots; `*.geometry.spec.ts` compares
   // measured boxes, which a screenshot cannot assert on and a unit test cannot
-  // reach. Both run against the same playground routes, in the same projects.
-  testMatch: "**/*.@(visual|geometry).spec.ts",
+  // reach. Runtime specs exercise browser-only modules through this same Vite
+  // server and its production package conditions.
+  testMatch: "**/*.@(visual|geometry|runtime).spec.ts",
   // Every test loads its own page and shares nothing with the others, so they
   // spread across workers. One page load on the dev server costs about 6 s,
   // which made the single-worker run about 10 min long.
