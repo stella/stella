@@ -6,7 +6,7 @@ import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   caseLawBrowseFacetCounts,
@@ -190,7 +190,7 @@ type CaseLawCoverage = {
    */
   totals: {
     addedLastWeek: number | null;
-    searchable: number;
+    searchable: number | null;
     stored: { decisions: number; asOf: string | null };
   };
   countries: readonly CaseLawCoverageCountry[];
@@ -422,17 +422,20 @@ const sumOfKnown = (terms: readonly (number | null)[]): number | null => {
 const searchableCoverageTotals = (
   countries: readonly CaseLawCoverageCountry[],
 ) => {
-  const searchable = countries.filter(
-    (country) =>
-      country.availability === CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE,
-  );
+  // Admission determines who contributes; a failed facet read has no observed country count.
+  const searchable = countries
+    .filter(({ country }) => isPublicCaseLawCountry(country))
+    .map((country) =>
+      country.availability === CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE
+        ? country
+        : null,
+    );
   return {
-    searchable: searchable.reduce(
-      (total, country) => total + country.searchable,
-      0,
+    searchable: sumOfKnown(
+      searchable.map((country) => country?.searchable ?? null),
     ),
     addedLastWeek: sumOfKnown(
-      searchable.map((country) => country.addedLastWeek),
+      searchable.map((country) => country?.addedLastWeek ?? null),
     ),
   };
 };
@@ -644,10 +647,7 @@ export const loadCaseLawCoverage = async ({
       storedAsOf = entry.storedAsOf;
     }
 
-    const isAdmitted = PUBLIC_CASE_LAW_COUNTRIES.some(
-      (candidate) => candidate === country,
-    );
-    if (!isAdmitted) {
+    if (!isPublicCaseLawCountry(country)) {
       countries.push({
         ...base,
         availability: CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,

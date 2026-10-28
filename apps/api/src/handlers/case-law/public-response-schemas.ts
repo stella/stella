@@ -420,7 +420,7 @@ export const coverageResponseSchema = v.object({
   ),
   totals: v.object({
     addedLastWeek: v.nullable(v.number()),
-    searchable: v.number(),
+    searchable: v.nullable(v.number()),
     stored,
   }),
   countries: v.pipe(

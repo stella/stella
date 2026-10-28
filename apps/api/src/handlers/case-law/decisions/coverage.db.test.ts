@@ -15,6 +15,7 @@ import {
   caseLawCoverageSlices,
   caseLawDecisions,
   caseLawSearchDocuments,
+  caseLawSourceArrivals,
   caseLawSources,
   publishedCaseLawDecisions,
 } from "@/api/db/schema";
@@ -1003,10 +1004,80 @@ test(
       CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
     );
     expect(cze?.stored.decisions).toBe(4);
-    expect(coverage.value.totals.searchable).toBe(0);
+    expect(coverage.value.totals).toMatchObject({
+      searchable: null,
+      addedLastWeek: null,
+    });
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test.each([
+  {
+    name: "complete facet reads give exact searchable totals",
+    unavailableCountries: [],
+    expected: { searchable: 8, addedLastWeek: 9 },
+  },
+  {
+    name: "partial facet reads leave searchable totals unknown",
+    unavailableCountries: ["CZE"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+  {
+    name: "partial facet reads after a known country leave searchable totals unknown",
+    unavailableCountries: ["EU"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+  {
+    name: "all facet reads failing leave searchable totals unknown",
+    unavailableCountries: ["CZE", "EU"],
+    expected: { searchable: null, addedLastWeek: null },
+  },
+])("$name", async ({ unavailableCountries, expected }) => {
+  const db = drizzle({ client });
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: sourceId,
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      storedTotal: 5,
+      storedTotalAsOf: NOW,
+    }),
+  );
+  try {
+    await db
+      .insert(caseLawSourceArrivals)
+      .values({ sourceId, addedLastWeek: 7, countedAt: NOW });
+    const failedParts: string[] = [];
+    const coverage = await loadCoverage({
+      onPartialFailure: (part) => {
+        failedParts.push(part);
+      },
+      readFacets: async (country) =>
+        unavailableCountries.some((candidate) => candidate === country)
+          ? Result.err({ message: "Index unavailable" })
+          : Result.ok({
+              country: [{ value: country, count: country === "CZE" ? 3 : 5 }],
+              court: [],
+              year: [],
+            }),
+    });
+    expect(Result.isOk(coverage)).toBe(true);
+    if (Result.isError(coverage)) {
+      return;
+    }
+    expect(coverage.value.countries.map(({ country }) => country)).toEqual([
+      "AUT",
+      "CZE",
+      "EU",
+    ]);
+    expect(failedParts).toEqual(unavailableCountries.map(() => "facets"));
+    expect(coverage.value.totals).toMatchObject(expected);
+    expect(coverage.value.totals.stored.decisions).toBe(10);
+  } finally {
+    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+  }
+});
 
 test(
   "a week the arrivals read did not answer for is unknown, never zero",
