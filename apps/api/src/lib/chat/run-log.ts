@@ -187,8 +187,8 @@ type RunLogHeaderOptions = Pick<
   tx: Transaction;
   includeReferences: boolean;
 };
-// A generic run's complete source set is known only when its producer closes it.
-const runDeliveryReady = sql<boolean>`${chatThreads.subjectDecisionId} IS NOT NULL OR ${chatRunLogs.closedAt} IS NOT NULL`;
+// A run's complete source set is known only when its producer closes it.
+const runDeliveryReady = sql<boolean>`${chatRunLogs.closedAt} IS NOT NULL`;
 const readRunLogHeaderOnTx = async ({
   tx,
   organizationId,

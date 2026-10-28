@@ -750,25 +750,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           { type: EventType.TEXT_MESSAGE_END, messageId },
           { type: EventType.RUN_FINISHED, runId, threadId },
         ]);
-        const entries = await request(async () => log.snapshot());
-        expect(entries.map(({ offset }) => offset)).toEqual([
-          "1",
-          "2",
-          "3",
-          "4",
-          "5",
-        ]);
-        expect(JSON.stringify(entries)).toContain(marker);
-        expect(JSON.stringify(entries)).not.toContain(secret);
-        const { processor } = createStreamMessageCapture({
-          initialMessages: [],
-          capture: (message) => message,
-        });
-        for (const { chunk } of entries) {
-          processor.processChunk(chunk);
-        }
-        expect(JSON.stringify(processor.getMessages())).toContain(marker);
-        expect(JSON.stringify(processor.getMessages())).not.toContain(secret);
+        expect(await log.snapshot()).toEqual([]);
         await log.append([
           {
             type: EventType.TEXT_MESSAGE_START,
@@ -782,6 +764,29 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           },
           { type: EventType.TEXT_MESSAGE_END, messageId: userMessageId },
         ]);
+        await log.close();
+        const entries = await request(async () => log.snapshot());
+        expect(entries.map(({ offset }) => offset)).toEqual([
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+        ]);
+        expect(JSON.stringify(entries)).toContain(marker);
+        expect(JSON.stringify(entries)).not.toContain(secret);
+        const { processor } = createStreamMessageCapture({
+          initialMessages: [],
+          capture: (message) => message,
+        });
+        for (const { chunk } of entries) {
+          processor.processChunk(chunk);
+        }
+        expect(JSON.stringify(processor.getMessages())).toContain(marker);
+        expect(JSON.stringify(processor.getMessages())).not.toContain(secret);
         const suffix = await request(async () => {
           const reconnected = createChatRunLog({
             db: scopedDb,
@@ -1698,7 +1703,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     },
   );
 
-  const genericLogFixture = async () => {
+  const liveLogFixture = async (subject: "generic" | "active subject") => {
     const id = createSafeId<"chatThread">();
     seededThreads.push(id);
     const incomingId = createSafeId<"chatMessage">();
@@ -1715,6 +1720,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         workspaceId,
         title: own,
         titleSource: "user",
+        subjectDecisionId: subject === "active subject" ? activeId : null,
       });
       await tx.insert(chatMessages).values({
         id: incomingId,
@@ -1747,16 +1753,22 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
 
   test.each(
     (["direct", "replay", "compact"] as const).flatMap((mode) =>
-      (["withdrawn", "active"] as const).map((source) => ({ mode, source })),
+      (["withdrawn", "active"] as const).flatMap((source) =>
+        (["generic", "active subject"] as const).map((subject) => ({
+          mode,
+          source,
+          subject,
+        })),
+      ),
     ),
   )(
-    "generic $mode holds text until later references are resolved ($source)",
-    async ({ mode, source }) => {
+    "live $subject $mode holds text until later references are resolved ($source)",
+    async ({ mode, source, subject }) => {
       const {
         writer,
         options,
         threadId: genericThreadId,
-      } = await genericLogFixture();
+      } = await liveLogFixture(subject);
       const assistantId = createSafeId<"chatMessage">();
       const prefix = [
         {
@@ -1802,7 +1814,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               organizationId,
               runId: options.runId,
               resumeOffset: "-1",
-            })) ?? panic("Expected generic replay"));
+            })) ?? panic("Expected live replay"));
       reads = 0;
       await request(async () => {
         const controller = new AbortController();
@@ -1881,7 +1893,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       writer,
       options,
       threadId: genericThreadId,
-    } = await genericLogFixture();
+    } = await liveLogFixture("generic");
     await writer.append([
       {
         type: EventType.RUN_STARTED,
