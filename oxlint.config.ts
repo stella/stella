@@ -2019,6 +2019,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
+    "./.oxlint-plugins/require-mutation-user-feedback.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/no-known-value-widening.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
@@ -3274,6 +3275,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/lib/**/mutations*.ts",
+        "apps/web/src/**/mutations/*.ts",
+        ".oxlint-plugins/__fixtures__/require-mutation-user-feedback.fixture.ts",
+      ],
+      rules: {
+        "require-mutation-user-feedback/require-mutation-user-feedback":
+          "error",
       },
     },
     {

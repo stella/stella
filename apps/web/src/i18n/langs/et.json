@@ -5976,6 +5976,10 @@
       "title": "Tõlge on valmis"
     }
   },
+  "transportErrors": {
+    "network": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
+    "timeout": "Vastuse loomise aeg sai otsa. Proovi uuesti."
+  },
   "validation": {
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
     "slugFormat": "Slug tohib sisaldada ainult väiketähti, numbreid ja sidekriipse",

@@ -5976,6 +5976,10 @@
       "title": "Tradução pronta"
     }
   },
+  "transportErrors": {
+    "network": "Erro de rede. Verifique sua conexão com a Internet e tente novamente.",
+    "timeout": "O tempo limite para a resposta foi excedido. Tente novamente."
+  },
   "validation": {
     "organizationNameRequired": "O nome da organização é obrigatório",
     "slugFormat": "O slug deve conter letras minúsculas, números e hifens",

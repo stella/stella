@@ -5976,6 +5976,10 @@
       "title": "Překlad je hotový"
     }
   },
+  "transportErrors": {
+    "network": "Chyba sítě. Zkontrolujte připojení k internetu a zkuste to znovu.",
+    "timeout": "Vypršel časový limit pro odpověď. Zkuste to znovu."
+  },
   "validation": {
     "organizationNameRequired": "Název organizace je povinný",
     "slugFormat": "Slug smí obsahovat pouze malá písmena, čísla a pomlčky",

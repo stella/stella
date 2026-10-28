@@ -51,6 +51,8 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  transportKind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 }> {}
 
 const MAX_API_RETRY_COUNT = 3;
@@ -90,11 +92,12 @@ export const shouldRetryAPIRequest = (
 export type ToAPIErrorProps = {
   status: number;
   value: unknown;
+  kind?: "network" | "timeout" | "aborted" | undefined;
+  cause?: unknown;
 };
 
 export type ApiResponse<T> =
-  | { data: T; error: null }
-  | { data: null; error: { status: number; value: unknown } };
+  { data: T; error: null } | { data: null; error: ToAPIErrorProps };
 
 /**
  * Unwraps an API client response: throws a localized {@link APIError} when the
@@ -111,7 +114,20 @@ export function unwrapApiResponse<T>(response: ApiResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+export const toAPIError = (error: ToAPIErrorProps): APIError => {
+  if (error.kind !== undefined) {
+    const t = getTranslator();
+    return new APIError({
+      status: error.status,
+      transportKind: error.kind,
+      cause: error.cause,
+      message:
+        error.kind === "timeout"
+          ? t("transportErrors.timeout")
+          : t("transportErrors.network"),
+    });
+  }
+  const { status, value } = error;
   const normalized = normalizeApiError({
     status,
     value: parseApiErrorValue(value),

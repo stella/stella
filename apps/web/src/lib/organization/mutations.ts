@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import type { Role } from "@/lib/auth-client";
@@ -43,6 +44,7 @@ export const useRemoveMember = () => {
         fingerprintKey: "useRemoveMember:failure",
         scope: { type: "handler", handlerId: "useRemoveMember:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -79,6 +81,7 @@ export const useInviteMember = () => {
         fingerprintKey: "useInviteMember:failure",
         scope: { type: "handler", handlerId: "useInviteMember:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -116,6 +119,7 @@ export const useCancelInvitation = () => {
         fingerprintKey: "useCancelInvitation:failure",
         scope: { type: "handler", handlerId: "useCancelInvitation:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };

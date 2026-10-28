@@ -5976,6 +5976,10 @@
       "title": "Übersetzung bereit"
     }
   },
+  "transportErrors": {
+    "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+    "timeout": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut."
+  },
   "validation": {
     "organizationNameRequired": "Organisationsname ist erforderlich",
     "slugFormat": "Slug darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",

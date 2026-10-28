@@ -5976,6 +5976,10 @@
       "title": "A fordítás elkészült"
     }
   },
+  "transportErrors": {
+    "network": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
+    "timeout": "Lejárt a válaszadás időkorlátja. Próbálja újra."
+  },
   "validation": {
     "organizationNameRequired": "A szervezet neve kötelező",
     "slugFormat": "A slug csak kisbetűket, számokat és kötőjeleket tartalmazhat",

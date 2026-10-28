@@ -275,6 +275,7 @@ runtime validation, or integration tests.
 - [`require-api-error-check`](./require-api-error-check.ts) (`require-api-error-check`): requires API responses to inspect or unwrap the error channel before data is consumed or escapes.
 - [`require-fetch-timeout`](./require-fetch-timeout.ts) (`require-fetch-timeout`): requires network requests to carry a bounded timeout or an owned timeout wrapper.
 - [`require-toast-error-capture`](./require-toast-error-capture.ts) (`require-toast-error-capture`): requires failures shown in a toast to also reach structured error capture.
+- [`require-mutation-user-feedback`](./require-mutation-user-feedback.ts) (`require-mutation-user-feedback`): requires mutation telemetry failures to also show feedback or declare caller ownership.
 - [`tagged-error-requires-message`](./tagged-error-requires-message.ts) (`tagged-error-requires-message`): requires every `TaggedError` payload to include a user- or operator-readable message.
 
 ### Architecture, configuration, AI, and type safety

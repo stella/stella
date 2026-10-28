@@ -5976,6 +5976,10 @@
       "title": "Vertimas paruoštas"
     }
   },
+  "transportErrors": {
+    "network": "Tinklo klaida. Patikrinkite interneto ryšį ir bandykite dar kartą.",
+    "timeout": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą."
+  },
   "validation": {
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",
     "slugFormat": "Slug gali būti tik mažosios raidės, skaičiai ir brūkšneliai",

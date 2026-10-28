@@ -5976,6 +5976,10 @@
       "title": "Traduction prête"
     }
   },
+  "transportErrors": {
+    "network": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
+    "timeout": "Le délai de génération de la réponse a expiré. Réessayez."
+  },
   "validation": {
     "organizationNameRequired": "Le nom de l'organisation est requis",
     "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets",

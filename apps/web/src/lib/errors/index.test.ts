@@ -22,6 +22,7 @@ import {
   isUnauthorizedError,
   toAuthClientError,
 } from "./auth";
+import { ClientOperationError } from "./client";
 import { userErrorFromThrown, userErrorMessage } from "./user-safe";
 
 describe("API request retries", () => {
@@ -51,6 +52,39 @@ describe("API request retries", () => {
 
     expect(shouldRetryAPIRequest(2, transportError)).toBe(true);
     expect(shouldRetryAPIRequest(3, transportError)).toBe(false);
+  });
+});
+
+describe("user-visible transport and client failures", () => {
+  test.each([
+    ["network", messages.transportErrors.network],
+    ["timeout", messages.transportErrors.timeout],
+  ] as const)("localizes a %s transport failure", (kind, expected) => {
+    try {
+      unwrapApiResponse({
+        data: null,
+        error: {
+          kind,
+          cause: new TypeError("private browser detail"),
+          status: 0,
+          value: null,
+        },
+      });
+      throw new TypeError("Expected transport failure");
+    } catch (error) {
+      expect(APIError.is(error)).toBe(true);
+      expect(userErrorFromThrown(error, "Fallback")).toBe(expected);
+    }
+  });
+
+  test("keeps an expected client refusal safe for display", () => {
+    const error = new ClientOperationError({
+      action: "upload-version",
+      message: "Choose a file with the same file type.",
+    });
+    expect(userErrorFromThrown(error, "Version upload failed")).toBe(
+      error.message,
+    );
   });
 });
 

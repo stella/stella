@@ -5976,6 +5976,10 @@
       "title": "Translation ready"
     }
   },
+  "transportErrors": {
+    "network": "Network error. Please check your internet connection and try again.",
+    "timeout": "The answer timed out. Try again."
+  },
   "validation": {
     "organizationNameRequired": "Organization name is required",
     "slugFormat": "Slug must be lowercase letters, numbers, and hyphens",

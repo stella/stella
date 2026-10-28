@@ -5976,6 +5976,10 @@
       "title": "Traducción lista"
     }
   },
+  "transportErrors": {
+    "network": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
+    "timeout": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo."
+  },
   "validation": {
     "organizationNameRequired": "El nombre de la organización es obligatorio",
     "slugFormat": "El slug debe contener solo letras minúsculas, números y guiones",

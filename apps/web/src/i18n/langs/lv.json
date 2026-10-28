@@ -5976,6 +5976,10 @@
       "title": "Tulkojums ir gatavs"
     }
   },
+  "transportErrors": {
+    "network": "Tīkla kļūda. Lūdzu, pārbaudiet interneta savienojumu un mēģiniet vēlreiz.",
+    "timeout": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz."
+  },
   "validation": {
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",
     "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises",

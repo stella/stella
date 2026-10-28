@@ -5976,6 +5976,10 @@
       "title": "Tłumaczenie gotowe"
     }
   },
+  "transportErrors": {
+    "network": "Błąd sieci. Sprawdź połączenie z internetem i spróbuj ponownie.",
+    "timeout": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie."
+  },
   "validation": {
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
     "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
