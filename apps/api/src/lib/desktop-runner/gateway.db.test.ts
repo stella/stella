@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
+  DESKTOP_RUNNER_FEATURE_ID,
   DESKTOP_RUNNER_LIMITS,
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_PROTOCOL,
@@ -12,6 +13,7 @@ import {
   desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
+import { user } from "@/api/db/auth-schema";
 import {
   desktopRunnerEvents,
   desktopRunnerRuns,
@@ -36,6 +38,10 @@ import {
   type DesktopRunnerDoorbell,
 } from "@/api/lib/desktop-runner/doorbell";
 import {
+  type RunnerFeatureAccess,
+  runnerFeatureAccess,
+} from "@/api/lib/desktop-runner/feature-access";
+import {
   authorizeRunnerWith,
   createDesktopRunnerGateway,
   type DesktopRunnerGateway,
@@ -51,6 +57,7 @@ import type {
   RunnerTimers,
 } from "@/api/lib/desktop-runner/session";
 import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
+import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { desktopRunnerUpgradeScalingScenario } from "@/api/tests/read-scaling/desktop-runner-upgrade";
@@ -85,6 +92,26 @@ const TIMING = {
 } as const satisfies DesktopRunnerTiming;
 
 const clock = { now: Date.now() };
+
+/** Both fixture organizations hold the runner feature unless a test takes it away. */
+const RUNNER_GRANTS: FeatureAccessGrants = {
+  [DESKTOP_RUNNER_FEATURE_ID]: [
+    { type: "organization", organizationId: ids.orgA },
+    { type: "organization", organizationId: ids.orgB },
+  ],
+};
+const runnerGrants: { current: FeatureAccessGrants } = {
+  current: RUNNER_GRANTS,
+};
+/** The real feature decision over the test database and the grants above. */
+const isRunnerEnabled: RunnerFeatureAccess = async (account) =>
+  await runnerFeatureAccess({
+    // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
+    db: asTestRaw<
+      NonNullable<NonNullable<Parameters<typeof runnerFeatureAccess>[0]>["db"]>
+    >(db),
+    grants: () => runnerGrants.current,
+  })(account);
 const now = () => new Date(clock.now);
 
 let db: TestDatabase;
@@ -149,6 +176,7 @@ const startInstance = async (
     isKeyLive: desktopKeyLiveness(
       asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
     ),
+    isRunnerEnabled,
   });
   await gateway.start();
   const server = Bun.serve({
@@ -175,6 +203,11 @@ beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
   credentials = await createRlsDesktopCredentials(db, ids);
+  // Feature access decides only for verified members.
+  await db
+    .update(user)
+    .set({ emailVerified: true })
+    .where(eq(user.id, ids.userA1));
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
   const updateRows = db.update.bind(db);
@@ -928,6 +961,7 @@ describe("upgrade scaling", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isRunnerEnabled,
     });
     const fixture = {
       gateway,
@@ -1054,6 +1088,59 @@ describe("credential revocation", () => {
     });
     // Nothing reached the socket after its welcome: no run, no token.
     expect(desktop.received.map(({ type }) => type)).toEqual(["welcome"]);
+  });
+});
+
+describe("runner feature", () => {
+  test("an account without the runner feature is refused before the upgrade and keeps no runner", async () => {
+    const desktopId = Bun.randomUUIDv7();
+    const openBefore = first.gateway.openSessions();
+    runnerGrants.current = {};
+    try {
+      const refused = await first.gateway.upgrade(
+        await upgradeRequest(first, desktopId),
+        first.server,
+      );
+      expect(refused?.status).toBe(403);
+      expect(await refused?.json()).toMatchObject({
+        code: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
+      });
+    } finally {
+      runnerGrants.current = RUNNER_GRANTS;
+    }
+    expect(first.gateway.openSessions()).toBe(openBefore);
+    expect(
+      (await runnerRows(owner.userId, owner.organizationId)).filter(
+        (row) => row.desktopId === desktopId,
+      ),
+    ).toEqual([]);
+    // With the feature on, the same installation is welcomed.
+    const desktop = await openDesktop(first, desktopId);
+    await desktop.hello();
+    expect(desktop.received.map(({ type }) => type)).toEqual(["welcome"]);
+    await desktop.close();
+  });
+
+  test("turning the runner feature off closes an open socket at the next heartbeat", async () => {
+    // Heartbeats on a short interval; the socket's close is the signal awaited.
+    const beating = await startInstance(
+      "api-feature-heartbeat",
+      sharedDoorbell,
+      {
+        timing: { pingIntervalMs: 50 },
+      },
+    );
+    const desktop = await openDesktop(beating, Bun.randomUUIDv7());
+    await desktop.hello();
+    runnerGrants.current = {};
+    try {
+      expect(await desktop.closed).toEqual({
+        code: DESKTOP_RUNNER_CLOSE.featureDisabled.code,
+        reason: DESKTOP_RUNNER_CLOSE.featureDisabled.reason,
+      });
+    } finally {
+      runnerGrants.current = RUNNER_GRANTS;
+    }
   });
 });
 
@@ -1389,6 +1476,7 @@ describe("outbound frames", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isRunnerEnabled,
     });
     await gateway.start();
     const accepted: { session: ApiSocketSession | null } = { session: null };
@@ -1491,6 +1579,7 @@ describe("gateway edges", () => {
       now,
       random: () => 0.5,
       timing: TIMING,
+      isRunnerEnabled,
     });
     await gateway.start();
     const accepted: { session: ApiSocketSession | null } = { session: null };

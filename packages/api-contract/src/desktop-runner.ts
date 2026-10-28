@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
+import type { DesktopFeatureId } from "./desktop-feature-access";
 import {
   desktopProtocolSchema,
   desktopVersionSchema,
@@ -32,6 +33,13 @@ export const DESKTOP_RUNNER_PROTOCOL = { current: 1, minimum: 1 } as const;
 
 /** Largest frame either side sends or accepts, in UTF-8 bytes. */
 export const DESKTOP_RUNNER_MAX_FRAME_BYTES = 4 * 1024 * 1024;
+
+/**
+ * The desktop feature an account needs to hold runner sockets. The API refuses
+ * the upgrade without it and closes open sockets once it is turned off.
+ */
+export const DESKTOP_RUNNER_FEATURE_ID =
+  "local-agents" as const satisfies DesktopFeatureId;
 
 /**
  * What one account may hold through runner sockets and what one run may

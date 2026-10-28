@@ -17,7 +17,7 @@ type DesktopRunnerUpgradeFixture = {
 
 /**
  * Opening a runner socket authenticates the desktop account and its device
- * proof. Nothing it reads grows with the runs, commands or events the
+ * proof and reads the account's runner feature decision. Nothing it reads grows with the runs, commands or events the
  * account's desktops hold; the socket's own reads are bounded pages.
  */
 export const desktopRunnerUpgradeScalingScenario = {
