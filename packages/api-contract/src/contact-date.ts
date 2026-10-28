@@ -6,6 +6,9 @@ import { isApiDate } from "./api-date";
 
 export const CONTACT_BIRTH_YEAR_MIN = 1900;
 
+// UTC+14 reaches each calendar date first, so a user's current date is never future.
+export const CONTACT_DATE_TIME_ZONE = "Pacific/Kiritimati";
+
 const yearSchema = v.pipe(v.number(), v.integer());
 const monthSchema = v.pipe(v.number(), v.integer());
 const daySchema = v.pipe(v.number(), v.integer());
@@ -29,8 +32,13 @@ export type ContactDate = v.InferOutput<typeof contactDateShapeSchema>;
 
 const pad = (value: number) => String(value).padStart(2, "0");
 
-export const isValidContactBirthDate = (value: ContactDate): boolean => {
-  const today = Temporal.Now.plainDateISO();
+export const isValidContactBirthDate = (
+  value: ContactDate,
+  currentInstant = Temporal.Now.instant(),
+): boolean => {
+  const today = currentInstant
+    .toZonedDateTimeISO(CONTACT_DATE_TIME_ZONE)
+    .toPlainDate();
   const todayParts = [today.year, today.month, today.day];
   const parts = [
     value.year,
