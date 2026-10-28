@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -8,6 +9,7 @@ import {
   createRouter,
   RouterContextProvider,
 } from "@tanstack/react-router";
+import { getByRole } from "@testing-library/dom";
 import { describe, expect, setSystemTime, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
@@ -20,6 +22,7 @@ import type {
   CaseLawCoverageCountry,
   CaseLawCoverageSource,
 } from "@/routes/law/-law-coverage/coverage.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const rootRoute = createRootRoute();
 
@@ -67,6 +70,8 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 996,
+  publishedDecisions: 990,
+  courts: [{ court: "Nejvyšší soud", decisions: 990 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 12,
   completeness: {
@@ -89,6 +94,8 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 4321,
+  publishedDecisions: 4200,
+  courts: [{ court: "Ústavní soud", decisions: 4200 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
@@ -105,6 +112,8 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: null,
+  publishedDecisions: 600,
+  courts: [{ court: "Nejvyšší správní soud", decisions: 600 }],
   knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
@@ -177,19 +186,18 @@ describe("the coverage page states what it counts", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
     expect(markup).toContain("4,200,000");
-    // What is held but not searchable is a source's own figure, in its
-    // decisions column; neither it nor a sum of the two heads the page.
+    // Stored completeness counts stay separate from the searchable total.
     expect(markup).not.toContain("4,500,000");
     expect(markup).not.toContain("8,700,000");
   });
 
-  test("a source states the decisions it holds, measured against a total or not", () => {
+  test("a source counts its published court rows separately from stored completeness", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
-    expect(markup).toContain(">996<");
-    expect(markup).toContain(">4,321<");
-    // A source nobody has counted holds no stated number, which is not zero.
-    expect(markup).toContain(">—<");
+    expect(markup).toContain(">990<");
+    expect(markup).toContain(">4,200<");
+    expect(markup).toContain(">600<");
+    expect(markup).toContain(messages.caseLaw.coverage.notCountedYet);
     // The sweep's date is the page's own, stated once at the top, not per row.
     expect(markup).not.toContain("Sep 17, 2026");
   });
@@ -337,66 +345,66 @@ describe("the coverage page states what it counts", () => {
       />,
     );
 
-    // The court row still states its own week; only the source's is unknown.
-    expect(markup).toContain("+12");
+    expect(markup).not.toContain("+12");
     expect(markup).not.toContain(">0<");
   });
 
-  test("the courts beyond the listed ones close the breakdown as one row", () => {
+  test("each country has one source table with collapsed court rows that include every court", () => {
+    const source = {
+      ...NEARLY_COMPLETE,
+      publishedDecisions: 1000,
+      courts: [
+        { court: "Nejvyšší soud", decisions: 500 },
+        { court: "Okresní soud v Benešově", decisions: 20 },
+        { court: null, decisions: 480 },
+      ],
+    };
     const markup = render(
       <CaseLawCoveragePage
         coverage={{
           ...COVERAGE,
-          countries: [
-            {
-              ...CZECHIA,
-              courts: [
-                ...(CZECHIA.courts ?? []),
-                {
-                  type: "other-courts",
-                  tier: "other",
-                  courts: 5,
-                  decisions: 480,
-                },
-              ],
-            },
-          ],
+          countries: [{ ...CZECHIA, sources: [source] }],
         }}
       />,
     );
 
-    // The row names and counts the other courts, carries their decisions,
-    // and states no activity, because none was read for them.
+    expect(markup.match(/<table[ >]/gu)).toHaveLength(1);
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain("aria-controls=");
+    expect(markup).toMatch(/<tbody[^>]*hidden=""/u);
+    expect(markup).toContain("Okresní soud v Benešově");
     expect(markup).toContain("Other courts");
-    expect(markup).toContain("5 courts");
-    expect(markup).toContain("480");
+    expect(markup).toContain(">480<");
+    expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
   });
 
-  test("an available court breakdown renders its heading and rows", () => {
-    const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
+  test("court toggles have distinct accessible names containing their source names", async () => {
+    GlobalRegistrator.register();
+    const { document: testDocument } = globalThis;
+    try {
+      // safe-html: React renderToStaticMarkup escapes the coverage fixture values.
+      testDocument.body.innerHTML = render(
+        <CaseLawCoveragePage coverage={COVERAGE} />,
+      );
 
-    expect(markup).toContain(messages.caseLaw.coverage.courtsHeading);
-    const courtTable = markup
-      .split(messages.caseLaw.coverage.courtsHeading)
-      .at(1)
-      ?.split("</table>")
-      .at(0);
-    expect(courtTable).toContain(messages.common.court);
-    expect(courtTable).toContain(messages.common.decisions);
-    expect(courtTable).toContain(messages.caseLaw.corpusStatus.newLast7Days);
-    expect(courtTable).toContain(messages.common.lastUpdated);
-    expect(courtTable).toContain("Nejvyšší soud");
-    expect(courtTable).toContain("1,900");
-    expect(courtTable).toContain("court=");
+      const first = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEARLY_COMPLETE.name}`,
+      });
+      const second = getByRole(testDocument.body, "button", {
+        name: `${messages.common.court} ${NEVER_MEASURED.name}`,
+      });
+      expect(first).not.toBe(second);
+    } finally {
+      await unregisterDomEnvironment();
+    }
   });
 
-  test("an unavailable court breakdown hides the entire section", () => {
+  test("an unavailable country court breakdown leaves no separate section", () => {
     const markup = render(
       <CaseLawCoveragePage
         coverage={{ ...COVERAGE, countries: [{ ...CZECHIA, courts: null }] }}
       />,
     );
-
     expect(markup).not.toContain(messages.caseLaw.coverage.courtsHeading);
     expect(markup).not.toContain("court=");
   });

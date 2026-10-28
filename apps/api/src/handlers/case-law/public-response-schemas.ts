@@ -325,6 +325,16 @@ const countryCoverage = {
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
         storedDecisions: numberOrNull,
+        publishedDecisions: v.number(),
+        courts: v.pipe(
+          v.array(
+            v.object({
+              court: v.nullable(identity.court),
+              decisions: v.number(),
+            }),
+          ),
+          v.maxLength(LIMITS.caseLawFacetLimit + 1),
+        ),
         knownGaps: v.union([
           v.object({
             type: v.literal("not_reconciled"),
