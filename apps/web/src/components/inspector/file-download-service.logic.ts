@@ -9,15 +9,16 @@ import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 
 /**
  * The alternative copies of a file the app can offer, in the order they are
- * offered. `original` is listed only where the plain Download hands over
- * something else: a PDF downloads with the reader's highlights and comments
- * written in, so its untouched upload is one click further.
+ * offered. `original` and `withComments` are listed only where the plain
+ * Download is a PDF with the reader's highlights written in (and nothing
+ * else): the untouched upload and the copy with comments and author names
+ * are one click further.
  */
 export type DownloadRendition = FileDownloadRendition;
 
 /**
  * What a download hands over: the uploaded bytes, the PDF with the reader's
- * marks (`marked`), or one rendition of them.
+ * highlights (`marked`), or one rendition of them.
  */
 export type DownloadVariant =
   DownloadRendition | "marked" | "reference-scrubbed";
@@ -28,7 +29,7 @@ type PrimaryDownloadVariant = Extract<DownloadVariant, "original" | "marked">;
 /**
  * What the plain Download of a file hands over, read off the renditions it is
  * offered: where the upload is listed as an alternative, the Download is the
- * PDF with the reader's marks. One rule for every Download button.
+ * PDF with the reader's highlights. One rule for every Download button.
  */
 export const getPrimaryDownloadVariant = (
   renditions: readonly DownloadRendition[],
@@ -80,7 +81,8 @@ type DownloadRenditionsInput = {
  * points cannot offer different lists. Only DOCX can be handed over with its
  * reference: the reference is written into the document body, which no other
  * format the app serves can carry. A PDF the server can read downloads with
- * the reader's marks, so its upload as stored is offered beside it.
+ * the reader's highlights, so its upload as stored and the copy with comments
+ * are offered beside it.
  */
 export const getDownloadRenditions = ({
   canScrub,
@@ -89,8 +91,11 @@ export const getDownloadRenditions = ({
   hasPdfConversion,
   mimeType,
 }: DownloadRenditionsInput): readonly DownloadRendition[] => {
+  // The server writes marks into a PDF it can read.
+  const carriesMarks = encrypted === false && mimeType === PDF_MIME;
   const isAvailable = {
-    original: encrypted === false && mimeType === PDF_MIME,
+    original: carriesMarks,
+    withComments: carriesMarks,
     pdf: hasPdfConversion,
     reference:
       Boolean(currentVersionReference) &&

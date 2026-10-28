@@ -1,6 +1,7 @@
 /**
  * Download a matter document's PDF with the caller's visible marks written
- * in as PDF annotations: the plain Download of a PDF in the app.
+ * in as PDF annotations, as the export mode says: highlights alone for the
+ * plain Download of a PDF in the app, or with comments and author names.
  *
  * Which marks are visible is the annotation listing's to decide (the caller's
  * own and what colleagues on the matter shared, under row-level security), so
@@ -11,6 +12,8 @@
  */
 
 import { Result } from "better-result";
+
+import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -33,6 +36,7 @@ const MARKED_DOWNLOAD_READ_TIMEOUT_MS = 60 * 1000;
 
 type MarkedDownloadOptions = {
   fieldId: SafeId<"field">;
+  mode: MarkedPdfExportMode;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -43,6 +47,7 @@ type MarkedDownloadOptions = {
 
 export const readMarkedDownload = async function* ({
   fieldId,
+  mode,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -122,7 +127,12 @@ export const readMarkedDownload = async function* ({
   const marked = yield* Result.await(
     Result.tryPromise(
       async () =>
-        await writeMarksIntoPdf({ marks, source, viewedFieldId: fieldId }),
+        await writeMarksIntoPdf({
+          marks,
+          mode,
+          source,
+          viewedFieldId: fieldId,
+        }),
     ),
   );
   const bytes = marked.status === "marked" ? marked.bytes : source;
@@ -143,6 +153,7 @@ export const readMarkedDownload = async function* ({
                 mimeType: content.mimeType,
                 annotations:
                   marked.status === "marked" ? marked.annotationCount : 0,
+                markExport: mode,
               },
             }),
         ),

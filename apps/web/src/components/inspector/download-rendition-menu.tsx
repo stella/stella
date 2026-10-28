@@ -3,7 +3,12 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DownloadIcon, FileIcon, FileOutputIcon } from "@stll/ui/icons";
+import {
+  DownloadIcon,
+  FileIcon,
+  FileOutputIcon,
+  MessageSquareTextIcon,
+} from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
   MenuItem,
@@ -40,7 +45,10 @@ export const DownloadRenditionMenuItems = ({
   const canStripMetadata = renditions.includes("scrubbed");
   const canTransform = canIncludeReference || canStripMetadata;
   const canDownloadOriginal = renditions.includes("original");
+  const canDownloadWithComments = renditions.includes("withComments");
   const canDownloadPdf = renditions.includes("pdf");
+  const offersCopy =
+    canDownloadOriginal || canDownloadWithComments || canDownloadPdf;
 
   return (
     <>
@@ -50,15 +58,19 @@ export const DownloadRenditionMenuItems = ({
           {t("workspaces.files.downloadOriginal")}
         </MenuItem>
       )}
+      {canDownloadWithComments && (
+        <MenuItem onClick={() => onSelect("withComments")}>
+          <MessageSquareTextIcon />
+          {t("workspaces.files.downloadWithComments")}
+        </MenuItem>
+      )}
       {canDownloadPdf && (
         <MenuItem onClick={() => onSelect("pdf")}>
           <FileOutputIcon />
           {t("workspaces.files.downloadPdf")}
         </MenuItem>
       )}
-      {(canDownloadOriginal || canDownloadPdf) && canTransform && (
-        <MenuSeparator />
-      )}
+      {offersCopy && canTransform && <MenuSeparator />}
       {canIncludeReference && (
         <MenuCheckboxItem
           checked={includeReference}

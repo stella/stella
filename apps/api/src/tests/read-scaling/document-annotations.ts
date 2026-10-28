@@ -302,6 +302,7 @@ export const markedPdfDownloadScalingScenario = {
             tenant.userId,
           ),
           params: { workspaceId: tenant.workspaceId, fieldId: tenant.fieldId },
+          query: { mode: "highlightsWithComments" },
         }),
       );
       if (!(response instanceof Response) || !response.ok) {

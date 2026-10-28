@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
+import { MARKED_PDF_EXPORT_MODES } from "@stll/api-contract/marked-pdf-export";
 
 import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
@@ -335,9 +336,10 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
 );
 
 /**
- * A PDF as uploaded, with the caller's visible highlights and comments
- * appended as PDF annotations; the stored bytes unchanged when the file
- * cannot take them without harm.
+ * A PDF as uploaded, with the caller's visible marks appended as PDF
+ * annotations as `mode` says (highlights alone, or with comments and author
+ * names); the stored bytes unchanged when the file cannot take them without
+ * harm.
  */
 export const markedDownloadEndpoint = createSafeHandler(
   {
@@ -348,9 +350,11 @@ export const markedDownloadEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
     params: workspaceParams({ fieldId: resourceIdSchema("field") }),
+    query: v.object({ mode: v.picklist(MARKED_PDF_EXPORT_MODES) }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
+    query: { mode },
     recordAuditEvent,
     safeDb,
     scopedDb,
@@ -362,6 +366,7 @@ export const markedDownloadEndpoint = createSafeHandler(
     yield* checkDemoAccountOperation(user.email);
     return yield* readMarkedDownload({
       fieldId,
+      mode,
       organizationId: session.activeOrganizationId,
       recordAuditEvent,
       safeDb,

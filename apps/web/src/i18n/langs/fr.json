@@ -6153,6 +6153,7 @@
       "downloadOriginal": "Fichier d'origine",
       "downloadPdf": "Télécharger en PDF",
       "downloadSearchablePdf": "PDF avec texte recherchable",
+      "downloadWithComments": "Télécharger avec les commentaires",
       "emptyFile": "Le fichier est vide.",
       "includeReferenceNumber": "Inclure le numéro de référence",
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",

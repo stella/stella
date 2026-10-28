@@ -6153,6 +6153,7 @@
       "downloadOriginal": "Original file",
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
+      "downloadWithComments": "Download with comments",
       "emptyFile": "The file is empty.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",

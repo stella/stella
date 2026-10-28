@@ -47,7 +47,7 @@ describe("download renditions", () => {
       ...NOTHING_AVAILABLE,
       mimeType: PDF_MIME,
     });
-    expect(renditions).toEqual(["original"]);
+    expect(renditions).toEqual(["original", "withComments"]);
     expect(getPrimaryDownloadVariant(renditions)).toBe("marked");
   });
 
@@ -62,6 +62,7 @@ describe("download renditions", () => {
         ...file,
       });
       expect(renditions).not.toContain("original");
+      expect(renditions).not.toContain("withComments");
       expect(getPrimaryDownloadVariant(renditions)).toBe("original");
     }
   });

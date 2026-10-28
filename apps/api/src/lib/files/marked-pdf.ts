@@ -2,6 +2,11 @@
  * A matter document's PDF with the reader's marks written in as standard
  * text markup annotations, for the copy a download hands over.
  *
+ * What is written depends on the export mode, decided here and nowhere else:
+ * `highlights` writes highlights by style, colour and position only, with no
+ * comment text, no author names and no comment-only marks;
+ * `highlightsWithComments` adds comments, their words and author names.
+ *
  * Each mark is placed with `placeMark`, the rule the web viewer draws it by,
  * on the page text LibPDF extracts, so the copy carries exactly the marks
  * the viewer shows on this file and at the same glyphs. The annotations are
@@ -30,6 +35,7 @@ import type {
   ReaderAnnotationKind,
   ReaderAnnotationStyle,
 } from "@stll/api-contract/legal-reader-annotations";
+import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 import {
   placeMark,
   readPdfPageGlyphText,
@@ -131,13 +137,39 @@ const addMarkup = (
   }
 };
 
-/** How a mark is drawn: its annotation subtype and colour. */
-const markLook = (
-  mark: PdfMark,
-): { subtype: MarkupSubtype; color: ReaderAnnotationColor } =>
+/** What one mark is written as: its subtype, colour and words. */
+type MarkAnnotation = {
+  subtype: MarkupSubtype;
+  color: ReaderAnnotationColor;
+  contents: string;
+  title: string;
+};
+
+/** A mark as the viewer draws it: its subtype and colour. */
+const markLook = (mark: PdfMark): Pick<MarkAnnotation, "color" | "subtype"> =>
   mark.kind === "highlight" && mark.color !== null && mark.style !== null
     ? { subtype: STYLE_SUBTYPE[mark.style], color: mark.color }
     : { subtype: "Underline", color: COMMENT_COLOR };
+
+/**
+ * What a mark is written as in each export mode, or null when the mode
+ * leaves it out. The plain copy carries which passages were highlighted and
+ * nothing else: a comment, and any author or note, stays inside the firm.
+ */
+const MARK_ANNOTATION_BY_MODE = {
+  highlights: (mark) =>
+    mark.kind === "highlight"
+      ? { ...markLook(mark), contents: "", title: "" }
+      : null,
+  highlightsWithComments: (mark) => ({
+    ...markLook(mark),
+    contents: mark.body ?? "",
+    title: mark.authorName.trim(),
+  }),
+} as const satisfies Record<
+  MarkedPdfExportMode,
+  (mark: PdfMark) => MarkAnnotation | null
+>;
 
 /**
  * The strictest modification permission a signed field's FieldMDP transform
@@ -188,6 +220,8 @@ const signaturesForbidAnnotations = (pdf: PDF, source: Uint8Array) => {
 type WriteMarksOptions = {
   /** The marks the caller may see on this document, in any order. */
   marks: readonly PdfMark[];
+  /** What of the marks the copy carries. */
+  mode: MarkedPdfExportMode;
   /** The stored PDF bytes; never modified. */
   source: Uint8Array;
   /** The file being downloaded, which `placeMark` places marks for. */
@@ -221,10 +255,16 @@ const readMarkPages = (
  */
 export const writeMarksIntoPdf = async ({
   marks,
+  mode,
   source,
   viewedFieldId,
 }: WriteMarksOptions): Promise<MarkedPdf> => {
-  if (marks.length === 0) {
+  const annotationFor = MARK_ANNOTATION_BY_MODE[mode];
+  const written = marks.flatMap((mark) => {
+    const annotation = annotationFor(mark);
+    return annotation === null ? [] : [{ mark, annotation }];
+  });
+  if (written.length === 0) {
     return { status: "unchanged", reason: MARKED_PDF_UNCHANGED.noMarks };
   }
   const loaded = await Result.tryPromise(async () => await PDF.load(source));
@@ -241,10 +281,10 @@ export const writeMarksIntoPdf = async ({
 
   const pages = readMarkPages(
     pdf,
-    new Set(marks.map((mark) => mark.pageNumber)),
+    new Set(written.map(({ mark }) => mark.pageNumber)),
   );
   let annotationCount = 0;
-  for (const mark of marks) {
+  for (const { mark, annotation } of written) {
     const read = pages.get(mark.pageNumber);
     const placement = placeMark({
       anchor: mark,
@@ -255,12 +295,10 @@ export const writeMarksIntoPdf = async ({
     if (read === undefined || placement.type !== "placed") {
       continue;
     }
-    const look = markLook(mark);
-    const contents = mark.body ?? "";
-    const title = mark.authorName.trim();
-    addMarkup(read.page, look.subtype, {
+    const { color, contents, subtype, title } = annotation;
+    addMarkup(read.page, subtype, {
       rects: placement.boxes,
-      color: pdfMarkColor(look.color),
+      color: pdfMarkColor(color),
       ...(contents.length > 0 && { contents }),
       ...(title.length > 0 && { title }),
     });

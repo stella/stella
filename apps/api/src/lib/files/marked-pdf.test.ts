@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, test } from "bun:test";
 
 import { READER_ANNOTATION_STYLES } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationStyle } from "@stll/api-contract/legal-reader-annotations";
+import { MARKED_PDF_EXPORT_MODES } from "@stll/api-contract/marked-pdf-export";
+import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 import {
   mergePdfTextBoxes,
   readPdfPageGlyphText,
@@ -105,16 +107,26 @@ const isPrefix = (prefix: Uint8Array, bytes: Uint8Array) =>
   bytes.length > prefix.length &&
   Buffer.from(bytes.subarray(0, prefix.length)).equals(Buffer.from(prefix));
 
-const write = async (source: Uint8Array, marks: readonly PdfMark[]) =>
+/** Most cases read the full copy; the plain Download's cases name theirs. */
+const write = async (
+  source: Uint8Array,
+  marks: readonly PdfMark[],
+  mode: MarkedPdfExportMode = "highlightsWithComments",
+) =>
   await writeMarksIntoPdf({
     // A copy, so a write into the caller's bytes would show as a difference.
     source: source.slice(),
     marks,
+    mode,
     viewedFieldId: FIELD,
   });
 
-const markedBytes = async (source: Uint8Array, marks: readonly PdfMark[]) => {
-  const marked = await write(source, marks);
+const markedBytes = async (
+  source: Uint8Array,
+  marks: readonly PdfMark[],
+  mode: MarkedPdfExportMode = "highlightsWithComments",
+) => {
+  const marked = await write(source, marks, mode);
   if (marked.status !== "marked") {
     throw new Error(`expected a marked copy, got ${marked.reason}`);
   }
@@ -261,6 +273,63 @@ describe("a downloaded PDF with the reader's marks", () => {
   });
 });
 
+describe("the plain Download's copy, with highlights only", () => {
+  const commentOn = async (source: Uint8Array) =>
+    await markOn(source, "thirty days", {
+      kind: "comment",
+      color: null,
+      style: null,
+      body: "Privileged: check against clause 7.",
+    });
+
+  test("writes highlights without any note or author, and leaves comments out", async () => {
+    const source = await createTextPdf();
+    const highlight = await markOn(source, "deliver the goods");
+    const comment = await commentOn(source);
+    // The same marks in the full copy carry both the comment and the names.
+    const full = await markedBytes(source, [highlight, comment]);
+    expect(full.annotationCount).toBe(2);
+    expect(
+      (await pageOneAnnotations(full.bytes)).map(
+        (annotation) => annotation.contents,
+      ),
+    ).toEqual([null, "Privileged: check against clause 7."]);
+
+    const plain = await markedBytes(source, [highlight, comment], "highlights");
+
+    expect(plain.annotationCount).toBe(1);
+    expect(isPrefix(source, plain.bytes)).toBe(true);
+    const annotations = await pageOneAnnotations(plain.bytes);
+    expect(annotations.map((annotation) => annotation.type)).toEqual([
+      "Highlight",
+    ]);
+    expect(annotations[0]?.contents).toBe(null);
+    const [written] =
+      (await PDF.load(plain.bytes))
+        .getPages()
+        .at(0)
+        ?.getHighlightAnnotations() ?? [];
+    expect(written?.title).toBe(null);
+    expect(written?.color).toEqual(pdfMarkColor("yellow"));
+    expectSameQuads(
+      written?.quadPoints ?? [],
+      await expectedQuads(source, highlight),
+    );
+    // Neither the note nor the author's name is anywhere in the bytes.
+    const text = Buffer.from(plain.bytes).toString("latin1");
+    expect(text).not.toContain("Privileged");
+    expect(text).not.toContain("Alex Author");
+  });
+
+  test("hands over the stored bytes when only comments are visible", async () => {
+    const source = await createTextPdf();
+
+    expect(
+      await write(source, [await commentOn(source)], "highlights"),
+    ).toEqual({ status: "unchanged", reason: MARKED_PDF_UNCHANGED.noMarks });
+  });
+});
+
 describe("a signed PDF with the reader's marks", () => {
   const signedTextPdf = async (certify?: number | null) =>
     await createSignedPdf({
@@ -282,42 +351,53 @@ describe("a signed PDF with the reader's marks", () => {
     }
   };
 
-  test("adds annotations after an approval signature, which stays valid", async () => {
-    const signed = await signedTextPdf();
-    const mark = await markOn(signed, "deliver the goods");
+  test.each(MARKED_PDF_EXPORT_MODES)(
+    "adds annotations after an approval signature, which stays valid (%s)",
+    async (mode) => {
+      const signed = await signedTextPdf();
+      const mark = await markOn(signed, "deliver the goods");
 
-    const marked = await markedBytes(signed, [mark]);
+      const marked = await markedBytes(signed, [mark], mode);
 
-    expect(isPrefix(signed, marked.bytes)).toBe(true);
-    await expectSignaturesIntact(signed, marked.bytes);
-    expect(
-      (await pageOneAnnotations(marked.bytes)).map(
-        (annotation) => annotation.type,
-      ),
-    ).toContain("Highlight");
-  });
+      expect(isPrefix(signed, marked.bytes)).toBe(true);
+      await expectSignaturesIntact(signed, marked.bytes);
+      expect(
+        (await pageOneAnnotations(marked.bytes)).map(
+          (annotation) => annotation.type,
+        ),
+      ).toContain("Highlight");
+    },
+  );
 
-  test("adds annotations to a file certified to allow them (P = 3)", async () => {
-    const signed = await signedTextPdf(3);
-    const mark = await markOn(signed, "deliver the goods");
+  test.each(MARKED_PDF_EXPORT_MODES)(
+    "adds annotations to a file certified to allow them, P = 3 (%s)",
+    async (mode) => {
+      const signed = await signedTextPdf(3);
+      const mark = await markOn(signed, "deliver the goods");
 
-    const marked = await markedBytes(signed, [mark]);
+      const marked = await markedBytes(signed, [mark], mode);
 
-    expect(isPrefix(signed, marked.bytes)).toBe(true);
-    await expectSignaturesIntact(signed, marked.bytes);
-  });
+      expect(isPrefix(signed, marked.bytes)).toBe(true);
+      await expectSignaturesIntact(signed, marked.bytes);
+    },
+  );
 
-  test.each([
+  const CERTIFICATIONS = [
     ["no changes (P = 1)", 1],
     ["only form filling and signing (P = 2)", 2],
     ["the default when P is absent (2)", null],
-  ] as const)(
-    "hands over the stored bytes of a file certified for %s",
-    async (_, certify) => {
+  ] as const;
+  test.each(
+    CERTIFICATIONS.flatMap(([label, certify]) =>
+      MARKED_PDF_EXPORT_MODES.map((mode) => [label, certify, mode] as const),
+    ),
+  )(
+    "hands over the stored bytes of a file certified for %s (%s, %s)",
+    async (_, certify, mode) => {
       const signed = await signedTextPdf(certify);
       const mark = await markOn(signed, "deliver the goods");
 
-      expect(await write(signed, [mark])).toEqual({
+      expect(await write(signed, [mark], mode)).toEqual({
         status: "unchanged",
         reason: MARKED_PDF_UNCHANGED.certified,
       });

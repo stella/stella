@@ -6153,6 +6153,7 @@
       "downloadOriginal": "Originaalfail",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "downloadWithComments": "Laadi alla koos kommentaaridega",
       "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
