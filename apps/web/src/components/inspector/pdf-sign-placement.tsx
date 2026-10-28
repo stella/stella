@@ -341,19 +341,34 @@ const placeDefaultStamp = ({ page, pageIndex }: PdfSignPlacementPageProps) => {
   setPdfSignDraft({ box: defaultStampBox(page), page, pageIndex });
 };
 
+/**
+ * Every line the bar can show. Kept to this narrow union: handing `t` the
+ * whole catalogue's key union makes its parameter types too complex to check.
+ */
+const STATUS_KEYS = {
+  attachmentsOnly: "workspaces.files.pdfSigning.placementAttachmentsOnly",
+  drawTooLarge: "workspaces.files.pdfSigning.placementDrawTooLarge",
+  drawTooSmall: "workspaces.files.pdfSigning.placementDrawTooSmall",
+  modeHint: "workspaces.files.pdfSigning.placementModeHint",
+  pageTooSmall: "workspaces.files.pdfSigning.placementTooSmall",
+  redrawHint: "workspaces.files.pdfSigning.placementRedrawHint",
+} as const satisfies Record<string, TranslationKey>;
+
+type PlacementStatusKey = (typeof STATUS_KEYS)[keyof typeof STATUS_KEYS];
+
 const DRAWING_STATUS_KEYS = {
-  fits: "workspaces.files.pdfSigning.placementModeHint",
-  too_large: "workspaces.files.pdfSigning.placementDrawTooLarge",
-  too_small: "workspaces.files.pdfSigning.placementDrawTooSmall",
-} as const satisfies Record<StampSizeCheck, TranslationKey>;
+  fits: STATUS_KEYS.modeHint,
+  too_large: STATUS_KEYS.drawTooLarge,
+  too_small: STATUS_KEYS.drawTooSmall,
+} as const satisfies Record<StampSizeCheck, PlacementStatusKey>;
 
 const placementStatus = ({
   session,
 }: {
   session: PdfSignPlacementSession | null;
-}): TranslationKey => {
+}): PlacementStatusKey => {
   if (session === null) {
-    return "workspaces.files.pdfSigning.placementModeHint";
+    return STATUS_KEYS.modeHint;
   }
   if (session.drawing !== null) {
     return DRAWING_STATUS_KEYS[
@@ -361,11 +376,9 @@ const placementStatus = ({
     ];
   }
   if (session.notice === "page_too_small") {
-    return "workspaces.files.pdfSigning.placementTooSmall";
+    return STATUS_KEYS.pageTooSmall;
   }
-  return session.draft === null
-    ? "workspaces.files.pdfSigning.placementModeHint"
-    : "workspaces.files.pdfSigning.placementRedrawHint";
+  return session.draft === null ? STATUS_KEYS.modeHint : STATUS_KEYS.redrawHint;
 };
 
 type PdfSignPlacementControlsProps = {
@@ -389,9 +402,7 @@ export const PdfSignPlacementControls = ({
     (state) => state.session?.draft ?? null,
   );
   const status = usePdfSignPlacementStore((state) =>
-    showsOwnPages
-      ? placementStatus(state)
-      : "workspaces.files.pdfSigning.placementAttachmentsOnly",
+    showsOwnPages ? placementStatus(state) : STATUS_KEYS.attachmentsOnly,
   );
 
   useMountEffect(() => {
