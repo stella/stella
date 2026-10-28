@@ -320,6 +320,28 @@ describe("contact import document", () => {
     });
   });
 
+  test("a partial structured name does not merge different people", () => {
+    const householdPhone = {
+      isPrimary: true,
+      number: "+1 202 555 0150",
+      type: "home" as const,
+    };
+    const rows = validateContactImportCandidates({
+      candidates: [
+        {
+          ...person("John Smith"),
+          firstName: "John",
+          phones: [householdPhone],
+        },
+        { ...person("John Doe"), firstName: "John", phones: [householdPhone] },
+      ],
+      rowNumbers: [2, 3],
+      taxIdScheme: "none",
+    });
+
+    expect(rows.map(({ issues }) => issues)).toEqual([[], []]);
+  });
+
   test("a shared secondary email or phone still identifies a duplicate", () => {
     const mobile = (number: string, isPrimary: boolean) => ({
       isPrimary,

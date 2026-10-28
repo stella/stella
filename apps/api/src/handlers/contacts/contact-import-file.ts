@@ -1023,11 +1023,16 @@ export type InFileDuplicateDecision<Row> =
   | { kind: "possibleDuplicate"; of: Row; by: "nameOnly" }
   | { kind: "distinct" };
 
+// Structured parts are the name only when they are complete (first and last);
+// a partial set ("John") would make different people look alike, so the full
+// display name decides then.
 const normalizedName = (candidate: ContactImportCandidate): string =>
   normalizeToken(
-    [candidate.firstName, candidate.middleName, candidate.lastName]
-      .filter(Boolean)
-      .join(" ") || candidate.displayName,
+    candidate.firstName && candidate.lastName
+      ? [candidate.firstName, candidate.middleName, candidate.lastName]
+          .filter(Boolean)
+          .join(" ")
+      : candidate.displayName,
   );
 
 const normalizedValue = (value: string | undefined): string | undefined => {
