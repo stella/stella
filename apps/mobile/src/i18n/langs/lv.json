@@ -74,7 +74,8 @@
     "reopen": "Atvērt atkārtoti",
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
-    "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit."
+    "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
+    "openMatter": "Atvērt lietu"
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",

@@ -74,7 +74,8 @@
     "reopen": "Otwórz ponownie",
     "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
     "pickTitle": "Wybierz zadanie",
-    "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj."
+    "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
+    "openMatter": "Otwórz sprawę"
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

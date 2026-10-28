@@ -74,7 +74,8 @@
     "reopen": "Rouvrir",
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
-    "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici."
+    "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
+    "openMatter": "Ouvrir le dossier"
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

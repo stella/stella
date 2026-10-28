@@ -74,7 +74,8 @@
     "reopen": "Ava uuesti",
     "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti.",
     "pickTitle": "Vali ülesanne",
-    "pickDescription": "Vali loendist ülesanne, et seda siin näha."
+    "pickDescription": "Vali loendist ülesanne, et seda siin näha.",
+    "openMatter": "Ava asi"
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",

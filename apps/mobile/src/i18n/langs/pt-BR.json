@@ -74,7 +74,8 @@
     "reopen": "Reabrir",
     "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
     "pickTitle": "Escolha uma tarefa",
-    "pickDescription": "Escolha uma tarefa da lista para vê-la aqui."
+    "pickDescription": "Escolha uma tarefa da lista para vê-la aqui.",
+    "openMatter": "Abrir caso"
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

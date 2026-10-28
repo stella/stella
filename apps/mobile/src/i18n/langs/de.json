@@ -74,7 +74,8 @@
     "reopen": "Wieder öffnen",
     "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
     "pickTitle": "Aufgabe wählen",
-    "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen."
+    "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen.",
+    "openMatter": "Akte öffnen"
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",

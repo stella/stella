@@ -74,7 +74,8 @@
     "reopen": "Reopen",
     "statusFailed": "The task could not be changed. Try again.",
     "pickTitle": "Pick a task",
-    "pickDescription": "Choose a task from the list to see it here."
+    "pickDescription": "Choose a task from the list to see it here.",
+    "openMatter": "Open matter"
   },
   "matters": {
     "emptyTitle": "No matters yet",

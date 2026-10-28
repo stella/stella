@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 
 import { View } from "react-native";
 
-import { EmptyCard } from "@/components/empty-state-screen";
 import { useLayout } from "@/components/selection";
+import { Text } from "@/components/ui/text";
 import { useAppColors } from "@/theme";
 
 /**
@@ -43,8 +43,11 @@ export const SplitPane = ({
       <View style={{ width: layout.divisionWidth }} />
       <View className="flex-1" style={{ backgroundColor: colors.background }}>
         {detail ?? (
-          <View className="flex-1 p-6 pt-24">
-            <EmptyCard description={emptyDescription} title={emptyTitle} />
+          <View className="flex-1 items-center justify-center gap-2 p-8">
+            <Text variant="headline">{emptyTitle}</Text>
+            <Text className="max-w-90 text-center" variant="caption">
+              {emptyDescription}
+            </Text>
           </View>
         )}
       </View>

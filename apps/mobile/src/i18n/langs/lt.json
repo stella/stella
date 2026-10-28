@@ -74,7 +74,8 @@
     "reopen": "Atidaryti iš naujo",
     "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą.",
     "pickTitle": "Pasirinkite užduotį",
-    "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia."
+    "pickDescription": "Pasirinkite užduotį iš sąrašo, kad ją matytumėte čia.",
+    "openMatter": "Atidaryti bylą"
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

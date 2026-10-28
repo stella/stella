@@ -74,7 +74,8 @@
     "reopen": "Reabrir",
     "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
     "pickTitle": "Elija una tarea",
-    "pickDescription": "Elija una tarea de la lista para verla aquí."
+    "pickDescription": "Elija una tarea de la lista para verla aquí.",
+    "openMatter": "Abrir asunto"
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

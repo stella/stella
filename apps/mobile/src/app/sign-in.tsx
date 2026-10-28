@@ -24,6 +24,9 @@ import { DEFAULT_SERVER_URL } from "@/env";
 import { MoreHorizontalIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
+/** The widest the sign-in panel grows. */
+const SIGN_IN_MAX_WIDTH = 520;
+
 /**
  * The web sign-in, on the phone: its backdrop, wordmark and beta mark, its
  * headline, and one way in. The web page itself takes the sign-in in the
@@ -60,9 +63,12 @@ const SignInScreen = () => {
   return (
     <View className="flex-1">
       <AuthBackdrop />
+      {/* On an iPad the panel keeps a phone's measure, centred, as the web's
+          auth panel does on a wide screen. */}
       <View
-        className="flex-1 px-8"
+        className="w-full flex-1 self-center px-8"
         style={{
+          maxWidth: SIGN_IN_MAX_WIDTH,
           paddingBottom: insets.bottom + 24,
           paddingTop: insets.top + 24,
         }}

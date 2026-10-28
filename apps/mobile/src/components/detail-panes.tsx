@@ -1,5 +1,6 @@
 import { useHeaderHeight } from "expo-router/react-navigation";
-import { KeyboardAvoidingView, Platform, View } from "react-native";
+import { KeyboardAvoidingView, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { useRevision } from "@/components/changes";
@@ -65,15 +66,14 @@ export const MatterPane = ({ matter }: { matter: MatterSelection }) => {
 /** The task selected in the tasks' list, beside it, as its sheet shows it. */
 export const TaskPane = ({ task }: { task: TaskSelection }) => {
   const { state } = useSession();
-  const headerHeight = useHeaderHeight();
 
   return state.status === "signed-in" ? (
-    <View className="flex-1" style={{ paddingTop: headerHeight }}>
+    <SafeAreaView className="flex-1" edges={["top"]}>
       <EntityDetailSheet
         entityId={task.entityId}
         source={state.source}
         workspaceId={task.workspaceId}
       />
-    </View>
+    </SafeAreaView>
   ) : null;
 };

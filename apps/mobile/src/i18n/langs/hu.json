@@ -74,7 +74,8 @@
     "reopen": "Újranyitás",
     "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
     "pickTitle": "Válasszon feladatot",
-    "pickDescription": "Válasszon feladatot a listából, hogy itt lássa."
+    "pickDescription": "Válasszon feladatot a listából, hogy itt lássa.",
+    "openMatter": "Ügy megnyitása"
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",

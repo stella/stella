@@ -74,7 +74,8 @@
     "reopen": "Znovu otevřít",
     "statusFailed": "Úkol se nepodařilo změnit. Zkuste to znovu.",
     "pickTitle": "Vyberte úkol",
-    "pickDescription": "Vyberte úkol ze seznamu a zobrazí se zde."
+    "pickDescription": "Vyberte úkol ze seznamu a zobrazí se zde.",
+    "openMatter": "Otevřít spis"
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",

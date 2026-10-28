@@ -1,10 +1,12 @@
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { useFormatter } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { useLayout, useSelection } from "@/components/selection";
 import { MatterIcon } from "@/components/ui/matter-icon";
 import { Text } from "@/components/ui/text";
+import { useScan } from "@/components/use-scan";
+import { canScan } from "@/native/document-scanner";
 import type { MatterSummary } from "@/state/matters";
 
 /**
@@ -13,6 +15,8 @@ import type { MatterSummary } from "@/state/matters";
  * JavaScript engine, cannot format relative times. Under its client's
  * heading the client goes unsaid. Tapping it opens the matter, beside the
  * list where the window has two columns, which marks it as the one open.
+ * Holding it adds to it without opening it: a task, or a scanned document
+ * where the device can scan.
  */
 export const MatterRow = ({
   matter,
@@ -22,7 +26,9 @@ export const MatterRow = ({
   underClient?: boolean;
 }) => {
   const format = useFormatter();
+  const t = useTranslations("matter");
   const router = useRouter();
+  const scan = useScan(matter.id);
   const layout = useLayout();
   const selection = useSelection();
   const open =
@@ -44,37 +50,61 @@ export const MatterRow = ({
   );
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: open }}
-      className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
-      onPress={() => {
+    <Link
+      asChild
+      href={{
+        pathname: "/matter/[workspaceId]",
+        params: { workspaceId: matter.id, name: matter.name },
+      }}
+      onPress={(event) => {
         if (layout.usesSplitView) {
+          event.preventDefault();
           selection.select("matter", {
             name: matter.name,
             workspaceId: matter.id,
           });
-          return;
         }
-        router.push({
-          pathname: "/matter/[workspaceId]",
-          params: { workspaceId: matter.id, name: matter.name },
-        });
       }}
     >
-      <View className="pt-0.5">
-        <MatterIcon matter={matter} size={18} />
-      </View>
-      <View className="flex-1 gap-0.5">
-        <Text numberOfLines={2} variant="rowTitle">
-          {matter.name}
-        </Text>
-        {details.length === 0 ? null : (
-          <Text numberOfLines={1} variant="caption">
-            {details.join(" · ")}
-          </Text>
-        )}
-      </View>
-    </Pressable>
+      <Link.Trigger>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: open }}
+          className={`border-border active:bg-accent flex-row gap-3 border-b py-3 ${open ? "bg-accent" : ""}`}
+        >
+          <View className="pt-0.5">
+            <MatterIcon matter={matter} size={18} />
+          </View>
+          <View className="flex-1 gap-0.5">
+            <Text numberOfLines={2} variant="rowTitle">
+              {matter.name}
+            </Text>
+            {details.length === 0 ? null : (
+              <Text numberOfLines={1} variant="caption">
+                {details.join(" · ")}
+              </Text>
+            )}
+          </View>
+        </Pressable>
+      </Link.Trigger>
+      <Link.Menu>
+        <Link.MenuAction
+          icon="checklist"
+          onPress={() => {
+            router.push({
+              pathname: "/task/new",
+              params: { matterId: matter.id },
+            });
+          }}
+          title={t("newTask")}
+        />
+        <Link.MenuAction
+          hidden={!canScan()}
+          icon="doc.viewfinder"
+          onPress={scan}
+          title={t("scanDocument")}
+        />
+      </Link.Menu>
+    </Link>
   );
 };

@@ -38,12 +38,13 @@ final class KeyCommandsView: ExpoView {
   override var keyCommands: [UIKeyCommand]? {
     shortcuts.map { shortcut in
       let command = UIKeyCommand(
+        title: shortcut.title,
+        action: #selector(runShortcut(_:)),
         input: shortcut.input,
         modifierFlags: shortcut.modifiers,
-        action: #selector(perform(_:)),
-        propertyList: shortcut.id
+        propertyList: shortcut.id,
+        discoverabilityTitle: shortcut.title
       )
-      command.discoverabilityTitle = shortcut.title
       command.wantsPriorityOverSystemBehavior = true
       return command
     }
@@ -93,7 +94,7 @@ final class KeyCommandsView: ExpoView {
     takeFocusIfFree()
   }
 
-  @objc private func perform(_ sender: UIKeyCommand) {
+  @objc private func runShortcut(_ sender: UIKeyCommand) {
     guard let id = sender.propertyList as? String else { return }
     onCommand(["id": id])
   }
