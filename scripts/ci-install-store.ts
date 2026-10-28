@@ -10,6 +10,7 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
@@ -142,7 +143,12 @@ export const installStoreRestorePrefix = (key: string) => {
   return key.slice(0, separator + 1);
 };
 
-const lockPackageIdentities = (root: string) => {
+type LockStoreEntries = {
+  identities: Set<string>;
+  unmappablePackageNames: Set<string>;
+};
+
+const lockStoreEntries = (root: string): LockStoreEntries => {
   const lock: unknown = Bun.JSONC.parse(
     readFileSync(path.join(root, "bun.lock"), "utf-8"),
   );
@@ -150,18 +156,59 @@ const lockPackageIdentities = (root: string) => {
     throw new InstallStoreInvariantError("Invalid bun.lock packages");
   }
   const identities = new Set<string>();
+  const unmappablePackageNames = new Set<string>();
   for (const value of Object.values(lock["packages"])) {
-    if (Array.isArray(value) && typeof value[0] === "string") {
-      identities.add(value[0]);
+    if (!Array.isArray(value) || typeof value[0] !== "string") {
+      continue;
+    }
+    const resolution = value[0];
+    const source =
+      /@(?<kind>github:|git\+|https?:\/\/|file:|link:|workspace:|root:|\.{0,2}\/)/u.exec(
+        resolution,
+      );
+    if (source?.groups?.["kind"] === undefined) {
+      identities.add(resolution);
+      continue;
+    }
+    const packageName = resolution.slice(0, source.index);
+    const kind = source.groups["kind"];
+    const tag = value.at(2);
+    if (kind === "github:" && typeof tag === "string") {
+      identities.add(`@GH@${tag}`);
+    } else if (kind === "git+" && typeof tag === "string") {
+      identities.add(`@G@${tag}`);
+    } else if (
+      (kind === "http://" ||
+        kind === "https://" ||
+        kind === "./" ||
+        kind === "../" ||
+        kind === "/") &&
+      typeof tag === "string" &&
+      tag.startsWith("sha512-")
+    ) {
+      const hash = Buffer.from(tag.slice("sha512-".length), "base64")
+        .toString("hex")
+        .slice(0, 32);
+      identities.add(`@T@sha512-${hash}`);
+    } else {
+      unmappablePackageNames.add(packageName);
     }
   }
-  return identities;
+  return { identities, unmappablePackageNames };
 };
+
+const lockNeedsStoreEntry = (
+  entries: LockStoreEntries,
+  identity: string,
+  packageName: string,
+) =>
+  entries.identities.has(identity.replace(/@@@\d+$/u, "")) ||
+  entries.unmappablePackageNames.has(packageName);
 
 // A prefix restore may contain packages from the previous lock. Remove every
 // identifiable package absent from the current lock before sealing the new key.
 export const pruneInstallStore = (store: string, root: string) => {
-  const allowed = lockPackageIdentities(root);
+  const needed = lockStoreEntries(root);
   const pending = [store];
   for (const directory of pending) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -181,7 +228,11 @@ export const pruneInstallStore = (store: string, root: string) => {
         isRecord(metadata) &&
         typeof metadata["name"] === "string" &&
         typeof metadata["version"] === "string" &&
-        !allowed.has(`${metadata["name"]}@${metadata["version"]}`)
+        !lockNeedsStoreEntry(
+          needed,
+          repoRelativePath(store, filename),
+          metadata["name"],
+        )
       ) {
         rmSync(filename, { recursive: true, force: true });
       }
@@ -190,7 +241,7 @@ export const pruneInstallStore = (store: string, root: string) => {
 };
 
 const assertInstallStoreExact = (store: string, root: string) => {
-  const before: string[] = [];
+  const extraCandidates: { identity: string; packageName: string }[] = [];
   const visit = (directory: string) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const filename = path.join(directory, entry.name);
@@ -210,16 +261,22 @@ const assertInstallStoreExact = (store: string, root: string) => {
         typeof metadata["name"] === "string" &&
         typeof metadata["version"] === "string"
       ) {
-        before.push(`${metadata["name"]}@${metadata["version"]}`);
+        extraCandidates.push({
+          identity: repoRelativePath(store, filename),
+          packageName: metadata["name"],
+        });
       }
     }
   };
   visit(store);
-  const allowed = lockPackageIdentities(root);
-  const extra = before.find((identity) => !allowed.has(identity));
+  const needed = lockStoreEntries(root);
+  const extra = extraCandidates.find(
+    ({ identity, packageName }) =>
+      !lockNeedsStoreEntry(needed, identity, packageName),
+  );
   if (extra !== undefined) {
     throw new InstallStoreInvariantError(
-      `Install store contains package outside current lock: ${extra}`,
+      `Install store contains package outside current lock: ${extra.identity}`,
     );
   }
 };
