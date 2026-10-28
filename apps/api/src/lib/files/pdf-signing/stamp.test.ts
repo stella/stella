@@ -26,6 +26,11 @@ import type {
   SignatureStamp,
   StampRotation,
 } from "@/api/lib/files/pdf-signing/stamp";
+import {
+  STELLA_MARK_FILL,
+  STELLA_MARK_HEIGHT,
+  STELLA_MARK_WIDTH,
+} from "@/api/lib/files/pdf-signing/stamp-mark";
 import { settled } from "@/api/tests/helpers/settled";
 import { readSignatureIntegrity } from "@/api/tests/helpers/signed-pdf";
 import {
@@ -368,8 +373,10 @@ const readStampRows = async (bytes: Uint8Array) => {
       parseToUnicode(new TextDecoder().decode(cmap.getDecodedData())),
     );
   }
-  const right = appearance.getArray("BBox")?.at(2);
-  const middle = right instanceof PdfNumber ? right.value / 2 : 0;
+  // Each column is drawn top to bottom, the name first: a baseline above the
+  // one before starts the details column.
+  let column = 0;
+  let baseline = Number.POSITIVE_INFINITY;
   const rows = new Map<string, string>();
   let font = "";
   let row = "";
@@ -383,7 +390,12 @@ const readStampRows = async (bytes: Uint8Array) => {
     if (fontMatch) {
       font = fontMatch[1] ?? "";
     } else if (matrix) {
-      row = `${Number(matrix[1]) < middle ? "name" : "details"}:${matrix[2]}`;
+      const y = Number(matrix[2]);
+      if (y > baseline) {
+        column += 1;
+      }
+      baseline = y;
+      row = `${column}:${matrix[2]}`;
     } else if (span) {
       actualText = new TextDecoder("utf-16be").decode(
         Buffer.from(span[1] ?? "", "hex"),
@@ -496,6 +508,53 @@ describe("signing with a visible stamp", () => {
     }
   });
 
+  test.each([0, 90, 180, 270] as const)(
+    "fills the stella mark under the details on a page turned by %d",
+    async (rotation) => {
+      const { applied } = await signWithStamp(rotation);
+      const { appearance, resolve } = await readStamp(applied.bytes);
+      const operators = new TextDecoder()
+        .decode(appearance.getDecodedData())
+        .split("\n");
+      const text = operators.indexOf("BT");
+      const fill = operators.indexOf(STELLA_MARK_FILL);
+
+      // The mark is filled in its own graphics state, wholly before the text.
+      expect(operators.at(0)).toBe("q");
+      expect(fill).toBe(1);
+      expect(operators.at(text - 1)).toBe("Q");
+      expect(
+        operators.slice(fill, text).filter((line) => line === "f"),
+      ).toHaveLength(2);
+      expect(operators.indexOf("f", text)).toBe(-1);
+      // Opaque, so no transparency group or soft mask is involved.
+      expect(appearance.getDict("Resources", resolve)?.has("ExtGState")).toBe(
+        false,
+      );
+      expect(appearance.has("Group")).toBe(false);
+
+      // In appearance space, the same for every rotation: inside the box,
+      // filling most of its height.
+      const bbox = (appearance.getArray("BBox")?.toArray() ?? []).map(
+        (entry) => (entry instanceof PdfNumber ? entry.value : Number.NaN),
+      );
+      const width = bbox.at(2) ?? 0;
+      const height = bbox.at(3) ?? 0;
+      const placement = /^([\d.]+) 0 0 \1 ([\d.]+) ([\d.]+) cm$/u.exec(
+        operators.at(fill + 1) ?? "",
+      );
+      expect(placement).not.toBeNull();
+      const [scale = 0, left = 0, bottom = 0] = (placement ?? [])
+        .slice(1)
+        .map(Number);
+      expect(left).toBeGreaterThan(width / 4);
+      expect(left + STELLA_MARK_WIDTH * scale).toBeLessThanOrEqual(width);
+      expect(bottom).toBeGreaterThanOrEqual(0);
+      expect(bottom + STELLA_MARK_HEIGHT * scale).toBeLessThanOrEqual(height);
+      expect(STELLA_MARK_HEIGHT * scale).toBeGreaterThan(height * 0.8);
+    },
+  );
+
   test("wraps the longest accepted text inside the largest box", async () => {
     // A 64-character name (the X.520 upper bound) and a reason and location
     // at the handoff's 256-character cap, in a 400 x 200 pt box.
@@ -570,8 +629,14 @@ describe("signing with a visible stamp", () => {
     const operators = new TextDecoder()
       .decode(appearance.getDecodedData())
       .split("\n");
+    // No border, background or image; the only fill is the mark under it.
     expect(operators).not.toContain("S");
-    expect(operators.some((line) => /(?:re|f|Do)$/u.test(line))).toBe(false);
+    expect(operators.some((line) => /(?:re|Do)$/u.test(line))).toBe(false);
+    expect(
+      operators
+        .slice(operators.indexOf("BT"))
+        .some((line) => /(?:^|\s)f\*?$/u.test(line)),
+    ).toBe(false);
     expect(rows).toEqual([
       "Jiří",
       "Čermák",

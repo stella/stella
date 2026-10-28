@@ -39,6 +39,7 @@ import {
   LEFT_TO_RIGHT_ISOLATE,
   POP_DIRECTIONAL_ISOLATE,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
+import { drawStampMark } from "@/api/lib/files/pdf-signing/stamp-mark";
 import {
   stampTextCheck,
   stampValue,
@@ -452,8 +453,14 @@ export const addSignatureStamp = ({
       }),
     );
   }
-  const text = drawStampRows({ pdf, rows: layout });
-  const operators = ["BT", "0.1 0.1 0.1 rg", ...text.operators, "ET"];
+  const text = drawStampRows({ pdf, rows: layout.rows });
+  const operators = [
+    ...drawStampMark(layout.details),
+    "BT",
+    "0.1 0.1 0.1 rg",
+    ...text.operators,
+    "ET",
+  ];
 
   const appearance = pdf.context.registry.register(
     new PdfStream(

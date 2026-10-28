@@ -89,7 +89,7 @@ describe("laying out a stamp row", () => {
 });
 
 describe("the stamp's two columns", () => {
-  const fit = async (
+  const fitColumns = async (
     name: string,
     {
       width = 240,
@@ -120,6 +120,8 @@ describe("the stamp's two columns", () => {
       layoutRow: (text) => layoutStampRow({ direction, fonts, text }),
     });
   };
+  const fit = async (...args: Parameters<typeof fitColumns>) =>
+    (await fitColumns(...args))?.rows ?? null;
 
   /** Vertical extent and right edge of a positioned row, in points. */
   const extent = ({ row, fontSize, x, y }: PositionedStampRow) => {
@@ -202,11 +204,12 @@ describe("the stamp's two columns", () => {
   });
 
   test("sizes the details to fill the box, with no fixed cap", async () => {
-    const rows = await fit("Jan Kubica", { width: 380, height: 100 });
-    expect(rows).not.toBeNull();
-    if (rows === null) {
+    const laidOut = await fitColumns("Jan Kubica", { width: 380, height: 100 });
+    expect(laidOut).not.toBeNull();
+    if (laidOut === null) {
       return;
     }
+    const { rows } = laidOut;
     const { name, details } = columns(rows, 2);
     expect(details).toHaveLength(4);
     const fontSize = details.at(0)?.fontSize ?? 0;
@@ -231,6 +234,12 @@ describe("the stamp's two columns", () => {
       expect(edges.top).toBeLessThanOrEqual(94.001);
     }
     expect((top + bottom) / 2).toBeCloseTo(50);
+    // The details box, which the mark fills, spans the column inside the
+    // padding.
+    expect(laidOut.details.x).toBeCloseTo(nameRight + 6);
+    expect(laidOut.details.width).toBeCloseTo(detailsWidth);
+    expect(laidOut.details.y).toBeCloseTo(6);
+    expect(laidOut.details.height).toBeCloseTo(88);
   });
 
   test("shrinks a long name and refuses an unbreakable word below the readable size", async () => {

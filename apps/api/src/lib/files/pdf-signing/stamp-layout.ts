@@ -269,6 +269,12 @@ export type PositionedStampRow = {
   y: number;
 };
 
+export type StampColumns = {
+  rows: PositionedStampRow[];
+  /** The box of the details column, in appearance space. */
+  details: { x: number; y: number; width: number; height: number };
+};
+
 /**
  * Fit both columns without clipping, each as large as the box allows and
  * centred vertically: the name, one word per line, in at most the left half;
@@ -287,7 +293,7 @@ export const layoutStampColumns = ({
   /** User-space length of one physical point (1 / UserUnit). */
   unit: number;
   width: number;
-}): PositionedStampRow[] | null => {
+}): StampColumns | null => {
   const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
   const innerHeight = height - 2 * padding;
   const unitWidth = (text: string) =>
@@ -371,10 +377,18 @@ export const layoutStampColumns = ({
     ) {
       continue;
     }
-    return [
-      ...position(nameRows, nameSize, padding),
-      ...position(rows, fontSize, detailsX),
-    ];
+    return {
+      rows: [
+        ...position(nameRows, nameSize, padding),
+        ...position(rows, fontSize, detailsX),
+      ],
+      details: {
+        x: detailsX,
+        y: padding,
+        width: detailsWidth,
+        height: innerHeight,
+      },
+    };
   }
   return null;
 };
