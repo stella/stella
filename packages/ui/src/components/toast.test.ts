@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 // Every shared toast surface must expose the full provider reason. Enumerating
 // the actual JSX catches new floating/anchored variants without a mirror list.
@@ -85,4 +88,58 @@ describe("toast countdown", () => {
     ).toBeUndefined();
     expect(toastCountdownMs({ type: "info" })).toBeUndefined();
   });
+});
+
+describe("toast lifetime transitions", () => {
+  test("pending to terminal states own their dismissal timing", async () => {
+    const { resolveToastUpdateTimeout } = await import("./toast");
+    const terminalStates = [
+      { type: "success", defaultTimeout: 4000 },
+      { type: "error", defaultTimeout: 8000 },
+      { type: "info", defaultTimeout: 4000 },
+    ] as const;
+
+    assertProperty(
+      "pending to terminal states own their dismissal timing",
+      fc.property(
+        fc.constantFrom(...terminalStates),
+        fc.option(fc.integer({ min: 1, max: 30_000 }), { nil: undefined }),
+        (terminal, timeout) => {
+          const update =
+            timeout === undefined
+              ? { title: "Settled", type: terminal.type }
+              : { title: "Settled", type: terminal.type, timeout };
+          expect(
+            resolveToastUpdateTimeout(update, {
+              title: "Pending",
+              type: "loading",
+            }),
+          ).toEqual({ timeout: timeout ?? terminal.defaultTimeout });
+        },
+      ),
+    );
+  });
+
+  test("pending updates remain sticky", async () => {
+    const { resolveToastUpdateTimeout } = await import("./toast");
+    expect(
+      resolveToastUpdateTimeout(
+        { description: "Still working" },
+        { title: "Pending", type: "loading" },
+      ),
+    ).toEqual({});
+  });
+
+  test.each(["Files uploaded successfully", "Duplicated"])(
+    "%s uses the success lifetime after loading",
+    async (title) => {
+      const { resolveToastUpdateTimeout } = await import("./toast");
+      expect(
+        resolveToastUpdateTimeout(
+          { title, type: "success" },
+          { title: "Loading", type: "loading" },
+        ),
+      ).toEqual({ timeout: 4000 });
+    },
+  );
 });

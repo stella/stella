@@ -20,7 +20,6 @@ import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
-  timeoutPolicy?: { type: "automatic" } | { type: "explicit"; timeout: number };
 };
 
 const toastManager = Toast.createToastManager<ToastData>();
@@ -55,10 +54,19 @@ type ToastOptions = Omit<
   actionProps?: ToastActionProps;
 };
 
-type ToastUpdateOptions = Partial<ToastOptions> & {
+type ToastUpdateFields = Partial<Omit<ToastOptions, "timeout">> & {
   title?: React.ReactNode | undefined;
-  type?: ToastType | undefined;
 };
+
+type ToastUpdateOptions =
+  | (ToastUpdateFields & {
+      type: ToastType;
+      timeout?: number | undefined;
+    })
+  | (ToastUpdateFields & {
+      type?: undefined;
+      timeout?: number | undefined;
+    });
 
 type ToastPromiseMessage = React.ReactNode | ToastUpdateOptions;
 
@@ -467,10 +475,13 @@ function toastDedupeId({
   description,
   title,
   type,
-}: Pick<
-  ToastAddOptions,
-  "action" | "actionProps" | "description" | "title" | "type"
->): string | undefined {
+}: {
+  action?: ToastAction | undefined;
+  actionProps?: ToastActionProps | undefined;
+  description?: React.ReactNode | undefined;
+  title: React.ReactNode;
+  type?: ToastType | undefined;
+}): string | undefined {
   if (
     type === "loading" ||
     action !== undefined ||
@@ -520,7 +531,7 @@ function normalizeToastAddOptions(options: ToastUpdateOptions) {
   return {
     ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
-    data: { ...data, timeoutPolicy: toastTimeoutPolicy(timeout) },
+    data,
     timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
@@ -543,29 +554,31 @@ function normalizeToastUpdateOptions(
     }),
     ...(type === undefined ? {} : { type }),
   };
-  const timeoutPolicy =
-    timeout === undefined
-      ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
-      : toastTimeoutPolicy(timeout);
   return {
     ...update,
-    data: {
-      ...(Object.hasOwn(options, "data") ? data : previous.data),
-      timeoutPolicy,
-    },
-    timeout:
-      timeoutPolicy.type === "explicit"
-        ? timeoutPolicy.timeout
-        : getDefaultToastTimeout({ ...previous, ...update }),
+    data: Object.hasOwn(options, "data") ? data : previous.data,
+    ...resolveToastUpdateTimeout(options, previous),
   };
 }
 
-function toastTimeoutPolicy(
-  timeout: number | undefined,
-): NonNullable<ToastData["timeoutPolicy"]> {
-  return timeout === undefined
-    ? { type: "automatic" }
-    : { type: "explicit", timeout: normalizeToastTimeout(timeout) };
+function resolveToastUpdateTimeout(
+  options: ToastUpdateOptions,
+  previous: Pick<
+    ToastObject<ToastData>,
+    "actionProps" | "description" | "title" | "type"
+  >,
+): { timeout?: number } {
+  if (options.timeout !== undefined) {
+    return { timeout: normalizeToastTimeout(options.timeout) };
+  }
+
+  if (options.type === undefined) {
+    return {};
+  }
+
+  return {
+    timeout: getDefaultToastTimeout({ ...previous, ...options }),
+  };
 }
 
 function normalizeToastActionProps({
@@ -728,4 +741,5 @@ export {
   AnchoredToastProvider,
   toastCountdownMs,
   toastDedupeId,
+  resolveToastUpdateTimeout,
 };
