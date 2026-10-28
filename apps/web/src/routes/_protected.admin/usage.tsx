@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryAvailability } from "@/lib/organization/feature-access/availability";
 import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
@@ -70,9 +71,15 @@ function UsageSettingsPage() {
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
   const entitlementView = queryView(entitlementQuery);
-  const data =
-    entitlementView.type === "items" ? entitlementView.items : undefined;
-  const isLoading = entitlementView.type === "pending";
+  const availability = queryAvailability(
+    env.VITE_FEATURE_USAGE,
+    entitlementView,
+  );
+  if (availability.status === "disabled") {
+    return null;
+  }
+  const data = availability.status === "ready" ? availability.value : undefined;
+  const isLoading = availability.status === "pending";
   const entitlement = data?.entitlement;
   const packsPurchasable =
     entitlement?.source === "hosted" &&
@@ -84,10 +91,10 @@ function UsageSettingsPage() {
         description={t("settings.organization.usageDescription")}
         title={t("settings.organization.usage")}
       />
-      {entitlementView.type !== "pending" && (
+      {availability.status !== "pending" && (
         <QueryViewFeedback view={entitlementView} />
       )}
-      {entitlementView.type !== "error" && (
+      {availability.status !== "error" && (
         <UsageBody
           data={data?.entitlement ? data : null}
           isLoading={isLoading}

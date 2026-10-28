@@ -76,7 +76,7 @@ describe("projectToolMapForSubagent", () => {
   test("no surviving tool both requires approval and can run a real write; writes become non-executing proposals", async () => {
     const sideEffects: string[] = [];
     const tools: ChatToolMap = {
-      // reads (policy.needsApproval === false): survive with a live execute.
+      // Internal reads survive with a live execute.
       read_document: withPolicy(
         serverTool("read_document"),
         CHAT_TOOL_POLICY_KIND.internal,
@@ -129,7 +129,12 @@ describe("projectToolMapForSubagent", () => {
         .list()
         .map((proposal) => proposal.toolName)
         .toSorted(),
-    ).toEqual(["delete_matter", "save_matter", "web_search"]);
+    ).toEqual([
+      "delete_matter",
+      "lookup_company_registry",
+      "save_matter",
+      "web_search",
+    ]);
   });
 
   test("a mutation tool's projected wrapper records the proposed call instead of executing it", async () => {
