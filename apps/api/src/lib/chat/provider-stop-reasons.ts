@@ -133,6 +133,8 @@ const MISTRAL = {
 const OPENAI = {
   completed: "ended",
   max_output_tokens: "length",
+  max_messages: "length",
+  steered: "unfinished",
   content_filter: "content_filter",
   incomplete: "unfinished",
   cancelled: "unfinished",

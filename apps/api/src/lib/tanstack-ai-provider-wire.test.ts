@@ -1,3 +1,4 @@
+import type { BetaRefusalStopDetails } from "@anthropic-ai/sdk/resources/beta/messages";
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
@@ -234,6 +235,111 @@ const checkCancel = async (provider: ProviderWireProvider) => {
   );
   expectSettledTranscripts({ requests, transcripts });
 };
+
+describe("provider terminal metadata retains independent evidence", () => {
+  test("Bedrock preserves source identity alongside the provider stop reason", async () => {
+    const cassette = cassetteFor(cassettes, "bedrock", "text");
+    const { run, findings, requests, sent, transcripts } =
+      await replayWireScenario({ cassette, replay });
+    expect(run.thrown).toBeUndefined();
+    expect(
+      findWireContractViolations({ cassette, replay: findings, run }),
+    ).toEqual([]);
+    expectSettledTranscripts({ requests, transcripts });
+    expectPinnedRequests(cassette, sent);
+    expectProviderRules(sent);
+    expect(
+      run.chunks.findLast((chunk) => chunk.type === EventType.RUN_FINISHED),
+    ).toMatchObject({
+      metadata: {
+        providerStopReason: "end_turn",
+        tanstack: {
+          source: {
+            provider: "amazon-bedrock",
+            api: "bedrock-converse-stream",
+            model: cassette.model,
+          },
+        },
+      },
+    });
+  });
+
+  test("OpenRouter preserves response identity and model alongside the provider stop reason", async () => {
+    const cassette = cassetteFor(cassettes, "openrouter", "text");
+    const { run, findings, requests, sent, transcripts } =
+      await replayWireScenario({ cassette, replay });
+    expect(run.thrown).toBeUndefined();
+    expect(
+      findWireContractViolations({ cassette, replay: findings, run }),
+    ).toEqual([]);
+    expectSettledTranscripts({ requests, transcripts });
+    expectPinnedRequests(cassette, sent);
+    expectProviderRules(sent);
+    expect(
+      run.chunks.findLast((chunk) => chunk.type === EventType.RUN_FINISHED),
+    ).toMatchObject({
+      responseId: "[id]",
+      metadata: {
+        providerStopReason: "stop",
+        tanstack: { responseId: "[id]", model: cassette.model },
+      },
+    });
+  });
+
+  test("Anthropic refusal preserves its response identity and provider details alongside the stop reason", async () => {
+    const stopDetails = {
+      type: "refusal",
+      category: "general_harms",
+      explanation: "Synthetic refusal metadata canary.",
+      fallback_credit_token: null,
+      fallback_has_prefill_claim: null,
+      recommended_model: null,
+    } as const satisfies BetaRefusalStopDetails;
+    const original = cassetteFor(cassettes, "anthropic", "refusal");
+    const cassette = {
+      ...original,
+      exchanges: original.exchanges.map((exchange) => {
+        const { body } = exchange.response;
+        if (body.encoding !== "text") {
+          panic("Anthropic refusal needs an SSE response");
+        }
+        const stopReason = '"stop_reason":"refusal"';
+        expect(body.text.split(stopReason)).toHaveLength(2);
+        return {
+          ...exchange,
+          response: {
+            ...exchange.response,
+            body: {
+              encoding: "text",
+              text: body.text.replace(
+                stopReason,
+                () =>
+                  `${stopReason},"stop_details":${JSON.stringify(stopDetails)}`,
+              ),
+            },
+          },
+        };
+      }),
+    } satisfies ProviderWireCassette;
+    const { run, findings, requests, sent, transcripts } =
+      await replayWireScenario({ cassette, replay });
+    expect(run.thrown).toBeUndefined();
+    expect(
+      findWireContractViolations({ cassette, replay: findings, run }),
+    ).toEqual([]);
+    expectSettledTranscripts({ requests, transcripts });
+    expectPinnedRequests(cassette, sent);
+    expectProviderRules(sent);
+    expect(
+      run.chunks.findLast((chunk) => chunk.type === EventType.RUN_FINISHED),
+    ).toMatchObject({
+      responseId: "msg_01CassetteReplay0000000001",
+      finishReason: "content_filter",
+      rawEvent: stopDetails,
+      metadata: { providerStopReason: "refusal" },
+    });
+  });
+});
 
 /** Retried failures wait out each SDK's backoff. */
 const RETRY_TIMEOUT_MS = 60_000;
