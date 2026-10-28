@@ -10,6 +10,7 @@ import type {
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopMatter,
+  DesktopTimeEntryBatch,
   DesktopTimeEntryClassification,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
@@ -255,6 +256,38 @@ export type ReviewItem = {
   classification: DesktopTimeEntryClassification | null;
   ranges: ActivityRange[];
 };
+
+/** One confirmed row as the batch invoke carries it: the entry the server
+ * creates and the local ranges it marks as drafted. */
+export type ConfirmedBatchItem = {
+  entry: DesktopTimeEntryBatch["entries"][number];
+  ranges: ActivityRange[];
+};
+
+type ConfirmedBatchItemOptions = {
+  item: ReviewItem;
+  date: string;
+  timezone: string;
+};
+
+export const confirmedBatchItem = ({
+  item,
+  date,
+  timezone,
+}: ConfirmedBatchItemOptions): ConfirmedBatchItem => ({
+  entry: {
+    matterId: item.matter.id,
+    dateWorked: date,
+    timezoneId: timezone,
+    durationMinutes: item.durationMinutes,
+    narrative: item.narrative,
+    billable: item.billable,
+    ...(item.classification === null
+      ? {}
+      : { classification: item.classification }),
+  },
+  ranges: item.ranges,
+});
 
 export type ReviewRow = { group: DraftableGroup; content: ReviewContent };
 

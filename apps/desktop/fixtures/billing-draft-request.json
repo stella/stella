@@ -1,0 +1,33 @@
+{
+  "requests": [
+    {
+      "entries": [
+        {
+          "entryId": "entry_1",
+          "matterId": "00000000-0000-4000-8000-000000000001",
+          "date": "2026-10-24",
+          "timezone": "Europe/Prague",
+          "durationMinutes": 60,
+          "appNames": ["Word", "Mail"],
+          "evidence": {
+            "documentNames": ["Lease v3.docx"],
+            "windowTitles": ["Re: break clause"]
+          }
+        }
+      ],
+      "steer": "Shorter narratives"
+    },
+    {
+      "entries": [
+        {
+          "entryId": "entry_1",
+          "matterId": "00000000-0000-4000-8000-000000000001",
+          "date": "2026-10-24",
+          "timezone": "Europe/Prague",
+          "durationMinutes": 60,
+          "appNames": ["Word", "Mail"]
+        }
+      ]
+    }
+  ]
+}

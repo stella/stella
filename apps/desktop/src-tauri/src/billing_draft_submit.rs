@@ -28,6 +28,9 @@ pub struct DraftEvidence {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DraftEntry {
+  /// Positional identifier the review uses to match the server's drafts back
+  /// to the entries it sent.
+  entry_id: String,
   matter_id: String,
   date: String,
   timezone: String,
@@ -188,6 +191,7 @@ mod tests {
 
   fn entry() -> serde_json::Value {
     serde_json::json!({
+      "entryId": "entry_1",
       "matterId": "00000000-0000-4000-8000-000000000001",
       "date": "2026-10-24",
       "timezone": "Europe/Prague",
@@ -227,6 +231,22 @@ mod tests {
         .unwrap()
         .extend(extra.as_object().unwrap().clone());
       assert!(serde_json::from_value::<DraftRequest>(top_level).is_err());
+    }
+  }
+
+  /// The webview builds these requests; the shared fixture keeps both sides
+  /// of the invoke boundary on the same field names.
+  #[test]
+  fn draft_request_fixture_round_trips() {
+    let fixture: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/billing-draft-request.json"))
+        .unwrap();
+    let requests = fixture["requests"].as_array().unwrap();
+    assert!(!requests.is_empty());
+    for expected in requests {
+      let request: DraftRequest = serde_json::from_value(expected.clone()).unwrap();
+      assert!(request.validate().is_ok());
+      assert_eq!(&serde_json::to_value(&request).unwrap(), expected);
     }
   }
 

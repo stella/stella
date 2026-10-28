@@ -6,11 +6,15 @@ import * as v from "valibot";
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopBillingDraft } from "@stll/api-contract/desktop-billing-drafts";
+import { desktopTimeEntryBatchSchema } from "@stll/api-contract/desktop-time-entries";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
+import billingDraftRequest from "../fixtures/billing-draft-request.json" with { type: "json" };
+import timeEntryBatchRequest from "../fixtures/time-entry-batch-request.json" with { type: "json" };
 import {
+  confirmedBatchItem,
   draftRequestEntries,
   draftScalars,
   materializeStructure,
@@ -21,6 +25,7 @@ import {
 import type {
   DraftableGroup,
   ResolvedStructureProposal,
+  ReviewItem,
   ReviewRow,
 } from "../src/activity/billing-draft-logic";
 import messages from "../src/i18n/langs/en.json";
@@ -150,6 +155,35 @@ describe("draft request", () => {
     }
   });
 
+  // The Rust invoke boundary deserializes the same fixture with
+  // deny_unknown_fields, so a field either side drops fails one of the tests.
+  test("matches the request fixture the desktop shell accepts", () => {
+    const [withTitles, withoutTitles] = billingDraftRequest.requests;
+    expect(
+      draftRequestEntries({
+        groups,
+        date: "2026-10-24",
+        timezone: "Europe/Prague",
+        captureDetails: true,
+      }),
+    ).toEqual(withTitles?.entries ?? panic("fixture lacks a titled request"));
+    expect(
+      draftRequestEntries({
+        groups,
+        date: "2026-10-24",
+        timezone: "Europe/Prague",
+        captureDetails: false,
+      }),
+    ).toEqual(
+      withoutTitles?.entries ?? panic("fixture lacks an untitled request"),
+    );
+    for (const request of billingDraftRequest.requests) {
+      expect(
+        v.safeParse(desktopBillingDraftRequestSchema, request).success,
+      ).toBe(true);
+    }
+  });
+
   test("bounds every name to the contract", () => {
     const long = group({
       id: "long",
@@ -174,6 +208,72 @@ describe("draft request", () => {
     expect(
       v.safeParse(desktopBillingDraftRequestSchema, { entries: [entry] })
         .success,
+    ).toBe(true);
+  });
+});
+
+describe("confirmed batch request", () => {
+  const matter = ({ id, name }: DesktopTimeEntryMatterCandidate) => ({
+    id,
+    name,
+    reference: null,
+    color: null,
+  });
+  const range = (start: string, end: string) => ({
+    start: `2026-10-24T${start}:00Z`,
+    end: `2026-10-24T${end}:00Z`,
+  });
+
+  // The Rust invoke boundary deserializes the same fixture with
+  // deny_unknown_fields, so a field either side drops fails one of the tests.
+  test("matches the request fixture the desktop shell accepts", () => {
+    const items: ReviewItem[] = [
+      {
+        key: "riverside",
+        matter: matter(RIVERSIDE),
+        durationMinutes: 60,
+        narrative: "Reviewed lease break clause",
+        billable: true,
+        classification: {
+          type: "ledes",
+          taskCode: "L120",
+          activityCode: "A104",
+        },
+        ranges: [range("07:00", "08:00")],
+      },
+      {
+        key: "meridian",
+        matter: matter(MERIDIAN),
+        durationMinutes: 30,
+        narrative: "Internal planning",
+        billable: false,
+        classification: { type: "activity_group", activityGroup: "internal" },
+        ranges: [range("09:00", "09:30")],
+      },
+      {
+        key: "call",
+        matter: matter(RIVERSIDE),
+        durationMinutes: 6,
+        narrative: "Call with client",
+        billable: true,
+        classification: null,
+        ranges: [range("10:00", "10:06")],
+      },
+    ];
+    expect(
+      items.map((item) =>
+        confirmedBatchItem({
+          item,
+          date: timeEntryBatchRequest.date,
+          timezone: "Europe/Prague",
+        }),
+      ),
+    ).toEqual(timeEntryBatchRequest.items);
+    expect(
+      v.safeParse(desktopTimeEntryBatchSchema, {
+        idempotencyKey: timeEntryBatchRequest.idempotencyKey,
+        entries: timeEntryBatchRequest.items.map(({ entry }) => entry),
+      }).success,
     ).toBe(true);
   });
 });

@@ -11,7 +11,6 @@ import {
 } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
-  DesktopTimeEntryBatch,
   DesktopTimeEntryBatchResponse,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
@@ -43,8 +42,12 @@ import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
-import { absorbedGroupIds, reviewItems } from "./billing-draft-logic";
-import type { ReviewItem } from "./billing-draft-logic";
+import {
+  absorbedGroupIds,
+  confirmedBatchItem,
+  reviewItems,
+} from "./billing-draft-logic";
+import type { ConfirmedBatchItem, ReviewItem } from "./billing-draft-logic";
 import { useBillingDraftSession } from "./billing-draft-session";
 import type { DraftStatus, ReviewBarDrafts } from "./billing-draft-session";
 import { initialReviewEdit, reviewReducer } from "./billing-review-state";
@@ -75,15 +78,11 @@ type CandidateState =
   | { type: "loading" }
   | { type: "failed" }
   | { type: "ready"; matters: DesktopTimeEntryMatterCandidate[] };
-type BatchItem = {
-  entry: DesktopTimeEntryBatch["entries"][number];
-  ranges: { start: string; end: string }[];
-};
 type Submission =
   | { type: "editing" }
-  | { type: "submitting"; idempotencyKey: string; items: BatchItem[] }
-  | { type: "retry"; idempotencyKey: string; items: BatchItem[] }
-  | { type: "discarding"; idempotencyKey: string; items: BatchItem[] }
+  | { type: "submitting"; idempotencyKey: string; items: ConfirmedBatchItem[] }
+  | { type: "retry"; idempotencyKey: string; items: ConfirmedBatchItem[] }
+  | { type: "discarding"; idempotencyKey: string; items: ConfirmedBatchItem[] }
   | { type: "saved"; count: number };
 export type ActivityReviewStatus = Submission["type"];
 type Range = { startMs: number; endMs: number };
@@ -334,7 +333,13 @@ export const ActivityDayReview = ({
         ? submission
         : {
             idempotencyKey: crypto.randomUUID(),
-            items: items.map((item) => batchItem(item, snapshot.date)),
+            items: items.map((item) =>
+              confirmedBatchItem({
+                item,
+                date: snapshot.date,
+                timezone: Temporal.Now.timeZoneId(),
+              }),
+            ),
           };
     if (pending.items.length === 0) {
       return;
@@ -512,23 +517,6 @@ export const ActivityDayReview = ({
     </div>
   );
 };
-
-function batchItem(item: ReviewItem, date: string): BatchItem {
-  return {
-    entry: {
-      matterId: item.matter.id,
-      dateWorked: date,
-      timezoneId: Temporal.Now.timeZoneId(),
-      durationMinutes: item.durationMinutes,
-      narrative: item.narrative,
-      billable: item.billable,
-      ...(item.classification === null
-        ? {}
-        : { classification: item.classification }),
-    },
-    ranges: item.ranges,
-  };
-}
 
 type DayReviewMetricsProps = {
   header: ReactNode;

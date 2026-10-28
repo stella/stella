@@ -33,14 +33,14 @@ fn uncertain<E: std::fmt::Display>(cause: E) -> SubmitError {
 pub(crate) static BATCH_CONFIRMATION: tokio::sync::Mutex<()> =
   tokio::sync::Mutex::const_new(());
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedBatchItem {
   entry: ConfirmedTimeEntry,
   ranges: Vec<ActivityRange>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ConfirmedBatchRequest {
   date: String,
@@ -297,6 +297,29 @@ mod tests {
     ] {
       assert_eq!(SubmitError::from(error), SubmitError::Uncertain);
     }
+  }
+
+  /// The webview builds this request; the shared fixture keeps both sides of
+  /// the invoke boundary on the same field names.
+  #[test]
+  fn confirmed_batch_fixture_round_trips() {
+    let expected: serde_json::Value = serde_json::from_str(include_str!(
+      "../../fixtures/time-entry-batch-request.json"
+    ))
+    .unwrap();
+    let request: ConfirmedBatchRequest =
+      serde_json::from_value(expected.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&request).unwrap(), expected);
+    let ConfirmedBatchRequest {
+      date,
+      idempotency_key,
+      items,
+    } = request;
+    let batch = ConfirmedBatch {
+      idempotency_key,
+      entries: items.into_iter().map(|item| item.entry).collect(),
+    };
+    assert_eq!(validate_confirmation(&batch, &date), Ok(()));
   }
 
   #[test]
