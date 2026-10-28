@@ -29,8 +29,8 @@ bun "$repo_root/packages/mojibake/scripts/refresh-exemplar-input.ts" prepare "$w
 
 # Select the official characters mapping, not calendars, units and currencies.
 # The pinned source still owns both the package and path mapping definitions.
-awk '
-  /^package=misc ;/ || /^section=characters ;/ { print; count++ }
+awk -v section="$(jq -r '.converterOptions.section' "$manifest")" '
+  /^package=misc ;/ || index($0, "section=" section " ;") == 1 { print; count++ }
   END { if (count != 2) exit 1 }
 ' "$source_root/tools/cldr-code/src/main/resources/org/unicode/cldr/json/JSON_config.txt" \
   > "$work_directory/characters-config.txt"
