@@ -9,6 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import {
   createInstallWatchdog,
   installStoreProgress,
@@ -109,6 +111,101 @@ test("two stalled fake children produce a typed terminal stall", async () => {
   });
   expect(attempts).toEqual([1, 2]);
   expect(result).toEqual({ exitCode: 137, stalled: true, retried: true });
+});
+
+test("recording failures clean up the active install attempt", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ci-install-recording-"));
+  roots.push(root);
+  const recordingError = new Error("installer log is full");
+  let attempts = 0;
+  let kills = 0;
+  let probes = 0;
+  let probeSettled = false;
+  let exitCode: number | null = null;
+  const exit = Promise.withResolvers<number>();
+  const probe = Promise.withResolvers<undefined>();
+  let fireTimer: () => void = () => undefined;
+  let timerActive = false;
+  let now = 0;
+  const timerCancelled = Promise.withResolvers<undefined>();
+  let stdoutController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      stdoutController = controller;
+    },
+  });
+  const stderr = new ReadableStream<Uint8Array>();
+  let writes = 0;
+  const recordingFailed = Promise.withResolvers<undefined>();
+
+  const attempt = runLoggedInstall({
+    command: ["fake-install"],
+    logFile: path.join(root, "install.log"),
+    budgetMs: 1000,
+    stallMs: 10,
+    progressRoots: [],
+    now: () => now,
+    record: (descriptor, chunk) => {
+      writes += 1;
+      if (writes === 2) {
+        recordingFailed.resolve(undefined);
+        throw recordingError;
+      }
+      writeFileSync(descriptor, chunk);
+    },
+    sampleStore: async (_roots, active) => {
+      probes += 1;
+      await probe.promise;
+      expect(active?.()).toBe(false);
+      probeSettled = true;
+      return { signature: "", newest: 0 };
+    },
+    scheduleInterval: (callback) => {
+      timerActive = true;
+      fireTimer = () => {
+        if (timerActive) {
+          return callback();
+        }
+      };
+      return () => {
+        timerActive = false;
+        timerCancelled.resolve(undefined);
+      };
+    },
+    spawn: () => {
+      attempts += 1;
+      return {
+        stdout,
+        stderr,
+        exited: exit.promise,
+        get exitCode() {
+          return exitCode;
+        },
+        signalCode: null,
+        kill: () => {
+          kills += 1;
+          exitCode = 137;
+          exit.resolve(exitCode);
+        },
+      };
+    },
+  });
+
+  now = 5;
+  fireTimer();
+  stdoutController?.enqueue(Buffer.from("first installer chunk"));
+  await recordingFailed.promise;
+  await timerCancelled.promise;
+  probe.resolve(undefined);
+  expect(await rejectionOf(attempt)).toBe(recordingError);
+
+  expect(attempts).toBe(1);
+  expect(kills).toBe(1);
+  expect(probeSettled).toBe(true);
+  const probesAfterRejection = probes;
+  expect(timerActive).toBe(false);
+  fireTimer();
+  expect(probes).toBe(probesAfterRejection);
 });
 
 test.each([0, 7])(

@@ -184,6 +184,17 @@ type LoggedInstallOptions = {
   progressRoots?: readonly string[];
   report?: (message: string) => void;
   now?: () => number;
+  record?: (descriptor: number, chunk: Uint8Array) => void;
+  sampleStore?: typeof installStoreProgress;
+  scheduleInterval?: (callback: () => void, milliseconds: number) => () => void;
+  spawn?: (command: readonly string[]) => {
+    stdout: ReadableStream<Uint8Array>;
+    stderr: ReadableStream<Uint8Array>;
+    exited: Promise<number>;
+    exitCode: number | null;
+    signalCode: string | number | null;
+    kill: (signal: NodeJS.Signals) => void;
+  };
 };
 
 export const runLoggedInstall = async ({
@@ -202,15 +213,29 @@ export const runLoggedInstall = async ({
     process.stdout.write(message);
   },
   now = Date.now,
+  record: write = (descriptor, chunk) => {
+    writeSync(descriptor, chunk);
+  },
+  sampleStore = installStoreProgress,
+  scheduleInterval = (callback, milliseconds) => {
+    const timer = setInterval(callback, milliseconds);
+    return () => {
+      clearInterval(timer);
+    };
+  },
+  spawn = (spawnCommand) =>
+    Bun.spawn({
+      cmd: [...spawnCommand],
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    }),
 }: LoggedInstallOptions) => {
   mkdirSync(path.dirname(logFile), { recursive: true });
   const descriptor = openSync(logFile, "w+");
   const started = now();
   const record = (chunk: string | Uint8Array) => {
-    writeSync(
-      descriptor,
-      typeof chunk === "string" ? Buffer.from(chunk) : chunk,
-    );
+    write(descriptor, typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   };
   const summary = (message: string) => {
     record(message);
@@ -223,12 +248,7 @@ export const runLoggedInstall = async ({
       let sampling: Promise<void> | undefined;
       const completion = new AbortController();
       const attemptStarted = now();
-      const child = Bun.spawn({
-        cmd: [...command],
-        stdin: "ignore",
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const child = spawn(command);
       const watchdog = createInstallWatchdog({
         budgetMs,
         stallMs,
@@ -250,7 +270,7 @@ export const runLoggedInstall = async ({
       let lastProbe = attemptStarted;
       const probeStore = async () => {
         try {
-          const store = await installStoreProgress(
+          const store = await sampleStore(
             progressRoots,
             () => !completion.signal.aborted,
           );
@@ -278,7 +298,7 @@ export const runLoggedInstall = async ({
           sampling = undefined;
         }
       };
-      const timer = setInterval(
+      const cancelTimer = scheduleInterval(
         () => {
           if (completion.signal.aborted || sampling !== undefined) {
             return;
@@ -305,14 +325,21 @@ export const runLoggedInstall = async ({
       };
       // Verbose extraction can emit hundreds of thousands of lines. Keep the
       // artifact complete without coupling install throughput to the CI console.
-      await Promise.all([
-        child.stdout.pipeTo(new WritableStream({ write: output })),
-        child.stderr.pipeTo(new WritableStream({ write: output })),
-        child.exited,
-      ]);
-      completion.abort();
-      clearInterval(timer);
-      await sampling;
+      try {
+        await Promise.all([
+          child.stdout.pipeTo(new WritableStream({ write: output })),
+          child.stderr.pipeTo(new WritableStream({ write: output })),
+          child.exited,
+        ]);
+      } finally {
+        completion.abort();
+        cancelTimer();
+        await sampling;
+        if (child.exitCode === null) {
+          child.kill("SIGKILL");
+          await child.exited;
+        }
+      }
       watchdog.finish();
       const exitCode = childExitStatus(child);
       if (exitCode !== 0) {
