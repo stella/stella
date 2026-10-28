@@ -23,7 +23,13 @@ const trigger = (table: string, name: string, body: string) => {
     name === "entity_feature_gate_repair_missing"
       ? "WHEN (NEW.entity_feature_gate = 'missing') "
       : "";
-  return `CREATE TRIGGER ${name} ${body} ON public.${quote(table)} FOR EACH ${row ? "ROW" : "STATEMENT"} ${condition}EXECUTE FUNCTION public.${routine}();`;
+  const referencingAt = body.indexOf(" REFERENCING ");
+  const event = referencingAt === -1 ? body : body.slice(0, referencingAt);
+  const transitionRelations =
+    referencingAt === -1
+      ? undefined
+      : body.slice(referencingAt + " REFERENCING ".length);
+  return `CREATE TRIGGER ${name} ${event} ON public.${quote(table)}${transitionRelations === undefined ? "" : ` REFERENCING ${transitionRelations}`} FOR EACH ${row ? "ROW" : "STATEMENT"} ${condition}EXECUTE FUNCTION public.${routine}();`;
 };
 
 const propagationTriggers = (table: string) => [
