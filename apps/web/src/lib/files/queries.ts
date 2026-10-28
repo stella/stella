@@ -1,11 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import * as v from "valibot";
 
 import type {
   AuthoredDocumentPropertyKey,
   EmailAttachmentDescriptor,
   EmailCitationBlock,
 } from "@stll/api-contract";
+import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -61,6 +63,27 @@ type TextFileData = {
   mimeType: string;
   originalMimeType: string;
   text: string;
+};
+
+const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
+  entityId: v.string(),
+  fieldId: v.string(),
+  fileName: v.string(),
+  workspaceId: v.string(),
+});
+
+// Route types do not validate decoded JSON: a success answer that does not
+// match its contract is the same 502 it was before the typed client.
+const parseSuccessBody = <TSchema extends v.GenericSchema>(
+  schema: TSchema,
+  body: unknown,
+  message: string,
+): v.InferOutput<TSchema> => {
+  const parsed = v.safeParse(schema, body);
+  if (!parsed.success) {
+    throw new APIError({ status: 502, message });
+  }
+  return parsed.output;
 };
 
 export const filesKeys = {
@@ -269,11 +292,15 @@ export const saveEmailAttachment = async ({
   sourceWorkspaceId: string;
 }) =>
   await invokeAppOnlyWrite("files.email-attachment.save", async () =>
-    unwrapApiResponse(
-      await api
-        .files({ workspaceId: sourceWorkspaceId })
-        ["email-attachment"]({ fieldId })({ attachmentId })
-        .save.post({ destinationWorkspaceId, parentId }),
+    parseSuccessBody(
+      EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
+      unwrapApiResponse(
+        await api
+          .files({ workspaceId: sourceWorkspaceId })
+          ["email-attachment"]({ fieldId })({ attachmentId })
+          .save.post({ destinationWorkspaceId, parentId }),
+      ),
+      "Invalid email attachment save response",
     ),
   );
 
@@ -288,11 +315,15 @@ const readDocumentProperties = async ({
   fieldId,
   signal,
 }: FileOptionsProps & { signal: AbortSignal }) =>
-  unwrapApiResponse(
-    await api
-      .files({ workspaceId })
-      ["document-properties"]({ fieldId })
-      .get({ fetch: { signal } }),
+  parseSuccessBody(
+    DOCUMENT_PROPERTIES_RESULT_SCHEMA,
+    unwrapApiResponse(
+      await api
+        .files({ workspaceId })
+        ["document-properties"]({ fieldId })
+        .get({ fetch: { signal } }),
+    ),
+    "Invalid document properties response",
   );
 
 /**

@@ -24,7 +24,7 @@ import type { ApiResponse } from "@/lib/errors/api";
 
 const timeEntryResponseParsers = {
   approve: parseTimeApprovalBatch,
-  batchDelete: parseTimeEntryDeleteResponse,
+  batchDelete: parseTimeEntryUpdatedResponse,
   batchUpdate: parseTimeEntryUpdatedResponse,
   create: parseTimeEntryIdResponse,
   decideSuggestion: parseTimeEntrySuggestionDecision,

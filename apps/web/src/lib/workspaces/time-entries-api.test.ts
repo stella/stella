@@ -3,6 +3,7 @@ import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import { APIError } from "@/lib/errors/api";
 
 import {
+  batchDeleteTimeEntries,
   createTimeEntry,
   type CreateTimeEntryBody,
   decideTimeSuggestion,
@@ -84,6 +85,16 @@ test.each([
     }
   },
 );
+
+test("a batch delete accepts the batch count answer", async () => {
+  responses = [{ updated: 2 }];
+  expect(
+    await batchDeleteTimeEntries("workspace-1", ["entry-1", "entry-2"]),
+  ).toEqual({ updated: 2 });
+  expect(requests).toEqual([
+    { body: { ids: ["entry-1", "entry-2"] }, method: "DELETE" },
+  ]);
+});
 
 afterAll(() => {
   globalThis.fetch = originalFetch;
