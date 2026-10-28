@@ -115,6 +115,32 @@ const TableColumns = ({ columns }: { columns: readonly TableColumn[] }) => (
 const PENDING_ROW_KEYS = ["a", "b", "c", "d"] as const;
 const PENDING_SECTION_KEYS = ["first", "second"] as const;
 
+const COUNTRY_NAVIGATION_HEIGHT = "--coverage-country-navigation-height";
+
+// A callback ref publishes geometry before country refs perform their hash scroll.
+const measureCountryNavigation = (node: HTMLElement | null) => {
+  if (node === null) {
+    return undefined;
+  }
+  const container = node.parentElement;
+  if (container === null) {
+    panic("Country navigation requires a coverage container");
+  }
+  const measure = () => {
+    container.style.setProperty(
+      COUNTRY_NAVIGATION_HEIGHT,
+      `${node.getBoundingClientRect().height}px`,
+    );
+  };
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
+  return () => {
+    observer.disconnect();
+    container.style.removeProperty(COUNTRY_NAVIGATION_HEIGHT);
+  };
+};
+
 /**
  * What the corpus holds, country by country and source by source.
  *
@@ -214,6 +240,7 @@ export const CaseLawCoveragePage = ({
       </Hero>
 
       <nav
+        ref={measureCountryNavigation}
         aria-label={t("caseLaw.coverage.countryNavigation")}
         className="bg-background sticky top-0 z-10 border-b py-2"
       >
@@ -517,8 +544,9 @@ const CountryCard = ({
 }: CountryCardProps) => (
   <section
     aria-labelledby={headingId}
-    className="bg-background flex scroll-mt-24 flex-col rounded-xl border shadow-xs/5"
+    className="bg-background flex flex-col rounded-xl border shadow-xs/5"
     id={anchor}
+    style={{ scrollMarginTop: `var(${COUNTRY_NAVIGATION_HEIGHT})` }}
     ref={ref}
   >
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">

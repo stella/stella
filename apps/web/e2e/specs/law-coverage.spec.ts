@@ -158,3 +158,47 @@ for (const locale of ["en", "ar"]) {
     ).toBe(true);
   });
 }
+
+for (const locale of ["en", "ar"]) {
+  for (const width of [640, 768, 390]) {
+    test(`country anchors clear the navigation at ${width}px (${locale})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(`/law/coverage?locale=${locale}#country-cze`, {
+        waitUntil: "domcontentloaded",
+      });
+      const navigation = page.getByRole("navigation");
+      await expect(navigation.locator("a")).toHaveCount(8);
+      const country = page.locator("#country-cze");
+      const heading = country.getByRole("heading", { level: 2 });
+      const expectHeadingBelowNavigation = async () => {
+        await expect
+          .poll(async () => {
+            const navigationBottom = await navigation.evaluate(
+              (node) => node.getBoundingClientRect().bottom,
+            );
+            const headingTop = await heading.evaluate(
+              (node) => node.getBoundingClientRect().top,
+            );
+            return headingTop - navigationBottom;
+          })
+          .toBeGreaterThanOrEqual(0);
+      };
+      await expectHeadingBelowNavigation();
+      // Font size changes the mounted navigation’s height too.
+      await page.locator("html").evaluate((node) => {
+        node.style.fontSize = "24px";
+      });
+      if (width < 640) {
+        await page.getByRole("combobox").selectOption("country-svk");
+        await page.getByRole("combobox").selectOption("country-cze");
+      } else {
+        await navigation.locator('a[href$="#country-svk"]').click();
+        await navigation.locator('a[href$="#country-cze"]').click();
+      }
+      await expect(page).toHaveURL(/#country-cze$/u);
+      await expectHeadingBelowNavigation();
+    });
+  }
+}

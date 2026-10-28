@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
+import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+
 import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json" with { type: "json" };
 import en from "@/i18n/langs/en.json" with { type: "json" };
@@ -30,7 +32,12 @@ const router = createRouter({
       path: "/law/coverage",
       component: () => (
         <CaseLawCoveragePage
-          coverage={{ ...COVERAGE, countries: [CZECHIA, IN_PREPARATION] }}
+          coverage={{
+            ...COVERAGE,
+            countries: CASE_LAW_JURISDICTIONS.map((country) =>
+              country === "CZE" ? CZECHIA : { ...IN_PREPARATION, country },
+            ),
+          }}
         />
       ),
     }),
