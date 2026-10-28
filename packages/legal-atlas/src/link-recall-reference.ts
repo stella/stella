@@ -184,15 +184,15 @@ export const extractAuditReferences = ({
     }
 
     for (const match of text.matchAll(provisionPattern)) {
-      const section = match.groups?.section;
-      const act = match.groups?.act;
-      const year = match.groups?.year;
+      const section = match.groups?.["section"];
+      const act = match.groups?.["act"];
+      const year = match.groups?.["year"];
       if (!section || !act || !year) {
         panic(`Invalid ${profile.country} audit provision capture groups`);
       }
       references.push({
         kind: "provision",
-        key: `${act}/${year}:${section.toLowerCase()}${match.groups?.sectionSuffix?.toLowerCase() ?? ""}`,
+        key: `${act}/${year}:${section.toLowerCase()}${match.groups?.["sectionSuffix"]?.toLowerCase() ?? ""}`,
         anchor,
         start: match.index,
         end: match.index + match[0].length,
