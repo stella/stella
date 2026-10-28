@@ -28,6 +28,7 @@ import {
   plan,
   push,
   refreshLockfile,
+  resolveDerived,
 } from "./generated-conflicts";
 import { type Generator, GENERATORS } from "./generated-files";
 
@@ -1089,6 +1090,191 @@ describe("resolution across runs", () => {
     expect(published.stderr).toContain(
       "bun.lock: cannot delete a format or lockfile resolution",
     );
+  });
+
+  const localGenerator = (extra = ""): Generator => ({
+    id: "fixture-local",
+    outputKind: "committed",
+    outputs: [MESSAGES],
+    inputs: [NOTES],
+    write: [
+      "bun",
+      "-e",
+      `const fs = require("node:fs"); fs.writeFileSync(${JSON.stringify(MESSAGES)}, fs.readFileSync(${JSON.stringify(NOTES)})); ${extra}`,
+    ],
+    check: [
+      "bun",
+      "-e",
+      `const fs = require("node:fs"); process.exit(fs.readFileSync(${JSON.stringify(MESSAGES)}, "utf-8") === fs.readFileSync(${JSON.stringify(NOTES)}, "utf-8") ? 0 : 1)`,
+    ],
+    autofix: true,
+    after: [],
+  });
+
+  test("local regeneration preserves both source edits and leaves an ordinary abortable merge", () => {
+    const { origin, head, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    const attributes = path.join(
+      origin,
+      git(origin, "rev-parse", "--git-path", "info/attributes"),
+    );
+    writeFileSync(attributes, "sentinel merge=text\n");
+    const result = resolveDerived({
+      repo: origin,
+      main,
+      generators: [localGenerator()],
+    });
+    expect(result.eligible).toBe(true);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    const output = readFileSync(path.join(origin, MESSAGES), "utf-8");
+    expect(output).toBe(readFileSync(path.join(origin, NOTES), "utf-8"));
+    expect(output).toContain("branch\n");
+    expect(output).toContain("main\n");
+    expect(git(origin, "ls-files", "-u")).toBe("");
+    expect(readFileSync(attributes, "utf-8")).toBe("sentinel merge=text\n");
+    git(origin, "merge", "--abort");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(readFileSync(path.join(origin, MESSAGES), "utf-8")).toBe(
+      `${git(origin, "show", `${head}:${MESSAGES}`)}\n`,
+    );
+  });
+
+  test("local regeneration refuses source conflicts without touching the index or files", () => {
+    const { origin, head, main } = fixture({
+      branchEdits: (repo) => write(repo, "source.ts", "branch\n"),
+      mainEdits: (repo) => write(repo, "source.ts", "main\n"),
+    });
+    git(origin, "switch", "-q", "feature");
+    const tree = git(origin, "write-tree");
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+    ).toThrow("source.ts: not a generated output");
+    expect(git(origin, "write-tree")).toBe(tree);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(
+      run(origin, ["git", "rev-parse", "--verify", "MERGE_HEAD"]).exitCode,
+    ).not.toBe(0);
+  });
+
+  test.each(["tracked", "staged", "untracked"])(
+    "local regeneration refuses %s dirty state without mutations",
+    (state) => {
+      const { origin, head, main } = fixture();
+      git(origin, "switch", "-q", "feature");
+      write(
+        origin,
+        state === "untracked" ? "untracked.txt" : NOTES,
+        "local work\n",
+      );
+      if (state === "staged") {
+        git(origin, "add", NOTES);
+      }
+      const status = git(origin, "status", "--porcelain");
+      const index = git(origin, "write-tree");
+      expect(() =>
+        resolveDerived({ repo: origin, main, generators: [localGenerator()] }),
+      ).toThrow("requires a clean index and work tree");
+      expect(git(origin, "status", "--porcelain")).toBe(status);
+      expect(git(origin, "write-tree")).toBe(index);
+      expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+      expect(
+        readFileSync(
+          path.join(origin, state === "untracked" ? "untracked.txt" : NOTES),
+          "utf-8",
+        ),
+      ).toBe("local work\n");
+    },
+  );
+
+  test.each([
+    {
+      name: "failed generator",
+      extra: "process.exit(7)",
+      message: "Generator fixture-local failed",
+    },
+    {
+      name: "out of scope write",
+      extra: 'fs.writeFileSync("outside.txt", "unexpected")',
+      message: "outside the owning generators' outputs: outside.txt",
+    },
+  ])("$name leaves a recoverable pending merge", ({ extra, message }) => {
+    const { origin, head, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    expect(() =>
+      resolveDerived({
+        repo: origin,
+        main,
+        generators: [localGenerator(extra)],
+      }),
+    ).toThrow(message);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  test("local regeneration refuses lockfile pin drift and leaves an abortable merge", () => {
+    const manifest = { name: "fixture", dependencies: { a: "1.0.0" } };
+    const lockfile = {
+      lockfileVersion: 3,
+      workspaces: { "": manifest },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    const drifted = {
+      ...lockfile,
+      packages: { a: ["a@2.0.0", "", {}, "sha512-other"] },
+    };
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify(manifest));
+        write(repo, "bun.lock", JSON.stringify(lockfile));
+      },
+    });
+    git(origin, "switch", "-q", "feature");
+    const generator = localGenerator(
+      `fs.writeFileSync("bun.lock", ${JSON.stringify(JSON.stringify(drifted))})`,
+    );
+    expect(() =>
+      resolveDerived({ repo: origin, main, generators: [generator] }),
+    ).toThrow("frozen pins or policy");
+    expect(git(origin, "rev-parse", "HEAD")).toBe(head);
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+    expect(git(origin, "status", "--porcelain")).toBe("");
+    expect(readFileSync(path.join(origin, "bun.lock"), "utf-8")).toBe(
+      JSON.stringify(lockfile),
+    );
+  });
+
+  test("local regeneration supports linked worktrees without rewriting shared attributes", () => {
+    const { origin, head, main } = fixture();
+    const linked = path.join(root, "linked");
+    git(origin, "worktree", "add", "-q", linked, "feature");
+    const attributes = git(
+      linked,
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-path",
+      "info/attributes",
+    );
+    writeFileSync(attributes, "sentinel merge=text\n");
+    resolveDerived({ repo: linked, main, generators: [localGenerator()] });
+    expect(git(linked, "rev-parse", "HEAD")).toBe(head);
+    expect(git(linked, "rev-parse", "MERGE_HEAD")).toBe(main);
+    expect(git(origin, "rev-parse", "HEAD")).toBe(main);
+    expect(readFileSync(attributes, "utf-8")).toBe("sentinel merge=text\n");
+    expect(readFileSync(path.join(linked, MESSAGES), "utf-8")).toContain(
+      "branch\n",
+    );
+    expect(readFileSync(path.join(linked, MESSAGES), "utf-8")).toContain(
+      "main\n",
+    );
+    git(linked, "merge", "--abort");
+    expect(git(linked, "status", "--porcelain")).toBe("");
   });
 
   test("a branch that moved between the jobs gets no merge from the old resolution", () => {
