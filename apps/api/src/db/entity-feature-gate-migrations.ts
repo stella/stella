@@ -402,12 +402,27 @@ const NAMES_GATE_OBJECT =
   /entity_feature_gate|workspace_entity_feature|stella_entity_gate|_ef_/iu;
 const GATE_CHECK_BLOCK =
   /^DO \$check\$ BEGIN IF NOT EXISTS \(SELECT 1 FROM pg_constraint WHERE conrelid = 'public\.[a-z0-9_]+'::regclass AND conname = 'entity_feature_gate_(?:states|ready)_check'\) THEN ALTER TABLE public\."[a-z0-9_]+" ADD CONSTRAINT entity_feature_gate_(?:states_check CHECK \(entity_feature_gate IN \('pending', 'open', 'legal-lists', 'missing'\)\)|ready_check CHECK \(entity_feature_gate <> 'pending'\)) NOT VALID; END IF; END \$check\$;?$/u;
-const GATE_SETUP_BLOCK_DIGESTS: ReadonlySet<string> = new Set([
+const REVIEWED_DO_BLOCK_DIGESTS: ReadonlySet<string> = new Set([
   // 20261009112500_entity_feature_row_gates: the gate role ($role$) and the
   // gated tables' ownership check ($ownership$).
   "2cc1de9651dce4678295ae32a0be83b4e543aed1d09da1770e8bbea7f3310c8b",
   "bf691151d21554b79204533029c538cbfbf4b52d6c28703bc9bdef51292c9347",
+  // Applied before any gate existed, and they use a verb refused below:
+  // 20260510140000_document_rls_role_bootstrap (a role membership REVOKE)
+  // and 20260710173000_scalable_workspace_authorization (workspace policy
+  // ALTER POLICY rewrites).
+  "dedb2e145a86faef1fbe76a0d93d5be6cecc270d661b2a7140033d3b54ffd4ae",
+  "2be38411cd78c08ad531cf21933c83888caf0f43cc19423eab215761e6b096cb",
+  "98af32848d5183ef91136e04532f8572b4e4974b20d863251e7c24dbf4c02440",
+  "91a20eb72b45d1efca1bb3233686d785cac8861e88e0bf0900b1115721a20b23",
 ]);
+
+// A DO block can switch a gated table's protection off without naming a
+// gate object (DISABLE TRIGGER ALL, NO FORCE ROW LEVEL SECURITY, DROP
+// POLICY on it), so these verbs are refused in any DO block that is not
+// pinned above, whatever it names.
+const DO_BLOCK_PROTECTION_VERBS =
+  /\b(?:DISABLE\s+TRIGGER|DROP\s+TRIGGER|DROP\s+POLICY|ALTER\s+POLICY|DISABLE\s+ROW\s+LEVEL\s+SECURITY|NO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY|REVOKE)\b/iu;
 
 /** A DO block's content digest, whitespace-insensitive. */
 export const doBlockDigest = (sql: string): string =>
@@ -415,7 +430,7 @@ export const doBlockDigest = (sql: string): string =>
 
 const isReviewedGateDoBlock = (sql: string) =>
   GATE_CHECK_BLOCK.test(sql) ||
-  GATE_SETUP_BLOCK_DIGESTS.has(doBlockDigest(sql));
+  REVIEWED_DO_BLOCK_DIGESTS.has(doBlockDigest(sql));
 
 /** Inline the policy DDL that `entity_feature_gate_finish()` runs when called. */
 const withFinishBody = (statement: string): string[] => {
@@ -452,7 +467,10 @@ const foldStatement = (state: FoldState, sql: string, migration: number) => {
     }
   }
   if (/^DO\s/iu.test(sql)) {
-    if (NAMES_GATE_OBJECT.test(sql) && !isReviewedGateDoBlock(sql)) {
+    if (
+      (NAMES_GATE_OBJECT.test(sql) || DO_BLOCK_PROTECTION_VERBS.test(sql)) &&
+      !isReviewedGateDoBlock(sql)
+    ) {
       panic(`Unsupported gated DO block in migration ${migration}: ${sql}`);
     }
     return;

@@ -145,3 +145,20 @@ test("a DO block naming a gate object is refused, whatever it does", () => {
     ]),
   ).toThrow(/Unsupported gated DO block in migration 2/u);
 });
+
+test.each([
+  "ALTER TABLE entities DISABLE TRIGGER ALL",
+  "DROP TRIGGER some_trigger ON entities",
+  "DROP POLICY workspace_select ON entities",
+  "ALTER POLICY workspace_select ON entities USING (true)",
+  "ALTER TABLE entities DISABLE ROW LEVEL SECURITY",
+  "ALTER TABLE entities NO FORCE ROW LEVEL SECURITY",
+  "REVOKE SELECT ON entities FROM stella",
+])(
+  "a DO block that can switch protection off is refused without naming a gate object: %s",
+  (statement) => {
+    expect(() => fold([`DO $$ BEGIN EXECUTE '${statement}'; END $$;`])).toThrow(
+      /Unsupported gated DO block in migration 1/u,
+    );
+  },
+);
