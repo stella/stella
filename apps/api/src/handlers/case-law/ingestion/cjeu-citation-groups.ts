@@ -41,10 +41,10 @@ export const CJEU_RANGE_REFUSALS = {
   exceedsSpan: "range-exceeds-span",
 } as const;
 
-export type CjeuRangeRefusalReason =
+type CjeuRangeRefusalReason =
   (typeof CJEU_RANGE_REFUSALS)[keyof typeof CJEU_RANGE_REFUSALS];
 
-export type CjeuRangeRefusal = {
+type CjeuRangeRefusal = {
   reason: CjeuRangeRefusalReason;
   /** The range as printed, from its first end to its last. */
   printed: string;
@@ -55,7 +55,7 @@ export type CjeuRangeRefusal = {
 /** Where in the text a group member's own characters stand. */
 type PrintedSpan = { text: string; start: number; end: number };
 
-export type CjeuGroupMember = {
+type CjeuGroupMember = {
   /** The case number as a citation of it is written: `C‑160/12`, `60/81`. */
   caseNumber: string;
   /**
@@ -67,13 +67,13 @@ export type CjeuGroupMember = {
   role: "printed" | "range-interior";
 };
 
-export type CjeuCitationGroup = {
+type CjeuCitationGroup = {
   members: readonly CjeuGroupMember[];
   /** The ECLI printed after the numbers, which names the cited decision. */
   ecli: PrintedSpan | null;
 };
 
-export type CjeuCitationGroupReading = {
+type CjeuCitationGroupReading = {
   groups: readonly CjeuCitationGroup[];
   refusals: readonly CjeuRangeRefusal[];
 };
@@ -187,6 +187,8 @@ type CaseNumberToken = PrintedSpan & {
   letter: string | null;
   dash: string;
   ordinal: number;
+  /** The number's digits as printed. */
+  digits: string;
   year: string;
 };
 
@@ -194,7 +196,7 @@ const caseNumberTokens = (text: string): CaseNumberToken[] =>
   [...text.matchAll(CASE_NUMBER_RE)].map((match) => {
     const letter = match.groups?.["letter"] ?? null;
     const dash = match.groups?.["dash"] ?? "-";
-    const ordinal = match.groups?.["ordinal"] ?? "";
+    const digits = match.groups?.["ordinal"] ?? "";
     const year = match.groups?.["year"] ?? "";
     return {
       text: match[0],
@@ -202,18 +204,21 @@ const caseNumberTokens = (text: string): CaseNumberToken[] =>
       end: match.index + match[0].length,
       letter,
       dash,
-      ordinal: Number(ordinal),
+      ordinal: Number(digits),
+      digits,
       year,
     };
   });
 
-const caseNumberOf = ({
-  letter,
-  dash,
-  ordinal,
-  year,
-}: Pick<CaseNumberToken, "letter" | "dash" | "ordinal" | "year">): string =>
-  letter === null ? `${ordinal}/${year}` : `${letter}${dash}${ordinal}/${year}`;
+/**
+ * A case number as a citation of it is written. A printed one keeps its own
+ * digits, so it keys exactly as the citation patterns keyed it.
+ */
+const caseNumberOf = (
+  { letter, dash, year }: Pick<CaseNumberToken, "letter" | "dash" | "year">,
+  digits: string,
+): string =>
+  letter === null ? `${digits}/${year}` : `${letter}${dash}${digits}/${year}`;
 
 type Link = "join" | "range";
 
@@ -314,7 +319,7 @@ export const readCjeuCitationGroups = (
         continue;
       }
       members.push({
-        caseNumber: caseNumberOf(token),
+        caseNumber: caseNumberOf(token, token.digits),
         span: { text: token.text, start: token.start, end: token.end },
         role: "printed",
       });
@@ -338,7 +343,7 @@ export const readCjeuCitationGroups = (
         ordinal += 1
       ) {
         members.push({
-          caseNumber: caseNumberOf({ ...token, ordinal }),
+          caseNumber: caseNumberOf(token, String(ordinal)),
           span: range,
           role: "range-interior",
         });
