@@ -10,7 +10,7 @@ import type { ApiError } from "@/state/api-request";
 const PUSH_DEVICES_PATH = "/v1/me/push-devices";
 
 /** Which APNs gateway serves a build: Xcode-signed development builds get sandbox tokens. */
-export type ApsEnvironment = "sandbox" | "production";
+type ApsEnvironment = "sandbox" | "production";
 
 export type PushDevice = {
   /** The APNs device token, as hex. */
