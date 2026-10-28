@@ -31,16 +31,13 @@ import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
 import type { StampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
-import {
-  drawStampRows,
-  pdfNumber,
-} from "@/api/lib/files/pdf-signing/stamp-glyphs";
+import { drawStampRows } from "@/api/lib/files/pdf-signing/stamp-glyphs";
 import {
   FIRST_STRONG_ISOLATE,
+  layoutStampColumns,
   layoutStampRow,
   LEFT_TO_RIGHT_ISOLATE,
   POP_DIRECTIONAL_ISOLATE,
-  STAMP_UNITS_PER_EM,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
 import {
   stampTextCheck,
@@ -74,11 +71,6 @@ const FRACTION_TOLERANCE = 1e-6;
 /** The same rounding, in points. */
 const SIZE_TOLERANCE = 1e-3;
 
-const MAX_FONT_SIZE = 10;
-/** Smaller than this and a stamp is not readable on paper. */
-const MIN_FONT_SIZE = 6;
-const FONT_SIZE_STEP = 0.5;
-const LINE_HEIGHT = 1.25;
 /** /F Print: the stamp prints with the page. */
 const ANNOTATION_FLAG_PRINT = 4;
 const COMMON_NAME_OID = "2.5.4.3";
@@ -329,7 +321,10 @@ export const formatStampTime = (signingTime: Date, timeZone: string) => {
   const zoned = Temporal.Instant.fromEpochMilliseconds(
     signingTime.getTime(),
   ).toZonedDateTimeISO(timeZone);
-  return `${pad(zoned.year, 4)}-${pad(zoned.month)}-${pad(zoned.day)} ${pad(zoned.hour)}:${pad(zoned.minute)}:${pad(zoned.second)} ${zoned.offset}`;
+  return {
+    date: `${pad(zoned.year, 4)}.${pad(zoned.month)}.${pad(zoned.day)}`,
+    time: `${pad(zoned.hour)}:${pad(zoned.minute)}:${pad(zoned.second)} ${zoned.offset.replace(":", "'")}'`,
+  };
 };
 
 /** An inserted value, set apart so its direction cannot leak into the label's. */
@@ -354,16 +349,24 @@ export const stampLines = ({
   signerName: string;
   signingTime: Date;
   stamp: SignatureStamp;
-}): string[] => [
-  signerName === ""
-    ? stamp.labels.signedBy
-    : `${stamp.labels.signedBy} ${isolated(signerName)}`,
-  `${stamp.labels.date}: ${LEFT_TO_RIGHT_ISOLATE}${formatStampTime(signingTime, stamp.timeZone)}${POP_DIRECTIONAL_ISOLATE}`,
-  ...(reason === null ? [] : [`${stamp.labels.reason}: ${isolated(reason)}`]),
-  ...(location === null
-    ? []
-    : [`${stamp.labels.location}: ${isolated(location)}`]),
-];
+}) => {
+  const { date, time } = formatStampTime(signingTime, stamp.timeZone);
+  return {
+    name: stampValue(signerName),
+    details: [
+      stamp.labels.signedBy,
+      ...(signerName === "" ? [] : [isolated(signerName)]),
+      `${stamp.labels.date}: ${LEFT_TO_RIGHT_ISOLATE}${date}${POP_DIRECTIONAL_ISOLATE}`,
+      `${LEFT_TO_RIGHT_ISOLATE}${time}${POP_DIRECTIONAL_ISOLATE}`,
+      ...(reason === null
+        ? []
+        : [`${stamp.labels.reason}: ${isolated(reason)}`]),
+      ...(location === null
+        ? []
+        : [`${stamp.labels.location}: ${isolated(location)}`]),
+    ],
+  };
+};
 
 const nextFieldName = (pdf: PDF) => {
   const taken = new Set(pdf.getForm()?.getFieldNames());
@@ -372,111 +375,6 @@ const nextFieldName = (pdf: PDF) => {
     index += 1;
   }
   return `${STAMP_FIELD_PREFIX}${index}`;
-};
-
-const ISOLATE_INITIATOR = /[\u2066-\u2068]/u;
-
-/**
- * Close, at the end of a row, an isolate that wrapping left open, and
- * reopen it at the start of the next: each row is laid out on its own, and
- * an isolate split across rows would otherwise lose its direction in the
- * second.
- */
-const balanceIsolates = (rows: readonly string[]) => {
-  const open: string[] = [];
-  return rows.map((row) => {
-    const reopened = open.join("");
-    for (const character of row) {
-      if (ISOLATE_INITIATOR.test(character)) {
-        open.push(character);
-      } else if (character === POP_DIRECTIONAL_ISOLATE) {
-        open.pop();
-      }
-    }
-    return `${reopened}${row}${POP_DIRECTIONAL_ISOLATE.repeat(open.length)}`;
-  });
-};
-
-/** Split a word too wide for a row into pieces that fit, by grapheme. */
-const breakWord = (
-  word: string,
-  maxWidth: number,
-  unitWidth: (text: string) => number,
-) => {
-  const pieces: string[] = [];
-  let piece = "";
-  for (const { segment } of new Intl.Segmenter().segment(word)) {
-    if (piece !== "" && unitWidth(piece + segment) > maxWidth) {
-      pieces.push(piece);
-      piece = "";
-    }
-    piece += segment;
-  }
-  return piece === "" ? pieces : [...pieces, piece];
-};
-
-/** Greedy word wrap of one logical line into rows no wider than `maxWidth`. */
-const wrapLine = (
-  line: string,
-  maxWidth: number,
-  unitWidth: (text: string) => number,
-) => {
-  const rows: string[] = [];
-  let row = "";
-  for (const word of line.split(/\s+/u).filter((entry) => entry !== "")) {
-    const candidate = row === "" ? word : `${row} ${word}`;
-    if (unitWidth(candidate) <= maxWidth) {
-      row = candidate;
-      continue;
-    }
-    if (row !== "") {
-      rows.push(row);
-    }
-    const pieces = breakWord(word, maxWidth, unitWidth);
-    rows.push(...pieces.slice(0, -1));
-    row = pieces.at(-1) ?? "";
-  }
-  return balanceIsolates(row === "" ? rows : [...rows, row]);
-};
-
-/**
- * The largest readable size, 10 pt down to 6 pt, at which the lines wrap
- * inside the box, or `null` when they do not fit even at 6 pt. Sizes are
- * physical points; `unit` converts them to the page's user space.
- */
-const layoutStampText = ({
-  height,
-  lines,
-  unit,
-  unitWidth,
-  width,
-}: {
-  height: number;
-  lines: readonly string[];
-  /** User-space length of one point (1 / UserUnit). */
-  unit: number;
-  /** Width of `text` at a font size of 1. */
-  unitWidth: (text: string) => number;
-  width: number;
-}): { fontSize: number; padding: number; rows: string[] } | null => {
-  const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
-  const innerWidth = width - 2 * padding;
-  const innerHeight = height - 2 * padding;
-  for (
-    let points = MAX_FONT_SIZE;
-    points >= MIN_FONT_SIZE;
-    points -= FONT_SIZE_STEP
-  ) {
-    const fontSize = points * unit;
-    const rows = lines.flatMap((line) =>
-      wrapLine(line, innerWidth / fontSize, unitWidth),
-    );
-    const used = fontSize + (rows.length - 1) * fontSize * LINE_HEIGHT;
-    if (used <= innerHeight) {
-      return { fontSize, padding, rows };
-    }
-  }
-  return null;
 };
 
 /** Counter-rotates the appearance so the stamp reads upright on screen. */
@@ -500,7 +398,7 @@ export const addSignatureStamp = ({
 }: {
   /** See `stamp-font.ts`. */
   fonts: StampFonts;
-  lines: readonly string[];
+  lines: ReturnType<typeof stampLines>;
   pdf: PDF;
   stamp: SignatureStamp;
 }): Result<string, PdfSigningStampError> => {
@@ -520,7 +418,7 @@ export const addSignatureStamp = ({
 
   // Never draw a blank glyph or an unshaped script: see `stamp-text.ts`.
   const check = stampTextCheck(fonts);
-  if (!lines.every((line) => check.canDraw(line))) {
+  if (![lines.name, ...lines.details].every((line) => check.canDraw(line))) {
     return Result.err(
       new PdfSigningStampError({
         message:
@@ -538,11 +436,11 @@ export const addSignatureStamp = ({
     }
     return row;
   };
-  const layout = layoutStampText({
+  const layout = layoutStampColumns({
     height,
     lines,
     unit: 1 / pageUserUnit(page.dict),
-    unitWidth: (text) => layoutRow(text).width / STAMP_UNITS_PER_EM,
+    layoutRow,
     width,
   });
   if (layout === null) {
@@ -554,33 +452,8 @@ export const addSignatureStamp = ({
       }),
     );
   }
-  const { fontSize, padding, rows } = layout;
-  const text = drawStampRows({
-    fontSize,
-    pdf,
-    rows: rows.map((line, index) => {
-      const row = layoutRow(line);
-      const rowWidth = (row.width * fontSize) / STAMP_UNITS_PER_EM;
-      return {
-        row,
-        x: stamp.direction === "rtl" ? width - padding - rowWidth : padding,
-        y: height - padding - fontSize - index * fontSize * LINE_HEIGHT,
-      };
-    }),
-  });
-
-  const operators = [
-    "q",
-    "0.35 0.35 0.35 RG",
-    "0.6 w",
-    `0.300 0.300 ${pdfNumber(width - 0.6)} ${pdfNumber(height - 0.6)} re`,
-    "S",
-    "Q",
-    "BT",
-    "0.1 0.1 0.1 rg",
-    ...text.operators,
-    "ET",
-  ];
+  const text = drawStampRows({ pdf, rows: layout });
+  const operators = ["BT", "0.1 0.1 0.1 rg", ...text.operators, "ET"];
 
   const appearance = pdf.context.registry.register(
     new PdfStream(

@@ -187,12 +187,30 @@ describe("placing a stamp drawn on the displayed page", () => {
 
 describe("the stamp's signing time", () => {
   test("is the recorded instant, in the signer's zone, with its offset", () => {
-    expect(formatStampTime(SIGNING_TIME, "Europe/Prague")).toBe(
-      "2026-06-01 14:00:00 +02:00",
-    );
-    expect(formatStampTime(SIGNING_TIME, "Asia/Kolkata")).toBe(
-      "2026-06-01 17:30:00 +05:30",
-    );
+    expect(formatStampTime(SIGNING_TIME, "Europe/Prague")).toEqual({
+      date: "2026.06.01",
+      time: "14:00:00 +02'00'",
+    });
+    expect(formatStampTime(SIGNING_TIME, "Asia/Kolkata")).toEqual({
+      date: "2026.06.01",
+      time: "17:30:00 +05'30'",
+    });
+  });
+
+  test("formats winter, negative, fractional and zero offsets", () => {
+    const winter = new Date("2026-01-08T12:50:57Z");
+    expect(formatStampTime(winter, "Europe/Prague")).toEqual({
+      date: "2026.01.08",
+      time: "13:50:57 +01'00'",
+    });
+    expect(formatStampTime(winter, "America/St_Johns")).toEqual({
+      date: "2026.01.08",
+      time: "09:20:57 -03'30'",
+    });
+    expect(formatStampTime(winter, "UTC")).toEqual({
+      date: "2026.01.08",
+      time: "12:50:57 +00'00'",
+    });
   });
 });
 
@@ -350,6 +368,8 @@ const readStampRows = async (bytes: Uint8Array) => {
       parseToUnicode(new TextDecoder().decode(cmap.getDecodedData())),
     );
   }
+  const right = appearance.getArray("BBox")?.at(2);
+  const middle = right instanceof PdfNumber ? right.value / 2 : 0;
   const rows = new Map<string, string>();
   let font = "";
   let row = "";
@@ -358,12 +378,12 @@ const readStampRows = async (bytes: Uint8Array) => {
     .decode(appearance.getDecodedData())
     .split("\n")) {
     const fontMatch = /^\/(\w+) [\d.]+ Tf$/u.exec(line);
-    const matrix = /^1 0 0 1 [\d.-]+ ([\d.-]+) Tm$/u.exec(line);
+    const matrix = /^1 0 0 1 ([\d.-]+) ([\d.-]+) Tm$/u.exec(line);
     const span = /^\/Span << \/ActualText <FEFF([\dA-F]*)> >> BDC$/u.exec(line);
     if (fontMatch) {
       font = fontMatch[1] ?? "";
     } else if (matrix) {
-      row = matrix[1] ?? "";
+      row = `${Number(matrix[1]) < middle ? "name" : "details"}:${matrix[2]}`;
     } else if (span) {
       actualText = new TextDecoder("utf-16be").decode(
         Buffer.from(span[1] ?? "", "hex"),
@@ -513,6 +533,14 @@ describe("signing with a visible stamp", () => {
     expect(PdfSigningStampError.is(refused) && refused.reason).toBe("overflow");
   });
 
+  test("refuses an unbreakable name before signing when it cannot fit readably", async () => {
+    const refused = await signWithStamp(0, "W".repeat(64)).catch(
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(PdfSigningStampError);
+    expect(PdfSigningStampError.is(refused) && refused.reason).toBe("overflow");
+  });
+
   test("the signature still covers every byte it signed", async () => {
     const { applied } = await signWithStamp(90);
 
@@ -539,9 +567,18 @@ describe("signing with a visible stamp", () => {
     ).toBe(true);
 
     const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
+    const operators = new TextDecoder()
+      .decode(appearance.getDecodedData())
+      .split("\n");
+    expect(operators).not.toContain("S");
+    expect(operators.some((line) => /(?:re|f|Do)$/u.test(line))).toBe(false);
     expect(rows).toEqual([
-      "Digitálně podepsal Jiří Čermák",
-      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Jiří",
+      "Čermák",
+      "Digitálně podepsal",
+      "Jiří Čermák",
+      "Datum: 2026.06.01",
+      "14:00:00 +02'00'",
       "Místo: Brno",
     ]);
   });
@@ -555,8 +592,12 @@ describe("signing with a visible stamp", () => {
 
     const rows = (await readStampRows(applied.bytes)).map(withoutInvisibles);
     expect(rows).toEqual([
-      "Digitálně podepsal Jiří Čermák",
-      "Datum: 2026-06-01 14:00:00 +02:00",
+      "Jiří",
+      "Čermák",
+      "Digitálně podepsal",
+      "Jiří Čermák",
+      "Datum: 2026.06.01",
+      "14:00:00 +02'00'",
       "Důvod: Приложение Ελληνικά",
       "Místo: नई दिल्ली · กรุงเทพ · 東京 · 서울",
     ]);

@@ -188,3 +188,175 @@ export const layoutStampRow = ({
     ),
   };
 };
+
+const ISOLATE_INITIATOR = /[\u2066-\u2068]/u;
+
+/**
+ * Close, at the end of a row, an isolate that wrapping left open, and
+ * reopen it at the start of the next: each row is laid out on its own, and
+ * an isolate split across rows would otherwise lose its direction in the
+ * second.
+ */
+const balanceIsolates = (rows: readonly string[]) => {
+  const open: string[] = [];
+  return rows.map((row) => {
+    const reopened = open.join("");
+    for (const character of row) {
+      if (ISOLATE_INITIATOR.test(character)) {
+        open.push(character);
+      } else if (character === POP_DIRECTIONAL_ISOLATE) {
+        open.pop();
+      }
+    }
+    return `${reopened}${row}${POP_DIRECTIONAL_ISOLATE.repeat(open.length)}`;
+  });
+};
+
+/** Split a word too wide for a row into pieces that fit, by grapheme. */
+const breakWord = (
+  word: string,
+  maxWidth: number,
+  unitWidth: (text: string) => number,
+) => {
+  const pieces: string[] = [];
+  let piece = "";
+  for (const { segment } of new Intl.Segmenter().segment(word)) {
+    if (piece !== "" && unitWidth(piece + segment) > maxWidth) {
+      pieces.push(piece);
+      piece = "";
+    }
+    piece += segment;
+  }
+  return piece === "" ? pieces : [...pieces, piece];
+};
+
+/** Greedy word wrap of one logical line into rows no wider than `maxWidth`. */
+const wrapLine = (
+  line: string,
+  maxWidth: number,
+  unitWidth: (text: string) => number,
+) => {
+  const rows: string[] = [];
+  let row = "";
+  for (const word of line.split(/\s+/u).filter((entry) => entry !== "")) {
+    const candidate = row === "" ? word : `${row} ${word}`;
+    if (unitWidth(candidate) <= maxWidth) {
+      row = candidate;
+      continue;
+    }
+    if (row !== "") {
+      rows.push(row);
+    }
+    const pieces = breakWord(word, maxWidth, unitWidth);
+    rows.push(...pieces.slice(0, -1));
+    row = pieces.at(-1) ?? "";
+  }
+  return balanceIsolates(row === "" ? rows : [...rows, row]);
+};
+
+/** Smaller text would not be readable on paper. Sizes are physical points. */
+const MIN_FONT_SIZE = 6;
+const MAX_DETAIL_FONT_SIZE = 10;
+const FONT_SIZE_STEP = 0.5;
+const LINE_HEIGHT = 1.25;
+
+export type PositionedStampRow = {
+  row: StampRow;
+  fontSize: number;
+  /** Left end of the baseline in appearance space. */
+  x: number;
+  y: number;
+};
+
+/** Fit both columns without clipping; a name word stays on its own line. */
+export const layoutStampColumns = ({
+  height,
+  layoutRow,
+  lines,
+  unit,
+  width,
+}: {
+  height: number;
+  layoutRow: (text: string) => StampRow;
+  lines: { name: string; details: readonly string[] };
+  /** User-space length of one physical point (1 / UserUnit). */
+  unit: number;
+  width: number;
+}): PositionedStampRow[] | null => {
+  const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
+  const columnWidth = width / 2 - 2 * padding;
+  const innerHeight = height - 2 * padding;
+  const unitWidth = (text: string) =>
+    layoutRow(text).width / STAMP_UNITS_PER_EM;
+  const metrics = (rows: readonly StampRow[]) => {
+    const faces = rows.flatMap(({ runs }) => runs.map(({ face }) => face));
+    const ascent = Math.max(
+      1,
+      ...faces.map(({ font }) => font.ascender / font.unitsPerEm),
+    );
+    const descent = Math.max(
+      0,
+      ...faces.map(({ font }) => -font.descender / font.unitsPerEm),
+    );
+    return {
+      ascent,
+      descent,
+      leading: Math.max(LINE_HEIGHT, ascent + descent),
+    };
+  };
+  const position = (rows: readonly StampRow[], fontSize: number, x: number) => {
+    const { ascent, leading } = metrics(rows);
+    return rows.map((row, index) => ({
+      row,
+      fontSize,
+      x,
+      y: height - padding - fontSize * (ascent + index * leading),
+    }));
+  };
+  const nameRows = lines.name
+    .split(/\s+/u)
+    .filter((word) => word !== "")
+    .map((word) =>
+      layoutRow(`${FIRST_STRONG_ISOLATE}${word}${POP_DIRECTIONAL_ISOLATE}`),
+    );
+  const nameMetrics = metrics(nameRows);
+  const nameSize = Math.min(
+    columnWidth /
+      Math.max(
+        ...nameRows.map(({ width: rowWidth }) => rowWidth / STAMP_UNITS_PER_EM),
+      ),
+    innerHeight /
+      (nameMetrics.ascent +
+        nameMetrics.descent +
+        Math.max(0, nameRows.length - 1) * nameMetrics.leading),
+  );
+  if (nameRows.length > 0 && nameSize < MIN_FONT_SIZE * unit) {
+    return null;
+  }
+  for (
+    let points = MAX_DETAIL_FONT_SIZE;
+    points >= MIN_FONT_SIZE;
+    points -= FONT_SIZE_STEP
+  ) {
+    const fontSize = points * unit;
+    const rows = lines.details
+      .flatMap((line) => wrapLine(line, columnWidth / fontSize, unitWidth))
+      .map(layoutRow);
+    const { ascent, descent, leading } = metrics(rows);
+    const usedHeight =
+      fontSize * (ascent + descent + Math.max(0, rows.length - 1) * leading);
+    if (
+      usedHeight > innerHeight ||
+      rows.some(
+        (row) => (row.width * fontSize) / STAMP_UNITS_PER_EM > columnWidth,
+      )
+    ) {
+      continue;
+    }
+    return [
+      ...position(nameRows, nameSize, padding),
+      ...position(rows, fontSize, width / 2 + padding),
+    ];
+  }
+  return null;
+};
