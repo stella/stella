@@ -73,6 +73,7 @@
     "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-paragraph-range": "./src/decision-paragraph-range.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
+    "./decision-docket-filing-year.fixtures": "./src/decision-docket-filing-year.fixtures.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-docket-identity.fixtures": "./src/decision-docket-identity.fixtures.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
@@ -151,6 +152,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/api-contract"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/aho-corasick": "catalog:",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/errors": "workspace:*",

@@ -39,6 +39,7 @@ import {
   installPgliteCorpusProjectionRevisionFence,
   installPgliteDecisionAliases,
   installPgliteDecisionCitationStats,
+  installPgliteDecisionDocketFilingYear,
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFlowTransitions,
@@ -831,6 +832,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteUserFileOrganizationKeyGuard(db);
   await installPgliteAiMemoryActiveUserGuard(db);
   await installPgliteDecisionAliases(db);
+  await installPgliteDecisionDocketFilingYear(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
