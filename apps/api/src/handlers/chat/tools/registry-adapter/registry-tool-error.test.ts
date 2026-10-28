@@ -51,6 +51,9 @@ describe("registry tool error projection", () => {
         message: metadata.message,
         hint: metadata.hint,
         retryable: metadata.retryable,
+        ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+          ? { retryAfterMs: 1250 }
+          : {}),
         contactUrl: "https://example.test/contact",
       } as const satisfies InternalToolError;
       const projected = toRegistryChatToolError(error);
@@ -67,6 +70,9 @@ describe("registry tool error projection", () => {
           message: metadata.message,
           hint: metadata.hint,
           retryable: metadata.retryable,
+          ...(code === ACTION_ADMISSION_CODES.concurrencyBusy
+            ? { retryAfterMs: 1250 }
+            : {}),
           contactUrl: error.contactUrl,
         },
       });

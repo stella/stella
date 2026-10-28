@@ -532,6 +532,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("public-law-read-boundary.fixture.ts", [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
+    "public-law-read-boundary/require-owned-public-read-transport",
   ]),
   fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
     "require-billing-cap-crossings/require-billing-cap-crossings",
@@ -6356,6 +6357,13 @@ const config = defineConfig({
       files: ["apps/api/src/handlers/case-law/decisions/search.ts"],
       rules: {
         "public-law-read-boundary/require-language-alternate-counts": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}", "**/tests/**"],
+      rules: {
+        "public-law-read-boundary/require-owned-public-read-transport": "error",
       },
     },
     {

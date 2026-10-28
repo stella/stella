@@ -58,5 +58,6 @@ export type ActionAdmissionRefusal = {
   message: string;
   hint: string;
   retryable: boolean;
+  retryAfterMs?: number;
   contactUrl?: string;
 };

@@ -4,6 +4,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
   type ActionAdmissionCode,
+  type ActionAdmissionRefusal,
 } from "@stll/api-contract/action-admission";
 import { declareFingerprintFields } from "@stll/errors";
 
@@ -25,16 +26,38 @@ type ActionAdmissionReason =
 // names its window's reset; the MCP read fence's window refusal does not. No
 // other refusal may claim one. Only a disabled feature names its kill switch.
 type ActionAdmissionErrorProps = { message: string; cause?: unknown } & (
-  | { reason: "daily_exhausted"; retryAtMs: number; killSwitch?: never }
-  | { reason: "period_exhausted"; retryAtMs?: number; killSwitch?: never }
-  | { reason: "feature_disabled"; killSwitch: KillSwitchId; retryAtMs?: never }
+  | {
+      reason: "busy";
+      retryAfterMs?: number;
+      retryAtMs?: never;
+      killSwitch?: never;
+    }
+  | {
+      reason: "daily_exhausted";
+      retryAtMs: number;
+      killSwitch?: never;
+      retryAfterMs?: never;
+    }
+  | {
+      reason: "period_exhausted";
+      retryAtMs?: number;
+      killSwitch?: never;
+      retryAfterMs?: never;
+    }
+  | {
+      reason: "feature_disabled";
+      killSwitch: KillSwitchId;
+      retryAtMs?: never;
+      retryAfterMs?: never;
+    }
   | {
       reason: Exclude<
         ActionAdmissionReason,
-        "daily_exhausted" | "period_exhausted" | "feature_disabled"
+        "busy" | "daily_exhausted" | "period_exhausted" | "feature_disabled"
       >;
       retryAtMs?: never;
       killSwitch?: never;
+      retryAfterMs?: never;
     }
 );
 
@@ -51,12 +74,20 @@ export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
 
   /** Epoch milliseconds at which an exhausted budget resets. */
   readonly retryAtMs: number | undefined;
+  /** Advisory delay before retrying a busy admission; live leases may renew. */
+  readonly retryAfterMs: number | undefined;
   /** The switch that turned the refused feature off. */
   readonly killSwitch: KillSwitchId | undefined;
 
-  constructor({ retryAtMs, killSwitch, ...props }: ActionAdmissionErrorProps) {
+  constructor({
+    retryAtMs,
+    retryAfterMs,
+    killSwitch,
+    ...props
+  }: ActionAdmissionErrorProps) {
     super(props);
     this.retryAtMs = retryAtMs;
+    this.retryAfterMs = retryAfterMs;
     this.killSwitch = killSwitch;
   }
 
@@ -94,16 +125,32 @@ const refusalHint = ({ error, hint, contactUrl }: RefusalHintOptions) => {
   return contactUrl === undefined ? hint : `${hint} Contact: ${contactUrl}`;
 };
 
+type ActionAdmissionRefusalResponse = ActionAdmissionRefusal &
+  (
+    | { status: 403 | 429 | 503; retryAfterMs?: never }
+    | { status: 429 | 503; retryable: true; retryAfterMs: number }
+  );
+
 export const actionAdmissionRefusal = (
   error: ActionAdmissionError,
   configuredContactUrl?: string,
-) => {
+): ActionAdmissionRefusalResponse => {
   const refusal = ACTION_ADMISSION_REFUSALS[error.code];
   const contactUrl =
     error.code === ACTION_ADMISSION_CODES.periodExhausted ||
     error.code === ACTION_ADMISSION_CODES.notEnabled
       ? configuredContactUrl
       : undefined;
+  if (
+    error.code === ACTION_ADMISSION_CODES.concurrencyBusy &&
+    error.retryAfterMs !== undefined
+  ) {
+    return {
+      ...ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.concurrencyBusy],
+      code: ACTION_ADMISSION_CODES.concurrencyBusy,
+      retryAfterMs: error.retryAfterMs,
+    };
+  }
   return {
     ...refusal,
     code: error.code,

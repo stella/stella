@@ -14,6 +14,10 @@ export default {
     specifiers: ["@/api/lib/admission-redis"],
     allowed: [
       {
+        path: "apps/api/src/lib/rate-limit/concurrency-lease.ts",
+        reason: "Shared concurrency lease commands and store lifecycle.",
+      },
+      {
         path: "apps/api/src/lib/rate-limit/action-admission.ts",
         reason:
           "Shared concurrency leases, period reservations, and service budgets.",
