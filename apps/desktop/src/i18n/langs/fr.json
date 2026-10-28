@@ -618,5 +618,45 @@
       "fullDiskAccess": "Accès complet au disque",
       "administrator": "Droits d'administrateur"
     }
+  },
+  "agentSubscriptions": {
+    "title": "Abonnements IA",
+    "chatGpt": "ChatGPT",
+    "description": "Utilisez votre forfait ChatGPT pour les requêtes d’IA dans stella. L’utilisation est décomptée de votre forfait ChatGPT, indépendamment de votre abonnement stella.",
+    "continueWithChatGpt": "Continuer avec ChatGPT",
+    "useDifferentAccount": "Utiliser un autre compte",
+    "signingIn": "Terminez la connexion dans votre navigateur.",
+    "cancel": "Annuler",
+    "pasteDescription": "Si le navigateur affiche une page d’erreur après la connexion, copiez son adresse et collez-la ici.",
+    "pasteSubmit": "Terminer la connexion",
+    "connected": "ChatGPT connecté",
+    "connectedAs": "ChatGPT connecté · {email}",
+    "manageUsage": "Gérer l’utilisation",
+    "disconnect": "Déconnecter",
+    "needsReconnect": "Votre connexion à ChatGPT a expiré. Reconnectez-vous pour continuer à utiliser votre forfait.",
+    "notice": {
+      "actionFailed": "Cela n’a pas fonctionné. Réessayez.",
+      "pasteRejected": "Cette adresse ne correspond pas à la connexion en cours. Copiez l’adresse complète de l’onglet du navigateur qui s’est ouvert.",
+      "revocationUnconfirmed": "Déconnecté sur cet ordinateur, mais ChatGPT ne l’a pas confirmé. Vous pouvez aussi retirer stella dans les paramètres de ChatGPT."
+    },
+    "failure": {
+      "declined": "La connexion a été refusée dans le navigateur.",
+      "planUsageNotGranted": "stella n’a pas été autorisé à utiliser votre forfait ChatGPT. Reconnectez-vous et autorisez-le.",
+      "differentAccount": "Vous vous êtes connecté avec un autre compte ChatGPT. Votre connexion enregistrée n’a pas changé.",
+      "stateMismatch": "La connexion n’a pas pu être vérifiée. Réessayez.",
+      "timedOut": "La connexion a pris trop de temps. Réessayez.",
+      "browserUnavailable": "Votre navigateur n’a pas pu être ouvert. Réessayez.",
+      "callbackUnavailable": "La connexion n’a pas pu être préparée sur cet ordinateur. Réessayez.",
+      "registrationIncomplete": "ChatGPT n’a pas terminé de connecter stella. Réessayez.",
+      "codeExpired": "La connexion a expiré avant d’être terminée. Réessayez.",
+      "verification": "La réponse de ChatGPT n’a pas pu être vérifiée. Réessayez.",
+      "clientRejected": "ChatGPT n’accepte plus cette connexion. Reconnectez-la avec un autre compte.",
+      "unreachable": "La connexion à ChatGPT est inaccessible. Vérifiez votre connexion Internet et réessayez.",
+      "storage": "La connexion n’a pas pu être lue ni enregistrée sur cet ordinateur."
+    },
+    "callbackConnectedTitle": "ChatGPT est connecté",
+    "callbackConnectedBody": "Vous pouvez fermer cet onglet et revenir à stella.",
+    "callbackNotConnectedTitle": "ChatGPT n’a pas été connecté",
+    "callbackNotConnectedBody": "Revenez à stella pour voir ce qui s’est passé et réessayez."
   }
 }

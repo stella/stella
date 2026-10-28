@@ -618,5 +618,45 @@
       "fullDiskAccess": "Teljes lemezhozzáférés",
       "administrator": "Rendszergazdai jogok"
     }
+  },
+  "agentSubscriptions": {
+    "title": "MI-előfizetések",
+    "chatGpt": "ChatGPT",
+    "description": "Használja ChatGPT-csomagját a stella MI-kéréseihez. A használat a ChatGPT-csomagját terheli, a stella-előfizetésétől külön.",
+    "continueWithChatGpt": "Folytatás a ChatGPT-vel",
+    "useDifferentAccount": "Másik fiók használata",
+    "signingIn": "Fejezze be a bejelentkezést a böngészőben.",
+    "cancel": "Mégse",
+    "pasteDescription": "Ha a böngésző bejelentkezés után hibaoldalt mutat, másolja ki a címét, és illessze be ide.",
+    "pasteSubmit": "Bejelentkezés befejezése",
+    "connected": "ChatGPT csatlakoztatva",
+    "connectedAs": "ChatGPT csatlakoztatva · {email}",
+    "manageUsage": "Használat kezelése",
+    "disconnect": "Leválasztás",
+    "needsReconnect": "A ChatGPT-kapcsolat lejárt. Jelentkezzen be újra, hogy tovább használhassa a csomagját.",
+    "notice": {
+      "actionFailed": "Ez nem sikerült. Próbálja újra.",
+      "pasteRejected": "Ez a cím nem a jelenlegi bejelentkezéshez tartozik. Másolja ki a teljes címet a megnyílt böngészőlapról.",
+      "revocationUnconfirmed": "Ezen a számítógépen leválasztva, de a ChatGPT nem erősítette meg. A stellát a ChatGPT beállításaiban is eltávolíthatja."
+    },
+    "failure": {
+      "declined": "A bejelentkezést elutasították a böngészőben.",
+      "planUsageNotGranted": "A stella nem kapott engedélyt a ChatGPT-csomag használatára. Jelentkezzen be újra, és engedélyezze.",
+      "differentAccount": "Másik ChatGPT-fiókkal jelentkezett be. A mentett kapcsolat nem változott.",
+      "stateMismatch": "A bejelentkezést nem sikerült ellenőrizni. Próbálja újra.",
+      "timedOut": "A bejelentkezés túl sokáig tartott. Próbálja újra.",
+      "browserUnavailable": "A böngészőt nem sikerült megnyitni. Próbálja újra.",
+      "callbackUnavailable": "A bejelentkezést nem sikerült előkészíteni ezen a számítógépen. Próbálja újra.",
+      "registrationIncomplete": "A ChatGPT nem fejezte be a stella csatlakoztatását. Próbálja újra.",
+      "codeExpired": "A bejelentkezés lejárt, mielőtt befejeződött volna. Próbálja újra.",
+      "verification": "A ChatGPT válaszát nem sikerült ellenőrizni. Próbálja újra.",
+      "clientRejected": "A ChatGPT már nem fogadja el ezt a kapcsolatot. Csatlakozzon újra egy másik fiókkal.",
+      "unreachable": "A ChatGPT-bejelentkezés nem érhető el. Ellenőrizze az internetkapcsolatot, és próbálja újra.",
+      "storage": "A kapcsolatot nem sikerült beolvasni vagy menteni ezen a számítógépen."
+    },
+    "callbackConnectedTitle": "A ChatGPT csatlakoztatva",
+    "callbackConnectedBody": "Bezárhatja ezt a lapot, és visszatérhet a stellába.",
+    "callbackNotConnectedTitle": "A ChatGPT nem csatlakozott",
+    "callbackNotConnectedBody": "Térjen vissza a stellába, nézze meg, mi történt, és próbálja újra."
   }
 }
