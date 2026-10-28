@@ -9,10 +9,10 @@ import {
   describe,
   expect,
   jest,
+  mock,
+  spyOn,
   test,
 } from "bun:test";
-
-import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
@@ -22,6 +22,10 @@ const sessionArea = () =>
   browserStorage("session") ?? panic("Test requires session browser storage");
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
+  configurable: true,
+  value: "running-build",
+});
 
 const { act, Suspense } = await import("react");
 const { cleanup, fireEvent, render, screen } =
@@ -33,8 +37,6 @@ const { APIError } = await import("@/lib/errors/api");
 const { RecoverableViewerBoundary } =
   await import("@/components/viewer/recoverable-viewer-boundary");
 
-// The stale-deployment guard reads this key; see preload-error-recovery.ts.
-const RELOAD_GUARD_KEY = "stella:preload-reload-at";
 const NO_BACKOFF = [0, 0] as const;
 const RENDERED = "rendered file";
 /**
@@ -62,8 +64,10 @@ afterEach(async () => {
     cleanup();
   });
   sessionArea().clear();
+  mock.restore();
 });
 afterAll(async () => {
+  Reflect.deleteProperty(globalThis, "__APP_COMMIT_SHA__");
   await unregisterDomEnvironment();
 });
 
@@ -214,10 +218,9 @@ describe("RecoverableViewerBoundary", () => {
     );
   });
 
-  test("a stale build that already reloaded once fails instead of looping", async () => {
-    sessionArea().setItem(
-      RELOAD_GUARD_KEY,
-      String(Temporal.Now.instant().epochMilliseconds),
+  test("a same-build first chunk failure shows Retry, which renders the viewer", async () => {
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ commit: __APP_COMMIT_SHA__ })),
     );
     mount({
       source: flakySource(
@@ -228,8 +231,15 @@ describe("RecoverableViewerBoundary", () => {
     });
 
     await settleAttempts(1);
-    expect(screen.getByRole("alert").textContent).toContain(
-      messages.fileDetail.displayFailed,
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.tryAgain }),
     );
+    await settleAttempts(1);
+
+    expect(screen.getByText(RENDERED)).toBeTruthy();
   });
 });
