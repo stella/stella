@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Reads the release candidate's draft manifest for staging promotion; contents write only makes the draft visible and nothing is published.",
+  "reviewedDigest": "a2b1e2ce8006fcb349e37a68b7c77c430f8021a09689549c7e2cab1e8faff588"
+}
