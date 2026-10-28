@@ -2733,200 +2733,205 @@ describe("OpenAI-compatible MCP tools", () => {
     },
   );
 
-  test("search_case_law maps filters and returns decision links", async () => {
-    searchDecisionsHandlerMock.mockResolvedValue({
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      facets: {
-        courtYear: COURT_YEAR_FIXTURE,
-        court: [
+  test.each(["available", "metadata_only"] as const)(
+    "search_case_law maps filters and returns decision links with %s text",
+    async (textAvailability) => {
+      searchDecisionsHandlerMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: {
+          courtYear: COURT_YEAR_FIXTURE,
+          court: [
+            {
+              tierLabel: "supreme",
+              courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
+            },
+          ],
+          year: [{ count: 1, label: null, value: "2024" }],
+          decisionType: [{ count: 1, label: null, value: "rozsudek" }],
+          source: [
+            {
+              count: 1,
+              countType: FACET_COUNT_TYPE.EXACT,
+              label: "Nejvyšší soud ČR",
+              value: "source-id",
+            },
+          ],
+          language: [{ count: 1, label: null, value: "cs" }],
+        },
+        hits: [
           {
-            tierLabel: "supreme",
-            courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
+            caseNumber: "29 Cdo 123/2024",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            citationAuthority: 1.75,
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            courtAbbreviation: "NS",
+            decisionDate: "2024-02-01",
+            decisionId: DECISION_ID,
+            decisionType: "judgment",
+            ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "29 Cdo 123/2024",
+              },
+              {
+                type: DECISION_IDENTIFIER_TYPES.ECLI,
+                value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+              },
+            ],
+            // The handler builds the headline for the web UI; the MCP snippet
+            // must come back as plain text.
+            headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
+            textWithheldReason: null,
+            language: "cs",
+            headnote: {
+              type: "present",
+              text: "Publisher holding on causation and compensation. ".repeat(
+                16,
+              ),
+              truncated: false,
+            },
+            keywords: null,
+            textAvailability,
+            matchingPassages: 4,
+            match: "all_terms",
+            languageAlternates: [
+              {
+                caseNumber: "29 Cdo 123/2024",
+                country: "CZE",
+                court: "Nejvyšší soud",
+                decisionDate: "2024-02-01",
+                id: DECISION_ID,
+                language: "cs",
+                slug: "stable-official-slug",
+              },
+              {
+                caseNumber: "29 Cdo 123/2024",
+                country: "CZE",
+                court: "Nejvyšší soud",
+                decisionDate: "2024-02-01",
+                id: "dec_124",
+                language: "en",
+                slug: "stable-official-slug-en",
+              },
+            ],
+            slug: "stable-official-slug",
+            sourceUrl: "https://example.test/decision",
           },
         ],
-        year: [{ count: 1, label: null, value: "2024" }],
-        decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [
-          {
-            count: 1,
-            countType: FACET_COUNT_TYPE.EXACT,
-            label: "Nejvyšší soud ČR",
-            value: "source-id",
-          },
-        ],
-        language: [{ count: 1, label: null, value: "cs" }],
-      },
-      hits: [
-        {
-          caseNumber: "29 Cdo 123/2024",
-          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          citationAuthority: 1.75,
-          citationCount: 7,
+        nextCursor: "cursor_2",
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        queryUsed: "shareholder dispute",
+        warnings: [],
+      });
+
+      const context = createContext();
+      const { result, observer } = await handleMcpToolCallWithCapturedObserver({
+        args: {
           country: "CZE",
           court: "Nejvyšší soud",
-          courtAbbreviation: "NS",
-          decisionDate: "2024-02-01",
-          decisionId: DECISION_ID,
-          decisionType: "judgment",
-          ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          identifiers: [
-            {
-              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-              value: "29 Cdo 123/2024",
-            },
-            {
-              type: DECISION_IDENTIFIER_TYPES.ECLI,
-              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-            },
-          ],
-          // The handler builds the headline for the web UI; the MCP snippet
-          // must come back as plain text.
-          headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
-          textWithheldReason: null,
-          language: "cs",
-          headnote: {
-            type: "present",
-            text: "Publisher holding on causation and compensation. ".repeat(
-              16,
-            ),
-            truncated: false,
-          },
-          keywords: null,
-          matchingPassages: 4,
-          match: "all_terms",
-          languageAlternates: [
-            {
-              caseNumber: "29 Cdo 123/2024",
-              country: "CZE",
-              court: "Nejvyšší soud",
-              decisionDate: "2024-02-01",
-              id: DECISION_ID,
-              language: "cs",
-              slug: "stable-official-slug",
-            },
-            {
-              caseNumber: "29 Cdo 123/2024",
-              country: "CZE",
-              court: "Nejvyšší soud",
-              decisionDate: "2024-02-01",
-              id: "dec_124",
-              language: "en",
-              slug: "stable-official-slug-en",
-            },
-          ],
-          slug: "stable-official-slug",
-          sourceUrl: "https://example.test/decision",
+          date_from: "2024-01-01",
+          decision_type: "judgment",
+          limit: 5,
+          queries: ["shareholder dispute"],
+          sort: "newest",
+          source_id: "11111111-1111-4111-8111-111111111111",
         },
-      ],
-      nextCursor: "cursor_2",
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-      queryUsed: "shareholder dispute",
-      warnings: [],
-    });
+        context,
+        toolName: "search_case_law",
+      });
 
-    const context = createContext();
-    const { result, observer } = await handleMcpToolCallWithCapturedObserver({
-      args: {
-        country: "CZE",
-        court: "Nejvyšší soud",
-        date_from: "2024-01-01",
-        decision_type: "judgment",
-        limit: 5,
-        queries: ["shareholder dispute"],
-        sort: "newest",
-        source_id: "11111111-1111-4111-8111-111111111111",
-      },
-      context,
-      toolName: "search_case_law",
-    });
-
-    // snake_case in, the body's camelCase out, and `sort` reaches the handler
-    // as the closed value the public body declares.
-    expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
-      body: {
-        country: "CZE",
-        court: "Nejvyšší soud",
-        dateFrom: "2024-01-01",
-        decisionType: "judgment",
-        limit: 5,
-        sentenceAlignedExcerpt: true,
-        headnotePresentation: "expanded",
-        query: "shareholder dispute",
-        facets: [],
-        sort: "newest",
-        sourceId: "11111111-1111-4111-8111-111111111111",
-      },
-      caseLawDb: caseLawPublicReadDb,
-      observer,
-      signal: undefined,
-    });
-
-    expect(parseToolPayload(result)).toEqual({
-      headnotes: "included",
-      facets: {
-        courtYear: COURT_YEAR_FIXTURE,
-        court: [
-          {
-            tierLabel: "supreme",
-            courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
-          },
-        ],
-        year: [{ count: 1, label: null, value: "2024" }],
-        decisionType: [{ count: 1, label: null, value: "rozsudek" }],
-        source: [
-          {
-            count: 1,
-            countType: FACET_COUNT_TYPE.EXACT,
-            label: "Nejvyšší soud ČR",
-            value: "source-id",
-          },
-        ],
-        language: [{ count: 1, label: null, value: "cs" }],
-      },
-      nextCursor: "cursor_2",
-      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-      searches: [
-        {
+      // snake_case in, the body's camelCase out, and `sort` reaches the handler
+      // as the closed value the public body declares.
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledWith({
+        body: {
+          country: "CZE",
+          court: "Nejvyšší soud",
+          dateFrom: "2024-01-01",
+          decisionType: "judgment",
+          limit: 5,
+          sentenceAlignedExcerpt: true,
+          headnotePresentation: "expanded",
           query: "shareholder dispute",
-          queryUsed: "shareholder dispute",
-          paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-          warnings: [],
+          facets: [],
+          sort: "newest",
+          sourceId: "11111111-1111-4111-8111-111111111111",
         },
-      ],
-      results: [
-        {
-          url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
-          source_url: "https://example.test/decision",
-          caseNumber: "29 Cdo 123/2024",
-          citationAuthority: 1.75,
-          citationCount: 7,
-          country: "CZE",
-          court: "Nejvyšší soud",
-          courtAbbreviation: "NS",
-          decisionDate: "2024-02-01",
-          decisionId: DECISION_ID,
-          resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
-          decisionType: "judgment",
-          ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
-          language: "cs",
-          matchedQueries: [0],
-          headnote: {
-            type: "present",
-            text: "Publisher holding on causation and compensation. ".repeat(
-              16,
-            ),
-            truncated: false,
+        caseLawDb: caseLawPublicReadDb,
+        observer,
+        signal: undefined,
+      });
+
+      expect(parseToolPayload(result)).toEqual({
+        headnotes: "included",
+        facets: {
+          courtYear: COURT_YEAR_FIXTURE,
+          court: [
+            {
+              tierLabel: "supreme",
+              courts: [{ count: 1, label: null, value: "Nejvyšší soud" }],
+            },
+          ],
+          year: [{ count: 1, label: null, value: "2024" }],
+          decisionType: [{ count: 1, label: null, value: "rozsudek" }],
+          source: [
+            {
+              count: 1,
+              countType: FACET_COUNT_TYPE.EXACT,
+              label: "Nejvyšší soud ČR",
+              value: "source-id",
+            },
+          ],
+          language: [{ count: 1, label: null, value: "cs" }],
+        },
+        nextCursor: "cursor_2",
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        searches: [
+          {
+            query: "shareholder dispute",
+            queryUsed: "shareholder dispute",
+            paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+            warnings: [],
           },
-          keywords: null,
-          matchingPassages: 4,
-          match: "all_terms",
-          snippet: 'Relevant holding on "smlouva"',
-          sourceUrl: "https://example.test/decision",
-        },
-      ],
-      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-    });
-  });
+        ],
+        results: [
+          {
+            url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/stable-official-slug`,
+            source_url: "https://example.test/decision",
+            caseNumber: "29 Cdo 123/2024",
+            citationAuthority: 1.75,
+            citationCount: 7,
+            country: "CZE",
+            court: "Nejvyšší soud",
+            courtAbbreviation: "NS",
+            decisionDate: "2024-02-01",
+            decisionId: DECISION_ID,
+            resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
+            decisionType: "judgment",
+            ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            language: "cs",
+            matchedQueries: [0],
+            headnote: {
+              type: "present",
+              text: "Publisher holding on causation and compensation. ".repeat(
+                16,
+              ),
+              truncated: false,
+            },
+            keywords: null,
+            textAvailability,
+            matchingPassages: 4,
+            match: "all_terms",
+            snippet: 'Relevant holding on "smlouva"',
+            sourceUrl: "https://example.test/decision",
+          },
+        ],
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      });
+    },
+  );
 
   test.each(["search_case_law", "search_legislation"] as const)(
     "%s surfaces exclusion-budget truncation even without a continuation",
@@ -2988,6 +2993,7 @@ describe("OpenAI-compatible MCP tools", () => {
         truncated: false,
       },
       keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
+      textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
       languageAlternates: [],
@@ -3179,6 +3185,7 @@ describe("OpenAI-compatible MCP tools", () => {
           language: "cs",
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
+          textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
           slug: "stable-official-slug",
@@ -3237,6 +3244,7 @@ describe("OpenAI-compatible MCP tools", () => {
           matchedQueries: [0],
           headnote: null,
           keywords: null,
+          textAvailability: "available",
           matchingPassages: 1,
           match: "all_terms",
           snippet: "Relevant holding",
@@ -3273,6 +3281,7 @@ describe("OpenAI-compatible MCP tools", () => {
       language: "cs",
       headnote: { type: "absent", reason: "not_published" },
       keywords: null,
+      textAvailability: "available",
       matchingPassages: 1,
       match: "all_terms",
       slug: "stable-official-slug",
@@ -3496,6 +3505,7 @@ describe("OpenAI-compatible MCP tools", () => {
     languageAlternates: [],
     headnote: { type: "absent", reason: "not_published" },
     keywords: null,
+    textAvailability: "available",
     matchingPassages: 1,
     match: "all_terms",
     slug: `slug-${decisionId}`,
@@ -4041,6 +4051,7 @@ describe("OpenAI-compatible MCP tools", () => {
               language: "cs",
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
+              textAvailability: "available",
               matchingPassages: 1,
               match: "all_terms",
               slug: "stable-official-slug",
