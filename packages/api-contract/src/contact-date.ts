@@ -59,7 +59,7 @@ export const isValidContactBirthDate = (
     ...(value.precision === "year" ? [] : [value.month]),
     ...(value.precision === "day" ? [value.day] : []),
   ];
-  if (value.year < CONTACT_BIRTH_YEAR_MIN) {
+  if (!parts.every(Number.isInteger) || value.year < CONTACT_BIRTH_YEAR_MIN) {
     return false;
   }
   if (value.precision !== "year" && (value.month < 1 || value.month > 12)) {

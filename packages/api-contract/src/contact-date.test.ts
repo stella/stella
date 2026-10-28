@@ -55,6 +55,14 @@ describe("contact birth date boundary", () => {
     expect(isValidContactBirthDate(value, CURRENT_INSTANT)).toBe(false);
   });
 
+  test.each([
+    { precision: "year", year: 1990.5 },
+    { precision: "month", year: 1990, month: 1.5 },
+    { precision: "day", year: 1990, month: 1, day: 2.5 },
+  ] as const)("rejects fractional $precision parts", (value) => {
+    expect(isValidContactBirthDate(value, CURRENT_INSTANT)).toBe(false);
+  });
+
   test("uses the same instant boundary on browser and API hosts", () => {
     const browserInstant = CURRENT_INSTANT.toZonedDateTimeISO(
       CONTACT_DATE_TIME_ZONE,

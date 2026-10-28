@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import type { CountryCode } from "@stll/country-codes";
+import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -499,7 +500,12 @@ describe("person birth date", () => {
 
   test.each([
     { precision: "year" as const, year: 1899 },
-    { precision: "month" as const, year: 2027, month: 1 },
+    // Next year is always in the future, whenever this runs.
+    {
+      precision: "month" as const,
+      year: Temporal.Now.plainDateISO().year + 1,
+      month: 1,
+    },
   ])("refuses an out-of-range $precision date", (dateOfBirth) => {
     const result = personDateOfBirth({ birthDate: undefined, dateOfBirth });
     expect(result.isErr() && result.error).toMatchObject({
