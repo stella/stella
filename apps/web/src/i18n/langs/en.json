@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "All sources up to date",
       "completeness": "Completeness",
-      "completenessHelp": "Stored decisions compared with the publisher’s own count, its listing or a recorded total.",
+      "completenessHelp": "Stored decisions compared with the publisher’s own count, its listing or a recorded total. Decisions the publisher lists that reconciliation found missing are not counted.",
       "countryNavigation": "Browse countries",
       "courtsHeading": "By court",
       "decisionYears": "Decision years",

@@ -50,6 +50,7 @@ import {
   type CitationScopesRejectedError,
   indexCitationScopes,
 } from "@/api/handlers/case-law/ingestion/citation-scopes";
+import { readCjeuCitationGroups } from "@/api/handlers/case-law/ingestion/cjeu-citation-groups";
 import { extractUsCitations } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
 import type {
   UsCitationDiagnostics,
@@ -1970,6 +1971,86 @@ const mergeCollectionCitations = ({
   }
 };
 
+/** An ECLI printed after a group's numbers, or two that disagreed. */
+type CjeuGroupPin = { ecli: string; key: string } | "conflicting";
+
+/**
+ * Read the CJEU's own way of naming several cases in one reference (see
+ * `cjeu-citation-groups.ts`) into the citations the patterns found:
+ *
+ * - every case a group names becomes a citation, the cases a range names
+ *   between its two printed ends included;
+ * - a case number printed with an ECLI takes the ECLI as its identity. The
+ *   number keeps its text, which is what the reader marks; the ECLI decides
+ *   which decision it means, because a CJEU case number is shared by the
+ *   judgment, the Advocate General's opinion and every order in the case,
+ *   and joined cases are filed under the first number alone. Where one text
+ *   prints the same number with two ECLIs (a judgment and the opinion before
+ *   it), neither pins it, as for every other hint that must agree.
+ */
+const applyCjeuCitationGroups = ({
+  byKey,
+  sections,
+  language,
+}: {
+  byKey: Map<string, ExtractedCitation>;
+  sections: readonly { index: number; text: string }[];
+  language: string | undefined;
+}): void => {
+  const caseNumberType = DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
+  const pins = new Map<string, CjeuGroupPin>();
+  for (const section of sections) {
+    const { groups } = readCjeuCitationGroups(section.text, language);
+    for (const { members, ecli } of groups) {
+      for (const { caseNumber, span } of members) {
+        const dedupKey = `${caseNumberType}:${normalizeDecisionIdentifierValue(caseNumberType, caseNumber)}`;
+        if (!byKey.has(dedupKey)) {
+          byKey.set(dedupKey, {
+            citationText: caseNumber,
+            sectionIndex: section.index,
+            citedDecisionTypeHint: detectCitationDecisionTypeHint(
+              section.text,
+              span.start,
+            ),
+            identifierType: caseNumberType,
+            identifierValue: caseNumber,
+            citedCourtHint: detectCitationCourtHint(section.text, span.start),
+            citedSheetNumber: detectCitationSheetNumber(section.text, span.end),
+            citedDecisionDate: detectCitationDecisionDate(
+              section.text,
+              span.start,
+            ),
+          });
+        }
+        if (ecli === null) {
+          continue;
+        }
+        const pin = {
+          ecli: ecli.text,
+          key: normalizeDecisionIdentifierValue(
+            DECISION_IDENTIFIER_TYPES.ECLI,
+            ecli.text,
+          ),
+        };
+        const pinned = pins.get(dedupKey);
+        if (pinned === undefined) {
+          pins.set(dedupKey, pin);
+        } else if (pinned !== "conflicting" && pinned.key !== pin.key) {
+          pins.set(dedupKey, "conflicting");
+        }
+      }
+    }
+  }
+  for (const [dedupKey, pin] of pins) {
+    const citation = byKey.get(dedupKey);
+    if (pin === "conflicting" || citation === undefined) {
+      continue;
+    }
+    citation.identifierType = DECISION_IDENTIFIER_TYPES.ECLI;
+    citation.identifierValue = pin.ecli;
+  }
+};
+
 type StorageBoundedCitationMatchOptions = {
   pattern: RegExp;
   match: RegExpExecArray;
@@ -2016,6 +2097,16 @@ const storageBoundedCitationMatch = ({
  */
 export const extractCitations = (
   sections: { index: number; text: string }[],
+  {
+    language,
+  }: {
+    /**
+     * The text's language, which settles the one word whose meaning differs
+     * between languages (`a` joins two case numbers in Czech and ranges them
+     * in Spanish). Without it the word joins, which never invents a case.
+     */
+    language?: string | undefined;
+  } = {},
 ): ExtractedCitation[] => {
   const byKey = new Map<string, ExtractedCitation>();
   const positions = new Map<string, CitationPosition>();
@@ -2182,6 +2273,7 @@ export const extractCitations = (
   }
 
   mergeCollectionCitations({ byKey, positions, sectionText });
+  applyCjeuCitationGroups({ byKey, sections, language });
 
   return [...byKey.values()];
 };
@@ -2189,6 +2281,8 @@ export const extractCitations = (
 export type ExtractDecisionCitationsOptions = {
   /** The decision's country as stored on its row. */
   country: string;
+  /** The decision's language as stored on its row, when known. */
+  language?: string | undefined;
   sections: readonly { index: number; text: string }[];
   documentAst?: DocumentAst | undefined;
   citationScopes?: readonly CitationOpinionScope[] | undefined;
@@ -2244,6 +2338,7 @@ export const extractDecisionCitations = ({
   citationScopes,
   country,
   documentAst,
+  language,
   sections,
 }: ExtractDecisionCitationsOptions): Result<
   DecisionCitationExtraction,
@@ -2259,7 +2354,7 @@ export const extractDecisionCitations = ({
   }
   if (!readsUsReporterCitations(country)) {
     return Result.ok({
-      citations: extractCitations([...sections]),
+      citations: extractCitations([...sections], { language }),
       occurrences: [],
       documentAst,
       reading: { type: "patterns" },

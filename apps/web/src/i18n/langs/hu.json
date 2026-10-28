@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Minden forrás naprakész",
       "completeness": "Teljesség",
-      "completenessHelp": "A tárolt határozatok száma a kiadó által közölt, a jegyzékében szereplő vagy kézzel rögzített összesítéshez viszonyítva.",
+      "completenessHelp": "A tárolt határozatok száma a kiadó által közölt, a jegyzékében szereplő vagy kézzel rögzített összesítéshez viszonyítva. A kiadó jegyzékében szereplő, az egyeztetés során hiányzónak talált határozatok nem számítanak bele.",
       "countryNavigation": "Ugrás egy országhoz",
       "courtsHeading": "Bíróságonként",
       "decisionYears": "Határozatok évei",

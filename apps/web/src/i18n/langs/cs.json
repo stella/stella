@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Všechny zdroje jsou aktuální",
       "completeness": "Úplnost",
-      "completenessHelp": "Počet uložených rozhodnutí vůči počtu uvedenému vydavatelem, jeho seznamu nebo ručně zaznamenanému údaji.",
+      "completenessHelp": "Počet uložených rozhodnutí vůči počtu uvedenému vydavatelem, jeho seznamu nebo ručně zaznamenanému údaji. Rozhodnutí ze seznamu vydavatele, jejichž chybění zjistilo porovnání, se nezapočítávají.",
       "countryNavigation": "Přejít na zemi",
       "courtsHeading": "Podle soudu",
       "decisionYears": "Roky rozhodnutí",

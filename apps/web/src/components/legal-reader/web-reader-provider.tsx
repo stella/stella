@@ -8,7 +8,7 @@ import { DecisionReaderProvider } from "@stll/decision-reader/reader-adapters";
 import type { DecisionReaderAdapters } from "@stll/decision-reader/reader-adapters";
 
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
-import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { CitedDecisionSourceText } from "@/components/legal-reader/cited-decision-link";
 import {
   CitedProvisionExpansion,
   CitedProvisionLink,
@@ -24,7 +24,12 @@ export const WebReaderProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useContext(QueryClientContext);
   const adapters = {
     ...useWebReaderPresentationAdapters(),
-    renderDecisionLink: (props) => <CitedDecisionLink {...props} />,
+    // A reader link is a reference in the decision's own text.
+    renderDecisionLink: ({
+      citation: _citation,
+      blockId: _blockId,
+      ...props
+    }) => <CitedDecisionSourceText {...props} />,
     renderStatuteLink: (props) => {
       switch (props.type) {
         case "statute":

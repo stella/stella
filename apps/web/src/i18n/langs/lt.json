@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Visi šaltiniai atnaujinti",
       "completeness": "Išsamumas",
-      "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi.",
+      "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi. Skelbėjo sąraše esantys sprendimai, kurių trūkumą nustatė sutikrinimas, neįskaičiuojami.",
       "countryNavigation": "Pereiti prie šalies",
       "courtsHeading": "Pagal teismą",
       "decisionYears": "Sprendimų metai",

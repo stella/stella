@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Kõik allikad on ajakohased",
       "completeness": "Täielikkus",
-      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga.",
+      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga. Avaldaja loendis olevaid lahendeid, mis võrdlemisel puudu leiti, ei arvestata.",
       "countryNavigation": "Vali riik",
       "courtsHeading": "Kohtute kaupa",
       "decisionYears": "Lahendite aastad",

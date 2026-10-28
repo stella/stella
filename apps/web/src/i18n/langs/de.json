@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Alle Quellen sind aktuell",
       "completeness": "Vollständigkeit",
-      "completenessHelp": "Gespeicherte Entscheidungen im Verhältnis zur Gesamtzahl des Herausgebers, dessen Verzeichnis oder einer erfassten Gesamtzahl.",
+      "completenessHelp": "Gespeicherte Entscheidungen im Verhältnis zur Gesamtzahl des Herausgebers, dessen Verzeichnis oder einer erfassten Gesamtzahl. Vom Herausgeber gelistete Entscheidungen, die beim Abgleich als fehlend festgestellt wurden, werden nicht mitgezählt.",
       "countryNavigation": "Land auswählen",
       "courtsHeading": "Nach Gericht",
       "decisionYears": "Entscheidungsjahre",

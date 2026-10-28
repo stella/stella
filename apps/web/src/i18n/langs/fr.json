@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Toutes les sources sont à jour",
       "completeness": "Exhaustivité",
-      "completenessHelp": "Décisions conservées par rapport au décompte de l’éditeur, à son répertoire ou à un total relevé.",
+      "completenessHelp": "Décisions conservées par rapport au décompte de l’éditeur, à son répertoire ou à un total relevé. Les décisions répertoriées par l’éditeur que le rapprochement a relevées comme manquantes ne sont pas comptées.",
       "countryNavigation": "Accéder à un pays",
       "courtsHeading": "Par juridiction",
       "decisionYears": "Années des décisions",

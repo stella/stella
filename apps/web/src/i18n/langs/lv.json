@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Visi avoti ir aktuāli",
       "completeness": "Pilnīgums",
-      "completenessHelp": "Saglabāto nolēmumu skaits attiecībā pret izdevēja norādīto kopskaitu, tā sarakstu vai reģistrētu kopskaitu.",
+      "completenessHelp": "Saglabāto nolēmumu skaits attiecībā pret izdevēja norādīto kopskaitu, tā sarakstu vai reģistrētu kopskaitu. Izdevēja sarakstā iekļautie nolēmumi, kuru trūkumu atklāja salīdzināšana, netiek ieskaitīti.",
       "countryNavigation": "Pāriet uz valsti",
       "courtsHeading": "Pēc tiesas",
       "decisionYears": "Nolēmumu gadi",

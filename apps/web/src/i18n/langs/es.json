@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Todas las fuentes están al día",
       "completeness": "Exhaustividad",
-      "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado.",
+      "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado. No se cuentan las resoluciones del listado del editor que la conciliación detectó como ausentes.",
       "countryNavigation": "Ir a un país",
       "courtsHeading": "Por tribunal",
       "decisionYears": "Años de las resoluciones",

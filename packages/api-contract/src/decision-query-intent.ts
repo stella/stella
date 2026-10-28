@@ -84,6 +84,12 @@ export type DecisionQueryIntent =
 
 const ECLI_RE = /^ecli:[a-z]{2}:[a-z0-9]{1,12}:\d{4}:[a-z0-9.]{1,64}$/iu;
 
+/**
+ * The Court of Justice's own spelling of its ECLIs, which its judgments print
+ * without the scheme's literal: "EU:C:2013:791" is "ECLI:EU:C:2013:791".
+ */
+const CJEU_SHORT_ECLI_RE = /^eu:[ctf]:\d{4}:\d{1,6}$/iu;
+
 type ParseDecisionQueryOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
   /**
@@ -112,8 +118,11 @@ const ecliIntentOf = (
     foldDecisionIdentifierInput(text),
     ".",
   );
-  return ECLI_RE.test(folded)
-    ? { type: "identifier", kind: "ecli", value: folded }
+  if (ECLI_RE.test(folded)) {
+    return { type: "identifier", kind: "ecli", value: folded };
+  }
+  return CJEU_SHORT_ECLI_RE.test(folded)
+    ? { type: "identifier", kind: "ecli", value: `ECLI:${folded}` }
     : null;
 };
 
@@ -253,7 +262,7 @@ const identifierWithin = (
       const window = tokens.slice(start, end).join(" ");
       // Every docket grammar the entry can reach writes a slash; an ECLI is a
       // single word. Anything else is not worth a grammar's time.
-      if (!window.includes("/") && !/ecli:/iu.test(window)) {
+      if (!window.includes("/") && !/ecli:|^eu:[ctf]:/iu.test(window)) {
         continue;
       }
       const reading = readingOfWindow({ end, grammar, start, tokens });

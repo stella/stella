@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Všetky zdroje sú aktuálne",
       "completeness": "Úplnosť",
-      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju.",
+      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju. Rozhodnutia zo zoznamu vydavateľa, ktorých chýbanie zistilo porovnanie, sa nezapočítavajú.",
       "countryNavigation": "Prejsť na krajinu",
       "courtsHeading": "Podľa súdu",
       "decisionYears": "Roky rozhodnutí",

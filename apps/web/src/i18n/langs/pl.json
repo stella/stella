@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Wszystkie źródła są aktualne",
       "completeness": "Kompletność",
-      "completenessHelp": "Zapisane orzeczenia względem liczby podanej przez wydawcę, jego wykazu lub odnotowanej liczby całkowitej.",
+      "completenessHelp": "Zapisane orzeczenia względem liczby podanej przez wydawcę, jego wykazu lub odnotowanej liczby całkowitej. Orzeczenia z wykazu wydawcy, których brak wykazało uzgodnienie, nie są wliczane.",
       "countryNavigation": "Przejdź do kraju",
       "courtsHeading": "Według sądu",
       "decisionYears": "Lata orzeczeń",

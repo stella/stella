@@ -572,6 +572,7 @@ export const planDecisionWrite = async ({
   }
   const extraction = extractDecisionCitations({
     country: result.country,
+    language: result.language,
     sections: sections.map(({ index, text }) => ({ index, text })),
     documentAst: hasUsableAst(result.documentAst)
       ? result.documentAst

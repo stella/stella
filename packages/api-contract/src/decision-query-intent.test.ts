@@ -243,6 +243,30 @@ const hit = (caseNumber: string, ecli: string | null = null) => ({
 });
 
 describe("the hits that are the named decision", () => {
+  test("the Court of Justice's short ECLI names the decision its full ECLI names", () => {
+    for (const entry of ["EU:C:2013:791", "eu:c:2013:791", " EU:C:2013:791 "]) {
+      const intent = parseDecisionQuery(entry);
+      if (intent.type !== "identifier") {
+        return panic(`Short ECLI read as ${intent.type}`);
+      }
+      expect(intent.kind).toBe("ecli");
+      expect(
+        exactDecisionMatches(intent, [
+          hit("C-159/12", "ECLI:EU:C:2013:791"),
+          hit("C-159/12", "ECLI:EU:C:2013:529"),
+        ]),
+      ).toEqual([hit("C-159/12", "ECLI:EU:C:2013:791")]);
+    }
+    expect(
+      parseDecisionQuery("viz rozsudek Venturini, EU:C:2013:791"),
+    ).toMatchObject({ type: "identifier", kind: "ecli" });
+    // Not every colon-joined token is one: a time or a ratio stays text.
+    expect(parseDecisionQuery("EU:X:2013:791")).toEqual({
+      type: "text",
+      text: "EU:X:2013:791",
+    });
+  });
+
   test("spacing, case, dash style and the sheet number do not change identity", () => {
     fc.assert(
       fc.property(

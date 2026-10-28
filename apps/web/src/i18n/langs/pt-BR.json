@@ -1002,7 +1002,7 @@
     "coverage": {
       "allCurrent": "Todas as fontes estão em dia",
       "completeness": "Completude",
-      "completenessHelp": "Decisões armazenadas em relação ao total informado pelo publicador, à sua listagem ou a uma contagem registrada.",
+      "completenessHelp": "Decisões armazenadas em relação ao total informado pelo publicador, à sua listagem ou a uma contagem registrada. Decisões listadas pelo publicador que a conciliação apontou como ausentes não são contadas.",
       "countryNavigation": "Ir para um país",
       "courtsHeading": "Por tribunal",
       "decisionYears": "Anos das decisões",
