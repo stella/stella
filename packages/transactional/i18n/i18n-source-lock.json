@@ -12,7 +12,7 @@
   "newDeviceLogin.ignore": "If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.",
   "newDeviceLogin.ipAddress": "IP address",
   "newDeviceLogin.preview": "New sign-in from {device}",
-  "newDeviceLogin.subject": "New sign-in to your Stella account",
+  "newDeviceLogin.subject": "New sign-in to your stella account",
   "newDeviceLogin.time": "Time",
   "otp.changeEmail": "Use this code to verify your new email address.",
   "otp.deleteAccount": "Use this code to verify deleting your account.",

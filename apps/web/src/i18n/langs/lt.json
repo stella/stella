@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Pridėti pasirinktinį",
-    "addCustomMcp": "Pridėti MCP serverį",
+    "addCustomMcp": "Pridėti integraciją",
     "addCustomSkill": "Pridėti įgūdį",
     "by": "Autorius: {author}",
     "configuration": "Konfigūracija",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Autentifikacija",
     "empty": "Pagal dabartinį filtrą nėra įrašų.",
     "filter": {
-      "mcps": "MCP serveriai",
+      "mcps": "Integracijos",
       "nativeTools": "Integruoti įrankiai",
       "skills": "Įgūdžiai"
     },
@@ -2362,7 +2362,7 @@
     "scopeChat": "Skaityti ir tvarkyti jūsų pokalbius ir žinutes",
     "scopeContactsWrite": "Kurti, redaguoti ir ištrinti kontaktus visoje jūsų organizacijoje",
     "scopeDocumentsWrite": "Kurti, redaguoti ir ištrinti jūsų dokumentus",
-    "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
+    "scopeExternalMcps": "Naudoti jūsų prijungtas integracijas",
     "scopeFeedback": "Siųsti produkto atsiliepimus stella prižiūrėtojams",
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
     "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
@@ -2387,7 +2387,7 @@
     "summaryChat": "pokalbiai",
     "summaryContactsWrite": "kontaktai",
     "summaryDocumentsWrite": "dokumentai",
-    "summaryExternalMcps": "prijungti išoriniai įrankiai",
+    "summaryExternalMcps": "prijungtos integracijos",
     "summaryKnowledgeWrite": "sąlygos ir peržiūros vadovai",
     "summaryLawRead": "viešus teisės aktus ir teismų praktiką",
     "summaryLineChange": "<group>Kūrimas ir redagavimas:</group> {items}",
@@ -2416,8 +2416,8 @@
     "attorneys": {
       "none": "Nepriskirtas",
       "originating": "Pagrindinis kontaktas",
-      "responsible": "Atsakingas advokatas",
-      "title": "Advokatai"
+      "responsible": "Atsakingas asmuo",
+      "title": "Atsakingi už ryšį"
     },
     "billing": {
       "addBankAccount": "Pridėti banko sąskaitą",
@@ -2840,14 +2840,14 @@
     "failedToChangeViewType": "Nepavyko pakeisti rodinio tipo",
     "failedToCheckSlugAvailability": "Nepavyko patikrinti slug prieinamumo",
     "failedToCreateContact": "Nepavyko sukurti kliento",
-    "failedToCreateEntity": "Nepavyko sukurti įrašo",
+    "failedToCreateEntity": "Nepavyko sukurti elemento",
     "failedToCreateOrganization": "Nepavyko sukurti organizacijos",
     "failedToCreateProperty": "Nepavyko sukurti savybės",
     "failedToCreateView": "Nepavyko sukurti rodinio",
     "failedToCreateWorkspace": "Nepavyko sukurti bylos",
     "failedToDeclineInvitation": "Nepavyko atmesti kvietimo",
     "failedToDeleteContact": "Nepavyko ištrinti kliento",
-    "failedToDeleteEntities": "Nepavyko ištrinti įrašų",
+    "failedToDeleteEntities": "Nepavyko ištrinti elementų",
     "failedToDeleteProperty": "Nepavyko ištrinti savybės",
     "failedToDeleteTemplate": "Nepavyko ištrinti šablono",
     "failedToDeleteView": "Nepavyko ištrinti rodinio",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Grąžinti (Ctrl+Y)",
     "rejectChange": "Atmesti keitimą",
     "removeLink": "Pašalinti nuorodą",
-    "renderErrorDescription": "Atvaizduojant šį komponentą įvyko klaida. Bandykite dar kartą arba susisiekite su pagalba, jei problema kartojasi.",
+    "renderErrorDescription": "Nepavyko parodyti šios dokumento dalies. Įkelkite puslapį iš naujo, o jei tai kartosis, praneškite mums.",
     "saveCheckpointFailedDescription": "DOCX buvo sukurtas vietiniame įrenginyje, tačiau stella nepavyko įkelti kontrolinio taško. Palikite redaktorių atidarytą ir bandykite išsaugoti dar kartą.",
     "saveCheckpointFailedTitle": "Nepavyko įkelti išsaugojimo",
     "saveEditorUnavailableDescription": "Redaktorius dar nepasiruošęs. Palaukite, kol dokumentas bus įkeltas, ir bandykite išsaugoti dar kartą.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Pridėti ir prijungti",
       "addServer": "Pridėti serverį",
-      "addServerCardTitle": "Pridėti naują MCP serverį",
+      "addServerCardTitle": "Pridėti naują integraciją",
       "auth": {
         "bearer": "Bearer tokenas",
         "none": "Be autentifikavimo",
@@ -4247,7 +4247,7 @@
         "title": "Šablonai"
       },
       "tools": {
-        "description": "Sujunkite stella su viešais registrais ir kitais šaltiniais",
+        "description": "Įgūdžiai, integracijos ir visada pasiekiami įrankiai, kuriuos DI gali naudoti pokalbyje",
         "title": "Įrankiai"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Įgūdis su šia / komanda jau yra",
       "commandHelp": "Įveskite komandą pokalbyje, kad paleistumėte šį įgūdį.",
-      "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
+      "commandLabel": "Pokalbio komanda (neprivaloma)",
       "commandPlaceholder": "pvz. apibendrinti",
       "errors": {
         "commandInvalid": "Naudokite tik mažąsias raides, skaitmenis, brūkšnelius ir pabraukimus"
@@ -4428,7 +4428,7 @@
     "chat": "Pokalbis",
     "contacts": "Kontaktai",
     "inbox": "Gautieji",
-    "knowledge": "Žinios",
+    "knowledge": "Analitika",
     "myTodos": "Mano užduotys",
     "pinned": "Prisegti",
     "recentMatters": "Naujausios bylos",
@@ -5506,14 +5506,14 @@
     "dueDate": "Terminas",
     "hardDeadline": "Galutinis terminas",
     "hardDeadlineOverdue": "Galutinis terminas praleistas",
-    "linkEntity": "Susieti įrašą",
-    "linkedEntities": "Susiję įrašai",
+    "linkEntity": "Susieti elementą",
+    "linkedEntities": "Susieti elementai",
     "myTasksTitle": "Mano užduotys",
     "myWorkTitle": "Mano darbai",
     "newTask": "Nauja užduotis",
     "noActivity": "Veiklos dar nėra",
     "noAssignees": "Nėra bendradarbių",
-    "noLinks": "Nėra susietų įrašų",
+    "noLinks": "Nėra susietų elementų",
     "noSubtasks": "Nėra použduočių",
     "noTasksAssigned": "Jums nėra priskirtų užduočių",
     "noWorkInQueue": "Šioje eilėje darbų nėra",
@@ -6155,7 +6155,7 @@
       "emptyFile": "Failas tuščias.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
-      "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
+      "maxEntitiesReached": "Pasiektas didžiausias elementų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
       "ocrBatchHelp": "Eilėje esantys dokumentai apdorojami kitame OCR pakete.",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
@@ -6385,7 +6385,7 @@
     "matterInfo": "Bylos informacija",
     "mattersCount": "{count, plural, one {# byla} few {# bylos} many {# bylos} other {# bylų}}",
     "members": {
-      "addMember": "Pridėti narį",
+      "addMember": "Pridėti prie bylos",
       "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
       "alreadyOnMatter": "Jau yra šioje byloje",
@@ -6558,7 +6558,7 @@
       },
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
-      "evidence": "Įrodymas",
+      "evidence": "Pagrindimas",
       "incorrectPassword": "Neteisingas slaptažodis. Bandykite dar kartą.",
       "nextPage": "Kitas puslapis",
       "pageEditor": {

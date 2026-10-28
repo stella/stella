@@ -157,7 +157,7 @@
     "oneTimeCodeExpired": "Tu código de un solo uso ha caducado. Solicita un código nuevo.",
     "openInProvider": "Abrir {provider}",
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
-    "organizationNamePlaceholder": "Mi Organización",
+    "organizationNamePlaceholder": "Mi organización",
     "password": "Contraseña",
     "professionalUse": {
       "title": "Confirme el uso profesional"
@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Añadir personalizado",
-    "addCustomMcp": "Añadir servidor MCP",
+    "addCustomMcp": "Añadir integración",
     "addCustomSkill": "Añadir habilidad",
     "by": "Por {author}",
     "configuration": "Configuración",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Autenticación",
     "empty": "Ninguna entrada coincide con el filtro actual.",
     "filter": {
-      "mcps": "Servidores MCP",
+      "mcps": "Integraciones",
       "nativeTools": "Herramientas integradas",
       "skills": "Habilidades"
     },
@@ -2362,7 +2362,7 @@
     "scopeChat": "Leer y gestionar sus chats y mensajes",
     "scopeContactsWrite": "Crear, editar y eliminar contactos en toda su organización",
     "scopeDocumentsWrite": "Crear, editar y eliminar sus documentos",
-    "scopeExternalMcps": "Usar tus herramientas externas conectadas",
+    "scopeExternalMcps": "Usar tus integraciones conectadas",
     "scopeFeedback": "Enviar comentarios sobre el producto a los responsables de stella",
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
     "scopeLawRead": "Leer legislación pública y jurisprudencia",
@@ -2387,7 +2387,7 @@
     "summaryChat": "conversaciones",
     "summaryContactsWrite": "contactos",
     "summaryDocumentsWrite": "documentos",
-    "summaryExternalMcps": "herramientas externas conectadas",
+    "summaryExternalMcps": "integraciones conectadas",
     "summaryKnowledgeWrite": "cláusulas y playbooks",
     "summaryLawRead": "legislación pública y jurisprudencia",
     "summaryLineChange": "<group>Crear y editar:</group> {items}",
@@ -2416,8 +2416,8 @@
     "attorneys": {
       "none": "No asignado",
       "originating": "Contacto principal",
-      "responsible": "Abogado responsable",
-      "title": "Abogados"
+      "responsible": "Persona responsable",
+      "title": "Responsables de la relación"
     },
     "billing": {
       "addBankAccount": "Añadir cuenta bancaria",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Rehacer (Ctrl+Y)",
     "rejectChange": "Rechazar cambio",
     "removeLink": "Eliminar enlace",
-    "renderErrorDescription": "Se produjo un error al renderizar este componente. Inténtalo de nuevo o contacta con soporte si el problema persiste.",
+    "renderErrorDescription": "No se pudo mostrar esta parte del documento. Recarga la página y, si vuelve a ocurrir, avísanos.",
     "saveCheckpointFailedDescription": "El DOCX se creó localmente, pero stella no pudo subir el punto de control. Mantén el editor abierto e intenta guardar de nuevo.",
     "saveCheckpointFailedTitle": "No se pudo subir el guardado",
     "saveEditorUnavailableDescription": "El editor aún no está listo. Espera a que el documento termine de cargarse y vuelve a intentar guardar.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Añadir y conectar",
       "addServer": "Añadir servidor",
-      "addServerCardTitle": "Añadir nuevo servidor MCP",
+      "addServerCardTitle": "Añadir nueva integración",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Sin autenticación",
@@ -4247,7 +4247,7 @@
         "title": "Plantillas"
       },
       "tools": {
-        "description": "Conecte stella con registros públicos y otras fuentes",
+        "description": "Habilidades, integraciones y herramientas siempre disponibles que la IA puede usar en el chat",
         "title": "Herramientas"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Ya existe una habilidad con este comando /",
       "commandHelp": "Escríbelo en el chat para ejecutar esta habilidad.",
-      "commandLabel": "Comando con barra (opcional)",
+      "commandLabel": "Comando del chat (opcional)",
       "commandPlaceholder": "p. ej. resumir",
       "errors": {
         "commandInvalid": "Usa solo letras minúsculas, dígitos, guiones y guiones bajos"
@@ -4428,7 +4428,7 @@
     "chat": "Chat",
     "contacts": "Contactos",
     "inbox": "Bandeja de entrada",
-    "knowledge": "Conocimiento",
+    "knowledge": "Inteligencia",
     "myTodos": "Mis tareas",
     "pinned": "Fijados",
     "recentMatters": "Asuntos recientes",
@@ -6385,7 +6385,7 @@
     "matterInfo": "Información del asunto",
     "mattersCount": "{count, plural, one {# asunto} other {# asuntos}}",
     "members": {
-      "addMember": "Añadir miembro",
+      "addMember": "Añadir al asunto",
       "addMemberDescription": "Añadir un miembro del equipo a este asunto",
       "alreadyMember": "El usuario ya es miembro",
       "alreadyOnMatter": "Ya está en este asunto",
@@ -6558,7 +6558,7 @@
       },
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
-      "evidence": "Prueba documental",
+      "evidence": "Justificación",
       "incorrectPassword": "Contraseña incorrecta. Inténtelo de nuevo.",
       "nextPage": "Página siguiente",
       "pageEditor": {

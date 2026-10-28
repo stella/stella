@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Pridať vlastné",
-    "addCustomMcp": "Pridať MCP server",
+    "addCustomMcp": "Pridať integráciu",
     "addCustomSkill": "Pridať zručnosť",
     "by": "Od {author}",
     "configuration": "Konfigurácia",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Autentifikácia",
     "empty": "Žiadne položky nezodpovedajú aktuálnemu filtru.",
     "filter": {
-      "mcps": "MCP servery",
+      "mcps": "Integrácie",
       "nativeTools": "Vstavané nástroje",
       "skills": "Zručnosti"
     },
@@ -1703,8 +1703,8 @@
     "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
-        "private": "Vaše AI zručnosti",
-        "team": "Tímové AI zručnosti"
+        "private": "Vaše zručnosti",
+        "team": "Tímové zručnosti"
       }
     },
     "sourceChips": {
@@ -2362,7 +2362,7 @@
     "scopeChat": "Čítať a spravovať vaše chaty a správy",
     "scopeContactsWrite": "Vytvárať, upravovať a odstraňovať kontakty v celej vašej organizácii",
     "scopeDocumentsWrite": "Vytvoriť, upraviť a vymazať vaše dokumenty",
-    "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
+    "scopeExternalMcps": "Použitie vašich pripojených integrácií",
     "scopeFeedback": "Odoslať spätnú väzbu k produktu správcom stelly",
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeLawRead": "Čítať verejné právne predpisy a judikatúru",
@@ -3234,7 +3234,7 @@
     "doubleClickFooter": "Dvojklikom pridáte pätu",
     "doubleClickHeader": "Dvojklikom pridáte hlavičku",
     "downloadCheckpoint": "Stiahnuť kontrolnú kópiu",
-    "editAuthRequired": "Pred úpravou dokumentu obnovte Stellu a znova sa prihláste.",
+    "editAuthRequired": "Pred úpravou dokumentu obnovte stellu a znova sa prihláste.",
     "editDownloadFailed": "Dokument sa nepodarilo stiahnuť na úpravy.",
     "editLink": "Upraviť odkaz",
     "editOpenFailed": "Dokument sa nepodarilo otvoriť na úpravy.",
@@ -3308,8 +3308,8 @@
     "redoShortcut": "Znovu (Ctrl+Y)",
     "rejectChange": "Odmietnuť zmenu",
     "removeLink": "Odstrániť odkaz",
-    "renderErrorDescription": "Pri vykresľovaní tejto komponenty došlo k chybe. Skúste to znova alebo kontaktujte podporu, ak problém pretrváva.",
-    "saveCheckpointFailedDescription": "DOCX bol vytvorený lokálne, ale Stelle sa nepodarilo nahrať kontrolný bod. Nechajte editor otvorený a skúste uložiť znova.",
+    "renderErrorDescription": "Túto časť dokumentu sa nepodarilo zobraziť. Načítajte stránku znova a ak sa to bude opakovať, dajte nám vedieť.",
+    "saveCheckpointFailedDescription": "DOCX bol vytvorený lokálne, ale stelle sa nepodarilo nahrať kontrolný bod. Nechajte editor otvorený a skúste uložiť znova.",
     "saveCheckpointFailedTitle": "Uloženie sa nepodarilo nahrať",
     "saveEditorUnavailableDescription": "Editor ešte nie je pripravený. Počkajte, kým sa dokument načíta, a skúste uložiť znova.",
     "saveEditorUnavailableTitle": "Editor nie je pripravený",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Pridať a pripojiť",
       "addServer": "Pridať server",
-      "addServerCardTitle": "Pridať nový MCP server",
+      "addServerCardTitle": "Pridať novú integráciu",
       "auth": {
         "bearer": "Bearer token",
         "none": "Bez prihlásenia",
@@ -4247,7 +4247,7 @@
         "title": "Vzory"
       },
       "tools": {
-        "description": "Pripojte stella k verejným registrom a ďalším zdrojom",
+        "description": "Zručnosti, integrácie a vždy dostupné nástroje, ktoré AI môže použiť v chate",
         "title": "Nástroje"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Zručnosť s týmto / príkazom už existuje",
       "commandHelp": "Napíšte tento príkaz do chatu a spustite zručnosť.",
-      "commandLabel": "Lomkový príkaz (voliteľné)",
+      "commandLabel": "Príkaz v chate (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "errors": {
         "commandInvalid": "Používajte iba malé písmená, číslice, spojovníky a podčiarkovníky"
@@ -4428,7 +4428,7 @@
     "chat": "Chat",
     "contacts": "Kontakty",
     "inbox": "Doručené",
-    "knowledge": "Znalosti",
+    "knowledge": "Analytika",
     "myTodos": "Moje úlohy",
     "pinned": "Pripnuté",
     "recentMatters": "Nedávne spisy",
@@ -6558,7 +6558,7 @@
       },
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily dokumentu",
-      "evidence": "Príloha",
+      "evidence": "Odôvodnenie",
       "incorrectPassword": "Nesprávne heslo. Skúste znova.",
       "nextPage": "Nasledujúca strana",
       "pageEditor": {

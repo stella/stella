@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Adicionar personalizado",
-    "addCustomMcp": "Adicionar servidor MCP",
+    "addCustomMcp": "Adicionar integração",
     "addCustomSkill": "Adicionar habilidade",
     "by": "Por {author}",
     "configuration": "Configuração",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Autenticação",
     "empty": "Nenhuma entrada corresponde ao filtro atual.",
     "filter": {
-      "mcps": "Servidores MCP",
+      "mcps": "Integrações",
       "nativeTools": "Ferramentas integradas",
       "skills": "Habilidades"
     },
@@ -1703,8 +1703,8 @@
     "signInToChatAbout": "Entre para conversar sobre",
     "skills": {
       "scope": {
-        "private": "Suas habilidades de IA",
-        "team": "Habilidades de IA da equipe"
+        "private": "Suas habilidades",
+        "team": "Habilidades da equipe"
       }
     },
     "sourceChips": {
@@ -2362,7 +2362,7 @@
     "scopeChat": "Ler e gerenciar seus chats e mensagens",
     "scopeContactsWrite": "Criar, editar e excluir contatos em toda a sua organização",
     "scopeDocumentsWrite": "Criar, editar e excluir seus documentos",
-    "scopeExternalMcps": "Usar suas ferramentas externas conectadas",
+    "scopeExternalMcps": "Usar suas integrações conectadas",
     "scopeFeedback": "Enviar feedback do produto para os mantenedores da stella",
     "scopeKnowledgeWrite": "Criar, editar e excluir suas cláusulas e executar playbooks",
     "scopeLawRead": "Ler legislação pública e jurisprudência",
@@ -2387,7 +2387,7 @@
     "summaryChat": "conversas",
     "summaryContactsWrite": "contatos",
     "summaryDocumentsWrite": "documentos",
-    "summaryExternalMcps": "ferramentas externas conectadas",
+    "summaryExternalMcps": "integrações conectadas",
     "summaryKnowledgeWrite": "cláusulas e playbooks",
     "summaryLawRead": "legislação pública e jurisprudência",
     "summaryLineChange": "<group>Criar e editar:</group> {items}",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Refazer (Ctrl+Y)",
     "rejectChange": "Rejeitar alteração",
     "removeLink": "Remover link",
-    "renderErrorDescription": "Ocorreu um erro ao renderizar este componente. Tente novamente ou entre em contato com o suporte se o problema persistir.",
+    "renderErrorDescription": "Não foi possível exibir esta parte do documento. Recarregue a página e, se isso continuar acontecendo, avise-nos.",
     "saveCheckpointFailedDescription": "O DOCX foi criado localmente, mas stella não conseguiu fazer upload do checkpoint. Mantenha o editor aberto e tente salvar novamente.",
     "saveCheckpointFailedTitle": "Não foi possível fazer upload do salvamento",
     "saveEditorUnavailableDescription": "O editor ainda não está pronto. Aguarde o documento terminar de carregar e tente salvar novamente.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Adicionar e conectar",
       "addServer": "Adicionar servidor",
-      "addServerCardTitle": "Adicionar novo servidor MCP",
+      "addServerCardTitle": "Adicionar nova integração",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Sem autenticação",
@@ -4247,7 +4247,7 @@
         "title": "Modelos"
       },
       "tools": {
-        "description": "Conecte stella a registros públicos e outras fontes",
+        "description": "Habilidades, integrações e ferramentas sempre disponíveis que a IA pode usar no chat",
         "title": "Ferramentas"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Já existe uma habilidade com este comando /",
       "commandHelp": "Digite no chat para executar esta habilidade.",
-      "commandLabel": "Comando com barra (opcional)",
+      "commandLabel": "Comando do chat (opcional)",
       "commandPlaceholder": "p. ex. resumir",
       "errors": {
         "commandInvalid": "Use apenas letras minúsculas, dígitos, hifens e sublinhados"
@@ -4428,7 +4428,7 @@
     "chat": "Chat",
     "contacts": "Contatos",
     "inbox": "Caixa de entrada",
-    "knowledge": "Conhecimento",
+    "knowledge": "Inteligência",
     "myTodos": "Minhas tarefas",
     "pinned": "Fixado",
     "recentMatters": "Casos recentes",

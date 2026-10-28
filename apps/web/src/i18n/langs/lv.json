@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",
-    "addCustomMcp": "Pievienot MCP serveri",
+    "addCustomMcp": "Pievienot integrāciju",
     "addCustomSkill": "Pievienot prasmi",
     "by": "Autors: {author}",
     "configuration": "Konfigurācija",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Autentifikācija",
     "empty": "Nav neviena ieraksta, kas atbilstu pašreizējam filtram.",
     "filter": {
-      "mcps": "MCP serveri",
+      "mcps": "Integrācijas",
       "nativeTools": "Iebūvētie rīki",
       "skills": "Prasmes"
     },
@@ -2362,7 +2362,7 @@
     "scopeChat": "Lasīt un pārvaldīt jūsu tērzēšanas un ziņas",
     "scopeContactsWrite": "Izveidot, rediģēt un dzēst kontaktpersonas visā jūsu organizācijā",
     "scopeDocumentsWrite": "Izveidot, rediģēt un dzēst jūsu dokumentus",
-    "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
+    "scopeExternalMcps": "Izmantot jūsu pievienotās integrācijas",
     "scopeFeedback": "Nosūtīt produkta atsauksmes stella uzturētājiem",
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",
     "scopeLawRead": "Lasīt publiski pieejamos tiesību aktus un judikatūru",
@@ -2387,7 +2387,7 @@
     "summaryChat": "sarunas",
     "summaryContactsWrite": "kontaktpersonas",
     "summaryDocumentsWrite": "dokumenti",
-    "summaryExternalMcps": "pievienotie ārējie rīki",
+    "summaryExternalMcps": "pievienotās integrācijas",
     "summaryKnowledgeWrite": "klauzulas un pārbaudes ceļveži",
     "summaryLawRead": "publiski pieejamos tiesību aktus un judikatūru",
     "summaryLineChange": "<group>Izveidot un rediģēt:</group> {items}",
@@ -2416,8 +2416,8 @@
     "attorneys": {
       "none": "Nav piešķirts",
       "originating": "Galvenā kontaktpersona",
-      "responsible": "Atbildīgais advokāts",
-      "title": "Advokāti"
+      "responsible": "Atbildīgā persona",
+      "title": "Par attiecībām atbildīgie"
     },
     "billing": {
       "addBankAccount": "Pievienot bankas kontu",
@@ -2840,14 +2840,14 @@
     "failedToChangeViewType": "Neizdevās mainīt skata veidu",
     "failedToCheckSlugAvailability": "Neizdevās pārbaudīt slug pieejamību",
     "failedToCreateContact": "Neizdevās izveidot klientu",
-    "failedToCreateEntity": "Neizdevās izveidot ierakstu",
+    "failedToCreateEntity": "Neizdevās izveidot vienumu",
     "failedToCreateOrganization": "Neizdevās izveidot organizāciju",
     "failedToCreateProperty": "Neizdevās izveidot rekvizītu",
     "failedToCreateView": "Neizdevās izveidot skatu",
     "failedToCreateWorkspace": "Neizdevās izveidot lietu",
     "failedToDeclineInvitation": "Neizdevās noraidīt uzaicinājumu",
     "failedToDeleteContact": "Neizdevās dzēst klientu",
-    "failedToDeleteEntities": "Neizdevās dzēst ierakstus",
+    "failedToDeleteEntities": "Neizdevās dzēst vienumus",
     "failedToDeleteProperty": "Neizdevās dzēst rekvizītu",
     "failedToDeleteTemplate": "Neizdevās izdzēst veidni",
     "failedToDeleteView": "Neizdevās dzēst skatu",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Atkārtot (Ctrl+Y)",
     "rejectChange": "Noraidīt izmaiņu",
     "removeLink": "Noņemt saiti",
-    "renderErrorDescription": "Renderējot šo komponentu, radās kļūda. Mēģiniet vēlreiz vai sazinieties ar atbalstu, ja problēma atkārtojas.",
+    "renderErrorDescription": "Neizdevās parādīt šo dokumenta daļu. Pārlādējiet lapu un, ja tas atkārtojas, dariet mums zināmu.",
     "saveCheckpointFailedDescription": "DOCX tika izveidots lokāli, taču stella nevarēja augšupielādēt kontrolpunktu. Atstājiet redaktoru atvērtu un mēģiniet saglabāt vēlreiz.",
     "saveCheckpointFailedTitle": "Neizdevās augšupielādēt saglabāto",
     "saveEditorUnavailableDescription": "Redaktors vēl nav gatavs. Pagaidiet, līdz dokuments ir ielādēts, un tad mēģiniet saglabāt vēlreiz.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Pievienot un savienot",
       "addServer": "Pievienot serveri",
-      "addServerCardTitle": "Pievienot jaunu MCP serveri",
+      "addServerCardTitle": "Pievienot jaunu integrāciju",
       "auth": {
         "bearer": "Bearer tokens",
         "none": "Bez autentifikācijas",
@@ -4247,7 +4247,7 @@
         "title": "Veidnes"
       },
       "tools": {
-        "description": "Savienojiet stella ar publiskiem reģistriem un citiem avotiem",
+        "description": "Prasmes, integrācijas un vienmēr pieejami rīki, ko AI var izmantot tērzēšanā",
         "title": "Rīki"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Prasme ar šo / komandu jau pastāv",
       "commandHelp": "Ierakstiet to tērzēšanā, lai palaistu šo prasmi.",
-      "commandLabel": "Slīpsvītras komanda (nav obligāta)",
+      "commandLabel": "Tērzēšanas komanda (nav obligāta)",
       "commandPlaceholder": "piem. apkopot",
       "errors": {
         "commandInvalid": "Izmantojiet tikai mazos burtus, ciparus, defises un pasvītras"
@@ -4428,7 +4428,7 @@
     "chat": "Tērzēšana",
     "contacts": "Kontakti",
     "inbox": "Iesūtne",
-    "knowledge": "Zināšanas",
+    "knowledge": "Analītika",
     "myTodos": "Mani uzdevumi",
     "pinned": "Piesprausts",
     "recentMatters": "Nesenās lietas",
@@ -5506,14 +5506,14 @@
     "dueDate": "Izpildes termiņš",
     "hardDeadline": "Saistošais termiņš",
     "hardDeadlineOverdue": "Saistošais termiņš nokavēts",
-    "linkEntity": "Saistīt ierakstu",
-    "linkedEntities": "Saistītie ieraksti",
+    "linkEntity": "Saistīt vienumu",
+    "linkedEntities": "Saistītie vienumi",
     "myTasksTitle": "Mani uzdevumi",
     "myWorkTitle": "Mans darbs",
     "newTask": "Jauns uzdevums",
     "noActivity": "Aktivitāšu vēl nav",
     "noAssignees": "Nav līdzstrādnieku",
-    "noLinks": "Nav saistīto ierakstu",
+    "noLinks": "Nav saistīto vienumu",
     "noSubtasks": "Nav apakšuzdevumu",
     "noTasksAssigned": "Jums nav piešķirtu uzdevumu",
     "noWorkInQueue": "Šajā rindā nav darba",
@@ -6155,7 +6155,7 @@
       "emptyFile": "Fails ir tukšs.",
       "includeReferenceNumber": "Iekļaut atsauces numuru",
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
-      "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
+      "maxEntitiesReached": "Sasniegts maksimālais vienumu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrBatchHelp": "Rindā esošie dokumenti tiek apstrādāti nākamajā OCR pakotnē.",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
@@ -6385,7 +6385,7 @@
     "matterInfo": "Lietas informācija",
     "mattersCount": "{count, plural, zero {# lietu} one {# lieta} other {# lietas}}",
     "members": {
-      "addMember": "Pievienot dalībnieku",
+      "addMember": "Pievienot lietai",
       "addMemberDescription": "Pievienot komandas dalībnieku šai lietai",
       "alreadyMember": "Lietotājs jau ir dalībnieks",
       "alreadyOnMatter": "Jau ir šajā lietā",
@@ -6558,7 +6558,7 @@
       },
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",
-      "evidence": "Pierādījums",
+      "evidence": "Pamatojums",
       "incorrectPassword": "Nepareiza parole. Lūdzu, mēģiniet vēlreiz.",
       "nextPage": "Nākamā lappuse",
       "pageEditor": {

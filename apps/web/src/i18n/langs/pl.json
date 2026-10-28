@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
-    "addCustomMcp": "Dodaj serwer MCP",
+    "addCustomMcp": "Dodaj integrację",
     "addCustomSkill": "Dodaj umiejętność",
     "by": "Autor: {author}",
     "configuration": "Konfiguracja",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Uwierzytelnianie",
     "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
     "filter": {
-      "mcps": "Serwery MCP",
+      "mcps": "Integracje",
       "nativeTools": "Wbudowane narzędzia",
       "skills": "Umiejętności"
     },
@@ -1703,8 +1703,8 @@
     "signInToChatAbout": "Zaloguj się, aby czatować o",
     "skills": {
       "scope": {
-        "private": "Twoje umiejętności AI",
-        "team": "Umiejętności AI zespołu"
+        "private": "Twoje umiejętności",
+        "team": "Umiejętności zespołu"
       }
     },
     "sourceChips": {
@@ -2362,7 +2362,7 @@
     "scopeChat": "Odczyt i zarządzanie Twoimi czatami i wiadomościami",
     "scopeContactsWrite": "Tworzenie, edytowanie i usuwanie kontaktów w całej organizacji",
     "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
-    "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
+    "scopeExternalMcps": "Korzystanie z połączonych integracji",
     "scopeFeedback": "Wysyłanie opinii o produkcie do opiekunów stelli",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeLawRead": "Czytać publiczne przepisy prawa i orzecznictwo",
@@ -2387,7 +2387,7 @@
     "summaryChat": "czaty",
     "summaryContactsWrite": "kontakty",
     "summaryDocumentsWrite": "dokumenty",
-    "summaryExternalMcps": "połączone narzędzia zewnętrzne",
+    "summaryExternalMcps": "połączone integracje",
     "summaryKnowledgeWrite": "klauzule i playbooki",
     "summaryLawRead": "publiczne przepisy prawa i orzecznictwo",
     "summaryLineChange": "<group>Tworzenie i edycja:</group> {items}",
@@ -2416,8 +2416,8 @@
     "attorneys": {
       "none": "Nieprzypisany",
       "originating": "Główny kontakt",
-      "responsible": "Prawnik prowadzący",
-      "title": "Prawnicy klienta"
+      "responsible": "Osoba odpowiedzialna",
+      "title": "Opiekunowie klienta"
     },
     "billing": {
       "addBankAccount": "Dodaj konto bankowe",
@@ -3234,7 +3234,7 @@
     "doubleClickFooter": "Kliknij dwukrotnie, aby dodać stopkę",
     "doubleClickHeader": "Kliknij dwukrotnie, aby dodać nagłówek",
     "downloadCheckpoint": "Pobierz punkt kontrolny",
-    "editAuthRequired": "Odśwież Stellę i zaloguj się ponownie przed edycją tego dokumentu.",
+    "editAuthRequired": "Odśwież stellę i zaloguj się ponownie przed edycją tego dokumentu.",
     "editDownloadFailed": "Nie udało się pobrać dokumentu do edycji.",
     "editLink": "Edytuj link",
     "editOpenFailed": "Nie udało się otworzyć dokumentu do edycji.",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Ponów (Ctrl+Y)",
     "rejectChange": "Odrzuć zmianę",
     "removeLink": "Usuń link",
-    "renderErrorDescription": "Wystąpił błąd podczas renderowania tego komponentu. Spróbuj ponownie albo skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał.",
+    "renderErrorDescription": "Nie udało się wyświetlić tej części dokumentu. Odśwież stronę, a jeśli problem będzie się powtarzał, daj nam znać.",
     "saveCheckpointFailedDescription": "Plik DOCX został utworzony lokalnie, ale stella nie mogła przesłać punktu kontrolnego. Pozostaw edytor otwarty i spróbuj zapisać ponownie.",
     "saveCheckpointFailedTitle": "Nie udało się przesłać zapisu",
     "saveEditorUnavailableDescription": "Edytor nie jest jeszcze gotowy. Poczekaj, aż dokument zakończy ładowanie, a następnie spróbuj zapisać ponownie.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",
-      "addServerCardTitle": "Dodaj nowy serwer MCP",
+      "addServerCardTitle": "Dodaj nową integrację",
       "auth": {
         "bearer": "Token Bearer",
         "none": "Bez uwierzytelniania",
@@ -4247,7 +4247,7 @@
         "title": "Szablony"
       },
       "tools": {
-        "description": "Połącz stella z rejestrami publicznymi i innymi źródłami",
+        "description": "Umiejętności, integracje i zawsze dostępne narzędzia, z których AI może korzystać na czacie",
         "title": "Narzędzia"
       },
       "workflows": {
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
       "commandHelp": "Wpisz to na czacie, aby uruchomić tę umiejętność.",
-      "commandLabel": "Polecenie ukośnikowe (opcjonalne)",
+      "commandLabel": "Polecenie czatu (opcjonalne)",
       "commandPlaceholder": "np. podsumuj",
       "errors": {
         "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń"
@@ -4428,7 +4428,7 @@
     "chat": "Czat",
     "contacts": "Kontakty",
     "inbox": "Skrzynka",
-    "knowledge": "Wiedza",
+    "knowledge": "Analityka",
     "myTodos": "Moje zadania",
     "pinned": "Przypięte",
     "recentMatters": "Ostatnie sprawy",
@@ -6385,7 +6385,7 @@
     "matterInfo": "Informacje o sprawie",
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
     "members": {
-      "addMember": "Dodaj członka",
+      "addMember": "Dodaj do sprawy",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
       "alreadyOnMatter": "Już należy do tej sprawy",

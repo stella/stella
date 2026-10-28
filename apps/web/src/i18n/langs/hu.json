@@ -1255,7 +1255,7 @@
   },
   "catalogue": {
     "addCustom": "Egyéni hozzáadása",
-    "addCustomMcp": "MCP-szerver hozzáadása",
+    "addCustomMcp": "Integráció hozzáadása",
     "addCustomSkill": "Készség hozzáadása",
     "by": "Készítette: {author}",
     "configuration": "Konfiguráció",
@@ -1266,7 +1266,7 @@
     "detailAuthMethod": "Hitelesítés",
     "empty": "Nincs az aktuális szűrőnek megfelelő bejegyzés.",
     "filter": {
-      "mcps": "MCP-szerverek",
+      "mcps": "Integrációk",
       "nativeTools": "Beépített eszközök",
       "skills": "Készségek"
     },
@@ -2362,7 +2362,7 @@
     "scopeChat": "Csevegések és üzenetek olvasása és kezelése",
     "scopeContactsWrite": "Kapcsolatok létrehozása, szerkesztése és törlése a teljes szervezetben",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
-    "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
+    "scopeExternalMcps": "A csatlakoztatott integrációk használata",
     "scopeFeedback": "Termékvisszajelzés küldése a stella karbantartóinak",
     "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",
     "scopeLawRead": "Nyilvános jogszabályok és ítélkezési gyakorlat olvasása",
@@ -2387,7 +2387,7 @@
     "summaryChat": "csevegések",
     "summaryContactsWrite": "kapcsolatok",
     "summaryDocumentsWrite": "dokumentumok",
-    "summaryExternalMcps": "csatlakoztatott külső eszközök",
+    "summaryExternalMcps": "csatlakoztatott integrációk",
     "summaryKnowledgeWrite": "záradékok és playbookok",
     "summaryLawRead": "nyilvános jogszabályok és ítélkezési gyakorlat",
     "summaryLineChange": "<group>Létrehozás és szerkesztés:</group> {items}",
@@ -2416,8 +2416,8 @@
     "attorneys": {
       "none": "Nem hozzárendelt",
       "originating": "Elsődleges kapcsolattartó",
-      "responsible": "Felelős ügyvéd",
-      "title": "Ügyvédek"
+      "responsible": "Felelős személy",
+      "title": "Kapcsolatfelelősök"
     },
     "billing": {
       "addBankAccount": "Bankszámla hozzáadása",
@@ -3234,7 +3234,7 @@
     "doubleClickFooter": "Kattintson duplán élőláb hozzáadásához",
     "doubleClickHeader": "Kattintson duplán élőfej hozzáadásához",
     "downloadCheckpoint": "Ellenőrzőpont letöltése",
-    "editAuthRequired": "Frissítse a Stellát, és a dokumentum szerkesztése előtt jelentkezzen be újra.",
+    "editAuthRequired": "Frissítse a stellát, és a dokumentum szerkesztése előtt jelentkezzen be újra.",
     "editDownloadFailed": "Nem sikerült letölteni a dokumentumot szerkesztésre.",
     "editLink": "Hivatkozás szerkesztése",
     "editOpenFailed": "Nem sikerült megnyitni a dokumentumot szerkesztésre.",
@@ -3308,7 +3308,7 @@
     "redoShortcut": "Mégis (Ctrl+Y)",
     "rejectChange": "Módosítás elutasítása",
     "removeLink": "Hivatkozás eltávolítása",
-    "renderErrorDescription": "Hiba történt az összetevő megjelenítése közben. Próbálja újra, vagy forduljon az ügyfélszolgálathoz, ha a probléma továbbra is fennáll.",
+    "renderErrorDescription": "Nem sikerült megjeleníteni a dokumentum ezen részét. Töltse be újra az oldalt, és ha a hiba ismét előfordul, jelezze nekünk.",
     "saveCheckpointFailedDescription": "A DOCX helyben létrejött, de a stella nem tudta feltölteni a mentési pontot. Hagyja nyitva a szerkesztőt, és próbálja újra a mentést.",
     "saveCheckpointFailedTitle": "A mentés feltöltése sikertelen",
     "saveEditorUnavailableDescription": "A szerkesztő még nem áll készen. Várja meg, amíg a dokumentum betöltődik, majd próbálja újra a mentést.",
@@ -3984,7 +3984,7 @@
     "mcp": {
       "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",
-      "addServerCardTitle": "Új MCP-szerver hozzáadása",
+      "addServerCardTitle": "Új integráció hozzáadása",
       "auth": {
         "bearer": "Bearer-token",
         "none": "Nincs hitelesítés",
@@ -4281,7 +4281,7 @@
       },
       "commandConflict": "Már létezik készség ezzel a / paranccsal",
       "commandHelp": "A készség futtatásához írja be a parancsot a csevegésbe.",
-      "commandLabel": "Perjeles parancs (nem kötelező)",
+      "commandLabel": "Csevegési parancs (nem kötelező)",
       "commandPlaceholder": "pl. összefoglalás",
       "errors": {
         "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon"
@@ -4428,7 +4428,7 @@
     "chat": "Csevegés",
     "contacts": "Kapcsolatok",
     "inbox": "Beérkezett",
-    "knowledge": "Tudásbázis",
+    "knowledge": "Analitika",
     "myTodos": "Feladataim",
     "pinned": "Rögzített",
     "recentMatters": "Legutóbbi ügyek",
@@ -5520,7 +5520,7 @@
     "notFound": "A feladat nem található",
     "openWorkflowRun": "Munkafolyamat futtatásának megnyitása",
     "overdue": "Lejárt",
-    "owner": "Felelős",
+    "owner": "Kezeli",
     "priority": "Prioritás",
     "priorityValues": {
       "high": "Magas",
@@ -6385,7 +6385,7 @@
     "matterInfo": "Ügy adatai",
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
     "members": {
-      "addMember": "Tag hozzáadása",
+      "addMember": "Hozzáadás az ügyhöz",
       "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
       "alreadyMember": "A felhasználó már tag",
       "alreadyOnMatter": "Már tagja ennek az ügynek",
@@ -6558,7 +6558,7 @@
       },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
-      "evidence": "Bizonyíték",
+      "evidence": "Indoklás",
       "incorrectPassword": "Hibás jelszó. Kérjük, próbálja újra.",
       "nextPage": "Következő oldal",
       "pageEditor": {
