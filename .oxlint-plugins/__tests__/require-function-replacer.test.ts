@@ -50,3 +50,12 @@ test("leaves spread calls and nonstring HTMLRewriter options alone", async () =>
     ),
   ).toEqual([]);
 });
+
+test("literal replacement vectors stay author-visible while dynamic elements are rejected", async () => {
+  expect(
+    await lintSingleRule(
+      "require-function-replacer",
+      'matcher.replaceAll(text, ["<match>", "$&"]);\nmatcher.replaceAll(text, [dynamic]);\nmatcher.replaceAll(text, ["literal", ...values]);\nmatcher.replaceAll(text, [compute()]);\nmatcher.replaceAll(text, [, "literal"]);',
+    ),
+  ).toEqual([2, 3, 4, 5]);
+});
