@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -121,6 +122,34 @@ test("the restricted review account is configured with both keys or neither", ()
       );
     }
   }
+});
+
+test("Sign in with Apple boots only fully configured, with a readable key", () => {
+  const apple = {
+    APPLE_AUTH_CLIENT_ID: "app.example.web",
+    APPLE_AUTH_TEAM_ID: "TEAM123456",
+    APPLE_AUTH_KEY_ID: "KEY1234567",
+    APPLE_AUTH_PRIVATE_KEY: generateKeyPairSync("ec", {
+      namedCurve: "prime256v1",
+    })
+      .privateKey.export({ type: "pkcs8", format: "pem" })
+      .toString(),
+  };
+  expect(envApiInvariantViolation({ ...environment, ...apple })).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      ...apple,
+      APPLE_AUTH_PRIVATE_KEY: undefined,
+    }),
+  ).toContain("must be configured together");
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      ...apple,
+      APPLE_AUTH_PRIVATE_KEY: "not a key",
+    }),
+  ).toContain("APPLE_AUTH_PRIVATE_KEY must be the PEM text");
 });
 
 test("managed checks require an explicit supported provider and bounded configuration", () => {
