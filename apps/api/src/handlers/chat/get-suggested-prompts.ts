@@ -98,7 +98,9 @@ export const latestAssistantTurnAwaitsUser = (
       return true;
     }
     return (
-      (part.name === "ask-user" || part.name === "request_secret") &&
+      (part.name === "ask-user" ||
+        part.name === "request_secret" ||
+        part.name === "connect_connector") &&
       ASK_USER_STATE_AWAITS_USER[part.state]
     );
   });

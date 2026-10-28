@@ -29,6 +29,7 @@ import {
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
+  isUserInputChatToolName,
   projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
@@ -44,6 +45,12 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+test("inherited object keys are not user-input tool names", () => {
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    expect(isUserInputChatToolName(name)).toBe(false);
+  }
+});
 
 describe("playbook save consumption", () => {
   test("a reverse completion refreshes caches without following the older call", () => {

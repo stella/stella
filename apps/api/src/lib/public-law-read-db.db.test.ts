@@ -233,7 +233,7 @@ test("a caught select cancellation is logged", async () => {
     });
     expect(getPgErrorCode(result)).toBe("57014");
     const timeout = runWithPublicReadStatementTimeout(
-      PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse,
+      { budgetMs: PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse },
       () => publicReadTimeoutError(result),
     );
     expect(timeout).toMatchObject({ status: 503, code: "PUBLIC_READ_TIMEOUT" });

@@ -1,5 +1,12 @@
 # @stll/business-registries
 
+## 0.13.3
+
+### Patch Changes
+
+- Updated dependencies [[`0ecb2de`](https://github.com/stella/stella/commit/0ecb2de044bc19abd46d44ac933d0f3c1cd724ef), [`15e7031`](https://github.com/stella/stella/commit/15e7031924012f3998e399392d1add7eb603583d)]:
+  - @stll/text-normalize@0.5.0
+
 ## 0.13.2
 
 ### Patch Changes

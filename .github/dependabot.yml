@@ -160,9 +160,14 @@ updates:
       default-days: 5
     open-pull-requests-limit: 10
     groups:
+      # Tauri crates release with the npm @tauri-apps packages, so they share
+      # the Bun entry's tauri group shape instead of riding minor-and-patch.
       minor-and-patch:
         patterns:
           - "*"
+        exclude-patterns:
+          - "tauri"
+          - "tauri-*"
         update-types:
           - "minor"
           - "patch"
@@ -172,6 +177,8 @@ updates:
           - "tauri-*"
         update-types:
           - "major"
+          - "minor"
+          - "patch"
       async-runtime:
         patterns:
           - "tokio"
