@@ -23,7 +23,16 @@
       "yesterday": "Hier",
       "week": "7 derniers jours",
       "earlier": "Plus ancien"
-    }
+    },
+    "newChat": "Nouvelle conversation",
+    "composerPlaceholder": "Demander à stella",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "sendFailed": "Votre message n’a pas pu être envoyé. Réessayez.",
+    "answerWorking": "En cours…",
+    "answerStopped": "Arrêté.",
+    "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
+    "answerFailed": "La réponse n’a pas pu être terminée."
   },
   "tasks": {
     "description": "Voyez ce qui demande votre attention sans ouvrir tout l’espace de travail.",
