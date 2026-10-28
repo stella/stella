@@ -28,9 +28,7 @@ import {
 const { privateKey, publicKey } = generateKeyPairSync("ec", {
   namedCurve: "prime256v1",
 });
-const privateKeyPem = privateKey
-  .export({ type: "pkcs8", format: "pem" })
-  .toString();
+const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" });
 const appleEnv = {
   APPLE_AUTH_CLIENT_ID: "app.example.web",
   APPLE_AUTH_TEAM_ID: "TEAM123456",
@@ -82,15 +80,17 @@ describe("Sign in with Apple configuration", () => {
     ],
     [
       "a P-384 key",
-      generateKeyPairSync("ec", { namedCurve: "secp384r1" })
-        .privateKey.export({ type: "pkcs8", format: "pem" })
-        .toString(),
+      generateKeyPairSync("ec", { namedCurve: "secp384r1" }).privateKey.export({
+        type: "pkcs8",
+        format: "pem",
+      }),
     ],
     [
       "an RSA key",
-      generateKeyPairSync("rsa", { modulusLength: 2048 })
-        .privateKey.export({ type: "pkcs8", format: "pem" })
-        .toString(),
+      generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({
+        type: "pkcs8",
+        format: "pem",
+      }),
     ],
   ])("refuses a private key that is %s", (_label, pem) => {
     const resolved = resolveAppleSignIn({
@@ -197,7 +197,7 @@ const createAppleFixture = async () => {
       async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
         const url = input instanceof Request ? input.url : String(input);
         expect(url).toBe("https://appleid.apple.com/auth/token");
-        const body = new URLSearchParams(String(init?.body));
+        const body = new URLSearchParams(await new Response(init?.body).text());
         clientSecrets.push(body.get("client_secret") ?? "");
         return Response.json({
           access_token: "apple-access-token",

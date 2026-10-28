@@ -131,9 +131,7 @@ test("Sign in with Apple boots only fully configured, with a readable key", () =
     APPLE_AUTH_KEY_ID: "KEY1234567",
     APPLE_AUTH_PRIVATE_KEY: generateKeyPairSync("ec", {
       namedCurve: "prime256v1",
-    })
-      .privateKey.export({ type: "pkcs8", format: "pem" })
-      .toString(),
+    }).privateKey.export({ type: "pkcs8", format: "pem" }),
   };
   expect(envApiInvariantViolation({ ...environment, ...apple })).toBeNull();
   expect(
