@@ -239,6 +239,12 @@ const FILTER_ACCESS = {
     query: { country: "CZE", language: "en" },
     indexCond: /\(language\)::text = 'en'::text/u,
   },
+  readingLanguages: {
+    type: "walk-filter",
+    query: { country: "CZE", readingLanguages: "en,cs,fr" },
+    reason:
+      "an order among one decision's versions, read in the per-row version check, not a filter",
+  },
   sourceId: {
     type: "walk-filter",
     query: { country: "CZE", sourceId },
