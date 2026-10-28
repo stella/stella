@@ -356,7 +356,7 @@ describe("harness sidecar over stdio", () => {
     expect(chunks).toContainEqual(
       expect.objectContaining({
         type: "TOOL_CALL_START",
-        toolName: "search_case_law",
+        toolCallName: "search_case_law",
       }),
     );
     // Nothing after the run's last message.
