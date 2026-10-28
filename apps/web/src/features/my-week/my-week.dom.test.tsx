@@ -12,6 +12,8 @@ import { toSafeId } from "@/lib/safe-id";
 import type { MyTimeSuggestionRange as MySuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { TIME_TRACKING_ENTRIES_SELECTOR } from "../../../e2e/marketing/capture-readiness";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/time" });
 
 const { act, useState } = await import("react");
@@ -471,6 +473,13 @@ describe("my week", () => {
     mount();
 
     expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+    const capturedEntries = document.querySelectorAll(
+      TIME_TRACKING_ENTRIES_SELECTOR,
+    );
+    expect(capturedEntries).toHaveLength(1);
+    expect(capturedEntries.item(0)?.textContent).toContain(
+      "Review lease schedule",
+    );
     const nextMonday = Temporal.PlainDate.from(MONDAY)
       .add({ weeks: 1 })
       .toString();
@@ -488,6 +497,9 @@ describe("my week", () => {
       await screen.findByText(messages.timesheets.week.noActivity),
     ).toBeTruthy();
     expect(screen.queryByText("Review lease schedule") === null).toBe(true);
+    expect(
+      document.querySelectorAll(TIME_TRACKING_ENTRIES_SELECTOR),
+    ).toHaveLength(0);
     const ranges = calls
       .filter(({ method }) => method === "GET")
       .map(({ path, search }) => ({
