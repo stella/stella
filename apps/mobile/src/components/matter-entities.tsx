@@ -181,7 +181,7 @@ const LoadedEntities = ({
           />
         )
       }
-      ListFooterComponent={footer}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}

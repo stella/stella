@@ -335,6 +335,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/style-sets/:styleSetId/download": "crud",
   "GET /v1/style-sets/:styleSetId/editor": "crud",
   "GET /v1/style-sets/editor/stella": "crud",
+  "GET /v1/tasks": "crud",
   "GET /v1/tasks/:workspaceId/:taskId": "crud",
   "GET /v1/tasks/:workspaceId/:taskId/links": "crud",
   "GET /v1/template-categories": "crud",
