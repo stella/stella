@@ -696,7 +696,8 @@
       "@stll/redis-config",
       "@stll/concurrency",
       "@stll/fetch",
-      "@stll/docx-utils"
+      "@stll/docx-utils",
+      "@stll/locales"
     ],
     "Test projection-totality classification": ["@stll/api", "scripts/**"],
     "Test aggregate inventories": [

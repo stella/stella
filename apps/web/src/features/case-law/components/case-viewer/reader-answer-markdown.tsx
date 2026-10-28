@@ -15,7 +15,14 @@ import { assistantMessageFallbackText } from "@/components/chat/chat-thread-mess
 const citationMarker = ({ decisionId, paragraphId }: ReaderAnswerCitation) =>
   `[[${decisionId}#${paragraphId}]]`;
 
-const SKIP_TAGS = new Set(["code", "pre", "a", "button", "script", "style"]);
+const SKIP_TAGS: readonly string[] = [
+  "code",
+  "pre",
+  "a",
+  "button",
+  "script",
+  "style",
+];
 
 const citationElement = (index: number): Element => ({
   type: "element",
@@ -34,7 +41,7 @@ const rehypeReaderAnswerCitations =
     const replaceText = (value: string): ElementContent[] => {
       const result: ElementContent[] = [];
       let cursor = 0;
-      for (const match of value.matchAll(/\[\[[^\]\n]+\]\]/gu)) {
+      for (const match of value.matchAll(/\[\[[^[\]\n]+\]\]/gu)) {
         const index = byMarker.get(match[0]);
         if (index === undefined) {
           continue;
@@ -55,7 +62,7 @@ const rehypeReaderAnswerCitations =
       return result;
     };
     const walk = (element: Element): void => {
-      if (SKIP_TAGS.has(element.tagName)) {
+      if (SKIP_TAGS.includes(element.tagName)) {
         return;
       }
       element.children = element.children.flatMap((child) => {
@@ -106,7 +113,7 @@ const hidePendingReaderMarkers = (value: string): string =>
 
 const rehypePendingReaderCitations = () => (tree: Root) => {
   const walk = (element: Element): void => {
-    if (element.tagName !== "a" && SKIP_TAGS.has(element.tagName)) {
+    if (element.tagName !== "a" && SKIP_TAGS.includes(element.tagName)) {
       return;
     }
     for (const [index, child] of element.children.entries()) {

@@ -30,7 +30,7 @@ export const ANALYSIS_KEYED_FAILURE_MESSAGE = {
   TranslationKey
 >;
 
-export const ANALYSIS_UNAVAILABLE_MESSAGE = {
+const ANALYSIS_UNAVAILABLE_MESSAGE = {
   decision_not_found: "caseLaw.analysis.errors.decisionNotFound",
   document_unparseable: "caseLaw.analysis.errors.documentUnparseable",
   language_unsupported: "caseLaw.analysis.errors.languageUnsupported",
