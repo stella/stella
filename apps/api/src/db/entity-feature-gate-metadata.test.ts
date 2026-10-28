@@ -527,7 +527,7 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     );
   };
 
-  expect(descriptors).toHaveLength(47);
+  expect(descriptors).toHaveLength(actual.length);
   expect(schemaPolicies).toHaveLength(descriptors.length);
   expect(schemaPolicies.every((policy) => targetsGateRole(policy.to))).toBe(
     true,
@@ -553,12 +553,7 @@ test("the migration grants maintenance policies only to the dedicated gate role"
   );
   // A later CREATE OR REPLACE keeps a routine's privileges, so the revokes
   // where the routines were first created still hold.
-  const created = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const created = effective.revokes;
   for (const signature of [
     "entity_feature_gate_value(text, jsonb)",
     "entity_feature_gate_write()",
@@ -566,19 +561,14 @@ test("the migration grants maintenance policies only to the dedicated gate role"
     "entity_feature_gate_repair_missing()",
     "entity_feature_gate_backfill(text, text, integer)",
   ]) {
-    expect(created).toContain(
-      `REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC;`,
-    );
+    expect(created).toContain(signature);
   }
 });
 
 test("migration maintenance grants match each descriptor's read and write columns", async () => {
-  const migration = await Bun.file(
-    new URL(
-      "../../drizzle/20261009112500_entity_feature_row_gates/migration.sql",
-      import.meta.url,
-    ),
-  ).text();
+  const migration = [
+    ...(await readEffectiveEntityFeatureGateDefinitions()).grants.values(),
+  ].join("\n");
   const tables = Object.values(schema).filter((table) => is(table, PgTable));
   const descriptors = entityFeatureGateMetadata(tables);
   const grants = [

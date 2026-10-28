@@ -8,6 +8,7 @@ import {
 } from "../src/db/entity-feature-gate-metadata";
 import { readEffectiveEntityFeatureGateDefinitions } from "../src/db/entity-feature-gate-migrations";
 import * as schema from "../src/db/schema";
+import { entityFeatureGateTableSql } from "./entity-feature-gate-ddl";
 
 const tables = Object.values(schema).filter((table) => is(table, PgTable));
 const descriptors = entityFeatureGateMetadata(tables);
@@ -21,6 +22,9 @@ const definitions = [
 ] as const;
 const changed = definitions.flatMap(([name, sql]) =>
   effective.functions.get(name) === sql ? [] : [sql],
+);
+changed.push(
+  ...(await entityFeatureGateTableSql(tables, descriptors, effective)),
 );
 
 if (changed.length > 0) {

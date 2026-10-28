@@ -7,6 +7,8 @@ export type EffectiveEntityFeatureGateDefinitions = {
   policies: ReadonlyMap<string, string>;
   triggers: ReadonlyMap<string, string>;
   indexes: ReadonlyMap<string, string>;
+  grants: ReadonlyMap<string, string>;
+  revokes: ReadonlySet<string>;
 };
 
 const statementKey = (table: string, name: string) => `${table}.${name}`;
@@ -19,18 +21,20 @@ export const effectiveEntityFeatureGateDefinitions = (
   const policies = new Map<string, string>();
   const triggers = new Map<string, string>();
   const indexes = new Map<string, string>();
+  const grants = new Map<string, string>();
+  const revokes = new Set<string>();
 
   for (const migration of migrations) {
     for (const match of migration.matchAll(
       /CREATE OR REPLACE FUNCTION public\.(entity_feature_gate_[a-z_]+)\([^)]*\)[\s\S]*?AS (\$[a-z_]*\$)[\s\S]*?\2;/gu,
     )) {
-      functions.set(match[1] ?? "", (match[0] ?? "").trim());
+      functions.set(match.at(1) ?? "", match[0].trim());
     }
     const policyEvents = [
       ...migration.matchAll(
         /(?<drop>DROP POLICY(?: IF EXISTS)? "?(?<dropName>workspace_entity_feature|entity_feature_gate_maintenance)"? ON (?:"?public"?\.)?"?(?<dropTable>[a-z0-9_]+)"?)|(?<create>CREATE POLICY "?(?<createName>workspace_entity_feature|entity_feature_gate_maintenance)"? ON (?:"?public"?\.)?"?(?<createTable>[a-z0-9_]+)"?[\s\S]*?;)/giu,
       ),
-    ].toSorted((left, right) => (left.index ?? 0) - (right.index ?? 0));
+    ].toSorted((left, right) => left.index - right.index);
     for (const event of policyEvents) {
       const groups = event.groups ?? {};
       if (groups["drop"] !== undefined) {
@@ -49,7 +53,7 @@ export const effectiveEntityFeatureGateDefinitions = (
     )) {
       triggers.set(
         statementKey(match[2] ?? "", match[1] ?? ""),
-        (match[0] ?? "").trim(),
+        match[0].trim(),
       );
     }
     for (const match of migration.matchAll(
@@ -57,11 +61,25 @@ export const effectiveEntityFeatureGateDefinitions = (
     )) {
       indexes.set(
         statementKey(match[2] ?? "", match[1] ?? ""),
-        (match[0] ?? "").trim(),
+        match[0].trim(),
       );
     }
+    for (const match of migration.matchAll(
+      /GRANT SELECT \([^)]+\), UPDATE \([^)]+\) ON public\."?([a-z0-9_]+)"? TO stella_entity_gate;/giu,
+    )) {
+      grants.set(match.at(1) ?? "", match[0].trim());
+    }
+    for (const match of migration.matchAll(
+      /REVOKE ALL ON FUNCTION ([^;]+) FROM PUBLIC;/giu,
+    )) {
+      for (const signature of (match[1] ?? "").matchAll(
+        /(?:public\.)?(entity_feature_gate_[a-z_]+\([^)]*\))/giu,
+      )) {
+        revokes.add(signature[1] ?? "");
+      }
+    }
   }
-  return { functions, policies, triggers, indexes };
+  return { functions, policies, triggers, indexes, grants, revokes };
 };
 
 export const readEffectiveEntityFeatureGateDefinitions = async (
