@@ -470,6 +470,7 @@ export const resolveAuditResourceNames = async ({
     if (ids.length === 0) {
       continue;
     }
+    // db-await-in-loop: one batched read per resource kind on the page, bounded by the fixed kind set
     resolved.set(kind, await resolver({ tx, ids, organizationId, userId }));
   }
   return resolved;
