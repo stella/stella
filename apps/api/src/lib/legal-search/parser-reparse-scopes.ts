@@ -125,11 +125,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Rebuild usable portal documents or archived registry originals and read all detail metadata; discovering an uncaptured original requires a normal re-crawl.",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
