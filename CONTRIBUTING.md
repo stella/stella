@@ -273,6 +273,14 @@ records that the change is internal — a rename behind the export map, a test,
 a comment — and produces no version bump. Anything a consumer of the package
 can observe needs a real bump.
 
+Published packages also commit `packages/<name>/api-report.json`. After changing
+an entrypoint, export, or signature, run `bun run update:package-api` and commit
+the updated reports. Check them with `bun run check:package-api -- --base origin/main`.
+Removing or renaming an export, or narrowing a signature, requires a major
+changeset for that package: published packages have consumers outside this
+repository. CI compares the reports with the target branch and rejects stale
+reports or breaking changes without that changeset.
+
 ## Pull Request Checklist
 
 - [ ] Code builds without errors or warnings

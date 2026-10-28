@@ -102,6 +102,8 @@
     "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
     "check:standalone-negated-shell": "bun scripts/check-standalone-negated-shell.ts",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
+    "check:package-api": "bun scripts/package-api-report.ts --check",
+    "update:package-api": "bun scripts/package-api-report.ts --write",
     "check:result-consumption": "bun run generate && bun packages/scripts/src/result-consumption.ts",
     "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",
     "check:failure-as-empty": "bun scripts/failure-as-empty-baseline.ts --check",

@@ -1,0 +1,556 @@
+{
+  "package": "@stll/template-conditions",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ARRAY_FILTER_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "BLOCK_DIRECTIVE_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "BlockDirectiveKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CONDITION_RESERVED_WORDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CompareNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CompareOp",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Condition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionTagOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DATE_FORMAT_EXAMPLE_ISO",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DATE_FORMAT_STYLES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DIRECTIVE_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DateFormatStyle",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DeterministicFieldConfig",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DirectiveKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FILTER_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldDateFormat",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FilterArgument",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FilterCall",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FilterName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ForOpenerOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GroupNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "InvalidMarker",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "LOOP_PROPERTIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "LoopProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MARKER_DEFECT_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MARKER_OUTPUT_BODY",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MARKER_STATEMENT_BODY",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MAX_CONDITION_DEPTH",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MAX_CONDITION_NESTING",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MarkerDefect",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerDefectKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerFieldConfig",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerFieldInputType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerFieldLookup",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerFieldSource",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerFieldValidation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerForm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerLiteral",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerMeta",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MarkerPrefix",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NUMERIC_FUNCTION_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "NamedCondition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NumericFunctionName",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Operand",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PredicateNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PredicateOp",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RowBlockMarker",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RowBlockPair",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RowScope",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ScannedMarker",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "UnwritableReason",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "arrayFiltersFromFieldConfig",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "assertNever",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "blockDirectiveLinePattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "classifyMarker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "classifyMarkerDefect",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "clauseSlotKey",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "clauseSlotPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionHasFormula",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionNodeSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "conditionSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "detectRowBlockPair",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "emptyCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "evaluateCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "evaluateNumericExpression",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "filtersFromFieldConfig",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatDate",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "hasBlockDirectivePattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "hasNumberingPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isArrayFilterName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isBlockDirectiveKind",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isClauseSlotName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isFieldPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isSafeFieldPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "legacyLoopAlias",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "legacyMarkerReplacement",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "loopPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "markerPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeMarkerInner",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "numPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "placeholderPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "qualifyLoopPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "qualifyRowScopedPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "qualifyRowScopedPlaceholder",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "refPattern",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "referencedConditionPaths",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "renderConditionTag",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "renderDeterministicFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "renderFilterChain",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "renderForOpener",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "renderValueMarker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "replaceOutputMarkers",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolvePath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "rowScopePaths",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "scanInvalidMarkers",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "scanMarkers",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "serializeCondition",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "substitutionKey",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "translateLegacyExpression",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "unwritableFilterValues",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "unwritableMarkerLiteral",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./path": {
+      "type": "module",
+      "file": "./src/path.d.ts",
+      "exports": [
+        {
+          "name": "isNonNullObject",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolvePath",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/compute.d.ts": "export declare const NUMERIC_FUNCTION_NAMES: readonly [\n    \"min\",\n    \"max\",\n    \"round\",\n    \"abs\",\n    \"floor\",\n    \"ceil\"\n];\nexport type NumericFunctionName = (typeof NUMERIC_FUNCTION_NAMES)[number];\nexport declare const evaluateNumericExpression: (expression: string, data: Record<string, unknown>) => number | undefined;\n",
+    "./src/condition-builder.d.ts": "import type { ConditionNode } from \"@stll/conditions\";\nexport declare const serializeCondition: (node: ConditionNode) => string;\n",
+    "./src/field-config.d.ts": "import type { FieldDateFormat } from \"./field-values.js\";\nimport type { FilterCall, FilterName } from \"./markers.js\";\nexport type MarkerFieldSource = {\n    kind: \"matter\";\n    field: string;\n} | {\n    kind: \"contact\";\n    field: string;\n} | {\n    kind: \"firm\";\n    field: string;\n} | {\n    kind: \"party\";\n    role: string;\n    field: string;\n} | {\n    kind: \"attorney\";\n    ref: string;\n    field: string;\n};\nexport type MarkerFieldValidation = {\n    required?: boolean | undefined;\n    pattern?: string | undefined;\n    min?: number | undefined;\n    max?: number | undefined;\n    minLength?: number | undefined;\n    maxLength?: number | undefined;\n    minItems?: number | undefined;\n    maxItems?: number | undefined;\n};\nexport type MarkerFieldLookup = {\n    registry: string;\n    formats: readonly {\n        key: string;\n        template: string;\n    }[];\n};\nexport type MarkerFieldInputType = \"text\" | \"number\" | \"boolean\" | \"date\" | \"select\";\nexport type MarkerFieldConfig = {\n    path: string;\n    label?: string | undefined;\n    hint?: string | undefined;\n    inputType?: MarkerFieldInputType | undefined;\n    options?: readonly string[] | undefined;\n    optionsFrom?: string | undefined;\n    validation?: MarkerFieldValidation | undefined;\n    required?: boolean | undefined;\n    aiPrompt?: string | undefined;\n    aiAdapt?: boolean | undefined;\n    aiSeesDocument?: boolean | undefined;\n    lookup?: MarkerFieldLookup | undefined;\n    source?: MarkerFieldSource | undefined;\n    formula?: string | undefined;\n    condition?: string | undefined;\n    dateFormat?: FieldDateFormat | undefined;\n};\nexport declare const ARRAY_FILTER_NAMES: readonly [\n    \"label\",\n    \"hint\",\n    \"required\",\n    \"min_items\",\n    \"max_items\"\n];\nexport declare const isArrayFilterName: (name: FilterName) => boolean;\nexport declare const filtersFromFieldConfig: (field: MarkerFieldConfig) => FilterCall[];\nexport declare const arrayFiltersFromFieldConfig: (field: MarkerFieldConfig) => FilterCall[];\n",
+    "./src/field-values.d.ts": "export declare const DATE_FORMAT_STYLES: readonly [\n    \"long\",\n    \"medium\",\n    \"short\",\n    \"iso\"\n];\nexport type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];\nexport declare const DATE_FORMAT_EXAMPLE_ISO = \"2028-06-13\";\nexport type FieldDateFormat = {\n    locale: string;\n    style: DateFormatStyle;\n};\nexport declare const formatDate: (value: string, dateFormat: FieldDateFormat) => string | null;\nexport type DeterministicFieldConfig = {\n    path: string;\n    inputType?: string | undefined;\n    formula?: string | undefined;\n    dateFormat?: FieldDateFormat | undefined;\n};\nexport declare const renderDeterministicFieldValue: (field: DeterministicFieldConfig, values: Record<string, unknown>) => string | null;\n",
+    "./src/index.d.ts": "import { type ConditionNode } from \"@stll/conditions\";\nimport { resolvePath } from \"./path.js\";\nexport { resolvePath };\nexport type NamedCondition = {\n    name: string;\n    expression: string;\n    node?: ConditionNode;\n    label?: string;\n};\nexport declare const MAX_CONDITION_DEPTH = 50;\nexport declare const evaluateCondition: (expression: string, data: Record<string, unknown>, namedConditions?: readonly NamedCondition[], _resolved?: ReadonlySet<string>, _depth?: number) => boolean;\nexport { CONDITION_RESERVED_WORDS, MAX_CONDITION_NESTING, parseCondition, } from \"./parse.js\";\nexport { referencedConditionPaths } from \"./referenced-paths.js\";\nexport { evaluateNumericExpression, NUMERIC_FUNCTION_NAMES, } from \"./compute.js\";\nexport type { NumericFunctionName } from \"./compute.js\";\nexport { DATE_FORMAT_EXAMPLE_ISO, DATE_FORMAT_STYLES, formatDate, renderDeterministicFieldValue, } from \"./field-values.js\";\nexport type { DateFormatStyle, DeterministicFieldConfig, FieldDateFormat, } from \"./field-values.js\";\nexport { serializeCondition } from \"./condition-builder.js\";\nexport { conditionHasFormula, conditionNodeSchema, conditionSchema, emptyCondition, } from \"@stll/conditions\";\nexport type { CompareNode, CompareOp, Condition, ConditionNode, GroupNode, Operand, PredicateNode, PredicateOp, } from \"@stll/conditions\";\nexport { assertNever, BLOCK_DIRECTIVE_KINDS, blockDirectiveLinePattern, classifyMarker, clauseSlotKey, classifyMarkerDefect, clauseSlotPattern, DIRECTIVE_KINDS, FILTER_NAMES, hasBlockDirectivePattern, hasNumberingPattern, isBlockDirectiveKind, isClauseSlotName, isFieldPath, isSafeFieldPath, legacyLoopAlias, legacyMarkerReplacement, LOOP_PROPERTIES, loopPattern, MARKER_DEFECT_KINDS, MARKER_OUTPUT_BODY, MARKER_STATEMENT_BODY, markerPattern, normalizeMarkerInner, numPattern, placeholderPattern, refPattern, replaceOutputMarkers, scanInvalidMarkers, scanMarkers, substitutionKey, translateLegacyExpression, } from \"./markers.js\";\nexport type { BlockDirectiveKind, DirectiveKind, FilterArgument, FilterCall, FilterName, InvalidMarker, LoopProperty, MarkerDefect, MarkerDefectKind, MarkerForm, MarkerLiteral, MarkerMeta, MarkerPrefix, ScannedMarker, } from \"./markers.js\";\nexport { qualifyLoopPath, qualifyRowScopedPath, qualifyRowScopedPlaceholder, rowScopePaths, } from \"./loop-scope.js\";\nexport type { RowScope } from \"./loop-scope.js\";\nexport { ARRAY_FILTER_NAMES, arrayFiltersFromFieldConfig, filtersFromFieldConfig, isArrayFilterName, } from \"./field-config.js\";\nexport type { MarkerFieldConfig, MarkerFieldInputType, MarkerFieldLookup, MarkerFieldSource, MarkerFieldValidation, } from \"./field-config.js\";\nexport { renderConditionTag, renderFilterChain, renderForOpener, renderValueMarker, unwritableFilterValues, unwritableMarkerLiteral, } from \"./render.js\";\nexport type { ConditionTagOptions, ForOpenerOptions, UnwritableReason, } from \"./render.js\";\nexport { detectRowBlockPair } from \"./row-blocks.js\";\nexport type { RowBlockMarker, RowBlockPair } from \"./row-blocks.js\";\n",
+    "./src/loop-scope.d.ts": "export type RowScope = {\n    alias: string;\n    declaredPath: string;\n    scopedPath: string;\n};\nexport declare const rowScopePaths: (rowScopes: readonly RowScope[]) => string[];\nexport declare const qualifyRowScopedPath: (path: string, rowPaths?: readonly string[]) => string;\nexport declare const qualifyRowScopedPlaceholder: (path: string, rowScopes: readonly RowScope[]) => string;\nexport declare const qualifyLoopPath: (declaredPath: string, rowScopes: readonly RowScope[]) => string;\n",
+    "./src/markers.d.ts": "export type MarkerLiteral = string | number | boolean;\nexport type FilterArgument = {\n    kind: \"positional\";\n    value: MarkerLiteral;\n} | {\n    kind: \"keyword\";\n    name: string;\n    value: MarkerLiteral;\n};\nexport type FilterCall = {\n    name: FilterName;\n    args: readonly FilterArgument[];\n};\nexport declare const LOOP_PROPERTIES: readonly [\n    \"index\",\n    \"index0\",\n    \"first\",\n    \"last\",\n    \"length\"\n];\nexport type LoopProperty = (typeof LOOP_PROPERTIES)[number];\nexport type MarkerMeta = {\n    kind: \"placeholder\";\n    expr: string;\n    filters: readonly FilterCall[];\n} | {\n    kind: \"clause\";\n    name: string;\n    version: string | undefined;\n} | {\n    kind: \"num\";\n    key: string;\n} | {\n    kind: \"ref\";\n    key: string;\n} | {\n    kind: \"loop\";\n    property: LoopProperty;\n} | {\n    kind: \"if\";\n    expr: string;\n    filters: readonly FilterCall[];\n} | {\n    kind: \"elif\";\n    expr: string;\n    filters: readonly FilterCall[];\n} | {\n    kind: \"else\";\n} | {\n    kind: \"endif\";\n} | {\n    kind: \"for\";\n    alias: string;\n    path: string;\n    filters: readonly FilterCall[];\n} | {\n    kind: \"endfor\";\n};\nexport type DirectiveKind = MarkerMeta[\"kind\"];\nexport declare const DIRECTIVE_KINDS: readonly [\n    \"placeholder\",\n    \"clause\",\n    \"num\",\n    \"ref\",\n    \"loop\",\n    \"if\",\n    \"elif\",\n    \"else\",\n    \"endif\",\n    \"for\",\n    \"endfor\"\n];\ndeclare const DIRECTIVE_PLACEMENT: {\n    readonly placeholder: \"inline\";\n    readonly clause: \"inline\";\n    readonly num: \"inline\";\n    readonly ref: \"inline\";\n    readonly loop: \"inline\";\n    readonly if: \"block\";\n    readonly elif: \"block\";\n    readonly else: \"block\";\n    readonly endif: \"block\";\n    readonly for: \"block\";\n    readonly endfor: \"block\";\n};\nexport type BlockDirectiveKind = {\n    [TKind in DirectiveKind]: (typeof DIRECTIVE_PLACEMENT)[TKind] extends \"block\" ? TKind : never;\n}[DirectiveKind];\nexport declare const BLOCK_DIRECTIVE_KINDS: readonly [\n    \"if\",\n    \"elif\",\n    \"else\",\n    \"endif\",\n    \"for\",\n    \"endfor\"\n];\nexport declare const isBlockDirectiveKind: (kind: unknown) => kind is BlockDirectiveKind;\nexport declare const FILTER_NAMES: readonly [\n    \"text\",\n    \"number\",\n    \"date\",\n    \"checkbox\",\n    \"select\",\n    \"options_from\",\n    \"label\",\n    \"hint\",\n    \"required\",\n    \"pattern\",\n    \"min\",\n    \"max\",\n    \"min_length\",\n    \"max_length\",\n    \"min_items\",\n    \"max_items\",\n    \"ai\",\n    \"lookup\",\n    \"matter\",\n    \"contact\",\n    \"party\",\n    \"attorney\",\n    \"firm\",\n    \"formula\",\n    \"condition\"\n];\nexport type FilterName = (typeof FILTER_NAMES)[number];\nexport declare const normalizeMarkerInner: (inner: string) => string;\nexport declare const MARKER_OUTPUT_BODY: string;\nexport declare const MARKER_STATEMENT_BODY: string;\nexport declare const markerPattern: () => RegExp;\nexport declare const placeholderPattern: () => RegExp;\nexport declare const clauseSlotPattern: () => RegExp;\nexport declare const numPattern: () => RegExp;\nexport declare const refPattern: () => RegExp;\nexport declare const loopPattern: () => RegExp;\nexport declare const hasNumberingPattern: () => RegExp;\nexport declare const hasBlockDirectivePattern: () => RegExp;\nexport declare const blockDirectiveLinePattern: () => RegExp;\nexport declare const isFieldPath: (value: string) => boolean;\nexport declare const isSafeFieldPath: (value: string) => boolean;\nexport declare const isClauseSlotName: (value: string) => boolean;\nexport type MarkerForm = \"output\" | \"statement\";\nexport type MarkerPrefix = \"none\" | \"paragraph\" | \"row\";\nexport declare const classifyMarker: (innerRaw: string, form?: MarkerForm) => MarkerMeta | null;\nexport type ScannedMarker = {\n    start: number;\n    end: number;\n    raw: string;\n    inner: string;\n    form: MarkerForm;\n    prefix: MarkerPrefix;\n    meta: MarkerMeta;\n};\nexport declare const scanMarkers: (text: string) => ScannedMarker[];\nexport declare const replaceOutputMarkers: (text: string, replace: (raw: string, inner: string) => string) => string;\nexport declare const substitutionKey: (meta: MarkerMeta) => string | null;\nexport declare const clauseSlotKey: (name: string, version?: string) => string;\nexport type InvalidMarker = {\n    start: number;\n    end: number;\n    raw: string;\n    inner: string;\n    form: MarkerForm;\n};\nexport declare const scanInvalidMarkers: (text: string) => InvalidMarker[];\nexport declare const legacyLoopAlias: (path: string) => string;\nexport declare const translateLegacyExpression: (expr: string) => string;\nexport declare const legacyMarkerReplacement: (innerRaw: string) => string | null;\nexport type MarkerDefectKind = \"legacy_marker\" | \"unsupported_tag\" | \"unknown_filter\" | \"python_expression\" | \"bracket_index\";\nexport declare const MARKER_DEFECT_KINDS: readonly [\n    \"legacy_marker\",\n    \"unsupported_tag\",\n    \"unknown_filter\",\n    \"python_expression\",\n    \"bracket_index\"\n];\nexport type MarkerDefect = {\n    kind: MarkerDefectKind;\n    construct: string;\n    replacement?: string;\n};\nexport declare const classifyMarkerDefect: (innerRaw: string, form?: MarkerForm) => MarkerDefect | null;\nexport declare const assertNever: (value: never) => never;\nexport {};\n",
+    "./src/parse.d.ts": "import type { ConditionNode } from \"@stll/conditions\";\nexport declare const MAX_CONDITION_NESTING = 256;\nexport declare const CONDITION_RESERVED_WORDS: readonly [\n    \"and\",\n    \"or\",\n    \"not\",\n    \"in\",\n    \"is\",\n    \"defined\",\n    \"true\",\n    \"false\"\n];\nexport declare const parseCondition: (expression: string) => ConditionNode | null;\n",
+    "./src/path.d.ts": "export declare const isNonNullObject: (v: unknown) => v is Record<string, unknown>;\nexport declare const resolvePath: (path: string, data: Record<string, unknown>) => unknown;\n",
+    "./src/referenced-paths.d.ts": "export declare const referencedConditionPaths: (expression: string) => string[] | null;\n",
+    "./src/render.d.ts": "import type { FilterCall, MarkerForm, MarkerLiteral, MarkerPrefix } from \"./markers.js\";\nexport type UnwritableReason = \"tag-delimiter\" | \"number-spelling\";\nexport declare const unwritableMarkerLiteral: (value: MarkerLiteral, form?: MarkerForm) => UnwritableReason | null;\nexport declare const unwritableFilterValues: (filters: readonly FilterCall[], form?: MarkerForm) => {\n    filter: string;\n    value: MarkerLiteral;\n    reason: UnwritableReason;\n}[];\nexport declare const renderFilterChain: (filters: readonly FilterCall[]) => string;\nexport declare const renderValueMarker: (path: string, filters: readonly FilterCall[]) => string;\nexport type ConditionTagOptions = {\n    kind: \"if\" | \"elif\";\n    expression: string;\n    filters: readonly FilterCall[];\n    prefix: MarkerPrefix;\n};\nexport declare const renderConditionTag: ({ expression, filters, kind, prefix, }: ConditionTagOptions) => string;\nexport type ForOpenerOptions = {\n    alias: string;\n    path: string;\n    filters: readonly FilterCall[];\n    prefix: MarkerPrefix;\n};\nexport declare const renderForOpener: ({ alias, filters, path, prefix, }: ForOpenerOptions) => string;\n",
+    "./src/row-blocks.d.ts": "import type { ScannedMarker } from \"./markers.js\";\nexport type RowBlockMarker = {\n    cellIndex: number;\n    paragraphIndex: number;\n    marker: ScannedMarker;\n};\nexport type RowBlockPair = {\n    open: RowBlockMarker;\n    close: RowBlockMarker;\n};\nexport declare const detectRowBlockPair: (cells: readonly (readonly string[])[]) => RowBlockPair | null;\n"
+  }
+}

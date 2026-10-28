@@ -1,0 +1,272 @@
+{
+  "package": "@stll/workspace-model",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/properties.d.ts",
+      "exports": [
+        {
+          "name": "ResolvedWorkspacePropertyOptionGroups",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFileValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceIdentifier",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyDefinition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyDefinitionStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyIdentifier",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroup",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroupIssue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroupSpan",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isWorkspacePropertyType",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveWorkspacePropertyOptionGroups",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspacePropertyDefinitionStatuses",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspacePropertyTypes",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./properties": {
+      "type": "module",
+      "file": "./src/properties.d.ts",
+      "exports": [
+        {
+          "name": "ResolvedWorkspacePropertyOptionGroups",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFileValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceIdentifier",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyDefinition",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyDefinitionStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyIdentifier",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroup",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroupIssue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyOptionGroupSpan",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspacePropertyValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isWorkspacePropertyType",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveWorkspacePropertyOptionGroups",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspacePropertyDefinitionStatuses",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspacePropertyTypes",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./views": {
+      "type": "module",
+      "file": "./src/views.d.ts",
+      "exports": [
+        {
+          "name": "WorkspaceCalendarMode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceCalendarViewLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanViewLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceSavedView",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceTableViewLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceTimelineViewLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceTimelineZoomLevel",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewCalculation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewConditionNode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewLayoutBase",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewLayoutType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSort",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isWorkspaceViewLayoutType",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspaceCalendarModes",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspaceTimelineZoomLevels",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "workspaceViewLayoutTypes",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/properties.d.ts": "export declare const workspacePropertyDefinitionStatuses: readonly [\n    \"active\",\n    \"archived\"\n];\nexport type WorkspacePropertyDefinitionStatus = (typeof workspacePropertyDefinitionStatuses)[number];\nexport declare const workspacePropertyTypes: readonly [\n    \"file\",\n    \"text\",\n    \"single-select\",\n    \"multi-select\",\n    \"date\",\n    \"int\",\n    \"money\",\n    \"person\"\n];\nexport type WorkspacePropertyType = (typeof workspacePropertyTypes)[number];\nexport type WorkspaceIdentifier = string | number;\nexport type WorkspacePropertyIdentifier = WorkspaceIdentifier;\nexport type WorkspacePropertyOptionGroup<GroupId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Color extends string = string> = {\n    color?: Color | undefined;\n    id: GroupId;\n    key: string;\n    label: string;\n    sortOrder: number;\n};\nexport type WorkspacePropertyOption<OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Color extends string = string, GroupId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = {\n    color: Color;\n    groupId?: GroupId | undefined;\n    id: OptionId;\n    key: string;\n    label: string;\n    sortOrder: number;\n    status: WorkspacePropertyDefinitionStatus;\n};\ntype WorkspacePropertyDefinitionBase<PropertyId extends WorkspacePropertyIdentifier> = {\n    id: PropertyId;\n    key: string;\n    label: string;\n    revision: number;\n    status: WorkspacePropertyDefinitionStatus;\n};\ntype WorkspaceSelectPropertyDefinition<PropertyId extends WorkspacePropertyIdentifier, OptionId extends WorkspacePropertyIdentifier, Color extends string> = WorkspacePropertyDefinitionBase<PropertyId> & {\n    fallbackOptionId: OptionId | null;\n    groups?: readonly WorkspacePropertyOptionGroup<OptionId, Color>[] | undefined;\n    options: readonly WorkspacePropertyOption<OptionId, Color, OptionId>[];\n    type: \"multi-select\" | \"single-select\";\n};\nexport type WorkspacePropertyDefinition<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Color extends string = string> = (WorkspacePropertyDefinitionBase<PropertyId> & {\n    type: \"file\" | \"text\" | \"date\" | \"int\" | \"person\";\n}) | (WorkspacePropertyDefinitionBase<PropertyId> & {\n    currency: string | null;\n    type: \"money\";\n}) | WorkspaceSelectPropertyDefinition<PropertyId, OptionId, Color>;\nexport type WorkspaceFileValue = {\n    encrypted: boolean;\n    fileName: string;\n    id: string;\n    mimeType: string;\n    pdfFileId: string | null;\n    sha256Hex: string;\n    sizeBytes: number;\n};\ntype WorkspacePropertyValueBase<PropertyId extends WorkspacePropertyIdentifier> = {\n    propertyId: PropertyId;\n};\nexport type WorkspacePropertyValue<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = (WorkspacePropertyValueBase<PropertyId> & {\n    type: \"file\";\n    value: WorkspaceFileValue;\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    type: \"text\";\n    value: string;\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    optionId: OptionId | null;\n    type: \"single-select\";\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    optionIds: readonly OptionId[];\n    type: \"multi-select\";\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    type: \"date\";\n    value: string | null;\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    type: \"int\";\n    value: number;\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    amountCents: number;\n    currency: string;\n    type: \"money\";\n}) | (WorkspacePropertyValueBase<PropertyId> & {\n    image: string | null;\n    name: string;\n    type: \"person\";\n    userId: string | null;\n});\nexport declare const isWorkspacePropertyType: (value: string) => value is WorkspacePropertyType;\nexport type WorkspacePropertyOptionGroupSpan<OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Color extends string = string> = {\n    group: WorkspacePropertyOptionGroup<OptionId, Color> | null;\n    options: WorkspacePropertyOption<OptionId, Color, OptionId>[];\n};\nexport type WorkspacePropertyOptionGroupIssue = {\n    groupId: WorkspacePropertyIdentifier;\n    type: \"undeclared-group\";\n} | {\n    groupId: WorkspacePropertyIdentifier;\n    type: \"split-group\";\n};\nexport type ResolvedWorkspacePropertyOptionGroups<OptionId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Color extends string = string> = {\n    spans: WorkspacePropertyOptionGroupSpan<OptionId, Color>[];\n    type: \"ok\";\n} | {\n    issues: WorkspacePropertyOptionGroupIssue[];\n    type: \"invalid\";\n};\nexport declare const resolveWorkspacePropertyOptionGroups: <OptionId extends WorkspacePropertyIdentifier, Color extends string>({ groups, options, }: {\n    groups?: readonly WorkspacePropertyOptionGroup<OptionId, Color>[] | undefined;\n    options: readonly WorkspacePropertyOption<OptionId, Color, OptionId>[];\n}) => ResolvedWorkspacePropertyOptionGroups<OptionId, Color>;\nexport {};\n",
+    "./src/views.d.ts": "import type { CalculationKind } from \"@stll/calculations\";\nimport type { CompareNode, GroupNode, Operand, PredicateNode } from \"@stll/conditions\";\nimport type { WorkspaceIdentifier, WorkspacePropertyIdentifier } from \"./properties\";\nexport declare const workspaceViewLayoutTypes: readonly [\n    \"table\",\n    \"kanban\",\n    \"calendar\",\n    \"timeline\"\n];\nexport type WorkspaceViewLayoutType = (typeof workspaceViewLayoutTypes)[number];\nexport declare const workspaceCalendarModes: readonly [\n    \"month\",\n    \"week\",\n    \"year\"\n];\nexport type WorkspaceCalendarMode = (typeof workspaceCalendarModes)[number];\nexport declare const workspaceTimelineZoomLevels: readonly [\n    \"day\",\n    \"week\",\n    \"month\",\n    \"quarter\"\n];\nexport type WorkspaceTimelineZoomLevel = (typeof workspaceTimelineZoomLevels)[number];\ntype WorkspaceViewOperand<PropertyId extends WorkspacePropertyIdentifier> = Exclude<Operand, {\n    type: \"property\";\n}> | {\n    propertyId: PropertyId;\n    type: \"property\";\n};\nexport type WorkspaceViewConditionNode<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = (Omit<CompareNode, \"left\" | \"right\"> & {\n    left: WorkspaceViewOperand<PropertyId>;\n    right: WorkspaceViewOperand<PropertyId>;\n}) | (Omit<PredicateNode, \"operand\"> & {\n    operand: WorkspaceViewOperand<PropertyId>;\n}) | (Omit<GroupNode, \"children\"> & {\n    children: WorkspaceViewConditionNode<PropertyId>[];\n});\nexport type WorkspaceViewSort<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = {\n    desc: boolean;\n    propertyId: PropertyId;\n};\nexport type WorkspaceViewCalculation<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = {\n    kind: CalculationKind;\n    propertyId: PropertyId;\n};\nexport type WorkspaceViewLayoutBase<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = {\n    calculations: readonly WorkspaceViewCalculation<PropertyId>[];\n    filters: readonly WorkspaceViewConditionNode<PropertyId>[];\n    hiddenProperties: readonly PropertyId[];\n    sorts: readonly WorkspaceViewSort<PropertyId>[];\n    version: 1;\n};\nexport type WorkspaceTableViewLayout<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = WorkspaceViewLayoutBase<PropertyId> & {\n    columnOrder: readonly PropertyId[];\n    columnPinning: readonly PropertyId[];\n    groupByPropertyId?: PropertyId | undefined;\n    type: \"table\";\n};\nexport type WorkspaceKanbanViewLayout<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = WorkspaceViewLayoutBase<PropertyId> & {\n    groupByPropertyId?: PropertyId | undefined;\n    subgroupByPropertyId?: PropertyId | undefined;\n    type: \"kanban\";\n};\nexport type WorkspaceCalendarViewLayout<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = WorkspaceViewLayoutBase<PropertyId> & {\n    additionalDatePropertyIds?: readonly PropertyId[] | undefined;\n    datePropertyId: PropertyId;\n    endDatePropertyId?: PropertyId | undefined;\n    mode: WorkspaceCalendarMode;\n    type: \"calendar\";\n};\nexport type WorkspaceTimelineViewLayout<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = WorkspaceViewLayoutBase<PropertyId> & {\n    endDatePropertyId: PropertyId;\n    groupByPropertyId?: PropertyId | undefined;\n    showTable: boolean;\n    startDatePropertyId: PropertyId;\n    type: \"timeline\";\n    zoom: WorkspaceTimelineZoomLevel;\n};\nexport type WorkspaceViewLayout<PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier> = WorkspaceTableViewLayout<PropertyId> | WorkspaceKanbanViewLayout<PropertyId> | WorkspaceCalendarViewLayout<PropertyId> | WorkspaceTimelineViewLayout<PropertyId>;\nexport type WorkspaceSavedView<ViewId extends WorkspaceIdentifier = WorkspaceIdentifier, PropertyId extends WorkspacePropertyIdentifier = WorkspacePropertyIdentifier, Layout extends WorkspaceViewLayout<PropertyId> = WorkspaceViewLayout<PropertyId>> = {\n    createdAt: string;\n    id: ViewId;\n    layout: Layout;\n    name: string;\n    position: number;\n    version: 1;\n};\nexport declare const isWorkspaceViewLayoutType: (value: string) => value is WorkspaceViewLayoutType;\nexport {};\n"
+  }
+}

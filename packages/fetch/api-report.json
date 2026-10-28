@@ -1,0 +1,152 @@
+{
+  "package": "@stll/fetch",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "FetchTimeout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FetchWithTimeoutInit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Fetcher",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TransportRequestInit",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createFetchWithTimeout",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "fetchWithTimeout",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isConnectionFailure",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./publisher": {
+      "type": "module",
+      "file": "./src/publisher.d.ts",
+      "exports": [
+        {
+          "name": "AgentExcludedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "CrawlDelayUnsupportedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherBodyLimitError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherBodyNotReplayableError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherBypassUnauditedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherBypassableRefusal",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PublisherFetchResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PublisherPolicy",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PublisherPolicyError",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PublisherRedirectLimitError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherRequestAbortedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherRobotsDecision",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PublisherTargetRefusedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "PublisherTelemetry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RobotsDisallowedError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "RobotsUnavailableError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "createPolitePublisherFetch",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "evaluatePublisherRobots",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "readBoundedBody",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/connection-failure.d.ts": "export declare const isConnectionFailure: (cause: unknown) => boolean;\n",
+    "./src/index.d.ts": "export { isConnectionFailure } from \"./connection-failure\";\nexport type FetchTimeout = {\n    type: \"headers\";\n    ms: number;\n} | {\n    type: \"idle\";\n    ms: number;\n};\nexport type TransportRequestInit = RequestInit & {\n    timeout?: FetchTimeout;\n    timeoutMs?: number;\n};\nexport type Fetcher = (input: string | URL | Request, init?: TransportRequestInit) => Promise<Response>;\nexport type FetchWithTimeoutInit = Omit<RequestInit, \"signal\"> & {\n    signal?: AbortSignal | undefined;\n} & ({\n    timeout: FetchTimeout;\n    timeoutMs?: never;\n} | {\n    timeoutMs: number;\n    timeout?: never;\n});\nexport declare const createFetchWithTimeout: (fetcher: Fetcher) => (input: string | URL | Request, init: FetchWithTimeoutInit) => Promise<Response>;\nexport declare const fetchWithTimeout: (input: string | URL | Request, init: FetchWithTimeoutInit) => Promise<Response>;\n",
+    "./src/publisher.d.ts": "import { Result } from \"better-result\";\nimport type { TransportRequestInit } from \"./index\";\nexport type PublisherPolicy = {\n    type: \"obey\";\n} | {\n    type: \"licensed\";\n    basis: string;\n    evidenceUrl: string;\n};\nexport type PublisherRobotsDecision = \"allowed\" | \"allow_all_4xx\" | \"robots_disallowed\" | \"agent_excluded\" | \"robots_unavailable\" | \"licensed_bypass\";\ntype RefusalFields = {\n    message: string;\n    url: string;\n    origin: string;\n};\ndeclare const RobotsDisallowedError_base: import(\"better-result\").TaggedErrorClass<\"robots_disallowed\">;\nexport declare class RobotsDisallowedError extends RobotsDisallowedError_base<RefusalFields> {\n}\ndeclare const AgentExcludedError_base: import(\"better-result\").TaggedErrorClass<\"agent_excluded\">;\nexport declare class AgentExcludedError extends AgentExcludedError_base<RefusalFields> {\n}\ndeclare const RobotsUnavailableError_base: import(\"better-result\").TaggedErrorClass<\"robots_unavailable\">;\nexport declare class RobotsUnavailableError extends RobotsUnavailableError_base<RefusalFields & {\n    cause?: unknown;\n}> {\n}\ndeclare const CrawlDelayUnsupportedError_base: import(\"better-result\").TaggedErrorClass<\"crawl_delay_unsupported\">;\nexport declare class CrawlDelayUnsupportedError extends CrawlDelayUnsupportedError_base<RefusalFields & {\n    crawlDelayMs: number;\n    maximumMs: number;\n}> {\n}\ndeclare const PublisherRedirectLimitError_base: import(\"better-result\").TaggedErrorClass<\"publisher_redirect_limit\">;\nexport declare class PublisherRedirectLimitError extends PublisherRedirectLimitError_base<RefusalFields> {\n}\ndeclare const PublisherTargetRefusedError_base: import(\"better-result\").TaggedErrorClass<\"publisher_target_refused\">;\nexport declare class PublisherTargetRefusedError extends PublisherTargetRefusedError_base<RefusalFields & {\n    cause: unknown;\n}> {\n}\ndeclare const PublisherBodyNotReplayableError_base: import(\"better-result\").TaggedErrorClass<\"publisher_body_not_replayable\">;\nexport declare class PublisherBodyNotReplayableError extends PublisherBodyNotReplayableError_base<RefusalFields> {\n}\ndeclare const PublisherRequestAbortedError_base: import(\"better-result\").TaggedErrorClass<\"publisher_request_aborted\">;\nexport declare class PublisherRequestAbortedError extends PublisherRequestAbortedError_base<RefusalFields & {\n    cause: unknown;\n}> {\n}\ndeclare const PublisherBypassUnauditedError_base: import(\"better-result\").TaggedErrorClass<\"publisher_bypass_unaudited\">;\nexport declare class PublisherBypassUnauditedError extends PublisherBypassUnauditedError_base<RefusalFields & {\n    cause: unknown;\n}> {\n}\nexport type PublisherPolicyError = RobotsDisallowedError | AgentExcludedError | RobotsUnavailableError | CrawlDelayUnsupportedError | PublisherRedirectLimitError | PublisherTargetRefusedError | PublisherBodyNotReplayableError | PublisherRequestAbortedError | PublisherBypassUnauditedError;\nexport type PublisherFetchResult = {\n    response: Response;\n    robotsDecision: PublisherRobotsDecision;\n    delayAppliedMs: number;\n};\nexport type PublisherTelemetry = {\n    event: \"publisher_fetch_policy_bypass\";\n    url: string;\n    origin: string;\n    refusal: PublisherPolicyError;\n    policy: PublisherPolicy;\n    delayMs: number;\n};\ntype Clock = {\n    now: () => number;\n    sleep: (ms: number, signal?: AbortSignal) => Promise<void>;\n};\ntype PublisherTarget = {\n    url: URL;\n};\ntype PublisherFetcher<Target extends PublisherTarget> = (target: Target, init?: TransportRequestInit) => Promise<Response>;\ntype PublisherFetcherOptions<Target extends PublisherTarget> = {\n    validateTarget: (url: URL) => Promise<Result<Target, unknown>>;\n    fetcher: PublisherFetcher<Target>;\n    clock?: Clock;\n    robotsTtlMs?: number;\n    robotsRetryMs?: number;\n    defaultMinimumIntervalMs?: number;\n    robotsLoadTimeoutMs?: number;\n    onTelemetry?: (event: PublisherTelemetry) => void | Promise<void>;\n};\ntype PublisherFetchOptions = {\n    init?: Omit<TransportRequestInit, \"redirect\">;\n    policy?: PublisherPolicy;\n};\ntype CompiledPattern = {\n    anchored: boolean;\n    segments: {\n        literal: string;\n        prefix: number[];\n    }[];\n    specificity: number;\n};\ntype Rule = {\n    type: \"allow\" | \"disallow\";\n    pattern: string;\n    compiled?: CompiledPattern;\n};\ntype Group = {\n    agents: string[];\n    rules: Rule[];\n    crawlDelayMs?: number;\n};\nexport type PublisherBypassableRefusal = RobotsUnavailableError | CrawlDelayUnsupportedError | AgentExcludedError | RobotsDisallowedError;\nexport declare const evaluatePublisherRobots: (groups: Group[], productToken: string, path: string) => {\n    allowed: boolean;\n    agentExcluded: boolean;\n    crawlDelayMs: number;\n};\ndeclare const PublisherBodyLimitError_base: import(\"better-result\").TaggedErrorClass<\"publisher_body_limit\">;\nexport declare class PublisherBodyLimitError extends PublisherBodyLimitError_base<{\n    message: string;\n    url: string;\n    maxBytes: number;\n}> {\n}\ntype ReadBoundedBodyOptions = {\n    maxBytes: number;\n    signal: AbortSignal;\n};\nexport declare const readBoundedBody: (response: Response, { maxBytes, signal }: ReadBoundedBodyOptions) => Promise<Result<Uint8Array, PublisherBodyLimitError>>;\nexport declare const createPolitePublisherFetch: <Target extends PublisherTarget>({ validateTarget, fetcher, clock, robotsTtlMs, robotsRetryMs, robotsLoadTimeoutMs, defaultMinimumIntervalMs, onTelemetry, }: PublisherFetcherOptions<Target>) => (input: string | URL, options?: PublisherFetchOptions) => Promise<Result<PublisherFetchResult, PublisherPolicyError>>;\nexport {};\n"
+  }
+}

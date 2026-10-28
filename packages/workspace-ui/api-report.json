@@ -1,0 +1,1529 @@
+{
+  "package": "@stll/workspace-ui",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ApplyCalculationSelectionParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CONDITION_OPERATORS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationFormatters",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationKindPicker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationKindPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationPicker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationSummary",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationSummaryProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ColorVariants",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ColumnCalculation",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ConditionBuilder",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ConditionBuilderLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionCapabilities",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionOperator",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CreateWorkspaceKanbanSchemaParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FIELD_CONTENT_TYPES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldContent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldOptionChoice",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldValueType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormatCalculationParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormattedCalculation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormulaCellRenderCtx",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GenericProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "IntFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KANBAN_EMPTY_GROUP_VISIBILITIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KANBAN_SAVED_VIEW_STATE_VERSION",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KanbanBoardPresentation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanEmptyGroupVisibility",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanPresentedBand",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanPresentedLane",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedAxisState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedGroupAxisState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedGroupReference",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedSubgroupState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedViewState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedViewStateV1",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MoneyFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "OptionColor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PersonFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PropertyIcon",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PropertyIconType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResolveWorkspaceKanbanViewParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResolvedWorkspaceKanbanView",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortChips",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SortChipsLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortChipsProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortDescriptor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortableProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TableSkeletonRows",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "UseCalculationParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ValueEditorKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ValueEditorRenderCtx",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceCalculationLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFieldContent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrame",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceFrameEndRail",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameInspector",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameNavigation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameNavigationItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameTopBar",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanBuiltInGroupLabel",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingChoice",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingPicker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingPickerLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceUiFormattingProvider",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceUiFormattingProviderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcher",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceViewSwitcherEditing",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherReorder",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "appendChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "applyCalculationSelection",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "asGroup",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "buildLeaf",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createWorkspaceKanbanSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "emptyColor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "fieldForNode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatCalculationResult",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getClipFieldValueLabel",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getWorkspaceKanbanGroupingChoices",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isConditionOperator",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isMultiValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafFromField",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafOperand",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafOperator",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafValueList",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafValueString",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeKanbanSavedViewState",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "operandsEqual",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "operatorsFor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "optionColors",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "presentKanbanBoard",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "removeChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "replaceChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveOptionColor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveWorkspaceKanbanView",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "useCalculation",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "valueEditorFor",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./calculation-format": {
+      "type": "module",
+      "file": "./src/calculation-format.d.ts",
+      "exports": [
+        {
+          "name": "CalculationFormatters",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormatCalculationParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormattedCalculation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "formatCalculationResult",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./calculation-selection": {
+      "type": "module",
+      "file": "./src/calculation-selection.d.ts",
+      "exports": [
+        {
+          "name": "ApplyCalculationSelectionParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "applyCalculationSelection",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./calculations": {
+      "type": "module",
+      "file": "./src/calculations.d.ts",
+      "exports": [
+        {
+          "name": "CalculationKindPicker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationKindPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationPicker",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationSummary",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationSummaryProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ColumnCalculation",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "UseCalculationParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceCalculationLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "useCalculation",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./colors": {
+      "type": "module",
+      "file": "./src/colors.d.ts",
+      "exports": [
+        {
+          "name": "ColorVariants",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OptionColor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "emptyColor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "optionColors",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveOptionColor",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./column-sort": {
+      "type": "module",
+      "file": "./src/column-sort.d.ts",
+      "exports": [
+        {
+          "name": "COLUMN_SORT_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ColumnSortKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SORT_DIRECTIONS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SortDirection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortDirectionLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "sortDirectionOf",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./conditions": {
+      "type": "module",
+      "file": "./src/conditions/index.d.ts",
+      "exports": [
+        {
+          "name": "CONDITION_OPERATORS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ConditionBuilder",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ConditionBuilderLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionCapabilities",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ConditionOperator",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldOptionChoice",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FieldValueType",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormulaCellRenderCtx",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ValueEditorKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ValueEditorRenderCtx",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "appendChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "asGroup",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "buildLeaf",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "fieldForNode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isConditionOperator",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isMultiValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafFromField",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafOperand",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafOperator",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafValueList",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "leafValueString",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "operandsEqual",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "operatorsFor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "removeChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "replaceChild",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "valueEditorFor",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./feature-previews": {
+      "type": "module",
+      "file": "./src/feature-previews/index.d.ts",
+      "exports": [
+        {
+          "name": "BillingPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "BillingPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BillingPreviewEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "BillingPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ContactsPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ContactsPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ContactsPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DocumentsPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DocumentsPreviewComment",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DocumentsPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DocumentsPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FeaturePreviewProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MattersPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MattersPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MattersPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MattersPreviewTask",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MattersPreviewTaskStatus",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PreviewMatter",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "PreviewPerson",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResearchPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ResearchPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResearchPreviewDecision",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResearchPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TimeTrackingPreview",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TimeTrackingPreviewData",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TimeTrackingPreviewEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "TimeTrackingPreviewLabels",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./field-value": {
+      "type": "module",
+      "file": "./src/field-value.d.ts",
+      "exports": [
+        {
+          "name": "ClipFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "EmptyFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ErrorFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldValueVariant",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "IntFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MoneyFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PendingSkeleton",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PersonAvatar",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PersonFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "UnsupportedFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatIntFieldValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getIntClassName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getSelectPropertyColor",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./field-value-logic": {
+      "type": "module",
+      "file": "./src/field-value-logic.d.ts",
+      "exports": [
+        {
+          "name": "getClipFieldValueLabel",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./formatting": {
+      "type": "module",
+      "file": "./src/formatting.d.ts",
+      "exports": [
+        {
+          "name": "WorkspaceUiFormattingProvider",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceUiFormattingProviderProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "useFormatter",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "useFormattingLocale",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./kanban-grouping-picker": {
+      "type": "module",
+      "file": "./src/kanban-grouping-picker.d.ts",
+      "exports": [
+        {
+          "name": "WorkspaceKanbanGroupingPicker",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./kanban-view": {
+      "type": "module",
+      "file": "./src/kanban-view.d.ts",
+      "exports": [
+        {
+          "name": "CreateWorkspaceKanbanSchemaParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KANBAN_EMPTY_GROUP_VISIBILITIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KANBAN_SAVED_VIEW_STATE_VERSION",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "KanbanBoardPresentation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanEmptyGroupVisibility",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanPresentedBand",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanPresentedLane",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedAxisState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedGroupAxisState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedGroupReference",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedSubgroupState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedViewState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "KanbanSavedViewStateV1",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResolveWorkspaceKanbanViewParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResolvedWorkspaceKanbanView",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanBuiltInGroupLabel",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingChoice",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingPickerLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanGroupingPickerProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceKanbanProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createWorkspaceKanbanSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getWorkspaceKanbanGroupingChoices",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeKanbanSavedViewState",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "presentKanbanBoard",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveWorkspaceKanbanView",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./property-icon": {
+      "type": "module",
+      "file": "./src/property-icon.d.ts",
+      "exports": [
+        {
+          "name": "PropertyIcon",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "PropertyIconType",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./responsive-action-toolbar": {
+      "type": "module",
+      "file": "./src/responsive-action-toolbar.d.ts",
+      "exports": [
+        {
+          "name": "ResponsiveActionToolbar",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ResponsiveActionToolbarItem",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ResponsiveActionToolbarSlot",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./sorts": {
+      "type": "module",
+      "file": "./src/sorts.d.ts",
+      "exports": [
+        {
+          "name": "SortChips",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "SortChipsLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortChipsProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortDescriptor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SortableProperty",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./table-skeleton-rows": {
+      "type": "module",
+      "file": "./src/table-skeleton-rows.d.ts",
+      "exports": [
+        {
+          "name": "TableSkeletonRows",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./task-status": {
+      "type": "module",
+      "file": "./src/task-status.d.ts",
+      "exports": [
+        {
+          "name": "TASK_STATUS_COLORS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TASK_STATUS_ICONS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "TaskStatusGlyph",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./types": {
+      "type": "module",
+      "file": "./src/types.d.ts",
+      "exports": [
+        {
+          "name": "FIELD_CONTENT_TYPES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FieldContent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FileConversionRefusal",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "GenericProperty",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "OptionColor",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFieldContent",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./view-switcher": {
+      "type": "module",
+      "file": "./src/view-switcher.d.ts",
+      "exports": [
+        {
+          "name": "WorkspaceViewSwitcher",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceViewSwitcherEditing",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceViewSwitcherReorder",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./workspace-frame": {
+      "type": "module",
+      "file": "./src/workspace-frame.d.ts",
+      "exports": [
+        {
+          "name": "WorkspaceFrame",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "WorkspaceFrameEndRail",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameInspector",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameNavigation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameNavigationItem",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameSidebarNavigation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "WorkspaceFrameTopBar",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/calculation-format.d.ts": "import type { CalculationResult } from \"@stll/calculations\";\nimport type { CentsAmount } from \"@stll/money\";\nexport type CalculationFormatters = {\n    number: (value: number) => string;\n    money: (amountCents: CentsAmount, currency: string) => string;\n    percent: (ratio: number) => string;\n};\nexport type CalculationLabels = {\n    kind: string;\n    unavailable: string;\n};\nexport type FormattedCalculation = {\n    summary: string;\n    breakdown: readonly string[];\n};\nexport type FormatCalculationParams = {\n    result: CalculationResult;\n    formatters: CalculationFormatters;\n    labels: CalculationLabels;\n};\nexport declare const formatCalculationResult: ({ result, formatters, labels, }: FormatCalculationParams) => FormattedCalculation;\n",
+    "./src/calculation-selection.d.ts": "import type { CalculationKind } from \"@stll/calculations\";\nexport type CalculationSelection = {\n    propertyId: string;\n    kind: CalculationKind;\n};\nexport type ApplyCalculationSelectionParams = {\n    selections: readonly CalculationSelection[];\n    propertyId: string;\n    kind: CalculationKind | null;\n};\nexport declare const applyCalculationSelection: ({ selections, propertyId, kind, }: ApplyCalculationSelectionParams) => CalculationSelection[];\n",
+    "./src/calculations.d.ts": "import type { ReactNode } from \"react\";\nimport type { CalculationKind, CalculationResult, CalculationValue } from \"@stll/calculations\";\nimport type { FormattedCalculation } from \"./calculation-format\";\nimport type { CalculationSelection } from \"./calculation-selection\";\nexport type CalculationProperty = {\n    id: string;\n    name: string;\n    kinds: readonly CalculationKind[];\n};\nexport type WorkspaceCalculationLabels = {\n    choose: string;\n    kinds: Record<CalculationKind, string>;\n    noProperties: string;\n    none: string;\n    unavailable: string;\n};\nexport type CalculationPickerProps = {\n    labels: WorkspaceCalculationLabels;\n    properties: readonly CalculationProperty[];\n    selections: readonly CalculationSelection[];\n    onChange: (selections: CalculationSelection[]) => void;\n    children?: ReactNode;\n};\nexport declare const CalculationPicker: ({ labels, properties, selections, onChange, children, }: CalculationPickerProps) => import(\"react\").JSX.Element | null;\nexport type CalculationKindPickerProps = {\n    labels: WorkspaceCalculationLabels;\n    kinds: readonly CalculationKind[];\n    value: CalculationKind | null;\n    onChange: (kind: CalculationKind | null) => void;\n    children?: ReactNode;\n};\nexport declare const CalculationKindPicker: ({ labels, kinds, value, onChange, children, }: CalculationKindPickerProps) => import(\"react\").JSX.Element | null;\nexport type CalculationSummaryProps = {\n    calculation: FormattedCalculation;\n};\nexport declare const CalculationSummary: ({ calculation, }: CalculationSummaryProps) => import(\"react\").JSX.Element;\nexport type UseCalculationParams = {\n    kind: CalculationKind;\n    labels: WorkspaceCalculationLabels;\n    values: readonly CalculationValue[];\n    scopeValues?: readonly CalculationValue[] | undefined;\n};\nexport declare const useCalculation: ({ kind, labels, values, scopeValues, }: UseCalculationParams) => FormattedCalculation;\nexport declare const ColumnCalculation: (params: UseCalculationParams) => import(\"react\").JSX.Element;\nexport type { CalculationSelection };\nexport type { CalculationResult };\n",
+    "./src/colors.d.ts": "export type { ColorVariants, OptionColor } from \"@stll/ui/option-color\";\nexport { emptyColor, optionColors, resolveOptionColor, } from \"@stll/ui/option-color\";\n",
+    "./src/column-sort.d.ts": "export declare const COLUMN_SORT_KINDS: readonly [\n    \"text\",\n    \"date\",\n    \"number\"\n];\nexport type ColumnSortKind = (typeof COLUMN_SORT_KINDS)[number];\nexport declare const SORT_DIRECTIONS: readonly [\n    \"asc\",\n    \"desc\"\n];\nexport type SortDirection = (typeof SORT_DIRECTIONS)[number];\nexport type SortDirectionLabels = Record<ColumnSortKind, Record<SortDirection, string>>;\nexport declare const sortDirectionOf: (desc: boolean) => SortDirection;\n",
+    "./src/conditions/builder.d.ts": "import type { ReactNode } from \"react\";\nimport type { ConditionNode, GroupNode } from \"@stll/conditions\";\nimport { type ConditionOperator, type FieldOption, type FieldValueType, type ValueEditorKind } from \"./logic\";\nexport type ConditionBuilderLabels = {\n    addCondition: string;\n    addGroup: string;\n    when: string;\n    match: string;\n    and: string;\n    or: string;\n    remove: string;\n    fieldPlaceholder: string;\n    valuePlaceholder: string;\n    useFormula: string;\n    clearDate: string;\n    selectDate: string;\n    today: string;\n    operator: (valueType: FieldValueType, op: ConditionOperator) => string;\n};\nexport type ConditionCapabilities = {\n    fields: FieldOption[];\n    allowNesting?: boolean;\n    maxChildren?: number | undefined;\n    allowFormula?: boolean;\n    formulaNumberFields?: readonly {\n        path: string;\n        label: string;\n    }[];\n    renderValueEditor?: (ctx: ValueEditorRenderCtx) => React.ReactNode | null;\n    renderFormulaCell?: (ctx: FormulaCellRenderCtx) => ReactNode;\n    operatorsFor?: (valueType: FieldValueType) => readonly ConditionOperator[];\n    valueEditorFor?: (valueType: FieldValueType, op: ConditionOperator) => ValueEditorKind;\n};\nexport type FormulaCellRenderCtx = {\n    expr: string;\n    numberFields: readonly {\n        path: string;\n        label: string;\n    }[];\n    onChangeExpr: (expr: string) => void;\n    onUseField: () => void;\n};\nexport type ValueEditorRenderCtx = {\n    editorKind: ValueEditorKind;\n    field: FieldOption;\n    node: ConditionNode;\n    operator: ConditionOperator;\n    emit: (value: string | string[]) => void;\n};\ntype ConditionBuilderProps = {\n    value: ConditionNode | null;\n    onChange: (next: GroupNode) => void;\n    capabilities: ConditionCapabilities;\n    labels: ConditionBuilderLabels;\n    locale: string;\n};\nexport declare const ConditionBuilder: ({ value, onChange, capabilities, labels, locale, }: ConditionBuilderProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/conditions/index.d.ts": "export type { ConditionBuilderLabels, ConditionCapabilities, FormulaCellRenderCtx, ValueEditorRenderCtx, } from \"./builder\";\nexport { ConditionBuilder } from \"./builder\";\nexport type { ConditionOperator, FieldOption, FieldOptionChoice, FieldValueType, ValueEditorKind, } from \"./logic\";\nexport { appendChild, asGroup, buildLeaf, CONDITION_OPERATORS, fieldForNode, isConditionOperator, isMultiValue, leafFromField, leafOperand, leafOperator, leafValueList, leafValueString, operandsEqual, operatorsFor, removeChild, replaceChild, valueEditorFor, } from \"./logic\";\n",
+    "./src/conditions/logic.d.ts": "import type { ConditionNode, GroupNode, RefOperand } from \"@stll/conditions\";\nimport type { PropertyIconType } from \"../property-icon\";\nexport type FieldValueType = \"text\" | \"single-select\" | \"multi-select\" | \"date\" | \"int\" | \"money\" | \"person\" | \"kind\" | \"status\" | \"priority\";\nexport type FieldOptionChoice = {\n    value: string;\n    label: string;\n    color?: string;\n};\nexport type FieldOption = {\n    operand: RefOperand;\n    label: string;\n    valueType: FieldValueType;\n    type: PropertyIconType;\n    options?: FieldOptionChoice[];\n};\nexport declare const CONDITION_OPERATORS: readonly [\n    \"eq\",\n    \"neq\",\n    \"contains\",\n    \"not_contains\",\n    \"starts_with\",\n    \"ends_with\",\n    \"contains_all\",\n    \"in\",\n    \"gt\",\n    \"lt\",\n    \"gte\",\n    \"lte\",\n    \"is_empty\",\n    \"is_not_empty\"\n];\nexport type ConditionOperator = (typeof CONDITION_OPERATORS)[number];\nexport declare const isConditionOperator: (value: string) => value is ConditionOperator;\nexport declare const operatorsFor: (valueType: FieldValueType) => readonly ConditionOperator[];\nexport type ValueEditorKind = \"none\" | \"text\" | \"int\" | \"date\" | \"select\";\nexport declare const valueEditorFor: (valueType: FieldValueType, operator: ConditionOperator) => ValueEditorKind;\nexport declare const isMultiValue: (operator: ConditionOperator) => boolean;\nexport declare const operandsEqual: (a: RefOperand, b: RefOperand) => boolean;\nexport declare const leafOperand: (node: ConditionNode) => RefOperand | null;\nexport declare const leafOperator: (node: ConditionNode) => ConditionOperator | null;\nexport declare const leafValueString: (node: ConditionNode) => string;\nexport declare const leafValueList: (node: ConditionNode) => string[];\ntype BuildLeafArgs = {\n    operand: RefOperand;\n    operator: ConditionOperator;\n    value: string | string[];\n};\nexport declare const buildLeaf: ({ operand, operator, value, }: BuildLeafArgs) => ConditionNode;\nexport declare const leafFromField: (field: FieldOption) => ConditionNode;\nexport declare const fieldForNode: (node: ConditionNode, fields: FieldOption[]) => FieldOption | null;\nexport declare const asGroup: (value: ConditionNode | null) => GroupNode;\nexport declare const replaceChild: (group: GroupNode, index: number, child: ConditionNode) => GroupNode;\nexport declare const removeChild: (group: GroupNode, index: number) => GroupNode;\nexport declare const appendChild: (group: GroupNode, child: ConditionNode) => GroupNode;\nexport {};\n",
+    "./src/feature-previews/billing-preview.d.ts": "import type { CentsAmount } from \"@stll/money\";\nimport type { PreviewMatter } from \"./mock-data\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type BillingPreviewLabels = {\n    date: string;\n    description: string;\n    billedTime: string;\n    rate: string;\n    fee: string;\n    summary: string;\n};\nexport type BillingPreviewEntry = {\n    date: string;\n    description: string;\n    billedMinutes: number;\n};\nexport type BillingPreviewData = {\n    invoiceNumber: string;\n    client: string;\n    matter: PreviewMatter;\n    currency: string;\n    hourlyRate: CentsAmount;\n    entries: readonly BillingPreviewEntry[];\n};\nexport declare const BillingPreview: ({ labels, locale, data, className, }: FeaturePreviewProps<BillingPreviewLabels, BillingPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/feature-previews/contacts-preview.d.ts": "import type { PreviewMatter } from \"./mock-data\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type ContactsPreviewLabels = {\n    businessRegistry: string;\n    matters: string;\n};\nexport type ContactsPreviewData = {\n    company: {\n        name: string;\n        legalForm: string;\n        status: string;\n        registry: string;\n        details: readonly {\n            label: string;\n            value: string;\n        }[];\n        incorporatedOn: {\n            label: string;\n            date: string;\n        };\n    };\n    linkedMatters: readonly PreviewMatter[];\n};\nexport declare const ContactsPreview: ({ labels, locale, data: { company, linkedMatters }, className, }: FeaturePreviewProps<ContactsPreviewLabels, ContactsPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/feature-previews/documents-preview.d.ts": "import type { PreviewPerson } from \"./mock-data\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type DocumentsPreviewLabels = {\n    comments: string;\n};\nexport type DocumentsPreviewComment = {\n    author: PreviewPerson;\n    time: string;\n    anchor: string;\n    body: string;\n};\nexport type DocumentsPreviewData = {\n    fileName: string;\n    reviewers: readonly PreviewPerson[];\n    title: string;\n    heading: string;\n    trackedChange: {\n        before: string;\n        deleted: string;\n        inserted: string;\n        after: string;\n    };\n    commented: {\n        before: string;\n        marked: string;\n        after: string;\n    };\n    nextHeading: string;\n    clauses: readonly string[];\n    comments: readonly DocumentsPreviewComment[];\n};\nexport declare const DocumentsPreview: ({ labels, locale, data, className, }: FeaturePreviewProps<DocumentsPreviewLabels, DocumentsPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/feature-previews/index.d.ts": "export type { BillingPreviewData, BillingPreviewEntry, BillingPreviewLabels, } from \"./billing-preview\";\nexport { BillingPreview } from \"./billing-preview\";\nexport type { ContactsPreviewData, ContactsPreviewLabels, } from \"./contacts-preview\";\nexport { ContactsPreview } from \"./contacts-preview\";\nexport type { DocumentsPreviewComment, DocumentsPreviewData, DocumentsPreviewLabels, } from \"./documents-preview\";\nexport { DocumentsPreview } from \"./documents-preview\";\nexport type { MattersPreviewData, MattersPreviewLabels, MattersPreviewTask, MattersPreviewTaskStatus, } from \"./matters-preview\";\nexport { MattersPreview } from \"./matters-preview\";\nexport type { PreviewMatter, PreviewPerson } from \"./mock-data\";\nexport type { ResearchPreviewData, ResearchPreviewDecision, ResearchPreviewLabels, } from \"./research-preview\";\nexport { ResearchPreview } from \"./research-preview\";\nexport type { FeaturePreviewProps } from \"./surface\";\nexport type { TimeTrackingPreviewData, TimeTrackingPreviewEntry, TimeTrackingPreviewLabels, } from \"./time-tracking-preview\";\nexport { TimeTrackingPreview } from \"./time-tracking-preview\";\n",
+    "./src/feature-previews/matters-preview.d.ts": "import type { PreviewMatter, PreviewPerson } from \"./mock-data\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type MattersPreviewLabels = {\n    open: string;\n    inProgress: string;\n    done: string;\n};\nexport type MattersPreviewTaskStatus = \"open\" | \"in_progress\" | \"done\";\nexport type MattersPreviewTask = {\n    name: string;\n    status: MattersPreviewTaskStatus;\n    due: string;\n    assignee: PreviewPerson;\n    attachment: string | null;\n};\nexport type MattersPreviewData = {\n    matter: PreviewMatter;\n    team: readonly PreviewPerson[];\n    tasks: readonly MattersPreviewTask[];\n};\nexport declare const MattersPreview: ({ labels, locale, data, className, }: FeaturePreviewProps<MattersPreviewLabels, MattersPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/feature-previews/mock-data.d.ts": "export type PreviewPerson = {\n    name: string;\n};\nexport declare const PREVIEW_PEOPLE: {\n    readonly laura: {\n        readonly name: \"Laura Chen\";\n    };\n    readonly tomas: {\n        readonly name: \"Tomás Novák\";\n    };\n    readonly amira: {\n        readonly name: \"Amira Haddad\";\n    };\n};\nexport type PreviewMatter = {\n    id: string;\n    color: string;\n    name: string;\n};\nexport declare const PREVIEW_MATTERS: {\n    readonly cargo: {\n        readonly id: \"preview-matter-cargo\";\n        readonly color: \"--option-blue\";\n        readonly name: \"Harbour Logistics v. Meridian Freight\";\n    };\n    readonly acquisition: {\n        readonly id: \"preview-matter-acquisition\";\n        readonly color: \"--option-violet\";\n        readonly name: \"Project Alder: share purchase\";\n    };\n    readonly lease: {\n        readonly id: \"preview-matter-lease\";\n        readonly color: \"--option-amber\";\n        readonly name: \"Quayside warehouse lease\";\n    };\n};\n",
+    "./src/feature-previews/research-preview.d.ts": "import type { COURT_TIER_WEIGHT } from \"@stll/ui/document-identity-badge.logic\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type ResearchPreviewLabels = {\n    caseLaw: string;\n};\nexport type ResearchPreviewDecision = {\n    court: {\n        name: string;\n        abbreviation: string;\n        tier: keyof typeof COURT_TIER_WEIGHT;\n    };\n    date: string;\n    fileNumber: string;\n    before: string;\n    hit: string;\n    after: string;\n};\nexport type ResearchPreviewData = {\n    query: string;\n    decisions: readonly ResearchPreviewDecision[];\n};\nexport declare const ResearchPreview: ({ labels, locale, data, className, }: FeaturePreviewProps<ResearchPreviewLabels, ResearchPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/feature-previews/surface.d.ts": "import type * as React from \"react\";\nimport type { PreviewPerson } from \"./mock-data\";\nexport type FeaturePreviewProps<Labels, Data> = {\n    labels: Labels;\n    locale: string;\n    data?: Data | undefined;\n    className?: string | undefined;\n};\ntype FeaturePreviewSurfaceProps = React.PropsWithChildren<{\n    icon: React.ReactNode;\n    title: React.ReactNode;\n    meta?: React.ReactNode;\n    className?: string | undefined;\n}>;\nexport declare const FeaturePreviewSurface: ({ icon, title, meta, className, children, }: FeaturePreviewSurfaceProps) => React.JSX.Element;\nexport declare const PreviewAvatarStack: ({ people, }: {\n    people: readonly PreviewPerson[];\n}) => React.JSX.Element;\nexport declare const PreviewAvatar: ({ person }: {\n    person: PreviewPerson;\n}) => React.JSX.Element;\nexport {};\n",
+    "./src/feature-previews/time-tracking-preview.d.ts": "import type { PreviewMatter } from \"./mock-data\";\nimport type { FeaturePreviewProps } from \"./surface\";\nexport type TimeTrackingPreviewLabels = {\n    time: string;\n    summary: string;\n};\nexport type TimeTrackingPreviewEntry = {\n    start: string;\n    end: string;\n    minutes: number;\n    description: string;\n    matter: PreviewMatter;\n};\nexport type TimeTrackingPreviewData = {\n    day: string;\n    running: {\n        description: string;\n        matter: PreviewMatter;\n        elapsedMinutes: number;\n    };\n    entries: readonly TimeTrackingPreviewEntry[];\n};\nexport declare const TimeTrackingPreview: ({ labels, locale, data: { day, running, entries }, className, }: FeaturePreviewProps<TimeTrackingPreviewLabels, TimeTrackingPreviewData>) => import(\"react\").JSX.Element;\n",
+    "./src/field-value-logic.d.ts": "export declare const getClipFieldValueLabel: ({ citation, url, }: {\n    citation: string | null | undefined;\n    url: string;\n}) => string;\n",
+    "./src/field-value.d.ts": "import { useFormatter } from \"./formatting\";\nimport type { GenericProperty, WorkspaceFieldContent } from \"./types\";\nexport type FieldValueVariant = \"default\" | \"table\" | \"kanban\";\ntype PropertyContentType = GenericProperty[\"content\"][\"type\"];\ntype FieldValueProps = {\n    content: WorkspaceFieldContent | undefined;\n    property: GenericProperty;\n    pendingPreview?: string | null | undefined;\n    variant?: FieldValueVariant;\n};\nexport declare const FieldValue: ({ content, property, pendingPreview, variant, }: FieldValueProps) => import(\"react\").JSX.Element | null;\nexport declare const IntFieldValue: ({ content, variant, }: {\n    content: Extract<WorkspaceFieldContent, {\n        type: \"int\";\n    }>;\n    variant?: FieldValueVariant;\n}) => import(\"react\").JSX.Element;\ntype FormatIntFieldValueParams = {\n    content: Extract<WorkspaceFieldContent, {\n        type: \"int\";\n    }>;\n    format: ReturnType<typeof useFormatter>;\n};\nexport declare const formatIntFieldValue: ({ content, format, }: FormatIntFieldValueParams) => string;\nexport declare const MoneyFieldValue: ({ content, variant, }: {\n    content: Extract<WorkspaceFieldContent, {\n        type: \"money\";\n    }>;\n    variant?: FieldValueVariant;\n}) => import(\"react\").JSX.Element;\nexport declare const PersonFieldValue: ({ content, variant, }: {\n    content: Extract<WorkspaceFieldContent, {\n        type: \"person\";\n    }>;\n    variant?: FieldValueVariant;\n}) => import(\"react\").JSX.Element;\nexport declare const PersonAvatar: ({ image, name, }: {\n    image: string | null;\n    name: string;\n}) => import(\"react\").JSX.Element;\nexport declare const EmptyFieldValue: ({ variant, }: {\n    variant: FieldValueVariant;\n}) => import(\"react\").JSX.Element | null;\nexport declare const ErrorFieldValue: ({ variant, }: {\n    variant: FieldValueVariant;\n}) => import(\"react\").JSX.Element | null;\nexport declare const UnsupportedFieldValue: ({ variant, }: {\n    variant: FieldValueVariant;\n}) => import(\"react\").JSX.Element | null;\nexport declare const ClipFieldValue: ({ content, variant, }: {\n    content: Extract<WorkspaceFieldContent, {\n        type: \"clip\";\n    }>;\n    variant: FieldValueVariant;\n}) => import(\"react\").JSX.Element;\ntype PendingSkeletonProps = {\n    contentType: PropertyContentType;\n};\nexport declare const PendingSkeleton: ({ contentType }: PendingSkeletonProps) => import(\"react\").JSX.Element;\nexport declare const getSelectPropertyColor: (property: GenericProperty, option: string | null) => import(\"@stll/ui/option-color\").ColorVariants | undefined;\nexport declare const getIntClassName: (variant: FieldValueVariant) => \"text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none tabular-nums\" | \"block max-w-full min-w-0 truncate text-start tabular-nums\" | \"block min-w-0 max-w-full truncate text-start text-sm tabular-nums\";\nexport {};\n",
+    "./src/formatting.d.ts": "import type { PropsWithChildren } from \"react\";\nimport { createFormatter } from \"use-intl/core\";\ntype Formatter = ReturnType<typeof createFormatter>;\nexport type WorkspaceUiFormattingProviderProps = PropsWithChildren<{\n    locale: string;\n    timeZone: string;\n}>;\nexport declare const WorkspaceUiFormattingProvider: ({ children, locale, timeZone, }: WorkspaceUiFormattingProviderProps) => import(\"react\").JSX.Element;\nexport declare const useFormatter: () => Formatter;\nexport declare const useFormattingLocale: () => string;\nexport {};\n",
+    "./src/index.d.ts": "export { CalculationKindPicker, CalculationPicker, CalculationSummary, ColumnCalculation, useCalculation, } from \"./calculations\";\nexport type { CalculationKindPickerProps, CalculationPickerProps, CalculationProperty, CalculationResult, CalculationSelection, CalculationSummaryProps, UseCalculationParams, WorkspaceCalculationLabels, } from \"./calculations\";\nexport { formatCalculationResult } from \"./calculation-format\";\nexport type { CalculationFormatters, CalculationLabels, FormattedCalculation, FormatCalculationParams, } from \"./calculation-format\";\nexport { applyCalculationSelection } from \"./calculation-selection\";\nexport type { ApplyCalculationSelectionParams } from \"./calculation-selection\";\nexport { emptyColor, optionColors, resolveOptionColor } from \"./colors\";\nexport type { ColorVariants, OptionColor } from \"./colors\";\nexport { ConditionBuilder } from \"./conditions/builder\";\nexport type { ConditionBuilderLabels, ConditionCapabilities, FormulaCellRenderCtx, ValueEditorRenderCtx, } from \"./conditions/builder\";\nexport { CONDITION_OPERATORS, appendChild, asGroup, buildLeaf, fieldForNode, isConditionOperator, isMultiValue, leafFromField, leafOperand, leafOperator, leafValueList, leafValueString, operandsEqual, operatorsFor, removeChild, replaceChild, valueEditorFor, } from \"./conditions/logic\";\nexport type { ConditionOperator, FieldOption, FieldOptionChoice, FieldValueType, ValueEditorKind, } from \"./conditions/logic\";\nexport { FieldValue, IntFieldValue, MoneyFieldValue, PersonFieldValue, } from \"./field-value\";\nexport { getClipFieldValueLabel } from \"./field-value-logic\";\nexport { WorkspaceUiFormattingProvider } from \"./formatting\";\nexport type { WorkspaceUiFormattingProviderProps } from \"./formatting\";\nexport { PropertyIcon } from \"./property-icon\";\nexport type { PropertyIconType } from \"./property-icon\";\nexport { SortChips } from \"./sorts\";\nexport type { SortChipsLabels, SortChipsProps, SortableProperty, SortDescriptor, } from \"./sorts\";\nexport { TableSkeletonRows } from \"./table-skeleton-rows\";\nexport type { FieldContent, GenericProperty, WorkspaceFieldContent, } from \"./types\";\nexport { FIELD_CONTENT_TYPES } from \"./types\";\nexport { createWorkspaceKanbanSchema, getWorkspaceKanbanGroupingChoices, KANBAN_EMPTY_GROUP_VISIBILITIES, KANBAN_SAVED_VIEW_STATE_VERSION, normalizeKanbanSavedViewState, presentKanbanBoard, resolveWorkspaceKanbanView, } from \"./kanban-view\";\nexport type { CreateWorkspaceKanbanSchemaParams, KanbanBoardPresentation, KanbanEmptyGroupVisibility, KanbanPresentedBand, KanbanPresentedLane, KanbanSavedAxisState, KanbanSavedGroupAxisState, KanbanSavedGroupReference, KanbanSavedSubgroupState, KanbanSavedViewState, KanbanSavedViewStateV1, ResolvedWorkspaceKanbanView, ResolveWorkspaceKanbanViewParams, WorkspaceKanbanBuiltInGroupLabel, WorkspaceKanbanGroupingChoice, WorkspaceKanbanGroupingPickerLabels, WorkspaceKanbanGroupingPickerProps, WorkspaceKanbanProperty, } from \"./kanban-view\";\nexport { WorkspaceKanbanGroupingPicker } from \"./kanban-grouping-picker\";\nexport { WorkspaceViewSwitcher } from \"./view-switcher\";\nexport type { WorkspaceViewSwitcherEditing, WorkspaceViewSwitcherItem, WorkspaceViewSwitcherProps, WorkspaceViewSwitcherReorder, } from \"./view-switcher\";\nexport { WorkspaceFrame } from \"./workspace-frame\";\nexport type { WorkspaceFrameEndRail, WorkspaceFrameInspector, WorkspaceFrameNavigation, WorkspaceFrameNavigationItem, WorkspaceFrameProps, WorkspaceFrameTopBar, } from \"./workspace-frame\";\n",
+    "./src/kanban-grouping-picker.d.ts": "import { type WorkspaceKanbanGroupingPickerProps, type WorkspaceKanbanProperty } from \"./kanban-view\";\nexport declare const WorkspaceKanbanGroupingPicker: <TRow, TProperty extends WorkspaceKanbanProperty<TGroupId>, TGroupId extends string = string>({ allowNone, excludedGroupBy, getBuiltInGroupLabel, labels, onValueChange, schema, value, }: WorkspaceKanbanGroupingPickerProps<TRow, TProperty, TGroupId>) => import(\"react\").JSX.Element;\n",
+    "./src/kanban-view.d.ts": "import { type KanbanBoardCell, type KanbanBoardColumn, type KanbanBoardLane, type KanbanBoardMatrix, type KanbanBuiltInGroup, type KanbanColumnBandSpan, type KanbanGrouping, type KanbanSchema } from \"@stll/ui/kanban\";\nimport type { GenericProperty } from \"./types\";\nexport declare const KANBAN_EMPTY_GROUP_VISIBILITIES: {\n    readonly hide: \"hide\";\n    readonly show: \"show\";\n};\nexport type KanbanEmptyGroupVisibility = (typeof KANBAN_EMPTY_GROUP_VISIBILITIES)[keyof typeof KANBAN_EMPTY_GROUP_VISIBILITIES];\nexport type KanbanSavedGroupReference = {\n    type: \"option\";\n    value: string;\n} | {\n    type: \"uncategorized\";\n};\nexport type KanbanSavedAxisState<TGroupId extends string = string> = {\n    emptyGroups: KanbanEmptyGroupVisibility;\n    groupBy: TGroupId;\n    hiddenGroups: readonly KanbanSavedGroupReference[];\n    orderedGroups: readonly KanbanSavedGroupReference[];\n};\nexport type KanbanSavedGroupAxisState<TGroupId extends string = string> = KanbanSavedAxisState<TGroupId> & {\n    collapsedBands: readonly string[];\n};\nexport type KanbanSavedSubgroupState<TGroupId extends string = string> = KanbanSavedAxisState<TGroupId> & {\n    collapsedGroups: readonly KanbanSavedGroupReference[];\n};\nexport type KanbanSavedViewStateV1<TGroupId extends string = string> = {\n    group: KanbanSavedAxisState<TGroupId>;\n    subgroup: KanbanSavedSubgroupState<TGroupId> | null;\n    version: 1;\n};\nexport type KanbanSavedViewState<TGroupId extends string = string> = {\n    group: KanbanSavedGroupAxisState<TGroupId>;\n    subgroup: KanbanSavedSubgroupState<TGroupId> | null;\n    version: 2;\n};\nexport declare const KANBAN_SAVED_VIEW_STATE_VERSION = 2;\nexport declare const normalizeKanbanSavedViewState: <TGroupId extends string = string>(state: KanbanSavedViewStateV1<TGroupId> | KanbanSavedViewState<TGroupId>) => KanbanSavedViewState<TGroupId>;\nexport type WorkspaceKanbanProperty<TGroupId extends string = string> = GenericProperty & {\n    id: TGroupId;\n    name: string;\n};\nexport type CreateWorkspaceKanbanSchemaParams<TRow, TBuiltInGroupId extends string, TProperty extends WorkspaceKanbanProperty> = {\n    builtInGroups: readonly KanbanBuiltInGroup<TRow, TBuiltInGroupId>[];\n    properties: readonly TProperty[];\n};\ntype WorkspaceKanbanSchemaGroupId<TBuiltInGroupId extends string, TProperty extends WorkspaceKanbanProperty> = TBuiltInGroupId | TProperty[\"id\"];\nexport declare const createWorkspaceKanbanSchema: <TRow, TBuiltInGroupId extends string, TProperty extends WorkspaceKanbanProperty>({ builtInGroups, properties, }: CreateWorkspaceKanbanSchemaParams<TRow, TBuiltInGroupId, TProperty>) => KanbanSchema<TRow, TProperty, WorkspaceKanbanSchemaGroupId<TBuiltInGroupId, TProperty>>;\nexport type WorkspaceKanbanGroupingChoice<TGroupId extends string = string> = {\n    id: TGroupId;\n    label: string;\n    type: \"built-in\" | \"property\";\n};\nexport type WorkspaceKanbanBuiltInGroupLabel<TRow, TGroupId extends string = string> = (group: KanbanBuiltInGroup<TRow, TGroupId>) => string;\nexport declare const getWorkspaceKanbanGroupingChoices: <TRow, TProperty extends WorkspaceKanbanProperty<TGroupId>, TGroupId extends string = string>({ getBuiltInGroupLabel, schema, }: {\n    getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow, TGroupId>;\n    schema: KanbanSchema<TRow, TProperty, TGroupId>;\n}) => WorkspaceKanbanGroupingChoice<TGroupId>[];\nexport type WorkspaceKanbanGroupingPickerLabels = {\n    control: string;\n    none: string;\n    placeholder: string;\n};\nexport type WorkspaceKanbanGroupingPickerProps<TRow, TProperty extends WorkspaceKanbanProperty<TGroupId>, TGroupId extends string = string> = {\n    allowNone: boolean;\n    excludedGroupBy?: TGroupId | undefined;\n    getBuiltInGroupLabel: WorkspaceKanbanBuiltInGroupLabel<TRow, TGroupId>;\n    labels: WorkspaceKanbanGroupingPickerLabels;\n    onValueChange: (groupBy: TGroupId | \"\") => void;\n    schema: KanbanSchema<TRow, TProperty, TGroupId>;\n    value: TGroupId | \"\";\n};\nexport type ResolveWorkspaceKanbanViewParams<TRow, TProperty, TGroupId extends string = string> = {\n    schema: KanbanSchema<TRow, TProperty, TGroupId>;\n    state: KanbanSavedViewState<TGroupId>;\n};\nexport type ResolvedWorkspaceKanbanView<TRow, TProperty, TGroupId extends string = string> = {\n    group: KanbanGrouping<TRow, TProperty, TGroupId>;\n    subgroup: KanbanGrouping<TRow, TProperty, TGroupId>;\n};\nexport declare const resolveWorkspaceKanbanView: <TRow, TProperty, TGroupId extends string = string>({ schema, state, }: ResolveWorkspaceKanbanViewParams<TRow, TProperty, TGroupId>) => ResolvedWorkspaceKanbanView<TRow, TProperty, TGroupId>;\nexport type KanbanPresentedLane<TRow> = {\n    cells: KanbanBoardCell<TRow>[];\n    collapsed: boolean;\n    lane: KanbanBoardLane;\n};\nexport type KanbanPresentedBand = KanbanColumnBandSpan & {\n    collapsed: boolean;\n};\nexport type KanbanBoardPresentation<TRow> = {\n    bands: KanbanPresentedBand[];\n    columns: KanbanBoardColumn[];\n    lanes: KanbanPresentedLane<TRow>[];\n    matrix: KanbanBoardMatrix<TRow>;\n};\nexport declare const presentKanbanBoard: <TRow>({ matrix, state, }: {\n    matrix: KanbanBoardMatrix<TRow>;\n    state: KanbanSavedViewState;\n}) => KanbanBoardPresentation<TRow>;\nexport {};\n",
+    "./src/property-icon.d.ts": "import type { FieldContent } from \"./types\";\ntype FieldTypeWithoutPending = Exclude<FieldContent[\"type\"], \"pending\">;\ntype PropertyContentType = \"file\" | \"text\" | \"single-select\" | \"multi-select\" | \"date\" | \"int\" | \"money\" | \"person\";\nexport type PropertyIconType = FieldTypeWithoutPending | PropertyContentType;\ntype PropertyHelperProps = {\n    type: PropertyIconType;\n    className?: string;\n};\nexport declare const PropertyIcon: ({ type, className }: PropertyHelperProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/responsive-action-toolbar.d.ts": "import type * as React from \"react\";\nexport type ResponsiveActionToolbarSlot = \"primary\" | \"secondary\" | \"action\";\nexport declare const ResponsiveActionToolbar: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ntype ResponsiveActionToolbarItemProps = React.PropsWithChildren<{\n    slot: ResponsiveActionToolbarSlot;\n    className?: string | undefined;\n}>;\nexport declare const ResponsiveActionToolbarItem: ({ slot, className, children, }: ResponsiveActionToolbarItemProps) => React.JSX.Element;\nexport {};\n",
+    "./src/sorts.d.ts": "import type { ColumnSortKind, SortDirectionLabels } from \"./column-sort\";\nimport type { PropertyIconType } from \"./property-icon\";\nexport type SortDescriptor = {\n    propertyId: string;\n    desc: boolean;\n};\nexport type SortableProperty = {\n    id: string;\n    name: string;\n    type: PropertyIconType;\n    sortKind: ColumnSortKind;\n};\nexport type SortChipsLabels = {\n    add: string;\n    remove: string;\n    directions: SortDirectionLabels;\n};\nexport type SortChipsProps = {\n    sorts: readonly SortDescriptor[];\n    properties: readonly SortableProperty[];\n    onUpdate: (sorts: SortDescriptor[]) => void;\n    labels: SortChipsLabels;\n    maxSorts?: number | undefined;\n};\nexport declare const SortChips: ({ sorts, properties, onUpdate, labels, maxSorts, }: SortChipsProps) => import(\"react\").JSX.Element;\n",
+    "./src/table-skeleton-rows.d.ts": "import type { ReactNode } from \"react\";\nimport type { Column, RowData, TableFeatures } from \"@tanstack/react-table\";\ntype TableSkeletonRowsProps<TFeatures extends TableFeatures, TData extends RowData> = {\n    columns: readonly Column<TFeatures, TData>[];\n    rowCount?: number;\n    renderCell?: (column: Column<TFeatures, TData>) => ReactNode;\n};\nexport declare const TableSkeletonRows: <TFeatures extends TableFeatures, TData extends RowData>({ columns, rowCount, renderCell, }: TableSkeletonRowsProps<TFeatures, TData>) => import(\"react\").JSX.Element[];\nexport {};\n",
+    "./src/task-status.d.ts": "import type { LucideIcon } from \"@stll/ui/icons\";\nexport declare const TASK_STATUS_ICONS: Readonly<Record<\"open\" | \"in_progress\" | \"in_review\" | \"done\" | \"cancelled\", LucideIcon>>;\nexport declare const TASK_STATUS_COLORS: {\n    readonly open: \"text-muted-foreground\";\n    readonly in_progress: \"text-foreground dark:text-foreground-muted\";\n    readonly in_review: \"text-warning\";\n    readonly done: \"text-success dark:text-success\";\n    readonly cancelled: \"text-destructive dark:text-destructive\";\n};\nexport type TaskStatusGlyph = keyof typeof TASK_STATUS_ICONS;\n",
+    "./src/types.d.ts": "import type { KanbanColumnBand } from \"@stll/ui/kanban\";\nimport type { OptionColor } from \"@stll/ui/option-color\";\nexport type { OptionColor } from \"@stll/ui/option-color\";\nexport type FileConversionRefusal = {\n    kind: \"unsupported_encoding\";\n    encoding: string;\n} | {\n    kind: \"unsupported_reference\";\n    format: string;\n    element: string;\n    attribute: string;\n} | {\n    kind: \"unsupported_field\";\n    fieldType: string;\n} | {\n    kind: \"legacy_format\";\n    replacementExtension: \".xlsx\" | \".pptx\";\n};\nexport type FieldContent = {\n    type: \"error\";\n    version: 1;\n} | {\n    type: \"pending\";\n    version: 1;\n} | {\n    type: \"unsupported\";\n    version: 1;\n} | {\n    type: \"text\";\n    version: 1;\n    value: string;\n} | {\n    type: \"single-select\";\n    version: 1;\n    value: string | null;\n} | {\n    type: \"multi-select\";\n    version: 1;\n    value: string[];\n} | {\n    type: \"file\";\n    version: 1;\n    id: string;\n    fileName: string;\n    mimeType: string;\n    sizeBytes: number;\n    encrypted: boolean;\n    sha256Hex: string;\n    pdfFileId: string | null;\n    pdfDerivative?: {\n        status: \"not-required\" | \"pending\" | \"ready\";\n    } | {\n        status: \"failed\";\n        reason?: \"enqueue\" | \"processing\" | \"too-large\" | undefined;\n        conversionRefusal?: FileConversionRefusal | undefined;\n    } | undefined;\n} | {\n    type: \"date\";\n    version: 1;\n    value: string | null;\n} | {\n    type: \"int\";\n    version: 1;\n    value: number;\n    currency: string | null;\n} | {\n    type: \"money\";\n    version: 1;\n    amountCents: number;\n    currency: string;\n} | {\n    type: \"person\";\n    version: 1;\n    userId: string | null;\n    name: string;\n    image: string | null;\n} | {\n    type: \"clip\";\n    version: 1;\n    url: string;\n    snippet?: string;\n    citation?: string;\n    jurisdiction?: string;\n    sourceType?: string;\n};\nexport declare const FIELD_CONTENT_TYPES: readonly [\n    \"error\",\n    \"pending\",\n    \"unsupported\",\n    \"text\",\n    \"single-select\",\n    \"multi-select\",\n    \"file\",\n    \"date\",\n    \"int\",\n    \"money\",\n    \"person\",\n    \"clip\"\n];\nexport type WorkspaceFieldContent = FieldContent & {\n    truncated?: true;\n};\nexport type GenericProperty = {\n    content: {\n        type: \"file\" | \"text\" | \"date\" | \"int\" | \"money\" | \"person\";\n    } | {\n        type: \"single-select\" | \"multi-select\";\n        options: {\n            value: string;\n            color: OptionColor;\n            band?: KanbanColumnBand | undefined;\n        }[];\n    };\n};\n",
+    "./src/view-switcher.d.ts": "import { type InlineDirection } from \"@stll/ui/inline-reorder\";\nexport type WorkspaceViewSwitcherItem = {\n    id: string;\n    name: string;\n};\nexport type WorkspaceViewSwitcherEditing<View> = {\n    viewId: string;\n    renderLabel: (view: View) => React.ReactNode;\n};\nexport type WorkspaceViewSwitcherReorder<View> = {\n    getDragData?: (view: View) => Record<string | symbol, unknown>;\n    getDropData?: (view: View) => Record<string | symbol, unknown>;\n    isBlocked?: boolean;\n    onReorder: (viewIds: string[]) => void;\n};\nexport type WorkspaceViewSwitcherProps<View extends WorkspaceViewSwitcherItem> = {\n    activeViewId: string;\n    ariaLabel: string;\n    direction: InlineDirection;\n    reorder: WorkspaceViewSwitcherReorder<View> | null;\n    views: readonly View[];\n    addControl?: React.ReactNode;\n    editing?: WorkspaceViewSwitcherEditing<View> | null;\n    onViewChange: (viewId: string) => void;\n    onViewContextMenu?: (view: View, event: React.MouseEvent<HTMLElement>) => void;\n    onViewDoubleClick?: (view: View, event: React.MouseEvent<HTMLElement>) => void;\n    actionMenu?: {\n        label: string;\n        renderItems: (view: View) => React.ReactNode;\n        onOpenChange?: (view: View, open: boolean) => void;\n    };\n    renderIcon: (view: View) => React.ReactNode;\n};\nexport declare const WorkspaceViewSwitcher: <View extends WorkspaceViewSwitcherItem>({ activeViewId, ariaLabel, direction, reorder, views, addControl, editing, onViewChange, onViewContextMenu, onViewDoubleClick, actionMenu, renderIcon, }: WorkspaceViewSwitcherProps<View>) => import(\"react\").JSX.Element;\n",
+    "./src/workspace-frame.d.ts": "import type { ComponentProps, ReactElement, ReactNode } from \"react\";\nimport { InspectorDock } from \"@stll/ui/inspector\";\nimport { WorkspaceEndRail, WorkspaceShell } from \"@stll/ui/workspace-shell\";\nexport type WorkspaceFrameNavigationItem = {\n    id: string;\n    label: string;\n    icon: ReactNode;\n    active?: boolean;\n    disabled?: boolean;\n    onActivate: () => void;\n};\nexport type WorkspaceFrameSidebarNavigation = {\n    brand?: ReactNode;\n    toggleLabel: {\n        collapse: string;\n        expand: string;\n    };\n    open?: boolean;\n    onOpenChange?: (open: boolean) => void;\n    defaultOpen?: boolean;\n    forceCollapsed?: boolean;\n};\nexport type WorkspaceFrameNavigation = {\n    label: string;\n    items: readonly WorkspaceFrameNavigationItem[];\n    header?: ReactNode;\n    footer?: ReactNode;\n    compact: {\n        content: ReactElement;\n        label: string;\n        open: boolean;\n        onOpenChange: (open: boolean) => void;\n        trigger: ReactElement | null;\n    };\n    sidebar?: WorkspaceFrameSidebarNavigation;\n};\nexport type WorkspaceFrameInspector = {\n    pane: ReactNode;\n    showPaneContent: boolean;\n    width: number;\n    resizeHandleLabel: string;\n    resizeHandleProps: ComponentProps<typeof InspectorDock>[\"resizeHandleProps\"];\n    onResetWidth?: (() => void) | undefined;\n    mobile?: {\n        content: ReactElement;\n        label: string;\n        open: boolean;\n        onOpenChange: (open: boolean) => void;\n    };\n};\nexport type WorkspaceFrameEndRail = {\n    label: string;\n    topAction: ReactNode;\n    chatAction: ComponentProps<typeof WorkspaceEndRail>[\"chatAction\"];\n    children?: ReactNode;\n    overlay?: ReactNode;\n};\nexport type WorkspaceFrameProps = {\n    children: ReactNode;\n} & ({\n    composition: \"described\";\n    navigation: WorkspaceFrameNavigation;\n    topBar: WorkspaceFrameTopBar;\n    endRail?: WorkspaceFrameEndRail;\n    inspector?: WorkspaceFrameInspector;\n} | {\n    composition: \"host-responsive\";\n    navigation: ComponentProps<typeof WorkspaceShell>[\"navigation\"];\n    topBar: ComponentProps<typeof WorkspaceShell>[\"topBar\"];\n    endDock?: ReactElement | undefined;\n});\nexport type WorkspaceFrameTopBar = {\n    leading?: ReactNode;\n    center?: ReactNode;\n    actions?: ReactNode;\n};\nexport declare const WorkspaceFrame: (props: WorkspaceFrameProps) => import(\"react\").JSX.Element;\n"
+  }
+}

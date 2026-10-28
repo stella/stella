@@ -1,0 +1,237 @@
+{
+  "package": "@stll/text-normalize",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ARABIC_DIGIT_FOLDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARABIC_LETTER_FOLDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ARABIC_REMOVED",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ASCII_FOLD_TABLE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "FoldedSearchText",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FoldedText",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SearchMatchRange",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SlugCharset",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SlugSeparator",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SlugifyOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "UNICODE_NORMALIZATION_FORMS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "UnicodeMarkClass",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "UnicodeNormalizationForm",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "applyArabicFolds",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "applyArabicFoldsWithOffsets",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "arabicNormalize",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "collapseSpacedLetters",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "escapeRegExp",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "findSearchMatchRanges",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldSearchMatchText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldSearchMatchTextWithOffsets",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldToAscii",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeUnicode",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "slugify",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "spacedLetterRunRegex",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "stripDiacritics",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "stripDiacriticsForSlug",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "stripUnicodeMarks",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./postgres-search-fold": {
+      "type": "module",
+      "file": "./src/postgres-search-fold.d.ts",
+      "exports": [
+        {
+          "name": "findPostgresSearchFoldRanges",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldLikePostgresSearch",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "foldLikePostgresSearchWithOffsets",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./search-match-key": {
+      "type": "module",
+      "file": "./src/search-match-key.d.ts",
+      "exports": [
+        {
+          "name": "containsSearchMatchKey",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "findSearchMatchKeyRanges",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./search-query-matcher": {
+      "type": "module",
+      "file": "./src/search-query-matcher.d.ts",
+      "exports": [
+        {
+          "name": "SearchQueryMatcher",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createSearchQueryMatcher",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "filterBySearchQuery",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./unaccent-rules": {
+      "type": "module",
+      "file": "./src/unaccent-rules.d.ts",
+      "exports": [
+        {
+          "name": "POSTGRES_UNACCENT_RULES",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/arabic.d.ts": "export declare const ARABIC_LETTER_FOLDS: Readonly<Record<string, string>>;\nexport declare const ARABIC_REMOVED: readonly string[];\nexport declare const ARABIC_DIGIT_FOLDS: Readonly<Record<string, string>>;\nexport declare const applyArabicFolds: (text: string) => string;\nexport type FoldedText = {\n    sourceEndIndex: number[];\n    text: string;\n    truncated: boolean;\n    sourceIndex: number[];\n};\ntype ApplyArabicFoldsWithOffsetsOptions = {\n    maxFoldedUnits?: number;\n};\nexport declare const applyArabicFoldsWithOffsets: (input: string, options?: ApplyArabicFoldsWithOffsetsOptions) => FoldedText;\nexport {};\n",
+    "./src/ascii-fold-table.d.ts": "export declare const ASCII_FOLD_TABLE: Readonly<Record<string, string>>;\n",
+    "./src/ascii-fold.d.ts": "export declare const applyAsciiFolds: (decomposed: string) => string;\nexport declare const foldToAscii: (text: string) => string;\n",
+    "./src/diacritics.d.ts": "export declare const SEARCH_DIACRITIC_SOURCE = \"(?=\\\\p{M}|\\\\p{Script=Latin})\\\\p{Diacritic}\";\nexport declare const stripDiacritics: (text: string) => string;\nexport declare const stripDiacriticsForSlug: (text: string) => string;\n",
+    "./src/escape-regexp.d.ts": "export declare const escapeRegExp: (value: string) => string;\n",
+    "./src/index.d.ts": "export { applyArabicFolds, applyArabicFoldsWithOffsets, ARABIC_DIGIT_FOLDS, ARABIC_LETTER_FOLDS, ARABIC_REMOVED, } from \"./arabic.js\";\nexport type { FoldedText } from \"./arabic.js\";\nexport { foldToAscii } from \"./ascii-fold.js\";\nexport { ASCII_FOLD_TABLE } from \"./ascii-fold-table.js\";\nexport { stripDiacritics, stripDiacriticsForSlug } from \"./diacritics.js\";\nexport { escapeRegExp } from \"./escape-regexp.js\";\nexport { arabicNormalize } from \"./normalize.js\";\nexport { findSearchMatchRanges, foldSearchMatchText, foldSearchMatchTextWithOffsets, } from \"./search-match.js\";\nexport type { FoldedSearchText, SearchMatchRange } from \"./search-match.js\";\nexport { collapseSpacedLetters, spacedLetterRunRegex, } from \"./spaced-letters.js\";\nexport { slugify } from \"./slug.js\";\nexport type { SlugCharset, SlugifyOptions, SlugSeparator } from \"./slug.js\";\nexport { normalizeUnicode, stripUnicodeMarks, UNICODE_NORMALIZATION_FORMS, } from \"./unicode.js\";\nexport type { UnicodeMarkClass, UnicodeNormalizationForm } from \"./unicode.js\";\n",
+    "./src/normalize.d.ts": "export declare const arabicNormalize: (text: string) => string;\n",
+    "./src/postgres-search-fold.d.ts": "import type { FoldedSearchText, SearchMatchRange } from \"./search-match.js\";\nexport declare const foldLikePostgresSearch: (value: string) => string;\nexport declare const foldLikePostgresSearchWithOffsets: (content: string) => FoldedSearchText;\nexport declare const findPostgresSearchFoldRanges: (content: string, term: string) => SearchMatchRange[];\n",
+    "./src/search-match-key.d.ts": "type SearchMatchKeyRange = {\n    end: number;\n    start: number;\n};\nexport declare const containsSearchMatchKey: (content: string, query: string) => boolean;\ntype FindSearchMatchKeyRangesOptions = {\n    start?: number;\n    end?: number;\n    maxMatches?: number;\n};\nexport declare const findSearchMatchKeyRanges: (content: string, query: string, options?: FindSearchMatchKeyRangesOptions) => SearchMatchKeyRange[];\nexport {};\n",
+    "./src/search-match.d.ts": "export type SearchMatchRange = {\n    end: number;\n    start: number;\n};\nexport type FoldedSearchText = {\n    originalRanges: SearchMatchRange[];\n    text: string;\n};\nexport declare const foldSearchMatchText: (value: string) => string;\nexport declare const foldSearchMatchTextWithOffsets: (content: string) => FoldedSearchText;\ntype FindFoldedRangesOptions = {\n    content: FoldedSearchText;\n    maxMatches: number;\n    query: string;\n};\nexport declare const findFoldedRanges: ({ content, maxMatches, query, }: FindFoldedRangesOptions) => SearchMatchRange[];\ntype FindSearchMatchRangesOptions = {\n    maxMatches?: number;\n};\nexport declare const findSearchMatchRanges: (content: string | FoldedSearchText, query: string, options?: FindSearchMatchRangesOptions) => SearchMatchRange[];\nexport {};\n",
+    "./src/search-query-matcher.d.ts": "export type SearchQueryMatcher = (candidate: string | null | undefined) => boolean;\nexport declare const createSearchQueryMatcher: (query: string) => SearchQueryMatcher;\ntype FilterBySearchQueryOptions<T> = {\n    fields: (item: T) => readonly (string | null | undefined)[];\n    items: readonly T[];\n    query: string;\n};\nexport declare const filterBySearchQuery: <T>({ fields, items, query, }: FilterBySearchQueryOptions<T>) => T[];\nexport {};\n",
+    "./src/slug.d.ts": "export type SlugCharset = \"ascii\" | \"unicode\";\nexport type SlugSeparator = \"-\" | \"_\";\nexport type SlugifyOptions = {\n    readonly charset: SlugCharset;\n    readonly separator: SlugSeparator;\n    readonly maxLength: number;\n    readonly fallback: string;\n};\nexport declare const slugify: (value: string, { charset, separator, maxLength, fallback }: SlugifyOptions) => string;\n",
+    "./src/spaced-letters.d.ts": "export declare const spacedLetterRunRegex: () => RegExp;\nexport declare const collapseSpacedLetters: (text: string) => string;\n",
+    "./src/unaccent-rules.d.ts": "export declare const POSTGRES_UNACCENT_RULES: Readonly<Record<string, string>>;\n",
+    "./src/unicode.d.ts": "export declare const UNICODE_NORMALIZATION_FORMS: readonly [\n    \"NFC\",\n    \"NFD\",\n    \"NFKC\",\n    \"NFKD\"\n];\nexport type UnicodeNormalizationForm = (typeof UNICODE_NORMALIZATION_FORMS)[number];\nexport type UnicodeMarkClass = \"combining\" | \"diacritic\" | \"basic-combining\";\ntype StripUnicodeMarksOptions = {\n    form: UnicodeNormalizationForm;\n    markClass: UnicodeMarkClass;\n};\nexport declare const normalizeUnicode: (text: string, form: UnicodeNormalizationForm) => string;\nexport declare const stripUnicodeMarks: (text: string, { form, markClass }: StripUnicodeMarksOptions) => string;\nexport {};\n"
+  }
+}
