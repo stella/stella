@@ -58,6 +58,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/desktop-runner/**/*.ts",
+  "apps/api/src/lib/desktop-runner/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
