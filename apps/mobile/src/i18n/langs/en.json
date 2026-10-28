@@ -8,7 +8,22 @@
   "chat": {
     "description": "Keep ongoing work close and continue from any device.",
     "emptyTitle": "No conversations yet",
-    "emptyDescription": "New conversations and recent threads will appear here."
+    "emptyDescription": "New conversations and recent threads will appear here.",
+    "loadFailed": "Your conversations could not be loaded.",
+    "retry": "Try again",
+    "untitled": "Untitled conversation",
+    "loadMoreFailed": "Load more",
+    "loadOlderFailed": "Load earlier messages",
+    "toolUsed": "Used {tool}",
+    "threadTitle": "Conversation",
+    "threadLoadFailed": "This conversation could not be loaded.",
+    "threadEmptyDescription": "This conversation has no messages yet.",
+    "sections": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Previous 7 days",
+      "earlier": "Earlier"
+    }
   },
   "tasks": {
     "description": "See what needs attention without opening the full workspace.",

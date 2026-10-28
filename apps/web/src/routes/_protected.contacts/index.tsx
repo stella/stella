@@ -46,17 +46,12 @@ import {
   DownloadIcon,
   EllipsisVerticalIcon,
   PlusIcon,
-  SearchIcon,
   UploadIcon,
   UserIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -210,20 +205,17 @@ function ContactsPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
-          <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-            <InputGroupInput
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                updateSearch(val);
-              }}
-              placeholder={t("contacts.search")}
-              value={searchQuery}
-            />
-            <InputGroupAddon>
-              <SearchIcon />
-            </InputGroupAddon>
-          </InputGroup>
+          <SearchField
+            aria-label={t("contacts.search")}
+            clearLabel={t("common.clearSearch")}
+            groupClassName="sm:max-w-sm"
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              updateSearch(value);
+            }}
+            placeholder={t("contacts.search")}
+            value={searchQuery}
+          />
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
           <div className="flex flex-wrap gap-1">
@@ -723,12 +715,15 @@ const ContactsToolbarPlaceholder = () => {
   return (
     <ResponsiveActionToolbar>
       <ResponsiveActionToolbarItem slot="primary">
-        <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-          <InputGroupInput disabled placeholder={t("contacts.search")} />
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-        </InputGroup>
+        <SearchField
+          aria-label={t("contacts.search")}
+          clearLabel={t("common.clearSearch")}
+          disabled
+          groupClassName="sm:max-w-sm"
+          onValueChange={() => undefined}
+          placeholder={t("contacts.search")}
+          value=""
+        />
       </ResponsiveActionToolbarItem>
       <ResponsiveActionToolbarItem slot="secondary">
         <div className="flex flex-wrap gap-1">
