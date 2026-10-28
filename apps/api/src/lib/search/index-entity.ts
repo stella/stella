@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { EmptyFilter } from "drizzle-orm/relations";
 
 import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
@@ -207,7 +208,7 @@ const buildSearchDocument = async (
       where: {
         entityId: { eq: entityId },
         workspaceId: { eq: entity.workspaceId },
-        versionNumber: cursor === null ? undefined : { lt: Number(cursor) },
+        versionNumber: cursor === null ? EmptyFilter : { lt: Number(cursor) },
       },
       // Include tombstones: a deleted newer version must prevent legacy text
       // from being attributed to a promoted older version.
