@@ -257,7 +257,7 @@
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
     "fast-check": "catalog:",
-    "openai": "6.49.0",
+    "openai": "7.43.0",
     "pdfjs-dist": "^6.4.299",
     "saxes": "catalog:",
     "tsrs": "catalog:",
