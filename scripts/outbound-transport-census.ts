@@ -873,6 +873,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
+    path: "apps/web/src/lib/api.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Sends typed client requests to the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/lib/desktop-bridge.ts",
     class: "operator-configured-infrastructure",
     reason:

@@ -1257,7 +1257,6 @@
     "apps/web/src/features/chat/hooks/use-chat-session.ts": 1,
     "apps/web/src/features/chat/queries.ts": 3,
     "apps/web/src/lib/desktop-bridge.ts": 2,
-    "apps/web/src/lib/files/queries.ts": 2,
     "apps/web/src/lib/workspaces/mutations/entities.ts": 1,
     "apps/web/src/lib/workspaces/mutations/properties.ts": 1,
     "apps/web/src/lib/workspaces/mutations/use-create-file-entities.ts": 1,
