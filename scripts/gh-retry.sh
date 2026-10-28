@@ -76,7 +76,14 @@ for ((i=1; i<${#args[@]}; i+=1)); do
       ;;
     --input=*) method=POST; [[ "$arg" != --input=- ]] || stdin_needed=true ;;
     --paginate) paginated=true ;;
-    --exit-status|--exit-status=true) exit_status=true ;;
+    --exit-status) exit_status=true ;;
+    --exit-status=*)
+      case "${arg#*=}" in
+        1|t|T|TRUE|true|True) exit_status=true ;;
+        0|f|F|FALSE|false|False) exit_status=false ;;
+        *) exit_status=false ;;
+      esac
+      ;;
     -f|-F|--field|--raw-field)
       flag="$arg"; method=POST; i=$((i+1)); value="${args[i]:-}"
       [[ "$value" != query=* ]] || query="${value#query=}"

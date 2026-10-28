@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import {
   chmod,
   mkdir,
@@ -9,6 +9,9 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+// timeout: matrix tests run several isolated subprocess scenarios serially.
+setDefaultTimeout(20_000);
 
 const HELPER = path.resolve(import.meta.dir, "gh-retry.sh");
 const FAKE_GH = `#!/usr/bin/env python3
@@ -331,6 +334,29 @@ test.each([
   },
 );
 
+test("run view accepts --exit-status=1", async () => {
+  const result = await scenario({
+    args: ["run", "view", "123", "--exit-status=1"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
+test.each(["1", "t", "T", "TRUE", "true", "True"])(
+  "run --exit-status=%s returns a failed workflow conclusion without retrying",
+  async (value) => {
+    const result = await scenario({
+      args: ["run", "view", "123", `--exit-status=${value}`],
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(1);
+    expect(result.calls).toHaveLength(1);
+    expect(result.sleeps).toEqual([]);
+  },
+);
+
 test("run --exit-status still retries a transient HTTP response", async () => {
   const result = await scenario({
     args: ["run", "view", "123", "--exit-status"],
@@ -347,6 +373,34 @@ test("run view without --exit-status retries a 2xx decode failure", async () => 
   });
   expect(result.exit).toBe(0);
   expect(result.calls).toHaveLength(2);
+});
+
+test.each(["false", "0"])(
+  "run --exit-status=%s retries a 2xx decode failure",
+  async (value) => {
+    const result = await scenario({
+      args: ["run", "view", "123", `--exit-status=${value}`],
+      responses: [{ exit: 1, http: 200 }, success],
+    });
+    expect(result.exit).toBe(0);
+    expect(result.calls).toHaveLength(2);
+  },
+);
+
+test("the last --exit-status value wins", async () => {
+  const enabled = await scenario({
+    args: ["run", "view", "123", "--exit-status=false", "--exit-status=T"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(enabled.exit).toBe(1);
+  expect(enabled.calls).toHaveLength(1);
+
+  const disabled = await scenario({
+    args: ["run", "view", "123", "--exit-status=1", "--exit-status=0"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(disabled.exit).toBe(0);
+  expect(disabled.calls).toHaveLength(2);
 });
 
 test("HTTP writes and GraphQL mutations stay single-shot", async () => {
