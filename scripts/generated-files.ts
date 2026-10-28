@@ -2056,8 +2056,15 @@ const GENERATOR_DECLARATIONS = [
     id: "mojibake-exemplars",
     outputKind: "committed",
     outputs: ["packages/mojibake/src/exemplars.generated.ts"],
-    checkInputs: ["packages/mojibake/src/unicode-set.ts"],
-    inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
+    checkInputs: [
+      "packages/mojibake/src/unicode-set.ts",
+      "packages/sha256/src/bun.ts",
+    ],
+    inputs: [
+      "packages/mojibake/scripts/extract-exemplars.ts",
+      "packages/mojibake/scripts/cldr49-input.json",
+      "packages/mojibake/data/cldr49/**",
+    ],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
     check: null,
     unchecked:
