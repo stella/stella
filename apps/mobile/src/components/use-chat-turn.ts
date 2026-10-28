@@ -97,7 +97,7 @@ export const useChatTurn = ({
     if (error._tag !== "SignedOutError") {
       return false;
     }
-    end();
+    end(source);
     return true;
   };
 

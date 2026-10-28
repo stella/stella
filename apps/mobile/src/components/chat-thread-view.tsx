@@ -181,7 +181,7 @@ const ThreadMessages = ({
         return true;
       }
       if (latest.error._tag === "SignedOutError") {
-        end();
+        end(source);
       }
       // Otherwise the answer stays as it streamed until the next refresh.
       return false;
