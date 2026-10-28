@@ -338,6 +338,31 @@ describe("PostHog server analytics", () => {
     ).toEqual([["rejected_user"], ["next_user"]]);
   });
 
+  test("still sends the rest of a flush after PostHog rejects one batch", async () => {
+    const receiver = startReceiver((_request, index) =>
+      index === 0
+        ? new Response("invalid", { status: 400 })
+        : Response.json({ status: "Ok" }),
+    );
+    const analytics = analyticsFor(receiver.host, {
+      flushAt: 2,
+      maxBatchSize: 2,
+    });
+
+    for (const user of ["user_1", "user_2", "user_3", "user_4", "user_5"]) {
+      analytics.capture(feedbackEvent(user));
+    }
+    expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
+      { "analytics.delivery.failure": "rejected", "http.status_code": 400 },
+    ]);
+
+    expect(
+      receiver.requests.map((request) =>
+        request.body.batch.map((message) => message.distinct_id),
+      ),
+    ).toEqual([["user_1", "user_2"], ["user_3", "user_4"], ["user_5"]]);
+  });
+
   test("keeps events that never reached PostHog for the next flush", async () => {
     // Requests stall until the test has seen the flush give up on them.
     let healthy = false;

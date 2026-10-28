@@ -179,13 +179,15 @@ export const createPostHogServerAnalytics = (
   };
 
   /**
-   * Send what is queued when this flush starts. A rejected batch is dropped;
-   * a batch that never reached PostHog goes back to the front of the queue
-   * for the next flush. Either way the flush logs the failure.
+   * Send what is queued when this flush starts. A rejected batch is dropped
+   * and the rest of the flush still goes out; a batch that never reached
+   * PostHog goes back to the front of the queue for the next flush. Either
+   * way the flush logs the failure.
    */
   const drain = async (): Promise<DeliveryFailure | null> => {
     clearTimer();
     let remaining = queue.length;
+    let rejected: DeliveryFailure | null = null;
     while (remaining > 0 && queue.length > 0) {
       const batch = queue.slice(0, Math.min(maxBatchSize, remaining));
       queue = queue.slice(batch.length);
@@ -207,9 +209,10 @@ export const createPostHogServerAnalytics = (
         queue = [...batch, ...queue].slice(0, maxQueueSize);
         return { reason: "unreached", errorType: outcome.errorType };
       }
-      return { reason: "rejected", status: outcome.status };
+      rejected ??= { reason: "rejected", status: outcome.status };
+      remaining -= batch.length;
     }
-    return null;
+    return rejected;
   };
 
   // observeFailure captures through this client, so the client sits below it
