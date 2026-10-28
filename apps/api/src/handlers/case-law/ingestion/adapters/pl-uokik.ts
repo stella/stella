@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
@@ -85,7 +86,6 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1962,17 +1962,38 @@ const metadataField = (key: string): SourceFieldDisposition => ({
 type PlUokikPublisherRecord = Readonly<Record<PlUokikSourceField, unknown>>;
 
 const PL_UOKIK_SOURCE_FIELDS = {
-  "listing.@position": legacyExcludedSourceField(
-    "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
-  ),
+  "listing.@position": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["@position"],
+      reason:
+        "The original view row retains traversal attributes and every column container value",
+    },
+  },
   "listing.@unid": { disposition: "stored", target: { type: "identity" } },
   "listing.@noteid": metadataField("noteId"),
-  "listing.@siblings": legacyExcludedSourceField(
-    "the view's size, the same on every row; the total probe reads it",
-  ),
-  "listing.entrydata": legacyExcludedSourceField(
-    "the column container; each value in it is declared below",
-  ),
+  "listing.@siblings": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["@siblings"],
+      reason:
+        "The original view row retains traversal attributes and every column container value",
+    },
+  },
+  "listing.entrydata": {
+    disposition: "stored",
+    target: {
+      type: "raw",
+      part: "listing",
+      path: ["entrydata"],
+      reason:
+        "The original view row retains traversal attributes and every column container value",
+    },
+  },
   "listing.column.Numer decyzji": metadataField("decisionNumberAsListed"),
   "listing.column.Data decyzji": metadataField("decisionDateAsListed"),
   "listing.column.link": metadataField("parties"),

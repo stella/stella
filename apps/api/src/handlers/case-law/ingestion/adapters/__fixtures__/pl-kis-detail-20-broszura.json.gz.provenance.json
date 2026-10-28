@@ -1,0 +1,8 @@
+{
+  "capture": "recorded",
+  "sha256": "97b16e7e106f4d67c6006036edcce8b3323068c40a641492d759b421e377642b",
+  "sourceUrl": "https://eureka.mf.gov.pl/api/public/v1/informacje/674293",
+  "capturedAt": "2026-10-28T18:31:03.587253+00:00",
+  "note": "Recorded publisher record excerpt: all metadata, HTML text, links and DOM structure retained;31 inline image byte payloads replaced by AA==. Full original response SHA-256 recorded separately; production raw retention is unchanged.",
+  "originalResponseSha256": "ea4e9d713d499a82d2c94d4781bd8c35998139c6357d456cfb8940c1bfbff66e"
+}

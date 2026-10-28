@@ -392,72 +392,13 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
   "hu-bhgy": [],
   "pl-courts": [],
   "pl-kio": [],
-  "pl-kis": [
-    {
-      "field": "POZIOM_DOSTEPU_WYBRANEJ_TRESCI",
-      "policy": "legacy",
-      "reason": "which of the service's editor groups may see a part of the document; it says nothing about the document",
-    },
-    {
-      "field": "informacja/id",
-      "policy": "legacy",
-      "reason": "the same id ID_INFORMACJI states, which keys the row",
-    },
-    {
-      "field": "informacja/informacjaTytulDto",
-      "policy": "legacy",
-      "reason": "an empty list on every document observed; the title is TEZA",
-    },
-    {
-      "field": "informacja/nazwa",
-      "policy": "legacy",
-      "reason": "the category's name, which KATEGORIA_INFORMACJI states",
-    },
-  ],
-  "pl-ncourt": [
-    {
-      "field": "excerpt",
-      "policy": "legacy",
-      "reason": "the opening characters of the document the document part holds whole",
-    },
-    {
-      "field": "xPart@xml:space",
-      "policy": "legacy",
-      "reason": "a serialisation directive for the XML, not a statement about the judgment",
-    },
-  ],
+  "pl-kis": [],
+  "pl-ncourt": [],
   "pl-nsa": [],
   "pl-sn": [],
   "pl-tk": [],
-  "pl-uodo": [
-    {
-      "field": "type",
-      "policy": "legacy",
-      "reason": "the record format's own name; every record the search returns carries the same value",
-    },
-    {
-      "field": "version",
-      "policy": "legacy",
-      "reason": "the version of the record format, not a fact about the document",
-    },
-  ],
-  "pl-uokik": [
-    {
-      "field": "listing.@position",
-      "policy": "legacy",
-      "reason": "the row's place in a view that shifts with every decision published; the crawl reads it, the row does not keep it",
-    },
-    {
-      "field": "listing.@siblings",
-      "policy": "legacy",
-      "reason": "the view's size, the same on every row; the total probe reads it",
-    },
-    {
-      "field": "listing.entrydata",
-      "policy": "legacy",
-      "reason": "the column container; each value in it is declared below",
-    },
-  ],
+  "pl-uodo": [],
+  "pl-uokik": [],
   "sk-courts": [],
   "sk-us": [],
   "uk-fcl": [],
