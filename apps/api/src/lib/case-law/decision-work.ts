@@ -42,7 +42,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
-import { unionAll } from "drizzle-orm/pg-core";
 
 import {
   caseLawCitations,
@@ -431,24 +430,36 @@ export const workCitationStream = ({
           after === undefined ? undefined : gt(caseLawCitations.id, after),
         ),
       );
-  const [first, second, ...rest] = work.manifestationIds.map(branch);
+  const [first, ...rest] = work.manifestationIds.map(branch);
   if (first === undefined) {
     return panic("A work holds at least its subject");
   }
-  const merged = (
-    second === undefined ? first : unionAll(first, second, ...rest)
-  ).as("work_citation_rows");
+  const merged = first.$dynamic();
+  for (const next of rest) {
+    merged.unionAll(next);
+  }
+  const anchored = merged.as("work_citation_rows");
   // The cap sits directly over the anchor ranges, so each range reads at most
   // `limit` rows; numbering and the canonical rule read the capped rows.
-  const rows =
-    limit === undefined
-      ? merged
-      : tx
-          .select(edgeColumnsOf(merged))
-          .from(merged)
-          .orderBy(asc(merged.id))
-          .limit(limit)
-          .as("work_citation_capped");
+  const capped = tx
+    .select({
+      id: anchored.id,
+      citationText: anchored.citationText,
+      sectionIndex: anchored.sectionIndex,
+      polarity: anchored.polarity,
+      doctrinalTreatment: anchored.doctrinalTreatment,
+      evidenceQuote: anchored.evidenceQuote,
+      relatedId: anchored.relatedId,
+      citingDecisionId: anchored.citingDecisionId,
+      citedDecisionId: anchored.citedDecisionId,
+      kind: anchored.kind,
+    })
+    .from(anchored)
+    .$dynamic();
+  if (limit !== undefined) {
+    capped.orderBy(asc(anchored.id)).limit(limit);
+  }
+  const rows = capped.as("work_citation_capped");
   const canonical = canonicalRuleApplies(direction, work)
     ? canonicalWorkCitationSql({
         direction,
@@ -463,7 +474,16 @@ export const workCitationStream = ({
     : sql<boolean>`true`;
   return tx
     .select({
-      ...edgeColumnsOf(rows),
+      id: rows.id,
+      citationText: rows.citationText,
+      sectionIndex: rows.sectionIndex,
+      polarity: rows.polarity,
+      doctrinalTreatment: rows.doctrinalTreatment,
+      evidenceQuote: rows.evidenceQuote,
+      relatedId: rows.relatedId,
+      citingDecisionId: rows.citingDecisionId,
+      citedDecisionId: rows.citedDecisionId,
+      kind: rows.kind,
       ordinal: sql<number>`row_number() OVER (ORDER BY ${rows.id})`.as(
         "ordinal",
       ),
@@ -475,34 +495,5 @@ export const workCitationStream = ({
     .from(rows)
     .as("work_citation_window");
 };
-
-/** The edge columns of a subquery over the anchor ranges, re-bound to it. */
-const edgeColumnsOf = <
-  T extends {
-    id: unknown;
-    citationText: unknown;
-    sectionIndex: unknown;
-    polarity: unknown;
-    doctrinalTreatment: unknown;
-    evidenceQuote: unknown;
-    relatedId: unknown;
-    citingDecisionId: unknown;
-    citedDecisionId: unknown;
-    kind: unknown;
-  },
->(
-  subquery: T,
-) => ({
-  id: subquery.id,
-  citationText: subquery.citationText,
-  sectionIndex: subquery.sectionIndex,
-  polarity: subquery.polarity,
-  doctrinalTreatment: subquery.doctrinalTreatment,
-  evidenceQuote: subquery.evidenceQuote,
-  relatedId: subquery.relatedId,
-  citingDecisionId: subquery.citingDecisionId,
-  citedDecisionId: subquery.citedDecisionId,
-  kind: subquery.kind,
-});
 
 export type WorkCitationWindow = ReturnType<typeof workCitationStream>;
