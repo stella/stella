@@ -33,7 +33,7 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus } from "@/api/db/schema";
+import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
   billingArrangements,
   caseLawReplayBatches,
@@ -47,7 +47,6 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import type { SearchProjectionKind } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
