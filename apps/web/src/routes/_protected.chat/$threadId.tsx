@@ -14,6 +14,7 @@ import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { loadRouteResource } from "@/lib/route-not-found";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
@@ -94,13 +95,13 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // awaited refetch would replace the seed with the server's (possibly
     // empty) set before the page's matter picker ever saw it. The loader
     // only fills a cold cache.
-    if (
-      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
-      undefined
-    ) {
-      return;
-    }
-    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
+    await loadRouteResource({
+      ids: [params.threadId],
+      load: async () =>
+        context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
+        (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
+      exists: (thread) => thread.threadExists,
+    });
   },
 });
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -518,4 +518,19 @@ export const DefaultPendingComponent = ({
   </div>
 );
 
-export const DefaultNotFoundComponent = () => <Navigate to="/workspaces" />;
+export const DefaultNotFoundComponent = () => {
+  const t = useTranslations();
+
+  return (
+    <main className="flex min-h-0 flex-1 items-center justify-center p-6">
+      <section className="flex max-w-md flex-col items-center gap-4 text-center">
+        <h1 className="text-foreground text-xl font-medium">
+          {t("errors.api.notFound")}
+        </h1>
+        <Button render={<Link to="/workspaces" />} variant="outline">
+          {t("common.goBack")}
+        </Button>
+      </section>
+    </main>
+  );
+};

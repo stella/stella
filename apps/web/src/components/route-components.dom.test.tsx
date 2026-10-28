@@ -25,9 +25,37 @@ const { RouteErrorLifecycleProvider } =
   await import("@/lib/analytics/route-error-lifecycle-context");
 const { APIError } = await import("@/lib/errors/api");
 const { AuthClientError } = await import("@/lib/errors/auth");
-const { DefaultErrorComponent } = await import("./route-components");
+const { DefaultErrorComponent, DefaultNotFoundComponent } =
+  await import("./route-components");
 
 afterAll(async () => await unregisterDomEnvironment());
+
+test("not found renders a message and a route back without redirecting", () => {
+  const root = createRootRoute();
+  const router = createRouter({
+    isServer: true,
+    history: createMemoryHistory({ initialEntries: ["/time/invoices"] }),
+    routeTree: root.addChildren([
+      createRoute({ getParentRoute: () => root, path: "/workspaces" }),
+    ]),
+  });
+  const markup = renderToStaticMarkup(
+    <IntlProvider locale="en" messages={en} timeZone="UTC">
+      <RouterContextProvider router={router}>
+        <DefaultNotFoundComponent />
+      </RouterContextProvider>
+    </IntlProvider>,
+  );
+  const container = document.createElement("div");
+  // safe-html: markup comes from React renderToStaticMarkup above, which escapes text.
+  container.innerHTML = markup;
+  const ui = within(container);
+
+  expect(ui.getByRole("heading").textContent).toBe(
+    "We could not find what you requested.",
+  );
+  expect(ui.getByRole("link").getAttribute("href")).toBe("/workspaces");
+});
 
 const errors = [
   { kind: "cancellation", error: new CancelledError({ revert: true }) },
