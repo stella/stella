@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:tna="https://caselaw.nationalarchives.gov.uk">
+  <title>Synthetic judgment feed</title>
+  <entry>
+    <title>Invented Amber v Invented Birch</title>
+    <id>https://caselaw.nationalarchives.gov.uk/id/d-00000000-0000-4000-8000-000000000001</id>
+    <published>2026-01-02T00:00:00Z</published>
+    <updated>2026-01-03T12:00:00Z</updated>
+    <author><name>Supreme Court</name></author>
+    <tna:uri>d-00000000-0000-4000-8000-000000000001</tna:uri>
+    <tna:identifier type="ukncn" slug="uksc/2026/900001">[2026] UKSC 900001</tna:identifier>
+    <tna:identifier type="fclid" slug="tna.synthetic001">synthetic001</tna:identifier>
+    <tna:contenthash>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</tna:contenthash>
+    <tna:assets_base href="https://assets.example.test/synthetic/"/>
+    <link rel="alternate" type="text/html" href="https://caselaw.nationalarchives.gov.uk/d-00000000-0000-4000-8000-000000000001"/>
+    <link rel="alternate" type="application/akn+xml" href="https://caselaw.nationalarchives.gov.uk/d-00000000-0000-4000-8000-000000000001/data.xml"/>
+    <link rel="alternate" type="application/pdf" href="https://assets.example.test/synthetic/decision.pdf"/>
+  </entry>
+</feed>

@@ -194,12 +194,20 @@
     "scripts/ci-scoped-install.test.ts": ["**"],
     "scripts/ci-static-checks.test.ts": [".github/**"],
     "scripts/cla-workflow.test.ts": [".github/**"],
+    "scripts/cloud-env-secret-scanner-setup.test.ts": [
+      ".agents/cloud-setup.sh",
+      "scripts/cloud-env-secret-scanner-setup.sh",
+      "stll-toolchain.json"
+    ],
     "scripts/code-quality-cache-inputs.test.ts": ["turbo.json"],
     "scripts/code-quality-task-budget.test.ts": ["**"],
     "scripts/codemod-icons.test.ts": ["packages/ui/**"],
     "scripts/decision-reader-surfaces.test.ts": ["**"],
     "scripts/dependency-audit-acceptance.test.ts": [
       "scripts/dependency-audit-baseline.json"
+    ],
+    "scripts/dependency-audit-assessment.test.ts": [
+      "scripts/fixtures/dependency-audit/**"
     ],
     "scripts/dependency-audit-workflow.test.ts": [".github/**"],
     "scripts/dependency-review-workflow.test.ts": ["**"],
@@ -260,6 +268,7 @@
     "scripts/gh-retry-processes.test.ts": ["scripts/gh-retry.sh"],
     "scripts/global-rule-inputs.test.ts": ["**"],
     "scripts/hook-dependencies.test.ts": ["**"],
+    "scripts/hooks-no-type-aware.test.ts": ["**"],
     "scripts/legal-atlas-image-scope.test.ts": ["**"],
     "scripts/main-heavy-classification.test.ts": [".github/workflows/ci.yml"],
     "scripts/main-workflow-cadence.test.ts": [".github/**"],
@@ -304,6 +313,10 @@
     "scripts/postgres-test-maintenance-workflow.test.ts": [".github/**"],
     "scripts/pr-regeneration.test.ts": [".github/workflows/autofix.yml"],
     "scripts/pre-push-affected.test.ts": ["**"],
+    "scripts/pre-push-typecheck.test.ts": [
+      "apps/*/package.json",
+      "packages/*/package.json"
+    ],
     "scripts/precommit-lint.test.ts": ["**"],
     "scripts/precommit-paths.test.ts": ["lefthook.yml"],
     "scripts/prepare-maintenance-release-gates.test.ts": [
@@ -481,11 +494,13 @@
     "scripts/check-swallowed-item-error-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-test-state-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/ci-job-classification/snapshots.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/ci-job-classification/writers.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/fix-tests-on-base.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-process.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-rust.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flaky-test-history.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/generate-mobile-ui-theme.test.ts": "Uses only in-memory fixtures and its static import closure.",
     "scripts/generated-conflicts.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/ledger-membership.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/marketing-screenshot-verdict.test.ts": "Reads only in-memory report fixtures; the file reads belong to the command-line entry.",

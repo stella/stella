@@ -401,6 +401,7 @@ export const ReaderBreadcrumb = ({
                         render={
                           <Button
                             className="size-11 shrink-0"
+                            tooltip={t("common.showMore")}
                             variant="ghost"
                           />
                         }

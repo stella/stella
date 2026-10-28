@@ -79,6 +79,7 @@ test.each([
       });
       return new HandlerError({
         status: 503,
+        code: "internal_error",
         message: refusal.message,
         retryable: true,
         retryAfterMs: refusal.retryAfterMs,
@@ -129,6 +130,7 @@ test("a thrown retryable handler error sets Retry-After", async () => {
     async function* () {
       throw new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Work capacity is unavailable",
         retryable: true,
         retryAfterMs: 2000,
@@ -160,6 +162,7 @@ test("a retryable handler error sets a whole-second Retry-After", async () => {
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Work capacity is unavailable",
           retryable: true,
           retryAfterMs: 2000,
@@ -1118,6 +1121,7 @@ describe("a mapped status survives the transport wrapper", () => {
   const upstreamRefusal = () =>
     new HandlerError({
       status: 503,
+      code: "internal_error",
       message: "Search is temporarily unavailable",
     });
 
@@ -1256,7 +1260,11 @@ describe("errorCauseChainAttributes", () => {
   });
 
   test("walks nested causes and omits the status of untyped levels", () => {
-    const root = new HandlerError({ status: 502, message: "upstream" });
+    const root = new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "upstream",
+    });
     const middle = new Error("adapter", { cause: root });
     const wrapper = new HandlerError({
       status: 500,

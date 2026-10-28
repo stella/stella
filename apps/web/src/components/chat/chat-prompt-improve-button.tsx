@@ -148,6 +148,7 @@ export const ChatPromptImproveButton = ({
 
   return (
     <SplitButton
+      primaryContent="icon"
       primaryLabel={label}
       menuLabel={t("chat.choosePromptImprovementStrategy")}
       primaryDisabled={unavailable}
