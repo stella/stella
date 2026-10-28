@@ -1123,11 +1123,14 @@ test("classification ignores unrelated workflow and composite action edits", () 
   expect(result.isOk()).toBe(true);
 });
 
+// A GitHub-hosted runner change is not among them: it cannot change a job's
+// kind (see "job digests omit only standard hosted runner labels").
+// A self-hosted runner can.
 for (const change of [
   "    permissions: {contents: write}\n",
   `    env: {TOKEN: '${githubExpression("secrets.RELEASE_TOKEN")}'}\n`,
   "    environment: production\n",
-  "    runs-on: ubuntu-latest\n",
+  "    runs-on: [self-hosted, linux]\n",
 ]) {
   test(`classification shape changes require review and refresh: ${change.trim()}`, () => {
     const f = fixture();
@@ -1532,7 +1535,8 @@ const classificationKeyFixtures = {
       permissions: { contents: "read" },
       needs: ["prepare"],
       if: "always()",
-      "runs-on": "ubuntu-latest",
+      // A GitHub-hosted image leaves the shape; any other runner participates.
+      "runs-on": ["self-hosted", "linux"],
       snapshot: { "image-name": "checks" },
       environment: "staging",
       concurrency: { group: "checks" },
@@ -1724,6 +1728,101 @@ test("GitHub on keys retain their string identity in canonical YAML", () => {
   }
   expect(quoted.value.digest).toBe(original.value.digest);
   expect(extraKey.value.digest).not.toBe(original.value.digest);
+});
+
+// Hosted image labels cannot change classification. Arbitrary script effects
+// cannot be inferred from permissions or keyword matching alone.
+test("job digests omit only standard hosted runner labels", () => {
+  type WorkflowOptions = {
+    runner?: string;
+    script?: string;
+    permissions?: string;
+    action?: string;
+  };
+  const workflow = ({
+    runner = "ubuntu-latest",
+    script = "core.info(context.runId);",
+    permissions = "read",
+    action = "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+  }: WorkflowOptions = {}) =>
+    [
+      "on: pull_request",
+      "jobs:",
+      "  gate:",
+      `    runs-on: ${runner}`,
+      "    permissions:",
+      `      actions: ${permissions}`,
+      "    steps:",
+      `      - uses: ${action}`,
+      "        with:",
+      "          retries: 3",
+      "          script: |",
+      `            ${script}`,
+    ].join("\n");
+  const digest = (text: string) => {
+    const parsed = parseDocument(text);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    return parsed.value.jobs["gate"]?.digest;
+  };
+  const original = digest(workflow());
+  expect(original).toBeDefined();
+  expect(digest(workflow({ runner: "ubuntu-24.04-arm" }))).toBe(original);
+  expect(digest(workflow({ runner: "[ubuntu-24.04, macos-14]" }))).toBe(
+    original,
+  );
+  for (const runner of [
+    ...["ubuntu", "windows", "macos"].flatMap((platform) => [
+      `${platform}-internal`,
+      `${platform}-24.04-private`,
+      `${platform}-latest-custom`,
+      `private-${platform}-latest`,
+    ]),
+    "[ubuntu-latest, ubuntu-internal]",
+    "[]",
+    "[self-hosted, linux]",
+    "stella-mini",
+    githubExpression("matrix.runner"),
+    "{group: larger}",
+  ]) {
+    const source = workflow({ runner });
+    expect(digest(source)).not.toBe(original);
+    const parsed = parseDocument(source);
+    if (parsed.isErr()) {
+      throw parsed.error;
+    }
+    expect(parsed.value.privileged).toBe(true);
+  }
+  expect(
+    digest(workflow({ script: "for (;;) { await github.paginate(x); }" })),
+  ).not.toBe(original);
+  expect(digest(workflow({ script: "core.info(secrets.TOKEN);" }))).not.toBe(
+    original,
+  );
+  expect(
+    digest(
+      workflow({ script: "await github.rest.repos.createRelease(context);" }),
+    ),
+  ).not.toBe(original);
+  const loggingWithWrite = digest(workflow({ permissions: "write" }));
+  for (const script of [
+    "await github.rest.git.createRef({ ...context.repo, ref: 'refs/tags/v1', sha: context.sha });",
+    "const create = github.rest.git.createRef; await create({ ...context.repo, ref: 'refs/tags/v1', sha: context.sha });",
+    "const method = 'create' + 'Ref'; await github.rest.git[method](params);",
+  ]) {
+    expect(digest(workflow({ permissions: "write", script }))).not.toBe(
+      loggingWithWrite,
+    );
+  }
+  expect(digest(workflow({ permissions: "write" }))).not.toBe(original);
+  expect(
+    digest(
+      workflow({
+        action: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      }),
+    ),
+  ).not.toBe(original);
 });
 
 const parsedWorkflow = (document: Record<string, unknown>) => {

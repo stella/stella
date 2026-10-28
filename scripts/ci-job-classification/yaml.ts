@@ -8,6 +8,11 @@ export class AdmissionError extends TaggedError("AdmissionError")<{
   message: string;
 }> {}
 
+// Only these document/job/step keys are omitted; new keys participate automatically.
+// YAML comments are absent from the parsed objects. Action inputs, including
+// arbitrary github-script programs, stay intact. A GitHub-hosted
+// runner image does not decide a job's kind, so `runs-on` leaves the job shape
+// only when every label names one (see `projectRunner`).
 export const CLASSIFICATION_EXCLUSIONS = {
   document: ["name", "run-name"],
   job: ["name", "timeout-minutes"],
@@ -148,6 +153,20 @@ const secretRefs = (value: unknown): string[] => {
   return [...new Set(children.flatMap(secretRefs))].toSorted();
 };
 
+const githubScript = (step: JsonRecord) => {
+  const uses = step["uses"];
+  const options = step["with"];
+  if (
+    typeof uses !== "string" ||
+    !uses.startsWith("actions/github-script@") ||
+    !isRecord(options)
+  ) {
+    return undefined;
+  }
+  const script = options["script"];
+  return typeof script === "string" ? script : undefined;
+};
+
 const stepShapes = (value: unknown): JsonRecord[] => {
   if (!Array.isArray(value)) {
     throw new AdmissionError({ message: "steps must be array" });
@@ -156,12 +175,19 @@ const stepShapes = (value: unknown): JsonRecord[] => {
     const step = requireRecord(candidate, "step must be mapping");
     const shape = project(step, "step");
     const run = step["run"];
-    const publicationCommand =
-      typeof run === "string" && /publish|deploy|release|push/iu.test(run);
+    const script = githubScript(step);
+    // Arbitrary JavaScript effects cannot be proven from keyword matches:
+    // retain the complete body in `with`, including calls through aliases.
+    const bodies = [run, script].filter(
+      (body): body is string => typeof body === "string",
+    );
+    const publicationCommand = bodies.some((body) =>
+      /publish|deploy|release|push/iu.test(body),
+    );
     if ("parallel" in step) {
       shape["parallel"] = stepShapes(step["parallel"]);
     }
-    const refs = secretRefs(run);
+    const refs = secretRefs(bodies);
     if (
       Object.keys(shape).length === 0 &&
       refs.length === 0 &&
@@ -177,6 +203,50 @@ const stepShapes = (value: unknown): JsonRecord[] => {
       },
     ];
   });
+};
+
+// GitHub-hosted image labels only; a self-hosted, grouped or computed runner
+// can change what a job can reach, so it stays in the shape and in the
+// privilege check that reads it.
+// Standard labels: https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+// Unknown labels remain classification inputs until reviewed as hosted images.
+const GITHUB_HOSTED_RUNNERS = new Set([
+  "ubuntu-slim",
+  "ubuntu-latest",
+  "ubuntu-24.04",
+  "ubuntu-22.04",
+  "ubuntu-26.04",
+  "ubuntu-24.04-arm",
+  "ubuntu-22.04-arm",
+  "ubuntu-26.04-arm",
+  "windows-latest",
+  "windows-2025",
+  "windows-2025-vs2026",
+  "windows-2022",
+  "windows-11-arm",
+  "windows-11-vs2026-arm",
+  "macos-15-intel",
+  "macos-26-intel",
+  "macos-latest",
+  "macos-14",
+  "macos-15",
+  "macos-26",
+  "xcode-27",
+]);
+const projectRunner = (job: JsonRecord, shape: JsonRecord) => {
+  const runner = job["runs-on"];
+  const labels: unknown[] = Array.isArray(runner) ? runner : [runner];
+  const hosted =
+    labels.length > 0 &&
+    labels.every(
+      (label) => typeof label === "string" && GITHUB_HOSTED_RUNNERS.has(label),
+    );
+  if (!hosted) {
+    return shape;
+  }
+  return Object.fromEntries(
+    Object.entries(shape).filter(([key]) => key !== "runs-on"),
+  );
 };
 
 const canonicalSteps = (value: unknown): JsonRecord[] => {
@@ -266,6 +336,11 @@ const privileged = (value: unknown): boolean => {
     return false;
   }
   return Object.entries(value).some(([key, child]) => {
+    // Hosted labels were removed by projectRunner; a retained runner can reach
+    // infrastructure outside the standard hosted boundary.
+    if (key === "runs-on") {
+      return true;
+    }
     if (key === "publication-command" && child === true) {
       return true;
     }
@@ -326,7 +401,7 @@ const parse = (text: string): ParsedDocument => {
         jobDependencies[job["uses"]] = "reusable-workflow";
       }
       addActionDependencies(jobDependencies, steps, {});
-      const jobShape = project(job, "job");
+      const jobShape = projectRunner(job, project(job, "job"));
       if ("steps" in job) {
         jobShape["steps"] = stepShapes(job["steps"]);
       }

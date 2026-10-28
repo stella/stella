@@ -1,5 +1,5 @@
 {
   "kind": "ordinary",
   "qualifier": "Cancels same-repository pull-request runs after API code-quality failure; no publication or deployment.",
-  "reviewedDigest": "03c2ced5d51e318d6b3b6f77ab7584b09d394c7fdd41555782e4a7dc7eff4156"
+  "reviewedDigest": "58ea5beedbe000037647e7f036e0c5207bac7fe336aa2ef1d5dda303656a0a0e"
 }
