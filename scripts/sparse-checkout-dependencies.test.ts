@@ -9,7 +9,7 @@ import path from "node:path";
 // when a relative runtime import is missing. Follow both transitively for every
 // sparse checkout.
 const SIBLING_REFERENCE =
-  /(?:\$\(dirname (?:-- )?"(?:\$\{BASH_SOURCE\[0\]\}|\$0)"\)|\$\{?script_dir\}?)\/([\w./-]+\.(?:sh|jq))/gu;
+  /(?:\$\(dirname (?:-- )?"(?:\$\{BASH_SOURCE\[0\]\}|\$0)"\)|\$\{?script_dir\}?)\/([\w./-]+\.(?:sh|jq|ts))/gu;
 
 const root = path.resolve(import.meta.dir, "..");
 
@@ -90,6 +90,7 @@ test("sibling references resolve relative to the referencing script", () => {
         'bash "$script_dir/b.sh"',
         `source "$(dirname -- "\${BASH_SOURCE[0]}")/../lib/c.sh"`,
         'jq -f "$script_dir/gate.jq"',
+        'bun "$script_dir/gate.ts"',
         'r="$(dirname "$0")/d.sh"',
       ].join("\n"),
     ),
@@ -98,6 +99,7 @@ test("sibling references resolve relative to the referencing script", () => {
     "scripts/b.sh",
     "lib/c.sh",
     "scripts/gate.jq",
+    "scripts/gate.ts",
     "scripts/d.sh",
   ]);
 });

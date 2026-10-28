@@ -91,6 +91,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import submitChatConnector from "@/api/handlers/chat/submit-connector";
 import submitChatSecret from "@/api/handlers/chat/submit-secret";
 import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
 import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
@@ -1778,21 +1779,37 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
-    // `pinned: false` matches the fixture, so the positive run reaches the
-    // locked row without writing.
+    // Both probes need a live firm administrator for the in-transaction
+    // authority check. `pinned: false` reaches the locked row without writing.
     name: "memory update",
-    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
-      await runHandler(updateMemory, workspaceA, {
-        featureAccessSnapshot: memoryAccess(workspaceA),
+    runAAgainstB: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsA1],
+        organizationId: testIds.orgA,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsA1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("owner"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
-    runBPositive: async ({ ids: testIds, workspaceB }) =>
-      await runHandler(updateMemory, workspaceB, {
-        featureAccessSnapshot: memoryAccess(workspaceB),
+      });
+    },
+    runBPositive: async ({ ids: testIds }) => {
+      const context = createWorkspaceContext({
+        activeWorkspaceIds: [testIds.wsB1],
+        organizationId: testIds.orgB,
+        userId: testIds.userAdmin,
+        workspaceId: testIds.wsB1,
+      });
+      return await runHandler(updateMemory, context, {
+        featureAccessSnapshot: memoryAccess(context),
+        memberRole: sessionMemberRole("admin"),
         params: { memoryId: testIds.aiMemoryFirmB },
         body: { pinned: false },
-      }),
+      });
+    },
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
@@ -2242,6 +2259,23 @@ const isolationCases: IsolationCase[] = [
     runBPositive: async ({ sameUserWorkspaceB }) =>
       await runHandler(submitChatSecret, sameUserWorkspaceB, {
         body: { decision: "decline" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: expectStatus(409),
+  },
+  {
+    name: "chat connector request answer",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(submitChatConnector, workspaceA, {
+        body: { decision: "declined" },
+        params: { threadId: chatThreadB, toolCallId: "missing-request" },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(submitChatConnector, sameUserWorkspaceB, {
+        body: { decision: "declined" },
         params: { threadId: chatThreadB, toolCallId: "missing-request" },
         query: {},
       }),

@@ -102,6 +102,30 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:documents_write",
     handler: "apps/api/src/handlers/entities/versions/upload.ts",
   },
+  // The matter's columns, among them the file column a new document's upload
+  // names as its `propertyId`.
+  "GET /v1/properties/:workspaceId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/properties/list.ts",
+  },
+  // A new document goes up the way the web sends one: reserve a presigned
+  // storage URL, PUT the bytes there, then finalize (or abort a failed PUT).
+  // These routes carry the upload domain's scope; the handlers also spend
+  // the consent of each upload's purpose (`authorizeUploadConsent`), so a
+  // token creates a document only with `stella:documents_write` and can never
+  // install a skill.
+  "POST /v1/uploads/:workspaceId/presign": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/uploads/create.ts",
+  },
+  "POST /v1/uploads/:workspaceId/:uploadId/finalize": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/uploads/update.ts",
+  },
+  "POST /v1/uploads/:workspaceId/:uploadId/abort": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/uploads/delete.ts",
+  },
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",

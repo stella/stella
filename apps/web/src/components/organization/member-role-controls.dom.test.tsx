@@ -143,7 +143,7 @@ describe("mounted membership role controls", () => {
   for (const actorRole of ORGANIZATION_ROLE_NAMES) {
     test(`${actorRole} sees invitation options equal to the accepted form roles`, async () => {
       const expected = [...assignableRoles(actorRole)];
-      const schema = inviteMemberSchema(actorRole);
+      const schema = inviteMemberSchema(actorRole, "Invalid email");
       expect(
         ORGANIZATION_ROLE_NAMES.filter(
           (role) =>

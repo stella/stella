@@ -23,7 +23,6 @@ import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const COVERAGE_INDEX = CASE_LAW_COVERAGE_INDEX.name;
 const SOURCES = 3;
-const DECISIONS_PER_SOURCE = 4000;
 const SOURCE_DATE_SPAN = 5000;
 
 const planNodes = (
@@ -40,7 +39,7 @@ const planNodes = (
 };
 
 describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
-  test("each source probes both indexed date endpoints with one bounded row", async () => {
+  const assertIndexedBounds = async (decisionsPerSource: number) => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
       panic("The enabled coverage plan test requires DATABASE_URL");
@@ -134,7 +133,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           FROM (
             SELECT id, (row_number() OVER (ORDER BY adapter_key) - 1)::integer AS source_index
             FROM case_law_sources
-          ) sources CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+          ) sources CROSS JOIN generate_series(1, ${decisionsPerSource}) n`);
         await db.execute(sql`INSERT INTO case_law_decisions
           (id, source_id, case_number, court, country, language, decision_date, fulltext, redacted_at, metadata)
           SELECT gen_random_uuid(), sources.id, 'excluded/' || status || '/' || endpoint,
@@ -159,7 +158,7 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           (kind, country, source_id, value, total)
           SELECT 'year', 'CZE', sources.id, 'unused/' || n, 1
           FROM case_law_sources sources
-          CROSS JOIN generate_series(1, ${DECISIONS_PER_SOURCE}) n`);
+          CROSS JOIN generate_series(1, ${decisionsPerSource}) n`);
         await db.execute(sql`VACUUM (ANALYZE) case_law_browse_facet_counts`);
         captured.length = 0;
         const rows = await readCaseLawCoverageSourcesQuery(
@@ -258,14 +257,14 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             days: sourceIndex * SOURCE_DATE_SPAN + 1,
           });
           const lastDate = Temporal.PlainDate.from("1970-01-01").add({
-            days: sourceIndex * SOURCE_DATE_SPAN + DECISIONS_PER_SOURCE,
+            days: sourceIndex * SOURCE_DATE_SPAN + decisionsPerSource,
           });
           expect(row).toMatchObject({
             adapterKey: `coverage-plan-${sourceIndex}`,
             decisionYearFrom: firstDate.year,
             decisionYearTo: lastDate.year,
             pendingTextCount: 0,
-            courts: [{ court: "Plan court", decisions: DECISIONS_PER_SOURCE }],
+            courts: [{ court: "Plan court", decisions: decisionsPerSource }],
           });
         }
       } finally {
@@ -273,5 +272,10 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
         await db.execute(sql`DROP SCHEMA ${schema} CASCADE`);
       }
     });
-  }, 120_000);
+  };
+  test.each([400, 4000])(
+    "indexed bounds at %i decisions per source",
+    assertIndexedBounds,
+    120_000,
+  );
 });

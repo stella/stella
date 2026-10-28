@@ -14,6 +14,8 @@ import {
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -139,6 +141,10 @@ export const createSuggestThreadTitle = ({
       );
     }
 
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -146,26 +152,25 @@ export const createSuggestThreadTitle = ({
       task: "short-text",
     });
 
-    const authorization = await authorizeHandlerUsage({
-      metering: { actionType: "chat", modelTask: "short-text" },
-      organizationId: session.activeOrganizationId,
-      orgAIConfig,
-      workspaceId: persistedWorkspaceId,
-      userId: user.id,
-      safeDb,
-      ctx,
-      managedAIResidency,
-      promptCachingEnabled,
-      threadId,
-      thread,
-      messageWindow,
-      admit,
-      generateTextForTask,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
-    return await authorization.value.execute(async ({ proof }) => {
+    const authorization = yield* Result.await(
+      authorizeHandlerUsage({
+        metering: { actionType: "chat", modelTask: "short-text" },
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        workspaceId: persistedWorkspaceId,
+        userId: user.id,
+        safeDb,
+        ctx,
+        managedAIResidency,
+        promptCachingEnabled,
+        threadId,
+        thread,
+        messageWindow,
+        admit,
+        generateTextForTask,
+      }),
+    );
+    return await authorization.execute(async ({ proof }) => {
       const checked = proof.input.value;
       const admittedContext = cloneOperationInput(checked.ctx);
       return await Result.gen(async function* () {

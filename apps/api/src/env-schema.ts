@@ -9,7 +9,7 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { featureFlagSchema } from "@/api/env-base-schema";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -101,6 +101,7 @@ const originVerifyValue = v.pipe(
 );
 
 export const envApiServerSchema = {
+  DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and
@@ -687,6 +688,17 @@ export const envApiServerSchema = {
   ),
   ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  // Concurrent public-law MCP reads admitted per authenticated caller.
+  MCP_PUBLIC_READ_CALLER_CONCURRENCY: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+    "4",
   ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
