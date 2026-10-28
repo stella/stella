@@ -8,7 +8,22 @@
   "chat": {
     "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
     "emptyTitle": "Pokalbių dar nėra",
-    "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos."
+    "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos.",
+    "loadFailed": "Nepavyko įkelti jūsų pokalbių.",
+    "retry": "Bandyti dar kartą",
+    "untitled": "Pokalbis be pavadinimo",
+    "loadMoreFailed": "Įkelti daugiau",
+    "loadOlderFailed": "Įkelti ankstesnes žinutes",
+    "toolUsed": "Naudota: {tool}",
+    "threadTitle": "Pokalbis",
+    "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
+    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "sections": {
+      "today": "Šiandien",
+      "yesterday": "Vakar",
+      "week": "Paskutinės 7 dienos",
+      "earlier": "Anksčiau"
+    }
   },
   "tasks": {
     "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",
@@ -21,6 +36,36 @@
     "emptyDescription": "Čia bus rodomos jūsų naujausios bylos.",
     "loadFailed": "Nepavyko įkelti jūsų bylų.",
     "retry": "Bandyti dar kartą"
+  },
+  "matter": {
+    "documents": "Dokumentai",
+    "tasks": "Užduotys",
+    "emptyTitle": "Kol kas čia nieko nėra",
+    "emptyDescription": "Čia bus rodomi šios bylos dokumentai ir užduotys.",
+    "loadFailed": "Nepavyko įkelti bylos.",
+    "loadMoreFailed": "Nepavyko įkelti daugiau įrašų.",
+    "loadMore": "Įkelti daugiau",
+    "retry": "Bandyti dar kartą",
+    "untitled": "Be pavadinimo",
+    "updated": "Atnaujinta {time}",
+    "kind": {
+      "folder": "Aplankas",
+      "document": "Dokumentas",
+      "task": "Užduotis"
+    },
+    "status": {
+      "open": "Atvira",
+      "in_progress": "Vykdoma",
+      "in_review": "Peržiūrima",
+      "done": "Atlikta",
+      "cancelled": "Atšaukta"
+    }
+  },
+  "entity": {
+    "type": "Tipas",
+    "reference": "Numeris",
+    "currentVersion": "Dabartinė versija",
+    "loadFailed": "Nepavyko įkelti šio įrašo."
   },
   "signIn": {
     "title": "Prisijunkite prie stella",

@@ -146,7 +146,7 @@ describe("removeWorkspaceMember", () => {
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
-            ...createSelectQueryMock([]).from(),
+            where: createSelectQueryMock([]).from().where,
             innerJoin: () => ({
               where: () => ({ as: () => ({}) }),
             }),

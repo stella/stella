@@ -8,6 +8,8 @@ import {
 } from "@stll/catalogue/pinned-facts";
 import {
   isAllowedFirstPartySkillPackageSkip,
+  listSkillMetadata,
+  readSkillRequiredTools,
   validateSkillPackage,
 } from "@stll/skills";
 
@@ -53,6 +55,13 @@ const expectValid = (files: readonly { content: string; path: string }[]) => {
 };
 
 describe("first-party skill packages", () => {
+  test.each(listSkillMetadata().map((skill) => [skill.name, skill.metadata]))(
+    "%s declares at least one required tool",
+    (_name, metadata) => {
+      expect(readSkillRequiredTools(metadata).length).toBeGreaterThan(0);
+    },
+  );
+
   test("every built-in skill and blueprint satisfies the host format", async () => {
     const packageRoots = [
       path.join(root, "packages/skills/skills"),

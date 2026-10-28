@@ -46,6 +46,68 @@ const render = async (lineCount: number) => {
 };
 
 describe("Typst invoice renderer", () => {
+  test("groups interleaved lines by matter and prints matter subtotals before invoice totals", async () => {
+    const fixture = invoiceFixture(3);
+    const input = {
+      ...fixture,
+      invoice: {
+        ...fixture.invoice,
+        lines: fixture.invoice.lines.map((line, index) => ({
+          ...line,
+          workspaceId: index === 1 ? "matter-two" : "matter-one",
+          workspaceName: index === 1 ? "Litigation" : "Contract review",
+          description:
+            ["First consultation", "Court filing", "Second consultation"].at(
+              index,
+            ) ?? "",
+        })),
+      },
+    };
+    const data = buildInvoiceTemplateData(input).unwrap();
+    expect(
+      data.groups.map(({ workspaceName, lines }) => ({
+        workspaceName,
+        descriptions: lines.map(({ description }) => description),
+      })),
+    ).toEqual([
+      {
+        workspaceName: "Contract review",
+        descriptions: ["First consultation", "Second consultation"],
+      },
+      { workspaceName: "Litigation", descriptions: ["Court filing"] },
+    ]);
+    const outcome = (
+      await renderInvoiceWithTypst({
+        invoice: input,
+        session,
+        createdAt: CREATED_AT,
+      })
+    ).unwrap();
+    if (outcome.status !== "rendered") {
+      throw new Error(outcome.diagnostics.join("\n"));
+    }
+    const pdf = await PDF.load(outcome.pdf);
+    const text = pdf
+      .extractText()
+      .map(({ text: pageText }) => spaces(pageText))
+      .join("\n");
+    expect(text.indexOf("Contract review")).toBeLessThan(
+      text.indexOf("First consultation"),
+    );
+    expect(text.indexOf("Second consultation")).toBeLessThan(
+      text.indexOf("Litigation"),
+    );
+    expect(text.indexOf("Litigation")).toBeLessThan(
+      text.indexOf("Court filing"),
+    );
+    for (const group of data.groups) {
+      expect(text).toContain(spaces(group.net));
+      expect(text).toContain(spaces(group.vat));
+      expect(text).toContain(spaces(group.total));
+    }
+    expect(text).toContain(spaces(data.totals.gross));
+  });
+
   test("prints every field the live renderer prints", async () => {
     const fixture = invoiceFixture(3);
     const data = buildInvoiceTemplateData(fixture).unwrap();
@@ -79,7 +141,7 @@ describe("Typst invoice renderer", () => {
     for (const value of expected) {
       expect(folded).toContain(spaces(value).toLocaleLowerCase("cs"));
     }
-    for (const line of data.lines) {
+    for (const line of data.groups.flatMap(({ lines }) => lines)) {
       expect(text).toContain(spaces(line.total));
       expect(text).toContain(spaces(line.quantity ?? ""));
     }
@@ -95,7 +157,9 @@ describe("Typst invoice renderer", () => {
     const { pdf, pages } = await render(60);
     expect(pdf.getPageCount()).toBeGreaterThan(2);
     const header = data.labels.description.toLocaleUpperCase("cs");
-    const lineTotal = spaces(data.lines[0]?.total ?? "missing");
+    const lineTotal = spaces(
+      data.groups.at(0)?.lines.at(0)?.total ?? "missing",
+    );
     const pagesWithLines = pages.filter((page) => page.includes(lineTotal));
     expect(pagesWithLines.length).toBeGreaterThan(2);
     for (const page of pagesWithLines) {

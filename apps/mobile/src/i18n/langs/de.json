@@ -8,7 +8,22 @@
   "chat": {
     "description": "Behalten Sie laufende Arbeit im Blick und machen Sie auf jedem Gerät weiter.",
     "emptyTitle": "Noch keine Konversationen",
-    "emptyDescription": "Neue Konversationen und aktuelle Verläufe erscheinen hier."
+    "emptyDescription": "Neue Konversationen und aktuelle Verläufe erscheinen hier.",
+    "loadFailed": "Ihre Unterhaltungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "untitled": "Unbenannte Unterhaltung",
+    "loadMoreFailed": "Mehr laden",
+    "loadOlderFailed": "Ältere Nachrichten laden",
+    "toolUsed": "Verwendet: {tool}",
+    "threadTitle": "Unterhaltung",
+    "threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
+    "threadEmptyDescription": "Diese Unterhaltung enthält noch keine Nachrichten.",
+    "sections": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "week": "Letzte 7 Tage",
+      "earlier": "Früher"
+    }
   },
   "tasks": {
     "description": "Sehen Sie, was Aufmerksamkeit braucht, ohne den ganzen Arbeitsbereich zu öffnen.",
@@ -21,6 +36,36 @@
     "emptyDescription": "Ihre zuletzt bearbeiteten Akten erscheinen hier.",
     "loadFailed": "Ihre Akten konnten nicht geladen werden.",
     "retry": "Erneut versuchen"
+  },
+  "matter": {
+    "documents": "Dokumente",
+    "tasks": "Aufgaben",
+    "emptyTitle": "Noch nichts vorhanden",
+    "emptyDescription": "Dokumente und Aufgaben dieser Akte erscheinen hier.",
+    "loadFailed": "Diese Akte konnte nicht geladen werden.",
+    "loadMoreFailed": "Weitere Einträge konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "retry": "Erneut versuchen",
+    "untitled": "Ohne Titel",
+    "updated": "Geändert {time}",
+    "kind": {
+      "folder": "Ordner",
+      "document": "Dokument",
+      "task": "Aufgabe"
+    },
+    "status": {
+      "open": "Offen",
+      "in_progress": "In Bearbeitung",
+      "in_review": "In Prüfung",
+      "done": "Erledigt",
+      "cancelled": "Abgebrochen"
+    }
+  },
+  "entity": {
+    "type": "Typ",
+    "reference": "Aktenzeichen",
+    "currentVersion": "Aktuelle Version",
+    "loadFailed": "Dieser Eintrag konnte nicht geladen werden."
   },
   "signIn": {
     "title": "Bei stella anmelden",

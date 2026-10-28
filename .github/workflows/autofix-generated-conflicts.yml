@@ -5,7 +5,8 @@ defaults:
     shell: bash
 
 # When main moves, a same-repository pull request can start to conflict only
-# in generated outputs. This run only lists such pull requests and dispatches
+# in generated outputs, proven indentation-only source edits or independent
+# bun.lock pins. This run only lists such pull requests and dispatches
 # one resolve run per pull request on that pull request's own branch
 # (generated-conflicts-resolve.yml), so branch code never runs in a
 # default-branch context and no two pull requests share a run or an artifact

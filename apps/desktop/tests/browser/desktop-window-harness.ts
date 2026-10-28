@@ -3,7 +3,10 @@ import type { Page } from "@playwright/test";
 
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
-import type { PermissionsSnapshot } from "../../src/shared/permissions";
+import type {
+  PermissionsSnapshot,
+  PermissionStatus,
+} from "../../src/shared/permissions";
 import type { AppSnapshot, DesktopAccountSnapshot } from "../../src/shared/rpc";
 import type { ClipboardShortcutSnapshot } from "../../src/shared/shortcut-keys";
 import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
@@ -63,6 +66,8 @@ const tour = (step: OnboardingSnapshot["step"]): OnboardingSnapshot => ({
   mode: { type: "tour" },
   step,
   steps: [...ONBOARDING_STEPS],
+  // The native side reads the icon's place for the last step only.
+  trayLocation: step === "done" ? { along: 0.78, edge: "top" } : null,
 });
 
 /** Every screen the setup window shows: the tour's steps and both other modes. */
@@ -85,6 +90,19 @@ export const ONBOARDING_SCREENS = [
       mode: { feature: "activityTimeline", type: "introduce" },
     },
   },
+  // A taskbar along the bottom, with the icon near the clock.
+  {
+    name: "07-done-taskbar",
+    snapshot: {
+      ...tour("done"),
+      trayLocation: { along: 0.94, edge: "bottom" },
+    },
+  },
+  // An icon the OS cannot place, such as one in a hidden overflow area.
+  {
+    name: "07-done-unplaced",
+    snapshot: { ...tour("done"), trayLocation: null },
+  },
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
 
 type WindowFixture = {
@@ -93,6 +111,8 @@ type WindowFixture = {
   language: string;
   onboarding: OnboardingSnapshot | null;
   permissions: PermissionsSnapshot;
+  /** What the OS answers when the window asks for a permission. */
+  requestOutcome: PermissionStatus;
   shortcut: ClipboardShortcutSnapshot;
 };
 
@@ -133,6 +153,16 @@ const openWindow = async (
       get_state: () => data.appState,
       onboarding_get_snapshot: () => data.onboarding,
       permissions_get_snapshot: () => data.permissions,
+      permissions_request: (args) => {
+        data.permissions = {
+          rows: data.permissions.rows.map((row) =>
+            row.permission === args["permission"]
+              ? { ...row, status: data.requestOutcome }
+              : row,
+          ),
+        };
+        return data.permissions;
+      },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
     }),
@@ -144,7 +174,7 @@ const openWindow = async (
 export const openOnboardingWindow = async (
   page: Page,
   snapshot: OnboardingSnapshot,
-  options: WindowVariant,
+  options: WindowVariant & { requestOutcome?: PermissionStatus },
 ) => {
   await openWindow(page, {
     fixture: {
@@ -153,6 +183,7 @@ export const openOnboardingWindow = async (
       language: options.language,
       onboarding: snapshot,
       permissions: PERMISSIONS,
+      requestOutcome: options.requestOutcome ?? "granted",
       shortcut: SHORTCUT,
     },
     path: "/",
@@ -182,6 +213,7 @@ export const openSettingsWindow = async (
       language: options.language,
       onboarding: null,
       permissions: PERMISSIONS,
+      requestOutcome: "granted",
       shortcut: SHORTCUT,
     },
     path: `/#${tab}`,
