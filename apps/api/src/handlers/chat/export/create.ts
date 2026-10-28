@@ -46,6 +46,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
+import { readChatExportSource } from "@/api/lib/chat/export-source";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -132,19 +133,7 @@ const createMessageExport = createSafeRootHandler(
     const scope = yield* resolveChatScope({ getWorkspaceAccess, workspaceId });
 
     const thread = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await tx.query.chatThreads.findFirst({
-            where: { id: { eq: threadId }, userId: { eq: user.id } },
-            columns: { title: true, workspaceId: true },
-            with: {
-              messages: {
-                where: { id: { eq: messageId } },
-                columns: { content: true, role: true },
-              },
-            },
-          }),
-      ),
+      readChatExportSource({ safeDb, threadId, messageId, userId: user.id }),
     );
     if (!thread) {
       return Result.err(

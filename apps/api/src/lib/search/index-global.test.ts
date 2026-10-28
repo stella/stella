@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
@@ -191,7 +192,7 @@ describe("global search SQL scope", () => {
     });
   });
 
-  test("applies the score/id cursor and bounded lookahead to every source", async () => {
+  test("applies the score/id cursor to sources and projects a fixed chat candidate window", async () => {
     const sourceCases = [
       {
         tableSql: "FROM search_documents sd",
@@ -208,10 +209,6 @@ describe("global search SQL scope", () => {
       {
         tableSql: "FROM case_law_search_documents clsd",
         idSql: "'case-law:' || clsd.decision_id::text",
-      },
-      {
-        tableSql: "FROM chat_thread_search_documents cst",
-        idSql: "'chat:' || cst.thread_id::text",
       },
     ] as const;
     const dialect = new PgDialect();
@@ -261,12 +258,15 @@ describe("global search SQL scope", () => {
     expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
       3,
     );
-    expect(sourceQueries.at(4)?.compiled.sql).toContain(
-      "cst.preview_generation =",
+    const chatQuery = compiledQueries.find(({ sql }) =>
+      sql.includes("FROM chat_thread_search_documents cst"),
     );
-    expect(sourceQueries.at(4)?.compiled.params).toContain(
+    expect(chatQuery?.sql).toContain("cst.preview_generation =");
+    expect(chatQuery?.params).toContain(
       CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
     );
+    expect(chatQuery?.sql).not.toContain('COLLATE "C" <');
+    expect(chatQuery?.params.at(-1)).toBe(LIMITS.searchChatCandidateThreadsMax);
   });
 
   test("continues legacy offset cursors during a rolling deployment", async () => {
@@ -289,7 +289,11 @@ describe("global search SQL scope", () => {
     for (const [query] of rootDbExecuteMock.mock.calls) {
       const compiled = dialect.sqlToQuery(query);
       expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(compiled.params.at(-1)).toBe(29);
+      expect(compiled.params.at(-1)).toBe(
+        compiled.sql.includes("FROM chat_thread_search_documents cst")
+          ? LIMITS.searchChatCandidateThreadsMax
+          : 29,
+      );
     }
   });
 

@@ -24,7 +24,7 @@ type ReadWithdrawnCopiesOptions = {
   values: unknown;
   decisionIds?: readonly string[];
   locale?: UiLocale;
-  caseLawDb?: CaseLawPublicReadDb;
+  caseLawDb?: CaseLawPublicReadDb | undefined;
 };
 
 /** One bounded lookup, independent of tenant storage and publication filters. */

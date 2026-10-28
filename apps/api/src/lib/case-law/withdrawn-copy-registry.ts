@@ -21,6 +21,23 @@ type SeenType<Seen extends readonly unknown[], Value> = Seen extends readonly [
     : SeenType<Rest, Value>
   : false;
 
+type HasTaggedDecision<Value> = Value extends {
+  targetType: infer Kind;
+  targetId: unknown;
+}
+  ? string extends Kind
+    ? false
+    : "decision" extends Kind
+      ? true
+      : false
+  : Value extends { type: infer Kind; id: unknown }
+    ? string extends Kind
+      ? false
+      : "case_law_decision" extends Kind
+        ? true
+        : false
+    : false;
+
 type HasDecisionReference<
   Value,
   Seen extends readonly unknown[] = [],
@@ -30,19 +47,21 @@ type HasDecisionReference<
     ? Value extends SafeId<"caseLawDecision">
       ? true
       : false
-    : Value extends Date
-      ? false
-      : SeenType<Seen, Value> extends true
+    : HasTaggedDecision<Value> extends true
+      ? true
+      : Value extends Date
         ? false
-        : Value extends readonly (infer Item)[]
-          ? HasDecisionReference<Item, [...Seen, Value]>
-          : Value extends object
-            ? {
-                [Key in keyof Value]: IsDecisionReferenceKey<Key> extends true
-                  ? true
-                  : HasDecisionReference<Value[Key], [...Seen, Value]>;
-              }[keyof Value]
-            : false;
+        : SeenType<Seen, Value> extends true
+          ? false
+          : Value extends readonly (infer Item)[]
+            ? HasDecisionReference<Item, [...Seen, Value]>
+            : Value extends object
+              ? {
+                  [Key in keyof Value]: IsDecisionReferenceKey<Key> extends true
+                    ? true
+                    : HasDecisionReference<Value[Key], [...Seen, Value]>;
+                }[keyof Value]
+              : false;
 
 type DecisionKey<Row> = {
   [Field in keyof Row]: true extends HasDecisionReference<Row[Field]>
@@ -71,6 +90,7 @@ type TenantDecisionTable = DecisionCopyTableNames<Schema>;
 type DecisionPayloadTable =
   | "legalReaderAnnotations"
   | "legalReaderAnswerMessages"
+  | "chatThreadCompactions"
   | "chatMessages"
   | "chatMessageRevisions"
   | "chatRunLogEntries"
@@ -82,7 +102,13 @@ type CopyField = {
   kind: "identity" | "user-text" | "quote" | "generated" | "snapshot";
   projection: keyof Pick<
     WithdrawnCopyProjection,
-    "annotation" | "answer" | "answerMessage" | "chat" | "marker"
+    | "annotation"
+    | "answer"
+    | "answerMessage"
+    | "chat"
+    | "marker"
+    | "compaction"
+    | "thread"
   >;
 };
 type DecisionCopyRegistry = {
@@ -219,10 +245,40 @@ const WITHDRAWN_COPY_REGISTRY = {
     ],
     decision: "subjectDecisionId",
     fields: {
-      subjectDecisionId: { kind: "identity", projection: "marker" },
-      recapText: { kind: "generated", projection: "marker" },
-      title: { kind: "generated", projection: "marker" },
+      subjectDecisionId: { kind: "identity", projection: "thread" },
+      recapText: { kind: "generated", projection: "thread" },
+      title: { kind: "generated", projection: "thread" },
     },
+  },
+  chatThreadCompactions: {
+    decision: "threadId->chatThreads.subjectDecisionId;summary;summaryMarkdown",
+    fields: {
+      summary: { kind: "generated", projection: "compaction" },
+      summaryMarkdown: { kind: "generated", projection: "compaction" },
+    },
+    metadata: [
+      "id",
+      "threadId",
+      "status",
+      "firstSummarizedMessageId",
+      "lastSummarizedMessageId",
+      "firstKeptMessageId",
+      "summarizedMessageCount",
+      "deltaCursor",
+      "totalSummarizedMessageCount",
+      "totalTokens",
+      "preservedTokens",
+      "promptVersion",
+      "modelProvider",
+      "modelId",
+      "memoryEligibility",
+      "memoryExtractedAt",
+      "memoryExtractionAttemptedAt",
+      "memoryExtractionOrganizationId",
+      "memoryExtractionConsentAt",
+      "memoryExtractionDataWorkspaceIds",
+      "createdAt",
+    ],
   },
   chatMessages: {
     metadata: [
@@ -288,6 +344,7 @@ const WITHDRAWN_COPY_REGISTRY = {
 } as const satisfies DecisionCopyRegistry;
 
 type Registry = typeof WITHDRAWN_COPY_REGISTRY;
+export type DecisionCopyStore = keyof Registry;
 type UnclassifiedCopyColumn = {
   [Table in keyof Registry]: Exclude<
     keyof RowOf<Schema[Table]>,

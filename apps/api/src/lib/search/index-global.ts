@@ -49,6 +49,7 @@ import {
 import {
   compareScoredSearchHits,
   globalSearchCursorSql,
+  isAfterGlobalSearchCursor,
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
@@ -68,6 +69,7 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
+import { projectChatSearchCandidates } from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -750,6 +752,7 @@ const readGlobalSearch = async (
     contactTextSearchFilter,
     caseLawTextSearchFilter,
     chatTextSearchFilter,
+    tsQuery,
     searchHeadline,
     searchScore,
     searchScoreValue,
@@ -963,8 +966,19 @@ const readGlobalSearch = async (
         t.id AS id,
         t.workspace_id,
         w.name AS workspace_name,
-        cst.title,
-        ${searchHeadline(sql`cst.title || ' ' || cst.searchable_text`)},
+        t.title,
+        t.title_source,
+        t.subject_decision_id,
+        (SELECT coalesce(jsonb_agg(source_message), '[]'::jsonb) FROM (
+          SELECT m.role, m.content
+          FROM chat_message_search_documents ms
+          JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
+          WHERE ms.thread_id = t.id
+            ${hasSearchQuery ? sql`AND ms.tsv @@ ${tsQuery}` : sql``}
+          ORDER BY ms.created_at DESC, ms.message_id DESC
+          LIMIT ${LIMITS.searchChatPreviewMessageLimit}
+        ) source_message) AS source_messages,
+        NULL::text AS headline,
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
         t.updated_at
       FROM chat_thread_search_documents cst
@@ -976,16 +990,9 @@ const readGlobalSearch = async (
           ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-        ${globalSearchCursorSql({
-          cursor: searchCursor,
-          score: searchScoreValue({
-            tsv: sql`cst.tsv`,
-            updatedAt: sql`t.updated_at`,
-          }),
-          id: sql`'chat:' || cst.thread_id::text`,
-        })}
+
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${fetchLimit}
+      LIMIT ${LIMITS.searchChatCandidateThreadsMax}
     `),
   );
 
@@ -1058,21 +1065,7 @@ const readGlobalSearch = async (
         shouldSearchType(selected, "case-law"),
       () => database.execute(caseLawCountQuery),
     ),
-    countWhen(
-      isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
-      () =>
-        database.execute(sql`
-        SELECT count(*)::int AS total
-        FROM chat_thread_search_documents cst
-        JOIN chat_threads t ON t.id = cst.thread_id
-        WHERE TRUE
-          AND ${chatScope}
-          AND cst.preview_generation =
-            ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
-          ${chatUpdatedFilter}
-          ${chatTextSearchFilter}
-      `),
-    ),
+    Promise.resolve([]),
   ] as const;
 
   const entityTypeFacetPromise = rowsWhen(
@@ -1142,21 +1135,7 @@ const readGlobalSearch = async (
     () => database.execute(caseLawCountQuery),
   );
 
-  const chatTypeFacetCountPromise = countWhen(
-    shouldCountAlternativeTypeFacet("chat"),
-    () =>
-      database.execute(sql`
-      SELECT count(*)::int AS total
-      FROM chat_thread_search_documents cst
-      JOIN chat_threads t ON t.id = cst.thread_id
-      WHERE TRUE
-        AND ${chatScope}
-        AND cst.preview_generation =
-          ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
-        ${chatUpdatedFilter}
-        ${chatTextSearchFilter}
-    `),
-  );
+  const chatTypeFacetCountPromise = Promise.resolve([]);
 
   const entityWorkspaceFacetQuery = hasSelectedEntityType(selected)
     ? sql`
@@ -1294,12 +1273,27 @@ const readGlobalSearch = async (
     mimeTypeFacetPromise,
   ]);
 
+  const projectedChatRows = await projectChatSearchCandidates({
+    database,
+    rows: chatRows,
+    query,
+  });
+  const boundedChatSearch =
+    !restrictToEntities &&
+    shouldSearchType(selected, "chat") &&
+    (!isFirstPage || chatRows.length > 0);
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
-    ...chatRows.map(mapChatHit),
+    ...projectedChatRows
+      .map(mapChatHit)
+      .filter(
+        ({ hit, score }) =>
+          searchCursor === null ||
+          isAfterGlobalSearchCursor({ id: hit.id, score }, searchCursor),
+      ),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 
@@ -1366,7 +1360,8 @@ const readGlobalSearch = async (
         editor: facetBuckets(editorFacetMap),
         mimeType: facetBuckets(mimeTypeFacetMap),
       },
-      totalCount,
+      totalCount: boundedChatSearch ? null : totalCount,
+      coverage: boundedChatSearch ? "bounded" : "complete",
       nextCursor: page.nextCursor,
     },
     caseLawLanguageGroups,

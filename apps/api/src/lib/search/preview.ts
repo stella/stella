@@ -7,8 +7,10 @@ import { isNonNullObject } from "@stll/template-conditions/path";
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
+import { normalizeSearchableChatMessageContent } from "@/api/lib/search/chat-search-text";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -21,7 +23,6 @@ import {
   SEARCH_PREVIEW_HEADLINE_CONFIG,
   truncateSearchPreviewAroundCandidates,
 } from "@/api/lib/search/highlight";
-import { normalizeSearchableChatMessageContent } from "@/api/lib/search/index-chat";
 import { previewPassageJoin } from "@/api/lib/search/preview-passage-sql";
 import {
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT,
@@ -71,6 +72,8 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
+  subjectDecisionId?: unknown;
+  titleSource?: unknown;
   isTitleOnlyMatch: unknown;
   messages: SearchPreviewChatMessageRow[];
   title: unknown;
@@ -453,6 +456,8 @@ export const buildSearchPreviewQuery = ({
       return sql`
         SELECT
           cst.title,
+          t.subject_decision_id AS "subjectDecisionId",
+          t.title_source AS "titleSource",
           ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
@@ -552,6 +557,17 @@ export const readSearchPreview = async (
       return null;
     }
 
+    const withdrawal = await readWithdrawnCopyProjection({ values: row });
+    const subject =
+      typeof row.subjectDecisionId === "string" ? row.subjectDecisionId : null;
+    const titleMarker =
+      row.titleSource === "user"
+        ? null
+        : withdrawal.marker(row.messages, subject);
+    if (titleMarker !== null) {
+      return { type: "plain-text", content: titleMarker };
+    }
+
     if (row.isTitleOnlyMatch === true && typeof row.title === "string") {
       const title = row.title.trim();
       if (title) {
@@ -567,7 +583,14 @@ export const readSearchPreview = async (
       if (!isSearchPreviewChatRole(rawMessage.role)) {
         continue;
       }
-      const textParts = extractChatPreviewTextParts(rawMessage.content);
+      const marker =
+        rawMessage.role === "user"
+          ? null
+          : withdrawal.marker(rawMessage.content, subject);
+      const textParts =
+        marker === null
+          ? extractChatPreviewTextParts(rawMessage.content)
+          : [marker];
       if (textParts.length === 0) {
         continue;
       }

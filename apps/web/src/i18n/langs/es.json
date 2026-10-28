@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "boundedResults": "Se muestra una selección limitada de resultados. Precise la búsqueda para obtener más.",
     "caseLawEmptyState": "Empiece a escribir para buscar resoluciones judiciales.",
     "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",

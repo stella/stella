@@ -264,6 +264,7 @@ type GlobalSearchFacets = {
 export type GlobalSearchResult = {
   hits: GlobalSearchHit[];
   facets: GlobalSearchFacets;
-  totalCount: number;
+  totalCount: number | null;
+  coverage: "complete" | "bounded";
   nextCursor: string | null;
 };

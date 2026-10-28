@@ -66,3 +66,13 @@ true satisfies [
 ] extends [never]
   ? true
   : never;
+
+const taggedJsonCopy = pgTable("tagged_decision_snapshots", {
+  organizationId: text("organization_id"),
+  snapshot: jsonb("snapshot").$type<{
+    resource: { type: "case_law_decision"; id: string };
+  }>(),
+});
+"taggedJsonCopy" satisfies DecisionCopyTableNames<{
+  taggedJsonCopy: typeof taggedJsonCopy;
+}>;

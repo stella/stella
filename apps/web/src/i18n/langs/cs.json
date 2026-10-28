@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
+    "boundedResults": "Zobrazuje se omezený výběr výsledků. Pro další výsledky upřesněte hledání.",
     "caseLawEmptyState": "Začněte psát pro vyhledávání v soudních rozhodnutích.",
     "caseLawMatchingDecisions": "{count, plural, one {# odpovídající rozhodnutí} few {# odpovídající rozhodnutí} many {# odpovídajícího rozhodnutí} other {# odpovídajících rozhodnutí}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ odpovídající rozhodnutí} few {#+ odpovídající rozhodnutí} many {#+ odpovídajícího rozhodnutí} other {#+ odpovídajících rozhodnutí}}",

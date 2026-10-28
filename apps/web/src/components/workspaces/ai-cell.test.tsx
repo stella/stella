@@ -135,6 +135,7 @@ describe("every AI cell lifecycle state is visible", () => {
     const expected = {
       pending: "running",
       answered: "done",
+      withdrawn: "done",
       not_stated: "done",
       not_allowed: "failed",
       failed: "failed",

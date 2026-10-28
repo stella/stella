@@ -1,14 +1,10 @@
 import { Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  caseLawMatterLinks,
-  caseLawSources,
-  publishedCaseLawDecisions,
-} from "@/api/db/schema";
+import { caseLawMatterLinks } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -17,11 +13,8 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
-import {
-  publisherHeadnoteMetadataSql,
-  publisherKeywordsMetadataSql,
-} from "@/api/lib/case-law/publisher-summary";
-import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { readMatterLinkDecisions } from "@/api/lib/case-law/matter-link-decisions";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   decisionTextWithheldReason,
   isRedistributable,
@@ -46,48 +39,22 @@ export const listMatterLinksHandler = async ({
   workspaceId,
   audience = "human",
 }: ListMatterLinksProps) => {
-  const rows = await scopedDb((tx) =>
+  const links = await scopedDb((tx) =>
     tx
-      .select({
-        id: caseLawMatterLinks.id,
-        decisionId: caseLawMatterLinks.decisionId,
-        note: caseLawMatterLinks.note,
-        linkedBy: caseLawMatterLinks.linkedBy,
-        createdAt: caseLawMatterLinks.createdAt,
-        caseNumber: publishedCaseLawDecisions.caseNumber,
-        slug: publishedCaseLawDecisions.slug,
-        ecli: publishedCaseLawDecisions.ecli,
-        court: publishedCaseLawDecisions.court,
-        country: publishedCaseLawDecisions.country,
-        language: publishedCaseLawDecisions.language,
-        languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
-        decisionDate: publishedCaseLawDecisions.decisionDate,
-        decisionType: publishedCaseLawDecisions.decisionType,
-        citationCount: publishedCaseLawDecisions.citationCount,
-        descriptor: caseLawSources.descriptor,
-        // Publisher text follows the source's terms, exactly as the search
-        // hit does: a source that withholds redistribution contributes the
-        // row's own facts and no borrowed prose.
-        headnote: sql<string | null>`CASE WHEN ${redistributableCaseLawSource}
-          THEN ${publisherHeadnoteMetadataSql(publishedCaseLawDecisions.metadata)}
-        END`,
-        keywords: sql<string[] | null>`CASE WHEN ${redistributableCaseLawSource}
-          THEN ${publisherKeywordsMetadataSql(publishedCaseLawDecisions.metadata)}
-        END`,
-      })
+      .select()
       .from(caseLawMatterLinks)
-      .innerJoin(
-        publishedCaseLawDecisions,
-        eq(publishedCaseLawDecisions.id, caseLawMatterLinks.decisionId),
-      )
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
-      )
-      .where(and(eq(caseLawMatterLinks.workspaceId, workspaceId)))
+      .where(eq(caseLawMatterLinks.workspaceId, workspaceId))
       .orderBy(desc(caseLawMatterLinks.createdAt), desc(caseLawMatterLinks.id))
       .limit(LIMITS.caseLawMatterLinksPerWorkspace),
   );
+  const [decisions, withdrawal] = await Promise.all([
+    readMatterLinkDecisions(
+      caseLawDb,
+      links.map((row) => row.decisionId),
+    ),
+    readWithdrawnCopyProjection({ values: links, caseLawDb }),
+  ]);
+  const decisionsById = new Map(decisions.map((row) => [row.decisionId, row]));
 
   // The versions of each linked decision, through the same helper the search
   // hit uses: a multilingual decision the client cannot tell apart from a
@@ -98,7 +65,7 @@ export const listMatterLinksHandler = async ({
       caseLawDb,
       languageGroupKeys: [
         ...new Set(
-          rows
+          decisions
             .map((row) => row.languageGroupKey)
             .filter((value): value is string => value !== null),
         ),
@@ -106,53 +73,68 @@ export const listMatterLinksHandler = async ({
     });
 
   return {
-    links: rows.map((row) => {
-      const textWithheldReason =
-        !isRedistributable(row.descriptor) ||
-        decisionTextWithheldReason(row.descriptor) !== null
-          ? DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE
-          : null;
-      const headnote = readDecisionHeadnote({
-        headnote: row.headnote,
-        keywords: row.keywords,
-      });
-      const shared = {
-        id: row.id,
-        decisionId: row.decisionId,
-        note: row.note,
-        linkedBy: row.linkedBy,
-        createdAt: row.createdAt,
-        decision: {
-          id: row.decisionId,
-          caseNumber: row.caseNumber,
-          slug: row.slug,
-          ecli: row.ecli,
-          court: row.court,
-          country: row.country,
-          language: row.language,
-          languageAlternates: alternatesByGroupKey.alternatesFor(
-            row.languageGroupKey,
-          ),
-          decisionDate: row.decisionDate,
-          decisionType: row.decisionType,
-          citationCount: row.citationCount,
-        },
-      };
-      if (audience === "human") {
+    links: links
+      .map((link) => {
+        const marker = withdrawal.marker(null, link.decisionId);
+        if (marker !== null) {
+          return {
+            ...link,
+            decision: { status: "withdrawn" as const, marker },
+          };
+        }
+        const detail = decisionsById.get(link.decisionId);
+        if (detail === undefined) {
+          return null;
+        }
+        const row = { ...detail, ...link };
+        const textWithheldReason =
+          !isRedistributable(row.descriptor) ||
+          decisionTextWithheldReason(row.descriptor) !== null
+            ? DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE
+            : null;
+        const headnote = readDecisionHeadnote({
+          headnote: row.headnote,
+          keywords: row.keywords,
+        });
+        const shared = {
+          id: row.id,
+          decisionId: row.decisionId,
+          note: row.note,
+          linkedBy: row.linkedBy,
+          createdAt: row.createdAt,
+          decision: {
+            status: "available" as const,
+            id: row.decisionId,
+            caseNumber: row.caseNumber,
+            slug: row.slug,
+            ecli: row.ecli,
+            court: row.court,
+            country: row.country,
+            language: row.language,
+            languageAlternates: alternatesByGroupKey.alternatesFor(
+              row.languageGroupKey,
+            ),
+            decisionDate: row.decisionDate,
+            decisionType: row.decisionType,
+            citationCount: row.citationCount,
+          },
+        };
+        if (audience === "human") {
+          return {
+            ...shared,
+            decision: { ...shared.decision, headnote },
+          };
+        }
         return {
           ...shared,
-          decision: { ...shared.decision, headnote },
+          decision: {
+            ...shared.decision,
+            headnote: textWithheldReason === null ? headnote : null,
+            textWithheldReason,
+          },
         };
-      }
-      return {
-        ...shared,
-        decision: {
-          ...shared.decision,
-          headnote: textWithheldReason === null ? headnote : null,
-          textWithheldReason,
-        },
-      };
-    }),
+      })
+      .filter((link) => link !== null),
   };
 };
 
@@ -163,7 +145,8 @@ const config = {
     "first, each with its note and the decision's row facts: case number, " +
     "slug, ECLI, court, country, language, the decision's other language " +
     "versions, date, type, citation count and headnote preview. Returns the " +
-    "whole set up to the per-matter link cap; there is no pagination.",
+    "whole set up to the per-matter link cap; there is no pagination. " +
+    "Withdrawn decisions return only a translated marker beside the saved note.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {

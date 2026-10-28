@@ -432,6 +432,7 @@ export const LIMITS = {
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
   searchChatPreviewMessageLimit: 6,
+  searchChatCandidateThreadsMax: 50,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,

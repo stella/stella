@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "boundedResults": "Wyświetlono ograniczony wybór wyników. Doprecyzuj wyszukiwanie, aby znaleźć więcej.",
     "caseLawEmptyState": "Zacznij pisać, aby przeszukać orzeczenia sądowe.",
     "caseLawMatchingDecisions": "{count, plural, one {# pasujące orzeczenie} few {# pasujące orzeczenia} many {# pasujących orzeczeń} other {# pasującego orzeczenia}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ pasujące orzeczenie} few {#+ pasujące orzeczenia} many {#+ pasujących orzeczeń} other {#+ pasującego orzeczenia}}",

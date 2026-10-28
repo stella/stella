@@ -19,12 +19,22 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatRunLogEntries,
+  chatRunLogs,
+  chatThreads,
+  chatTurns,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
+import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
+import { isRecord } from "@/api/lib/type-guards";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
@@ -171,6 +181,216 @@ const readCurrentRunTiming = async ({
   return row?.timing ?? null;
 };
 
+type RunLogHeaderOptions = Pick<
+  RunLogReaderOptions,
+  "organizationId" | "runId"
+> & {
+  tx: Transaction;
+  includeReferences: boolean;
+};
+const readRunLogHeaderOnTx = async ({
+  tx,
+  organizationId,
+  runId,
+  includeReferences,
+}: RunLogHeaderOptions) =>
+  (
+    await tx
+      .select({
+        closedAt: chatRunLogs.closedAt,
+        nextSeq: chatRunLogs.nextSeq,
+        subjectDecisionId: chatThreads.subjectDecisionId,
+        sourceContent: chatMessages.content,
+        decisionReferences: includeReferences
+          ? sql`(select jsonb_agg(jsonb_build_object('seq', ref.seq::text, 'chunk', ref.chunk) order by ref.seq) from chat_run_log_entries ref where ref.organization_id = ${chatRunLogs.organizationId} and ref.run_id = ${chatRunLogs.runId})`
+          : sql`null`,
+        tailChunk: chatRunLogEntries.chunk,
+        tailTimingSeq: sql<string | null>`(
+            select pending.seq::text from chat_run_log_entries pending
+            where pending.organization_id = ${chatRunLogs.organizationId}
+              and pending.run_id = ${chatRunLogs.runId}
+              and pending.seq = ${chatRunLogs.nextSeq} - 2
+              and pending.chunk->>'type' = ${EventType.TEXT_MESSAGE_END}
+              and pending.chunk->'metadata' ? 'turnTiming'
+          )`,
+      })
+      .from(chatRunLogs)
+      .innerJoin(
+        chatTurns,
+        and(
+          eq(chatTurns.id, chatRunLogs.turnId),
+          eq(chatTurns.organizationId, chatRunLogs.organizationId),
+        ),
+      )
+      .innerJoin(chatThreads, eq(chatThreads.id, chatTurns.threadId))
+      .leftJoin(
+        chatMessages,
+        and(
+          eq(chatMessages.id, chatTurns.timingMessageId),
+          eq(chatMessages.threadId, chatTurns.threadId),
+        ),
+      )
+      .leftJoin(
+        chatRunLogEntries,
+        and(
+          eq(chatRunLogEntries.organizationId, chatRunLogs.organizationId),
+          eq(chatRunLogEntries.runId, chatRunLogs.runId),
+          eq(chatRunLogEntries.seq, sql`${chatRunLogs.nextSeq} - 1`),
+        ),
+      )
+      .where(logKey(organizationId, runId))
+      .limit(1)
+  ).at(0);
+type RunLogHeader = Awaited<ReturnType<typeof readRunLogHeaderOnTx>>;
+
+const createRunLogCopyProjection = () => {
+  let projection:
+    Awaited<ReturnType<typeof readWithdrawnCopyProjection>> | undefined;
+  let runMarker: string | null | undefined;
+  const checkedReferences = new Set<string>();
+  const userMessageIds = new Set<string>();
+  const userSequences = new Set<string>();
+  const knownSequences = new Set<string>();
+  let currentRole: string | undefined;
+  const shownMarkers = new Set<string>();
+  const isAuthoredEntry = ({
+    chunk,
+    seq,
+    offset,
+  }: {
+    chunk: StreamChunk;
+    seq?: bigint;
+    offset?: string;
+  }) => {
+    const sequence = seq?.toString() ?? offset;
+    if (sequence !== undefined && userSequences.has(sequence)) {
+      return true;
+    }
+    if (sequence === undefined || !knownSequences.has(sequence)) {
+      if (chunk.type === EventType.TEXT_MESSAGE_START) {
+        currentRole = chunk.role ?? "assistant";
+      } else if (
+        chunk.type === EventType.TEXT_MESSAGE_CHUNK &&
+        chunk.role !== undefined
+      ) {
+        currentRole = chunk.role;
+      }
+      const authored = currentRole === "user";
+      if (chunk.type === EventType.TEXT_MESSAGE_END) {
+        currentRole = undefined;
+      }
+      if (sequence !== undefined) {
+        knownSequences.add(sequence);
+        if (authored) {
+          userSequences.add(sequence);
+        }
+      }
+      if (authored) {
+        return true;
+      }
+    }
+    if (chunk.type === EventType.TEXT_MESSAGE_CHUNK && chunk.role === "user") {
+      return true;
+    }
+    if (chunk.type === EventType.TEXT_MESSAGE_START && chunk.role === "user") {
+      userMessageIds.add(chunk.messageId);
+    }
+    if (
+      (chunk.type === EventType.TEXT_MESSAGE_START ||
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.TEXT_MESSAGE_END) &&
+      userMessageIds.has(chunk.messageId)
+    ) {
+      return true;
+    }
+    return false;
+  };
+  const projectEntries = async <
+    T extends { chunk: StreamChunk; seq?: bigint; offset?: string },
+  >({
+    entries,
+    log,
+    markers = shownMarkers,
+  }: {
+    entries: T[];
+    log: RunLogHeader;
+    markers?: Set<string>;
+  }) => {
+    if (Array.isArray(log?.decisionReferences)) {
+      for (const record of log.decisionReferences) {
+        if (
+          !isRecord(record) ||
+          typeof record["seq"] !== "string" ||
+          !isRecord(record["chunk"])
+        ) {
+          continue;
+        }
+        knownSequences.add(record["seq"]);
+        const chunk = record["chunk"];
+        if (
+          chunk["type"] === EventType.TEXT_MESSAGE_START ||
+          chunk["type"] === EventType.TEXT_MESSAGE_CHUNK
+        ) {
+          if (chunk["type"] === EventType.TEXT_MESSAGE_START) {
+            currentRole =
+              typeof chunk["role"] === "string" ? chunk["role"] : "assistant";
+          } else if (typeof chunk["role"] === "string") {
+            currentRole = chunk["role"];
+          }
+          if (
+            chunk["role"] === "user" &&
+            typeof chunk["messageId"] === "string"
+          ) {
+            userMessageIds.add(chunk["messageId"]);
+          }
+        }
+        if (currentRole === "user") {
+          userSequences.add(record["seq"]);
+        }
+        if (chunk["type"] === EventType.TEXT_MESSAGE_END) {
+          currentRole = undefined;
+        }
+      }
+    }
+    const references = decisionReferencesIn([log, entries]);
+    if (
+      projection === undefined ||
+      [...references].some((id) => !checkedReferences.has(id))
+    ) {
+      projection = await readWithdrawnCopyProjection({
+        values: [log, entries],
+        decisionIds: [...checkedReferences],
+      });
+      for (const id of references) {
+        checkedReferences.add(id);
+      }
+    }
+    runMarker ??= projection.marker([log, entries], log?.subjectDecisionId);
+    const marker = runMarker;
+    return entries.map((entry) => {
+      const chunk = entry.chunk;
+      if (isAuthoredEntry(entry)) {
+        return entry;
+      }
+      const label = marker ?? projection?.marker(chunk);
+      if (label === null || label === undefined) {
+        return entry;
+      }
+      let text = label;
+      if (
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        chunk.type === EventType.TEXT_MESSAGE_CHUNK
+      ) {
+        const messageKey = chunk.messageId ?? "current-text-message";
+        text = markers.has(messageKey) ? "" : label;
+        markers.add(messageKey);
+      }
+      return { ...entry, chunk: projectWithdrawnRunChunk(chunk, text) };
+    });
+  };
+  return { projectEntries, hasRead: () => projection !== undefined };
+};
+
 const createRunLogReader = ({
   db,
   organizationId,
@@ -181,35 +401,14 @@ const createRunLogReader = ({
 }): Pick<StreamDurability, "read" | "snapshot"> => {
   const needsCurrentTiming = (chunks: readonly StreamChunk[]) =>
     timingMode === "current" && chunks.some(hasRunningChunkTiming);
+  const { projectEntries, hasRead } = createRunLogCopyProjection();
   const loadHeader = async (tx: Transaction) =>
-    (
-      await tx
-        .select({
-          closedAt: chatRunLogs.closedAt,
-          nextSeq: chatRunLogs.nextSeq,
-          tailChunk: chatRunLogEntries.chunk,
-          tailTimingSeq: sql<string | null>`(
-            select pending.seq::text from chat_run_log_entries pending
-            where pending.organization_id = ${chatRunLogs.organizationId}
-              and pending.run_id = ${chatRunLogs.runId}
-              and pending.seq = ${chatRunLogs.nextSeq} - 2
-              and pending.chunk->>'type' = ${EventType.TEXT_MESSAGE_END}
-              and pending.chunk->'metadata' ? 'turnTiming'
-          )`,
-        })
-        .from(chatRunLogs)
-        .leftJoin(
-          chatRunLogEntries,
-          and(
-            eq(chatRunLogEntries.organizationId, chatRunLogs.organizationId),
-            eq(chatRunLogEntries.runId, chatRunLogs.runId),
-            eq(chatRunLogEntries.seq, sql`${chatRunLogs.nextSeq} - 1`),
-          ),
-        )
-        .where(logKey(organizationId, runId))
-        .limit(1)
-    ).at(0);
-  type RunLogHeader = Awaited<ReturnType<typeof loadHeader>>;
+    await readRunLogHeaderOnTx({
+      tx,
+      organizationId,
+      runId,
+      includeReferences: !hasRead(),
+    });
   const unsettledTailAfter = (log: RunLogHeader) => {
     if (log?.closedAt !== null) {
       return undefined;
@@ -237,7 +436,7 @@ const createRunLogReader = ({
       if (log === undefined) {
         return { entries: [], log };
       }
-      const entries = await tx
+      const storedEntries = await tx
         .select({
           chunk: chatRunLogEntries.chunk,
           seq: chatRunLogEntries.seq,
@@ -252,6 +451,7 @@ const createRunLogReader = ({
         )
         .orderBy(asc(chatRunLogEntries.seq))
         .limit(READ_PAGE_SIZE);
+      const entries = await projectEntries({ entries: storedEntries, log });
       if (!needsCurrentTiming(entries.map(({ chunk }) => chunk))) {
         return { entries, log };
       }
@@ -326,11 +526,7 @@ const createRunLogReader = ({
     },
     snapshot: async () =>
       await db(async (tx) => {
-        const [log] = await tx
-          .select({ nextSeq: chatRunLogs.nextSeq })
-          .from(chatRunLogs)
-          .where(logKey(organizationId, runId))
-          .limit(1);
+        const log = await loadHeader(tx);
         if (log === undefined) {
           return [];
         }
@@ -364,17 +560,25 @@ const createRunLogReader = ({
               });
             }
             if (!needsCurrentTiming(result.map(({ chunk }) => chunk))) {
-              return result;
+              return await projectEntries({
+                entries: result,
+                log,
+                markers: new Set(),
+              });
             }
             const timing = await readCurrentRunTiming({
               tx,
               organizationId,
               runId,
             });
-            return result.map((entry) => ({
-              ...entry,
-              chunk: refreshRunningTiming(entry.chunk, timing),
-            }));
+            return await projectEntries({
+              entries: result.map((entry) => ({
+                ...entry,
+                chunk: refreshRunningTiming(entry.chunk, timing),
+              })),
+              log,
+              markers: new Set(),
+            });
           }
         }
       }),

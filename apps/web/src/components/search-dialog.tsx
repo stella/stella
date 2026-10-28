@@ -867,7 +867,7 @@ export const SearchDialog = ({
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
   const editorBuckets = facets ? facets.editor : EMPTY_FACET_BUCKETS;
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
-  const totalCount = firstPage?.totalCount ?? 0;
+  const totalCount = firstPage === undefined ? 0 : firstPage.totalCount;
   const filterTypesKey = filters.types.join("|");
   const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
@@ -2637,7 +2637,7 @@ type SearchHitResultsProps = {
     >["summarizeMutation"];
     visible: boolean;
   };
-  totalCount: number;
+  totalCount: number | null;
   virtual: {
     items: VirtualItem[];
     measureElement: (element: Element | null) => void;
@@ -2659,7 +2659,9 @@ const SearchHitResults = ({
   return (
     <div className="px-2 py-2">
       <p className="text-muted-foreground px-2 pb-2 text-xs">
-        {t("search.resultCount", { count: totalCount })}
+        {totalCount === null
+          ? t("search.boundedResults")
+          : t("search.resultCount", { count: totalCount })}
       </p>
       {summary.visible && (
         <SearchSummaryItem

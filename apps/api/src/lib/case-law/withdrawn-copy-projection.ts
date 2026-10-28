@@ -6,6 +6,8 @@ import { isUuid } from "@stll/uuid-codec";
 
 import type {
   chatMessages,
+  chatThreadCompactions,
+  chatThreads,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
   legalReaderAnswers,
@@ -41,6 +43,23 @@ export const decisionReferencesIn = (value: unknown): DecisionReferences => {
       return;
     }
     if (typeof item === "object" && item !== null) {
+      let taggedId: unknown;
+      if (
+        "targetType" in item &&
+        item.targetType === "decision" &&
+        "targetId" in item
+      ) {
+        taggedId = item.targetId;
+      } else if (
+        "type" in item &&
+        item.type === "case_law_decision" &&
+        "id" in item
+      ) {
+        taggedId = item.id;
+      }
+      if (typeof taggedId === "string" && isUuid(taggedId)) {
+        references.add(taggedId.toLowerCase());
+      }
       for (const [childKey, child] of Object.entries(item)) {
         visit(child, childKey);
       }
@@ -115,6 +134,52 @@ export class WithdrawnCopyProjection {
     }
     const marker = this.marker(row.citations, decisionId);
     return marker === null ? row : { ...row, content: marker, citations: [] };
+  }
+
+  thread<
+    T extends Pick<
+      typeof chatThreads.$inferSelect,
+      "title" | "titleSource" | "subjectDecisionId"
+    > & { recapText?: string | null },
+  >(row: T): T {
+    const marker = this.marker(row, row.subjectDecisionId);
+    if (marker === null) {
+      return row;
+    }
+    return {
+      ...row,
+      title: row.titleSource === "user" ? row.title : marker,
+      ...(row.recapText === undefined ? {} : { recapText: marker }),
+    };
+  }
+
+  compaction<
+    T extends Pick<
+      typeof chatThreadCompactions.$inferSelect,
+      "summary" | "summaryMarkdown"
+    >,
+  >(row: T, decisionId?: string | null): T {
+    const marker = this.marker(row, decisionId);
+    if (marker === null) {
+      return row;
+    }
+    return {
+      ...row,
+      summaryMarkdown: marker,
+      summary: {
+        version: 1,
+        goal: marker,
+        blocked: [],
+        constraints: [],
+        criticalContext: [],
+        done: [],
+        inProgress: [],
+        keyDecisions: [],
+        modifiedFiles: [],
+        nextSteps: [],
+        readFiles: [],
+      },
+    };
   }
 
   chat<

@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Improve query with AI",
+    "boundedResults": "Showing a limited set of results. Refine your search for more.",
     "caseLawEmptyState": "Start typing to search court decisions.",
     "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}",

@@ -10,6 +10,7 @@ import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annotations/schema";
 
 /**
@@ -17,6 +18,7 @@ import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annot
  * HTTP routes and the agent tools pass the same scope to the same handlers.
  */
 export type AnnotationAuthorScope = {
+  readCopies?: typeof readWithdrawnCopyProjection;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;

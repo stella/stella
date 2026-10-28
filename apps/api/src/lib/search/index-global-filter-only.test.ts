@@ -152,7 +152,7 @@ test("orders filter-only chat hits on the tenant-leading thread key", async () =
     .find(
       (query) =>
         query.includes("FROM chat_thread_search_documents") &&
-        query.includes("cst.title"),
+        query.includes("t.title"),
     );
 
   expect(hitQuery).toContain("t.user_id =");

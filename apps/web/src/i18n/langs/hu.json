@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
+    "boundedResults": "A találatok korlátozott válogatása látható. További találatokért pontosítsa a keresést.",
     "caseLawEmptyState": "Kezdjen el gépelni a bírósági határozatok közötti kereséshez.",
     "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",

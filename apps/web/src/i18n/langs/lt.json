@@ -4847,6 +4847,7 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "boundedResults": "Rodoma ribota rezultatų atranka. Norėdami rasti daugiau, patikslinkite paiešką.",
     "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",

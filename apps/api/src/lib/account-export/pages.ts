@@ -34,6 +34,7 @@ import { readAccountExportAnnotationPage } from "@/api/lib/account-export/owner-
 import type { AccountExportProjections } from "@/api/lib/account-export/projections";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   listAccountMembershipPage,
   readAccountProfileForExport,
@@ -411,7 +412,21 @@ const readLegalReaderAnnotationsPage = async ({
       after(legalReaderAnnotations.id, cursor),
     ),
   });
-  return projectRows(rows, projections.legal_reader_annotations);
+  const withdrawal = await readWithdrawnCopyProjection({
+    values: rows,
+    decisionIds: rows
+      .filter((row) => row.targetType === "decision")
+      .map((row) => row.targetId),
+  });
+  return projectRows(
+    rows.map((row) =>
+      withdrawal.annotation(
+        row,
+        row.targetType === "decision" ? row.targetId : null,
+      ),
+    ),
+    projections.legal_reader_annotations,
+  );
 };
 
 const readLegalReaderAnswersPage = async ({
@@ -462,10 +477,11 @@ const readLegalReaderAnswersPage = async ({
     if (messages.length > maximumMessages) {
       panic("Reader answer messages exceed their owning limit");
     }
+    const withdrawal = await readWithdrawnCopyProjection({ values: rows });
     return rows.map((row) => ({
       id: row.id,
       value: projections.legal_reader_answers(
-        row,
+        withdrawal.answer(row),
         messages.filter(({ answerId }) => answerId === row.id),
       ),
     }));

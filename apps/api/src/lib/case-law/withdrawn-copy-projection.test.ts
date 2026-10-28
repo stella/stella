@@ -93,3 +93,28 @@ describe("withdrawn decision copies", () => {
     );
   });
 });
+
+test("tagged decision identities share the canonical verdict and authored thread titles are retained", () => {
+  const tagged = [
+    { targetType: "decision", targetId: id },
+    { target: { type: "case_law_decision", id } },
+  ];
+  for (const value of tagged) {
+    expect([...decisionReferencesIn(value)]).toEqual([id]);
+    expect(projection.marker(value)).toBe(marker);
+  }
+  const row = {
+    title: "Own title",
+    titleSource: "user" as const,
+    subjectDecisionId: id,
+    recapText: "Generated summary",
+  };
+  expect(projection.thread(row)).toMatchObject({
+    title: row.title,
+    recapText: marker,
+  });
+  expect(projection.thread({ ...row, titleSource: "ai" })).toMatchObject({
+    title: marker,
+    recapText: marker,
+  });
+});
