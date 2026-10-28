@@ -1,5 +1,33 @@
 # @stll/cli
 
+## 6.1.0
+
+### Minor Changes
+
+- [#6189](https://github.com/stella/stella/pull/6189) [`34faed5`](https://github.com/stella/stella/commit/34faed5563266a9b413f4e8ca2cc6fe9f57bd179) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Prepare a matter's next invoice with `invoices prefill`, and create prefilled drafts that bill expenses and billed-time changes in one `invoices create` call. Seller profiles record whether the issuer is a VAT payer (`vatPayer`).
+
+### Patch Changes
+
+- [#7183](https://github.com/stella/stella/pull/7183) [`7b30990`](https://github.com/stella/stella/commit/7b3099091efa5a049d157b586adac10fff6c0089) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose pending and unprobeable case-law removal reconciliation counts.
+
+- [#7159](https://github.com/stella/stella/pull/7159) [`0f6787d`](https://github.com/stella/stella/commit/0f6787d847630e67782f3a188a4f31d02e2554ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters delete` refuses a matter that has time entries, expenses or invoices; archive it instead to keep its billing records.
+
+- [#7009](https://github.com/stella/stella/pull/7009) [`d2d46a7`](https://github.com/stella/stella/commit/d2d46a7f6d7e16a64822cd955694a010a6c19dc3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the public read timeout error code in the generated MCP contract and map it to the server exit class.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Serve shipped skill guidance in the CLI resource catalog.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose shipped skill guidance through CLI reference resources.
+
+- [#7160](https://github.com/stella/stella/pull/7160) [`61c786f`](https://github.com/stella/stella/commit/61c786fedac65aee81af9f2c210d2edbedd4b981) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks list` lists your open tasks across every matter you can open, soonest due first, each naming its matter.
+
+- [#7171](https://github.com/stella/stella/pull/7171) [`6ead297`](https://github.com/stella/stella/commit/6ead2978e0c1fdeaf42977b4c64c25e90d2f5eb8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries approval-queue return` returns up to 200 entries with one comment and answers per entry, and `time-entries update` moves a draft to another matter with `moveToWorkspaceId`.
+
+- [#7107](https://github.com/stella/stella/pull/7107) [`a640880`](https://github.com/stella/stella/commit/a6408801b667a761f77f46db628184ebec586be9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me suggestions list` lists your pending suggested time entries across matters for up to a week, and `time-entries me list` takes an `endDate` to cover up to seven work dates with per-day totals.
+
+- [#7127](https://github.com/stella/stella/pull/7127) [`3131d0d`](https://github.com/stella/stella/commit/3131d0dde83bd987c1176a951917083e6df38a06) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me submissions create` submits your draft time for up to a week to your approvers, and the approval queue now lists submitted entries only.
+- Updated dependencies []:
+  - @stll/agent-input@0.2.2
+
 ## 6.0.2
 
 ### Patch Changes

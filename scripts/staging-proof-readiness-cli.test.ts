@@ -15,7 +15,12 @@ test("a healthy response from the expected commit is ready", async () => {
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    fetch: () => Response.json({ status: "ok", commit: COMMIT }),
+    fetch: () =>
+      Response.json({
+        status: "ok",
+        commit: COMMIT,
+        deployEnvironment: "staging",
+      }),
   });
   try {
     expect(await readStagingReadiness(options(server.url))).toEqual({
@@ -30,12 +35,34 @@ for (const fixture of [
   {
     name: "a non-200 response",
     status: 503,
-    body: JSON.stringify({ status: "ok", commit: COMMIT }),
+    body: JSON.stringify({
+      status: "ok",
+      commit: COMMIT,
+      deployEnvironment: "staging",
+    }),
   },
   {
     name: "a non-200 success response",
     status: 201,
+    body: JSON.stringify({
+      status: "ok",
+      commit: COMMIT,
+      deployEnvironment: "staging",
+    }),
+  },
+  {
+    name: "a missing deployment environment",
+    status: 200,
     body: JSON.stringify({ status: "ok", commit: COMMIT }),
+  },
+  {
+    name: "a different deployment environment",
+    status: 200,
+    body: JSON.stringify({
+      status: "ok",
+      commit: COMMIT,
+      deployEnvironment: "production",
+    }),
   },
   { name: "malformed JSON", status: 200, body: "not JSON" },
   {

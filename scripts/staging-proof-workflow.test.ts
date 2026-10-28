@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import path from "node:path";
 
@@ -66,19 +67,25 @@ const assertReadinessGates = (candidate = source) => {
   const steps = promotionSteps(candidate);
   const preflight = steps.findIndex((step) => step["id"] === "proof-readiness");
   const postflight = steps.findIndex(
-    (step) => step["id"] === "proof-environment",
+    (step) => step["id"] === "candidate-served-after-smokes",
   );
   expect(preflight).toBeGreaterThan(-1);
   expect(postflight).toBeGreaterThan(preflight);
   expect(
     steps.slice(preflight + 1, postflight).map((step) => text(step, "name")),
-  ).toEqual(PROOF_STEPS);
+  ).toEqual([
+    "Install dependencies",
+    "Login to GitHub Container Registry for browser images",
+    "Verify image-provided Chromium",
+    ...PROOF_STEPS,
+  ]);
   for (const name of PROOF_STEPS) {
     const condition = text(stepNamed(name, candidate), "if");
     for (const readiness of [
       "",
       "environment-unavailable",
       "environment-interrupted",
+      "proof-tooling-failure",
     ]) {
       expect(
         evaluate(condition, {
@@ -132,7 +139,7 @@ test("every staging proof step waits for explicit readiness", () => {
 
 test("proof integrity is checked after journeys even when they fail or are cancelled", () => {
   const steps = promotionSteps();
-  const integrity = stepNamed("Check staging proof environment integrity");
+  const integrity = stepNamed("Verify candidate staging commit after smokes");
   const condition = text(integrity, "if");
   for (const outcome of ["success", "failure", "cancelled"]) {
     expect(
@@ -147,7 +154,9 @@ test("proof integrity is checked after journeys even when they fail or are cance
       }),
     ).toBe(true);
   }
-  const index = steps.findIndex((step) => step["id"] === "proof-environment");
+  const index = steps.findIndex(
+    (step) => step["id"] === "candidate-served-after-smokes",
+  );
   expect(index).toBeGreaterThan(
     steps.findIndex((step) => step["id"] === "mock-journeys"),
   );
@@ -189,9 +198,12 @@ test("proof tooling is preserved from the workflow revision before target checko
       "run",
     ),
   ).toContain("STAGING_PROOF_GATE_DIR=");
-  expect(text(stepNamed("Wait for staging proof readiness"), "run")).toContain(
-    'staging-proof-readiness-cli.ts" monitor',
-  );
+  expect(
+    text(
+      stepNamed("Verify staging serves the release commit and environment"),
+      "run",
+    ),
+  ).toContain('staging-proof-readiness-cli.ts" monitor');
 });
 
 const assertPreservedImports = (entrypoint: string) => {
@@ -329,6 +341,7 @@ const recordProof = (overrides: Record<string, string>, candidate = source) => {
     path.resolve(import.meta.dir, "../.staging-proof-test-"),
   );
   try {
+    writeFileSync(path.join(directory, "status-writer.sh"), ":\n");
     const script = text(
       stepNamed("Record staging verification", candidate),
       "run",
@@ -347,6 +360,7 @@ const recordProof = (overrides: Record<string, string>, candidate = source) => {
           GITHUB_RUN_ID: "1",
           GITHUB_SERVER_URL: "https://github.com",
           GITHUB_STEP_SUMMARY: path.join(directory, "summary"),
+          STAGING_STATUS_WRITER: path.join(directory, "status-writer.sh"),
           DEPLOYMENT_ID: "1",
           DEPLOY_SHA: "a".repeat(40),
           PROOF_READINESS: "ready",

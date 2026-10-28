@@ -60,7 +60,22 @@ const run = (script: string, env: Record<string, string>) => {
   mkdirSync(bin);
   writeFileSync(
     path.join(bin, "gh"),
-    '#!/bin/bash\njq -c . >> "$STUB_PAYLOADS"\n',
+    `#!/bin/bash
+set -euo pipefail
+if [[ " $* " == *" --method POST "* ]]; then
+  jq -c . >> "$STUB_PAYLOADS"
+  exit 0
+fi
+case "$*" in
+  *actions/workflows/deploy-staging.yml/runs?*)
+    jq -cn --arg sha "$DEPLOY_SHA" --argjson id "$GITHUB_RUN_ID" '{workflow_runs: [{
+      id: $id, event: "workflow_dispatch", head_sha: $sha, head_branch: "main",
+      path: ".github/workflows/deploy-staging.yml", display_title: ("Deploy main to staging " + $sha),
+      repository: {full_name: "stella/stella"}}]}' ;;
+  *commits/*/statuses?*) printf '[[]]\\n' ;;
+  *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;
+esac
+`,
     { mode: 0o755 },
   );
   try {
@@ -68,6 +83,10 @@ const run = (script: string, env: Record<string, string>) => {
       env: {
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+        STAGING_STATUS_WRITER: path.resolve(
+          import.meta.dir,
+          "post-staging-verification.sh",
+        ),
         ...env,
         GITHUB_OUTPUT: output,
         GITHUB_STEP_SUMMARY: summary,
@@ -199,7 +218,8 @@ const assertValidation = (candidate = workflow) => {
 };
 const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
   run(
-    `gh() { jq -c . >> "$STUB_PAYLOADS"; }\n${findStep("Record staging verification", candidate).run ?? panic("Missing verification script")}`,
+    findStep("Record staging verification", candidate).run ??
+      panic("Missing verification script"),
     {
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "1",
@@ -249,14 +269,17 @@ test("the sole named waiver validates before checkout and derives its downstream
     workflow.on.workflow_dispatch.inputs,
   );
   expect(inputs.waive_check.options).toEqual(["none", "corpus-search"]);
-  // Right after the release candidate check, still before any checkout of
-  // the candidate.
-  const resolveSteps = workflow.jobs["resolve"]?.steps ?? [];
-  const preflight = resolveSteps.findIndex(
-    ({ name }) => name === "Check release candidate",
+  const resolveSteps =
+    workflow.jobs["resolve"]?.steps ?? panic("Missing resolver steps");
+  const waiverIndex = resolveSteps.findIndex(({ id }) => id === "waiver");
+  // The network retry helper checkout reads only the workflow's own revision.
+  const candidateCheckoutIndex = resolveSteps.findIndex(
+    (step) =>
+      step.uses?.startsWith("actions/checkout@") &&
+      step.with?.["ref"] !== `\${{ github.workflow_sha }}`,
   );
-  expect(preflight).toBeGreaterThanOrEqual(0);
-  expect(resolveSteps.at(preflight + 1)?.id).toBe("waiver");
+  expect(waiverIndex).toBeGreaterThanOrEqual(0);
+  expect(candidateCheckoutIndex).toBeGreaterThan(waiverIndex);
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );
@@ -335,6 +358,7 @@ test("only failed corpus preflight can use the waiver and its MCP dependency rem
     "Reason: Backend verification deferred; evidence=artifacts/corpus-check.log",
   );
 });
+// timeout: The matrix executes the status writer in a separate shell per outcome.
 test("unused waiver keeps normal success and every unrelated failure remains blocking", () => {
   const unused = record({ CORPUS_PREFLIGHT: "success", MCP_SMOKE: "success" });
   expect(statuses(unused).at(0)).toMatchObject({
@@ -371,7 +395,7 @@ test("unused waiver keeps normal success and every unrelated failure remains blo
       JSON.stringify(overrides),
     ).toBe(true);
   }
-});
+}, 15_000);
 test("waiver scope, required reason and manual-only boundary mutations are rejected", () => {
   const widened = structuredClone(workflow);
   findStep("Run staging web smoke", widened)["continue-on-error"] =
@@ -431,7 +455,7 @@ test("both application journey outcomes belong to the serialized staging promoti
   const promotion =
     workflow.jobs["promote-staging"] ?? panic("Missing promotion owner");
   expect(promotion["concurrency"]).toEqual({
-    group: "deploy-staging",
+    group: `\${{ inputs.release_ref != '' && 'deploy-staging-candidate' || 'deploy-staging-ordinary' }}`,
     "cancel-in-progress": false,
   });
   const steps = promotion.steps ?? panic("Missing promotion steps");

@@ -65,16 +65,31 @@ const sleep = async (ms: number) => {
   await Bun.sleep(ms);
 };
 
+const readExpectedEnvironment = () => {
+  const value = process.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"]?.trim();
+  if (!value) {
+    return undefined;
+  }
+  if (value !== "production" && value !== "staging") {
+    throw new ApiDeploymentError(
+      "API_DEPLOYMENT_EXPECTED_ENVIRONMENT must be production or staging",
+    );
+  }
+  return value;
+};
+
 type ReadApiDeploymentOptions = {
   url: URL;
   headers?: Headers;
   timeoutMs?: number;
+  expectedEnvironment?: ReturnType<typeof readExpectedEnvironment>;
 };
 
 export const readApiDeployment = async ({
   url: probeUrl,
   headers,
   timeoutMs = FETCH_TIMEOUT_MS,
+  expectedEnvironment,
 }: ReadApiDeploymentOptions) => {
   const response = await fetch(probeUrl, {
     headers,
@@ -93,6 +108,17 @@ export const readApiDeployment = async ({
       `${probeUrl.toString()} did not return a full commit SHA`,
     );
   }
+  if (expectedEnvironment !== undefined) {
+    const observedEnvironment =
+      typeof body === "object" && body !== null
+        ? Reflect.get(body, "deployEnvironment")
+        : undefined;
+    if (observedEnvironment !== expectedEnvironment) {
+      throw new ApiDeploymentError(
+        `${probeUrl.toString()} deployEnvironment must be ${expectedEnvironment}; observed ${String(observedEnvironment ?? "unset")}`,
+      );
+    }
+  }
   return {
     statusCode: response.status,
     commit,
@@ -110,6 +136,13 @@ const main = async () => {
   const probePath =
     process.env["API_DEPLOYMENT_PROBE_PATH"]?.trim() || DEFAULT_PROBE_PATH;
   const expectedCommit = readRequiredEnv("API_DEPLOYMENT_EXPECTED_COMMIT");
+  const expectedEnvironment = readExpectedEnvironment();
+  const headers = new Headers();
+  const edgeHeaderName = process.env["EDGE_HEADER_NAME"]?.trim();
+  const edgeHeaderValue = process.env["EDGE_HEADER_VALUE"]?.trim();
+  if (edgeHeaderName && edgeHeaderValue) {
+    headers.set(edgeHeaderName, edgeHeaderValue);
+  }
   if (!COMMIT_SHA_PATTERN.test(expectedCommit)) {
     throw new ApiDeploymentError(
       "API_DEPLOYMENT_EXPECTED_COMMIT must be a full lowercase commit SHA",
@@ -138,7 +171,11 @@ const main = async () => {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       lastObservedCommit = (
-        await readApiDeployment({ url: getApiHealthUrl(apiUrl, probePath) })
+        await readApiDeployment({
+          url: getApiHealthUrl(apiUrl, probePath),
+          expectedEnvironment,
+          headers,
+        })
       ).commit;
       const stability = advanceDeploymentStability({
         consecutiveMatches,
@@ -175,7 +212,7 @@ const main = async () => {
   }
 
   throw new ApiDeploymentError(
-    `production did not remain at ${expectedCommit} for ${requiredStableProbes} consecutive probes; last observed ${lastObservedCommit ?? "unavailable"}; final streak ${consecutiveMatches}`,
+    `deployment did not remain at ${expectedCommit} for ${requiredStableProbes} consecutive probes; last observed ${lastObservedCommit ?? "unavailable"}; final streak ${consecutiveMatches}`,
   );
 };
 

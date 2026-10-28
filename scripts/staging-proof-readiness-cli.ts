@@ -12,7 +12,7 @@ import {
 } from "./staging-proof-readiness";
 
 const WAIT_DEADLINE_MS = 5 * 60_000;
-const MONITOR_DEADLINE_MS = 120 * 60_000;
+const MONITOR_DEADLINE_MS = 180 * 60_000;
 const FINISH_DEADLINE_MS = 45_000;
 const SAMPLE_INTERVAL_MS = 10_000;
 const READ_TIMEOUT_MS = 10_000;
@@ -32,7 +32,12 @@ export const readStagingReadiness = async ({
   timeoutMs,
 }: ReadStagingReadinessOptions): Promise<ReadinessSample> => {
   try {
-    const probe = await readApiDeployment({ url, headers, timeoutMs });
+    const probe = await readApiDeployment({
+      url,
+      headers,
+      timeoutMs,
+      expectedEnvironment: "staging",
+    });
     return {
       status:
         probe.statusCode === 200 && probe.commit === expectedCommit

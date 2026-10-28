@@ -1,12 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
+  auditLogs,
   chatSecrets,
   chatThreads,
   mcpConnectorAuthorizationReviews,
@@ -16,6 +17,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { storeChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { ChatSecretOutboundFetch } from "@/api/lib/mcp-upstream/chat-secret";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
@@ -26,6 +28,36 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+const secretOperationRecorder = ({
+  organizationId,
+  userId,
+  threadId,
+}: {
+  organizationId: ReturnType<typeof mintAuthProviderId<"organization">>;
+  userId: ReturnType<typeof mintAuthProviderId<"user">>;
+  threadId: ReturnType<typeof createSafeId<"chatThread">>;
+}) =>
+  createBackgroundAuditRecorder({
+    organizationId,
+    workspaceId: null,
+    userId,
+    execution: {
+      approval: { status: "approved", userId },
+      performer: {
+        type: "agent",
+        id: "stella-assistant",
+        name: "Stella AI",
+      },
+      trigger: {
+        type: "user_dispatch",
+        userId,
+        source: "chat",
+        sourceId: threadId,
+      },
+      runId: threadId,
+    },
+  });
 
 const withFixture = async (
   db: GatedTestDb,
@@ -252,6 +284,12 @@ if (!databaseUrl || !runPostgres) {
               userId,
               threadId,
               outboundFetch: upstream.outboundFetch,
+              purpose: "run",
+              recordAuditEvent: secretOperationRecorder({
+                organizationId,
+                userId,
+                threadId,
+              }),
             });
             const execute = tools[USE_CONNECTOR_SECRET_TOOL_NAME].execute;
             if (!execute) {
@@ -287,6 +325,38 @@ if (!databaseUrl || !runPostgres) {
               .from(chatSecrets)
               .where(eq(chatSecrets.id, receipt.secretRef));
             expect(stored).toEqual([{ remainingUses: 7 }]);
+            await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
+            const audit = await db
+              .select({ metadata: auditLogs.metadata })
+              .from(auditLogs)
+              .where(
+                and(
+                  eq(auditLogs.organizationId, organizationId),
+                  eq(auditLogs.resourceId, connectionId),
+                ),
+              );
+            const auditByPhase = Object.fromEntries(
+              audit.map(({ metadata }) => [metadata?.["phase"], metadata]),
+            );
+            expect(auditByPhase["intent"]).toEqual(
+              expect.objectContaining({
+                connectorSlug: connectorId,
+                outcome: "pending",
+                phase: "intent",
+                toolName: "list_items",
+              }),
+            );
+            expect(auditByPhase["outcome"]).toEqual(
+              expect.objectContaining({
+                connectorSlug: connectorId,
+                outcome: "success",
+                phase: "outcome",
+                toolName: "list_items",
+              }),
+            );
+            expect(auditByPhase["intent"]?.["operationId"]).toBe(
+              auditByPhase["outcome"]?.["operationId"],
+            );
           },
           { pendingReview: false },
         );
@@ -302,11 +372,18 @@ if (!databaseUrl || !runPostgres) {
             const safeDb = safeDbFromScoped(
               createScopedDb(markRlsDatabase(db), [], organizationId, userId),
             );
+            const threadId = createSafeId<"chatThread">();
             const tools = createSecretTools({
               safeDb,
               organizationId,
               userId,
-              threadId: createSafeId<"chatThread">(),
+              threadId,
+              purpose: "run",
+              recordAuditEvent: secretOperationRecorder({
+                organizationId,
+                userId,
+                threadId,
+              }),
             });
             const tool = tools[USE_CONNECTOR_SECRET_TOOL_NAME];
             const execute = tool.execute;
