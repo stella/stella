@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { IMPORT_SOURCE_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   recordPublisherFieldCoverage,
