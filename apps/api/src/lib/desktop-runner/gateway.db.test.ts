@@ -40,7 +40,10 @@ import {
   DESKTOP_RUNNER_ROUTE_PREFIX,
   type DesktopRunnerTiming,
 } from "@/api/lib/desktop-runner/protocol";
-import type { MintRunToken } from "@/api/lib/desktop-runner/session";
+import type {
+  MintRunToken,
+  RunnerTimers,
+} from "@/api/lib/desktop-runner/session";
 import type { DesktopRunnerDb } from "@/api/lib/desktop-runner/store";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -96,6 +99,11 @@ type HeldCommit = {
 };
 const commitGate: { next: HeldCommit | null } = { next: null };
 
+/** Resolves when the gateway writes outside a transaction, as a socket's release does. */
+const directUpdates: { next: PromiseWithResolvers<undefined> | null } = {
+  next: null,
+};
+
 let gatewayDb: DesktopRunnerDb;
 const sharedDoorbell = createLocalDoorbell();
 
@@ -109,6 +117,7 @@ const instances: Instance[] = [];
 type InstanceOverrides = {
   limits?: Partial<DesktopRunnerLimits>;
   timing?: Partial<DesktopRunnerTiming>;
+  timers?: RunnerTimers;
 };
 
 const startInstance = async (
@@ -126,6 +135,7 @@ const startInstance = async (
     random: () => 0.5,
     timing: { ...TIMING, ...overrides.timing },
     limits: overrides.limits ?? {},
+    ...(overrides.timers === undefined ? {} : { timers: overrides.timers }),
     // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
     isKeyLive: desktopKeyLiveness(
       asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
@@ -158,10 +168,17 @@ beforeAll(async () => {
   credentials = await createRlsDesktopCredentials(db, ids);
   // SAFETY: PGlite and Bun SQL expose the same Drizzle query and transaction
   // APIs the gateway uses; the transaction is wrapped to hold a commit open.
+  const updateRows = db.update.bind(db);
   gatewayDb = asTestRaw<DesktopRunnerDb>({
     select: db.select.bind(db),
     insert: db.insert.bind(db),
-    update: db.update.bind(db),
+    update: (table: Parameters<typeof db.update>[0]) => {
+      const observed = directUpdates.next;
+      directUpdates.next = null;
+      observed?.resolve(undefined);
+      // The caller adds its own `where`; this only observes the write.
+      return updateRows(table);
+    },
     transaction: async (run: (tx: unknown) => Promise<unknown>) =>
       await db.transaction(async (tx) => {
         const value = await run(tx);
@@ -1036,5 +1053,61 @@ describe("credential revocation", () => {
     });
     // Nothing reached the socket after its welcome: no run, no token.
     expect(desktop.received.map(({ type }) => type)).toEqual(["welcome"]);
+  });
+});
+
+/** System timers that remember which ones are still scheduled. */
+const recordingTimers = () => {
+  const pending = new Set<Timer>();
+  const timers: RunnerTimers = {
+    setTimeout: (run, ms) => {
+      const timer = setTimeout(() => {
+        pending.delete(timer);
+        run();
+      }, ms);
+      pending.add(timer);
+      return timer;
+    },
+    clearTimeout: (timer) => {
+      pending.delete(timer);
+      clearTimeout(timer);
+    },
+    setInterval: (run, ms) => {
+      const timer = setInterval(run, ms);
+      pending.add(timer);
+      return timer;
+    },
+    clearInterval: (timer) => {
+      pending.delete(timer);
+      clearInterval(timer);
+    },
+  };
+  return { timers, pending };
+};
+
+describe("socket lifecycle", () => {
+  test("a socket that closes while its hello is stored schedules nothing and mints nothing", async () => {
+    const { timers, pending } = recordingTimers();
+    const recorded = await startInstance("api-timers", sharedDoorbell, {
+      timers,
+    });
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(recorded, desktopId);
+    const held: HeldCommit = {
+      reached: Promise.withResolvers<undefined>(),
+      release: Promise.withResolvers<undefined>(),
+    };
+    commitGate.next = held;
+    desktop.send(helloFrame());
+    await held.reached.promise;
+    await desktop.close();
+    const released = Promise.withResolvers<undefined>();
+    directUpdates.next = released;
+    held.release.resolve(undefined);
+    // The release runs after the hello step, so the step has finished here.
+    await released.promise;
+    expect(pending.size).toBe(0);
+    expect(desktop.received).toEqual([]);
+    expect(recorded.gateway.openSessions()).toBe(0);
   });
 });

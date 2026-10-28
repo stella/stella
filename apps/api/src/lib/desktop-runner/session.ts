@@ -54,12 +54,32 @@ export type MintRunToken = (
   input: MintAgentRunTokenInput,
 ) => Promise<MintedAgentRunToken>;
 
+/** The clock functions a socket schedules with. */
+export type RunnerTimers = {
+  readonly setTimeout: (run: () => void, ms: number) => Timer;
+  readonly clearTimeout: (timer: Timer) => void;
+  readonly setInterval: (run: () => void, ms: number) => Timer;
+  readonly clearInterval: (timer: Timer) => void;
+};
+
+export const SYSTEM_TIMERS: RunnerTimers = {
+  setTimeout: (run, ms) => setTimeout(run, ms),
+  clearTimeout: (timer) => {
+    clearTimeout(timer);
+  },
+  setInterval: (run, ms) => setInterval(run, ms),
+  clearInterval: (timer) => {
+    clearInterval(timer);
+  },
+};
+
 /** What every socket of one gateway shares. */
 type RunnerSessionContext = {
   readonly db: DesktopRunnerDb;
   readonly instanceId: string;
   readonly timing: DesktopRunnerTiming;
   readonly limits: DesktopRunnerLimits;
+  readonly timers: RunnerTimers;
   readonly now: () => Date;
   readonly random: () => number;
   readonly mintRunToken: MintRunToken;
@@ -159,8 +179,8 @@ type SessionState = {
   missedPings: number;
   /** Tokens this socket sent, refreshed before they expire. */
   readonly tokens: Map<string, TrackedToken>;
-  readonly timeouts: ReturnType<typeof setTimeout>[];
-  readonly intervals: ReturnType<typeof setInterval>[];
+  readonly timeouts: Timer[];
+  readonly intervals: Timer[];
 };
 
 const runStartPayloadSchema = v.looseObject({
@@ -435,6 +455,9 @@ const heartbeat = (state: SessionState) => {
   );
 };
 
+/** Read through a call, so a check after an await sees the current phase. */
+const isReady = (state: SessionState) => state.phase.type === "ready";
+
 const onHello = async (
   state: SessionState,
   hello: Extract<DesktopRunnerDesktopMessage, { type: "hello" }>,
@@ -454,9 +477,15 @@ const onHello = async (
     close(state, DESKTOP_RUNNER_CLOSE.tooManyRunners);
     return;
   }
+  // Claimed, so the closing socket's release marks the runner disconnected.
   state.claimed = true;
   if (claim.previous !== null) {
     context.ringPrevious(claim.previous);
+  }
+  // The socket may have closed while the claim was stored: then nothing is
+  // scheduled or minted for it.
+  if (state.phase.type === "closed") {
+    return;
   }
   state.phase = {
     type: "ready",
@@ -469,16 +498,23 @@ const onHello = async (
     resume: claim.held.map(({ runId, ackSeq }) => ({ runId, ackSeq })),
   });
   state.intervals.push(
-    setInterval(() => heartbeat(state), context.timing.pingIntervalMs),
+    context.timers.setInterval(
+      () => heartbeat(state),
+      context.timing.pingIntervalMs,
+    ),
   );
   const life =
     context.timing.maxSocketLifeMs * (1 - MAX_LIFE_JITTER * context.random());
   state.timeouts.push(
-    setTimeout(() => {
+    context.timers.setTimeout(() => {
       drain(state, Math.floor(context.random() * MAX_LIFE_RECONNECT_SPREAD_MS));
     }, life),
   );
   for (const run of claim.held) {
+    // Minting awaits, and the socket may close in between.
+    if (!isReady(state)) {
+      return;
+    }
     if (run.state === "running") {
       await sendToken(state, run.runId, run.workspaceIds);
     }
@@ -591,10 +627,10 @@ const handleFrame = async (state: SessionState, frame: string) => {
 const onSocketClosed = (state: SessionState) => {
   state.phase = { type: "closed" };
   for (const timeout of state.timeouts) {
-    clearTimeout(timeout);
+    state.context.timers.clearTimeout(timeout);
   }
   for (const interval of state.intervals) {
-    clearInterval(interval);
+    state.context.timers.clearInterval(interval);
   }
   const previous = state.chain;
   detached(
@@ -659,7 +695,7 @@ export const createRunnerSession = ({
     open: (socket) => {
       state.phase = { type: "awaiting_hello", socket };
       state.timeouts.push(
-        setTimeout(() => {
+        context.timers.setTimeout(() => {
           if (state.phase.type === "awaiting_hello") {
             close(state, DESKTOP_RUNNER_CLOSE.helloTimeout);
           }

@@ -24,6 +24,8 @@ import {
   createRunnerSession,
   type MintRunToken,
   type RunnerSession,
+  type RunnerTimers,
+  SYSTEM_TIMERS,
 } from "@/api/lib/desktop-runner/session";
 import {
   type DesktopRunnerDb,
@@ -80,6 +82,8 @@ export type DesktopRunnerGatewayOptions = {
   limits?: Partial<DesktopRunnerLimits>;
   /** Re-checked on every heartbeat; the owner connection's check by default. */
   isKeyLive?: DesktopKeyLiveness;
+  /** The clock sockets schedule with; the system's by default. */
+  timers?: RunnerTimers;
 };
 
 /** Leases expired per sweep, so one sweep stays one short transaction. */
@@ -134,6 +138,7 @@ export const createDesktopRunnerGateway = (
     instanceId: options.instanceId,
     timing,
     limits,
+    timers: options.timers ?? SYSTEM_TIMERS,
     now,
     random,
     mintRunToken: options.mintRunToken,
