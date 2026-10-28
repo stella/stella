@@ -12,10 +12,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const CHILD_OUTPUT_LIMIT_BYTES = 32 * 1024 * 1024;
-const FIXTURE_VERSION = "1000.0.0-fixture";
+const FIXTURE_VERSION = "0.2.1";
 
 // timeout: actual offline npm installation exercises consumer dependency resolution.
-test.each(["declared", "undeclared"] as const)(
+test.each([
+  "declared",
+  "undeclared",
+  "incompatible",
+  "incompatible-transitive",
+] as const)(
   "a packed CLI resolves only its %s runtime dependency closure",
   (declaration) => {
     const root = mkdtempSync(path.join(tmpdir(), "packed-cli-test-"));
@@ -23,18 +28,27 @@ test.each(["declared", "undeclared"] as const)(
       const artifacts = path.join(root, "release-artifacts");
       const consumer = path.join(root, "consumer");
       mkdirSync(consumer);
+      const runtimeDependencies = {
+        "@stll/agent-input":
+          declaration === "incompatible" ? "^0.2.2" : FIXTURE_VERSION,
+        ...(declaration === "incompatible-transitive"
+          ? { "@stll/stable-stringify": FIXTURE_VERSION }
+          : {}),
+      };
       const packages = [
         {
           name: "cli",
-          dependencies:
-            declaration === "declared"
-              ? { "@stll/agent-input": FIXTURE_VERSION }
-              : {},
+          dependencies: declaration === "undeclared" ? {} : runtimeDependencies,
           code: 'console.log(require("@stll/agent-input"));',
         },
         {
           name: "agent-input",
-          dependencies: { "@stll/stable-stringify": FIXTURE_VERSION },
+          dependencies: {
+            "@stll/stable-stringify":
+              declaration === "incompatible-transitive"
+                ? "^0.2.2"
+                : FIXTURE_VERSION,
+          },
           code: 'module.exports = require("@stll/stable-stringify");',
         },
         {
@@ -97,6 +111,19 @@ test.each(["declared", "undeclared"] as const)(
           timeout: 30_000,
         },
       );
+      if (
+        declaration === "incompatible" ||
+        declaration === "incompatible-transitive"
+      ) {
+        expect(installed.status).not.toBe(0);
+        const dependency =
+          declaration === "incompatible" ? "agent-input" : "stable-stringify";
+        expect(installed.stderr).toContain(`@stll/${dependency}@0.2.1`);
+        expect(installed.stderr).toContain("does not satisfy");
+        expect(installed.stderr).toContain("^0.2.2");
+        expect(existsSync(path.join(consumer, "node_modules"))).toBe(false);
+        return;
+      }
       expect(installed.status, installed.stderr).toBe(0);
       const cli = spawnSync("node", ["node_modules/@stll/cli/index.js"], {
         cwd: consumer,

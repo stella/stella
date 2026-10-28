@@ -293,6 +293,7 @@ jobs:
             scripts/publish-manifest.ts
             scripts/publish-declarations.ts
             scripts/install-packed-cli.sh
+            scripts/prepare-packed-cli-consumer.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
