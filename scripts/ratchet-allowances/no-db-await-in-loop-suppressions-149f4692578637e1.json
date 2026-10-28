@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/chat/run-log.ts",
+  "delta": 1,
+  "reason": "Legacy logs lack a reference checkpoint. Reconstruct their SDK references in ordered pages of at most 256 entries, with a cumulative 32 MiB ceiling, before projecting persisted content. Each page depends on the previous cursor and processor state."
+}

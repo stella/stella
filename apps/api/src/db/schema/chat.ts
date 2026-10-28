@@ -748,11 +748,11 @@ export const chatRunLogs = p.pgTable(
       .references(() => chatTurns.id, { onDelete: "cascade" }),
     nextSeq: p.bigint("next_seq", { mode: "bigint" }).notNull().default(1n),
     bytesUsed: p.bigint("bytes_used", { mode: "bigint" }).notNull().default(0n),
-    /** Bounded SDK carry and source identities, updated atomically with each append. */
+    /** Older producers use legacy mode; current producers explicitly start checkpointed summaries. */
     referenceState: jsonb("reference_state")
       .$type<ChatRunReferenceState>()
       .notNull()
-      .default({ through: "0", decisionIds: [], messages: [] }),
+      .default({ type: "legacy" }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     closedAt: timestamptz("closed_at"),
   },

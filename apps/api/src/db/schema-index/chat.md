@@ -122,7 +122,7 @@ chat_run_logs.run_id           text                not null          chat.ts:745
 chat_run_logs.turn_id          safeUuid            fk,not null       chat.ts:746
 chat_run_logs.next_seq         bigint              default,not null  chat.ts:749
 chat_run_logs.bytes_used       bigint              default,not null  chat.ts:750
-chat_run_logs.reference_state  jsonb               default,not null  chat.ts:752  Bounded SDK carry and source identities, updated atomically with each append.
+chat_run_logs.reference_state  jsonb               default,not null  chat.ts:752  Older producers use legacy mode; current producers explicitly start checkpointed summaries.
 chat_run_logs.created_at       timestamptz         default,not null  chat.ts:756
 chat_run_logs.closed_at        timestamptz         null              chat.ts:757
 ```

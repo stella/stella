@@ -59,6 +59,7 @@ import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persist
 import {
   createChatRunLog,
   createChatRunLogReplay,
+  MAX_RUN_BYTES,
   READ_PAGE_SIZE,
 } from "@/api/lib/chat/run-log";
 import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
@@ -2228,7 +2229,12 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         await tx
           .update(chatRunLogs)
           .set({
-            referenceState: { through: "0", decisionIds: [], messages: [] },
+            referenceState: {
+              type: "checkpointed",
+              through: "0",
+              decisionIds: [],
+              messages: [],
+            },
           })
           .where(eq(chatRunLogs.runId, options.runId)),
     );
@@ -2397,6 +2403,231 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     const snapshot = await request(async () => await writer.snapshot());
     expect(JSON.stringify(snapshot)).toContain(marker);
     expect(JSON.stringify(snapshot)).not.toContain(secret);
+  });
+
+  test("a nonempty pre-migration log replays and appends through paged legacy reads", async () => {
+    await withGatedTestClients(
+      process.env["DATABASE_URL"] ??
+        panic("Postgres fixture requires DATABASE_URL"),
+      async ({ openClient }) => {
+        const queries: { query: string; params: unknown[] }[] = [];
+        const client = openClient({
+          logger: {
+            logQuery: (query, params) => {
+              queries.push({ query, params });
+            },
+          },
+        });
+        const namespace = sql.identifier(
+          `legacy_logs_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+        );
+        const { options } = await liveLogFixture("generic");
+        const assistantId = createSafeId<"chatMessage">();
+        const chunks = [
+          {
+            type: EventType.TEXT_MESSAGE_START,
+            messageId: assistantId,
+            role: "assistant",
+          },
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: assistantId,
+            delta: secret,
+          },
+          ...Array.from(
+            { length: 600 },
+            () =>
+              ({
+                type: EventType.TEXT_MESSAGE_CONTENT,
+                messageId: assistantId,
+                delta: "x".repeat(1024),
+              }) as const,
+          ),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: assistantId,
+            delta: `[decision](#stella-decision=${decisionId})`,
+          },
+          { type: EventType.TEXT_MESSAGE_END, messageId: assistantId },
+        ] satisfies StreamChunk[];
+        const bytes = chunks.reduce(
+          (sum, chunk) => sum + Buffer.byteLength(JSON.stringify(chunk)),
+          0,
+        );
+        const batchId = Bun.randomUUIDv7();
+        const migration = await Bun.file(
+          new URL(
+            "../../../drizzle/20261028182100_chat_run_reference_state/migration.sql",
+            import.meta.url,
+          ),
+        ).text();
+        await client.db.execute(sql`CREATE SCHEMA ${namespace}`);
+        try {
+          await client.db.transaction(async (tx) => {
+            await tx.execute(
+              sql`SET LOCAL search_path TO ${namespace}, public`,
+            );
+            await tx.execute(
+              sql`CREATE TABLE chat_run_logs (LIKE public.chat_run_logs INCLUDING ALL)`,
+            );
+            await tx.execute(
+              sql`ALTER TABLE ${namespace}.chat_run_logs DROP COLUMN reference_state`,
+            );
+            await tx.execute(
+              sql`CREATE TABLE chat_run_log_entries (LIKE public.chat_run_log_entries INCLUDING ALL)`,
+            );
+            await tx.execute(
+              sql`INSERT INTO chat_run_logs (organization_id, run_id, turn_id, next_seq, bytes_used) VALUES (${organizationId}, ${options.runId}, ${options.execution.id}, ${chunks.length + 1}, ${bytes})`,
+            );
+            await tx.execute(
+              sql`INSERT INTO chat_run_log_entries (organization_id, run_id, seq, batch_id, batch_index, chunk) VALUES ${sql.join(
+                chunks.map(
+                  (chunk, index) =>
+                    sql`(${organizationId}, ${options.runId}, ${index + 1}, ${batchId}, ${index}, ${JSON.stringify(chunk)}::text::jsonb)`,
+                ),
+                sql`, `,
+              )}`,
+            );
+            for (const statement of migration
+              .split(";")
+              .map((part) => part.trim())
+              .filter((part) => part !== "")) {
+              // db-await-in-loop: four statements from the reviewed migration, applied to this test's isolated old-schema tables
+              await tx.execute(sql.raw(statement));
+            }
+          });
+          await client.db.execute(
+            sql`GRANT USAGE ON SCHEMA ${namespace} TO stella`,
+          );
+          await client.db.execute(
+            sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${namespace} TO stella`,
+          );
+          const scoped = createScopedDb(
+            markRlsDatabase(client.db),
+            [workspaceId],
+            organizationId,
+            userId,
+          );
+          const legacyDb = (async (read) =>
+            await scoped(async (tx) => {
+              await tx.execute(
+                sql`SET LOCAL search_path TO ${namespace}, public`,
+              );
+              return await read(tx);
+            })) satisfies ScopedDb;
+          const log = createChatRunLog({ ...options, db: legacyDb });
+          queries.length = 0;
+          const replay =
+            (await createChatRunLogReplay({
+              db: legacyDb,
+              organizationId,
+              runId: options.runId,
+              resumeOffset: "-1",
+            })) ?? panic("Expected legacy replay");
+          const iterator = replay.read("-1")[Symbol.asyncIterator]();
+          const first = await request(async () => await iterator.next());
+          await iterator.return?.();
+          expect(first.done).toBe(false);
+          expect(JSON.stringify(first)).toContain(marker);
+          expect(JSON.stringify(first)).not.toContain(secret);
+          const pages = queries.filter(({ query }) =>
+            query.includes('from "chat_run_log_entries"'),
+          );
+          expect(pages.length).toBeGreaterThanOrEqual(6);
+          expect(
+            pages.every(
+              ({ query, params }) =>
+                /limit \$\d+/u.test(query) && params.at(-1) === READ_PAGE_SIZE,
+            ),
+          ).toBe(true);
+          expect(
+            queries.every(({ query }) => !query.includes("jsonb_agg")),
+          ).toBe(true);
+          // A legacy producer can continue a large partial input without adopting
+          // the new summary budget halfway through its run.
+          await log.append([
+            {
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: "continuation",
+              role: "assistant",
+            },
+            {
+              type: EventType.TOOL_CALL_START,
+              toolCallId: "document",
+              toolCallName: "draft",
+              parentMessageId: "continuation",
+            },
+            {
+              type: EventType.TOOL_CALL_ARGS,
+              toolCallId: "document",
+              delta: `{"body":"${"x".repeat(40 * 1024)}`,
+            },
+            {
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: "continuation",
+              delta: secret,
+            },
+          ]);
+          const state = await legacyDb(
+            async (tx) =>
+              await tx
+                .select({ state: chatRunLogs.referenceState })
+                .from(chatRunLogs)
+                .where(eq(chatRunLogs.runId, options.runId))
+                .limit(1),
+          );
+          expect(state.at(0)?.state).toEqual({ type: "legacy" });
+          await log.close();
+          const delivered = await request(async () => {
+            const result = [];
+            for await (const entry of log.read("-1")) {
+              result.push(entry);
+            }
+            return result;
+          });
+          expect(delivered).toHaveLength(chunks.length + 4);
+          expect(JSON.stringify(delivered)).toContain(marker);
+          expect(JSON.stringify(delivered)).not.toContain(secret);
+          await legacyDb(
+            async (tx) =>
+              await tx
+                .update(chatRunLogs)
+                .set({ bytesUsed: BigInt(MAX_RUN_BYTES) + 1n })
+                .where(eq(chatRunLogs.runId, options.runId)),
+          );
+          const oversized = await Result.tryPromise(
+            async () => await log.snapshot(),
+          );
+          expect(oversized.isErr()).toBe(true);
+          if (oversized.isErr()) {
+            expect(oversized.error.cause).toMatchObject({
+              message: "Chat run log exceeds its size limit",
+            });
+          }
+          const fresh = await liveLogFixture("generic");
+          const freshLog = createChatRunLog({ ...fresh.options, db: legacyDb });
+          await freshLog.append([
+            {
+              type: EventType.RUN_STARTED,
+              runId: fresh.options.runId,
+              threadId,
+            },
+          ]);
+          const freshState = await legacyDb(
+            async (tx) =>
+              await tx
+                .select({ state: chatRunLogs.referenceState })
+                .from(chatRunLogs)
+                .where(eq(chatRunLogs.runId, fresh.options.runId))
+                .limit(1),
+          );
+          expect(freshState.at(0)?.state.type).toBe("checkpointed");
+          await freshLog.close();
+        } finally {
+          await client.db.execute(sql`DROP SCHEMA ${namespace} CASCADE`);
+        }
+      },
+    );
   });
 
   test("new explicit run sources are checked before replaying a later batch", async () => {
