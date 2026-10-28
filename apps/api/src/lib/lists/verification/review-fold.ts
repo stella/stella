@@ -1,7 +1,5 @@
 import { panic } from "better-result";
 
-import { AVT_CLAIM_REVIEW_DECISION } from "@stll/api-contract/review-decision";
-
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   ClaimOverrideState,
@@ -14,7 +12,10 @@ import type {
   RecordConflictResolution,
   VerificationEvidence,
 } from "@/api/lib/lists/verification/contract";
-import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
+import {
+  AVT_CLAIM_REVIEW_DECISION,
+  CLAIM_STATE,
+} from "@/api/lib/lists/verification/contract";
 
 type ClaimReviewEvent = {
   payload: ClaimReviewEventPayload;

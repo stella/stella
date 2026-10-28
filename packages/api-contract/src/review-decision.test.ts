@@ -1,14 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  AVT_CLAIM_REVIEW_DECISION,
-  DOCUMENT_REVIEW_FINDING_DECISION,
-  DOCX_SUGGESTION_REVIEW_DECISION,
-  foldReviewDecisions,
-  LIST_GENERATION_CANDIDATE_REVIEW_DECISION,
-  LIST_ITEM_REVIEW_DECISION,
-  LIST_ITEM_SOURCE_REVIEW_DECISION,
-} from "./review-decision";
+import { foldReviewDecisions } from "./review-decision";
 
 const event = (
   decision: "accepted" | "rejected" | null,
@@ -58,37 +50,4 @@ describe("foldReviewDecisions", () => {
         .decision,
     ).toBe("rejected");
   });
-});
-
-test("surface maps cover every vocabulary", () => {
-  expect(Object.keys(AVT_CLAIM_REVIEW_DECISION)).toEqual([
-    "reviewed",
-    "disputed",
-  ]);
-  expect(Object.keys(DOCUMENT_REVIEW_FINDING_DECISION)).toEqual([
-    "open",
-    "accepted",
-    "dismissed",
-  ]);
-  expect(Object.keys(LIST_ITEM_SOURCE_REVIEW_DECISION)).toEqual([
-    "unverified",
-    "verified",
-    "rejected",
-  ]);
-  expect(Object.keys(LIST_ITEM_REVIEW_DECISION)).toEqual([
-    "verified",
-    "changes_requested",
-    "rejected",
-  ]);
-  expect(Object.keys(DOCX_SUGGESTION_REVIEW_DECISION)).toEqual([
-    "pending",
-    "accepted",
-    "rejected",
-  ]);
-  expect(Object.keys(LIST_GENERATION_CANDIDATE_REVIEW_DECISION)).toEqual([
-    "pending",
-    "accepting",
-    "accepted",
-    "rejected",
-  ]);
 });
