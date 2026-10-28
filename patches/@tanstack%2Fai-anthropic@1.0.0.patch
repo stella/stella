@@ -7,8 +7,11 @@ forced effort. Portable reasoning takes precedence; forced-tool finalization
 strips both paths. Remove this extension when upstream can express these native
 request shapes through its public API.
 
+
+Retain provider stop evidence through SDK 1.0 terminal wrappers and preserve upstream response identity/refusal detail. Published ESM and TypeScript stop handling remain aligned.
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index fbcbce1cf5..ca29dbfdfe 100644
+index fbcbce1..5ade848 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -350,8 +350,9 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
@@ -87,29 +90,37 @@ index fbcbce1cf5..ca29dbfdfe 100644
  								};
  								break;
  							case "max_tokens":
-@@ -1238,7 +1237,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1238,7 +1237,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  										message: "The response was cut off because the maximum token limit was reached.",
  										code: "max_tokens"
  									},
 -									usage
 +									usage,
 +									metadata: { providerStopReason: event.delta.stop_reason }
-+								};
-+								break;
-+							case "refusal":
-+								yield {
-+									type: EventType.RUN_FINISHED,
-+									runId,
-+									threadId,
-+									model,
-+									timestamp: Date.now(),
-+									finishReason: "content_filter",
+ 								};
+ 								break;
+ 							case "model_context_window_exceeded": {
+@@ -1253,7 +1253,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 										message,
+ 										code: CONTEXT_OVERFLOW_CODE
+ 									},
+-									usage
 +									usage,
 +									metadata: { providerStopReason: event.delta.stop_reason }
  								};
  								break;
- 							case "model_context_window_exceeded": {
-@@ -1278,18 +1290,32 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 							}
+@@ -1267,7 +1268,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 									timestamp: Date.now(),
+ 									finishReason: "content_filter",
+ 									...event.delta.stop_details && { rawEvent: event.delta.stop_details },
+-									usage
++									usage,
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							default: yield {
+@@ -1278,18 +1280,32 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  								model,
  								timestamp: Date.now(),
  								finishReason: "stop",
@@ -145,7 +156,7 @@ index fbcbce1cf5..ca29dbfdfe 100644
  				error,
  				source: "anthropic.processAnthropicStream"
 diff --git a/dist/esm/text/text-provider-options.d.ts b/dist/esm/text/text-provider-options.d.ts
-index 3a626ea231..4d9962272a 100644
+index 3a626ea..4d99622 100644
 --- a/dist/esm/text/text-provider-options.d.ts
 +++ b/dist/esm/text/text-provider-options.d.ts
 @@ -1,5 +1,4 @@
@@ -170,7 +181,7 @@ index 3a626ea231..4d9962272a 100644
      messages: Array<BetaMessageParam>;
      /**
 diff --git a/src/adapters/text.ts b/src/adapters/text.ts
-index 1b019fddd6..8199021363 100644
+index 1b019fd..c4de183 100644
 --- a/src/adapters/text.ts
 +++ b/src/adapters/text.ts
 @@ -800,8 +800,9 @@ export class AnthropicTextAdapter<
@@ -216,8 +227,112 @@ index 1b019fddd6..8199021363 100644
      const thinkingBudget =
        thinkingFields.thinking?.type === 'enabled'
          ? thinkingFields.thinking.budget_tokens
+@@ -1721,6 +1727,7 @@ export class AnthropicTextAdapter<
+     // Input and cache counts from message_start, for a closing message_delta
+     // that leaves them out and for a stream that fails before it arrives.
+     let messageStartUsage: Anthropic_SDK.Beta.BetaUsage | undefined
++    let reportedUsage: Parameters<typeof buildAnthropicUsage>[0]
+ 
+     try {
+       for await (const event of stream) {
+@@ -1731,6 +1738,8 @@ export class AnthropicTextAdapter<
+         logger.provider(`provider=anthropic type=${event.type}`, {
+           chunk: event,
+         })
++        if (event.type === 'message_start' && event.message.usage) reportedUsage = event.message.usage
++        if (event.type === 'message_delta' && event.usage) reportedUsage = event.usage
+         // Emit RUN_STARTED on first event
+         if (!hasEmittedRunStarted) {
+           hasEmittedRunStarted = true
+@@ -2192,21 +2201,6 @@ export class AnthropicTextAdapter<
+               timestamp: Date.now(),
+             }
+           }
+-
+-          // Only emit RUN_FINISHED from message_stop if message_delta didn't already emit one.
+-          // message_delta carries the real stop_reason (tool_use, end_turn, etc.),
+-          // while message_stop is just a completion signal.
+-          if (!hasEmittedRunFinished) {
+-            yield {
+-              type: EventType.RUN_FINISHED,
+-              ...(responseId !== undefined && { responseId }),
+-              runId,
+-              threadId,
+-              model,
+-              timestamp: Date.now(),
+-              finishReason: 'stop',
+-            }
+-          }
+         } else if (event.type === 'message_delta') {
+           if (event.delta.stop_reason) {
+             hasEmittedRunFinished = true
+@@ -2240,6 +2234,7 @@ export class AnthropicTextAdapter<
+                   timestamp: Date.now(),
+                   finishReason: 'tool_calls',
+                   usage,
++                  metadata: { providerStopReason: event.delta.stop_reason },
+                 }
+                 break
+               }
+@@ -2275,6 +2270,7 @@ export class AnthropicTextAdapter<
+                     code: 'max_tokens',
+                   },
+                   usage,
++                  metadata: { providerStopReason: event.delta.stop_reason },
+                 }
+                 break
+               }
+@@ -2292,6 +2288,7 @@ export class AnthropicTextAdapter<
+                   code: CONTEXT_OVERFLOW_CODE,
+                   error: { message, code: CONTEXT_OVERFLOW_CODE },
+                   usage,
++                  metadata: { providerStopReason: event.delta.stop_reason },
+                 }
+                 break
+               }
+@@ -2311,6 +2308,7 @@ export class AnthropicTextAdapter<
+                     rawEvent: event.delta.stop_details,
+                   }),
+                   usage,
++                  metadata: { providerStopReason: event.delta.stop_reason },
+                 }
+                 break
+               }
+@@ -2332,12 +2330,23 @@ export class AnthropicTextAdapter<
+                   timestamp: Date.now(),
+                   finishReason: 'stop',
+                   usage,
++                  metadata: { providerStopReason: event.delta.stop_reason },
+                 }
+               }
+             }
+           }
+         }
+       }
++      // A completion signal without a stop reason is an incomplete stream.
++      if (!hasEmittedRunFinished) yield {
++        type: EventType.RUN_ERROR,
++        model,
++        timestamp: Date.now(),
++        message: 'The provider stream ended before a stop reason.',
++        code: 'incomplete-stream',
++        ...(reportedUsage && { usage: buildAnthropicUsage(reportedUsage, messageStartUsage) }),
++        error: { message: 'The provider stream ended before a stop reason.', code: 'incomplete-stream' },
++      }
+     } catch (error: unknown) {
+       const err = error as Error & { status?: number; code?: string }
+       const code = runErrorCode(err)
+@@ -2346,7 +2355,7 @@ export class AnthropicTextAdapter<
+       // The closing message_delta already reported usage on its terminal chunk.
+       const usage = hasEmittedRunFinished
+         ? undefined
+-        : buildAnthropicUsage(messageStartUsage)
++        : buildAnthropicUsage(reportedUsage ?? messageStartUsage, messageStartUsage)
+ 
+       logger.errors('anthropic.processAnthropicStream fatal', {
+         error,
 diff --git a/src/text/text-provider-options.ts b/src/text/text-provider-options.ts
-index 6baf3850c1..beeedaf851 100644
+index 6baf385..beeedaf 100644
 --- a/src/text/text-provider-options.ts
 +++ b/src/text/text-provider-options.ts
 @@ -1,6 +1,5 @@

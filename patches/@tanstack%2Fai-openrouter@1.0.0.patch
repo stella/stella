@@ -10,25 +10,38 @@
    raw reason.
 
 
+
+Retain provider stop evidence through SDK 1.0 terminal wrappers and preserve upstream response identity/refusal detail. Published ESM and TypeScript stop handling remain aligned.
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 1f55ac92135..7041ccd6fd4 100644
+index 1f55ac9..312daf9 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -785,7 +785,29 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -767,30 +767,35 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+ 						timestamp: Date.now()
  					};
- 					return;
  				}
--				const finishReason = emittedAnyToolCallEnd ? "tool_calls" : pendingFinishReason === "tool_calls" ? "stop" : pendingFinishReason === "length" ? "length" : pendingFinishReason === "content_filter" || pendingFinishReason === "error" ? "content_filter" : "stop";
+-				if (pendingFinishReason && ![
+-					"stop",
+-					"length",
+-					"content_filter",
+-					"tool_calls",
+-					"error"
+-				].includes(pendingFinishReason)) {
+-					const message = `Provider finish_reason: ${pendingFinishReason}`;
++				// Preserve unknown stop reasons for the consumer stop-policy boundary.
 +				// A stream with no finish_reason was cut off, and finish_reason "error"
 +				// is a generation that failed mid-stream: neither is a finished answer.
 +				if (pendingFinishReason === void 0 || pendingFinishReason === "error") {
 +					const message = pendingFinishReason === "error" ? "The provider stream ended with an error." : "The provider stream ended before a finish reason.";
 +					const reportedUsage = buildOpenRouterUsage(lastUsage);
-+					yield {
-+						type: EventType.RUN_ERROR,
-+						model: lastModel || options.model,
-+						timestamp: Date.now(),
-+						message,
+ 					yield {
+ 						type: EventType.RUN_ERROR,
+-						runId: aguiState.runId,
+ 						model: lastModel || options.model,
+ 						timestamp: Date.now(),
+ 						message,
+-						error: { message }
 +						code: "incomplete-stream",
 +						...reportedUsage && { usage: {
 +							...reportedUsage,
@@ -38,22 +51,21 @@ index 1f55ac92135..7041ccd6fd4 100644
 +							message,
 +							code: "incomplete-stream"
 +						}
-+					};
-+					return;
-+				}
+ 					};
+ 					return;
+ 				}
+-				const finishReason = emittedAnyToolCallEnd ? "tool_calls" : pendingFinishReason === "tool_calls" ? "stop" : pendingFinishReason === "length" ? "length" : pendingFinishReason === "content_filter" || pendingFinishReason === "error" ? "content_filter" : "stop";
 +				const finishReason = emittedAnyToolCallEnd ? "tool_calls" : pendingFinishReason === "tool_calls" ? "stop" : pendingFinishReason === "length" ? "length" : pendingFinishReason === "content_filter" ? "content_filter" : "stop";
  				const finalUsage = buildOpenRouterUsage(lastUsage);
  				yield {
  					type: EventType.RUN_FINISHED,
-@@ -802,12 +824,14 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
- 						...finalUsage,
- 						...extractUsageCost(lastUsage)
+ 					...responseId && { responseId },
+-					metadata: { tanstack: {
++					metadata: { providerStopReason: pendingFinishReason ?? null, tanstack: {
+ 						...responseId && { responseId },
+ 						...lastModel && { model: lastModel }
  					} },
--					finishReason
-+					finishReason,
-+					metadata: { providerStopReason: pendingFinishReason ?? null }
- 				};
- 			}
+@@ -808,6 +813,7 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  		} catch (error) {
  			const errorPayload = toOpenRouterRunErrorPayload(error, `${this.name}.processStreamChunks failed`);
  			const rawEvent = toRunErrorRawEvent(error);
@@ -61,7 +73,7 @@ index 1f55ac92135..7041ccd6fd4 100644
  			options.logger.errors(`${this.name}.processStreamChunks fatal`, {
  				error: errorPayload,
  				source: `${this.name}.processStreamChunks`
-@@ -819,6 +843,10 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -819,6 +825,10 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
  				message: errorPayload.message,
  				...errorPayload.code !== void 0 && { code: errorPayload.code },
  				...rawEvent !== void 0 && { rawEvent },
@@ -72,3 +84,82 @@ index 1f55ac92135..7041ccd6fd4 100644
  				...streamErrorRetryAfterMs !== void 0 && { retryAfterMs: streamErrorRetryAfterMs },
  				error: {
  					message: errorPayload.message,
+diff --git a/src/adapters/text.ts b/src/adapters/text.ts
+index f21286c..500446e 100644
+--- a/src/adapters/text.ts
++++ b/src/adapters/text.ts
+@@ -1242,30 +1242,25 @@ export class OpenRouterTextAdapter<
+           }
+         }
+ 
+-        // An unknown finishReason must not end the run as a success.
+-        if (
+-          pendingFinishReason &&
+-          !['stop', 'length', 'content_filter', 'tool_calls', 'error'].includes(
+-            pendingFinishReason,
+-          )
+-        ) {
+-          const message = `Provider finish_reason: ${pendingFinishReason}`
++        // Preserve unknown stop reasons for the consumer stop-policy boundary.
++        // Missing/error reasons still represent an incomplete generation.
++        if (pendingFinishReason === undefined || pendingFinishReason === 'error') {
++          const message = pendingFinishReason === 'error'
++            ? 'The provider stream ended with an error.'
++            : 'The provider stream ended before a finish reason.'
++          const reportedUsage = buildOpenRouterUsage(lastUsage)
+           yield {
+             type: EventType.RUN_ERROR,
+-            runId: aguiState.runId,
+             model: lastModel || options.model,
+             timestamp: Date.now(),
+             message,
+-            error: { message },
++            code: 'incomplete-stream',
++            ...(reportedUsage && { usage: { ...reportedUsage, ...extractUsageCost(lastUsage) } }),
++            error: { message, code: 'incomplete-stream' },
+           }
+           return
+         }
+ 
+-        // Map upstream finishReason to AG-UI's narrower vocabulary while
+-        // preserving the upstream value when it falls outside the AG-UI set.
+-        // Use `tool_calls` only when a TOOL_CALL_END was actually emitted.
+-        // OpenRouter emits 'error' as a finish reason for upstream errors;
+-        // collapse to 'content_filter' (the closest AG-UI equivalent).
+         const finishReason:
+           | 'tool_calls'
+           | 'length'
+@@ -1276,8 +1271,7 @@ export class OpenRouterTextAdapter<
+             ? 'stop'
+             : pendingFinishReason === 'length'
+               ? 'length'
+-              : pendingFinishReason === 'content_filter' ||
+-                  pendingFinishReason === 'error'
++              : pendingFinishReason === 'content_filter'
+                 ? 'content_filter'
+                 : 'stop'
+ 
+@@ -1287,6 +1281,7 @@ export class OpenRouterTextAdapter<
+           type: EventType.RUN_FINISHED,
+           ...(responseId && { responseId }),
+           metadata: {
++            providerStopReason: pendingFinishReason ?? null,
+             tanstack: {
+               ...(responseId && { responseId }),
+               ...(lastModel && { model: lastModel }),
+@@ -1310,6 +1305,7 @@ export class OpenRouterTextAdapter<
+         `${this.name}.processStreamChunks failed`,
+       )
+       const rawEvent = toRunErrorRawEvent(error)
++      const reportedUsage = buildOpenRouterUsage(lastUsage)
+       options.logger.errors(`${this.name}.processStreamChunks fatal`, {
+         error: errorPayload,
+         source: `${this.name}.processStreamChunks`,
+@@ -1325,6 +1321,7 @@ export class OpenRouterTextAdapter<
+         message: errorPayload.message,
+         ...(errorPayload.code !== undefined && { code: errorPayload.code }),
+         ...(rawEvent !== undefined && { rawEvent }),
++        ...(reportedUsage && { usage: { ...reportedUsage, ...extractUsageCost(lastUsage) } }),
+         ...(streamErrorRetryAfterMs !== undefined && {
+           retryAfterMs: streamErrorRetryAfterMs,
+         }),

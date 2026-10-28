@@ -12,8 +12,11 @@
    raw reason.
 
 
+
+Retain provider stop evidence through SDK 1.0 terminal wrappers and preserve upstream response identity/refusal detail. Published ESM and TypeScript stop handling remain aligned.
+
 diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
-index 0882df2e2b4..3125bc5f314 100644
+index 0882df2..42307ce 100644
 --- a/dist/esm/adapters/converse-text.js
 +++ b/dist/esm/adapters/converse-text.js
 @@ -9,7 +9,7 @@ import { addPromptCachePoints } from "../converse/prompt-cache.js";
@@ -25,7 +28,12 @@ index 0882df2e2b4..3125bc5f314 100644
  //#region src/adapters/converse-text.ts
  var BedrockConverseTextAdapter = class extends BaseTextAdapter {
  	kind = "text";
-@@ -135,6 +135,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+@@ -131,10 +131,11 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 				model: options.model
+ 			})) yield chunk.type === EventType.RUN_STARTED || chunk.type === EventType.RUN_FINISHED ? {
+ 				...chunk,
+-				metadata: this.sourceMetadata(options.model)
++				metadata: { ...this.sourceMetadata(options.model), ...chunk.metadata }
  			} : chunk;
  		} catch (error) {
  			const errorPayload = converseRunErrorPayload(error, `${this.name}.chatStream failed`);
@@ -42,7 +50,7 @@ index 0882df2e2b4..3125bc5f314 100644
  					message: errorPayload.message,
  					...errorPayload.code !== void 0 && { code: errorPayload.code }
 diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-processor.js
-index 3a1af4ff77f..dd29392d8ae 100644
+index 3a1af4f..dd29392 100644
 --- a/dist/esm/converse/stream-processor.js
 +++ b/dist/esm/converse/stream-processor.js
 @@ -31,6 +31,7 @@ async function* processConverseStream(stream, newMessageId, lifecycle) {
@@ -80,3 +88,82 @@ index 3a1af4ff77f..dd29392d8ae 100644
  	};
  }
  //#endregion
+diff --git a/src/adapters/converse-text.ts b/src/adapters/converse-text.ts
+index c4400e9..0f574d0 100644
+--- a/src/adapters/converse-text.ts
++++ b/src/adapters/converse-text.ts
+@@ -4,7 +4,7 @@ import {
+   convertSchemaToJsonSchema,
+ } from '@tanstack/ai'
+ import { BaseTextAdapter } from '@tanstack/ai/adapters'
+-import { toRunErrorPayload } from '@tanstack/ai/adapter-internals'
++import { toRunErrorPayload, toRunErrorRawEvent } from '@tanstack/ai/adapter-internals'
+ import { resolveBedrockAuth } from '../utils/auth'
+ import {
+   toConverseMessages,
+@@ -293,7 +293,7 @@ export class BedrockConverseTextAdapter<
+       )) {
+         yield chunk.type === EventType.RUN_STARTED ||
+         chunk.type === EventType.RUN_FINISHED
+-          ? { ...chunk, metadata: this.sourceMetadata(options.model) }
++          ? { ...chunk, metadata: { ...this.sourceMetadata(options.model), ...chunk.metadata } }
+           : chunk
+       }
+     } catch (error: unknown) {
+@@ -301,6 +301,7 @@ export class BedrockConverseTextAdapter<
+         error,
+         `${this.name}.chatStream failed`,
+       )
++      const rawEvent = toRunErrorRawEvent(error)
+       options.logger.errors(`${this.name}.chatStream fatal`, {
+         error: errorPayload,
+         source: `${this.name}.chatStream`,
+@@ -314,6 +315,7 @@ export class BedrockConverseTextAdapter<
+         timestamp: Date.now(),
+         message: errorPayload.message,
+         ...(errorPayload.code !== undefined && { code: errorPayload.code }),
++        ...(rawEvent !== undefined && { rawEvent }),
+         error: {
+           message: errorPayload.message,
+           ...(errorPayload.code !== undefined && { code: errorPayload.code }),
+diff --git a/src/converse/stream-processor.ts b/src/converse/stream-processor.ts
+index 6a696e7..ea32991 100644
+--- a/src/converse/stream-processor.ts
++++ b/src/converse/stream-processor.ts
+@@ -79,6 +79,7 @@ export async function* processConverseStream(
+   // contract (usage may arrive after the finish signal).
+   let usage: TokenUsage | undefined
+   let finishReason: NonNullable<AdapterYieldChunk['finishReason']> | undefined
++  let providerStopReason: string | null = null
+ 
+   // Lazily emit RUN_STARTED exactly once, before the first content event.
+   function* ensureRunStarted(): Generator<AdapterYieldChunk> {
+@@ -283,6 +284,7 @@ export async function* processConverseStream(
+ 
+     if ('messageStop' in ev) {
+       const stopReason = ev.messageStop?.stopReason
++      providerStopReason = stopReason ?? null
+       // Map Converse stopReason to AG-UI's narrower finishReason vocabulary.
+       finishReason =
+         stopReason === 'tool_use'
+@@ -333,6 +335,10 @@ export async function* processConverseStream(
+   // Close any reasoning lifecycle that text never closed.
+   yield* closeReasoning()
+ 
++  if (finishReason === undefined) {
++    throw Object.assign(new Error('The Converse stream ended before messageStop.'), { code: 'incomplete-stream' })
++  }
++
+   // Single terminal RUN_FINISHED. Conditional `usage` spread keeps the wire
+   // shape spec-compliant (AG-UI's `usage` is optional with no `| undefined`).
+   yield {
+@@ -340,7 +346,8 @@ export async function* processConverseStream(
+     runId,
+     threadId,
+     timestamp: Date.now(),
+-    finishReason: finishReason ?? 'stop',
++    finishReason,
+     ...(usage && { usage }),
++    metadata: { providerStopReason },
+   }
+ }
