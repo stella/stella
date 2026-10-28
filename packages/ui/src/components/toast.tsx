@@ -20,6 +20,7 @@ import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
+  timeoutPolicy?: { type: "automatic" } | { type: "explicit"; timeout: number };
 };
 
 const toastManager = Toast.createToastManager<ToastData>();
@@ -531,7 +532,7 @@ function normalizeToastAddOptions(options: ToastUpdateOptions) {
   return {
     ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
-    data,
+    data: { ...data, timeoutPolicy: toastTimeoutPolicy(timeout) },
     timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
@@ -556,7 +557,13 @@ function normalizeToastUpdateOptions(
   };
   return {
     ...update,
-    data: Object.hasOwn(options, "data") ? data : previous.data,
+    data: {
+      ...(Object.hasOwn(options, "data") ? data : previous.data),
+      timeoutPolicy:
+        timeout === undefined
+          ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
+          : toastTimeoutPolicy(timeout),
+    },
     ...resolveToastUpdateTimeout(options, previous),
   };
 }
@@ -565,20 +572,46 @@ function resolveToastUpdateTimeout(
   options: ToastUpdateOptions,
   previous: Pick<
     ToastObject<ToastData>,
-    "actionProps" | "description" | "title" | "type"
+    "actionProps" | "data" | "description" | "title" | "type"
   >,
 ): { timeout?: number } {
   if (options.timeout !== undefined) {
     return { timeout: normalizeToastTimeout(options.timeout) };
   }
 
-  if (options.type === undefined) {
+  const timeoutPolicy = previous.data?.timeoutPolicy;
+  if (timeoutPolicy?.type === "explicit") {
+    return { timeout: timeoutPolicy.timeout };
+  }
+
+  if (previous.type === "loading" && options.type === undefined) {
     return {};
   }
 
-  return {
-    timeout: getDefaultToastTimeout({ ...previous, ...options }),
+  const { action, actionProps, type, ...updateOptions } = options;
+  const update = {
+    ...updateOptions,
+    ...normalizeToastActionProps({
+      action,
+      actionProps,
+      includeEmptyActionProps:
+        Object.hasOwn(options, "action") ||
+        Object.hasOwn(options, "actionProps"),
+    }),
+    ...(type === undefined ? {} : { type }),
   };
+
+  return {
+    timeout: getDefaultToastTimeout({ ...previous, ...update }),
+  };
+}
+
+function toastTimeoutPolicy(
+  timeout: number | undefined,
+): NonNullable<ToastData["timeoutPolicy"]> {
+  return timeout === undefined
+    ? { type: "automatic" }
+    : { type: "explicit", timeout: normalizeToastTimeout(timeout) };
 }
 
 function normalizeToastActionProps({

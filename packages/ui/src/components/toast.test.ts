@@ -94,27 +94,46 @@ describe("toast lifetime transitions", () => {
   test("pending to terminal states own their dismissal timing", async () => {
     const { resolveToastUpdateTimeout } = await import("./toast");
     const terminalStates = [
-      { type: "success", defaultTimeout: 4000 },
-      { type: "error", defaultTimeout: 8000 },
-      { type: "info", defaultTimeout: 4000 },
+      { type: "success", plainTimeout: 4000, richTimeout: 4000 },
+      { type: "error", plainTimeout: 8000, richTimeout: 0 },
+      { type: "info", plainTimeout: 4000, richTimeout: 4000 },
     ] as const;
 
     assertProperty(
       "pending to terminal states own their dismissal timing",
       fc.property(
         fc.constantFrom(...terminalStates),
-        fc.option(fc.integer({ min: 1, max: 30_000 }), { nil: undefined }),
-        (terminal, timeout) => {
-          const update =
-            timeout === undefined
-              ? { title: "Settled", type: terminal.type }
-              : { title: "Settled", type: terminal.type, timeout };
+        fc.boolean(),
+        fc.boolean(),
+        fc.option(fc.constantFrom(0, 3000, Number.POSITIVE_INFINITY), {
+          nil: undefined,
+        }),
+        (terminal, hasDescription, hasAction, timeout) => {
+          const update = {
+            ...(hasDescription ? { description: "Details" } : {}),
+            ...(hasAction ? { action: { label: "Retry" } } : {}),
+            ...(timeout === undefined ? {} : { timeout }),
+            title: "Settled",
+            type: terminal.type,
+          };
+          let expectedTimeout: number;
+          if (timeout === undefined) {
+            expectedTimeout =
+              hasDescription || hasAction
+                ? terminal.richTimeout
+                : terminal.plainTimeout;
+          } else if (timeout === Number.POSITIVE_INFINITY) {
+            expectedTimeout = 0;
+          } else {
+            expectedTimeout = timeout;
+          }
           expect(
             resolveToastUpdateTimeout(update, {
+              data: { timeoutPolicy: { type: "automatic" } },
               title: "Pending",
               type: "loading",
             }),
-          ).toEqual({ timeout: timeout ?? terminal.defaultTimeout });
+          ).toEqual({ timeout: expectedTimeout });
         },
       ),
     );
