@@ -60,6 +60,118 @@ const returnedValues = (value: unknown): unknown[] => {
   return values;
 };
 
+const sameSourceBinding = (
+  context: Context,
+  left: AstNode,
+  right: AstNode,
+): boolean =>
+  left.type === "Identifier" &&
+  right.type === "Identifier" &&
+  left.name === right.name &&
+  resolveVariable(context, left) === resolveVariable(context, right);
+
+const retainsWholeSource = (
+  context: Context,
+  value: unknown,
+  source: AstNode,
+): boolean => {
+  const node = unwrapExpression(value);
+  if (node === null) {
+    return false;
+  }
+  if (
+    node.type === "Property" &&
+    isAstNode(node.value) &&
+    sameSourceBinding(context, node.value, source)
+  ) {
+    return true;
+  }
+  if (
+    node.type === "SpreadElement" &&
+    isAstNode(node.argument) &&
+    sameSourceBinding(context, node.argument, source)
+  ) {
+    return true;
+  }
+  if (node.type === "CallExpression" && Array.isArray(node.arguments)) {
+    const callee = unwrapExpression(node.callee);
+    const argument = unwrapExpression(node.arguments.at(0));
+    if (
+      callee?.type === "MemberExpression" &&
+      getPropertyName(callee.property) === "stringify" &&
+      argument !== null
+    ) {
+      if (sameSourceBinding(context, argument, source)) {
+        return true;
+      }
+      // Composite envelopes serialize whole table records through a keyed part map.
+      if (
+        argument.type === "MemberExpression" &&
+        argument.computed === true &&
+        isAstNode(argument.property) &&
+        argument.property.type !== "Literal" &&
+        isAstNode(argument.object) &&
+        sameSourceBinding(context, argument.object, source)
+      ) {
+        return true;
+      }
+    }
+  }
+  return projectionChildren(node).some((child) =>
+    retainsWholeSource(context, child, source),
+  );
+};
+
+const literalRecordProjection = (
+  context: Context,
+  argument: unknown,
+  call: AstNode,
+): boolean => {
+  const literal = unwrapExpression(argument);
+  if (
+    literal?.type !== "ObjectExpression" ||
+    !Array.isArray(literal.properties)
+  ) {
+    return false;
+  }
+  let boundary = call;
+  let parent = call.parent;
+  while (isAstNode(parent)) {
+    if (
+      parent.type === "Property" &&
+      getPropertyName(parent.key) === "sourceRaw"
+    ) {
+      boundary = parent;
+      break;
+    }
+    if (parent.type === "CallExpression") {
+      const callee = unwrapExpression(parent.callee);
+      if (
+        callee !== null &&
+        calledName(context, callee) === "encodeSourceRawEnvelope"
+      ) {
+        boundary = parent;
+        break;
+      }
+    }
+    parent = parent.parent;
+  }
+  return literal.properties.some((property) => {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return false;
+    }
+    const value = unwrapExpression(property.value);
+    const source =
+      value?.type === "MemberExpression"
+        ? unwrapExpression(value.object)
+        : null;
+    return (
+      source?.type === "Identifier" &&
+      !retainsWholeSource(context, boundary, source)
+    );
+  });
+};
+
 const directLossyCall = (context: Context, node: AstNode): boolean => {
   if (node.type !== "CallExpression") {
     return false;
@@ -74,10 +186,12 @@ const directLossyCall = (context: Context, node: AstNode): boolean => {
   if (
     callee.type !== "MemberExpression" ||
     getPropertyName(callee.property) !== "stringify" ||
-    !Array.isArray(node.arguments) ||
-    node.arguments.length < 2
+    !Array.isArray(node.arguments)
   ) {
     return false;
+  }
+  if (literalRecordProjection(context, node.arguments.at(0), node)) {
+    return true;
   }
   const replacer = unwrapExpression(node.arguments.at(1));
   return (
@@ -213,7 +327,7 @@ export default eslintCompatPlugin({
         schema: [],
         messages: {
           lossyRaw:
-            "Retain the complete publisher payload in sourceRaw; filter, pick, omit, rest omission, delete and JSON replacers cannot project the raw archive.",
+            "Retain the complete publisher payload in sourceRaw; literal field selection, filter, pick, omit, rest omission, delete and JSON replacers cannot project the raw archive.",
         },
       },
       createOnce(context) {

@@ -12,6 +12,7 @@ describe.serial("publisher raw archive projections", () => {
     const projections = [
       "const raw = Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'newField'));",
       "const raw = pick(record, ['known']);",
+      "const raw = JSON.stringify({ known: record.known });",
       "const raw = omit(record, ['newField']);",
       "const { newField, ...raw } = record;",
       "const raw = { ...record }; delete raw.newField;",
@@ -58,6 +59,8 @@ describe.serial("publisher raw archive projections", () => {
         [
           "const sourceRaw = encodeSourceRawEnvelope({ listing: JSON.stringify(record), detail: html });",
           "const row = { sourceRaw };",
+          "const complete = { sourceRaw: JSON.stringify({ record, selected: { known: record.known } }) };",
+          "const parts = encodeSourceRawEnvelope(Object.fromEntries([['contract', JSON.stringify({ version: record.version })], ...Object.keys(record).map((key) => [key, JSON.stringify(record[key])])]));",
           "const selectedReferences = references.filter((reference) => reference.kind === 'case');",
           "const metadata = pick(record, ['court']);",
           "const bytes = JSON.stringify(record, null, 2);",
