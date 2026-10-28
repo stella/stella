@@ -101,14 +101,14 @@ export const extractNssPublisherMetadata = (
   const valuesByRow = new Map<AnyNode, typeof values>();
   for (const value of values) {
     const row = $(value.element).closest("tr").get(0);
-    if (row === undefined) {
-      continue;
-    }
-    const existing = valuesByRow.get(row);
-    if (existing === undefined) {
-      valuesByRow.set(row, [value]);
-    } else {
-      existing.push(value);
+    // Scalar values remain in publisherFields and have no table association.
+    if (row !== undefined) {
+      const existing = valuesByRow.get(row);
+      if (existing === undefined) {
+        valuesByRow.set(row, [value]);
+      } else {
+        existing.push(value);
+      }
     }
   }
   const publisherTables = $("table")
