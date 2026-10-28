@@ -44,7 +44,7 @@ describe.skipIf(!enabled)("vacuumUntilAllVisible (postgres)", () => {
             vacuumUntilAllVisible({
               db,
               table: "visibility_rows",
-              timeoutMs: 1000,
+              timeoutMs: 1000, // timeout under test
             }),
           );
           expect(refusal).toBeInstanceOf(Error);
