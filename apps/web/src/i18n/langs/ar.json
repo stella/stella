@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "الآن",
       "currentSession": "الحالية",
       "device": "الجهاز",
       "deviceOnOs": "{browser} على {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "modelRefused": "رفض النموذج الإجابة",
+    "nothingFound": "لم يتم العثور على شيء",
     "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
     "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
     "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "المذكور: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
+      "caseFileDocuments": "مستندات ملف هذه القضية",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
       "citedDecisionPassage": "مقطع من القرار",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
+      "unnamed": "{count, plural, zero {لا شيء آخر} one {عنصر واحد آخر} two {عنصران آخران} few {# عناصر أخرى} many {# عنصرًا آخر} other {# عنصر آخر}}"
     },
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
@@ -2210,6 +2214,7 @@
     "moveDown": "نقل لأسفل",
     "moveUp": "نقل لأعلى",
     "name": "الاسم",
+    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
     "newMatter": "ملف قانوني جديد",
     "newRow": "صف جديد",
     "next": "التالي",
@@ -2468,10 +2473,10 @@
       "value": "قيمة الحقل"
     },
     "datePrecision": "دقة التاريخ",
-    "deleteContact": "حذف العميل",
+    "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
-    "editContact": "تعديل العميل",
+    "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",
       "personal": "شخصي",
@@ -2529,6 +2534,7 @@
       "rowLabel": "العميل {index}",
       "skippedDuplicateContactId": "تم التخطي: معرّف جهة اتصال مكرر",
       "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
+      "skippedInFileDuplicate": "تم التخطي: يكرر صفًا سابقًا في الملف",
       "skippedInvalidRow": "تم التخطي: الصف لم يستوفِ قواعد الاستيراد",
       "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",
       "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "سطر العنوان 1 مطلوب عند إدخال عنوان.",
         "display_name_required": "تعذّر إنشاء اسم العرض.",
+        "in_file_duplicate": "نسخة مكررة من صف سابق في هذا الملف",
         "invalid_email": "عنوان البريد الإلكتروني غير صالح.",
         "invalid_phone": "رقم الهاتف غير صالح.",
         "invalid_tags": "يجب أن تكون الوسوم قيمًا نصية.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "الرقم البرازيلي CPF/CNPJ (مجموع تحقق)",
       "taxIdSchemeNone": "بدون تحقق من الرقم الضريبي",
       "title": "استيراد جهات الاتصال",
-      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
+      "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
+      "warning": {
+        "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله.",
+        "possible_in_file_duplicate": "تكرار محتمل للصف {row}؛ الاسم فقط متطابق."
+      }
     },
     "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
     "invalidNationalityCodes": "أدخل رموز جنسية صالحة.",
@@ -3295,7 +3306,6 @@
       "simple": "تعديلات مبسّطة"
     },
     "moreFormatting": "المزيد من التنسيق",
-    "networkError": "خطأ في الشبكة. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.",
     "nextChange": "التغيير التالي",
     "numberedList": "قائمة مرقّمة",
     "parseError": "تعذّر تحليل المستند. قد يكون تالفًا أو بتنسيق غير مدعوم.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",
-      "title": "إعدادات الذكاء الاصطناعي",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "المصادقة الثنائية"
       },
       "wordEditIdentitySaved": "تم تحديث هوية تحرير Word",
-      "wordEditShortcut": "اختصار تحرير Word",
+      "wordEditShortcut": "الأحرف الأولى لتعديلات Word",
       "wordEditShortcutDescription": "وسم قصير للأحرف الأولى من اسمك في تحريرات Word.",
       "wordEditShortcutPlaceholder": "مثل: ج.ك"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "مجموعة أنماط محفوظة",
     "sourceDocument": "ملف DOCX المصدر",
     "stellaDescription": "تنسيق stella القانوني الكامل والمحايد للمستندات",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "مجموعات الأنماط",
     "untitledDocument": "مستند بلا عنوان"
   },
   "success": {
     "aiConfigDeleted": "تمت إزالة إعدادات الذكاء الاصطناعي",
     "aiConfigUpdated": "تم تحديث إعدادات الذكاء الاصطناعي",
-    "clientUpdated": "تم تحديث العميل",
-    "contactCreated": "تم إنشاء العميل",
-    "contactDeleted": "تم حذف العميل",
+    "clientUpdated": "تم تحديث جهة الاتصال",
+    "contactCreated": "تم إنشاء جهة الاتصال",
+    "contactDeleted": "تم حذف جهة الاتصال",
     "documentCreated": "تم إنشاء المستند",
     "folderCreated": "تم إنشاء المجلد",
     "invitationCanceled": "تم إلغاء الدعوة",
@@ -5988,7 +5997,11 @@
       "title": "الترجمة جاهزة"
     }
   },
+  "transportErrors": {
+    "timeout": "استغرق الطلب وقتًا طويلاً. حاول مرة أخرى."
+  },
   "validation": {
+    "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
     "organizationNameRequired": "اسم المؤسسة مطلوب",
     "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
     "slugRequired": "المعرّف مطلوب"

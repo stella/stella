@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Teraz",
       "currentSession": "Aktuálna",
       "device": "Zariadenie",
       "deviceOnOs": "{browser} na {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "modelRefused": "Model odmietol odpovedať",
+    "nothingFound": "Nič sa nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "Uvedené: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Znenie účinné k {date}} until {Znenie účinné do {date}} from {Znenie účinné od {date}} other {Znenie účinné k {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Uvedené: {date}} until {Uvedené: do {date}} from {Uvedené: od {date}} other {Uvedené: {date}}}",
+      "caseFileDocuments": "Dokumenty v tomto spise",
       "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "citedDecisionPassage": "Pasáž v rozhodnutí",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+      "unnamed": "{count, plural, one {# ďalší} few {# ďalšie} other {# ďalších}}"
     },
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
@@ -2210,6 +2214,7 @@
     "moveDown": "Posunúť nadol",
     "moveUp": "Posunúť nahor",
     "name": "Názov",
+    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "newMatter": "Nový spis",
     "newRow": "Nový riadok",
     "next": "Pokračovať",
@@ -2406,7 +2411,7 @@
     "summaryTemplatesAnonymized": "anonymizované vzory dokumentov",
     "title": "Autorizácia prístupu",
     "unverifiedApp": "Neoverená aplikácia",
-    "unverifiedExplanation": "Stella neoverila, kto túto aplikáciu vydáva.",
+    "unverifiedExplanation": "stella neoverila, kto túto aplikáciu vydáva.",
     "useAnotherAccount": "Použiť iný účet",
     "verifiedPublisher": "Overená aplikácia od {publisher}"
   },
@@ -2468,10 +2473,10 @@
       "value": "Hodnota poľa"
     },
     "datePrecision": "Presnosť dátumu",
-    "deleteContact": "Vymazať klienta",
+    "deleteContact": "Vymazať kontakt",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
-    "editContact": "Upraviť klienta",
+    "editContact": "Upraviť kontakt",
     "emailTypes": {
       "other": "Iný",
       "personal": "Osobný",
@@ -2484,7 +2489,7 @@
     "extractProcuracao": {
       "dropZone": "Presuňte sem plnomocenstvo (.docx) alebo kliknite a vyberte súbor",
       "extracting": "Zisťujeme splnomocniteľa…",
-      "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
+      "fileHint": "stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
       "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
@@ -2529,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
+      "skippedInFileDuplicate": "Preskočené: opakuje skorší riadok súboru",
       "skippedInvalidRow": "Preskočené: riadok nespĺňa pravidlá importu",
       "skippedInvalidTaxId": "Preskočené: neplatné daňové identifikačné číslo",
       "skippedLimitReached": "Preskočené: dosiahnutý limit kontaktov"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "Ak je uvedená adresa, jej prvý riadok je povinný.",
         "display_name_required": "Zobrazovaný názov sa nepodarilo vytvoriť.",
+        "in_file_duplicate": "Duplikát skoršieho riadka v tomto súbore",
         "invalid_email": "E-mailová adresa je neplatná.",
         "invalid_phone": "Telefónne číslo je neplatné.",
         "invalid_tags": "Značky musia byť textové hodnoty.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazílske CPF/CNPJ (kontrolný súčet)",
       "taxIdSchemeNone": "Bez kontroly daňového čísla",
       "title": "Import kontaktov",
-      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
+      "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať.",
+      "warning": {
+        "ignored_populated_column": "Stĺpec „{column}“ obsahuje údaje, ale je ignorovaný.",
+        "possible_in_file_duplicate": "Možný duplikát riadka {row}; zhoduje sa iba meno."
+      }
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
     "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
@@ -3295,7 +3306,6 @@
       "simple": "Jednoduché revízie"
     },
     "moreFormatting": "Ďalšie formátovanie",
-    "networkError": "Chyba siete. Skontrolujte internetové pripojenie a skúste znova.",
     "nextChange": "Ďalšia zmena",
     "numberedList": "Číslovaný zoznam",
     "parseError": "Dokument sa nepodarilo spracovať. Môže byť poškodený alebo v nepodporovanom formáte.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "Vyberte pre tento kľúč aspoň jednu rolu.",
       "selectModelForEachRole": "Pridajte poskytovateľa a pre každú kategóriu vyberte model.",
       "selectedProvider": "{provider}",
-      "title": "Konfigurácia AI",
       "usingDefaults": "Používa predvolené nastavenia"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "Dvojfaktorové overenie"
       },
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
-      "wordEditShortcut": "Skratka pre úpravy vo Worde",
+      "wordEditShortcut": "Iniciály pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",
       "wordEditShortcutPlaceholder": "napr. JK"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "Uložená sada štýlov",
     "sourceDocument": "Zdrojový DOCX",
     "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Sady štýlov",
     "untitledDocument": "Dokument bez názvu"
   },
   "success": {
     "aiConfigDeleted": "Konfigurácia AI odstránená",
     "aiConfigUpdated": "Konfigurácia AI aktualizovaná",
-    "clientUpdated": "Klient aktualizovaný",
-    "contactCreated": "Klient vytvorený",
-    "contactDeleted": "Klient vymazaný",
+    "clientUpdated": "Kontakt aktualizovaný",
+    "contactCreated": "Kontakt vytvorený",
+    "contactDeleted": "Kontakt vymazaný",
     "documentCreated": "Dokument vytvorený",
     "folderCreated": "Priečinok vytvorený",
     "invitationCanceled": "Pozvánka zrušená",
@@ -5988,7 +5997,11 @@
       "title": "Preklad je pripravený"
     }
   },
+  "transportErrors": {
+    "timeout": "Požiadavka trvala príliš dlho. Skúste to znova."
+  },
   "validation": {
+    "invalidEmail": "Zadajte platnú e-mailovú adresu.",
     "organizationNameRequired": "Názov organizácie je povinný",
     "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky",
     "slugRequired": "Slug je povinný"

@@ -79,12 +79,6 @@
   },
   {
     "file": "apps/api/scripts/seed-case-law.ts",
-    "fingerprint": "03b54134994bf150aa5bca1635a922368a85490cdfc505a160c169a72c2fac96",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-case-law.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-case-law.ts",
     "fingerprint": "4144ff311f6619bb3cb10410aa2dacffc7e9f3fba082c2bcd590ab4965a9f65b",
     "count": 1,
     "reason": "Existing seed insert transaction; extracting the row builder changes its fingerprint without changing the transaction boundary."
@@ -4240,12 +4234,6 @@
     "fingerprint": "dcaaa7c3254eece4151cbba3a551d313c1b1919a9b14498334cabd4edbb51c04",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/scripts/corpus-snippet-compare.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/scripts/end-organization-evaluation.ts",
-    "fingerprint": "25233166cdd2604aabccfbb2a40be16f46e824f1edb238725f08444c39576e0a",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/end-organization-evaluation.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/scripts/eu-completion-tick.ts",

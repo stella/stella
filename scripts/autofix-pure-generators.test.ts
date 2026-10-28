@@ -103,6 +103,7 @@ const EXCLUDED_AUTOFIX = {
     "Model catalogs are explicitly excluded from automatic repair",
   "model-benchmarks": "Fetches upstream benchmark data",
   "catalogue-pinned-facts": "Fetches upstream content facts",
+  "harness-releases": "Fetches upstream release metadata",
   "us-courts": "Upstream court data refresh is excluded",
   "us-reporters": "Fetches pinned upstream reporter data",
   snowball: "Fetches/builds upstream Snowball sources",

@@ -223,6 +223,7 @@ export {
   CONTACT_IMPORT_SCHEMA_VERSION,
   CONTACT_IMPORT_TARGET_FIELDS,
   CONTACT_IMPORT_TAX_ID_SCHEMES,
+  CONTACT_IMPORT_WARNING_CODE,
   parseContactImportMapping,
 } from "./contact-import";
 export type {
@@ -233,6 +234,7 @@ export type {
   ContactImportMappingParseResult,
   ContactImportTargetField,
   ContactImportTaxIdScheme,
+  ContactImportWarningCode,
 } from "./contact-import";
 export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
@@ -1006,6 +1008,10 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,

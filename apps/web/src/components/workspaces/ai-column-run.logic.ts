@@ -69,7 +69,9 @@ const RUN_REVEAL_BY_CELL_STATE = {
   running: AI_COLUMN_RUN_REVEAL.pinned,
   // Each of these reads in its own cell, so the header adds nothing.
   done: AI_COLUMN_RUN_REVEAL.onInteraction,
+  not_stated: AI_COLUMN_RUN_REVEAL.onInteraction,
   failed: AI_COLUMN_RUN_REVEAL.onInteraction,
+  refused: AI_COLUMN_RUN_REVEAL.onInteraction,
   refused_budget: AI_COLUMN_RUN_REVEAL.onInteraction,
 } as const satisfies Record<AiCellState["type"], AiColumnRunReveal>;
 

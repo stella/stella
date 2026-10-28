@@ -1,4 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Publishes release version refreshes to the version packages pull request."
-}

@@ -1,4 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Deploys stable releases to production, verifies the served commit, publishes the release and advances stable image tags."
-}

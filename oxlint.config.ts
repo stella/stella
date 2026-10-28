@@ -16,6 +16,7 @@ import {
   AUDIT_MUTATION_LEDGER_SCOPE,
   auditMutationBudgets,
 } from "./scripts/audit-mutation-ledger-scope.ts";
+import { CI_INSTALL_PREINSTALL_FILES } from "./scripts/ci-install-preinstall-files.ts";
 import { DERIVED_ATTRIBUTES } from "./scripts/derived-attributes.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
@@ -385,6 +386,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
     "no-rendered-error-translation/no-rendered-error-translation",
+  ]),
+  fixtureRuleOverride("require-valibot-message.fixture.ts", [
+    "require-valibot-message/require-valibot-message",
   ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
@@ -1197,6 +1201,8 @@ const bunNativeFiles = [
 const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
 
 const config = defineConfig({
+  // Oxlint does not inherit `env` through `extends`.
+  env: core.env,
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
   // pre-commit hook and the docs-source check run without type information,
@@ -1851,6 +1857,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
+    "./.oxlint-plugins/require-valibot-message.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -3069,6 +3076,11 @@ const config = defineConfig({
         ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       ],
       rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // Pre-install tooling cannot import the workspace path owner before dependencies exist.
+      files: [...CI_INSTALL_PREINSTALL_FILES],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
@@ -5001,6 +5013,7 @@ const config = defineConfig({
               "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
+              "apps/api/src/env-ingestion.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
@@ -5016,7 +5029,6 @@ const config = defineConfig({
               // environment before any app module loads; the web app's env
               // contract is the Vite build, not this process.
               "apps/web/src/runtime.ts",
-              "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
               // validation (workers, scripts, tests). Reading
@@ -6662,6 +6674,19 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      files: [
+        "apps/web/src/lib/schema.ts",
+        "apps/web/src/lib/organization/role-assignment.logic.ts",
+        "apps/web/src/components/auth/password-sign-in-form.tsx",
+        "apps/web/src/components/auth/sign-in-panel.tsx",
+        "apps/web/src/components/organization/invite-member-dialog.tsx",
+        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+      ],
+      rules: {
+        "require-valibot-message/require-valibot-message": "error",
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables

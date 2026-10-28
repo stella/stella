@@ -3,6 +3,35 @@
 The mobile workspace is an Expo app for iOS, Android, and local web previews.
 It uses Expo Router with typed routes and React Compiler enabled.
 
+## Quickstart
+
+> [!NOTE]
+> The app runs in its own development client (`stella Dev`), built on your Mac
+> the first time and again only when its native code changes. You need Xcode
+> with an iOS simulator runtime (Xcode > Settings > Components) and CocoaPods
+> (`brew install cocoapods`).
+
+From the repository root:
+
+```sh
+bun run agent:up     # the local stack, seeded, in the background
+bun run mobile:sim   # the app on an iPhone simulator, against that stack
+```
+
+`mobile:sim` reuses a booted iPhone simulator or boots one, builds and
+installs the development client when it is missing or stale, starts Metro on a
+free port and opens the app with the stack's API as its server. Sign in with
+`test@stella.dev`, the seeded owner with matters and documents; the
+local sign-in page fills in the emailed code. Ctrl-C stops Metro, and the
+simulator too when the run booted it. `bun run agent:down` stops the stack.
+
+Two things can get in the way on a first run:
+
+- Expo's developer menu opens with an introduction sheet that takes the first
+  taps. Continue and close it.
+- A sign-in sheet left open from an earlier session carries an expired signed
+  request, so sending the code fails. Cancel it and start signing in again.
+
 ## Builds
 
 `app.config.ts` defines three builds that install side by side, each with its
@@ -28,6 +57,10 @@ Sign in with the address of a stella server. Plain http is accepted only for a
 simulator's or emulator's own host, so a local stack is reached at
 `http://localhost:<api port>` (or `http://10.0.2.2:<api port>` from an Android
 emulator); a phone needs an https server.
+
+Agents drive the app on a simulator against the local stack with the
+`test-mobile` skill (`.ai/local-skills/test-mobile/SKILL.md`), through the
+pinned `agent-device` CLI.
 
 The app uses only modules that Expo Go ships, so Expo Go can run it for a quick
 look. `expo-dev-client` is installed for the native development client, which

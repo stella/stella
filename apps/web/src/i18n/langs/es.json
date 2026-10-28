@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Ahora",
       "currentSession": "Actual",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} en {os}",
@@ -81,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columnas × {rows} filas = {answers, plural, one {# respuesta} other {# respuestas}}. Las respuestas consumen presupuesto.",
+    "modelRefused": "El modelo se negó a responder",
+    "nothingFound": "No se encontró nada",
     "refusedBudget": "No ejecutado: presupuesto de respuestas no disponible",
     "rerunAllPage": "Volver a ejecutar todo (esta página)",
     "rerunColumnPage": "Volver a ejecutar columna (esta página)",
@@ -1209,6 +1212,7 @@
       "appliedVersionStatedAmendmentCompact": "Indicado: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Redacción vigente el {date}} until {Redacción vigente hasta el {date}} from {Redacción vigente desde el {date}} other {Redacción vigente el {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Indicado: {date}} until {Indicado: hasta {date}} from {Indicado: desde {date}} other {Indicado: {date}}}",
+      "caseFileDocuments": "Documentos de este expediente judicial",
       "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "citedDecisionPassage": "Pasaje de la resolución",
@@ -1520,7 +1524,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
+      "unnamed": "{count, plural, one {# más} many {# más} other {# más}}"
     },
     "historyTrimmed": "No se pudieron resumir los mensajes anteriores, así que esta respuesta solo tiene en cuenta la parte más reciente de la conversación.",
     "improvePrompt": "Mejorar prompt",
@@ -2210,6 +2214,7 @@
     "moveDown": "Mover abajo",
     "moveUp": "Mover arriba",
     "name": "Nombre",
+    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "newMatter": "Nuevo asunto",
     "newRow": "Nueva fila",
     "next": "Siguiente",
@@ -2468,10 +2473,10 @@
       "value": "Valor del campo"
     },
     "datePrecision": "Precisión de la fecha",
-    "deleteContact": "Eliminar cliente",
+    "deleteContact": "Eliminar contacto",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
-    "editContact": "Editar cliente",
+    "editContact": "Editar contacto",
     "emailTypes": {
       "other": "Otro",
       "personal": "Personal",
@@ -2484,7 +2489,7 @@
     "extractProcuracao": {
       "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
       "extracting": "Extrayendo poderdante(s)…",
-      "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "fileHint": "stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
       "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
@@ -2529,6 +2534,7 @@
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Omitido: ID de contacto duplicado",
       "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
+      "skippedInFileDuplicate": "Omitido: repite una fila anterior del archivo",
       "skippedInvalidRow": "Omitido: la fila no cumple las reglas de importación",
       "skippedInvalidTaxId": "Omitido: identificación fiscal no válida",
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"
@@ -2570,6 +2576,7 @@
       "issue": {
         "address_line_required": "La línea de dirección 1 es obligatoria si se incluye una dirección.",
         "display_name_required": "No se pudo crear un nombre para mostrar.",
+        "in_file_duplicate": "Duplicado de una fila anterior de este archivo",
         "invalid_email": "La dirección de correo electrónico no es válida.",
         "invalid_phone": "El número de teléfono no es válido.",
         "invalid_tags": "Las etiquetas deben ser valores de texto.",
@@ -2598,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brasileño (dígito verificador)",
       "taxIdSchemeNone": "Sin validación de la identificación fiscal",
       "title": "Importar contactos",
-      "validateFailed": "No se han podido comprobar estos contactos."
+      "validateFailed": "No se han podido comprobar estos contactos.",
+      "warning": {
+        "ignored_populated_column": "La columna «{column}» contiene datos, pero se ignora.",
+        "possible_in_file_duplicate": "Posible duplicado de la fila {row}; solo coincide el nombre."
+      }
     },
     "invalidDateOfBirth": "Introduce una fecha de nacimiento válida.",
     "invalidNationalityCodes": "Introduce códigos de nacionalidad válidos.",
@@ -3295,7 +3306,6 @@
       "simple": "Revisión sencilla"
     },
     "moreFormatting": "Más formato",
-    "networkError": "Error de red. Comprueba tu conexión a internet y vuelve a intentarlo.",
     "nextChange": "Cambio siguiente",
     "numberedList": "Lista numerada",
     "parseError": "No se pudo analizar el documento. Puede que esté dañado o en un formato no compatible.",
@@ -4628,7 +4638,6 @@
       "selectAtLeastOneRole": "Selecciona al menos un rol para esta clave.",
       "selectModelForEachRole": "Añade un proveedor y elige un modelo para cada categoría.",
       "selectedProvider": "{provider}",
-      "title": "Configuración de la IA",
       "usingDefaults": "Se usan los valores predeterminados"
     },
     "invitations": {
@@ -5056,7 +5065,7 @@
         "title": "Autenticación de dos factores"
       },
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
-      "wordEditShortcut": "Abreviatura de edición en Word",
+      "wordEditShortcut": "Iniciales para ediciones de Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
       "wordEditShortcutPlaceholder": "p. ej. JK"
     },
@@ -5443,16 +5452,16 @@
     "savedDescription": "Conjunto de estilos guardado",
     "sourceDocument": "DOCX de origen",
     "stellaDescription": "Formato jurídico completo y neutro de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Conjuntos de estilos",
     "untitledDocument": "Documento sin título"
   },
   "success": {
     "aiConfigDeleted": "Configuración de IA eliminada",
     "aiConfigUpdated": "Configuración de IA actualizada",
-    "clientUpdated": "Cliente actualizado",
-    "contactCreated": "Cliente creado",
-    "contactDeleted": "Cliente eliminado",
+    "clientUpdated": "Contacto actualizado",
+    "contactCreated": "Contacto creado",
+    "contactDeleted": "Contacto eliminado",
     "documentCreated": "Documento creado",
     "folderCreated": "Carpeta creada",
     "invitationCanceled": "Invitación cancelada",
@@ -5988,7 +5997,11 @@
       "title": "Traducción lista"
     }
   },
+  "transportErrors": {
+    "timeout": "La solicitud tardó demasiado. Inténtalo de nuevo."
+  },
   "validation": {
+    "invalidEmail": "Introduce una dirección de correo electrónico válida.",
     "organizationNameRequired": "El nombre de la organización es obligatorio",
     "slugFormat": "El slug debe contener solo letras minúsculas, números y guiones",
     "slugRequired": "El slug es obligatorio"

@@ -178,6 +178,7 @@ describe("global search SQL scope", () => {
       file_property_id: "property_1",
       mime_type: "application/pdf",
       headline: "Interim injunction memo",
+      tier: 4,
       score: 0.9,
       updated_at: new Date("2026-04-30T08:00:00.000Z"),
     });
@@ -227,6 +228,7 @@ describe("global search SQL scope", () => {
       mimeTypes: [],
       updatedTo: "2026-07-29T08:00:00.000Z",
       cursor: encodeGlobalSearchCursor({
+        tier: 2,
         score: 0.75,
         id: "entity:boundary",
         seen: 3,
@@ -307,6 +309,7 @@ describe("global search SQL scope", () => {
       editedByUserIds: [],
       mimeTypes: [],
       cursor: encodeGlobalSearchCursor({
+        tier: 0,
         score: cursorValue,
         id: "entity:boundary",
         seen: 3,
@@ -346,6 +349,7 @@ describe("global search SQL scope", () => {
               type: "document",
               title: "First",
               headline: null,
+              tier: 0,
               score: preciseScore,
               updated_at: new Date("2026-07-29T08:00:00.999Z"),
             },
@@ -356,6 +360,7 @@ describe("global search SQL scope", () => {
               type: "document",
               title: "Second",
               headline: null,
+              tier: 0,
               score: preciseScore - 0.4,
               updated_at: new Date("2026-07-29T08:00:00.999Z"),
             },
@@ -382,11 +387,124 @@ describe("global search SQL scope", () => {
       entityResourceName("entity_1"),
     ]);
     expect(decodeGlobalSearchCursor(result.nextCursor ?? undefined)).toEqual({
+      tier: 0,
       score: preciseScore,
       id: "entity:entity_1",
       seen: 1,
     });
   });
+
+  test("ranks a diacritics-insensitive exact filename above fifty weak matters", async () => {
+    const dialect = new PgDialect();
+    rootDbExecuteMock.mockImplementation(
+      async (statement): Promise<Record<string, unknown>[]> => {
+        const queryText = dialect.sqlToQuery(statement).sql;
+        if (queryText.includes("FROM search_documents sd")) {
+          return [
+            {
+              id: "exact_file",
+              workspace_id: "ws_1",
+              workspace_name: "Matter",
+              type: "document",
+              title: "Žaloba Přehled.pdf",
+              tier: 4,
+              score: 0.01,
+              updated_at: new Date("2026-07-29T08:00:00.000Z"),
+            },
+          ];
+        }
+        if (queryText.includes("FROM workspace_search_documents wsd")) {
+          return Array.from({ length: 50 }, (_, index) => ({
+            id: `weak_matter_${index}`,
+            title: `Žaloba matter ${index}`,
+            tier: 1,
+            score: 100 - index,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          }));
+        }
+        return [];
+      },
+    );
+
+    const result = await searchGlobal({
+      query: "Zaloba Prehled.pdf",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document", "matter"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 51,
+    });
+
+    expect(result.hits.at(0)?.id).toBe("entity:exact_file");
+    const rankingQueries = rootDbExecuteMock.mock.calls
+      .map(([statement]) => dialect.sqlToQuery(statement).sql)
+      .filter((queryText) => queryText.includes(" AS tier"));
+    expect(rankingQueries).toHaveLength(2);
+    for (const queryText of rankingQueries) {
+      expect(queryText).toContain("lower(unaccent(arabic_normalize(");
+      expect(queryText).toContain("starts_with(");
+      expect(queryText).toContain("to_tsvector('simple'");
+      expect(queryText).toContain("ORDER BY tier DESC, score DESC");
+    }
+  });
+
+  test("ranks title prefixes above loose body matches", async () => {
+    const dialect = new PgDialect();
+    rootDbExecuteMock.mockImplementation(
+      async (statement): Promise<Record<string, unknown>[]> => {
+        if (
+          !dialect
+            .sqlToQuery(statement)
+            .sql.includes("FROM search_documents sd")
+        ) {
+          return [];
+        }
+        return [
+          {
+            id: "loose",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "Unrelated title",
+            tier: 1,
+            score: 100,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          },
+          {
+            id: "prefix",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "Contract review notes",
+            tier: 3,
+            score: 0.01,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          },
+        ];
+      },
+    );
+
+    const result = await searchGlobal({
+      query: "Contract review",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 2,
+    });
+
+    expect(result.hits.map(({ id }) => id)).toEqual([
+      "entity:prefix",
+      "entity:loose",
+    ]);
+  });
+
   test("selects the filtered file field and prefers previewable extracted sources", async () => {
     await searchGlobal({
       query: "indemnity",

@@ -925,7 +925,6 @@ export const RowActions = ({
     const toastId = stellaToast.add({
       title: t("common.duplicating"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
     let firstFailure: unknown;
