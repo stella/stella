@@ -65,23 +65,44 @@ const sleep = async (ms: number) => {
   await Bun.sleep(ms);
 };
 
-const readDeployedCommit = async (apiUrl: string, probePath: string) => {
-  const probeUrl = getApiHealthUrl(apiUrl, probePath);
+type ReadApiDeploymentOptions = {
+  url: URL;
+  headers?: Headers;
+  timeoutMs?: number;
+};
+
+export const readApiDeployment = async ({
+  url: probeUrl,
+  headers,
+  timeoutMs = FETCH_TIMEOUT_MS,
+}: ReadApiDeploymentOptions) => {
   const response = await fetch(probeUrl, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+    cache: "no-store",
   });
   if (!response.ok) {
     throw new ApiDeploymentError(
       `${probeUrl.toString()} returned HTTP ${response.status}`,
     );
   }
-  const commit = parseHealthCommit(await response.json());
+  const body: unknown = await response.json();
+  const commit = parseHealthCommit(body);
   if (!commit) {
     throw new ApiDeploymentError(
       `${probeUrl.toString()} did not return a full commit SHA`,
     );
   }
-  return commit;
+  return {
+    statusCode: response.status,
+    commit,
+    status:
+      typeof body === "object" &&
+      body !== null &&
+      Reflect.get(body, "status") === "ok"
+        ? "ready"
+        : "not-ready",
+  } as const;
 };
 
 const main = async () => {
@@ -116,7 +137,9 @@ const main = async () => {
   let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      lastObservedCommit = await readDeployedCommit(apiUrl, probePath);
+      lastObservedCommit = (
+        await readApiDeployment({ url: getApiHealthUrl(apiUrl, probePath) })
+      ).commit;
       const stability = advanceDeploymentStability({
         consecutiveMatches,
         expectedCommit,

@@ -657,13 +657,23 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/staging-proof-readiness.ts
+            scripts/staging-proof-readiness-cli.ts
+            scripts/check-api-deployment.ts
+            scripts/api-health.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/staging-proof-readiness"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"staging-proof-readiness*.ts "$RUNNER_TEMP/staging-proof-readiness/"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/"{check-api-deployment,api-health}.ts "$RUNNER_TEMP/staging-proof-readiness/"
+          echo "STAGING_PROOF_GATE_DIR=$RUNNER_TEMP/staging-proof-readiness" >> "$GITHUB_ENV"
+          echo "STAGING_PROOF_STATE_PATH=$RUNNER_TEMP/staging-proof-readiness/state.json" >> "$GITHUB_ENV"
 
       - name: Checkout workflow actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -780,8 +790,23 @@ jobs:
         timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
 
+      - name: Wait for staging proof readiness
+        id: proof-readiness
+        timeout-minutes: 7
+        continue-on-error: true
+        env:
+          E2E_API_URL: https://api-staging.stll.app
+          EXPECTED_COMMIT: ${{ needs.resolve.outputs.sha }}
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" wait
+          nohup bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" monitor > "$RUNNER_TEMP/staging-proof-readiness.log" 2>&1 &
+
       - name: Run staging web smoke
         id: web-smoke
+        if: ${{ !cancelled() && steps.proof-readiness.outputs.status == 'ready' }}
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
           STAGING_STATE: ${{ vars.STAGING_STATE }}
@@ -798,7 +823,7 @@ jobs:
       # runs on its own through staging-response-policy.yml. Report-only
       # until it has a record of green runs.
       - name: Run staging response policy checks
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-response-policy.ts; then
@@ -820,7 +845,7 @@ jobs:
       # installed and died with `bun: command not found`.
       - name: Run staging API chat smoke
         id: api-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
           E2E_API_URL: https://api-staging.stll.app
@@ -835,7 +860,7 @@ jobs:
       # summarized but does not fail the promotion. To make it blocking,
       # delete the `continue-on-error: true` line below.
       - name: Run staging API model-turn smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         continue-on-error: true
         run: |
           if bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"; then
@@ -857,7 +882,7 @@ jobs:
       - name: Check staging corpus search backend
         id: corpus-preflight
         continue-on-error: ${{ needs.resolve.outputs.corpus_search_waived == 'true' }}
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 2
         env:
           E2E_API_URL: https://api-staging.stll.app
@@ -890,7 +915,7 @@ jobs:
 
       - name: Run staging MCP user journeys
         id: mcp-smoke
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.corpus-preflight.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' && steps.corpus-preflight.outcome == 'success' }}
         run: bun run canary:mcp
         env:
           MCP_CANARY_ENVIRONMENT: staging
@@ -910,7 +935,7 @@ jobs:
 
       - name: Run deployed application journeys
         id: deployed-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 20
         uses: ./.github/actions/user-journeys
         with:
@@ -928,7 +953,7 @@ jobs:
 
       - name: Run mock-model application journeys
         id: mock-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
         timeout-minutes: 40
         uses: ./.github/actions/user-journeys
         with:
@@ -940,6 +965,14 @@ jobs:
           E2E_WEB_URL: http://localhost:3000
           E2E_API_URL: http://localhost:3001
           JOURNEY_SIGN_IN: seeded
+
+      - name: Check staging proof environment integrity
+        id: proof-environment
+        if: ${{ always() && steps.proof-readiness.outcome != '' && steps.proof-readiness.outcome != 'skipped' }}
+        timeout-minutes: 2
+        env:
+          STAGING_PROOF_PREFLIGHT: ${{ steps.proof-readiness.outputs.status }}
+        run: bun "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts" finish
 
       - name: Upload Playwright report
         if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
@@ -975,13 +1008,21 @@ jobs:
           CORPUS_PREFLIGHT: ${{ steps.corpus-preflight.outcome }}
           CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
           WAIVE_REASON: ${{ inputs.waive_reason }}
+          PROOF_READINESS: ${{ steps.proof-readiness.outputs.status }}
+          PROOF_ENVIRONMENT: ${{ steps.proof-environment.outputs.status }}
           JOB_STATUS: ${{ job.status }}
           PROOF_MAIN_BASE: ${{ needs.resolve.outputs.main-sha }}
         run: |
           set -euo pipefail
           state=failure
           description="Staging smoke failure: run ${GITHUB_RUN_ID}"
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$DEPLOYED_JOURNEYS" == "success" && "$MOCK_JOURNEYS" == "success" && "$JOB_STATUS" == "success" ]]; then
+          if [[ "$PROOF_READINESS" != "ready" ]]; then
+            state=error
+            description="Staging environment unavailable; rerun proof: ${GITHUB_RUN_ID}"
+          elif [[ "$PROOF_ENVIRONMENT" != "ready" ]]; then
+            state=error
+            description="Staging environment interrupted; rerun proof: ${GITHUB_RUN_ID}"
+          elif [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$DEPLOYED_JOURNEYS" == "success" && "$MOCK_JOURNEYS" == "success" && "$JOB_STATUS" == "success" ]]; then
             if [[ "$CORPUS_PREFLIGHT" == "success" && "$MCP_SMOKE" == "success" ]]; then
               state=success
               description="Staging smoke success: run ${GITHUB_RUN_ID}"

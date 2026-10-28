@@ -154,6 +154,8 @@ describe("API deployment health receipt", () => {
       CORPUS_SEARCH_WAIVED: "false",
       WAIVE_REASON: "",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
     };
     const cases = [
       { outcomes: success, state: "success" },
@@ -170,6 +172,14 @@ describe("API deployment health receipt", () => {
         })),
       ),
       { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+      ...["PROOF_READINESS", "PROOF_ENVIRONMENT"].flatMap((gate) =>
+        ["", "environment-unavailable", "environment-interrupted"].map(
+          (outcome) => ({
+            outcomes: { ...success, [gate]: outcome },
+            state: "error",
+          }),
+        ),
+      ),
     ];
     for (const { outcomes, state } of cases) {
       const result = Bun.spawnSync(
