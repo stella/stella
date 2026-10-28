@@ -44,9 +44,9 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * with the scope it requires and the handler module that serves it.
  * `api-oauth-routes.test.ts` proves each entry: the live route serves that
  * handler, the handler is not account control, and the capability catalog
- * assigns its capability exactly this scope. A realtime handler has no
- * capability; its entry names that reason and the scope its domain carries,
- * and the test holds the handler to that reason instead. Account-control routes
+ * assigns its capability exactly this scope. A realtime or file-delivery
+ * handler has no capability; its entry names that reason and the scope its
+ * domain carries, and the test holds the handler to that reason instead. Account-control routes
  * (sign-in methods, keys, connections, deletion) never belong here: a lost
  * phone must not be able to keep itself connected.
  */
@@ -76,6 +76,31 @@ export const API_OAUTH_ROUTES = {
   "PUT /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/create.ts",
+  },
+  "GET /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/get.ts",
+  },
+  "PATCH /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/update.ts",
+  },
+  "GET /v1/entities/:workspaceId/entity/:entityId/versions": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/entities/versions/list.ts",
+  },
+  // A short-lived, audited URL for one stored file, to download it or show
+  // it in the native viewer; each version from the route above names its
+  // file's field.
+  "GET /v1/files/:workspaceId/url/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/routes.ts",
+    exportName: "readFileEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "POST /v1/entities/:workspaceId/upload-version": {
+    scope: "stella:documents_write",
+    handler: "apps/api/src/handlers/entities/versions/upload.ts",
   },
   "GET /v1/chat/threads": {
     scope: "stella:chat",
@@ -111,6 +136,36 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/chat/turns/cancel.ts",
     uncataloged: "realtime_stream",
   },
+  // The caller's own timers. The organization-wide admin timer routes stay
+  // closed to access tokens.
+  "GET /v1/time-timers": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/time-timers/list.ts",
+  },
+  "POST /v1/time-timers/start": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/start.ts",
+  },
+  "POST /v1/time-timers/:id/pause": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/pause.ts",
+  },
+  "POST /v1/time-timers/:id/resume": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/resume.ts",
+  },
+  "PATCH /v1/time-timers/:id": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/update.ts",
+  },
+  "POST /v1/time-timers/:id/confirm": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/confirm.ts",
+  },
+  "DELETE /v1/time-timers/:id": {
+    scope: "stella:billing_write",
+    handler: "apps/api/src/handlers/time-timers/discard.ts",
+  },
 } as const satisfies Record<
   string,
   {
@@ -119,7 +174,7 @@ export const API_OAUTH_ROUTES = {
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
     /** Why the handler has no capability: its `mcp.internal` reason. */
-    uncataloged?: "realtime_stream";
+    uncataloged?: "realtime_stream" | "upload_mechanics";
   }
 >;
 

@@ -54,6 +54,9 @@ const PURE_AUTOFIX = {
   // Source-owned module metadata and CSS tokens render Markdown blocks.
   "module-ownership": "scripts/ownership.ts",
   "design-tokens": "scripts/design-tokens-doc.ts",
+  // Resolves the committed web theme against the lockfile-pinned Tailwind
+  // palette with lightningcss; no network, clock or environment.
+  "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.

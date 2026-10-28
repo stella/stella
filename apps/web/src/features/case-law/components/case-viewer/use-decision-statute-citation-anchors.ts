@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { locateStatuteCitations } from "@stll/decision-reader/fallback-legal-anchors";
 import type { DecisionStatuteCitationAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -61,7 +62,7 @@ export const useDecisionStatuteCitationAnchors = (
         slug: statute.slug,
         versionValidFrom: statute.versionValidFrom,
       },
-      statuteTitle: statute.title,
+      statuteTitle: statuteDisplayLabel(statute).text,
     };
     return [{ ...reference, target }];
   });

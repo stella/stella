@@ -87,12 +87,10 @@ export const loadBillingGuidelines = async ({
         ),
       1 + clientIds.length * BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
     );
-    switch (read.type) {
-      case "complete":
-        return read.rows;
-      case "overflow":
-        return panic("Billing guideline bindings exceed their configured cap", {
-          organizationId,
-        });
+    if (read.type === "overflow") {
+      return panic("Billing guideline bindings exceed their configured cap", {
+        organizationId,
+      });
     }
+    return read.rows;
   });

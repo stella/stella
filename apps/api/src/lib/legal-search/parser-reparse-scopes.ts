@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
-        "paragraph text, page breaks, letter-spaced words, hyphens and part headings are recomputed from the stored markup, and none of them has feature storage of its own",
+        "paragraph text and anonymization markers are recomputed from stored markup before whitespace trimming, including unpainted non-breaking-space redaction runs; none has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
