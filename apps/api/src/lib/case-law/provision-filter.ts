@@ -183,6 +183,34 @@ const provisionLinkConditions = (
   return conditions;
 };
 
+const provisionAnchorConditions = (scope: ProvisionScopeOptions): SQL[] => {
+  const link = caseLawProvisionCitations;
+  const linkJurisdiction = linkJurisdictionOf(scope);
+  return [
+    sql`${link.jurisdiction} = ${linkJurisdiction}`,
+    sql`${link.workIdentifier} = ${scope.provision.work}`,
+    orderedProvisionAnchorSubtreeSql(link.anchor, {
+      jurisdiction: linkJurisdiction,
+      anchor: scope.provision.anchor,
+    }),
+  ];
+};
+
+const linkMatchesProvision = (
+  link: {
+    subsection: string | null;
+    letter: string | null;
+    point: string | null;
+  },
+  provision: CaseLawProvisionFilter,
+) =>
+  (provision.subsection === undefined ||
+    link.subsection === canonicalPathValue(provision.subsection)) &&
+  (provision.letter === undefined ||
+    link.letter === canonicalPathValue(provision.letter)) &&
+  (provision.point === undefined ||
+    link.point === canonicalPathValue(provision.point));
+
 /**
  * Whether the corpus records any citation of the provision's act. A filter
  * on an act no link names answers an exact 0 that says only that the act's
@@ -244,9 +272,14 @@ export const provisionScopeLinksQuery = (
   scope: ProvisionScopeOptions & { idSetMax?: number },
 ) =>
   tx
-    .select({ decisionId: caseLawProvisionCitations.decisionId })
+    .select({
+      decisionId: caseLawProvisionCitations.decisionId,
+      subsection: caseLawProvisionCitations.subsection,
+      letter: caseLawProvisionCitations.letter,
+      point: caseLawProvisionCitations.point,
+    })
     .from(caseLawProvisionCitations)
-    .where(and(...provisionLinkConditions(scope, "ordered")))
+    .where(and(...provisionAnchorConditions(scope)))
     .orderBy(
       caseLawProvisionCitations.jurisdiction,
       caseLawProvisionCitations.workIdentifier,
@@ -262,7 +295,10 @@ export const readCaseLawProvisionScope = async (
   if (links.length > (scope.idSetMax ?? LIMITS.caseLawProvisionIdSetMax)) {
     return { type: "broad" };
   }
-  if (links.length === 0) {
+  const matchingLinks = links.filter((link) =>
+    linkMatchesProvision(link, scope.provision),
+  );
+  if (matchingLinks.length === 0) {
     return { type: "decisions", decisionIds: [] };
   }
   const rows = await tx
@@ -276,7 +312,7 @@ export const readCaseLawProvisionScope = async (
       and(
         inArray(
           publishedCaseLawDecisions.id,
-          links.map(({ decisionId }) => decisionId),
+          matchingLinks.map(({ decisionId }) => decisionId),
         ),
         eq(publishedCaseLawDecisions.country, scope.jurisdiction),
         redistributableCaseLawSource,

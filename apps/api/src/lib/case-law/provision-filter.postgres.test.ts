@@ -25,6 +25,11 @@ const PROVISION = {
   anchor: "cl_36-odst_1",
   subsection: "1",
 } as const;
+const GAPPED_PROVISION = {
+  work: "2/1993 Sb.",
+  anchor: "cl_36",
+  letter: "z",
+} as const;
 const TABLES = [
   "case_law_sources",
   "case_law_decisions",
@@ -258,6 +263,47 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
         expect(large.scope).toBeLessThan(1024);
         expect(large.page).toBeLessThan(1024);
         console.log("provision search shared blocks", measurements);
+
+        // A skipped hierarchy level makes the anchor cover every letter under
+        // the section. Non-matching letters must still consume the fixed
+        // physical-read budget rather than being scanned without a bound.
+        await db.execute(sql`TRUNCATE ${schema}.case_law_provision_citations`);
+        await db.execute(sql`INSERT INTO case_law_provision_citations
+          (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
+           work_collection, unit, section, subsection, letter, anchor, decision_date,
+           sentence_text, span_start, span_end, confidence)
+          SELECT gen_random_uuid(), d.id, 'CZE', '2/1993 Sb.', 2, 1993,
+            'Sb.', 'article', 36, '1', chr(97 + (n % 25)),
+            'cl_36-odst_1-pism_' || chr(97 + (n % 25)), d.decision_date,
+            'synthetic non-matching letter', n, n + 1, 1
+          FROM case_law_decisions d
+          CROSS JOIN LATERAL (SELECT row_number() OVER ()::int AS n) numbered`);
+        await db.execute(
+          sql`VACUUM (ANALYZE) ${schema}.case_law_provision_citations`,
+        );
+        captured.length = 0;
+        expect(
+          await readCaseLawProvisionScope(tx, {
+            jurisdiction: "CZE",
+            provision: GAPPED_PROVISION,
+            idSetMax: SCOPE_LIMIT,
+          }),
+        ).toEqual({ type: "broad" });
+        expect(captured).toHaveLength(1);
+        const gappedScope =
+          captured.at(0) ?? panic("The gapped scope query was not captured");
+        const gappedPlan = explainRoot(
+          await client.unsafe(
+            `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${gappedScope.query}`,
+            gappedScope.params,
+          ),
+        );
+        for (const scan of citationScans(gappedPlan)) {
+          const examined =
+            Number(scan["Actual Rows"]) +
+            Number(scan["Rows Removed by Filter"] ?? 0);
+          expect(examined).toBeLessThanOrEqual(SCOPE_LIMIT + 1);
+        }
       } finally {
         await db.execute(sql`SET statement_timeout = 0`);
         await db.execute(sql`SET search_path TO public`);

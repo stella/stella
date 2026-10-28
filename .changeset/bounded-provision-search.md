@@ -2,4 +2,4 @@
 "@stll/cli": patch
 ---
 
-Keep provision-filtered case-law searches bounded and return an actionable, retryable timeout response when their candidate budget is exhausted.
+Keep provision-filtered case-law searches bounded. Exhausting the candidate budget returns a successful partial or empty page with a continuation cursor; only a statement timeout returns the retryable timeout response.
