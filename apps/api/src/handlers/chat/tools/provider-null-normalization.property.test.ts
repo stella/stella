@@ -180,6 +180,7 @@ const streamOpenAiToolInput = async (input: unknown): Promise<unknown> => {
   const chunks: StreamChunk[] = [];
 
   for await (const chunk of adapter.chatStream({
+    threadId: Bun.randomUUIDv7(),
     ...providerOptions,
     model: adapter.model,
   })) {
@@ -227,6 +228,7 @@ const streamMistralToolInput = async (input: unknown): Promise<unknown> => {
   const chunks: StreamChunk[] = [];
 
   for await (const chunk of adapter.chatStream({
+    threadId: Bun.randomUUIDv7(),
     ...providerOptions,
     model: adapter.model,
   })) {

@@ -264,6 +264,7 @@ test("an OpenAI strict-mode null on an optional field never reaches the persiste
 
   const chunks: AdapterYieldChunk[] = [];
   for await (const chunk of adapter.chatStream({
+    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "List my matters." }],
     model: adapter.model,

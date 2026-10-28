@@ -536,9 +536,9 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
         };
         if (sink.length === 1) {
           yield {
-            type: EventType.STEP_STARTED,
-            stepName: "thinking",
-            stepId: "step-1",
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: "thinking-1",
+            role: "reasoning",
             model,
             timestamp: 1,
           };
@@ -550,10 +550,10 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
             timestamp: 1,
           };
           yield {
-            type: EventType.STEP_FINISHED,
-            stepName: "thinking",
-            stepId: "step-1",
-            signature,
+            type: EventType.REASONING_ENCRYPTED_VALUE,
+            subtype: "message",
+            entityId: "thinking-1",
+            encryptedValue: signature,
             model,
             timestamp: 1,
           };

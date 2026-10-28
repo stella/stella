@@ -83,6 +83,7 @@ describe("provider document transport", () => {
     });
 
     for await (const _chunk of chat({
+      threadId: Bun.randomUUIDv7(),
       adapter,
       debug: false,
       messages,
@@ -121,6 +122,7 @@ describe("provider document transport", () => {
     );
 
     for await (const _chunk of chat({
+      threadId: Bun.randomUUIDv7(),
       adapter,
       debug: false,
       messages,
@@ -165,6 +167,7 @@ describe("provider document transport", () => {
     });
 
     for await (const _chunk of chat({
+      threadId: Bun.randomUUIDv7(),
       adapter,
       debug: false,
       messages: inlinePdfWithoutFilenameMessages,
