@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -81,7 +81,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -141,7 +141,7 @@ jobs:
       # queued automatically. Re-running refreshes it from current main.
       - name: Open or update the quarantine proposal
         if: steps.scan.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/.github/actions/signed-commit@ba5f7da76aededf6f22814de93c72a49843fcc8e
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

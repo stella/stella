@@ -52,7 +52,7 @@ runs:
         esac
 
     - name: Setup Bun
-      uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+      uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
       with:
         save: ${{ github.ref == 'refs/heads/main' }}
 
