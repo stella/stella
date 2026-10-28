@@ -1,9 +1,102 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
+import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
+import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
+import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
+import {
+  approveTimeEntries,
+  returnTimeEntries,
+  sendTimeEntryMutation,
+} from "@/lib/workspaces/time-entries-api";
+
+// A review decision changes the matters' time and what they can invoice, and
+// every approver's queue. A batch the API refused entirely changed nothing.
+const refreshReviewedTime = async (
+  queryClient: QueryClient,
+  workspaceIds: readonly string[],
+  batch: { results: readonly { status: string }[] },
+) => {
+  if (batch.results.every(({ status }) => status === "refused")) {
+    return;
+  }
+  await Promise.all([
+    ...[...new Set(workspaceIds)].flatMap((workspaceId) => [
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+    ]),
+    queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+    // A reviewed entry can be the reviewer's own, shown in their week.
+    queryClient.invalidateQueries({ queryKey: myTimeEntriesKeys.root() }),
+  ]);
+};
+
+/**
+ * Approves a selection in one call. The API answers per entry, so a refusal
+ * (no rate, locked month, missing description) comes back as a result, not
+ * as a failed request.
+ */
+export const useApproveTimeEntries = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+    }: {
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
+      ids: readonly string[];
+    }) => await approveTimeEntries(ids),
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useApproveTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useApproveTimeEntries:failure" },
+      });
+    },
+  });
+};
+
+/**
+ * Returns a selection to draft with one comment in one call. Like approval,
+ * a refusal comes back per entry, not as a failed request.
+ */
+export const useReturnTimeEntries = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      comment,
+    }: {
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
+      ids: readonly string[];
+      comment: string;
+    }) => await returnTimeEntries({ ids, comment }),
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
+    },
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useReturnTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useReturnTimeEntries:failure" },
+      });
+    },
+  });
+};
 
 type CreateTimeEntryVars = {
   workspaceId: string;
@@ -51,6 +144,8 @@ export const useCreateTimeEntry = () => {
 type UpdateTimeEntryVars = {
   workspaceId: string;
   id: string;
+  /** Another matter a draft moves to; the API re-prices it there. */
+  moveTo?: string;
 } & NonEmptyPatch<{
   dateWorked: string;
   timezoneId: string;
@@ -70,7 +165,7 @@ export const useUpdateTimeEntry = () => {
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: UpdateTimeEntryVars) => {
-      const { id, workItemId, ...restBody } = body;
+      const { id, workItemId, moveTo, ...restBody } = body;
       await sendTimeEntryMutation({
         workspaceId,
         mutation: {
@@ -80,6 +175,7 @@ export const useUpdateTimeEntry = () => {
             ...restBody,
             id,
             ...(workItemId !== undefined && { workItemId }),
+            ...(moveTo !== undefined && { moveToWorkspaceId: moveTo }),
           },
         },
       });
@@ -99,7 +195,7 @@ type TimeSuggestionDecision =
       durationMinutes: number;
       narrative: string;
       narrativeLanguage?: string | null;
-      billable: boolean;
+      billable?: boolean;
     }
   | { type: "dismiss" };
 

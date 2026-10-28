@@ -143,6 +143,8 @@ export const WorkspaceTablePlayground = () => {
         </button>
       </div>
       <DecisionTable
+        // Bench rows have no endpoint to ask for another order.
+        dateOrder={null}
         decisions={decisions}
         firstRowNumber={1}
         isLoading={false}

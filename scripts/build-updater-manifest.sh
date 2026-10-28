@@ -33,7 +33,7 @@ read_sig() {
   local name="$1"
   local sig_name="${name}.sig"
   local found
-  found=$(echo "$assets_json" | jq -r --arg n "$sig_name" '.[] | select(.name == $n) | .apiUrl' | head -n1)
+  found=$(jq -r --arg n "$sig_name" 'first(.[] | select(.name == $n) | .apiUrl)' <<<"$assets_json")
   if [[ -z "$found" || "$found" == "null" ]]; then
     return 1
   fi
@@ -48,7 +48,7 @@ require_signed_version() {
   local sig="$2"
   local comment
   comment=$(printf '%s' "$sig" | base64 -d | sed -n 's/^trusted comment: //p')
-  if ! printf '%s' "$comment" | tr '\t' '\n' | grep -qxF "version:${APP_VERSION}"; then
+  if ! grep -qxF "version:${APP_VERSION}" <<<"${comment//$'\t'/$'\n'}"; then
     echo "::error::${name}.sig does not bind version ${APP_VERSION} (trusted comment: ${comment})" >&2
     exit 1
   fi
@@ -56,7 +56,7 @@ require_signed_version() {
 
 # Find an asset name matching a glob pattern.
 find_asset() {
-  echo "$assets_json" | jq -r --arg p "$1" '.[] | select(.name | test($p)) | .name' | head -n1
+  jq -r --arg p "$1" 'first(.[] | select(.name | test($p)) | .name)' <<<"$assets_json"
 }
 
 # Tauri 2's NSIS updater downloads the .exe directly and verifies it

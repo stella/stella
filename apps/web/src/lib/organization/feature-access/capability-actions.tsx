@@ -14,7 +14,8 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { optionalOrganizationSettingsOptions } from "@/queries/organization-settings";
 
 import {
@@ -93,12 +94,12 @@ const useLiveActionCapabilities = (
     enabled: needs("verification") || needs("legalLists"),
   });
   const roleQuery = useQuery({ ...roleOptions, enabled });
-  const ai = useQueryView(aiQuery);
-  const deepl = useQueryView(deeplQuery);
-  const ocr = useQueryView(ocrQuery);
-  const desktop = useQueryView(desktopQuery);
-  const settings = useQueryView(settingsQuery);
-  const role = useQueryView(roleQuery);
+  const ai = queryView(aiQuery);
+  const deepl = queryView(deeplQuery);
+  const ocr = queryView(ocrQuery);
+  const desktop = queryView(desktopQuery);
+  const settings = queryView(settingsQuery);
+  const role = queryView(roleQuery);
   useQueryViewError(ai, "useLiveActionCapabilities:query");
   useQueryViewError(deepl, "useLiveActionCapabilities:query-2");
   useQueryViewError(ocr, "useLiveActionCapabilities:query-3");
@@ -109,7 +110,7 @@ const useLiveActionCapabilities = (
     role: role.type === "items" ? role.items : undefined,
     ai: ai.type === "items" ? ai.items.available : undefined,
     deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items.available : undefined,
+    ocr: ocr.type === "items" ? ocr.items : undefined,
     desktop: desktop.type === "items" ? desktop.items.type : undefined,
     settings: settings.type === "items" ? settings.items : undefined,
   });

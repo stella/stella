@@ -34,6 +34,7 @@ import { cn } from "@stll/ui/utils";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PublicLawRow } from "@/components/public-law-table/public-law-row";
 import { PublicLawTable } from "@/components/public-law-table/public-law-table";
+import { UNORDERED_COLUMN } from "@/components/workspaces/properties/sort-property.logic";
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import type { TableFindHighlight } from "@/components/workspaces/table/find-highlight";
@@ -135,6 +136,8 @@ export const StatuteTable = ({
       onLayoutChange={onLayoutChange}
       rowHost={rowHost}
       rows={rows}
+      // Statutes are ordered by the list, never by a column.
+      sorting={null}
     />
   );
 };
@@ -238,6 +241,7 @@ const statuteColumnDef = (
         column={header.column}
         icon={STATUTE_COLUMN_ICONS[column]}
         label={label}
+        sort={UNORDERED_COLUMN}
       />
     ),
     cell: ({ row }: TableCellContext<unknown, StatuteRowData>) => (

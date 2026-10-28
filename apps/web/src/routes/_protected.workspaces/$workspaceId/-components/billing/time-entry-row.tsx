@@ -17,11 +17,11 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import { timeEntryActionLabel } from "@/components/billing/time-entry-copy.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { SplitEntryDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog";
 import { STATUS_STYLES } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/status-styles";
-import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 
 type TimeEntry = {
   id: string;
@@ -38,6 +38,25 @@ type TimeEntry = {
   status: string;
   userName: string | null;
   timerStartedAt: string | null;
+  /** Why an approver returned the entry; shown until it is approved. */
+  returnComment?: string | null;
+};
+
+/** Why an approver sent a draft back, until it is approved. */
+const ReturnReason = ({
+  entry,
+}: {
+  entry: Pick<TimeEntry, "status" | "returnComment">;
+}) => {
+  const t = useTranslations();
+  if (entry.status !== "draft" || !entry.returnComment) {
+    return null;
+  }
+  return (
+    <p className="text-xs" dir="auto">
+      {t("timesheets.week.returned", { comment: entry.returnComment })}
+    </p>
+  );
 };
 
 type TimeEntryRowProps = {
@@ -106,6 +125,7 @@ export const TimeEntryRow = ({
               {
                 {
                   draft: t("billing.statuses.draft"),
+                  submitted: t("billing.statuses.submitted"),
                   approved: t("billing.statuses.approved"),
                   billed: t("billing.statuses.billed"),
                   written_off: t("billing.statuses.written_off"),
@@ -118,6 +138,7 @@ export const TimeEntryRow = ({
               {entry.narrative}
             </p>
           )}
+          <ReturnReason entry={entry} />
         </div>
 
         {/* Billing amount */}

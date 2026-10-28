@@ -507,11 +507,56 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approval": {
+      "approveAll": "{count, plural, one {# Eintrag freigeben} other {Alle # Einträge freigeben}}",
+      "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "billedTotal": "{duration} abgerechnet",
+      "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "emptyWeek": "Diese Woche wartet nichts auf Freigabe. Eingereichte Zeit erscheint hier.",
+      "everyone": "Alle",
+      "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
+      "myTime": "Meine Zeit",
+      "pending": "{count, plural, one {# Eintrag zur Freigabe} other {# Einträge zur Freigabe}}",
+      "refusals": {
+        "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "notSubmitted": "Dieser Eintrag wurde noch nicht eingereicht. Zuerst reicht ihn die erfassende Person ein.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
+        "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
+        "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
+      },
+      "returnComment": "Grund für Rückgabe",
+      "returnRefusals": {
+        "invalidEntry": "Prüfen Sie das Arbeitsdatum des Eintrags und geben Sie ihn dann zurück.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag zurückgeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr und kann nicht zurückgegeben werden. Aktualisieren Sie die Liste.",
+        "notSubmitted": "Dieser Entwurf wurde nie eingereicht, es gibt also nichts zurückzugeben.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag zurückgeben.",
+        "timePeriodLocked": "Dieser Monat ist gesperrt, daher kann der Eintrag nicht zurückgegeben werden. Bitten Sie einen Administrator, ihn zu entsperren.",
+        "wrongStatus": "Abgerechnete oder abgeschriebene Zeit kann nicht an die erfassende Person zurückgegeben werden."
+      },
+      "returnSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} zurückgeben",
+      "selectEntry": "Eintrag auswählen",
+      "timeEntries": "Zeiteinträge",
+      "title": "Freigaben"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
+    "clientComposer": {
+      "flatFeeNote": "Rechnen Sie Akten mit Pauschalhonorar über die Rechnungsseite der jeweiligen Akte ab.",
+      "includeMatter": "{matterName} einschließen",
+      "invalidPeriod": "Wählen Sie ein Enddatum am oder nach dem Anfangsdatum.",
+      "loadFailed": "Nicht abgerechnete Arbeit konnte nicht geladen werden. Versuchen Sie es erneut.",
+      "matterSubtotal": "Aktensumme inkl. USt.: {amount} · {share} der Rechnung",
+      "periodEnd": "Zeitraum bis",
+      "periodStart": "Zeitraum von",
+      "title": "Kunden abrechnen",
+      "visibility": "Diese Rechnung ist nur für Personen mit Zugriff auf alle enthaltenen Akten und für Abrechnungsadministratoren sichtbar."
+    },
     "codes": {
       "activity": "Aktivität",
       "activityCode": "Aktivitätscode",
@@ -594,6 +639,7 @@
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
       "outsideScope": "Im Inland nicht steuerbar, 0 %",
+      "pendingApprovals": "{count, plural, one {# Position wartet} other {# Positionen warten}} auf Freigabe. Freigaben prüfen.",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -654,6 +700,11 @@
       "invoiceDate": "Rechnungsdatum",
       "invoiceDetail": "Rechnungsdetails",
       "invoiceNumber": "Rechnungsnummer",
+      "lineOverrides": {
+        "editedRecorded": "Bearbeitet · erfasst: {description}, {quantity} × {rate}",
+        "quantity": "Menge",
+        "resetRecorded": "Erfasste Werte wiederherstellen"
+      },
       "linkedExpenses": "Verknüpfte Ausgaben",
       "linkedTimeEntries": "Verknüpfte Zeiteinträge",
       "markPaid": "Als bezahlt markieren",
@@ -678,6 +729,7 @@
     "markNonBillableSelected": "Als nicht abrechenbar markieren",
     "matterRequired": "Bitte wählen Sie eine Akte aus",
     "minutes": "Minuten",
+    "moveEntryHint": "Beim Speichern wird der Eintrag in diese Akte verschoben und mit deren Sätzen bewertet.",
     "narrative": "Beschreibungstext",
     "narrativePlaceholder": "Beschreiben Sie die durchgeführte Arbeit...",
     "noActiveTimer": "Kein aktiver Timer",
@@ -792,13 +844,16 @@
       "approved": "Genehmigt",
       "billed": "Abgerechnet",
       "draft": "Entwurf",
+      "submitted": "Eingereicht",
       "written_off": "Abgeschrieben"
     },
     "stopTimer": "Stoppen",
     "suggestions": {
       "actionCount": "{count, plural, one {# Aktion} other {# Aktionen}}",
       "activeVsLogged": "{active} aktiv · {logged} erfasst",
+      "alreadyCovered": "Bereits durch erfasste Zeit abgedeckt",
       "chatEvidence": "{count, plural, one {# Nachricht} other {# Nachrichten}} in „{title}“",
+      "engagedTime": "{duration} aktive Zeit",
       "keyboardHint": "Enter nimmt an, E bearbeitet vor dem Annehmen, Entf verwirft",
       "privacyNote": "Nur Sie sehen diese Vorschläge. Es wird nichts erfasst, bevor Sie einen Vorschlag annehmen.",
       "title": "Vorschläge aus Ihrer Aktivität",
@@ -892,9 +947,14 @@
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
+      "goToMention": "Zur {number}. Erwähnung springen",
+      "goToParagraph": "Zu Randnummer {paragraph} springen",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
+      "mentionMark": "{number}. Erwähnung",
+      "mentionsInDecision": "{count, plural, one {In dieser Entscheidung einmal zitiert} other {In dieser Entscheidung #-mal zitiert}}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "none": "Noch keine Zitierungen erfasst.",
+      "notInStella": "Noch nicht in stella",
       "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
       "paragraphLabel": "Randnummer {paragraph}",
@@ -939,7 +999,6 @@
     "coverage": {
       "completeness": "Vollständigkeit",
       "courtsHeading": "Nach Gericht",
-      "courtsUnavailable": "Die Aufschlüsselung nach Gerichten ist derzeit nicht verfügbar.",
       "decisionYears": "Entscheidungsjahre",
       "description": "Wie viel Rechtsprechung der Bestand enthält, nach Land und Gericht, und wie aktuell jede Quelle ist.",
       "generatedAt": "Zahlen vom {date}",
@@ -950,20 +1009,16 @@
       "healthStalled": "Stockt",
       "healthUnknown": "Noch nie gelaufen",
       "inPreparation": "In Vorbereitung",
-      "knownGaps": "Bekannte Lücken",
       "lastSync": "Letzte Synchronisierung",
-      "noGapsRecorded": "Keine Lücken verzeichnet",
       "notCountedYet": "Noch nicht gezählt",
       "notMeasuredYet": "Noch nicht gemessen",
-      "pendingTexts": "Ausstehende Texte",
       "reportedByListing": "Aus der Liste des Herausgebers gezählt",
       "reportedByOperator": "Manuell erfasst",
       "reportedByPublisher": "Eigene Zählung des Herausgebers",
       "searchable": "Durchsuchbar",
       "title": "Abdeckung der Rechtsprechung",
       "totalFrom": "Gesamtzahl vom {date}",
-      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar.",
-      "unreadListingPeriods": "Nicht gelesene Zeiträume der Liste"
+      "unavailable": "Die Abdeckungszahlen sind derzeit nicht verfügbar."
     },
     "decisionNotFound": "Entscheidung nicht gefunden",
     "decisionTypes": {
@@ -1003,6 +1058,12 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "marginFilter": {
+      "label": "Filter für zitierte Vorschriften",
+      "paragraph": "{count, plural, =0 {Keine Vorschriften in ¶{paragraph} zitiert} one {# Vorschrift in ¶{paragraph} zitiert} other {# Vorschriften in ¶{paragraph} zitiert}}",
+      "selection": "{count, plural, =0 {Keine Vorschriften in der Auswahl zitiert} one {# Vorschrift in der Auswahl zitiert} other {# Vorschriften in der Auswahl zitiert}}",
+      "unnumberedParagraph": "{count, plural, =0 {Keine Vorschriften in diesem Absatz zitiert} one {# Vorschrift in diesem Absatz zitiert} other {# Vorschriften in diesem Absatz zitiert}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
       "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
@@ -1024,8 +1085,10 @@
     },
     "notesFilter": {
       "ai": "KI",
-      "human": "Mensch"
+      "human": "Mensch",
+      "toggleState": "{label}: {state, select, on {ein} other {aus}}"
     },
+    "oldestDecisions": "Älteste Entscheidungen",
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
@@ -1087,8 +1150,7 @@
       "runEstimate": "{rows, plural, one {# Entscheidung} other {# Entscheidungen}} × {columns, plural, one {# Frage} other {# Fragen}} auf dieser Seite: {cells, plural, one {# Antwort wird erzeugt} other {# Antworten werden erzeugt}}.",
       "runTitle": "Diese Seite beantworten",
       "savedQuestions": "Gespeicherte Fragen",
-      "title": "Recherchetabellen",
-      "updated": "Zuletzt bearbeitet {date}"
+      "title": "Recherchetabellen"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1194,8 @@
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
+      "oldest": "Älteste",
+      "oldestUnavailable": "Eine Suche wird nach Relevanz oder mit den neuesten zuerst sortiert. Leeren Sie die Suche, um die ältesten Entscheidungen zuerst anzuzeigen.",
       "relevance": "Beste Treffer"
     },
     "viewer": {
@@ -1147,6 +1211,7 @@
       "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Zum Absatz springen} other {Zu den Absätzen springen}}",
       "judgeRole": {
         "advocateGeneral": "Generalanwalt",
         "dissenting": "Sondervotum",
@@ -1486,7 +1551,7 @@
       "label": "Simulierte KI"
     },
     "modelSelector": {
-      "allModels": "Alle Modelle ({count, number})",
+      "allModels": "Alle Modelle",
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
       "belowFrontier": "Unter den besten Kompromissen",
@@ -1698,21 +1763,8 @@
       "describe-stella-function": "Datensuche vorbereiten",
       "describe_template": "Vorlagenfelder lesen",
       "discover_tools": "Datensuche vorbereiten",
-      "docxCommentSummary": "Kommentar zu {blockId} hinzufügen",
-      "docxDeleteSummary": "{blockId} löschen",
-      "docxDeleteTableColumnSummary": "Tabellenspalte bei {blockId} löschen",
-      "docxDeleteTableRowSummary": "Tabellenzeile bei {blockId} löschen",
       "docxEditMore": "{count, plural, one {# weitere Änderung} other {# weitere Änderungen}}",
       "docxEditSummary": "{count, plural, one {# vorgeschlagene Änderung} other {# vorgeschlagene Änderungen}}",
-      "docxInsertAfterSummary": "Text nach {blockId} einfügen",
-      "docxInsertBeforeSummary": "Text vor {blockId} einfügen",
-      "docxInsertTableColumnSummary": "Tabellenspalte in der Nähe von {blockId} einfügen",
-      "docxInsertTableRowSummary": "Tabellenzeile in der Nähe von {blockId} einfügen",
-      "docxMergeTableCellsSummary": "Tabellenzellen bei {blockId} verbinden",
-      "docxReplaceBlockSummary": "{blockId} ersetzen",
-      "docxReplaceSummary": "„{find}“ durch „{replace}“ ersetzen",
-      "docxSignatureTableSummary": "Signaturtabelle in der Nähe von {blockId} einfügen",
-      "docxSplitTableCellSummary": "Tabellenzelle bei {blockId} teilen",
       "execute-typescript": "Akten-Daten lesen",
       "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
@@ -2056,8 +2108,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "enterKey": "↵",
-    "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {
       "citations": "Zitate",
@@ -2131,6 +2181,7 @@
     "lastUpdated": "Zuletzt aktualisiert",
     "layoutResetAfterProblem": "Das Layout wurde nach einem Problem zurückgesetzt.",
     "legalDatabase": "Rechtsdatenbank",
+    "loadFailed": "Konnte nicht geladen werden.",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
     "logTime": "Zeit erfassen",
@@ -2205,10 +2256,12 @@
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
     "searchIn": "Suchen in",
+    "searchMembers": "Mitglieder suchen…",
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
     "selectDate": "Datum wählen…",
+    "selected": "Ausgewählt",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -2217,7 +2270,7 @@
     "showMore": "Mehr anzeigen",
     "showSecretValue": "Geheimen Wert anzeigen",
     "signOut": "Abmelden",
-    "somethingWentWrong": "Etwas ist schiefgelaufen",
+    "somethingWentWrong": "Etwas ist schiefgelaufen. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "sort": "Sortieren",
     "source": "Quelle",
     "stale": "Veraltet",
@@ -2694,7 +2747,7 @@
       "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
       "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
     },
-    "actionFailed": "Aktion fehlgeschlagen",
+    "actionFailed": "Das hat nicht funktioniert. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
       "caseLawCountryUnavailable": "Die Rechtsprechung dieses Landes ist nicht verfügbar. Wählen Sie ein anderes Land.",
@@ -3245,7 +3298,7 @@
     "saveSerializeFailedTitle": "DOCX-Datei konnte nicht erstellt werden",
     "savingDocument": "Speichern...",
     "showDetails": "Details anzeigen",
-    "somethingWentWrong": "Etwas ist schiefgelaufen",
+    "somethingWentWrong": "Etwas ist schiefgelaufen. Versuchen Sie es erneut oder laden Sie die Seite neu, falls es wieder passiert.",
     "synced": "Synchronisiert",
     "syncing": "Wird synchronisiert",
     "tableBordersAll": "Alle Rahmenlinien",
@@ -4253,6 +4306,8 @@
       "commentPlaceholder": "Kommentar schreiben…",
       "commentText": "Kommentartext",
       "commentedPassage": "Kommentierte Textstelle",
+      "editComment": "Kommentar bearbeiten",
+      "editedAt": "Bearbeitet {time}",
       "guestAuthor": "Sie",
       "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
       "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",
@@ -4282,7 +4337,12 @@
       "styleHighlight": "Markierung",
       "styleSquiggly": "Wellenlinie",
       "styleStrikethrough": "Durchstreichung",
-      "visibilityShared": "Mit der Organisation geteilt"
+      "visibilityShared": "Mit der Organisation geteilt",
+      "visibilitySharedWithMatter": "Mit der Akte geteilt"
+    },
+    "contents": {
+      "aiSection": "{section} (KI-generierter Abschnitt)",
+      "headingWithAiSection": "{heading} (KI-generierter Abschnitt: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -4759,10 +4819,8 @@
   },
   "readerAnswers": {
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
-    "citation": "¶{paragraph}",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Rückfrage stellen",
     "invalidCitations": "{count, plural, one {# Fundstelle konnte nicht überprüft werden.} other {# Fundstellen konnten nicht überprüft werden.}}",
     "loading": "Antwort wird generiert…",
@@ -4770,6 +4828,7 @@
     "modelError": "Das Modell konnte diese Antwort nicht fertigstellen.",
     "networkError": "Die Verbindung wurde unterbrochen. Versuchen Sie es erneut.",
     "regenerate": "Antwort neu generieren",
+    "selectionError": "Wählen Sie Text aus der Entscheidung selbst aus.",
     "send": "Rückfrage senden",
     "share": "Mit dem Team teilen",
     "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
@@ -5359,7 +5418,7 @@
     "importDescription": "Stile werden in eine neue, inhaltsfreie DOCX-Datei extrahiert.",
     "importTitle": "Stilset importieren",
     "loadFailed": "Stilsets konnten nicht geladen werden",
-    "newDocument": "Neues Dokument",
+    "newDocument": "Neues DOCX-Dokument",
     "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
     "renameTitle": "Stilset umbenennen",
     "replace": "Quelle ersetzen",
@@ -5643,7 +5702,7 @@
     "moveToMatter": "In Akte speichern",
     "moveToMatterAnyway": "Trotzdem speichern",
     "myDefaultLookupFormat": "Mein Standard",
-    "newFromTemplate": "Neues Dokument aus Vorlage",
+    "newFromTemplate": "Neues DOCX-Dokument aus Vorlage",
     "newFromTemplateFillHint": "Füllen Sie die Felder aus; das Dokument wird in dieser Akte erstellt.",
     "newTemplate": "Neue Vorlage",
     "noTemplates": "Noch keine Vorlagen",
@@ -5842,6 +5901,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Interne Arbeit"
+    },
+    "week": {
+      "allLogged": "Alles ist erfasst. Neue Aktivität erscheint hier, während Sie arbeiten.",
+      "days": "Wochentage",
+      "entriesTitle": "Erfasste Zeit",
+      "nextWeek": "Nächste Woche",
+      "noActivity": "Noch nichts zu erfassen. Arbeiten Sie in einer Akte, dann erscheint Ihre Aktivität hier zum Übernehmen.",
+      "pendingCount": "{count, plural, one {# Vorschlag} other {# Vorschläge}}",
+      "previousWeek": "Vorherige Woche",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Prüfen Sie das Arbeitsdatum und reichen Sie den Eintrag dann ein.",
+        "narrativeRequired": "Ergänzen Sie eine Beschreibung und reichen Sie den Eintrag dann ein.",
+        "runningTimer": "Stoppen Sie den laufenden Timer und reichen Sie den Eintrag dann ein.",
+        "unpriced": "Dieser Eintrag hat keinen Satz. Lassen Sie für die Akte einen Satz festlegen und reichen Sie ihn dann ein."
+      },
+      "returned": "Zurückgegeben: {comment}",
+      "submitAndApprove": "Einreichen und freigeben",
+      "submitResult": "{submitted} eingereicht · {approved} freigegeben · {refused} zu korrigieren",
+      "submitWeek": "Woche einreichen",
+      "title": "Meine Woche",
+      "totals": "{logged} erfasst · {billable} abrechenbar"
     }
   },
   "translate": {
@@ -6014,6 +6095,7 @@
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
+        "editInApplication": "In <bdi>{application}</bdi> bearbeiten",
         "editLocallyPrompt": "Bearbeiten Sie diese Datei lokal und synchronisieren Sie die Änderungen mit stella.",
         "forceRelease": "Freigabe erzwingen",
         "notOpenedDescription": "stella desktop hat nicht bestätigt, dass <bdi>{application}</bdi> geöffnet wurde. Starten Sie stella desktop und versuchen Sie es erneut.",
@@ -6037,13 +6119,15 @@
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
         "connected": "stella desktop ist verbunden",
+        "download": "stella desktop herunterladen",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
+        "update": "stella desktop aktualisieren"
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -6056,8 +6140,10 @@
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
+      "ocrBatchHelp": "Eingereihte Dokumente werden im nächsten OCR-Lauf verarbeitet.",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
-      "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
+      "ocrQueued": "Texterkennung eingereiht",
+      "ocrQueuedForBatch": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
         "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
@@ -6114,6 +6200,7 @@
         "waitingDescription": "Wählen Sie in stella desktop ein Signaturzertifikat, um dieses PDF zu signieren.",
         "waitingTitle": "Warten auf stella desktop"
       },
+      "queueForOcr": "Für OCR einreihen",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Was mit {fileName} geschehen soll",
@@ -6125,7 +6212,6 @@
       "removeMetadata": "Dokumentmetadaten entfernen",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
-      "runOcr": "OCR einreihen",
       "scrubFailed": "Die Metadaten dieser Datei konnten nicht entfernt werden, daher wurde nichts heruntergeladen",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
@@ -6204,8 +6290,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Lead festlegen",
-        "noLead": "Kein Lead",
-        "searchMembers": "Mitglieder suchen…"
+        "noLead": "Kein Lead"
       },
       "to": "Bis"
     },
@@ -6267,6 +6352,7 @@
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
+      "moveFailed": "{failed, plural, one {# von {total} Elementen konnte nicht verschoben werden.} other {# von {total} Elementen konnten nicht verschoben werden.}}",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
       "uploadDocument": "Dokument hochladen",
@@ -6285,10 +6371,10 @@
       "addMember": "Mitglied hinzufügen",
       "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
+      "alreadyOnMatter": "Bereits in dieser Akte",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?",
-      "selectMember": "Mitglied auswählen"
+      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?"
     },
     "newDocument": "Neues Dokument",
     "newFolder": "Neuer Ordner",
@@ -6326,7 +6412,6 @@
           "approvedBy": "Genehmigt von",
           "channel": "Kanal",
           "dateTime": "Datum und Uhrzeit",
-          "eventId": "Ereignis-ID",
           "notAvailable": "Nicht verfügbar",
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
@@ -6413,6 +6498,7 @@
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
+      "movedToClient": "Akte <bdi>{matterName}</bdi> zu <bdi>{clientName}</bdi> verschoben",
       "noClient": "Kein Klient zugeordnet",
       "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
@@ -6431,7 +6517,9 @@
       "personalLabel": "Persönlich",
       "promoteCta": "Zu Klient hochstufen",
       "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
+      "promoteToClientConfirm": "Die Akte <bdi>{matterName}</bdi> wird <bdi>{clientName}</bdi> zugeordnet und mit dem Team geteilt. Sie kann danach nicht wieder persönlich werden.",
       "promotedSuccess": "Akte hochgestuft",
+      "recentClients": "Zuletzt verwendete Klienten",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
@@ -6440,6 +6528,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
+      "annotations": {
+        "commentedBy": "Kommentar von {name}",
+        "detachedHeading": "Nicht in dieser Version",
+        "detachedOtherVersion": "In Version {version} erstellt; die Seite lautet inzwischen anders.",
+        "detachedTextChanged": "Diese Wörter stehen nicht mehr auf Seite {page}.",
+        "empty": "Wörter im Dokument markieren und dann „Kommentar“ wählen.",
+        "highlightedBy": "Hervorgehoben von {name}",
+        "refusedNoText": "Diese Seite enthält keinen Text zum Markieren. Führen Sie zuerst die Texterkennung für das Dokument aus.",
+        "refusedNotFound": "Diese Wörter wurden im Text der Seite nicht gefunden. Markieren Sie sie erneut.",
+        "refusedTooLong": "Diese Passage ist zu lang zum Markieren. Wählen Sie eine kürzere."
+      },
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",
@@ -6448,6 +6547,36 @@
       "pageEditor": {
         "addPDF": "PDF hinzufügen",
         "applyCrop": "Zuschnitt anwenden",
+        "cleanScan": {
+          "applied": "Bereinigte Fassung übernommen",
+          "apply": "Übernehmen",
+          "applyAll": "Alle übernehmen",
+          "applyPage": "Bereinigte Seite {number} übernehmen",
+          "cleaned": "Bereinigt",
+          "cleaning": "Seite wird bereinigt",
+          "contentCrop": "Auf Inhalt zuschneiden",
+          "description": "{count, plural, one {Prüfen Sie die bereinigte Seite, bevor Sie sie verwenden. Das Dokument ändert sich erst dann.} other {Prüfen Sie jede der # bereinigten Seiten, bevor Sie sie verwenden. Das Dokument ändert sich erst dann.}}",
+          "deskew": "Begradigen",
+          "failedEngine": "Die Bereinigung ist fehlgeschlagen. Die Seite bleibt unverändert.",
+          "failedRender": "Die Seite konnte nicht für die Bereinigung vorbereitet werden. Sie bleibt unverändert.",
+          "failedTimeout": "Die Bereinigung hat zu lange gedauert. Die Seite bleibt unverändert.",
+          "heading": "Scan bereinigen",
+          "output": "Farbmodus",
+          "outputBinary": "Schwarzweiß",
+          "outputGrayscale": "Graustufen",
+          "pageLimit": "Es können höchstens {max} Seiten gleichzeitig bereinigt werden. Wählen Sie weniger Seiten aus.",
+          "preview": "Bereinigte Seite {number}",
+          "progress": "{done} von {total} Seiten verarbeitet",
+          "reject": "Original behalten",
+          "rejectPage": "Originalseite {number} behalten",
+          "rejected": "Original behalten",
+          "scope": "{count, plural, =0 {Alle Seiten begradigen und bereinigen} one {Ausgewählte Seite begradigen und bereinigen} other {# ausgewählte Seiten begradigen und bereinigen}}",
+          "unrecognized": "Die Seite wurde nicht als Scan erkannt. Sie bleibt unverändert.",
+          "unrecognizedNoContent": "Auf dieser Seite wurde kein Inhalt gefunden. Sie bleibt unverändert.",
+          "unrecognizedNoPage": "Die Seitenränder wurden nicht gefunden. Die Seite bleibt unverändert.",
+          "unrecognizedTooLarge": "Die Seite ist zu groß für die Bereinigung. Sie bleibt unverändert.",
+          "use": "{count, plural, =0 {Bereinigte Seiten verwenden} one {# bereinigte Seite verwenden} other {# bereinigte Seiten verwenden}}"
+        },
         "crop": "Zuschneiden",
         "cropAdvanced": "Erweitert",
         "cropBottom": "Unten (mm)",
@@ -6495,7 +6624,10 @@
         "saveVersion": "Version speichern",
         "selectAll": "Alle auswählen",
         "selectPage": "Seite {number} auswählen",
+        "signAfterSave": "Speichert Ihre Seitenänderungen als neue Version und signiert diese",
+        "signSavedVersionMissing": "Die neue Version wurde gespeichert, konnte aber nicht zum Signieren geöffnet werden. Signieren Sie sie in der Dokumentansicht.",
         "signatureWarning": "Durch die Bearbeitung dieses PDFs werden digitale Signaturen ungültig.",
+        "signatureWarningWithSign": "Durch die Bearbeitung werden vorhandene digitale Signaturen ungültig. Beim Signieren von hier werden Ihre Änderungen zuerst gespeichert und dann die neue Version signiert.",
         "sourceLimit": "Die Gesamtgröße der PDF-Dateien darf 100 MB nicht überschreiten.",
         "title": "Seiten bearbeiten",
         "undo": "Seitenbearbeitung rückgängig machen",
@@ -6506,6 +6638,11 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
+      "selection": {
+        "explainPassagePrompt": "Erkläre diese Passage aus {citation}:\n\n„{quote}“",
+        "pageLocator": "S. {page}",
+        "pageRangeLocator": "S. {start}–{end}"
+      },
       "showOriginal": "Originalseiten anzeigen",
       "unlock": "Entsperren"
     },
@@ -6619,10 +6756,12 @@
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
       "singleSelect": "Einfachauswahl",
-      "sortAscending": "Aufsteigend sortieren",
       "sortAscendingDate": "Älteste zuerst",
-      "sortDescending": "Absteigend sortieren",
+      "sortAscendingNumber": "Niedrigste zuerst",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Neueste zuerst",
+      "sortDescendingNumber": "Höchste zuerst",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {In # Option aufteilen} other {In # Optionen aufteilen}}",
       "suggestWithAI": "Mit KI vorschlagen",
       "text": "Text",
@@ -6643,6 +6782,12 @@
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
       "parties": "Parteien"
+    },
+    "switcher": {
+      "searchPlaceholder": "Akte suchen…",
+      "trigger": "Akte wechseln",
+      "viewAll": "Alle Akten anzeigen",
+      "viewAllForClient": "Alle Akten des Klienten {clientName} anzeigen"
     },
     "table": {
       "clearFlags": "Markierungen löschen",

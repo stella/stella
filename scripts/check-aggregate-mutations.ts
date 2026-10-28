@@ -17,12 +17,27 @@ import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  type Argument,
+  type ArrowFunctionExpression,
+  type BindingProperty,
+  type CallExpression,
+  type Expression,
+  type Function as SyntaxFunction,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty as Property,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths";
+
+type Identifier = Extract<Node, { type: "Identifier" }>;
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const API = "apps/api/src/";
@@ -53,19 +68,67 @@ const resolveModule = ({ file, name }: ResolveModuleOptions) => {
     : `${resolved.replace(/\.ts$/u, "")}.ts`;
 };
 
-type ParseSourceOptions = { file: string; source: string };
-const parse = ({ file, source }: ParseSourceOptions) =>
-  ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
+type SourceTree = ParsedSource & { fileName: string };
+type Callable = SyntaxFunction | ArrowFunctionExpression;
+const contexts = new WeakMap<
+  Node,
+  { parent: Node | undefined; source: SourceTree }
+>();
+const parentOf = (node: Node) => contexts.get(node)?.parent;
+const sourceOf = (node: Node) =>
+  contexts.get(node)?.source ?? panic("Missing syntax source context");
+const nodeText = (node: Node, source = sourceOf(node)) =>
+  source.sourceText.slice(node.start, node.end);
+// An array hole (`[a, , b]`) has no node; diagnostics name it instead.
+const elementText = (element: Node | null, source: SourceTree) =>
+  element === null ? "an empty array slot" : nodeText(element, source);
+const isFunctionLike = (node: Node): node is Callable =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression";
+const isClassLike = (node: Node) =>
+  node.type === "ClassDeclaration" || node.type === "ClassExpression";
+const isPropertyAssignment = (node: Node): node is Property =>
+  node.type === "Property" &&
+  !node.method &&
+  !node.shorthand &&
+  node.kind === "init";
+const isStringLiteral = (
+  node: Node | null | undefined,
+): node is Extract<Node, { type: "Literal" }> & { value: string } =>
+  node?.type === "Literal" && typeof node.value === "string";
+const visitChildren = (root: Node, visit: (node: Node) => void) => {
+  walk(root, (node) => {
+    if (node !== root) {
+      visit(node);
+      return "skip-children";
+    }
+    return undefined;
+  });
+};
+const statementsOf = (source: SourceTree) =>
+  source.program.body.map((statement) =>
+    (statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration") &&
+    statement.declaration &&
+    (statement.declaration.type === "FunctionDeclaration" ||
+      statement.declaration.type === "ClassDeclaration" ||
+      statement.type === "ExportNamedDeclaration")
+      ? statement.declaration
+      : statement,
   );
+type ParseSourceOptions = { file: string; source: string };
+const parse = ({ file, source }: ParseSourceOptions) => {
+  const parsed = { ...parseSource(file, source), fileName: file };
+  walk(parsed.program, (node, ancestors) => {
+    contexts.set(node, { parent: ancestors.at(-1), source: parsed });
+  });
+  return parsed;
+};
 
 type ValidateDeclarationOptions = {
-  declaration: ts.ObjectLiteralExpression;
-  source: ts.SourceFile;
+  declaration: ObjectExpression;
+  source: SourceTree;
   file: string;
   registry: ReadonlySet<string>;
 };
@@ -77,36 +140,36 @@ const validateDeclaration = ({
 }: ValidateDeclarationOptions) => {
   const fields = new Map(
     declaration.properties
-      .filter(ts.isPropertyAssignment)
-      .map((field) => [field.name.getText(source), field.initializer]),
+      .filter(isPropertyAssignment)
+      .map((field) => [nodeText(field.key, source), field.value]),
   );
   const type = fields.get("type");
-  if (type === undefined || !ts.isStringLiteral(type)) {
+  if (type === undefined || !isStringLiteral(type)) {
     panic(`Missing mutation declaration type in ${file}`);
   }
-  if (type.text === "independent") {
+  if (type.value === "independent") {
     const reason = fields.get("reason");
     if (
       reason === undefined ||
-      !ts.isStringLiteral(reason) ||
-      reason.text.trim() === ""
+      !isStringLiteral(reason) ||
+      reason.value.trim() === ""
     ) {
       panic(`Missing mutation declaration reason in ${file}`);
     }
-  } else if (type.text === "aggregate") {
+  } else if (type.value === "aggregate") {
     const aggregates = fields.get("aggregates");
     if (
       aggregates === undefined ||
-      !ts.isArrayLiteralExpression(aggregates) ||
+      !(aggregates.type === "ArrayExpression") ||
       aggregates.elements.length === 0 ||
-      aggregates.elements.some((item) => !ts.isStringLiteral(item))
+      aggregates.elements.some((item) => !isStringLiteral(item))
     ) {
       panic(`Missing literal aggregate registry names in ${file}`);
     }
     for (const aggregate of aggregates.elements) {
-      if (!ts.isStringLiteral(aggregate) || !registry.has(aggregate.text)) {
+      if (!isStringLiteral(aggregate) || !registry.has(aggregate.value)) {
         panic(
-          `Unknown aggregate registry name in ${file}: ${aggregate.getText(source)}`,
+          `Unknown aggregate registry name in ${file}: ${elementText(aggregate, source)}`,
         );
       }
     }
@@ -120,33 +183,34 @@ const readAggregateRegistry = (load: SourceLoader) => {
   const registryContent = load(REGISTRY);
   if (registryContent !== undefined) {
     const registrySource = parse({ file: REGISTRY, source: registryContent });
-    const collectRegistry = (node: ts.Node) => {
+    const collectRegistry = (node: Node) => {
       if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.name.text === "AGGREGATE_LOCKS" &&
-        node.initializer !== undefined
+        node.type === "VariableDeclarator" &&
+        node.id.type === "Identifier" &&
+        node.id.name === "AGGREGATE_LOCKS" &&
+        node.init !== null
       ) {
-        const initializer = ts.isAsExpression(node.initializer)
-          ? node.initializer.expression
-          : node.initializer;
-        if (!ts.isObjectLiteralExpression(initializer)) {
+        const initializer =
+          node.init.type === "TSAsExpression"
+            ? node.init.expression
+            : node.init;
+        if (!(initializer.type === "ObjectExpression")) {
           panic("Aggregate registry requires a literal object");
         }
         for (const property of initializer.properties) {
-          if (!ts.isPropertyAssignment(property)) {
+          if (!isPropertyAssignment(property)) {
             panic("Aggregate registry cannot use computed spreads");
           }
           registry.add(
-            ts.isStringLiteral(property.name)
-              ? property.name.text
-              : property.name.getText(registrySource),
+            isStringLiteral(property.key)
+              ? property.key.value
+              : nodeText(property.key, registrySource),
           );
         }
       }
-      ts.forEachChild(node, collectRegistry);
+      visitChildren(node, collectRegistry);
     };
-    collectRegistry(registrySource);
+    collectRegistry(registrySource.program);
   }
   return registry;
 };
@@ -204,7 +268,7 @@ const createSourceAccess = (sourceLoader: SourceLoader) => {
 type SourceAccess = ReturnType<typeof createSourceAccess>;
 
 type SourceReferenceOptions = {
-  source: ts.SourceFile;
+  source: SourceTree;
   file: string;
   name: string;
   access: SourceAccess;
@@ -215,87 +279,61 @@ const importedReference = ({
   name,
   access,
 }: SourceReferenceOptions) => {
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of source.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const module = access.resolveSourceModule({
-      file,
-      name: statement.moduleSpecifier.text,
-    });
-    const specifier = statement.moduleSpecifier.text;
-    const clause = statement.importClause;
-    if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-      // Type-only imports have no runtime value; a same-named binding is
-      // never trusted.
-      if (
-        clause.name?.text === name ||
-        (clause.namedBindings !== undefined &&
-          ts.isNamedImports(clause.namedBindings) &&
-          clause.namedBindings.elements.some((item) => item.name.text === name))
-      ) {
-        return undefined;
-      }
-      continue;
-    }
-    if (clause?.name?.text === name) {
-      return { module, specifier, exported: "default" };
-    }
-    if (
-      clause?.namedBindings === undefined ||
-      !ts.isNamedImports(clause.namedBindings)
-    ) {
-      continue;
-    }
-    const binding = clause.namedBindings.elements.find(
-      (item) => item.name.text === name,
+    const specifier = statement.source.value;
+    const module = access.resolveSourceModule({ file, name: specifier });
+    const binding = statement.specifiers.find(
+      (item) => item.local.name === name,
     );
-    if (binding?.isTypeOnly === true) {
+    if (!binding || binding.type === "ImportNamespaceSpecifier") {
+      continue;
+    }
+    if (
+      statement.importKind === "type" ||
+      (binding.type === "ImportSpecifier" && binding.importKind === "type")
+    ) {
       return undefined;
     }
-    if (binding !== undefined) {
-      return {
-        module,
-        specifier,
-        exported: binding.propertyName?.text ?? binding.name.text,
-      };
+    let exported = "default";
+    if (binding.type === "ImportSpecifier") {
+      exported =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
     }
+    return { module, specifier, exported };
   }
   return undefined;
 };
 
 type HandlerImplementationOptions = {
-  handler: ts.Expression;
-  source: ts.SourceFile;
+  handler: Argument;
+  source: SourceTree;
   file: string;
   access: SourceAccess;
   visited?: Set<string>;
 };
 type HandlerImplementation =
-  { body: ts.Node; source: ts.SourceFile; file: string } | undefined;
+  { body: Node; source: SourceTree; file: string } | undefined;
 /** The handler constructor call a local factory returns, as its arrow body or only statement. */
-const factoryReturn = (
-  node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression,
-): ts.CallExpression | undefined => {
+const factoryReturn = (node: Callable): CallExpression | undefined => {
   const { body } = node;
-  if (body === undefined) {
+  if (body === null) {
     return undefined;
   }
-  if (ts.isCallExpression(body)) {
+  if (body.type === "CallExpression") {
     return body;
   }
-  if (!ts.isBlock(body) || body.statements.length !== 1) {
+  if (!(body.type === "BlockStatement") || body.body.length !== 1) {
     return undefined;
   }
-  const [statement] = body.statements;
-  return statement !== undefined &&
-    ts.isReturnStatement(statement) &&
-    statement.expression !== undefined &&
-    ts.isCallExpression(statement.expression)
-    ? statement.expression
+  const [statement] = body.body;
+  return statement?.type === "ReturnStatement" &&
+    statement.argument?.type === "CallExpression"
+    ? statement.argument
     : undefined;
 };
 
@@ -306,21 +344,18 @@ const handlerImplementation = ({
   access,
   visited = new Set<string>(),
 }: HandlerImplementationOptions): HandlerImplementation => {
-  if (ts.isArrowFunction(handler) || ts.isFunctionExpression(handler)) {
+  if (
+    handler.type === "ArrowFunctionExpression" ||
+    handler.type === "FunctionExpression"
+  ) {
+    if (handler.body === null) {
+      return undefined;
+    }
     return { body: handler.body, source, file };
   }
-  if (ts.isParenthesizedExpression(handler) || ts.isAsExpression(handler)) {
-    return handlerImplementation({
-      handler: handler.expression,
-      source,
-      file,
-      access,
-      visited,
-    });
-  }
   if (
-    ts.isPropertyAccessExpression(handler) &&
-    handler.name.text === "handler"
+    handler.type === "ParenthesizedExpression" ||
+    handler.type === "TSAsExpression"
   ) {
     return handlerImplementation({
       handler: handler.expression,
@@ -330,9 +365,26 @@ const handlerImplementation = ({
       visited,
     });
   }
-  if (ts.isCallExpression(handler) && ts.isIdentifier(handler.expression)) {
+  if (
+    handler.type === "MemberExpression" &&
+    !handler.computed &&
+    handler.property.type === "Identifier" &&
+    handler.property.name === "handler"
+  ) {
+    return handlerImplementation({
+      handler: handler.object,
+      source,
+      file,
+      access,
+      visited,
+    });
+  }
+  if (
+    handler.type === "CallExpression" &&
+    handler.callee.type === "Identifier"
+  ) {
     const factory = trustedBinding({
-      identifier: handler.expression,
+      identifier: handler.callee,
       access,
     });
     // A local endpoint factory (dependencies injectable for tests) is
@@ -340,7 +392,7 @@ const handlerImplementation = ({
     const returned =
       factory?.kind === "function" ? factoryReturn(factory.node) : undefined;
     if (returned !== undefined) {
-      const key = `${file}#${handler.expression.text}()`;
+      const key = `${file}#${handler.callee.name}()`;
       if (visited.has(key)) {
         return undefined;
       }
@@ -371,10 +423,10 @@ const handlerImplementation = ({
       visited,
     });
   }
-  if (!ts.isIdentifier(handler)) {
+  if (!(handler.type === "Identifier")) {
     return undefined;
   }
-  const key = `${file}#${handler.text}`;
+  const key = `${file}#${handler.name}`;
   if (visited.has(key)) {
     return undefined;
   }
@@ -424,11 +476,13 @@ const bindingImplementation = ({
   }
   const target = parse({ file: binding.module, source: content });
   if (binding.exported === "default") {
-    const assignment = target.statements.find(ts.isExportAssignment);
-    return assignment === undefined || !ts.isIdentifier(assignment.expression)
+    const assignment = target.program.body.find(
+      (statement) => statement.type === "ExportDefaultDeclaration",
+    );
+    return assignment?.declaration.type !== "Identifier"
       ? undefined
       : handlerImplementation({
-          handler: assignment.expression,
+          handler: assignment.declaration,
           source: target,
           file: binding.module,
           access,
@@ -453,102 +507,111 @@ const bindingImplementation = ({
   });
 };
 
-const bindingNames = (name: ts.BindingName, names: Set<string>) => {
-  if (ts.isIdentifier(name)) {
-    names.add(name.text);
+const bindingNames = (name: Node, names: Set<string>) => {
+  if (name.type === "Identifier") {
+    names.add(name.name);
     return;
   }
-  for (const element of name.elements) {
-    if (!ts.isOmittedExpression(element)) {
-      bindingNames(element.name, names);
+  if (name.type === "AssignmentPattern") {
+    bindingNames(name.left, names);
+    return;
+  }
+  if (name.type === "RestElement") {
+    bindingNames(name.argument, names);
+    return;
+  }
+  if (name.type === "ArrayPattern") {
+    for (const element of name.elements) {
+      if (element) {
+        bindingNames(element, names);
+      }
+    }
+  }
+  if (name.type === "ObjectPattern") {
+    for (const property of name.properties) {
+      bindingNames(
+        property.type === "RestElement" ? property.argument : property.value,
+        names,
+      );
     }
   }
 };
-
-const statementNames = (statement: ts.Node, names: Set<string>) => {
-  if (ts.isVariableStatement(statement)) {
-    for (const declaration of statement.declarationList.declarations) {
-      bindingNames(declaration.name, names);
+const statementNames = (statement: Node, names: Set<string>) => {
+  if (statement.type === "VariableDeclaration") {
+    for (const declaration of statement.declarations) {
+      bindingNames(declaration.id, names);
     }
   } else if (
-    (ts.isFunctionDeclaration(statement) ||
-      ts.isClassDeclaration(statement) ||
-      ts.isEnumDeclaration(statement)) &&
-    statement.name !== undefined
+    (statement.type === "FunctionDeclaration" ||
+      statement.type === "ClassDeclaration") &&
+    statement.id
   ) {
-    names.add(statement.name.text);
+    names.add(statement.id.name);
+  } else if (statement.type === "TSEnumDeclaration") {
+    names.add(statement.id.name);
   }
 };
-
 /** `var` declarations hoist to the function, whatever block they sit in. */
-const hoistedVarNames = (node: ts.Node, names: Set<string>) => {
-  if (ts.isFunctionLike(node) || ts.isClassLike(node)) {
+const hoistedVarNames = (node: Node, names: Set<string>) => {
+  if (isFunctionLike(node) || isClassLike(node)) {
     return;
   }
-  if (
-    ts.isVariableDeclarationList(node) &&
-    node.getFirstToken()?.kind === ts.SyntaxKind.VarKeyword
-  ) {
+  if (node.type === "VariableDeclaration" && node.kind === "var") {
     for (const declaration of node.declarations) {
-      bindingNames(declaration.name, names);
+      bindingNames(declaration.id, names);
     }
   }
-  ts.forEachChild(node, (child) => hoistedVarNames(child, names));
+  visitChildren(node, (child) => hoistedVarNames(child, names));
 };
-
 type ScopeNames = { names: Set<string>; parameters: Set<string> };
-const scopeNames = (scope: ts.Node): ScopeNames => {
+const scopeNames = (scope: Node): ScopeNames => {
   const names = new Set<string>();
   const parameters = new Set<string>();
-  if (ts.isFunctionLike(scope)) {
-    for (const parameter of scope.parameters) {
-      bindingNames(parameter.name, parameters);
-      bindingNames(parameter.name, names);
+  if (isFunctionLike(scope)) {
+    for (const parameter of scope.params) {
+      bindingNames(parameter, parameters);
+      bindingNames(parameter, names);
     }
-    if (ts.isFunctionExpression(scope) && scope.name !== undefined) {
-      names.add(scope.name.text);
+    if (scope.type === "FunctionExpression" && scope.id) {
+      names.add(scope.id.name);
     }
-    if (
-      (ts.isArrowFunction(scope) ||
-        ts.isFunctionExpression(scope) ||
-        ts.isFunctionDeclaration(scope) ||
-        ts.isMethodDeclaration(scope)) &&
-      scope.body !== undefined
-    ) {
+    if (scope.body) {
       const hoisted = new Set<string>();
       hoistedVarNames(scope.body, hoisted);
       for (const name of hoisted) {
         names.add(name);
-        // A `var` redeclaring a parameter rebinds it; never treat it as one.
         parameters.delete(name);
       }
     }
   }
-  if (ts.isBlock(scope) || ts.isModuleBlock(scope)) {
-    for (const statement of scope.statements) {
+  if (scope.type === "BlockStatement" || scope.type === "TSModuleBlock") {
+    for (const statement of scope.body) {
       statementNames(statement, names);
     }
   }
-  if (ts.isCaseBlock(scope)) {
-    for (const clause of scope.clauses) {
-      for (const statement of clause.statements) {
+  if (scope.type === "SwitchStatement") {
+    for (const clause of scope.cases) {
+      for (const statement of clause.consequent) {
         statementNames(statement, names);
       }
     }
   }
-  if (
-    (ts.isForStatement(scope) ||
-      ts.isForOfStatement(scope) ||
-      ts.isForInStatement(scope)) &&
-    scope.initializer !== undefined &&
-    ts.isVariableDeclarationList(scope.initializer)
+  let initializer: Node | null | undefined;
+  if (scope.type === "ForStatement") {
+    initializer = scope.init;
+  } else if (
+    scope.type === "ForInStatement" ||
+    scope.type === "ForOfStatement"
   ) {
-    for (const declaration of scope.initializer.declarations) {
-      bindingNames(declaration.name, names);
+    initializer = scope.left;
+  }
+  if (initializer?.type === "VariableDeclaration") {
+    for (const declaration of initializer.declarations) {
+      bindingNames(declaration.id, names);
     }
   }
-  if (ts.isCatchClause(scope) && scope.variableDeclaration !== undefined) {
-    bindingNames(scope.variableDeclaration.name, names);
+  if (scope.type === "CatchClause" && scope.param) {
+    bindingNames(scope.param, names);
   }
   return { names, parameters };
 };
@@ -558,61 +621,67 @@ const scopeNames = (scope: ts.Node): ScopeNames => {
  * `stop` when given) that binds `name`; undefined when only the module's
  * top-level imports and definitions can bind it.
  */
-const bindingScope = (node: ts.Node, name: string, stop?: ts.Node) => {
+const bindingScope = (node: Node, name: string, stop?: Node) => {
+  let child = node;
   for (
-    let scope = node.parent;
-    !ts.isSourceFile(scope) && scope !== stop;
-    scope = scope.parent
+    let scope = parentOf(node);
+    scope !== undefined && scope.type !== "Program" && scope !== stop;
+    scope = parentOf(scope)
   ) {
-    if (scopeNames(scope).names.has(name)) {
+    if (
+      !(scope.type === "SwitchStatement" && scope.discriminant === child) &&
+      scopeNames(scope).names.has(name)
+    ) {
       return scope;
     }
+    child = scope;
   }
   return undefined;
 };
 
-/** Plain or compound assignment (`ts.isAssignmentExpression` is internal). */
-const isAssignment = (node: ts.Node): node is ts.BinaryExpression =>
-  ts.isBinaryExpression(node) &&
-  node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-  node.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
-
-/**
- * Whether `identifier` sits in a write position: an assignment target (also
- * nested inside array/object destructuring targets), `++`/`--`, a for-in or
- * for-of head, or a `delete` operand.
- */
-const isWriteTarget = (identifier: ts.Identifier) => {
-  let node: ts.Node = identifier;
+/** Whether an identifier sits in a write position, including destructuring. */
+const isWriteTarget = (identifier: Identifier) => {
+  let node: Node = identifier;
   for (;;) {
-    const parent = node.parent;
+    const parent = parentOf(node);
+    if (!parent) {
+      return false;
+    }
     if (
-      ts.isParenthesizedExpression(parent) ||
-      ts.isArrayLiteralExpression(parent) ||
-      ts.isObjectLiteralExpression(parent) ||
-      ts.isSpreadElement(parent) ||
-      ts.isSpreadAssignment(parent) ||
-      (ts.isShorthandPropertyAssignment(parent) && parent.name === node) ||
-      (ts.isPropertyAssignment(parent) && parent.initializer === node)
+      parent.type === "ParenthesizedExpression" ||
+      parent.type === "ArrayPattern" ||
+      parent.type === "ObjectPattern" ||
+      parent.type === "ArrayExpression" ||
+      parent.type === "ObjectExpression" ||
+      parent.type === "SpreadElement" ||
+      parent.type === "RestElement" ||
+      (parent.type === "Property" &&
+        (parent.shorthand || parent.value === node))
     ) {
       node = parent;
       continue;
     }
-    if (isAssignment(parent)) {
+    if (parent.type === "AssignmentExpression") {
       return parent.left === node;
     }
-    if (
-      (ts.isPrefixUnaryExpression(parent) ||
-        ts.isPostfixUnaryExpression(parent)) &&
-      (parent.operator === ts.SyntaxKind.PlusPlusToken ||
-        parent.operator === ts.SyntaxKind.MinusMinusToken)
-    ) {
-      return parent.operand === node;
+    if (parent.type === "AssignmentPattern") {
+      if (parent.left !== node) {
+        return false;
+      }
+      node = parent;
+      continue;
     }
-    if (ts.isForInStatement(parent) || ts.isForOfStatement(parent)) {
-      return parent.initializer === node;
+    if (parent.type === "UpdateExpression") {
+      return parent.argument === node;
     }
-    return ts.isDeleteExpression(parent) && parent.expression === node;
+    if (parent.type === "ForInStatement" || parent.type === "ForOfStatement") {
+      return parent.left === node;
+    }
+    return (
+      parent.type === "UnaryExpression" &&
+      parent.operator === "delete" &&
+      parent.argument === node
+    );
   }
 };
 
@@ -622,29 +691,40 @@ const isWriteTarget = (identifier: ts.Identifier) => {
  * reference is resolved through its own enclosing scopes, so same-named
  * bindings in nested scopes are distinct.
  */
-const isWritten = (root: ts.Node, name: string, owner: ts.Node | undefined) => {
-  const visit = (node: ts.Node): boolean => {
+const isWritten = (root: Node, name: string, owner: Node | undefined) => {
+  let written = false;
+  walk(root, (node) => {
+    if (written) {
+      return "skip-children";
+    }
+    const parent = parentOf(node);
     if (
-      ts.isIdentifier(node) &&
-      node.text === name &&
+      node.type === "Identifier" &&
+      node.name === name &&
       !(
-        ts.isPropertyAccessExpression(node.parent) && node.parent.name === node
+        parent?.type === "MemberExpression" &&
+        !parent.computed &&
+        parent.property === node
       ) &&
-      !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+      !(
+        parent?.type === "Property" &&
+        !parent.shorthand &&
+        parent.key === node
+      ) &&
       bindingScope(node, name) === owner &&
       isWriteTarget(node)
     ) {
-      return true;
+      written = true;
     }
-    return ts.forEachChild(node, visit) ?? false;
-  };
-  return visit(root);
+    return undefined;
+  });
+  return written;
 };
 
-const unwrapExpression = (expression: ts.Expression): ts.Expression =>
-  ts.isParenthesizedExpression(expression) ||
-  ts.isAsExpression(expression) ||
-  ts.isSatisfiesExpression(expression)
+const unwrapExpression = (expression: Expression): Expression =>
+  expression.type === "ParenthesizedExpression" ||
+  expression.type === "TSAsExpression" ||
+  expression.type === "TSSatisfiesExpression"
     ? unwrapExpression(expression.expression)
     : expression;
 
@@ -662,20 +742,20 @@ type TrustedBinding =
     }
   | {
       kind: "function";
-      body: ts.ConciseBody;
-      node: ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+      body: Node;
+      node: Callable;
     }
-  | { kind: "const"; initializer: ts.Expression }
+  | { kind: "const"; initializer: Expression }
   | {
       kind: "parameter";
-      scope: ts.SignatureDeclaration;
+      scope: Callable;
       index: number;
-      element: ts.BindingElement | undefined;
+      element: BindingProperty | undefined;
     };
 
 type TrustedTopLevelOptions = {
   name: string;
-  source: ts.SourceFile;
+  source: SourceTree;
   access: SourceAccess;
 };
 const trustedTopLevel = ({
@@ -683,38 +763,35 @@ const trustedTopLevel = ({
   source,
   access,
 }: TrustedTopLevelOptions): TrustedBinding | undefined => {
-  if (isWritten(source, name, undefined)) {
+  if (isWritten(source.program, name, undefined)) {
     return undefined;
   }
-  for (const statement of source.statements) {
+  for (const statement of statementsOf(source)) {
     if (
-      ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === name &&
-      statement.body !== undefined
+      statement.type === "FunctionDeclaration" &&
+      statement.id?.name === name &&
+      statement.body !== null
     ) {
       return { kind: "function", body: statement.body, node: statement };
     }
-    if (!ts.isVariableStatement(statement)) {
+    if (!(statement.type === "VariableDeclaration")) {
       continue;
     }
-    const variable = statement.declarationList.declarations.find(
-      (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    const variable = statement.declarations.find(
+      (item) => item.id.type === "Identifier" && item.id.name === name,
     );
     if (variable === undefined) {
       continue;
     }
-    if (
-      statement.declarationList.getFirstToken()?.kind !==
-        ts.SyntaxKind.ConstKeyword ||
-      variable.initializer === undefined
-    ) {
+    if (statement.kind !== "const" || variable.init === null) {
       return undefined;
     }
-    const initializer = unwrapExpression(variable.initializer);
-    return ts.isArrowFunction(initializer) ||
-      ts.isFunctionExpression(initializer)
+    const initializer = unwrapExpression(variable.init);
+    return (initializer.type === "ArrowFunctionExpression" ||
+      initializer.type === "FunctionExpression") &&
+      initializer.body !== null
       ? { kind: "function", body: initializer.body, node: initializer }
-      : { kind: "const", initializer: variable.initializer };
+      : { kind: "const", initializer: variable.init };
   }
   const reference = importedReference({
     source,
@@ -726,7 +803,7 @@ const trustedTopLevel = ({
 };
 
 type TrustedBindingOptions = {
-  identifier: ts.Identifier;
+  identifier: Identifier;
   access: SourceAccess;
 };
 /**
@@ -739,38 +816,37 @@ const trustedBinding = ({
   identifier,
   access,
 }: TrustedBindingOptions): TrustedBinding | undefined => {
-  const name = identifier.text;
+  const name = identifier.name;
   const scope = bindingScope(identifier, name);
   if (scope === undefined) {
     return trustedTopLevel({
       name,
-      source: identifier.getSourceFile(),
+      source: sourceOf(identifier),
       access,
     });
   }
   if (
-    !ts.isFunctionLike(scope) ||
+    !isFunctionLike(scope) ||
     !scopeNames(scope).parameters.has(name) ||
     isWritten(scope, name, scope)
   ) {
     return undefined;
   }
-  for (const [index, parameter] of scope.parameters.entries()) {
-    if (ts.isIdentifier(parameter.name) && parameter.name.text === name) {
-      return parameter.initializer === undefined &&
-        parameter.dotDotDotToken === undefined
-        ? { kind: "parameter", scope, index, element: undefined }
-        : undefined;
+  for (const [index, parameter] of scope.params.entries()) {
+    if (parameter.type === "Identifier" && parameter.name === name) {
+      return { kind: "parameter", scope, index, element: undefined };
     }
-    if (ts.isObjectBindingPattern(parameter.name)) {
-      const element = parameter.name.elements.find(
-        (item) => ts.isIdentifier(item.name) && item.name.text === name,
+    const pattern =
+      parameter.type === "AssignmentPattern" ? parameter.left : parameter;
+    if (pattern.type === "ObjectPattern") {
+      const element = pattern.properties.find(
+        (item) =>
+          item.type === "Property" &&
+          item.value.type === "Identifier" &&
+          item.value.name === name,
       );
-      if (element !== undefined) {
-        return element.initializer === undefined &&
-          element.dotDotDotToken === undefined
-          ? { kind: "parameter", scope, index, element }
-          : undefined;
+      if (element?.type === "Property") {
+        return { kind: "parameter", scope, index, element };
       }
     }
   }
@@ -796,7 +872,7 @@ const isTrustedImport = ({
 };
 
 type CanonicalResultOptions = {
-  identifier: ts.Identifier;
+  identifier: Identifier;
   access: SourceAccess;
 };
 /** `identifier` is better-result's `Result`, trusted. */
@@ -823,6 +899,12 @@ const JOINING_RUNNERS = {
     {
       module: `${API}db/safe-db.ts`,
       exported: "abortableTx",
+      argument: 1,
+      suppliesTransaction: true,
+    },
+    {
+      module: `${API}db/safe-db.ts`,
+      exported: "resultTx",
       argument: 1,
       suppliesTransaction: true,
     },
@@ -860,43 +942,43 @@ const JOINING_RUNNERS = {
 } as const;
 
 type JoinedRunnerOptions = {
-  call: ts.CallExpression;
+  call: CallExpression;
   access: SourceAccess;
 };
 const isYieldedResultAwait = ({ call, access }: JoinedRunnerOptions) => {
-  const expression = call.expression;
-  if (
-    !ts.isPropertyAccessExpression(expression) ||
-    expression.name.text !== "await" ||
-    !ts.isIdentifier(expression.expression)
-  ) {
-    return false;
-  }
+  const expression = call.callee;
+  const parent = parentOf(call);
   return (
-    isCanonicalResult({ identifier: expression.expression, access }) &&
-    ts.isYieldExpression(call.parent) &&
-    call.parent.asteriskToken !== undefined &&
-    call.parent.expression === call
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier" &&
+    expression.property.name === "await" &&
+    expression.object.type === "Identifier" &&
+    isCanonicalResult({ identifier: expression.object, access }) &&
+    parent?.type === "YieldExpression" &&
+    parent.delegate &&
+    parent.argument === call
   );
 };
 const isJoinedRunner = ({ call, access }: JoinedRunnerOptions) => {
-  let expression: ts.Expression = call;
-  while (ts.isParenthesizedExpression(expression.parent)) {
-    expression = expression.parent;
+  let expression: Node = call;
+  let parent = parentOf(expression);
+  while (parent?.type === "ParenthesizedExpression") {
+    expression = parent;
+    parent = parentOf(expression);
   }
-  const parent = expression.parent;
-  if (ts.isAwaitExpression(parent) && parent.expression === expression) {
+  if (parent?.type === "AwaitExpression" && parent.argument === expression) {
     return true;
   }
   return (
-    ts.isCallExpression(parent) &&
-    parent.arguments.includes(expression) &&
+    parent?.type === "CallExpression" &&
+    parent.arguments.some((argument) => argument === expression) &&
     isYieldedResultAwait({ call: parent, access })
   );
 };
 
 type TransactionCallbackOptions = {
-  callback: ts.ArrowFunction | ts.FunctionExpression;
+  callback: Callable;
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
@@ -909,13 +991,11 @@ type TransactionCallbackOptions = {
  * calls must invoke the identifier itself: `.call`, `.apply` and `.bind`
  * are property accesses and are never followed.
  */
-const isCreditableFunction = (
-  node: ts.Node,
-): node is ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression =>
-  (ts.isFunctionDeclaration(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isFunctionExpression(node)) &&
-  node.asteriskToken === undefined;
+const isCreditableFunction = (node: Node): node is Callable =>
+  (node.type === "FunctionDeclaration" ||
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression") &&
+  !node.generator;
 
 const isJoinedTransactionCallback = ({
   callback,
@@ -932,24 +1012,24 @@ const isJoinedTransactionCallback = ({
   if (!isCreditableFunction(callback)) {
     return false;
   }
-  const call = callback.parent;
-  if (!ts.isCallExpression(call) || !isJoinedRunner({ call, access })) {
+  const call = parentOf(callback);
+  if (call?.type !== "CallExpression" || !isJoinedRunner({ call, access })) {
     return false;
   }
-  const expression = call.expression;
-  if (!ts.isIdentifier(expression)) {
+  const expression = call.callee;
+  if (!(expression.type === "Identifier")) {
     return false;
   }
   const binding = trustedBinding({ identifier: expression, access });
-  if (expression.text === "safeDb" && call.arguments.at(0) === callback) {
+  if (expression.name === "safeDb" && call.arguments.at(0) === callback) {
     // The route handler's own destructured `{ safeDb }` parameter.
     return (
       handlerSafeDb &&
       binding?.kind === "parameter" &&
-      binding.scope === body.parent &&
+      binding.scope === parentOf(body) &&
       binding.element !== undefined &&
-      (binding.element.propertyName === undefined ||
-        binding.element.propertyName.getText(source) === "safeDb")
+      !binding.element.computed &&
+      nodeText(binding.element.key, source) === "safeDb"
     );
   }
   return (
@@ -971,10 +1051,10 @@ const importedRunnerCredit = ({
   implementation,
   access,
 }: TransactionCallbackOptions): CalleeCallbackCredit => {
-  const call = callback.parent;
+  const call = parentOf(callback);
   if (
-    !ts.isCallExpression(call) ||
-    !ts.isIdentifier(call.expression) ||
+    call?.type !== "CallExpression" ||
+    !(call.callee.type === "Identifier") ||
     !isJoinedTransactionCallback({
       callback,
       implementation,
@@ -984,7 +1064,7 @@ const importedRunnerCredit = ({
   ) {
     return undefined;
   }
-  const binding = trustedBinding({ identifier: call.expression, access });
+  const binding = trustedBinding({ identifier: call.callee, access });
   const runner = JOINING_RUNNERS.imported.find(
     (item) =>
       binding?.kind === "import" &&
@@ -1006,7 +1086,7 @@ const isTrustedTransactionReceiver = ({
   implementation,
   access,
 }: Omit<TransactionCallbackOptions, "callback"> & {
-  receiver: ts.Identifier;
+  receiver: Identifier;
 }) => {
   const { handles } = JOINING_RUNNERS.transaction;
   const binding = trustedBinding({ identifier: receiver, access });
@@ -1020,8 +1100,8 @@ const isTrustedTransactionReceiver = ({
     binding?.kind === "parameter" &&
     binding.index === 0 &&
     binding.element === undefined &&
-    (ts.isArrowFunction(binding.scope) ||
-      ts.isFunctionExpression(binding.scope)) &&
+    (binding.scope.type === "ArrowFunctionExpression" ||
+      binding.scope.type === "FunctionExpression") &&
     calleeCallbackCredit({ callback: binding.scope, implementation, access })
       ?.suppliesTransaction === true
   );
@@ -1033,16 +1113,18 @@ const transactionMethodCredit = ({
   implementation,
   access,
 }: TransactionCallbackOptions): CalleeCallbackCredit => {
-  const call = callback.parent;
+  const call = parentOf(callback);
   const { transaction } = JOINING_RUNNERS;
-  return ts.isCallExpression(call) &&
-    ts.isPropertyAccessExpression(call.expression) &&
-    call.expression.name.text === transaction.method &&
+  return call?.type === "CallExpression" &&
+    call.callee.type === "MemberExpression" &&
+    !call.callee.computed &&
+    call.callee.property.type === "Identifier" &&
+    call.callee.property.name === transaction.method &&
     call.arguments.at(transaction.argument) === callback &&
-    ts.isIdentifier(call.expression.expression) &&
+    call.callee.object.type === "Identifier" &&
     isJoinedRunner({ call, access }) &&
     isTrustedTransactionReceiver({
-      receiver: call.expression.expression,
+      receiver: call.callee.object,
       implementation,
       access,
     })
@@ -1051,30 +1133,35 @@ const transactionMethodCredit = ({
 };
 
 /** Static key of an object literal member; undefined for computed keys. */
-const staticPropertyKey = (member: ts.ObjectLiteralElementLike) => {
-  const name = member.name;
-  return name !== undefined &&
-    (ts.isIdentifier(name) ||
-      ts.isStringLiteral(name) ||
-      ts.isNumericLiteral(name))
-    ? name.text
-    : undefined;
+const staticPropertyKey = (member: Node) => {
+  if (member.type !== "Property" || member.computed) {
+    return undefined;
+  }
+  if (member.key.type === "Identifier") {
+    return member.key.name;
+  }
+  if (
+    member.key.type === "Literal" &&
+    (typeof member.key.value === "string" ||
+      typeof member.key.value === "number")
+  ) {
+    return String(member.key.value);
+  }
+  return undefined;
 };
-
-/**
- * Whether `property` is the final value of its key: it has a static key, and
- * no later member is a spread, a computed key or the same key.
- */
-const isFinalProperty = (property: ts.PropertyAssignment) => {
+const isFinalProperty = (property: Property) => {
   const key = staticPropertyKey(property);
-  const members = property.parent.properties;
+  const parent = parentOf(property);
+  if (parent?.type !== "ObjectExpression") {
+    return false;
+  }
   return (
     key !== undefined &&
-    members
-      .slice(members.indexOf(property) + 1)
+    parent.properties
+      .slice(parent.properties.indexOf(property) + 1)
       .every(
         (member) =>
-          !ts.isSpreadAssignment(member) &&
+          member.type !== "SpreadElement" &&
           staticPropertyKey(member) !== undefined &&
           staticPropertyKey(member) !== key,
       )
@@ -1086,27 +1173,35 @@ const resultPropertyCredit = ({
   callback,
   access,
 }: TransactionCallbackOptions): CalleeCallbackCredit => {
-  const property = callback.parent;
+  const property = parentOf(callback);
   if (
-    !ts.isPropertyAssignment(property) ||
-    property.initializer !== callback ||
-    !ts.isObjectLiteralExpression(property.parent)
+    !property ||
+    !isPropertyAssignment(property) ||
+    property.value !== callback ||
+    parentOf(property)?.type !== "ObjectExpression"
   ) {
     return undefined;
   }
-  const options = property.parent;
-  const call = options.parent;
+  const options = parentOf(property);
+  if (options?.type !== "ObjectExpression") {
+    return undefined;
+  }
+  const call = parentOf(options);
   if (
     !isFinalProperty(property) ||
-    !ts.isCallExpression(call) ||
+    call?.type !== "CallExpression" ||
     call.arguments.at(0) !== options ||
-    !ts.isPropertyAccessExpression(call.expression) ||
-    !ts.isIdentifier(call.expression.expression) ||
-    !isCanonicalResult({ identifier: call.expression.expression, access })
+    !(
+      call.callee.type === "MemberExpression" &&
+      !call.callee.computed &&
+      call.callee.property.type === "Identifier"
+    ) ||
+    !(call.callee.object.type === "Identifier") ||
+    !isCanonicalResult({ identifier: call.callee.object, access })
   ) {
     return undefined;
   }
-  const method = call.expression.name.text;
+  const method = call.callee.property.name;
   const name = staticPropertyKey(property);
   const runner = JOINING_RUNNERS.calleeResultProperties.find(
     (item) => item.method === method && item.property === name,
@@ -1131,11 +1226,60 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
+const hasLockIds = (argument: Argument | undefined): boolean => {
+  if (argument === undefined || argument.type === "SpreadElement") {
+    return false;
+  }
+  const ids = unwrapExpression(argument);
+  return (
+    !(ids.type === "ArrayExpression" && ids.elements.length === 0) &&
+    !(ids.type === "Identifier" && ids.name === "undefined") &&
+    !(ids.type === "Literal" && ids.value === null) &&
+    !(ids.type === "UnaryExpression" && ids.operator === "void")
+  );
+};
+
+const hasWorkspaceParentBatch = (
+  call: CallExpression,
+  access: SourceAccess,
+): boolean => {
+  const options = call.arguments.at(0);
+  if (
+    call.callee.type !== "Identifier" ||
+    !isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateParentBatch"],
+    }) ||
+    options?.type !== "ObjectExpression" ||
+    !options.properties.every(
+      (property) =>
+        property.type === "Property" &&
+        !property.computed &&
+        !property.method &&
+        property.kind === "init",
+    )
+  ) {
+    return false;
+  }
+  const workspaceIds = options.properties.filter(
+    (property) => staticPropertyKey(property) === "workspaceIds",
+  );
+  const field = workspaceIds.at(0);
+  return (
+    workspaceIds.length === 1 &&
+    field !== undefined &&
+    isPropertyAssignment(field) &&
+    hasLockIds(field.value)
+  );
+};
+
 type AwaitedAggregateOptions = {
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
   /** Receives joined direct calls by identifier, for one-level following. */
-  calls?: ts.CallExpression[];
+  calls?: CallExpression[];
   /** Callee bodies also count locks inside joined inline callbacks. */
   inlineCallbacks?: boolean;
 };
@@ -1147,26 +1291,27 @@ const awaitedAggregateNames = ({
 }: AwaitedAggregateOptions) => {
   const { body, source } = implementation;
   const names = new Set<string>();
-  const visit = (node: ts.Node) => {
+  const visit = (node: Node) => {
     if (
       calls !== undefined &&
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
       isJoinedRunner({ call: node, access })
     ) {
       calls.push(node);
     }
     if (
-      ts.isClassLike(node) ||
-      (ts.isFunctionLike(node) &&
-        !ts.isArrowFunction(node) &&
-        !ts.isFunctionExpression(node))
+      isClassLike(node) ||
+      (isFunctionLike(node) &&
+        !(node.type === "ArrowFunctionExpression") &&
+        !(node.type === "FunctionExpression"))
     ) {
       // Declarations, methods, accessors and classes are never joined here.
       return;
     }
     if (
-      (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) &&
+      (node.type === "ArrowFunctionExpression" ||
+        node.type === "FunctionExpression") &&
       !(inlineCallbacks
         ? calleeCallbackCredit({ callback: node, implementation, access }) !==
           undefined
@@ -1180,36 +1325,49 @@ const awaitedAggregateNames = ({
       return;
     }
     if (
-      ts.isAwaitExpression(node) &&
-      ts.isCallExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression)
+      node.type === "AwaitExpression" &&
+      node.argument.type === "CallExpression" &&
+      node.argument.callee.type === "Identifier"
     ) {
-      const options = node.expression.arguments.at(0);
+      const options = node.argument.arguments.at(0);
       if (
         isTrustedImport({
-          identifier: node.expression.expression,
+          identifier: node.argument.callee,
+          access,
+          module: REGISTRY,
+          exported: ["withInvoiceMatterLocks"],
+        }) &&
+        hasLockIds(node.argument.arguments.at(1))
+      ) {
+        names.add("workspace");
+      }
+      if (hasWorkspaceParentBatch(node.argument, access)) {
+        names.add("workspace");
+      }
+      if (
+        isTrustedImport({
+          identifier: node.argument.callee,
           access,
           module: REGISTRY,
           exported: ["withAggregateLock", "withAggregateRowQuery"],
         }) &&
-        options !== undefined &&
-        ts.isObjectLiteralExpression(options)
+        options?.type === "ObjectExpression"
       ) {
         const aggregate = options.properties.find(
           (property) =>
-            ts.isPropertyAssignment(property) &&
-            property.name.getText(source) === "aggregate",
+            isPropertyAssignment(property) &&
+            nodeText(property.key, source) === "aggregate",
         );
         if (
           aggregate !== undefined &&
-          ts.isPropertyAssignment(aggregate) &&
-          ts.isStringLiteral(aggregate.initializer)
+          isPropertyAssignment(aggregate) &&
+          isStringLiteral(aggregate.value)
         ) {
-          names.add(aggregate.initializer.text);
+          names.add(aggregate.value.value);
         }
       }
     }
-    ts.forEachChild(node, visit);
+    visitChildren(node, visit);
   };
   visit(body);
   return names;
@@ -1224,57 +1382,57 @@ const packageRoot = (file: string) => {
 };
 
 type CalleeImplementationOptions = {
-  call: ts.CallExpression;
+  call: CallExpression;
   implementation: Exclude<HandlerImplementation, undefined>;
   access: SourceAccess;
 };
-const hasModifier = (statement: ts.Statement, kind: ts.SyntaxKind) =>
-  ts.canHaveModifiers(statement) &&
-  (ts.getModifiers(statement) ?? []).some((modifier) => modifier.kind === kind);
-
-/**
- * Whether `source` exports `name` only through an `export` modifier on its
- * own top-level function declaration or `const`. Default exports,
- * `export =`, export specifiers (`export { … }`, `export … from`, in either
- * position) and namespace re-exports of that name all fail closed, so
- * aliases and barrels never earn credit.
- */
-const isDirectNamedExport = (source: ts.SourceFile, name: string) => {
+/** Only a direct named export of a function or variable earns callee credit. */
+const isDirectNamedExport = (source: SourceTree, name: string) => {
   if (name === "default") {
     return false;
   }
   let declared = false;
-  for (const statement of source.statements) {
-    if (ts.isExportAssignment(statement) && statement.isExportEquals === true) {
+  for (const statement of source.program.body) {
+    if (statement.type === "TSExportAssignment") {
       return false;
     }
-    if (ts.isExportDeclaration(statement)) {
-      const clause = statement.exportClause;
-      if (
-        clause !== undefined &&
-        (ts.isNamespaceExport(clause)
-          ? clause.name.text === name
-          : clause.elements.some(
-              (element) =>
-                element.name.text === name ||
-                element.propertyName?.text === name,
-            ))
-      ) {
-        return false;
-      }
+    if (
+      statement.type === "ExportNamedDeclaration" &&
+      statement.specifiers.some(
+        (element) =>
+          (element.exported.type === "Identifier"
+            ? element.exported.name
+            : element.exported.value) === name ||
+          (element.local.type === "Identifier"
+            ? element.local.name
+            : element.local.value) === name,
+      )
+    ) {
+      return false;
     }
+    if (
+      statement.type === "ExportAllDeclaration" &&
+      statement.exported &&
+      (statement.exported.type === "Identifier"
+        ? statement.exported.name
+        : statement.exported.value) === name
+    ) {
+      return false;
+    }
+    const declaration =
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration"
+        ? statement.declaration
+        : statement;
     const declares =
-      (ts.isFunctionDeclaration(statement) && statement.name?.text === name) ||
-      (ts.isVariableStatement(statement) &&
-        statement.declarationList.declarations.some(
-          (item) => ts.isIdentifier(item.name) && item.name.text === name,
+      (declaration?.type === "FunctionDeclaration" &&
+        declaration.id?.name === name) ||
+      (declaration?.type === "VariableDeclaration" &&
+        declaration.declarations.some(
+          (item) => item.id.type === "Identifier" && item.id.name === name,
         ));
     if (declares) {
-      if (
-        declared ||
-        !hasModifier(statement, ts.SyntaxKind.ExportKeyword) ||
-        hasModifier(statement, ts.SyntaxKind.DefaultKeyword)
-      ) {
+      if (declared || statement.type !== "ExportNamedDeclaration") {
         return false;
       }
       declared = true;
@@ -1296,10 +1454,10 @@ const calleeImplementation = ({
   access,
 }: CalleeImplementationOptions): HandlerImplementation => {
   const root = packageRoot(file);
-  if (!ts.isIdentifier(call.expression) || root === undefined) {
+  if (!(call.callee.type === "Identifier") || root === undefined) {
     return undefined;
   }
-  const binding = trustedBinding({ identifier: call.expression, access });
+  const binding = trustedBinding({ identifier: call.callee, access });
   if (binding?.kind === "function") {
     return isCreditableFunction(binding.node)
       ? { body: binding.body, source, file }
@@ -1346,7 +1504,7 @@ const heldAggregateNames = ({
   implementation,
   access,
 }: HeldAggregateOptions) => {
-  const calls: ts.CallExpression[] = [];
+  const calls: CallExpression[] = [];
   const held = awaitedAggregateNames({ implementation, access, calls });
   for (const call of calls) {
     const callee = calleeImplementation({ call, implementation, access });
@@ -1365,7 +1523,7 @@ const heldAggregateNames = ({
 };
 
 type DeclaredHandlerLocksOptions = ValidateDeclarationOptions & {
-  handler: ts.Expression;
+  handler: Argument;
   access: SourceAccess;
 };
 const assertDeclaredHandlerLocks = ({
@@ -1377,14 +1535,14 @@ const assertDeclaredHandlerLocks = ({
 }: DeclaredHandlerLocksOptions) => {
   const fields = new Map(
     declaration.properties
-      .filter(ts.isPropertyAssignment)
-      .map((field) => [field.name.getText(source), field.initializer]),
+      .filter(isPropertyAssignment)
+      .map((field) => [nodeText(field.key, source), field.value]),
   );
   const type = fields.get("type");
   if (
     type !== undefined &&
-    ts.isStringLiteral(type) &&
-    type.text === "independent"
+    isStringLiteral(type) &&
+    type.value === "independent"
   ) {
     return;
   }
@@ -1401,13 +1559,13 @@ const assertDeclaredHandlerLocks = ({
   }
   const held = heldAggregateNames({ implementation, access });
   const aggregates = fields.get("aggregates");
-  if (aggregates === undefined || !ts.isArrayLiteralExpression(aggregates)) {
+  if (aggregates === undefined || !(aggregates.type === "ArrayExpression")) {
     panic(`Missing declared aggregate list in ${file}`);
   }
   for (const aggregate of aggregates.elements) {
-    if (!ts.isStringLiteral(aggregate) || !held.has(aggregate.text)) {
+    if (!isStringLiteral(aggregate) || !held.has(aggregate.value)) {
       panic(
-        `Declared handler must await withAggregateLock for ${aggregate.getText(source)} in ${file}`,
+        `Declared handler must await withAggregateLock for ${elementText(aggregate, source)} in ${file}`,
       );
     }
   }
@@ -1421,38 +1579,36 @@ const declarationNames = ({
   file,
   access,
 }: {
-  source: ts.SourceFile;
+  source: SourceTree;
   file: string;
   access: SourceAccess;
 }) => {
   const names = new Set<string>();
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of source.program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
     const fromOwner =
-      access.resolveSourceModule({
-        file,
-        name: statement.moduleSpecifier.text,
-      }) === OWNER;
-    const bindings = statement.importClause?.namedBindings;
-    if (fromOwner && bindings !== undefined && ts.isNamespaceImport(bindings)) {
-      panic(`Import ${DECLARE} by name from its owner in ${file}`);
-    }
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const item of bindings.elements) {
-      if ((item.propertyName ?? item.name).text !== DECLARE) {
+      access.resolveSourceModule({ file, name: statement.source.value }) ===
+      OWNER;
+    for (const item of statement.specifiers) {
+      if (fromOwner && item.type === "ImportNamespaceSpecifier") {
+        panic(`Import ${DECLARE} by name from its owner in ${file}`);
+      }
+      if (item.type !== "ImportSpecifier") {
         continue;
       }
-      if (!fromOwner || item.isTypeOnly) {
+      const exported =
+        item.imported.type === "Identifier"
+          ? item.imported.name
+          : item.imported.value;
+      if (exported !== DECLARE) {
+        continue;
+      }
+      if (!fromOwner || item.importKind === "type") {
         panic(`Import ${DECLARE} from ${OWNER} in ${file}`);
       }
-      names.add(item.name.text);
+      names.add(item.local.name);
     }
   }
   return names;
@@ -1471,26 +1627,28 @@ const verifyFileDeclarations = (file: string, access: SourceAccess) => {
   const source = parse({ file, source: content });
   const names = declarationNames({ source, file, access });
   let verified = 0;
-  const visit = (node: ts.Node) => {
+  const visit = (node: Node) => {
     if (
-      ts.isIdentifier(node) &&
-      (node.text === DECLARE || names.has(node.text)) &&
-      !ts.isImportSpecifier(node.parent)
+      node.type === "Identifier" &&
+      (node.name === DECLARE || names.has(node.name)) &&
+      parentOf(node)?.type !== "ImportSpecifier"
     ) {
-      const call = node.parent;
+      const call = parentOf(node);
       if (
-        !names.has(node.text) ||
-        !ts.isCallExpression(call) ||
-        call.expression !== node
+        !names.has(node.name) ||
+        call?.type !== "CallExpression" ||
+        call.callee !== node
       ) {
-        panic(`Call ${DECLARE} directly in ${file}: ${call.getText(source)}`);
+        panic(
+          `Call ${DECLARE} directly in ${file}: ${nodeText(call ?? node, source)}`,
+        );
       }
       const [handler, declaration] = call.arguments;
       if (
         call.arguments.length !== 2 ||
         handler === undefined ||
         declaration === undefined ||
-        !ts.isObjectLiteralExpression(declaration)
+        !(declaration.type === "ObjectExpression")
       ) {
         panic(`Invalid aggregate mutation declaration in ${file}`);
       }
@@ -1510,9 +1668,9 @@ const verifyFileDeclarations = (file: string, access: SourceAccess) => {
       });
       verified += 1;
     }
-    ts.forEachChild(node, visit);
+    visitChildren(node, visit);
   };
-  visit(source);
+  visit(source.program);
   return verified;
 };
 
@@ -1620,7 +1778,7 @@ const aggregateMutationComparisonCommit = () => {
   const resolved = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (resolved.status !== 0) {
     panic(`Aggregate mutation comparison ref is unavailable: ${requested}`);
@@ -1631,7 +1789,7 @@ const aggregateMutationComparisonCommit = () => {
   const base = spawnSync(
     "git",
     ["merge-base", "HEAD", resolved.stdout.trim()],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (base.status !== 0) {
     panic(
@@ -1674,6 +1832,7 @@ if (import.meta.main) {
   const undeclared = await undeclaredServedMutations();
   const baseExists =
     spawnSync("git", ["cat-file", "-e", `${comparisonCommit}:${BASELINE}`], {
+      maxBuffer: 2 ** 30,
       cwd: ROOT,
       encoding: "utf-8",
     }).status === 0;
@@ -1699,6 +1858,7 @@ if (import.meta.main) {
           baselineSchema,
           JSON.parse(
             spawnSync("git", ["show", `${comparisonCommit}:${BASELINE}`], {
+              maxBuffer: 2 ** 30,
               cwd: ROOT,
               encoding: "utf-8",
             }).stdout,

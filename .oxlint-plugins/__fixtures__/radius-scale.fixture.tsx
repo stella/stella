@@ -25,4 +25,5 @@ export const _c = () => (
 export const _d = () => (
   <div className="rounded-lg before:rounded-[calc(var(--radius-lg)-1px)]" />
 );
+// expect-clean: radius-scale/radius-scale
 export const _e = () => <span className="rounded-sm rounded-t-sm" />;

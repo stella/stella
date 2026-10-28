@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -19,9 +19,11 @@ import type {
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 type SourceChipsProps = {
   messageId: string;
@@ -246,9 +248,7 @@ const SourceChip = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const resolvedWorkspaceId =
     workspaceId ?? sourceDocument.workspaceId ?? undefined;
 
@@ -259,17 +259,18 @@ const SourceChip = ({
 
     detached(
       (async () => {
-        const result = await openEntityInInspector(
-          sourceDocument.entityId,
-          sourceDocument.title,
-          resolvedWorkspaceId,
-        );
+        const result = await openEntityInInspector({
+          documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+          entityId: sourceDocument.entityId,
+          label: sourceDocument.title,
+          workspaceId: resolvedWorkspaceId,
+        });
 
         if (result.type === "folder") {
           await navigateToWorkspaceFolder({
             folderId: result.entityId,
             navigate,
-            pathname,
+            router,
             queryClient,
             targetWorkspaceId: result.workspaceId,
           });

@@ -162,6 +162,7 @@ export const CalendarDayCell = ({
                   type="button"
                 />
               }
+              tooltip={t("common.add")}
             >
               <PlusIcon className="size-3.5" />
             </MenuTrigger>

@@ -19,6 +19,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -53,8 +54,9 @@ import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The statutes a decision applies, as the decision itself states them.
@@ -123,7 +125,7 @@ export const ProvisionsCited = ({
     ...statutesResolveOptions([...citedWorkByGroup.values()]),
     enabled: open && citedWorkByGroup.size > 0,
   });
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   useQueryViewError(resolvedView, "ProvisionsCited:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
@@ -245,8 +247,10 @@ export const ProvisionsCited = ({
         onClick={() => setLocalOpen(!open)}
         type="button"
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn("size-3.5 transition-transform", open && "rotate-90")}
+          flip={!open}
+          icon={ChevronRightIcon}
         />
         {t("caseLaw.viewer.provisionsCited")}
       </button>
@@ -283,7 +287,7 @@ const WorkReferences = ({
         references: group.provisions,
       }),
   });
-  const versionsView = useQueryView(versionsQuery);
+  const versionsView = queryView(versionsQuery);
   useQueryViewError(versionsView, "WorkReferences:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;

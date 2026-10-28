@@ -13,6 +13,7 @@ import type {
   ReaderAnswerSpan,
   ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
+import { readerSelectionMatches } from "@stll/legal-ast/case-law-reader";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
@@ -126,39 +127,24 @@ true satisfies MissingAnchorColumn extends never ? true : never;
 true satisfies UnexpectedAnchorColumn extends never ? true : never;
 
 /**
- * The spans as a selection when each matches its paragraph's text and the
- * paragraphs follow the decision's reading order without repeats; otherwise
- * undefined. The decision's own text bounds the selection, so no length cap.
+ * The spans as a selection when the reader offers them; otherwise undefined.
+ * The reader runs the same check before sending, so both refuse alike.
  */
 const selectionIn = (
   paragraphs: ReaderAnswerDecision["paragraphs"],
   spans: readonly ReaderAnswerSpan[],
 ): ReaderAnswerSpans | undefined => {
   const [first, ...rest] = spans;
-  if (first === undefined) {
-    return undefined;
-  }
-  const indexById = new Map(
-    paragraphs.map(({ paragraphId }, index) => [paragraphId, index] as const),
-  );
-  let previous = -1;
-  for (const span of spans) {
-    const index = indexById.get(span.paragraphId);
-    const text = index === undefined ? undefined : paragraphs[index]?.text;
-    if (
-      index === undefined ||
-      text === undefined ||
-      index <= previous ||
-      span.startOffset < 0 ||
-      span.endOffset > text.length ||
-      span.endOffset <= span.startOffset ||
-      text.slice(span.startOffset, span.endOffset) !== span.quote
-    ) {
-      return undefined;
-    }
-    previous = index;
-  }
-  return [first, ...rest];
+  return first !== undefined &&
+    readerSelectionMatches(
+      paragraphs.map(({ paragraphId, text }) => ({
+        anchorId: paragraphId,
+        text,
+      })),
+      spans.map((span) => ({ ...span, anchorId: span.paragraphId })),
+    )
+    ? [first, ...rest]
+    : undefined;
 };
 
 type RegenerateLastReaderAnswerOptions = {
@@ -278,6 +264,7 @@ const readReaderAnswerContext = async ({
           (cause) =>
             new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Decision reader is unavailable",
               cause,
             }),
@@ -303,6 +290,7 @@ const readReaderAnswerContext = async ({
           status: 400,
           code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
           message: "Selection does not match the decision paragraph",
+          hint: "Select the text again from the decision as it is shown now.",
         }),
       );
     }

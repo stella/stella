@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import images from "./ci-service-images.json" with { type: "json" };
+import { expressionValueSources } from "./github-expression";
 
 const root = path.resolve(import.meta.dir, "..");
 const record = (value: unknown): Record<string, unknown> => {
@@ -189,34 +190,55 @@ const assertWorkflowImages = (jobs: Record<string, unknown>) => {
       expect(container["image"], jobName).not.toContain(
         "ghcr.io/stella/ci-mirror/",
       );
-      const reference = /needs\.([\w-]+)\.outputs\.([\w-]+)/u.exec(
-        container["image"],
-      );
-      if (reference === null) {
+      if (
+        !container["image"].includes("${{") &&
+        !/needs\.[\w-]+\.outputs\.[\w-]+/u.test(container["image"])
+      ) {
         continue;
       }
-      const producerName = reference.at(1);
-      const outputName = reference.at(2);
-      if (producerName === undefined || outputName === undefined) {
-        throw new TypeError("Expected image output reference");
+      for (const source of expressionValueSources(container["image"])) {
+        if (source.type === "literal") {
+          expect(
+            source.value === "" ||
+              images.some(({ source: image }) => image === source.value),
+            `${jobName}: unregistered image fallback`,
+          ).toBe(true);
+          continue;
+        }
+        if (source.type === "computed") {
+          throw new TypeError(`${jobName}: unproven computed image`);
+        }
+        const reference = /^needs\.([\w-]+)\.outputs\.([\w-]+)$/u.exec(
+          source.path,
+        );
+        const producerName = reference?.at(1);
+        const outputName = reference?.at(2);
+        if (producerName === undefined || outputName === undefined) {
+          throw new TypeError("Expected image output reference");
+        }
+        const producer = record(jobs[producerName]);
+        const output = resolverOutputs(producer).find(
+          ({ name }) => name === outputName,
+        );
+        if (output === undefined) {
+          throw new TypeError(
+            `${jobName}: unresolved image output ${source.path}`,
+          );
+        }
+        expect(images.map(({ name }) => name)).toContain(output.imageName);
+        const needs = job["needs"];
+        expect(Array.isArray(needs) ? needs : [needs], jobName).toContain(
+          producerName,
+        );
+        expect(job).toHaveProperty("permissions.packages", "read");
+        expect(typeof container["credentials"]).toBe("string");
+        expect(container["credentials"]).toContain(
+          `startsWith(needs.${producerName}.outputs.${outputName}, 'ghcr.io/')`,
+        );
+        expect(container["credentials"]).toContain("secrets.GITHUB_TOKEN");
+        expect(container["credentials"]).toContain("fromJSON(format(");
+        expect(container["credentials"]).toContain("|| fromJSON('{}')");
       }
-      const producer = record(jobs[producerName]);
-      expect(
-        resolverOutputs(producer).map(({ name }) => name),
-        jobName,
-      ).toContain(outputName);
-      const needs = job["needs"];
-      expect(Array.isArray(needs) ? needs : [needs], jobName).toContain(
-        producerName,
-      );
-      expect(job).toHaveProperty("permissions.packages", "read");
-      expect(typeof container["credentials"]).toBe("string");
-      expect(container["credentials"]).toContain(
-        `startsWith(needs.${producerName}.outputs.${outputName}, 'ghcr.io/')`,
-      );
-      expect(container["credentials"]).toContain("secrets.GITHUB_TOKEN");
-      expect(container["credentials"]).toContain("fromJSON(format(");
-      expect(container["credentials"]).toContain("|| fromJSON('{}')");
     }
   }
 };
@@ -240,6 +262,93 @@ test("CI service guard rejects literal private mirror images", () => {
       },
     }),
   ).toThrow("ghcr.io/stella/ci-mirror/");
+});
+
+// Keep the fixture's resolver, dependencies and credentials coupled to the real
+// workflow; each case changes only the expression being guarded.
+const imageWorkflowFixture = (image: string) => {
+  const jobs = record(readWorkflow(".github/workflows/ci.yml")["jobs"]);
+  const consumer = record(jobs["postgres-service-suites"]);
+  const services = record(consumer["services"]);
+  const database = record({ ...record(services["dev_seed_postgres"]), image });
+  const job = record({ ...consumer, services: { database } });
+  return {
+    jobs: { "ci-plan": jobs["ci-plan"], "postgres-service-suites": job },
+    consumer: job,
+    database,
+  };
+};
+
+test.each([
+  "",
+  `\${{ '' }}`,
+  `\${{ false && needs.ci-plan.outputs.missing || '' }}`,
+  `\${{ needs.ci-plan.outputs.postgres }}`,
+  `\${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.postgres || '' }}`,
+  `\${{ (matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true') && needs.ci-plan.outputs.postgres || '' }}`,
+  `\${{ needs.ci-plan.outputs.dev_seed_required != 'needs.missing.outputs.fake' && needs.ci-plan.outputs.postgres || '' }}`,
+])(
+  "service image provenance accepts resolved value branches in %s",
+  (image) => {
+    assertWorkflowImages(imageWorkflowFixture(image).jobs);
+  },
+);
+
+test.each([
+  [`\${{ false }}`, "unregistered image fallback"],
+  [
+    `\${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.missing || '' }}`,
+    "unresolved image output",
+  ],
+  [
+    `\${{ needs.ci-plan.outputs.dev_seed_required || needs.ci-plan.outputs.postgres }}`,
+    "unresolved image output",
+  ],
+  [
+    `\${{ needs.ci-plan.outputs.postgres || needs.ci-plan.outputs.missing }}`,
+    "unresolved image output",
+  ],
+  [
+    `\${{ needs.ci-plan.outputs.postgres || matrix.image }}`,
+    "Expected image output reference",
+  ],
+  [`\${{ needs.unknown.outputs.image }}`, "Expected workflow object"],
+  [
+    `\${{ format('{0}', needs.ci-plan.outputs.postgres) }}`,
+    "unproven computed image",
+  ],
+  [
+    `\${{ needs.ci-plan.outputs.postgres || 'unregistered:latest' }}`,
+    "unregistered image fallback",
+  ],
+  [
+    `\${{ needs.ci-plan.outputs.dev_seed_required == 'true' || needs.ci-plan.outputs.postgres }}`,
+    "unregistered image fallback",
+  ],
+])(
+  "service image provenance rejects unproven result branches in %s",
+  (image, message) => {
+    expect(() =>
+      assertWorkflowImages(imageWorkflowFixture(image).jobs),
+    ).toThrow(message);
+  },
+);
+
+test("conditional service images retain dependency, permission and credential requirements", () => {
+  const image = `\${{ needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.postgres || '' }}`;
+  const missingDependency = imageWorkflowFixture(image);
+  delete missingDependency.consumer["needs"];
+  expect(() => assertWorkflowImages(missingDependency.jobs)).toThrow("ci-plan");
+
+  const missingPermission = imageWorkflowFixture(image);
+  delete missingPermission.consumer["permissions"];
+  expect(() => assertWorkflowImages(missingPermission.jobs)).toThrow(
+    "permissions.packages",
+  );
+
+  const missingCredentials = imageWorkflowFixture(image);
+  delete missingCredentials.database["credentials"];
+  expect(() => assertWorkflowImages(missingCredentials.jobs)).toThrow("string");
 });
 
 test("mirror credentials are cleared before stack application and browser execution, including failures", () => {

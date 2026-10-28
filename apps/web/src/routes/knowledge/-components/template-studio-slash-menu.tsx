@@ -44,8 +44,9 @@ import {
   clausesOptions as clauseLibraryOptions,
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
@@ -271,7 +272,7 @@ export const useTemplateStudioSlashMenu = ({
     }),
     enabled: slashClausesEnabled,
   });
-  const slashClauseDataView = useQueryView(slashClauseDataQuery);
+  const slashClauseDataView = queryView(slashClauseDataQuery);
   useQueryViewError(slashClauseDataView, "useTemplateStudioSlashMenu:query");
   const slashClauseData =
     slashClauseDataView.type === "items"

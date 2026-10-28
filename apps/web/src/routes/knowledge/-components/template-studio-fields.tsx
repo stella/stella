@@ -1157,7 +1157,7 @@ const FieldConditionSection = ({
           }
         }}
         size="sm"
-        title={
+        tooltip={
           condition.canRemove
             ? undefined
             : t("templates.studio.removeConditionBlocked")
@@ -1531,7 +1531,7 @@ export const FieldFace = ({
               disabled={repeat.disabledKey !== null}
               onClick={() => toggleRepeatable(repeat.kind !== "on")}
               size="sm"
-              title={
+              tooltip={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
               variant={repeat.kind === "on" ? "secondary" : "outline"}
