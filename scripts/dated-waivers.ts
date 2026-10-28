@@ -564,6 +564,17 @@ const flakyTestQuarantines = (content: string): readonly QuarantineEntry[] => {
     : panic(parsed.errors.join("\n"));
 };
 
+// Tests and fixtures carry sample timestamps, never waivers, whether they live
+// in a fixtures directory or are named `*.fixture.json` / `*.fixtures.json`.
+export const isExpiryPolicySource = (file: string): boolean =>
+  ((/^(?:apps|packages)\//u.test(file) &&
+    /\.(?:[cm]?tsx?|json)$/u.test(file)) ||
+    (/(?:^(?:scripts\/|\.claude\/mcp\/|\.oxlint-plugins\/|\.github\/)|config|baseline|waivers|allowances|bunfig\.toml$)/u.test(
+      file,
+    ) &&
+      /\.(?:ts|json|toml|ya?ml)$/u.test(file))) &&
+  !/(?:\.test\.|\.spec\.|\.fixtures?\.|fixtures\/|__fixtures__\/)/u.test(file);
+
 export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   const root = path.resolve(import.meta.dir, "..");
   const read = (file: string): string =>
@@ -571,16 +582,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   const files = tracked.filter(
     (file) => file === "bunfig.toml" || file.endsWith("/bunfig.toml"),
   );
-  const policyFiles = tracked.filter(
-    (file) =>
-      ((/^(?:apps|packages)\//u.test(file) &&
-        /\.(?:[cm]?tsx?|json)$/u.test(file)) ||
-        (/(?:^(?:scripts\/|\.claude\/mcp\/|\.oxlint-plugins\/|\.github\/)|config|baseline|waivers|allowances|bunfig\.toml$)/u.test(
-          file,
-        ) &&
-          /\.(?:ts|json|toml|ya?ml)$/u.test(file))) &&
-      !/(?:\.test\.|\.spec\.|fixtures\/|__fixtures__\/)/u.test(file),
-  );
+  const policyFiles = tracked.filter(isExpiryPolicySource);
   const uncovered = uncoveredExpirySources(
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([

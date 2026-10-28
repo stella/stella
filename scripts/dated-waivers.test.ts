@@ -18,6 +18,7 @@ import {
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
+  isExpiryPolicySource,
   PENDING_CONTRACT_MIGRATIONS_SOURCE,
   readTestQuarantines,
   RECHECK_INSTRUCTIONS,
@@ -358,6 +359,26 @@ test("impossible dates, missing anchors and new expiry-bearing owners fail close
       new Set(["known.ts"]),
     ),
   ).toEqual(["apps/example/src/deadline.ts", "new.json"]);
+});
+test("expiry census skips tests and fixtures in every naming", () => {
+  for (const file of [
+    "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/api-contract/src/desktop-presence-request.fixture.json",
+    "apps/desktop/fixtures/activity-contract.json",
+    "packages/mcp-kit/src/__fixtures__/registry.json",
+    "apps/api/src/lib/deadline.test.ts",
+    "apps/web/src/deadline.spec.tsx",
+  ]) {
+    expect(isExpiryPolicySource(file)).toBe(false);
+  }
+  for (const file of [
+    "packages/api-contract/src/desktop-runner.ts",
+    "apps/api/src/lib/fixture-loader.ts",
+    "scripts/suppression-waivers.json",
+    "bunfig.toml",
+  ]) {
+    expect(isExpiryPolicySource(file)).toBe(true);
+  }
 });
 test("documentation inventory derives from injected typed owners including none", () => {
   for (const docs of [
