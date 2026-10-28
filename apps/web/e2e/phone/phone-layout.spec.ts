@@ -42,7 +42,8 @@ test.describe.serial("pages fit a phone", () => {
     apiRequest = await playwright.request.newContext({
       storageState: STORAGE_STATE,
     });
-    const workspace = await createTestWorkspace(apiRequest, "phone-layout");
+    // The correspondence seed only writes into a workspace with this label.
+    const workspace = await createTestWorkspace(apiRequest, "route-smoke");
     await registerDeferredE2eCleanup(testInfo.project.outputDir, {
       type: E2E_CLEANUP_TARGET_TYPE.WORKSPACE,
       id: workspace.id,
