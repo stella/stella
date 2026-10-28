@@ -67,8 +67,8 @@
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tiptap/core": "^3.31.4",
-    "@tiptap/pm": "^3.31.4",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
@@ -78,8 +78,8 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
-    "@tiptap/core": "^3.31.4",
-    "@tiptap/pm": "^3.31.4",
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
     "@types/react": ">=19",
     "react": ">=19"
   },
