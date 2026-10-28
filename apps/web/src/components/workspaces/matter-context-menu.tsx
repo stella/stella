@@ -312,7 +312,9 @@ export const useMatterActions = (
       archiveWorkspace.mutate(
         { workspaceId: target.id },
         {
-          onError: (error) => notifyUserError(error, t("errors.actionFailed")),
+          onError: (error) => {
+            notifyUserError(error, t("errors.actionFailed"));
+          },
         },
       ),
     onDelete: () => setDeleteOpen(true),
