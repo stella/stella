@@ -5,7 +5,9 @@ import path from "node:path";
 // A sparse checkout materializes only the listed paths, so a listed script
 // that calls a sibling (`$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh`,
 // `$script_dir/x.sh`) fails with exit 127 at run time unless the sibling is
-// listed too. Follow those references transitively for every sparse checkout.
+// listed too. A listed TypeScript script fails module resolution the same way
+// when a relative runtime import is missing. Follow both transitively for every
+// sparse checkout.
 const SIBLING_REFERENCE =
   /(?:\$\(dirname (?:-- )?"(?:\$\{BASH_SOURCE\[0\]\}|\$0)"\)|\$\{?script_dir\}?)\/([\w./-]+\.(?:sh|jq))/gu;
 
@@ -19,6 +21,29 @@ const siblingReferences = (file: string, source: string): string[] =>
     path.posix.normalize(path.posix.join(path.posix.dirname(file), target)),
   );
 
+const transpiler = new Bun.Transpiler({ loader: "ts" });
+
+// Runtime imports only: Bun erases type-only imports, so they need no file.
+// The scanner rejects a shebang, which executable scripts start with.
+const relativeImports = (file: string, source: string): string[] =>
+  transpiler
+    .scanImports(source.replace(/^#!.*/u, ""))
+    .map(({ path: specifier }) => specifier)
+    .filter(
+      (specifier) => specifier.startsWith("./") || specifier.startsWith("../"),
+    )
+    .map((specifier) => {
+      const target = path.posix.normalize(
+        path.posix.join(path.posix.dirname(file), specifier),
+      );
+      return path.posix.extname(target) === "" ? `${target}.ts` : target;
+    });
+
+const dependencies = (file: string, source: string): string[] =>
+  file.endsWith(".ts")
+    ? relativeImports(file, source)
+    : siblingReferences(file, source);
+
 const isCovered = (file: string, listed: readonly string[]): boolean =>
   listed.some(
     (entry) =>
@@ -28,7 +53,9 @@ const isCovered = (file: string, listed: readonly string[]): boolean =>
 const uncoveredDependencies = (listed: readonly string[]): string[] => {
   const missing = new Set<string>();
   const seen = new Set<string>();
-  const pending = listed.filter((entry) => entry.endsWith(".sh"));
+  const pending = listed.filter(
+    (entry) => entry.endsWith(".sh") || entry.endsWith(".ts"),
+  );
   for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
     if (seen.has(file)) {
       continue;
@@ -38,10 +65,7 @@ const uncoveredDependencies = (listed: readonly string[]): string[] => {
     if (!existsSync(absolute) || statSync(absolute).isDirectory()) {
       continue;
     }
-    for (const target of siblingReferences(
-      file,
-      readFileSync(absolute, "utf-8"),
-    )) {
+    for (const target of dependencies(file, readFileSync(absolute, "utf-8"))) {
       if (!isCovered(target, listed)) {
         missing.add(target);
       }
@@ -76,6 +100,23 @@ test("sibling references resolve relative to the referencing script", () => {
     "scripts/gate.jq",
     "scripts/d.sh",
   ]);
+});
+
+test("relative runtime imports resolve relative to the importing script", () => {
+  expect(
+    relativeImports(
+      "scripts/a.ts",
+      [
+        "#!/usr/bin/env bun",
+        'import { b } from "./b";',
+        'import type { C } from "./c";',
+        'import data from "../lib/d.json" with { type: "json" };',
+        'import { e } from "better-result";',
+        'const f = await import("./f.ts");',
+        "export const g: C = { b, data, e, f };",
+      ].join("\n"),
+    ).toSorted(),
+  ).toEqual(["lib/d.json", "scripts/b.ts", "scripts/f.ts"]);
 });
 
 test("every sparse checkout includes the scripts its listed scripts call", () => {

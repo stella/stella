@@ -26,11 +26,16 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  servedBlockText,
+  type ServedTextBlock,
+} from "@/api/lib/case-law/served-paragraph-number";
+import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -39,6 +44,8 @@ import {
 } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type { StableExceptionKey } from "@/api/lib/observability/exception-fingerprint";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getRequestId } from "@/api/lib/observability/request-context";
@@ -848,26 +855,40 @@ export const searchIndexUnavailableResult = (
  */
 export const internalFailureResult = (
   error: unknown,
+  fingerprintKey: StableExceptionKey,
 ): InternalToolErrorResult => {
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(error, { source: "mcp" });
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  const timeout = publicReadTimeoutError(error);
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
   }
-  captureError(error, { source: "mcp" });
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
+  if (timeout !== null) {
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      retryable: true,
+    });
+  }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
+  }
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",
@@ -1136,8 +1157,8 @@ export const getWorkspaceStatus = ({
 
 /**
  * Resolve an accessible workspace that is also writable. Mirrors the HTTP
- * `validateWorkspaceAccess` macro, which rejects any workspace whose status is
- * not "active": archived matters stay readable but are read-only through MCP
+ * core's `authorizeWorkspace`, which by default rejects any workspace whose
+ * status is not "active": archived matters stay readable but are read-only through MCP
  * write tools. Returns the branded id when active, or an error result naming
  * the reason (not accessible vs archived). Callers that need to allow an
  * unarchive (`save_matter` with status:"active") should use
@@ -1212,7 +1233,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly { plainText: string }[] | null;
+  blocks: readonly ServedTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1223,7 +1244,9 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .flatMap((block) =>
+      block.plainText === "" ? [] : [servedBlockText(block)],
+    )
     .join("\n\n");
 };
 

@@ -1,11 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import { readScopes } from "./oxlint-config-scopes.ts";
 import { severityOf } from "./oxlint-effective-config.ts";
-import { parseSource } from "./parse-memo.ts";
 
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
@@ -18,6 +17,7 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "api-client-chain.ts",
   "icon-ownership.ts",
   "module-id.ts",
+  "network-call.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
   "restricted-import.ts",
@@ -43,52 +43,67 @@ const errors: string[] = [];
 let ruleCount = 0;
 
 export const ruleNamesFromSource = (source: string): string[] => {
-  const tree = parseSource({ fileName: "plugin.ts", text: source });
+  const tree = parseSource("plugin.ts", source).program;
   const constants = new Map<string, string>();
-  for (const statement of tree.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  for (const entry of tree.body) {
+    const statement =
+      entry.type === "ExportNamedDeclaration" && entry.declaration
+        ? entry.declaration
+        : entry;
+    if (statement.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer !== undefined &&
-        ts.isStringLiteral(declaration.initializer)
+        declaration.id.type === "Identifier" &&
+        declaration.init?.type === "Literal" &&
+        typeof declaration.init.value === "string"
       ) {
-        constants.set(declaration.name.text, declaration.initializer.text);
+        constants.set(declaration.id.name, declaration.init.value);
       }
     }
   }
   const names = new Set<string>();
-  const visit = (node: ts.Node) => {
+  walk(tree, (node) => {
     if (
-      ts.isPropertyAssignment(node) &&
-      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-      node.name.text === "rules" &&
-      ts.isObjectLiteralExpression(node.initializer)
+      node.type !== "Property" ||
+      node.computed ||
+      node.method ||
+      node.shorthand ||
+      node.kind !== "init" ||
+      !(
+        (node.key.type === "Identifier" && node.key.name === "rules") ||
+        (node.key.type === "Literal" && node.key.value === "rules")
+      ) ||
+      node.value.type !== "ObjectExpression"
     ) {
-      for (const property of node.initializer.properties) {
-        if (!ts.isPropertyAssignment(property)) {
-          continue;
+      return;
+    }
+    for (const property of node.value.properties) {
+      if (
+        property.type !== "Property" ||
+        property.method ||
+        property.shorthand ||
+        property.kind !== "init"
+      ) {
+        continue;
+      }
+      const name = property.key;
+      let ruleName: string | undefined;
+      if (property.computed) {
+        if (name.type === "Identifier") {
+          ruleName = constants.get(name.name);
         }
-        const name = property.name;
-        let ruleName: string | undefined;
-        if (ts.isStringLiteral(name) || ts.isIdentifier(name)) {
-          ruleName = name.text;
-        } else if (
-          ts.isComputedPropertyName(name) &&
-          ts.isIdentifier(name.expression)
-        ) {
-          ruleName = constants.get(name.expression.text);
-        }
-        if (ruleName !== undefined) {
-          names.add(ruleName);
-        }
+      } else if (name.type === "Identifier") {
+        ruleName = name.name;
+      } else if (name.type === "Literal" && typeof name.value === "string") {
+        ruleName = name.value;
+      }
+      if (ruleName !== undefined) {
+        names.add(ruleName);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return [...names];
 };
 

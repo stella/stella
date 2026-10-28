@@ -8,6 +8,7 @@ import {
   visualLinkSchema,
 } from "@stll/api-contract/visual-sandbox";
 import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
+import { declareFingerprintFields } from "@stll/errors";
 
 const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
 export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
@@ -15,7 +16,11 @@ export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;
 class VisualMarkupError extends TaggedError("VisualMarkupError")<{
   message: string;
   reason: "size" | "depth" | "nodes" | "input";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const PRESENTATION_TAGS = new Set([
   "a",

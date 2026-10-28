@@ -6,7 +6,6 @@ import {
   loadOrganizationMachineApiKey,
   machineApiKeyAlreadyRevoked,
   machineApiKeyExpiresInDaysSchema,
-  mintMachineApiKey,
   validateGrantablePermissions,
 } from "@/api/handlers/api-keys/mint";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -14,6 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
+import { issueMachineApiKey } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 const rotateApiKeyBody = v.object({
   keyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
@@ -82,7 +82,8 @@ const rotateMachineApiKey = createSafeRootHandler(
     }
 
     const minted = yield* Result.await(
-      mintMachineApiKey({
+      issueMachineApiKey({
+        sessionId: session.id,
         name: existing.name,
         scopes: existing.scopes,
         permissions: existing.permissions,
@@ -92,6 +93,18 @@ const rotateMachineApiKey = createSafeRootHandler(
         audience: existing.audience,
         userId: user.id,
         organizationId: session.activeOrganizationId,
+        recordAuditEvent,
+        auditEvent: (key) => ({
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+          resourceId: key.id,
+          metadata: {
+            name: key.name,
+            scopes: key.scopes,
+            permissions: key.permissions,
+            rotatedFrom: existing.id,
+          },
+        }),
       }),
     );
 
@@ -105,17 +118,6 @@ const rotateMachineApiKey = createSafeRootHandler(
     yield* Result.await(
       safeDb(async (tx) => {
         await recordAuditEvent(tx, [
-          {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
-            resourceId: minted.id,
-            metadata: {
-              name: minted.name,
-              scopes: minted.scopes,
-              permissions: minted.permissions,
-              rotatedFrom: existing.id,
-            },
-          },
           {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,

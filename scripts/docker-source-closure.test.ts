@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -9,7 +9,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import {
@@ -1434,7 +1433,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1459,7 +1458,7 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
@@ -1467,9 +1466,9 @@ describe("Docker source closure", () => {
   });
 
   // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
-  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
     expect(
-      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
   }, 40_000);
 
@@ -1701,11 +1700,12 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const parsed = ts.parseConfigFileTextToJson(
-        configuration,
-        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+      const parsed = Result.try(() =>
+        Bun.JSONC.parse(
+          readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+        ),
       );
-      expect(parsed.error, configuration).toBeUndefined();
+      expect(parsed.isOk(), configuration).toBe(true);
       const config = v.parse(
         v.looseObject({
           compilerOptions: v.optional(
@@ -1714,7 +1714,7 @@ describe("Docker source closure", () => {
             }),
           ),
         }),
-        parsed.config,
+        parsed.unwrapOr(undefined),
       );
       for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
         patterns.add(pattern);

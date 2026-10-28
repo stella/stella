@@ -23,13 +23,15 @@ import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { removalReconciliationCountsQuery } from "@/api/lib/legal-search/removal-reconciliation-store";
 import {
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 
 /**
- * Where the standing listing reconciliation stands for one source.
+ * Durable listing and removal reconciliation for one source.
  *
  * Null for a source it has never touched. The handler cannot see adapters, so
  * it cannot ask whether a source has the capability; the absence of both a
@@ -47,6 +49,8 @@ type SourceReconciliationStatus = {
   parked: number;
   /** Listed decisions the retry schedule gave up on; accounted for, not held. */
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
   lastCheckedAt: string | null;
 };
 
@@ -127,6 +131,8 @@ type SourceAggregate = {
   lastCheckedAt: string | null;
   parked: number;
   terminal: number;
+  pendingRemovals: number;
+  unprobeable: number;
 };
 
 type SourceAggregates = Map<string, SourceAggregate>;
@@ -143,6 +149,8 @@ const emptyAggregate = (): SourceAggregate => ({
   lastCheckedAt: null,
   parked: 0,
   terminal: 0,
+  pendingRemovals: 0,
+  unprobeable: 0,
 });
 
 /**
@@ -192,7 +200,7 @@ export const latestIngestionEventsQuery = (
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
-/** The `(source_id, slice, status)` index covers both exact counts. */
+/** Each durable lane supplies its own source-scoped health counts. */
 export const reconciliationCountsQuery = (
   db: Transaction,
   sourceIds: SafeId<"caseLawSource">[],
@@ -212,14 +220,20 @@ export const reconciliationCountsQuery = (
     .where(eq(caseLawReconciliationItems.sourceId, caseLawSources.id))
     .as("reconciliation_counts");
 
+  const removalCounts = removalReconciliationCountsQuery(db, sourceIds).as(
+    "removal_reconciliation_counts",
+  );
   return db
     .select({
       sourceId: caseLawSources.id,
       parked: counts.parked,
       terminal: counts.terminal,
+      pendingRemovals: removalCounts.pendingRemovals,
+      unprobeable: removalCounts.unprobeable,
     })
     .from(caseLawSources)
     .innerJoinLateral(counts, sql`true`)
+    .innerJoin(removalCounts, eq(removalCounts.sourceId, caseLawSources.id))
     .where(inArray(caseLawSources.id, sourceIds));
 };
 
@@ -374,6 +388,8 @@ const readSourceAggregates = async ({
     const aggregate = requireAggregate(aggregates, row.sourceId);
     aggregate.parked = row.parked;
     aggregate.terminal = row.terminal;
+    aggregate.pendingRemovals = row.pendingRemovals;
+    aggregate.unprobeable = row.unprobeable;
   }
 
   return aggregates;
@@ -422,7 +438,7 @@ export const getIngestionStatus = async (
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-      "case_law.ingestion_status",
+      SOURCE_REPORT_FEATURE.ingestionStatus,
     );
 
     for (const source of sources) {
@@ -430,7 +446,8 @@ export const getIngestionStatus = async (
       const reconciliation: SourceReconciliationStatus | null =
         aggregate.slices === 0 &&
         aggregate.parked === 0 &&
-        aggregate.terminal === 0
+        aggregate.terminal === 0 &&
+        aggregate.pendingRemovals === 0
           ? null
           : {
               slices: aggregate.slices,
@@ -438,6 +455,8 @@ export const getIngestionStatus = async (
               failedSlices: aggregate.failedSlices,
               parked: aggregate.parked,
               terminal: aggregate.terminal,
+              pendingRemovals: aggregate.pendingRemovals,
+              unprobeable: aggregate.unprobeable,
               lastCheckedAt: aggregate.lastCheckedAt,
             };
 
@@ -509,7 +528,7 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items). The fleet event total is an estimate from database " +
+    "and terminal items, pending removals and unprobeable identities). The fleet event total is an estimate from database " +
     "statistics and may lag recent writes. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate

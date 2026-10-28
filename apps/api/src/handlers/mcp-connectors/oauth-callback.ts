@@ -49,6 +49,7 @@ import type {
 } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -189,6 +190,7 @@ const validatePendingOAuthMetadata = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message:
           "MCP authorization server metadata does not match the selected issuer",
       }),
@@ -503,6 +505,7 @@ export const createMcpOAuthCallbackHandler = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
+              scope: requireRequestExceptionScope(request),
               operation: "mcp_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,

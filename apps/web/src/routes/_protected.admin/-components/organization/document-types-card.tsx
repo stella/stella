@@ -36,9 +36,9 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
@@ -62,7 +62,7 @@ export const DocumentTypesCard = () => {
   });
 
   const settingsQuery = useQuery(documentTypesOptions(activeOrganizationId));
-  const settingsView = useQueryView(settingsQuery, {
+  const settingsView = queryView(settingsQuery, {
     isEmpty: (data) => data.items.length === 0,
   });
   const data = settingsView.type === "items" ? settingsView.items : undefined;
@@ -73,6 +73,10 @@ export const DocumentTypesCard = () => {
   const once = useSingleFlight();
 
   const createMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypesCard.createMutation.useSettingsMutation",
+    },
     mutationFn: async (label: string) =>
       unwrapApiResponse(await api["document-types"].post({ label })),
     invalidate: documentTypesInvalidationKey,
@@ -84,6 +88,10 @@ export const DocumentTypesCard = () => {
   });
 
   const reorderMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypesCard.reorderMutation.useSettingsMutation",
+    },
     mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
       unwrapApiResponse(
         await api["document-types"].reorder.post({ orderedIds }),
@@ -242,6 +250,10 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   }, [rowRef, gripRef, type.id, type.label, handleReorder]);
 
   const renameMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypeRow.renameMutation.useSettingsMutation",
+    },
     mutationFn: async (label: string) =>
       unwrapApiResponse(
         await api["document-types"]({ documentTypeId: type.id }).patch({
@@ -257,6 +269,10 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   });
 
   const deleteMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypeRow.deleteMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
       unwrapApiResponse(
         await api["document-types"]({ documentTypeId: type.id }).delete(),

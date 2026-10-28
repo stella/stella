@@ -12,11 +12,18 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import tableChart from "@/api/handlers/chat/table-chart";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
+import {
+  captureError,
+  detached,
+  resetCaptureWindows,
+} from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
@@ -39,6 +46,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { runWithContentDeliveryScope } from "@/api/lib/files/content-delivery";
 import { WorkRefusal } from "@/api/lib/load/work-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -52,6 +60,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -70,6 +79,7 @@ test.each([
       });
       return new HandlerError({
         status: 503,
+        code: "internal_error",
         message: refusal.message,
         retryable: true,
         retryAfterMs: refusal.retryAfterMs,
@@ -120,6 +130,7 @@ test("a thrown retryable handler error sets Retry-After", async () => {
     async function* () {
       throw new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Work capacity is unavailable",
         retryable: true,
         retryAfterMs: 2000,
@@ -151,6 +162,7 @@ test("a retryable handler error sets a whole-second Retry-After", async () => {
       return Result.err(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Work capacity is unavailable",
           retryable: true,
           retryAfterMs: 2000,
@@ -201,7 +213,7 @@ test.each([
           asTestRaw({
             request: new Request("https://example.test/delivery"),
             route: "/delivery",
-            set: { headers: createHeaders() },
+            set: { headers: createHeaders(), status: 200 },
           }),
         ),
     );
@@ -709,6 +721,187 @@ describe("createSafeRootHandler permission gate", () => {
   });
 });
 
+test("safe handlers group plain errors by declared route across source-line moves", async () => {
+  const analytics = installRecordingAnalytics();
+  const recordingLogger = installRecordingLogger();
+  let sourceLine = 100;
+  const createFailingEndpoint = () =>
+    createSafeRootHandler(
+      {
+        contract: "patch",
+        permissions: { workspace: ["read"] },
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        const error = new Error("Handler failed");
+        error.stack = `Error: Handler failed\n    at performOperation (/app/operation.ts:${sourceLine}:9)`;
+        return Result.ok(await Promise.reject(error));
+      },
+    );
+  const first = createFailingEndpoint();
+  const second = createFailingEndpoint();
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await first.handler({
+                ...createContext(first, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:entityId": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await second.handler({
+                ...createContext(second, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of [
+      "/first/first-private-id",
+      "/second/second-private-id",
+    ]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(500);
+    }
+    const original = analytics.exceptions();
+    expect(original).toHaveLength(2);
+    const firstFingerprint =
+      original.at(0)?.properties["$exception_fingerprint"];
+    const secondFingerprint =
+      original.at(1)?.properties["$exception_fingerprint"];
+    expect(firstFingerprint).toContain("/first/:entityId");
+    expect(secondFingerprint).toContain("/second/:entityId");
+    expect(firstFingerprint).not.toBe(secondFingerprint);
+    expect(JSON.stringify(original)).not.toContain("private-id");
+
+    sourceLine += 10;
+    resetCaptureWindows();
+    const shifted = await app.fetch(
+      new Request("https://example.test/first/another-private-id"),
+    );
+    expect(shifted.status).toBe(500);
+    const captures = analytics.exceptions();
+    expect(captures).toHaveLength(3);
+    expect(captures.at(2)?.properties["$exception_fingerprint"]).toBe(
+      firstFingerprint,
+    );
+    expect(captures.at(2)?.properties["error.cause.frame"]).not.toBe(
+      captures.at(0)?.properties["error.cause.frame"],
+    );
+  } finally {
+    await app.stop();
+    recordingLogger.restore();
+    analytics.restore();
+  }
+});
+
+test("safe handlers preserve request scope through shared helpers and detached rejections", async () => {
+  const analytics = installRecordingAnalytics();
+  const logs = installRecordingLogger();
+  const endpoint = createSafeRootHandler(
+    {
+      contract: "patch",
+      permissions: { workspace: ["read"] },
+      accountAccess: ACCOUNT_ACCESS.sandbox,
+      mcp: { type: "internal", reason: "health_infra" },
+    },
+    async function* () {
+      captureError(
+        new Error("Shared failure"),
+        handlerErrorContext("test.sharedCapture"),
+      );
+      detached(
+        Promise.reject(new Error("Detached failure")),
+        "test.shared-detached",
+      );
+      return Result.ok({ ok: true });
+    },
+  );
+  const safeDb: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(new DatabaseError({ message: "unused" }));
+  const app = serveForTest(
+    createHttpApp({
+      middleware: [],
+      routes: routes({
+        "/first/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+        "/second/:id": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx, route }) =>
+              await endpoint.handler({
+                ...createContext(endpoint, safeDb),
+                request: ctx.request,
+                route,
+              }),
+          },
+        },
+      }),
+    }),
+  );
+  try {
+    for (const path of ["/first/private-first", "/second/private-second"]) {
+      const response = await app.fetch(
+        new Request(`https://example.test${path}`),
+      );
+      expect(response.status).toBe(200);
+    }
+    const fingerprints = analytics
+      .exceptions()
+      .map(({ properties }) => properties["$exception_fingerprint"]);
+    expect(fingerprints).toHaveLength(4);
+    expect(new Set(fingerprints).size).toBe(4);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/first/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(
+      fingerprints.filter(
+        (key) => typeof key === "string" && key.includes("/second/:id"),
+      ),
+    ).toHaveLength(2);
+    expect(JSON.stringify(fingerprints)).not.toContain("private-first");
+    expect(JSON.stringify(fingerprints)).not.toContain("private-second");
+  } finally {
+    await app.stop();
+    logs.restore();
+    analytics.restore();
+  }
+});
+
 describe("request.failed severity", () => {
   const runFailingHandler = async (error: SafeDbError | HandlerError) => {
     const analytics = installRecordingAnalytics();
@@ -928,6 +1121,7 @@ describe("a mapped status survives the transport wrapper", () => {
   const upstreamRefusal = () =>
     new HandlerError({
       status: 503,
+      code: "internal_error",
       message: "Search is temporarily unavailable",
     });
 
@@ -1066,7 +1260,11 @@ describe("errorCauseChainAttributes", () => {
   });
 
   test("walks nested causes and omits the status of untyped levels", () => {
-    const root = new HandlerError({ status: 502, message: "upstream" });
+    const root = new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "upstream",
+    });
     const middle = new Error("adapter", { cause: root });
     const wrapper = new HandlerError({
       status: 500,

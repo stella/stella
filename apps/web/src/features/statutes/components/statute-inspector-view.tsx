@@ -42,8 +42,13 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import {
+  AVAILABLE_EVERYWHERE,
+  REQUIREMENT,
+} from "@/lib/platform/requirements.logic";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -56,7 +61,7 @@ export const StatuteInspectorView = ({
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("statute");
   const {
     data: statute,
     isError,
@@ -66,8 +71,8 @@ export const StatuteInspectorView = ({
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "StatuteInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
@@ -118,22 +123,34 @@ export const StatuteInspectorView = ({
       ref={panelRef}
     >
       <InspectorTabHeader
-        actions={
-          <>
-            {statute !== undefined && (
-              <OpenOriginalButton
-                href={statute.documentUrl ?? statute.sourceUrl}
-                size="icon-xs"
+        actions={[
+          ...(statute === undefined
+            ? []
+            : [
+                {
+                  id: "open-original",
+                  requires: AVAILABLE_EVERYWHERE,
+                  render: () => (
+                    <OpenOriginalButton
+                      href={statute.documentUrl ?? statute.sourceUrl}
+                      size="icon-xs"
+                    />
+                  ),
+                },
+              ]),
+          {
+            id: "move-to-main",
+            requires: [REQUIREMENT.sidePanel],
+            // The wording moves to the page, so the tab that held it goes.
+            render: () => (
+              <StatuteMainViewAction
+                onMoveToMain={onClose}
+                payload={payload}
+                searchQuery={find.findQuery}
               />
-            )}
-            {/* The wording moves to the page, so the tab that held it goes. */}
-            <StatuteMainViewAction
-              onMoveToMain={onClose}
-              payload={payload}
-              searchQuery={find.findQuery}
-            />
-          </>
-        }
+            ),
+          },
+        ]}
         label={tab.label}
         onClose={onClose}
       />

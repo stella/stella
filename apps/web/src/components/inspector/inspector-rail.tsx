@@ -58,7 +58,8 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
   activeId,
@@ -82,10 +83,8 @@ export const InspectorRail = ({
     ...catalogueOptions(activeOrganizationId, userId),
     enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
   });
-  const activeSkillCatalogueDataView = useQueryView(
-    activeSkillCatalogueDataQuery,
-  );
-  useQueryViewError(activeSkillCatalogueDataView);
+  const activeSkillCatalogueDataView = queryView(activeSkillCatalogueDataQuery);
+  useQueryViewError(activeSkillCatalogueDataView, "InspectorRail:query");
   const activeSkillCatalogueData =
     activeSkillCatalogueDataView.type === "items"
       ? activeSkillCatalogueDataView.items
@@ -559,8 +558,8 @@ const VerticalTabCell = ({
       externalConnectorSlug !== undefined &&
       storedExternalIconHref === undefined,
   });
-  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
+  useQueryViewError(mcpConnectorsDataView, "VerticalTabCell:query");
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items

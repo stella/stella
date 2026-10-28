@@ -74,8 +74,9 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
@@ -198,7 +199,7 @@ export const ProtectedAppFrame = ({
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
   const activeWorkspaceId = useRouteWorkspaceId();
-  const workspaceNavigationView = useQueryView(
+  const workspaceNavigationView = queryView(
     useChromeQuery(
       workspacesNavigationOptions({
         organizationId: inspectorBroadcastOrganizationId,
@@ -206,7 +207,7 @@ export const ProtectedAppFrame = ({
       }),
     ),
   );
-  useQueryViewError(workspaceNavigationView);
+  useQueryViewError(workspaceNavigationView, "ProtectedAppFrame:query");
   const workspaceNavigation =
     workspaceNavigationView.type === "items"
       ? workspaceNavigationView.items
@@ -387,13 +388,13 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const workspaceView = useQueryView(
+  const workspaceView = queryView(
     useChromeQuery({
       ...workspaceOptions(workspaceId ?? ""),
       enabled: !!workspaceId,
     }),
   );
-  useQueryViewError(workspaceView);
+  useQueryViewError(workspaceView, "ProtectedContent:query");
   const workspace =
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (

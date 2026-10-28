@@ -59,7 +59,8 @@ import {
   aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
@@ -103,8 +104,8 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     [activeOrganizationId],
   );
   const dataQuery = useChromeQuery(availabilityOptions);
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
@@ -118,7 +119,10 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     const availability = await queryClient
       .query(availabilityOptions)
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "AIAvailabilityRoot:failure",
+          scope: { type: "handler", handlerId: "AIAvailabilityRoot:failure" },
+        });
         // Callers read `false` as "do not proceed" and stop there, so without
         // this the action the user just triggered would appear to do nothing.
         notifyUserError(error, tErrors("actionFailed"));
@@ -238,8 +242,8 @@ export const RequireAIKey = ({
   const dataQuery = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "RequireAIKey:query");
   const { isFetching, isPending } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
   const { openAIKeyDialog } = useAIKeyGate();
@@ -364,8 +368,8 @@ export const AIKeyRequiredDialog = ({
   const availabilityQuery = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const availabilityView = useQueryView(availabilityQuery);
-  useQueryViewError(availabilityView);
+  const availabilityView = queryView(availabilityQuery);
+  useQueryViewError(availabilityView, "AIKeyRequiredDialog:availability-query");
   const mayConfigure =
     availabilityView.type === "items" &&
     availabilityView.items.providerConfiguration === "allowed";
@@ -373,8 +377,8 @@ export const AIKeyRequiredDialog = ({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
     enabled: open && mayConfigure,
   });
-  const configView = useQueryView(configQuery);
-  useQueryViewError(configView);
+  const configView = queryView(configQuery);
+  useQueryViewError(configView, "AIKeyRequiredDialog:query");
   const configRefusalKey =
     configView.type === "error"
       ? configRefusalMessageKey(configView.error)
@@ -510,7 +514,10 @@ export const AIKeyRequiredDialog = ({
       onOpenChange(false);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AIKeyRequiredDialog:failure",
+        scope: { type: "handler", handlerId: "AIKeyRequiredDialog:failure" },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     },
   });
@@ -537,8 +544,8 @@ export const AIKeyRequiredDialog = ({
         }
       : {}),
   });
-  const defaultsView = useQueryView(defaultsQuery);
-  useQueryViewError(defaultsView);
+  const defaultsView = queryView(defaultsQuery);
+  useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =
     defaultsView.type === "items" ? defaultsView.items.defaultModels : null;
   const providerDefaultModels =

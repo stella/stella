@@ -26,8 +26,9 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -72,8 +73,8 @@ export const useInspectorGroupTransfer = (
     ...workspacesRouteOptions(activeOrganizationId),
     enabled: pending !== null,
   });
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useInspectorGroupTransfer:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -199,7 +200,13 @@ export const useInspectorGroupTransfer = (
       });
 
       if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
+        getAnalytics().captureError(result.error, {
+          fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useInspectorGroupTransfer.copyAndAssign:failure",
+          },
+        });
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
           notifyUserError(result.error, t("errors.actionFailed"));
@@ -227,6 +234,15 @@ export const useInspectorGroupTransfer = (
           new InspectorCopyMappingError({
             message: "Copied Inspector file field was not returned",
           }),
+          {
+            fingerprintKey:
+              "useInspectorGroupTransfer.copyAndAssign:InspectorCopyMappingError",
+            scope: {
+              type: "handler",
+              handlerId:
+                "useInspectorGroupTransfer.copyAndAssign:InspectorCopyMappingError",
+            },
+          },
         );
         notifyUserError(undefined, t("errors.actionFailed"));
         submittingRef.current = false;
@@ -240,7 +256,13 @@ export const useInspectorGroupTransfer = (
           }),
       );
       if (Result.isError(invalidation)) {
-        getAnalytics().captureError(invalidation.error);
+        getAnalytics().captureError(invalidation.error, {
+          fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "useInspectorGroupTransfer.copyAndAssign:failure-2",
+          },
+        });
         submittingRef.current = false;
         if (isCurrentScope(requestScope)) {
           notifyUserError(invalidation.error, t("errors.actionFailed"));
@@ -283,7 +305,13 @@ export const useInspectorGroupTransfer = (
       });
     });
     if (Result.isError(openResult)) {
-      getAnalytics().captureError(openResult.error);
+      getAnalytics().captureError(openResult.error, {
+        fingerprintKey: "useInspectorGroupTransfer.copyAndAssign:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "useInspectorGroupTransfer.copyAndAssign:failure-3",
+        },
+      });
       submittingRef.current = false;
       if (isCurrentScope(requestScope)) {
         notifyUserError(openResult.error, t("errors.actionFailed"));

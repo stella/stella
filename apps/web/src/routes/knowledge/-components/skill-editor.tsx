@@ -52,7 +52,7 @@ import type { SkillEditAccess } from "@/components/inspector/skill-history/skill
 import { useSkillEditAccess } from "@/components/inspector/skill-history/use-skill-edit-access";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
@@ -65,6 +65,7 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
+import { SkillAvailabilitySummary } from "./skill-availability-field";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -110,7 +111,7 @@ type SkillEditorProps = {
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const openSkillResourceTab = useInspectorTabsStore(
@@ -776,12 +777,23 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               saving={patchMetadata.isPending}
               value={invocation}
             />
+            {detail.data && (
+              <SkillAvailabilitySummary
+                boundClientId={detail.data.boundClientId}
+                boundWorkspaceId={detail.data.boundWorkspaceId}
+                scope={detail.data.scope}
+              />
+            )}
           </div>
         </div>
       </div>
       {/* Files — the skill's bundle, the main surface. Click a file to edit it
           in the inspector. */}
       <FileDropZone
+        exceptionScope={{
+          type: "handler",
+          handlerId: "knowledge.skill-files.drop",
+        }}
         className="p-3"
         coverage="content"
         enabled={canEditContent}

@@ -1297,8 +1297,29 @@ export const entityViewPolicies = () => [
   }),
 ];
 
+/**
+ * A bound skill is reachable only through its binding: a matter-bound one
+ * where the caller reaches that matter, a client-bound one where the caller
+ * reaches at least one matter of that client (`workspaces.client_id`). An
+ * unbound skill has both columns null. `table` qualifies the skill's columns
+ * (`agent_skills` in its own policies, `s` in a child's subquery).
+ */
+// sql-perf-allow: bounded by one skill row; the client probe uses workspaces_org_client_id_idx and runs only for client-bound skills
+const agentSkillBindingReachCheck = (table: string) => sql`(
+  (${sql.raw(table)}.bound_workspace_id IS NULL
+    OR ${workspaceAccessCheck(sql.raw(`${table}.bound_workspace_id`))})
+  AND (${sql.raw(table)}.bound_client_id IS NULL OR EXISTS (
+    SELECT 1
+    FROM workspaces bound_matter
+    WHERE bound_matter.organization_id = ${sql.raw(table)}.organization_id
+      AND bound_matter.client_id = ${sql.raw(table)}.bound_client_id
+      AND ${workspaceAccessCheck(sql`bound_matter.id`)}
+  ))
+)`;
+
 const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
+  AND ${agentSkillBindingReachCheck("agent_skills")}
 )`;
 
 const organizationManagementRoleValues = sql.raw(
@@ -1364,15 +1385,35 @@ export const timeEntryPolicies = () => [
 ];
 
 /**
- * Who may write a skill row: owners and admins for team skills, the author for
- * private ones. Members who can see a team skill propose and comment on it
+ * Who may write a skill (`table` qualifies its columns):
+ * - a team skill: owners and admins, or its author when it is bound to a
+ *   matter (a matter member keeps a skill for their own matter);
+ * - a private skill: its author, and only a manager may bind one to a client.
+ * Every write also needs the binding's reach, so nobody writes a skill they
+ * could not read. Members who can see a team skill propose and comment on it
  * through the child tables instead. Mirrors `canManageSkill`.
  */
+const agentSkillWriteRule = (table: string) => {
+  const column = (name: string) => sql.raw(`${table}.${name}`);
+  const isAuthor = sql`${column("user_id")} = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))`;
+  return sql`(
+    (
+      (${column("scope")} = 'team' AND (
+        ${organizationManagerCheck}
+        OR (${column("bound_workspace_id")} IS NOT NULL AND ${isAuthor})
+      ))
+      OR (${column("scope")} = 'private' AND ${isAuthor} AND (
+        ${column("bound_client_id")} IS NULL OR ${organizationManagerCheck}
+      ))
+    )
+    AND ${agentSkillBindingReachCheck(table)}
+  )`;
+};
+
 const agentSkillWriteCheck = sql`(
-  ${organizationCheck} AND (
-    (scope = 'team' AND ${organizationManagerCheck})
-    OR (scope = 'private' AND ${userCheck})
-  )
+  ${organizationCheck} AND ${agentSkillWriteRule("agent_skills")}
 )`;
 
 const agentSkillInsertCheck = sql`(
@@ -1397,12 +1438,7 @@ const agentSkillResourceWriteCheck = sql`(
     FROM agent_skills s
     WHERE s.id = skill_id
       AND s.organization_id = agent_skill_resources.organization_id
-      AND (
-        (s.scope = 'team' AND ${organizationManagerCheck})
-        OR (s.scope = 'private' AND s.user_id = (SELECT current_setting(
-          '${sql.raw(SETTING_USER_ID)}', true
-        )))
-      )
+      AND ${agentSkillWriteRule("s")}
   )
 )`;
 
@@ -1873,3 +1909,60 @@ export const templateChatThreadPolicies = () => [
     using: templateChatThreadScopeCheck,
   }),
 ];
+
+type InvoicePolicyColumns = {
+  id: p.AnyPgColumn;
+  organizationId: p.AnyPgColumn;
+  workspaceId: p.AnyPgColumn;
+  clientId: p.AnyPgColumn;
+  originalInvoiceId: p.AnyPgColumn;
+};
+
+/** The owner-evaluated predicate sees hidden lines, preventing partial invoices. */
+export const invoicePolicies = (table: InvoicePolicyColumns) => {
+  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId}, ${table.clientId}, ${table.originalInvoiceId})`;
+  return [
+    p.pgPolicy("invoices_workspace_select", {
+      for: "select",
+      to: stella,
+      using: access,
+    }),
+    p.pgPolicy("invoices_workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_update", {
+      for: "update",
+      to: stella,
+      using: access,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: access,
+    }),
+  ];
+};
+
+export const invoiceLineVisibilityPolicy = (table: {
+  invoiceId: p.AnyPgColumn;
+}) =>
+  p.pgPolicy("invoice_lines_complete_invoice", {
+    as: "restrictive",
+    for: "all",
+    to: stella,
+    using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+    withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });
+
+// FORCE RLS applies to the table owner, which runs the SECURITY DEFINER
+// invoice access, guard, and reserved-charge functions. They must see every
+// line to decide whole-invoice visibility; owner writes remain denied.
+export const invoiceLineOwnerReadPolicy = () =>
+  p.pgPolicy("invoice_lines_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });

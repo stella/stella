@@ -12,6 +12,7 @@ import * as v from "valibot";
 
 import type {
   CaseLawAnalysisFailureCode as AnalysisFailureCode,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "@stll/api-contract";
 import { aiDisclosure } from "@stll/api-contract/ai-disclosure";
@@ -22,6 +23,7 @@ import type {
   AnalysisGenerating,
   DecisionAnalysis,
 } from "@stll/legal-ast/analysis";
+import { analysisHeadingInputSchema } from "@stll/legal-ast/analysis";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -66,6 +68,7 @@ import {
   redactedProviderDiagnostic,
 } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   createDetachedModelActionStarter,
   createModelActionAdmitter,
@@ -73,7 +76,12 @@ import {
   type ModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
-import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import {
+  generateTanStackObjectForTask,
+  streamTanStackObjectForTask,
+  type TanStackStructuredOutputEvent,
+  withGenerationDeadline,
+} from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelInfoForTask,
   requireTanStackAIAvailableForTask,
@@ -82,7 +90,12 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 import { resolveAnalysisInput } from "./analysis-input";
-import { analysisOutputSchema, buildDecisionAnalysis } from "./analysis-output";
+import {
+  type AnalysisOutput,
+  analysisOutputSchema,
+  buildDecisionAnalysis,
+  buildPartialAnalysisTree,
+} from "./analysis-output";
 import { persistGeneratedAnalysis } from "./analysis-persistence";
 import { allowsDerivedAiAnalysis } from "./analysis-update";
 import { refreshSignificance } from "./significance-run";
@@ -96,6 +109,9 @@ import { refreshSignificance } from "./significance-run";
  * settles its sentinel before another request may take the row over.
  */
 export const ANALYSIS_GENERATION_DEADLINE_MS = 45_000;
+
+/** At most one partial-section write per this interval while a run streams. */
+const PARTIAL_PUBLISH_INTERVAL_MS = 1000;
 
 /**
  * The output an analysis needs, in tokens: about six times the ~2.6k a full
@@ -172,7 +188,7 @@ export type GenerateAnalysisResponse =
        */
       aiDisclosure: AiDisclosure;
     }
-  | { status: "generating" }
+  | CaseLawAnalysisProgressResponse
   | { status: "error"; code: AnalysisUnavailableCode; error: string }
   | {
       status: "error";
@@ -243,7 +259,9 @@ const unavailable = (
 /**
  * The key a reader's run would call the provider with: the organization's
  * own fast-role provider when it configured one, the platform's otherwise.
- * The same rule `getTanStackTextModelInfoForTask` dispatches by.
+ * The same rule `getTanStackTextModelInfoForTask` dispatches by. Intended
+ * policy: the first reader's key pays for the analysis that every
+ * organization then reads.
  */
 const readerKeyOf = ({
   orgAIConfig,
@@ -292,6 +310,10 @@ type RunGenerationOptions = {
   reader: AnalysisReaderKey;
   store: AnalysisStore;
   resolveTextModel: AnalysisModelResolver | undefined;
+  resolveModelInfo: AnalysisModelInfoResolver | undefined;
+  streamAnalysis: AnalysisStreamer | undefined;
+  generateAnalysisObject: AnalysisGenerator | undefined;
+  nowMs: () => number;
   deadlineMs: number;
 };
 
@@ -299,7 +321,18 @@ type RunGenerationOptions = {
 type AnalysisModelResolver = () =>
   ResolvedTanStackTextModel | Promise<ResolvedTanStackTextModel>;
 
-const runGeneration = async ({
+type AnalysisModelInfoResolver = () => { modelId: string };
+
+/** Focused seams for driving the streaming state machine without a provider. */
+type AnalysisStreamer = (options: {
+  abortSignal: AbortSignal | undefined;
+}) => AsyncIterable<TanStackStructuredOutputEvent<AnalysisOutput>>;
+
+type AnalysisGenerator = (options: {
+  deadlineMs: number;
+}) => Promise<AnalysisOutput>;
+
+export const runGeneration = async ({
   admission,
   anchorIds,
   contentHash,
@@ -312,6 +345,10 @@ const runGeneration = async ({
   promptCachingEnabled,
   reader,
   resolveTextModel,
+  resolveModelInfo,
+  streamAnalysis,
+  generateAnalysisObject,
+  nowMs,
   sentinel,
   store,
 }: RunGenerationOptions) => {
@@ -335,16 +372,14 @@ const runGeneration = async ({
 
   let analysis: DecisionAnalysis;
   try {
-    const { modelId } = getTanStackTextModelInfoForTask(
-      "short-text",
-      orgAIConfig,
-      {
+    const { modelId } =
+      resolveModelInfo?.() ??
+      getTanStackTextModelInfoForTask("short-text", orgAIConfig, {
         dataClass: "public_corpus",
         organizationId,
         modelTier: admission.modelTier,
-      },
-    );
-    const result = await generateTanStackObjectForTask({
+      });
+    const generationOptions = {
       userId: admission.userId,
       dataClass: "public_corpus",
       task: "short-text",
@@ -366,7 +401,105 @@ const runGeneration = async ({
       outputTokenBudget: ANALYSIS_OUTPUT_TOKEN_BUDGET,
       deadlineMs,
       ...(resolveTextModel === undefined ? {} : { resolveTextModel }),
+    } as const;
+
+    let result: AnalysisOutput | undefined;
+    let processedCount = 0;
+    const partialTree: DecisionAnalysis["tree"] = [];
+    let lastPublishedAt = Number.NEGATIVE_INFINITY;
+    // Sections completed since the last write. A section that lands inside
+    // the throttle window waits for the next event past it, not for the end.
+    let unpublished = false;
+    const publishIfDue = async () => {
+      const now = nowMs();
+      if (!unpublished || now - lastPublishedAt < PARTIAL_PUBLISH_INTERVAL_MS) {
+        return;
+      }
+      // Attempts are paced too: a superseded run's refused writes must not
+      // turn into a write per streamed token.
+      lastPublishedAt = now;
+      if (await store.savePartial({ decisionId, partialTree, sentinel })) {
+        unpublished = false;
+      }
+    };
+    // One deadline for the whole run: a fallback after an invalid stream gets
+    // what is left of it, never a fresh one.
+    const runStartedAt = nowMs();
+    const streamed = await Result.tryPromise({
+      try: async () =>
+        await withGenerationDeadline(generationOptions, async (abortSignal) => {
+          const events =
+            streamAnalysis === undefined
+              ? streamTanStackObjectForTask({
+                  ...generationOptions,
+                  abortSignal,
+                })
+              : streamAnalysis({ abortSignal });
+          for await (const event of events) {
+            switch (event.type) {
+              case "complete":
+                return event.object;
+              case "delta":
+                continue;
+              case "partial":
+                break;
+              default:
+                event satisfies never;
+                return panic("Unknown structured analysis event");
+            }
+            const headings = event.partial.headings;
+            if (!Array.isArray(headings)) {
+              continue;
+            }
+            // The last array member is still being written. A following member
+            // proves every member before it is complete.
+            const completeCount = Math.max(0, headings.length - 1);
+            for (const heading of headings.slice(
+              processedCount,
+              completeCount,
+            )) {
+              const parsed = v.safeParse(analysisHeadingInputSchema, heading);
+              if (parsed.success) {
+                partialTree.push(
+                  ...buildPartialAnalysisTree({
+                    headings: [parsed.output],
+                    language: input.language,
+                  }),
+                );
+                unpublished = true;
+              }
+            }
+            processedCount = Math.max(processedCount, completeCount);
+            await publishIfDue();
+          }
+          return undefined;
+        }),
+      catch: (error) => error,
     });
+    if (Result.isOk(streamed)) {
+      result = streamed.value;
+    } else {
+      const streamError = streamed.error;
+      // Preserve the existing strict repair and fallback ladder. The streamed
+      // sections remain on the sentinel while that ladder settles.
+      if (classifyAIError(streamError) !== "output_invalid") {
+        throw streamError;
+      }
+      const remainingDeadlineMs = Math.max(
+        1,
+        Math.floor(deadlineMs - (nowMs() - runStartedAt)),
+      );
+      result =
+        generateAnalysisObject === undefined
+          ? await generateTanStackObjectForTask({
+              ...generationOptions,
+              deadlineMs: remainingDeadlineMs,
+            })
+          : await generateAnalysisObject({ deadlineMs: remainingDeadlineMs });
+    }
+    if (result === undefined) {
+      panic("Structured analysis stream ended without a result");
+    }
 
     analysis = buildDecisionAnalysis({
       anchorIds,
@@ -404,6 +537,7 @@ const runGeneration = async ({
     contentHash,
     decisionId,
     persistence: store,
+    sentinel,
     onFailure: async (error) =>
       await handleGenerationFailure({
         aiAnalytics,
@@ -437,10 +571,13 @@ const handleGenerationFailure = async ({
   // are recorded by the analytics callbacks and told to the reader; only
   // an unanticipated shape is an exception worth capturing.
   if (isUnanticipatedAIFailure(error)) {
-    captureError(error, {
-      source: "case-law-analysis",
-      decisionId,
-    });
+    captureError(
+      error,
+      handlerErrorContext("analysis.handleGenerationFailure", {
+        source: "case-law-analysis",
+        decisionId,
+      }),
+    );
   }
   aiAnalytics.captureError(error);
   const failure = analysisFailureRecord({
@@ -499,7 +636,10 @@ const recordFailedRun = async ({
           [recorded.error, released.error],
           "The failed run's record could not be written nor its sentinel released",
         ),
-    { source: "case-law-analysis-failure-record", decisionId },
+    handlerErrorContext("analysis.recordFailedRun", {
+      source: "case-law-analysis-failure-record",
+      decisionId,
+    }),
   );
 };
 
@@ -538,6 +678,21 @@ type GenerateAnalysisOptions = {
    */
   beforeClaim?: (() => Promise<void>) | undefined;
 };
+
+const generatingResponse = (
+  partialTree: DecisionAnalysis["tree"],
+): CaseLawAnalysisProgressResponse => ({
+  status: "generating",
+  ...(partialTree.length === 0 ? {} : { partialTree }),
+});
+
+const analysisStartFailure = (cause: unknown) =>
+  new HandlerError({
+    status: 503,
+    code: "internal_error",
+    message: "Analysis generation could not start",
+    cause,
+  });
 
 export const generateAnalysis = async ({
   admitModelAction,
@@ -617,7 +772,7 @@ export const generateAnalysis = async ({
         aiDisclosure: aiDisclosure("caseLaw"),
       });
     case "generating":
-      return Result.ok({ status: "generating" });
+      return Result.ok(generatingResponse(stored.partialTree));
     case "none":
       break;
     default: {
@@ -742,27 +897,26 @@ export const generateAnalysis = async ({
         promptCachingEnabled,
         reader,
         resolveTextModel,
+        resolveModelInfo: undefined,
+        streamAnalysis: undefined,
+        generateAnalysisObject: undefined,
+        nowMs: () => performance.now(),
         sentinel,
         store,
       });
     },
   });
-  const cannotStart = (cause: unknown) =>
-    new HandlerError({
-      status: 503,
-      message: "Analysis generation could not start",
-      cause,
-    });
+
   if (Result.isError(started)) {
     return Result.err(
       ActionAdmissionError.is(started.error)
         ? started.error
-        : cannotStart(started.error),
+        : analysisStartFailure(started.error),
     );
   }
   const claimed = started.value;
   if (claimed.isErr()) {
-    return Result.err(cannotStart(claimed.error));
+    return Result.err(analysisStartFailure(claimed.error));
   }
 
   // A claim lost to a failure filed since the read answers that failure;

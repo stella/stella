@@ -5,6 +5,7 @@ import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { issueDesktopAccountGrant } from "@/api/lib/auth";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // permissions-exempt: a connection grant binds only the caller's account;
 // document actions and registry operations keep their own resource permissions.
@@ -32,12 +33,22 @@ export default createSafeRootHandler(
   },
   async function* ({ user, session, body, set }) {
     set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
+    // Redemption issues only under the browser session that asked for it.
+    if (session.id === null) {
+      return Result.err(
+        new HandlerError({
+          status: 401,
+          message: "Sign in again to connect stella desktop",
+        }),
+      );
+    }
     return Result.ok(
       yield* Result.await(
         issueDesktopAccountGrant({
           ...body,
           userId: user.id,
           organizationId: session.activeOrganizationId,
+          sessionId: session.id,
         }),
       ),
     );

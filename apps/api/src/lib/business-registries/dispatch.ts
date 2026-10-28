@@ -146,6 +146,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { normalizeRegisteredCompanyName } from "@/api/lib/business-registries/company-name";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { searchWeb } from "@/api/lib/web-search/search";
 import type { WebSearchRequestObserver } from "@/api/lib/web-search/search";
 import type { WebSearchProvider } from "@/api/lib/web-search/types";
@@ -508,11 +509,14 @@ const ARES_HANDLER: RegistryHandler = {
     const company = await lookupByIco(input, {
       observer: options.observer,
       onVrError: (error) =>
-        captureError(error, {
-          operation: "vr-enrichment",
-          registry: "ares",
-          source: "business-registry",
-        }),
+        captureError(
+          error,
+          handlerErrorContext("businessregistries.company", {
+            operation: "vr-enrichment",
+            registry: "ares",
+            source: "business-registry",
+          }),
+        ),
     });
     return company ? aresCompanyToHit(company) : null;
   },
@@ -696,6 +700,7 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
     // message rather than a 401 the caller cannot act on.
     return new HandlerError({
       status: 502,
+      code: "internal_error",
       message: `UK Companies House API key not configured: ${error.message}`,
     });
   }
@@ -838,6 +843,7 @@ const mapDenueError = (error: unknown): HandlerError | null => {
   if (error instanceof DenueAuthError) {
     return new HandlerError({
       status: 502,
+      code: "internal_error",
       message: `INEGI DENUE API token not configured or rejected: ${error.message}`,
     });
   }
