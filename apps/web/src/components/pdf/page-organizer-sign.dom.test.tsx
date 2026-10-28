@@ -43,8 +43,9 @@ const savedVersion = {
 
 /**
  * The sign flow with stella desktop ready: `start` places the stamp on the
- * dialogs' own target (the open version), `startWith` on whatever its
- * preparation resolves. Each placement is recorded as the version it signs.
+ * target it is given, `startWith` on whatever its preparation resolves. Each
+ * placement is recorded as the version it signs, and revealing the viewer
+ * for it as such.
  */
 const readyFlow = (events: string[], pending: Promise<void>[]) =>
   ({
@@ -54,8 +55,9 @@ const readyFlow = (events: string[], pending: Promise<void>[]) =>
     setUp: () => undefined,
     isConnecting: false,
     isSigning: false,
-    start: () => {
-      events.push(`sign ${openVersion.fieldId}`);
+    start: (target, reveal) => {
+      events.push(`sign ${target.fieldId}`);
+      reveal?.();
     },
     startWith: (prepare) => {
       pending.push(
@@ -67,12 +69,6 @@ const readyFlow = (events: string[], pending: Promise<void>[]) =>
         })(),
       );
     },
-    preparedTarget: null,
-    sign: async () => {
-      await Promise.resolve();
-    },
-    placementOpen: false,
-    setPlacementOpen: () => undefined,
     requiredDialog: {
       action: "sign-pdf",
       onClose: () => undefined,
@@ -104,6 +100,7 @@ const mount = ({ isDirty, saved }: MountOptions) => {
           })}
         >
           <PageOrganizerSignAction
+            closeEditor={() => events.push("close editor")}
             disabled={false}
             isDirty={isDirty}
             saveVersion={async () => {
@@ -128,12 +125,12 @@ test("with unsaved page edits, signing saves a version first and signs that vers
   expect(events).toEqual(["save", `sign ${savedVersion.fieldId}`]);
 });
 
-test("with no page edits, signing signs the open version without saving", () => {
+test("with no page edits, signing places the stamp on the open version in the viewer", () => {
   const { events } = mount({ isDirty: false, saved: savedVersion });
 
   fireEvent.click(screen.getByRole("button", { name: SIGN_LABEL }));
 
-  expect(events).toEqual([`sign ${openVersion.fieldId}`]);
+  expect(events).toEqual([`sign ${openVersion.fieldId}`, "close editor"]);
 });
 
 test("a save that does not produce a version signs nothing", async () => {

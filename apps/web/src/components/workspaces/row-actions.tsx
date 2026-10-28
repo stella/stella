@@ -70,7 +70,7 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
+  PdfSignRequiredDialog,
   usePdfSignFlow,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
@@ -509,6 +509,25 @@ export const RowActions = ({
     isCurrentVersion: true,
     workspaceId,
   });
+  // The stamp is placed on the page, so signing opens the document.
+  const signPdf = () => {
+    if (pdfSignTarget === null) {
+      return;
+    }
+    pdfSignFlow.start(pdfSignTarget, () => {
+      detached(
+        navigate({
+          to: "/workspaces/$workspaceId/$viewId/document",
+          params: viewParams,
+          search: {
+            entity: pdfSignTarget.entityId,
+            field: pdfSignTarget.fieldId,
+          },
+        }),
+        "row-actions.sign-navigate",
+      );
+    });
+  };
   const openCopyToMatterDialog = () => {
     setCopyToMatterEntities(
       toCopyToMatterEntities(bulkTargets, getAncestorIds),
@@ -1246,7 +1265,7 @@ export const RowActions = ({
               ? {
                   capability: "desktop",
                   label: pdfSignFlow.actionLabel,
-                  onSelect: pdfSignFlow.start,
+                  onSelect: signPdf,
                   onSetUp: pdfSignFlow.setUp,
                   status: pdfSignFlow.status,
                 }
@@ -1327,9 +1346,7 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );

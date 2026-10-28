@@ -1,507 +1,220 @@
-import { useId, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useId } from "react";
 
-import { useQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogFormState,
-  DialogHeader,
-  DialogPanel,
-  DialogTitle,
-} from "@stll/ui/dialog";
-import { Label } from "@stll/ui/label";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
-import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import {
+  attachPdfSignViewer,
+  cancelPdfSignDrawing,
+  confirmPdfSignPlacement,
+  endPdfSignPlacement,
+  finishPdfSignDrawing,
+  movePdfSignDrawing,
+  type PdfSignPlacementSession,
+  setPdfSignDraft,
+  showPdfSignNotice,
+  type StampDraft,
+  startPdfSignDrawing,
+  usePdfSignPlacementStore,
+} from "@/components/inspector/pdf-sign-placement-store";
+import {
   adjustStampBox,
   canPlaceStamp,
+  clampPagePoint,
   defaultStampBox,
-  type PdfSigningStamp,
+  drawnStampBox,
+  type PagePoint,
   previewDeltaToPoints,
   type StampAdjustMode,
   type StampBox,
   stampKeyAdjustment,
   type StampPageSize,
+  type StampSizeCheck,
+  stampSizeCheck,
 } from "@/components/inspector/pdf-signing-stamp.logic";
 import { type BoxDragAdjustment, useBoxDrag } from "@/hooks/use-box-drag";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
-import { detached } from "@/lib/detached";
-import { fileOptions } from "@/lib/files/queries";
-import type {
-  PDFDocumentLoadingTask,
-  PDFDocumentProxy,
-  PDFPageProxy,
-} from "@/lib/pdf/pdfjs-loader";
-import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
-import { getDevicePixelRatio } from "@/lib/pdf/utils";
+import type { TranslationKey } from "@/i18n/types";
+import { usePDFStore, usePDFStoreApi } from "@/lib/pdf/pdf-context";
 
-type StampPlacement = {
-  box: StampBox;
+const percent = (fraction: number) => `${String(fraction * 100)}%`;
+
+const boxStyle = (box: StampBox) => ({
+  height: percent(box.height),
+  insetInlineStart: percent(box.x),
+  top: percent(box.y),
+  width: percent(box.width),
+});
+
+/** Whether the viewer shows this file's own pages, which a stamp can land on. */
+const useShowsOwnPages = () =>
+  usePDFStore((state) => state.document?.pageSource === "document");
+
+const useIsPlacing = (fieldId: string) =>
+  usePdfSignPlacementStore((state) => state.session?.fieldId === fieldId);
+
+type PdfSignPlacementLayerProps = {
+  pageId: string;
+};
+
+/**
+ * Over one rendered page while its file's stamp is being placed: drag on the
+ * page to draw the stamp, then move or resize it. Renders nothing otherwise,
+ * so the viewer's own text selection and marks work as usual.
+ */
+export const PdfSignPlacementLayer = ({
+  pageId,
+}: PdfSignPlacementLayerProps) => {
+  const fieldId = usePDFStore((state) => state.fieldId);
+  const pageInfo = usePDFStore((state) => state.pages.get(pageId));
+  const showsOwnPages = useShowsOwnPages();
+  const isPlacing = useIsPlacing(fieldId);
+
+  if (!isPlacing || !showsOwnPages || pageInfo === undefined) {
+    return null;
+  }
+
+  return (
+    <PdfSignPlacementPage
+      // pdf.js applies the page's rotation and crop box, so its scale-1
+      // viewport is the displayed page in points, as the API measures it.
+      page={{
+        height: pageInfo.originalHeight,
+        width: pageInfo.originalWidth,
+      }}
+      pageIndex={pageInfo.proxy.pageNumber - 1}
+    />
+  );
+};
+
+const NO_POINT: PagePoint = { x: 0, y: 0 };
+
+type PdfSignPlacementPageProps = {
+  /** The page as displayed, in points. */
   page: StampPageSize;
   pageIndex: number;
 };
 
-type PlacementChange = (placement: StampPlacement | null) => void;
-
-type SignatureMode = "invisible" | "visible";
-
-// The preview's render budget; the page is drawn to fit inside it.
-const PREVIEW_MAX_WIDTH_PX = 464;
-const PREVIEW_MAX_HEIGHT_PX = 352;
-const PREVIEW_MAX_HEIGHT_CSS = "min(22rem, 45dvh)";
-// Placeholder proportions (A4 portrait) while the page is not measured yet.
-const PLACEHOLDER_PAGE = { height: 841.89, width: 595.28 } as const;
-
-const pageFrameStyle = (page: StampPageSize): CSSProperties => ({
-  aspectRatio: `${String(page.width)} / ${String(page.height)}`,
-  width: `min(100%, calc(${PREVIEW_MAX_HEIGHT_CSS} * ${String(page.width / page.height)}))`,
-});
-
-const percent = (fraction: number) => `${String(fraction * 100)}%`;
-
-type PdfSignPlacementProps = {
-  fieldId: string;
-  onConfirm: (stamp: PdfSigningStamp | undefined) => void;
-  workspaceId: string;
-};
-
-/** Dialog body: choose an invisible signature or place a visible stamp. */
-export const PdfSignPlacement = ({
-  fieldId,
-  onConfirm,
-  workspaceId,
-}: PdfSignPlacementProps) => {
+/** The drawing surface over one page, positioned against the page box. */
+export const PdfSignPlacementPage = ({
+  page,
+  pageIndex,
+}: PdfSignPlacementPageProps) => {
   const t = useTranslations();
-  const loadedLang = useI18nStore((state) => state.loadedLang);
-  const [mode, setMode] = useState<SignatureMode>("invisible");
-  const [placement, setPlacement] = useState<StampPlacement | null>(null);
-  const radioName = useId();
-
-  const selectMode = (next: SignatureMode) => {
-    setMode(next);
-    setPlacement(null);
-  };
-
-  const confirm = () => {
-    if (mode === "invisible") {
-      onConfirm(undefined);
-      return;
-    }
-    if (placement === null) {
-      return;
-    }
-    onConfirm({
-      box: placement.box,
-      direction: getLangDir(loadedLang),
-      labels: {
-        date: t("common.date"),
-        location: t("workspaces.files.pdfSigning.stampLocation"),
-        reason: t("common.reason"),
-        signedBy: t("workspaces.files.pdfSigning.stampSignedBy"),
-      },
-      pageIndex: placement.pageIndex,
-      timeZone: resolveAppTimeZone(),
-    });
-  };
+  const draft = usePdfSignPlacementStore((state) =>
+    state.session?.draft?.pageIndex === pageIndex ? state.session.draft : null,
+  );
+  const drawing = usePdfSignPlacementStore((state) =>
+    state.session?.drawing?.pageIndex === pageIndex
+      ? state.session.drawing
+      : null,
+  );
+  // The drag reports where the pointer is, as a point on the page; the box
+  // it spans from the anchor is derived from that.
+  const { startDrag, ...dragHandlers } = useBoxDrag<PagePoint, "draw">({
+    adjust: ({ box: anchor, delta }) =>
+      clampPagePoint({ x: anchor.x + delta.x, y: anchor.y + delta.y }),
+    box: NO_POINT,
+    onChange: movePdfSignDrawing,
+  });
+  const drawnBox = drawing === null ? null : drawnStampBox(drawing);
 
   return (
-    <>
-      <DialogFormState
-        dirty={mode !== "invisible" || placement !== null}
-        onDiscard={() => {
-          setMode("invisible");
-          setPlacement(null);
-        }}
-      />
-      <DialogHeader>
-        <DialogTitle>
-          {t("workspaces.files.pdfSigning.placementTitle")}
-        </DialogTitle>
-        <DialogDescription>
-          {t("workspaces.files.pdfSigning.placementDescription")}
-        </DialogDescription>
-      </DialogHeader>
-      <DialogPanel>
-        <div className="flex flex-col gap-4">
-          <fieldset className="flex flex-col gap-2">
-            <legend className="sr-only">
-              {t("workspaces.files.pdfSigning.placementDescription")}
-            </legend>
-            <ModeOption
-              checked={mode === "invisible"}
-              description={t(
-                "workspaces.files.pdfSigning.placementInvisibleDescription",
-              )}
-              label={t("workspaces.files.pdfSigning.placementInvisible")}
-              name={radioName}
-              onSelect={() => selectMode("invisible")}
-              value="invisible"
-            />
-            <ModeOption
-              checked={mode === "visible"}
-              description={t(
-                "workspaces.files.pdfSigning.placementVisibleDescription",
-              )}
-              label={t("workspaces.files.pdfSigning.placementVisible")}
-              name={radioName}
-              onSelect={() => selectMode("visible")}
-              value="visible"
-            />
-          </fieldset>
-          {mode === "visible" && (
-            <StampFile
-              fieldId={fieldId}
-              onPlacementChange={setPlacement}
-              placement={placement}
-              workspaceId={workspaceId}
-            />
-          )}
-        </div>
-      </DialogPanel>
-      <DialogFooter>
-        <DialogClose render={<Button variant="ghost" />}>
-          {t("common.cancel")}
-        </DialogClose>
-        <Button
-          disabled={mode === "visible" && placement === null}
-          onClick={confirm}
-        >
-          {t("workspaces.files.pdfSigning.placementConfirm")}
-        </Button>
-      </DialogFooter>
-    </>
+    // The page keeps its own orientation under an RTL interface.
+    <div
+      aria-hidden={draft === null ? true : undefined}
+      className="absolute inset-0 z-20 cursor-crosshair touch-none select-none"
+      data-pdf-sign-placement-page={pageIndex + 1}
+      dir="ltr"
+      onLostPointerCapture={(event) => {
+        dragHandlers.onLostPointerCapture(event);
+        cancelPdfSignDrawing(event.pointerId);
+      }}
+      onPointerCancel={(event) => {
+        dragHandlers.onPointerCancel(event);
+        cancelPdfSignDrawing(event.pointerId);
+      }}
+      onPointerDown={(event) => {
+        // The stamp handles its own drags; only the bare page draws.
+        if (event.button !== 0 || event.target !== event.currentTarget) {
+          return;
+        }
+        event.preventDefault();
+        if (!canPlaceStamp(page)) {
+          showPdfSignNotice("page_too_small");
+          return;
+        }
+        const rect = event.currentTarget.getBoundingClientRect();
+        const anchor = clampPagePoint({
+          x: rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0,
+          y: rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0,
+        });
+        startPdfSignDrawing({
+          anchor,
+          current: anchor,
+          page,
+          pageIndex,
+          pointerId: event.pointerId,
+        });
+        startDrag(event, {
+          from: anchor,
+          mode: "draw",
+          surface: event.currentTarget,
+        });
+      }}
+      onPointerMove={dragHandlers.onPointerMove}
+      onPointerUp={(event) => {
+        // Settle before the drag lets go, so losing capture cancels nothing.
+        finishPdfSignDrawing(event.pointerId);
+        dragHandlers.onPointerUp(event);
+      }}
+    >
+      {drawnBox !== null && (
+        <DrawnBoxPreview
+          check={stampSizeCheck(drawnBox, page)}
+          label={t("workspaces.files.pdfSigning.stampSignedBy")}
+          box={drawnBox}
+        />
+      )}
+      {drawnBox === null && draft !== null && <StampBoxControl draft={draft} />}
+    </div>
   );
 };
 
-const ModeOption = ({
-  checked,
-  description,
+const DrawnBoxPreview = ({
+  box,
+  check,
   label,
-  name,
-  onSelect,
-  value,
 }: {
-  checked: boolean;
-  description: string;
+  box: StampBox;
+  check: StampSizeCheck;
   label: string;
-  name: string;
-  onSelect: () => void;
-  value: SignatureMode;
 }) => (
-  <label
-    aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3"
+  <div
+    className={cn(
+      "pointer-events-none absolute flex items-start border text-start",
+      check === "fits"
+        ? "border-primary bg-primary/10 text-primary"
+        : "border-destructive bg-destructive/10 text-destructive border-dashed",
+    )}
+    data-stamp-preview={check}
+    style={boxStyle(box)}
   >
-    <input
-      checked={checked}
-      className="accent-primary mt-0.5 size-4 shrink-0"
-      name={name}
-      onChange={onSelect}
-      type="radio"
-      value={value}
-    />
-    <span className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-sm font-medium">{label}</span>
-      <span className="text-muted-foreground text-xs">{description}</span>
+    <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
+      {label}
     </span>
-  </label>
-);
-
-const PagePlaceholder = () => (
-  <div className="relative mx-auto" style={pageFrameStyle(PLACEHOLDER_PAGE)}>
-    <Skeleton className="absolute inset-0 rounded-sm" />
   </div>
 );
 
-const PreviewMessage = ({ children }: { children: ReactNode }) => (
-  <p className="text-muted-foreground text-sm" role="status">
-    {children}
-  </p>
-);
-
-type StampEditorProps = {
-  onPlacementChange: PlacementChange;
-  placement: StampPlacement | null;
-};
-
-const StampFile = ({
-  fieldId,
-  workspaceId,
-  ...editor
-}: StampEditorProps & { fieldId: string; workspaceId: string }) => {
-  const t = useTranslations();
-  // Same bytes, and cache entry, as the viewer beside the dialog.
-  const fileQuery = useQuery(
-    fileOptions({ fieldId, purpose: "display", workspaceId }),
-  );
-
-  if (fileQuery.isError) {
-    return (
-      <PreviewMessage>
-        {t("workspaces.files.pdfSigning.placementPreviewFailed")}
-      </PreviewMessage>
-    );
-  }
-  if (fileQuery.data === undefined) {
-    return <PagePlaceholder />;
-  }
-  return (
-    <StampDocument
-      buffer={fileQuery.data.buffer}
-      key={fileQuery.data.fileId}
-      {...editor}
-    />
-  );
-};
-
-type DocumentState =
-  | { status: "failed" }
-  | { status: "loading" }
-  | { document: PDFDocumentProxy; status: "ready" };
-
-const StampDocument = ({
-  buffer,
-  onPlacementChange,
-  placement,
-}: StampEditorProps & { buffer: ArrayBuffer }) => {
-  const t = useTranslations();
-  const selectId = useId();
-  const [state, setState] = useState<DocumentState>({ status: "loading" });
-  const [pageIndex, setPageIndex] = useState<number | null>(null);
-
-  // The parsed document lives in the pdf.js worker until it is destroyed.
-  useMountEffect(() => {
-    let disposed = false;
-    let loadingTask: PDFDocumentLoadingTask | null = null;
-
-    const load = async () => {
-      const loaded = await Result.tryPromise(async () => {
-        const pdfjs = await loadPdfjs();
-        if (disposed) {
-          return null;
-        }
-        const task = pdfjs.getDocument({ data: buffer.slice(0) });
-        loadingTask = task;
-        return await task.promise;
-      });
-      if (disposed) {
-        return;
-      }
-      setState(
-        Result.isOk(loaded) && loaded.value !== null
-          ? { document: loaded.value, status: "ready" }
-          : { status: "failed" },
-      );
-    };
-
-    detached(load(), "pdf-sign-placement.load-document");
-    return () => {
-      disposed = true;
-      if (loadingTask !== null) {
-        detached(loadingTask.destroy(), "pdf-sign-placement.destroy-document");
-      }
-    };
-  });
-
-  if (state.status === "loading") {
-    return <PagePlaceholder />;
-  }
-  if (state.status === "failed") {
-    return (
-      <PreviewMessage>
-        {t("workspaces.files.pdfSigning.placementPreviewFailed")}
-      </PreviewMessage>
-    );
-  }
-
-  const pageCount = state.document.numPages;
-  const selectedPage = Math.min(pageIndex ?? pageCount - 1, pageCount - 1);
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <Label htmlFor={selectId}>
-          {t("workspaces.files.pdfSigning.placementPageLabel")}
-        </Label>
-        <Select
-          onValueChange={(value) => {
-            if (value === null || value === selectedPage) {
-              return;
-            }
-            setPageIndex(value);
-            onPlacementChange(null);
-          }}
-          value={selectedPage}
-        >
-          <SelectTrigger className="w-auto" id={selectId} size="sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup alignItemWithTrigger={false}>
-            {Array.from({ length: pageCount }, (_, index) => (
-              <SelectItem key={index} value={index}>
-                {t("workspaces.files.pdfSigning.placementPageOption", {
-                  count: pageCount,
-                  page: index + 1,
-                })}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-      </div>
-      <StampPage
-        document={state.document}
-        key={selectedPage}
-        onPlacementChange={onPlacementChange}
-        pageIndex={selectedPage}
-        placement={placement?.pageIndex === selectedPage ? placement : null}
-      />
-    </div>
-  );
-};
-
-type PageState =
-  | { status: "failed" }
-  | { status: "loading" }
-  | { page: StampPageSize; status: "ready" };
-
-type RenderTask = ReturnType<PDFPageProxy["render"]>;
-
-const StampPage = ({
-  document,
-  onPlacementChange,
-  pageIndex,
-  placement,
-}: StampEditorProps & { document: PDFDocumentProxy; pageIndex: number }) => {
+const StampBoxControl = ({ draft }: { draft: StampDraft }) => {
   const t = useTranslations();
   const hintId = useId();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [state, setState] = useState<PageState>({ status: "loading" });
-
-  // pdf.js applies the page's rotation and crop box, so the canvas shows the
-  // page as displayed and its scale-1 viewport is the page size in points.
-  useMountEffect(() => {
-    let disposed = false;
-    let renderTask: RenderTask | null = null;
-
-    const render = async () => {
-      const rendered = await Result.tryPromise(async () => {
-        const proxy = await document.getPage(pageIndex + 1);
-        const canvas = canvasRef.current;
-        const context = canvas?.getContext("2d");
-        if (disposed || !canvas || !context) {
-          return null;
-        }
-        const base = proxy.getViewport({ scale: 1 });
-        const fit = Math.min(
-          PREVIEW_MAX_WIDTH_PX / base.width,
-          PREVIEW_MAX_HEIGHT_PX / base.height,
-        );
-        const viewport = proxy.getViewport({
-          scale: fit * getDevicePixelRatio(),
-        });
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const task = proxy.render({ canvas, canvasContext: context, viewport });
-        renderTask = task;
-        await task.promise;
-        return { height: base.height, width: base.width };
-      });
-      if (disposed) {
-        return;
-      }
-      if (Result.isError(rendered) || rendered.value === null) {
-        setState({ status: "failed" });
-        return;
-      }
-      const page = rendered.value;
-      setState({ page, status: "ready" });
-      if (canPlaceStamp(page)) {
-        onPlacementChange({ box: defaultStampBox(page), page, pageIndex });
-      }
-    };
-
-    detached(render(), "pdf-sign-placement.render-page");
-    return () => {
-      disposed = true;
-      renderTask?.cancel();
-    };
-  });
-
-  if (state.status === "failed") {
-    return (
-      <PreviewMessage>
-        {t("workspaces.files.pdfSigning.placementPreviewFailed")}
-      </PreviewMessage>
-    );
-  }
-
-  const page = state.status === "ready" ? state.page : null;
-
-  return (
-    <div className="flex flex-col gap-2">
-      {/* The page keeps its own orientation under an RTL interface. */}
-      <div
-        className="outline-border relative mx-auto overflow-hidden rounded-sm shadow-sm outline"
-        dir="ltr"
-        style={pageFrameStyle(page ?? PLACEHOLDER_PAGE)}
-      >
-        <canvas
-          aria-label={t("workspaces.files.pdfSigning.placementPreview", {
-            page: pageIndex + 1,
-          })}
-          className={cn("block size-full", page === null && "invisible")}
-          ref={canvasRef}
-          role="img"
-        />
-        {page === null && <Skeleton className="absolute inset-0" />}
-        {placement !== null && (
-          <StampBoxControl
-            describedBy={hintId}
-            onChange={(box) => onPlacementChange({ ...placement, box })}
-            placement={placement}
-          />
-        )}
-      </div>
-      {page !== null && !canPlaceStamp(page) ? (
-        <PreviewMessage>
-          {t("workspaces.files.pdfSigning.placementTooSmall")}
-        </PreviewMessage>
-      ) : (
-        <p className="text-muted-foreground text-xs text-pretty" id={hintId}>
-          {t("workspaces.files.pdfSigning.placementHint")}
-        </p>
-      )}
-    </div>
-  );
-};
-
-const StampBoxControl = ({
-  describedBy,
-  onChange,
-  placement,
-}: {
-  describedBy: string;
-  onChange: (box: StampBox) => void;
-  placement: StampPlacement;
-}) => {
-  const t = useTranslations();
-  const { box, page } = placement;
+  const { box, page } = draft;
+  const onChange = (next: StampBox) => setPdfSignDraft({ ...draft, box: next });
   const { startDrag, ...pointerHandlers } = useBoxDrag({
     adjust: ({
       box: initialBox,
@@ -524,12 +237,13 @@ const StampBoxControl = ({
 
   return (
     <button
-      aria-describedby={describedBy}
+      aria-describedby={hintId}
       aria-label={t("workspaces.files.pdfSigning.placementBox")}
       // Drawn at the stamp's true size; an invisible layer around a small
       // box keeps it at least 44px to grab, equally on every side in either
       // direction.
       className="border-primary bg-primary/10 text-primary focus-visible:ring-ring/50 absolute flex cursor-move touch-none items-start border text-start outline-none select-none before:absolute before:inset-x-[min(0px,calc(50%-1.375rem))] before:inset-y-[min(0px,calc(50%-1.375rem))] before:content-[''] focus-visible:ring-2"
+      data-stamp-box=""
       onKeyDown={(event) => {
         const adjustment = stampKeyAdjustment({
           key: event.key,
@@ -552,16 +266,14 @@ const StampBoxControl = ({
         startDrag(event, { mode: onHandle ? "resize" : "move", surface });
       }}
       {...pointerHandlers}
-      style={{
-        height: percent(box.height),
-        insetInlineStart: percent(box.x),
-        top: percent(box.y),
-        width: percent(box.width),
-      }}
+      style={boxStyle(box)}
       type="button"
     >
       <span className="text-2xs max-h-full min-w-0 truncate p-1 leading-tight">
         {t("workspaces.files.pdfSigning.stampSignedBy")}
+      </span>
+      <span className="sr-only" id={hintId}>
+        {t("workspaces.files.pdfSigning.placementHint")}
       </span>
       {/* A 44px target centred on the visible corner square. */}
       <span
@@ -572,5 +284,182 @@ const StampBoxControl = ({
         <span className="bg-primary size-2.5" />
       </span>
     </button>
+  );
+};
+
+type PdfSignPlacementBarProps = {
+  fieldId: string;
+};
+
+/**
+ * The placement's controls over the viewer of `fieldId`, while its stamp is
+ * being placed. Placement ends once no viewer of the file is left.
+ */
+export const PdfSignPlacementBar = ({ fieldId }: PdfSignPlacementBarProps) => {
+  useMountEffect(() => attachPdfSignViewer(fieldId));
+  const isPlacing = useIsPlacing(fieldId);
+  const showsOwnPages = useShowsOwnPages();
+  const lastPageId = usePDFStore((state) =>
+    state.document?.pageSource === "document"
+      ? state.pages.keys().toArray().at(-1)
+      : undefined,
+  );
+  const pdfStore = usePDFStoreApi();
+
+  if (!isPlacing) {
+    return null;
+  }
+
+  const placeOnLastPage = () => {
+    const { pages, setScrollTo } = pdfStore.getState();
+    const pageInfo =
+      lastPageId === undefined ? undefined : pages.get(lastPageId);
+    if (lastPageId === undefined || pageInfo === undefined) {
+      return;
+    }
+    placeDefaultStamp({
+      page: { height: pageInfo.originalHeight, width: pageInfo.originalWidth },
+      pageIndex: pageInfo.proxy.pageNumber - 1,
+    });
+    setScrollTo({ pageId: lastPageId });
+  };
+
+  return (
+    <PdfSignPlacementControls
+      onPlaceOnLastPage={lastPageId === undefined ? undefined : placeOnLastPage}
+      showsOwnPages={showsOwnPages}
+    />
+  );
+};
+
+/** The default stamp, bottom-right on a page, when the page can hold one. */
+const placeDefaultStamp = ({ page, pageIndex }: PdfSignPlacementPageProps) => {
+  if (!canPlaceStamp(page)) {
+    showPdfSignNotice("page_too_small");
+    return;
+  }
+  setPdfSignDraft({ box: defaultStampBox(page), page, pageIndex });
+};
+
+const DRAWING_STATUS_KEYS = {
+  fits: "workspaces.files.pdfSigning.placementModeHint",
+  too_large: "workspaces.files.pdfSigning.placementDrawTooLarge",
+  too_small: "workspaces.files.pdfSigning.placementDrawTooSmall",
+} as const satisfies Record<StampSizeCheck, TranslationKey>;
+
+const placementStatus = ({
+  session,
+}: {
+  session: PdfSignPlacementSession | null;
+}): TranslationKey => {
+  if (session === null) {
+    return "workspaces.files.pdfSigning.placementModeHint";
+  }
+  if (session.drawing !== null) {
+    return DRAWING_STATUS_KEYS[
+      stampSizeCheck(drawnStampBox(session.drawing), session.drawing.page)
+    ];
+  }
+  if (session.notice === "page_too_small") {
+    return "workspaces.files.pdfSigning.placementTooSmall";
+  }
+  return session.draft === null
+    ? "workspaces.files.pdfSigning.placementModeHint"
+    : "workspaces.files.pdfSigning.placementRedrawHint";
+};
+
+type PdfSignPlacementControlsProps = {
+  /** Offered while no stamp is drawn: a way to place one without a pointer. */
+  onPlaceOnLastPage?: (() => void) | undefined;
+  /** `false` when the viewer shows a portfolio's attachments instead. */
+  showsOwnPages: boolean;
+};
+
+/**
+ * What to do on the page, and the choice to sign with the stamp, without
+ * one, or not at all. Escape cancels.
+ */
+export const PdfSignPlacementControls = ({
+  onPlaceOnLastPage,
+  showsOwnPages,
+}: PdfSignPlacementControlsProps) => {
+  const t = useTranslations();
+  const loadedLang = useI18nStore((state) => state.loadedLang);
+  const draft = usePdfSignPlacementStore(
+    (state) => state.session?.draft ?? null,
+  );
+  const status = usePdfSignPlacementStore((state) =>
+    showsOwnPages
+      ? placementStatus(state)
+      : "workspaces.files.pdfSigning.placementAttachmentsOnly",
+  );
+
+  useMountEffect(() => {
+    const controller = new AbortController();
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape" && !event.defaultPrevented) {
+          endPdfSignPlacement();
+        }
+      },
+      { signal: controller.signal },
+    );
+    return () => controller.abort();
+  });
+
+  const signWithStamp = () => {
+    if (draft === null) {
+      return;
+    }
+    confirmPdfSignPlacement({
+      box: draft.box,
+      direction: getLangDir(loadedLang),
+      labels: {
+        date: t("common.date"),
+        location: t("workspaces.files.pdfSigning.stampLocation"),
+        reason: t("common.reason"),
+        signedBy: t("workspaces.files.pdfSigning.stampSignedBy"),
+      },
+      pageIndex: draft.pageIndex,
+      timeZone: resolveAppTimeZone(),
+    });
+  };
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-2 z-40 flex justify-center px-2">
+      <div
+        aria-label={t("workspaces.files.pdfSigning.placementTitle")}
+        className="bg-popover text-popover-foreground ring-border pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-lg px-3 py-2 shadow-lg ring-1"
+        role="group"
+      >
+        <p
+          aria-live="polite"
+          className="min-w-0 flex-1 basis-48 text-sm text-pretty"
+        >
+          {t(status)}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {draft === null && showsOwnPages && onPlaceOnLastPage && (
+            <Button onClick={onPlaceOnLastPage} size="sm" variant="ghost">
+              {t("workspaces.files.pdfSigning.placementPlaceOnLastPage")}
+            </Button>
+          )}
+          <Button onClick={endPdfSignPlacement} size="sm" variant="ghost">
+            {t("common.cancel")}
+          </Button>
+          <Button
+            onClick={() => confirmPdfSignPlacement(undefined)}
+            size="sm"
+            variant="outline"
+          >
+            {t("workspaces.files.pdfSigning.placementSignInvisible")}
+          </Button>
+          <Button disabled={draft === null} onClick={signWithStamp} size="sm">
+            {t("workspaces.files.pdfSigning.placementSignVisible")}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 };

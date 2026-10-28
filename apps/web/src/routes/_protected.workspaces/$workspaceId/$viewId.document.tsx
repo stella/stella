@@ -68,7 +68,7 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import {
-  PdfSignDialogs,
+  PdfSignRequiredDialog,
   usePdfSignFlow,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
@@ -858,7 +858,7 @@ function RouteComponentInner({
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
   // Signing from the page editor outlives it: saving first replaces the
-  // version, which remounts the editor, and the stamp dialog must stay.
+  // version, which remounts the editor, and the signing must go on.
   const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
@@ -988,13 +988,11 @@ function RouteComponentInner({
     );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
-  const editorPdfSignTarget = editorPdfSignFlow.preparedTarget ?? pdfSignTarget;
-
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
-      {editorPdfSignTarget !== null && (
-        <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
+      {pdfSignTarget !== null && (
+        <PdfSignRequiredDialog flow={editorPdfSignFlow} />
       )}
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
