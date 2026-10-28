@@ -86,6 +86,9 @@ type InspectorViewTab<P> = {
 export type InspectorViewRenderProps<P> = {
   tab: InspectorViewTab<P>;
   onClose: () => void;
+  /** The view's content moved to the main view: the tab goes and the pane
+   *  minimizes, since what would remain in front is not what was asked for. */
+  onMoveToMain: () => void;
 };
 
 export type InspectorRailIconProps<P> = {
@@ -216,13 +219,14 @@ export const registerInspectorView = <P>(
   const RailLabel = registration.railLabel;
   const stored: StoredRegistration = {
     ...registration,
-    render: ({ tab, onClose }) => {
+    render: ({ tab, onClose, onMoveToMain }) => {
       if (!registration.validate(tab.payload)) {
         return null;
       }
       return createElement(Render, {
         tab: { ...tab, payload: tab.payload },
         onClose,
+        onMoveToMain,
       });
     },
     railIcon: ({ tab, active }) => {
