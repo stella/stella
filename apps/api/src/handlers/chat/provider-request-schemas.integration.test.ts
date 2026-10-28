@@ -200,7 +200,6 @@ const REQUEST_OPTION_COVERAGE = {
   retry: { neverSent: NOT_SET_BY_CHAT },
   subagentName: { neverSent: NOT_SET_BY_CHAT },
   toolChoice: { neverSent: NOT_SET_BY_CHAT },
-  toolExecution: { neverSent: NOT_SET_BY_CHAT },
   wrapFetch: { neverSent: NOT_SET_BY_CHAT },
   debug: { neverSent: NOT_SET_BY_CHAT },
   interrupts: { neverSent: NOT_SET_BY_CHAT },

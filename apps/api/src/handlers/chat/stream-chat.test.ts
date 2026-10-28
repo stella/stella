@@ -2824,7 +2824,6 @@ describe("native continuation persistence", () => {
 
   const firstContinuation = async () =>
     await continueTurn({
-      threadId: Bun.randomUUIDv7(),
       adapter: createTextReplyAdapter("Saved the draft."),
       messages: [
         userMessage,
@@ -2897,7 +2896,6 @@ describe("native continuation persistence", () => {
     });
     const resumeSecondApproval = async (firstOwningMessage: ChatMessage) =>
       await continueTurn({
-        threadId: Bun.randomUUIDv7(),
         adapter: createTextReplyAdapter("Saved the second draft."),
         messages: [
           userMessage,
@@ -2960,7 +2958,6 @@ describe("native continuation persistence", () => {
       },
     ];
     const { emitted, finish } = await continueTurn({
-      threadId: Bun.randomUUIDv7(),
       adapter: createSingleToolCallAdapter({
         arguments: '{"name":"Again","source":"@title Again"}',
         toolName: "save_playbook",
