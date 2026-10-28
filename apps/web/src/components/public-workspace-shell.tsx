@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
+import { matterChromeStyle } from "@stll/ui/matter-colors";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
@@ -140,55 +141,57 @@ export const PublicWorkspaceShell = ({
   const defaultInspector = <PublicInspectorRail onActivate={openChat} />;
 
   const shell = (
-    <PublicSignInRequestContext value={requestAuth}>
-      <SidebarProvider>
-        <SidebarToggleHotkey />
-        <WorkspaceShell
-          endDock={inspector ?? defaultInspector}
-          navigation={{
-            content: authStatus.isAuthenticated ? (
-              <Suspense
-                fallback={
-                  <PublicSidebar
-                    authStatus={authStatus}
-                    requestAuth={requestAuth}
-                  />
-                }
-              >
-                <AppSidebar surface={UNTINTED_APP_SIDEBAR_SURFACE} />
-              </Suspense>
-            ) : (
-              <PublicSidebar
-                authStatus={authStatus}
-                requestAuth={requestAuth}
+    <div className="contents" style={matterChromeStyle(null)}>
+      <PublicSignInRequestContext value={requestAuth}>
+        <SidebarProvider>
+          <SidebarToggleHotkey />
+          <WorkspaceShell
+            endDock={inspector ?? defaultInspector}
+            navigation={{
+              content: authStatus.isAuthenticated ? (
+                <Suspense
+                  fallback={
+                    <PublicSidebar
+                      authStatus={authStatus}
+                      requestAuth={requestAuth}
+                    />
+                  }
+                >
+                  <AppSidebar surface={UNTINTED_APP_SIDEBAR_SURFACE} />
+                </Suspense>
+              ) : (
+                <PublicSidebar
+                  authStatus={authStatus}
+                  requestAuth={requestAuth}
+                />
+              ),
+              mode: "responsive",
+            }}
+            topBar={() => topBar}
+          >
+            {content ?? <Outlet />}
+          </WorkspaceShell>
+          {authRedirectTo !== null && (
+            <Suspense fallback={null}>
+              <SignInDialog
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setAuthRedirectTo(null);
+                  }
+                }}
+                open
+                redirectTo={authRedirectTo}
               />
-            ),
-            mode: "responsive",
-          }}
-          topBar={() => topBar}
-        >
-          {content ?? <Outlet />}
-        </WorkspaceShell>
-        {authRedirectTo !== null && (
-          <Suspense fallback={null}>
-            <SignInDialog
-              onOpenChange={(open) => {
-                if (!open) {
-                  setAuthRedirectTo(null);
-                }
-              }}
-              open
-              redirectTo={authRedirectTo}
-            />
-          </Suspense>
-        )}
-        {authStatus.isAuthenticated && createMatterDialogOpen && (
-          <Suspense fallback={null}>
-            <CreateMatterDialog />
-          </Suspense>
-        )}
-      </SidebarProvider>
-    </PublicSignInRequestContext>
+            </Suspense>
+          )}
+          {authStatus.isAuthenticated && createMatterDialogOpen && (
+            <Suspense fallback={null}>
+              <CreateMatterDialog />
+            </Suspense>
+          )}
+        </SidebarProvider>
+      </PublicSignInRequestContext>
+    </div>
   );
 
   if (authStatus.isAuthenticated) {
