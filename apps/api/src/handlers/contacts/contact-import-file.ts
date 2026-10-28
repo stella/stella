@@ -643,14 +643,22 @@ export const parseContactImportDocument = (
     );
   }
 
+  // The parser keeps whitespace as data; for contacts a record of only
+  // whitespace carries nothing to import, so it counts as a blank row.
+  const dataRows = selected.rows.slice(1);
+  const dataRowNumbers = selected.rowNumbers.slice(1);
+  const keep = dataRows.map((row) =>
+    row.some((value) => value.trim().length > 0),
+  );
   return boundedDocument({
     source: { kind: "delimited", delimiter: selected.delimiter },
     headers: firstRow.map((header, index) =>
       (index === 0 ? header.replace(/^\uFEFF/u, "") : header).trim(),
     ),
-    rows: selected.rows.slice(1),
-    rowNumbers: selected.rowNumbers.slice(1),
-    skippedBlankRowCount: selected.skippedBlankRowCount,
+    rows: dataRows.filter((_, index) => keep[index] === true),
+    rowNumbers: dataRowNumbers.filter((_, index) => keep[index] === true),
+    skippedBlankRowCount:
+      selected.skippedBlankRowCount + keep.filter((kept) => !kept).length,
   });
 };
 

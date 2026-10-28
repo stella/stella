@@ -82,7 +82,7 @@ export const parseCSVWithMetadata = (
 
   const finishRow = (): boolean => {
     finishCell();
-    if (row.some((value) => value.trim().length > 0)) {
+    if (row.some((value) => value.length > 0)) {
       if (maxRows !== undefined && rows.length >= maxRows) {
         return false;
       }
