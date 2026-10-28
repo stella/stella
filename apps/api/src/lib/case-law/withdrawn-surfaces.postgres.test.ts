@@ -811,7 +811,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         const persisted = await scopedDb(
           async (tx) =>
             await tx
-              .select({ state: chatRunLogs.referenceState })
+              .select({ state: chatRunLogs.referenceSummary })
               .from(chatRunLogs)
               .where(eq(chatRunLogs.runId, runId))
               .limit(1),
@@ -2164,7 +2164,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           expect(
             queries.every(
               (query) =>
-                !query.includes('"reference_state"') &&
+                !query.includes('"reference_summary"') &&
                 !query.includes("CASE WHEN octet_length"),
             ),
           ).toBe(true);
@@ -2188,7 +2188,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             .select({
               bytes: chatRunLogs.bytesUsed,
               nextSeq: chatRunLogs.nextSeq,
-              state: chatRunLogs.referenceState,
+              state: chatRunLogs.referenceSummary,
             })
             .from(chatRunLogs)
             .where(eq(chatRunLogs.runId, options.runId))
@@ -2229,7 +2229,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         await tx
           .update(chatRunLogs)
           .set({
-            referenceState: {
+            referenceSummary: {
               type: "checkpointed",
               through: "0",
               decisionIds: [],
@@ -2471,7 +2471,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
               sql`CREATE TABLE chat_run_logs (LIKE public.chat_run_logs INCLUDING ALL)`,
             );
             await tx.execute(
-              sql`ALTER TABLE ${namespace}.chat_run_logs DROP COLUMN reference_state`,
+              sql`ALTER TABLE ${namespace}.chat_run_logs DROP COLUMN reference_summary`,
             );
             await tx.execute(
               sql`CREATE TABLE chat_run_log_entries (LIKE public.chat_run_log_entries INCLUDING ALL)`,
@@ -2571,7 +2571,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           const state = await legacyDb(
             async (tx) =>
               await tx
-                .select({ state: chatRunLogs.referenceState })
+                .select({ state: chatRunLogs.referenceSummary })
                 .from(chatRunLogs)
                 .where(eq(chatRunLogs.runId, options.runId))
                 .limit(1),
@@ -2616,7 +2616,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           const freshState = await legacyDb(
             async (tx) =>
               await tx
-                .select({ state: chatRunLogs.referenceState })
+                .select({ state: chatRunLogs.referenceSummary })
                 .from(chatRunLogs)
                 .where(eq(chatRunLogs.runId, fresh.options.runId))
                 .limit(1),

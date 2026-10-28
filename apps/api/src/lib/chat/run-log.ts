@@ -200,7 +200,7 @@ type RunLogHeaderOptions = Pick<
   tx: Transaction;
   includeReferences: boolean;
 };
-const sourceReadBudget = sql`CASE WHEN ${chatRunLogs.referenceState}->>'type' = 'legacy' THEN ${MAX_RUN_BYTES}::integer ELSE ${MAX_CHUNK_BYTES}::integer END`;
+const sourceReadBudget = sql`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'legacy' THEN ${MAX_RUN_BYTES}::integer ELSE ${MAX_CHUNK_BYTES}::integer END`;
 const readRunLogHeaderOnTx = async ({
   tx,
   organizationId,
@@ -214,8 +214,8 @@ const readRunLogHeaderOnTx = async ({
         nextSeq: chatRunLogs.nextSeq,
         bytesUsed: chatRunLogs.bytesUsed,
         subjectDecisionId: chatThreads.subjectDecisionId,
-        referenceState: includeReferences
-          ? sql<RunLogReferenceSummary>`CASE WHEN ${chatRunLogs.referenceState}->>'type' = 'legacy' THEN jsonb_build_object('type', 'legacy') ELSE jsonb_build_object('type', 'checkpointed', 'through', ${chatRunLogs.referenceState}->'through', 'decisionIds', ${chatRunLogs.referenceState}->'decisionIds', 'userMessageIds', jsonb_path_query_array(${chatRunLogs.referenceState}, '$.messages[*] ? (@.role == "user").id')) END`
+        referenceSummary: includeReferences
+          ? sql<RunLogReferenceSummary>`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'legacy' THEN jsonb_build_object('type', 'legacy') ELSE jsonb_build_object('type', 'checkpointed', 'through', ${chatRunLogs.referenceSummary}->'through', 'decisionIds', ${chatRunLogs.referenceSummary}->'decisionIds', 'userMessageIds', jsonb_path_query_array(${chatRunLogs.referenceSummary}, '$.messages[*] ? (@.role == "user").id')) END`
           : sql<RunLogReferenceSummary | null>`null`,
         sourceContent: includeReferences
           ? sql`CASE WHEN octet_length(${chatMessages.content}::text) <= ${sourceReadBudget} THEN ${chatMessages.content} ELSE NULL END`
@@ -630,12 +630,12 @@ const createRunLogCopyProjection = ({
     if (log.sourceOverflow) {
       throw new ChatRunLogError({
         message:
-          log.referenceState?.type === "legacy"
+          log.referenceSummary?.type === "legacy"
             ? "Chat run log exceeds its size limit"
             : "Chat run log source exceeds its size limit",
       });
     }
-    const persisted = log.referenceState;
+    const persisted = log.referenceSummary;
     const references = decisionReferencesIn([
       { subjectDecisionId: log.subjectDecisionId },
       log.sourceContent,
@@ -727,7 +727,7 @@ const createRunLogCopyProjection = ({
   };
   return {
     async forHeader({ log, tx }: { log: RunLogHeader; tx: Transaction }) {
-      if (log?.referenceState?.type === "legacy") {
+      if (log?.referenceSummary?.type === "legacy") {
         if (log.bytesUsed > BigInt(MAX_RUN_BYTES)) {
           throw new ChatRunLogError({
             message: "Chat run log exceeds its size limit",
@@ -1149,7 +1149,7 @@ export const createChatRunLog = ({
             organizationId,
             runId,
             turnId: execution.id,
-            referenceState: {
+            referenceSummary: {
               type: "checkpointed",
               through: "0",
               decisionIds: [],
@@ -1216,14 +1216,14 @@ export const createChatRunLog = ({
           });
         }
         const [reference] = await tx
-          .select({ state: chatRunLogs.referenceState })
+          .select({ state: chatRunLogs.referenceSummary })
           .from(chatRunLogs)
           .where(logKey(organizationId, runId))
           .limit(1);
         const previous =
           reference?.state ??
           panic("Locked run log reference state disappeared");
-        const referenceState = nextRunReferenceState({
+        const referenceSummary = nextRunReferenceState({
           state: previous,
           chunks,
           firstSeq: log.nextSeq,
@@ -1244,7 +1244,7 @@ export const createChatRunLog = ({
           .set({
             nextSeq: first + BigInt(chunks.length),
             bytesUsed: nextBytes,
-            referenceState,
+            referenceSummary,
           })
           .where(logKey(organizationId, runId));
         return chunks.map((_, index) => (first + BigInt(index)).toString());
@@ -1291,7 +1291,7 @@ export const createChatRunLog = ({
             organizationId,
             runId,
             turnId: execution.id,
-            referenceState: {
+            referenceSummary: {
               type: "checkpointed",
               through: "0",
               decisionIds: [],

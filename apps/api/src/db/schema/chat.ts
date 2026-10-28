@@ -749,7 +749,7 @@ export const chatRunLogs = p.pgTable(
     nextSeq: p.bigint("next_seq", { mode: "bigint" }).notNull().default(1n),
     bytesUsed: p.bigint("bytes_used", { mode: "bigint" }).notNull().default(0n),
     /** Older producers use legacy mode; current producers explicitly start checkpointed summaries. */
-    referenceState: jsonb("reference_state")
+    referenceSummary: jsonb("reference_summary")
       .$type<ChatRunReferenceState>()
       .notNull()
       .default({ type: "legacy" }),
@@ -764,8 +764,8 @@ export const chatRunLogs = p.pgTable(
     p.check("chat_run_logs_next_seq_check", sql`${table.nextSeq} > 0`),
     p.check("chat_run_logs_bytes_used_check", sql`${table.bytesUsed} >= 0`),
     p.check(
-      "chat_run_logs_reference_state_size_check",
-      sql`octet_length(${table.referenceState}::text) <= ${CHAT_RUN_REFERENCE_STATE_MAX_BYTES}`,
+      "chat_run_logs_reference_summary_size_check",
+      sql`octet_length(${table.referenceSummary}::text) <= ${CHAT_RUN_REFERENCE_STATE_MAX_BYTES}`,
     ),
     p.index("chat_run_logs_turn_id_idx").on(table.turnId),
     p

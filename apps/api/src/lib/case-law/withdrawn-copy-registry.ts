@@ -320,8 +320,8 @@ const WITHDRAWN_COPY_REGISTRY = {
       "createdAt",
       "closedAt",
     ],
-    decision: "referenceState.decisionIds",
-    fields: { referenceState: { kind: "snapshot", projection: "marker" } },
+    decision: "referenceSummary.decisionIds",
+    fields: { referenceSummary: { kind: "snapshot", projection: "marker" } },
   },
   chatRunLogEntries: {
     metadata: ["organizationId", "runId", "seq", "batchId", "batchIndex"],
