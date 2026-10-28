@@ -35,11 +35,9 @@ export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
       : { type: "incomplete", reason: "Finding decision history is pending" };
   },
   repair: async (connection) => {
-    await connection.execute("SET statement_timeout = '60s'");
-    try {
-      for (;;) {
-        const rows = await connection.query(
-          `WITH batch AS (
+    for (;;) {
+      const rows = await connection.query(
+        `WITH batch AS (
             SELECT finding.id ${PENDING_DECISIONS}
             ORDER BY finding.id
             LIMIT $1
@@ -52,14 +50,11 @@ export const DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL = {
           FROM public.document_review_findings finding
           JOIN batch ON batch.id = finding.id
           RETURNING finding_id`,
-          [BATCH_SIZE],
-        );
-        if (rows.length === 0) {
-          return { type: "complete" } as const;
-        }
+        [BATCH_SIZE],
+      );
+      if (rows.length === 0) {
+        return { type: "complete" } as const;
       }
-    } finally {
-      await connection.execute("SET statement_timeout = 0");
     }
   },
 } satisfies OnlineRepair;

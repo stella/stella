@@ -8,7 +8,6 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL } from "../../db/document-review-finding-decision-backfill";
-import { createUngatedTableGateForTests } from "../../db/online-ddl";
 import type { OnlineMigrationConnection } from "../../db/online-migration-connection";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -106,19 +105,18 @@ describe.skipIf(!enabled)("document review finding decision history", () => {
         `);
 
         const connection = connectionIn(client, schema);
-        const tables = createUngatedTableGateForTests(connection);
         const repair = DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL;
         expect(await repair.readCompletion(connection)).toMatchObject({
           type: "incomplete",
         });
-        expect(await repair.repair(connection, tables)).toEqual({
+        expect(await repair.repair(connection)).toEqual({
           type: "complete",
         });
         expect(await repair.readCompletion(connection)).toEqual({
           type: "complete",
         });
         // A second run on a completed database changes nothing.
-        expect(await repair.repair(connection, tables)).toEqual({
+        expect(await repair.repair(connection)).toEqual({
           type: "complete",
         });
 
