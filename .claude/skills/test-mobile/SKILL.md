@@ -16,40 +16,6 @@ Its sessions are scoped to this worktree and it claims the device it opens, so
 parallel agents do not take over each other's simulators. Never shut down or
 erase a simulator another session holds (`bunx agent-device device status`).
 
-## Machine memory: one simulator, given back
-
-A booted simulator costs several gigabytes and hundreds of processes, and
-agent-device keeps an XCUITest runner (`xcodebuild test-without-building`)
-alive per session. To preserve machine memory:
-
-- **Boot through the script, one device at a time.** From the repository
-  root, run it in the background:
-
-  ```bash
-  bun run mobile:sim                  # an iPhone
-  bun run mobile:sim --device iPad    # or another, by part of its name
-  ```
-
-  It reuses a booted simulator of that kind, else boots one, keeps the
-  development client in step, starts Metro and opens the app. Batch every
-  check for one device into one boot; never boot a second device beside it.
-  Check another form factor after giving the first back.
-- **Give it back as soon as the checks are done**, not at the end of the
-  session:
-
-  ```bash
-  cd apps/mobile && bunx agent-device close --session <name>   # each session you opened
-  cd ../.. && bun run mobile:sim stop
-  ```
-
-  `stop` signals the running `mobile:sim`, which stops Metro and powers off
-  the simulator it booted (as Ctrl-C does), then quits Simulator and Xcode's
-  DeviceHub once nothing is booted. Never stop Metro by killing its process:
-  that skips the power-off.
-- A simulator the script did not boot (booted by hand, or by another
-  session) stays booted after `stop`. Do not power off one another session
-  holds; ask the person to power off one that is yours.
-
 ## 1. Start the stack
 
 ```bash
@@ -138,7 +104,6 @@ through `bun run agent:cli` or the API, as `/dev` describes.
 
 Report what you ran and what it showed: the commands, the screens you
 reached, the screenshot paths, and any state from §5 you did not drive and
-why. Then give the machine back: close your agent-device sessions
-(`bunx agent-device close`), run `bun run mobile:sim stop` (Metro and the
-simulator it booted), and `bun run agent:down` (the stack). Boot again for the
-next round of checks rather than leaving a simulator running between them.
+why. Then close your session (`bunx agent-device close`) and stop the Metro
+process you started. Leave the stack and the simulator running for the next
+iteration; `bun run agent:down` stops the stack when you are done with it.
