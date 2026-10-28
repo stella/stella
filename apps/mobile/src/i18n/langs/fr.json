@@ -199,7 +199,8 @@
     "retry": "Réessayer",
     "unavailable": "Le suivi du temps n’est pas activé pour votre organisation.",
     "startFailed": "Le minuteur n’a pas pu être démarré. Réessayez.",
-    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez."
+    "changeFailed": "Le minuteur n’a pas pu être modifié. Réessayez.",
+    "more": "{count, plural, one {# autre minuteur} other {# autres minuteurs}}"
   },
   "scan": {
     "title": "Numériser un document",

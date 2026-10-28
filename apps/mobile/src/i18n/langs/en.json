@@ -199,7 +199,8 @@
     "retry": "Try again",
     "unavailable": "Time tracking is not turned on for your organization.",
     "startFailed": "The timer could not be started. Try again.",
-    "changeFailed": "The timer could not be changed. Try again."
+    "changeFailed": "The timer could not be changed. Try again.",
+    "more": "{count, plural, one {# more timer} other {# more timers}}"
   },
   "scan": {
     "title": "Scan a document",

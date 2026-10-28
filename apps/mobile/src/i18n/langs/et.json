@@ -199,7 +199,8 @@
     "retry": "Proovi uuesti",
     "unavailable": "Teie organisatsioonis pole ajaarvestus sisse lülitatud.",
     "startFailed": "Taimerit ei õnnestunud käivitada. Proovige uuesti.",
-    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti."
+    "changeFailed": "Taimerit ei õnnestunud muuta. Proovige uuesti.",
+    "more": "{count, plural, one {veel # taimer} other {veel # taimerit}}"
   },
   "scan": {
     "title": "Skanni dokument",

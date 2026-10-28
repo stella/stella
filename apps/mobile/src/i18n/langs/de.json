@@ -199,7 +199,8 @@
     "retry": "Erneut versuchen",
     "unavailable": "Die Zeiterfassung ist für Ihre Organisation nicht aktiviert.",
     "startFailed": "Der Timer konnte nicht gestartet werden. Versuchen Sie es erneut.",
-    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut."
+    "changeFailed": "Der Timer konnte nicht geändert werden. Versuchen Sie es erneut.",
+    "more": "{count, plural, one {# weiterer Timer} other {# weitere Timer}}"
   },
   "scan": {
     "title": "Dokument scannen",

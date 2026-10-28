@@ -199,7 +199,8 @@
     "retry": "Újra",
     "unavailable": "Az időrögzítés nincs bekapcsolva a szervezetében.",
     "startFailed": "Az időzítőt nem sikerült elindítani. Próbálja újra.",
-    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra."
+    "changeFailed": "Az időzítőt nem sikerült módosítani. Próbálja újra.",
+    "more": "{count, plural, other {még # időmérő}}"
   },
   "scan": {
     "title": "Dokumentum szkennelése",

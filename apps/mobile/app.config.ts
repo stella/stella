@@ -108,6 +108,12 @@ const updatesFor = (
 
 type AppConfigInputs = {
   buildNumber: number;
+  /**
+   * Whether the build carries the widget extension that draws Live
+   * Activities. A release signs the app target alone, so it leaves the
+   * extension out until the release signs that too.
+   */
+  liveActivities: boolean;
   /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
   runtimeVersion: string;
   signingCertificatePresent: boolean;
@@ -116,6 +122,7 @@ type AppConfigInputs = {
 
 const appConfigBase = ({
   buildNumber,
+  liveActivities,
   runtimeVersion,
   signingCertificatePresent,
   variant,
@@ -168,21 +175,37 @@ const appConfigBase = ({
         ],
       },
     ],
+    // A running timer on the Lock Screen and in the Dynamic Island
+    // (src/widgets/timer-activity.ios.tsx).
+    ...(liveActivities
+      ? [
+          [
+            "expo-widgets",
+            {
+              bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
+              groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
+            },
+          ] as const,
+        ]
+      : []),
   ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
   },
-  extra: { variant },
+  extra: { liveActivities, variant },
 });
 
 export const appConfigFor = ({
   signing,
   ...inputs
-}: AppConfigInputs & {
+}: Omit<AppConfigInputs, "liveActivities"> & {
   signing?: ReleaseSigning | undefined;
 }): ExpoConfig => {
-  const config = appConfigBase(inputs);
+  const config = appConfigBase({
+    ...inputs,
+    liveActivities: signing === undefined,
+  });
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };
 

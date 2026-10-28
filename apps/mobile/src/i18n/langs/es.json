@@ -199,7 +199,8 @@
     "retry": "Reintentar",
     "unavailable": "El registro de tiempo no está activado en su organización.",
     "startFailed": "No se pudo iniciar el temporizador. Inténtelo de nuevo.",
-    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo."
+    "changeFailed": "No se pudo cambiar el temporizador. Inténtelo de nuevo.",
+    "more": "{count, plural, one {# temporizador más} other {# temporizadores más}}"
   },
   "scan": {
     "title": "Escanear un documento",

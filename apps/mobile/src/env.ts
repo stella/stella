@@ -27,7 +27,18 @@ export const DEFAULT_SERVER_URL: string =
  * without one is broken, so it stops at launch rather than signing in on
  * another build's redirect.
  */
-export const APP_VARIANT: MobileAppVariant = v.parse(
-  v.object({ variant: v.picklist(MOBILE_APP_VARIANTS) }),
+const extra = v.parse(
+  v.object({
+    liveActivities: v.optional(v.boolean(), false),
+    variant: v.picklist(MOBILE_APP_VARIANTS),
+  }),
   Constants.expoConfig?.extra,
-).variant;
+);
+
+export const APP_VARIANT: MobileAppVariant = extra.variant;
+
+/**
+ * Whether the build carries the widget extension that draws Live
+ * Activities (`app.config.ts`); a release leaves it out until it signs it.
+ */
+export const LIVE_ACTIVITIES: boolean = extra.liveActivities;
