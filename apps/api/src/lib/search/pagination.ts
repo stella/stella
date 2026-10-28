@@ -14,7 +14,7 @@ export type GlobalSearchCursor = {
   seen: number;
 };
 
-export const SEARCH_RANKING_TIERS = [0, 1, 2, 3, 4] as const;
+const SEARCH_RANKING_TIERS = [0, 1, 2, 3, 4] as const;
 export type SearchRankingTier = (typeof SEARCH_RANKING_TIERS)[number];
 
 const parseSearchRankingTier = (value: string): SearchRankingTier | null => {
