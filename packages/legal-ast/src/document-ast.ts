@@ -1079,6 +1079,13 @@ export const startsDecisionBody = (block: Block): boolean => {
   }
 };
 
+/** The publisher blocks validated and folded as one head-matter region. */
+export const isHeadMatterBlock = (block: Block): boolean =>
+  (block.type === "paragraph" &&
+    block.note === undefined &&
+    isApparatusRole(block.role)) ||
+  (block.type === "heading" && block.role === "publisher-heading");
+
 /** Publisher head matter may precede, but never interrupt or follow, the body.
  * Notes retain their own placement and are never a head-matter region. */
 export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean => {
@@ -1087,11 +1094,7 @@ export const headMatterPrecedesBody = (blocks: readonly Block[]): boolean => {
     if (footnoteOf(block) !== null) {
       continue;
     }
-    if (
-      bodyStarted &&
-      ((block.type === "paragraph" && isApparatusRole(block.role)) ||
-        (block.type === "heading" && block.role === "publisher-heading"))
-    ) {
+    if (bodyStarted && isHeadMatterBlock(block)) {
       return false;
     }
     bodyStarted ||= startsDecisionBody(block);
