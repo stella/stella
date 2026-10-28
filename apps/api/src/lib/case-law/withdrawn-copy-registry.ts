@@ -1,14 +1,11 @@
-import { getColumns, is } from "drizzle-orm";
-import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
-
-import * as schema from "@/api/db/schema";
+import { tenantDecisionTableNames } from "@/api/lib/account-export/schema-census";
+import type { DatabaseSchema } from "@/api/lib/account-export/schema-census";
 import type { SafeId } from "@/api/lib/branded-types";
 
-import { isDecisionReferenceKey } from "./withdrawn-copy-fields";
 import type { IsDecisionReferenceKey } from "./withdrawn-copy-fields";
 import type { WithdrawnCopyProjection } from "./withdrawn-copy-projection";
 
-type Schema = typeof schema;
+type Schema = DatabaseSchema;
 type RowOf<T> = T extends { $inferSelect: infer Row } ? Row : never;
 type SeenType<Seen extends readonly unknown[], Value> = Seen extends readonly [
   infer First,
@@ -373,36 +370,10 @@ type ConflictingCopyColumn = {
 true satisfies UnclassifiedCopyColumn extends never ? true : never;
 true satisfies ConflictingCopyColumn extends never ? true : never;
 
-/** Enumerate the real schema, including decision keys without foreign keys. */
+/** Require a projection for every schema-derived decision-associated store. */
 export const unregisteredDecisionCopyStores = (
-  tables: Record<string, unknown> = schema,
-): string[] => {
-  const missing: string[] = [];
-  for (const [name, value] of Object.entries(tables)) {
-    if (!is(value, PgTable)) {
-      continue;
-    }
-    const columns = getColumns(value);
-    if (!("organizationId" in columns) && !("workspaceId" in columns)) {
-      continue;
-    }
-    const hasDecisionKey = Object.values(columns).some((column) =>
-      isDecisionReferenceKey(column.name),
-    );
-    const hasDecisionTarget =
-      columns["targetType"]?.enumValues?.includes("decision") === true &&
-      "targetId" in columns;
-    const hasDecisionForeignKey = getTableConfig(value).foreignKeys.some(
-      (foreignKey) =>
-        getTableConfig(foreignKey.reference().foreignTable).name ===
-        getTableConfig(schema.caseLawDecisions).name,
-    );
-    if (
-      (hasDecisionKey || hasDecisionTarget || hasDecisionForeignKey) &&
-      !Object.hasOwn(WITHDRAWN_COPY_REGISTRY, name)
-    ) {
-      missing.push(name);
-    }
-  }
-  return missing;
-};
+  tables?: Record<string, unknown>,
+): string[] =>
+  tenantDecisionTableNames(tables).filter(
+    (name) => !Object.hasOwn(WITHDRAWN_COPY_REGISTRY, name),
+  );

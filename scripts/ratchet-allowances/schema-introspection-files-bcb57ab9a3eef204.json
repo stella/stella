@@ -1,6 +1,0 @@
-{
-  "metric": "schema-introspection-files",
-  "file": "apps/api/src/lib/case-law/withdrawn-copy-registry.ts",
-  "delta": 1,
-  "reason": "The withdrawal registry enumerates schema metadata to require a classification for each decision-associated tenant store; it performs no database operations."
-}

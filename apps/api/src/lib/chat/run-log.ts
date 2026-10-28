@@ -20,6 +20,7 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CHAT_RUN_REFERENCE_STATE_MAX_BYTES,
   chatMessages,
   chatRunLogEntries,
   chatRunLogs,
@@ -29,7 +30,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
-import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
 import type {
   ChatRunCheckpointedReferenceState,
   ChatRunReferenceState,

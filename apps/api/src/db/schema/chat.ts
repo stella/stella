@@ -11,7 +11,6 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
-import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
@@ -736,6 +735,8 @@ export const chatTurns = p.pgTable(
 
 const chatRunLogOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass)`;
 const chatRunLogEntryOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_log_entries'::regclass)`;
+
+export const CHAT_RUN_REFERENCE_STATE_MAX_BYTES = 64 * 1024;
 
 /** Transient delivery log for one execution run; the turn remains authoritative. */
 export const chatRunLogs = p.pgTable(

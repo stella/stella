@@ -3,11 +3,11 @@ import { inArray } from "drizzle-orm";
 
 import type { UiLocale } from "@stll/locales";
 
-import { caseLawWithdrawalStatus } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
+import { caseLawWithdrawalStatus } from "../../db/schema/case-law-withdrawal-status";
 import {
   decisionReferencesIn,
   WithdrawnCopyProjection,
