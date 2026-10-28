@@ -34,6 +34,8 @@
     "./capability-request": "./src/capability-request.ts",
     "./browser-storage": "./src/browser-storage.ts",
     "./browser-control": "./src/browser-control.ts",
+    "./chat-connector": "./src/chat-connector.ts",
+    "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./visual-theme": "./src/visual-theme.ts",
