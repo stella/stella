@@ -113,7 +113,6 @@ const decideDocumentReviewFinding = createSafeHandler(
     const recordsApplication =
       applicationStatus === DOCUMENT_REVIEW_APPLICATION_STATUS.APPLIED;
     const reopening = decision === DOCUMENT_REVIEW_DECISION.OPEN;
-    const now = new Date();
     // `null` means "the request said nothing about flags", which is different
     // from `[]`, which means "clear them".
     const requestedFlags =
@@ -169,6 +168,9 @@ const decideDocumentReviewFinding = createSafeHandler(
           return { type: "unchanged", finding } as const;
         }
 
+        // Read after the row lock, so decision moments follow the order in
+        // which the finding actually changed.
+        const now = new Date();
         // A decision restated is not a decision retaken: the moment and the
         // decider stay as the row recorded them. Taking one stamps both;
         // reopening withdraws both, which the column pair's CHECK requires.
