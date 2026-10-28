@@ -381,6 +381,11 @@ if (!databaseUrl || !runPostgresTests) {
         sourceRawS3Key: `case-law/raw/${sourceId}/documents/${decisionId}/identity.xml`,
         sourceRawContentType: "application/xml",
       });
+      await db.insert(caseLawDecisionSourceIdentities).values({
+        sourceId: siblingSourceId,
+        sourceDocumentId: "uksc/2024/secondary-identity",
+        decisionId,
+      });
       await db
         .insert(caseLawCorpusPackRefs)
         .values({ decisionId, kind: "ast", packKey, location: packedAst })
@@ -399,6 +404,29 @@ if (!databaseUrl || !runPostgresTests) {
         payload: { document: "publisher decision text" },
         nextAttemptAt: cycleNow,
       });
+      await db.insert(caseLawReconciliationItems).values([
+        {
+          sourceId: siblingSourceId,
+          slice: "2024",
+          identityKey: "document:uksc/2024/secondary-identity",
+          payload: { document: "secondary publisher text" },
+          nextAttemptAt: cycleNow,
+        },
+        {
+          sourceId,
+          slice: "2024",
+          identityKey: "document:uksc/2024/secondary-identity",
+          payload: { document: "unrelated source identity" },
+          nextAttemptAt: cycleNow,
+        },
+        {
+          sourceId: siblingSourceId,
+          slice: "2024",
+          identityKey: "document:uksc/2024/900001",
+          payload: { document: "unrelated sibling identity" },
+          nextAttemptAt: cycleNow,
+        },
+      ]);
       await db.insert(caseLawRawSweeps).values({
         decisionId,
         sourceId,
@@ -743,10 +771,16 @@ if (!databaseUrl || !runPostgresTests) {
       ).toEqual([]);
       expect(
         await db
-          .select({ id: caseLawReconciliationItems.id })
+          .select({ identityKey: caseLawReconciliationItems.identityKey })
           .from(caseLawReconciliationItems)
           .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
-      ).toEqual([]);
+      ).toEqual([{ identityKey: "document:uksc/2024/secondary-identity" }]);
+      expect(
+        await db
+          .select({ identityKey: caseLawReconciliationItems.identityKey })
+          .from(caseLawReconciliationItems)
+          .where(eq(caseLawReconciliationItems.sourceId, siblingSourceId)),
+      ).toEqual([{ identityKey: "document:uksc/2024/900001" }]);
       const fixedPoint = await reconcile({
         probe: publisherRemovalProbe(async () => {
           replayProbes++;
@@ -959,7 +993,10 @@ if (!databaseUrl || !runPostgresTests) {
           })
           .from(caseLawDecisionSourceIdentities)
           .where(eq(caseLawDecisionSourceIdentities.decisionId, decisionId)),
-      ).toMatchObject([{ decisionId, key: null }]);
+      ).toEqual([
+        { decisionId, key: null },
+        { decisionId, key: null },
+      ]);
       expect(
         await db
           .select({ decisionId: caseLawDecisionSupplements.decisionId })

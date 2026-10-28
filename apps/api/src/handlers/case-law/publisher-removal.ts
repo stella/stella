@@ -51,7 +51,6 @@ export const removePublisherDecision = async ({
   const projectionPending = await runCitationGraphTransaction(
     scopedDb,
     async (tx) => {
-      let pending = false;
       const alias = (
         await tx
           .select({ id: caseLawDecisionAliases.canonicalDecisionId })
@@ -76,43 +75,47 @@ export const removePublisherDecision = async ({
         })
         .from(caseLawDecisions)
         .where(inArray(caseLawDecisions.id, ids));
+      const identities = await tx
+        .select({
+          sourceId: caseLawDecisionSourceIdentities.sourceId,
+          sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
+        })
+        .from(caseLawDecisionSourceIdentities)
+        .where(inArray(caseLawDecisionSourceIdentities.decisionId, ids));
       for (const row of rows) {
         if (row.redactedAt === null) {
           panic("Publisher removal requires a fenced decision");
         }
-        // db-await-in-loop: enumerate exact provenance under the same row fence.
-        const identities = await tx
-          .select({
-            sourceId: caseLawDecisionSourceIdentities.sourceId,
-            sourceDocumentId: caseLawDecisionSourceIdentities.sourceDocumentId,
-          })
-          .from(caseLawDecisionSourceIdentities)
-          .where(eq(caseLawDecisionSourceIdentities.decisionId, row.id));
         if (row.sourceDocumentId !== null) {
           identities.push({
             sourceId: row.sourceId,
             sourceDocumentId: row.sourceDocumentId,
           });
         }
-        for (const identity of identities) {
-          // db-await-in-loop: delete only listings keyed by an exact erased publisher identity.
-          await eraseDecisionReconciliationPayloadsTx(tx, identity);
-        }
+      }
+      await eraseDecisionReconciliationPayloadsTx(tx, identities);
+      // audit: skip — the canonical redaction records this removal in case_law_index_jobs.
+      await tx
+        .update(caseLawDecisions)
+        .set({
+          analysis: null,
+          metadata: {},
+          // The ordered source fingerprint remains a tombstone, not a new source observation.
+          parsedSourceHash: null,
+          parsedSourceHashVersion: null,
+          parsedSourceRawS3Key: null,
+        })
+        .where(inArray(caseLawDecisions.id, ids));
+      const upload = (
+        await tx
+          .select({ id: caseLawCorpusUploadIntents.id })
+          .from(caseLawCorpusUploadIntents)
+          .where(inArray(caseLawCorpusUploadIntents.decisionId, ids))
+          .limit(1)
+      ).at(0);
+      for (const row of rows) {
         // db-await-in-loop: each fenced identity is scrubbed in stable row order.
         await removeCaseLawDerivedRowsTx(tx, row.id);
-        // audit: skip — the canonical redaction records this removal in case_law_index_jobs.
-        // db-await-in-loop: clear row-local derived content under the same decision fence.
-        await tx
-          .update(caseLawDecisions)
-          .set({
-            analysis: null,
-            metadata: {},
-            // The ordered source fingerprint remains a tombstone, not a new source observation.
-            parsedSourceHash: null,
-            parsedSourceHashVersion: null,
-            parsedSourceRawS3Key: null,
-          })
-          .where(eq(caseLawDecisions.id, row.id));
         // db-await-in-loop: snapshots are invalidated atomically with the removed inputs.
         await invalidateCaseLawRemovalSnapshotsTx(tx, {
           id: row.sourceId,
@@ -120,19 +123,11 @@ export const removePublisherDecision = async ({
         });
         // db-await-in-loop: every canonical row mutation reaches its write extension.
         await runDecisionWriteExtension(tx, row.id);
-        // db-await-in-loop: erasure settlement is checked for every fenced alias.
-        pending ||= await corpusProjectionRemovalIsPendingTx(tx, row.id);
-        // db-await-in-loop: retained upload reservations still own external payloads.
-        const upload = (
-          await tx
-            .select({ id: caseLawCorpusUploadIntents.id })
-            .from(caseLawCorpusUploadIntents)
-            .where(eq(caseLawCorpusUploadIntents.decisionId, row.id))
-            .limit(1)
-        ).at(0);
-        pending ||= upload !== undefined;
       }
-      return pending;
+      return (
+        upload !== undefined ||
+        (await corpusProjectionRemovalIsPendingTx(tx, ids))
+      );
     },
   );
   const { redaction, holders } = redacted.value;

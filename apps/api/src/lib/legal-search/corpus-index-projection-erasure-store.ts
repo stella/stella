@@ -333,8 +333,11 @@ export const advanceCorpusProjectionErasuresTx = async <
 /** Removal is complete only after every registered generation has settled its erasure. */
 export const corpusProjectionRemovalIsPendingTx = async (
   tx: Transaction,
-  decisionId: SafeId<"caseLawDecision">,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
 ): Promise<boolean> => {
+  if (decisionIds.length === 0) {
+    return false;
+  }
   const generations = tx
     .select({ generation: corpusIndexGenerations.generation })
     .from(corpusIndexGenerations)
@@ -347,7 +350,7 @@ export const corpusProjectionRemovalIsPendingTx = async (
         and(
           eq(corpusIndexProjectionStates.family, "case_law"),
           inArray(corpusIndexProjectionStates.generation, generations),
-          eq(corpusIndexProjectionStates.entityId, decisionId),
+          inArray(corpusIndexProjectionStates.entityId, decisionIds),
           or(
             ne(corpusIndexProjectionStates.desiredAction, "erase"),
             corpusIndexProjectionErasureIsPending(corpusIndexProjectionStates),
@@ -367,7 +370,7 @@ export const corpusProjectionRemovalIsPendingTx = async (
         and(
           eq(corpusIndexProjectionIntents.family, "case_law"),
           inArray(corpusIndexProjectionIntents.generation, generations),
-          eq(corpusIndexProjectionIntents.entityId, decisionId),
+          inArray(corpusIndexProjectionIntents.entityId, decisionIds),
           corpusIndexProjectionIntentIsOutstanding(
             corpusIndexProjectionIntents.status,
           ),

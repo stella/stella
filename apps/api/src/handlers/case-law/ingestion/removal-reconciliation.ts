@@ -54,10 +54,10 @@ import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const REMOVAL_RECONCILIATION_CONFIG_KEY = "removalReconciliation";
 export const REMOVAL_SWEEP_INTERVAL_MS = 7 * DAY_IN_MS;
-export const REMOVAL_SWEEP_REQUEST_BUDGET = 100;
+const REMOVAL_SWEEP_REQUEST_BUDGET = 100;
 export const REMOVAL_SWEEP_TIME_BUDGET_MS = 60_000;
 export const REMOVAL_RETRY_PER_KIND_BUDGET = 10;
-export const REMOVAL_RETRY_TIME_BUDGET_MS = 30_000;
+const REMOVAL_RETRY_TIME_BUDGET_MS = 30_000;
 const SOURCE_REFUSAL_MIN_HOLD_MS = 3_600_000;
 const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
 
@@ -72,7 +72,7 @@ type RemovalProbe = (
   identity: string,
   signal: AbortSignal,
 ) => Promise<Result<PublisherRemovalRead, AdapterFetchError>>;
-export const REMOVAL_SOURCE_PROBES = {
+const REMOVAL_SOURCE_PROBES = {
   [ADAPTER_KEYS.UK_FCL]: probeUkFclRemoval,
 } as const satisfies Record<string, RemovalProbe>;
 
@@ -96,10 +96,7 @@ type SweepOutcome = DiscoveryOutcome & {
   retried: number;
   nextRetryAt: Date | null;
 };
-type RemovalSource = Pick<
-  typeof caseLawSources.$inferSelect,
-  "config" | "adapterKey" | "removalCheckpoint"
->;
+type RemovalSource = NonNullable<Awaited<ReturnType<typeof readSource>>>;
 type StepOrigin =
   { type: "discovery" } | { type: "retry"; item: RemovalRetryItem };
 type RemovalItemOutcome = {
@@ -639,18 +636,13 @@ const discoverPublisherRemovals = async ({
       ).at(0),
     );
     if (decision === undefined) {
-      // db-await-in-loop: the weekly enumeration can finish while deferred work remains durable.
-      return {
-        type: (await commit({
-          status: "waiting",
-          nextCycleAt: new Date(
-            now().getTime() + REMOVAL_SWEEP_INTERVAL_MS,
-          ).toISOString(),
-        }))
-          ? "complete"
-          : "contended",
-        checked,
-      };
+      const committed = await commit({
+        status: "waiting",
+        nextCycleAt: new Date(
+          now().getTime() + REMOVAL_SWEEP_INTERVAL_MS,
+        ).toISOString(),
+      });
+      return { type: committed ? "complete" : "contended", checked };
     }
     // db-await-in-loop: every classified outcome flows through the single advancing commit below.
     const outcome = await processRemovalDecision({
@@ -676,21 +668,20 @@ const discoverPublisherRemovals = async ({
             reason: REMOVAL_PENDING_REASON.PUBLISHER_REFUSED,
           } as const)
         : outcome;
-    // db-await-in-loop: a deferred item is recorded atomically with advancing past it.
-    if (
-      !(await commit(
-        outcome.type === "source-paused"
-          ? { status: "paused", resume: next, resumeAt: outcome.resumeAt }
-          : next,
-        [
-          {
-            decisionId: decision.id,
-            outcome: disposition,
-            origin: { type: "discovery" },
-          },
-        ],
-      ))
-    ) {
+    // db-await-in-loop: ordered per-item CAS records the disposition and advances atomically.
+    const committed = await commit(
+      outcome.type === "source-paused"
+        ? { status: "paused", resume: next, resumeAt: outcome.resumeAt }
+        : next,
+      [
+        {
+          decisionId: decision.id,
+          outcome: disposition,
+          origin: { type: "discovery" },
+        },
+      ],
+    );
+    if (!committed) {
       return { type: "contended", checked };
     }
     checked++;
@@ -752,30 +743,29 @@ const retryPublisherRemovals = async ({
             reason: REMOVAL_PENDING_REASON.PUBLISHER_REFUSED,
           } as const)
         : outcome;
-    // db-await-in-loop: settling a retry never rewinds the independent enumeration cursor.
-    if (
-      await commitRemovalProgress({
-        scopedDb,
-        sourceId,
-        source,
-        next:
-          outcome.type === "source-paused"
-            ? {
-                status: "paused",
-                resume: source.removalCheckpoint,
-                resumeAt: outcome.resumeAt,
-              }
-            : source.removalCheckpoint,
-        items: [
-          {
-            decisionId: item.decisionId,
-            outcome: disposition,
-            origin: { type: "retry", item },
-          },
-        ],
-        now: now(),
-      })
-    ) {
+    // db-await-in-loop: ordered per-item CAS settles retries without rewinding discovery.
+    const committed = await commitRemovalProgress({
+      scopedDb,
+      sourceId,
+      source,
+      next:
+        outcome.type === "source-paused"
+          ? {
+              status: "paused",
+              resume: source.removalCheckpoint,
+              resumeAt: outcome.resumeAt,
+            }
+          : source.removalCheckpoint,
+      items: [
+        {
+          decisionId: item.decisionId,
+          outcome: disposition,
+          origin: { type: "retry", item },
+        },
+      ],
+      now: now(),
+    });
+    if (committed) {
       retried++;
       if (outcome.type === "source-paused") {
         return { retried, pauseUntil: new Date(outcome.resumeAt) };

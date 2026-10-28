@@ -936,22 +936,28 @@ type EraseDecisionReconciliationPayloadsOptions = {
 /** Retire the stored listing payload when its exact publisher identity is erased. */
 export const eraseDecisionReconciliationPayloadsTx = async (
   tx: Transaction,
-  { sourceId, sourceDocumentId }: EraseDecisionReconciliationPayloadsOptions,
+  identities: readonly EraseDecisionReconciliationPayloadsOptions[],
 ): Promise<void> => {
-  // audit: skip — stored listing cleanup belongs to the canonical decision erasure.
-  const identityKey = listingIdentityKey({
-    type: "document",
-    sourceDocumentId,
-  });
-  if (identityKey === null) {
-    return panic("Erasure requires a keyable publisher identity");
+  if (identities.length === 0) {
+    return;
   }
-  await tx
-    .delete(caseLawReconciliationItems)
-    .where(
-      and(
-        eq(caseLawReconciliationItems.sourceId, sourceId),
-        eq(caseLawReconciliationItems.identityKey, identityKey),
-      ),
-    );
+  const keys = identities.map(({ sourceId, sourceDocumentId }) => {
+    const identityKey = listingIdentityKey({
+      type: "document",
+      sourceDocumentId,
+    });
+    if (identityKey === null) {
+      return panic("Erasure requires a keyable publisher identity");
+    }
+    return { source_id: sourceId, identity_key: identityKey };
+  });
+  // One parameter bounds query growth across provenance identities and aliases.
+  // audit: skip — stored listing cleanup belongs to the canonical decision erasure.
+  await tx.delete(caseLawReconciliationItems).where(sql`
+    (${caseLawReconciliationItems.sourceId}, ${caseLawReconciliationItems.identityKey}) IN (
+      SELECT source_id, identity_key
+      FROM jsonb_to_recordset(${JSON.stringify(keys)}::text::jsonb)
+        AS erased(source_id uuid, identity_key text)
+    )
+  `);
 };

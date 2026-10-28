@@ -34,6 +34,7 @@ if (!databaseUrl || !runPostgres) {
     const scopedDb = createIngestionDb(markRlsDatabase(db));
     const decisionId = createSafeId<"caseLawDecision">();
     const sourceId = createSafeId<"caseLawSource">();
+    const unrelatedDecisionId = createSafeId<"caseLawDecision">();
     const intentId = createSafeId<"corpusIndexProjectionIntent">();
     const generation = "case_law_v5";
     cleanUp(async () => {
@@ -70,7 +71,10 @@ if (!databaseUrl || !runPostgres) {
       expect(
         await scopedDb(
           async (tx) =>
-            await corpusProjectionRemovalIsPendingTx(tx, decisionId),
+            await corpusProjectionRemovalIsPendingTx(tx, [
+              unrelatedDecisionId,
+              decisionId,
+            ]),
         ),
       ).toBe(false);
       await db.insert(caseLawSources).values({
@@ -122,9 +126,23 @@ if (!databaseUrl || !runPostgres) {
       expect(
         await scopedDb(
           async (tx) =>
-            await corpusProjectionRemovalIsPendingTx(tx, decisionId),
+            await corpusProjectionRemovalIsPendingTx(tx, [
+              unrelatedDecisionId,
+              decisionId,
+            ]),
         ),
       ).toBe(true);
+      expect(
+        await scopedDb(
+          async (tx) => await corpusProjectionRemovalIsPendingTx(tx, []),
+        ),
+      ).toBe(false);
+      expect(
+        await scopedDb(
+          async (tx) =>
+            await corpusProjectionRemovalIsPendingTx(tx, [unrelatedDecisionId]),
+        ),
+      ).toBe(false);
       await db
         .update(caseLawDecisions)
         .set({ contentHash: null, projectionEpoch: 2n })
@@ -151,7 +169,10 @@ if (!databaseUrl || !runPostgres) {
       expect(
         await scopedDb(
           async (tx) =>
-            await corpusProjectionRemovalIsPendingTx(tx, decisionId),
+            await corpusProjectionRemovalIsPendingTx(tx, [
+              unrelatedDecisionId,
+              decisionId,
+            ]),
         ),
       ).toBe(false);
     });
