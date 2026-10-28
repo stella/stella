@@ -75,6 +75,25 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toContain("8,700,000");
   });
 
+  test("unknown hero totals render as unknown rather than zero", () => {
+    const coverage = {
+      ...COVERAGE,
+      countries: [{ ...CZECHIA, sources: [NEARLY_COMPLETE] }],
+    };
+    const known = render(<CaseLawCoveragePage coverage={coverage} />);
+    const unknown = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...coverage,
+          totals: { ...coverage.totals, searchable: null, addedLastWeek: null },
+        }}
+      />,
+    );
+    expect(known).not.toContain(">—<");
+    expect(unknown.match(/>—</gu)).toHaveLength(2);
+    expect(unknown).not.toContain(">0<");
+  });
+
   test("a source counts its published court rows separately from stored completeness", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
