@@ -24,6 +24,7 @@ import {
   chatMessages,
   chatRunLogEntries,
   chatRunLogs,
+  chatRunTextStartSql,
   chatThreads,
   chatTurns,
 } from "@/api/db/schema";
@@ -36,6 +37,8 @@ import type {
   ChatRunRescanReferenceState,
   ChatRunTrackedReferenceState,
 } from "@/api/lib/chat/run-log-reference-state";
+import { createRunMessageRoles } from "@/api/lib/chat/run-log-roles";
+import type { OpenRunMessage } from "@/api/lib/chat/run-log-roles";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
@@ -194,7 +197,7 @@ const readCurrentRunTiming = async ({
 type RunLogResolvedReferences = Pick<
   ChatRunCheckpointedReferenceState,
   "through" | "decisionIds"
-> & { userMessageIds: string[] };
+>;
 type RunLogReferenceSummary =
   | { type: "legacy" }
   | ChatRunRescanReferenceState
@@ -206,6 +209,7 @@ type RunLogHeaderOptions = Pick<
 > & {
   tx: Transaction;
   includeReferences: boolean;
+  restoreRolesAfter?: bigint | undefined;
 };
 const sourceReadBudget = sql`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'checkpointed' THEN ${MAX_CHUNK_BYTES}::integer ELSE ${MAX_RUN_BYTES}::integer END`;
 const readRunLogHeaderOnTx = async ({
@@ -213,16 +217,31 @@ const readRunLogHeaderOnTx = async ({
   organizationId,
   runId,
   includeReferences,
+  restoreRolesAfter,
 }: RunLogHeaderOptions) =>
   (
     await tx
       .select({
+        openMessages:
+          restoreRolesAfter === undefined
+            ? sql<OpenRunMessage[]>`'[]'::jsonb`
+            : sql<OpenRunMessage[]>`to_jsonb(ARRAY(
+          SELECT jsonb_build_object('messageId', started.chunk->>'messageId', 'role', started.chunk->>'role', 'current', started.seq = (
+            SELECT latest.seq FROM chat_run_log_entries latest
+            WHERE latest.organization_id = started.organization_id AND latest.run_id = started.run_id
+              AND latest.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`latest.chunk`)}
+            ORDER BY latest.seq DESC LIMIT 1
+          )) FROM chat_run_log_entries started
+          WHERE started.organization_id = ${chatRunLogs.organizationId} AND started.run_id = ${chatRunLogs.runId}
+            AND started.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`started.chunk`)}
+            AND (started.text_message_end_seq IS NULL OR started.text_message_end_seq > ${restoreRolesAfter}) ORDER BY started.seq LIMIT ${MAX_RUN_BYTES}
+        ))`,
         closedAt: chatRunLogs.closedAt,
         nextSeq: chatRunLogs.nextSeq,
         bytesUsed: chatRunLogs.bytesUsed,
         subjectDecisionId: chatThreads.subjectDecisionId,
         referenceSummary: includeReferences
-          ? sql<RunLogReferenceSummary>`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'checkpointed' THEN jsonb_build_object('type', 'checkpointed', 'through', ${chatRunLogs.referenceSummary}->'through', 'decisionIds', ${chatRunLogs.referenceSummary}->'decisionIds', 'userMessageIds', jsonb_path_query_array(${chatRunLogs.referenceSummary}, '$.messages[*] ? (@.role == "user").id')) ELSE ${chatRunLogs.referenceSummary} END`
+          ? sql<RunLogReferenceSummary>`CASE WHEN ${chatRunLogs.referenceSummary}->>'type' = 'checkpointed' THEN jsonb_build_object('type', 'checkpointed', 'through', ${chatRunLogs.referenceSummary}->'through', 'decisionIds', ${chatRunLogs.referenceSummary}->'decisionIds') ELSE ${chatRunLogs.referenceSummary} END`
           : sql<RunLogReferenceSummary | null>`null`,
         sourceContent: includeReferences
           ? sql`CASE WHEN octet_length(${chatMessages.content}::text) <= ${sourceReadBudget} THEN ${chatMessages.content} ELSE NULL END`
@@ -490,8 +509,6 @@ const readRunReferencesOnTx = async ({
     capture: (message) => message,
   });
   const references = new Set<string>();
-  const authoredSequences = new Set<string>();
-  let currentRole: string | undefined;
   let after = 0n;
   let bytes = 0;
   for (;;) {
@@ -533,20 +550,6 @@ const readRunReferencesOnTx = async ({
       )) {
         references.add(id);
       }
-      if (chunk.type === EventType.TEXT_MESSAGE_START) {
-        currentRole = chunk.role ?? "assistant";
-      } else if (
-        chunk.type === EventType.TEXT_MESSAGE_CHUNK &&
-        chunk.role !== undefined
-      ) {
-        currentRole = chunk.role;
-      }
-      if (currentRole === "user") {
-        authoredSequences.add(seq.toString());
-      }
-      if (chunk.type === EventType.TEXT_MESSAGE_END) {
-        currentRole = undefined;
-      }
       after = seq;
     }
     if (page.nextCursor === null) {
@@ -569,10 +572,6 @@ const readRunReferencesOnTx = async ({
       return {
         through: after.toString(),
         decisionIds: [...references],
-        userMessageIds: messages
-          .filter(({ role }) => role === "user")
-          .map(({ id }) => id),
-        authoredSequences,
       };
     }
   }
@@ -603,18 +602,12 @@ const createLiveRunReferences = () => {
         state satisfies never;
         panic("Unknown live reference state");
     }
-    const userMessageIds: string[] = [];
     if (state.type === "checkpointed") {
       for (const id of state.decisionIds) {
         references.add(id);
       }
-      for (const message of state.messages) {
-        if (message.role === "user") {
-          userMessageIds.push(message.id);
-        }
-      }
     }
-    return { decisionIds: references, userMessageIds };
+    return { decisionIds: references };
   };
 };
 
@@ -628,45 +621,15 @@ const createRunLogCopyProjection = ({
   organizationId,
   runId,
 }: Pick<RunLogReaderOptions, "organizationId" | "runId">) => {
-  let rebuilt:
-    | (RunLogResolvedReferences & { authoredSequences: ReadonlySet<string> })
-    | undefined;
+  let rebuilt: RunLogResolvedReferences | undefined;
   const trackLiveReferences = createLiveRunReferences();
   let projection:
     Awaited<ReturnType<typeof readWithdrawnCopyProjection>> | undefined;
   let runMarker: string | null | undefined;
   const checkedReferences = new Set<string>();
-  const userMessageIds = new Set<string>();
-  let currentRole: string | undefined;
+  const roles = createRunMessageRoles();
   const shownMarkers = new Set<string>();
-  const isAuthoredEntry = (chunk: StreamChunk) => {
-    if (chunk.type === EventType.TEXT_MESSAGE_START) {
-      currentRole = chunk.role ?? "assistant";
-      if (currentRole === "user") {
-        userMessageIds.add(chunk.messageId);
-      }
-    } else if (
-      chunk.type === EventType.TEXT_MESSAGE_CHUNK &&
-      chunk.role !== undefined
-    ) {
-      currentRole = chunk.role;
-      if (chunk.role === "user" && chunk.messageId !== undefined) {
-        userMessageIds.add(chunk.messageId);
-      }
-    }
-    const authored =
-      currentRole === "user" ||
-      ((chunk.type === EventType.TEXT_MESSAGE_START ||
-        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
-        chunk.type === EventType.TEXT_MESSAGE_END ||
-        chunk.type === EventType.TEXT_MESSAGE_CHUNK) &&
-        chunk.messageId !== undefined &&
-        userMessageIds.has(chunk.messageId));
-    if (chunk.type === EventType.TEXT_MESSAGE_END) {
-      currentRole = undefined;
-    }
-    return authored;
-  };
+  let rolesRestored = false;
   const projectEntries = async <
     T extends { chunk: StreamChunk; seq?: bigint; offset?: string },
   >({
@@ -700,9 +663,6 @@ const createRunLogCopyProjection = ({
       for (const id of live.decisionIds) {
         references.add(id);
       }
-      for (const id of live.userMessageIds) {
-        userMessageIds.add(id);
-      }
     } else {
       let resolved: RunLogResolvedReferences;
       switch (persisted.type) {
@@ -728,9 +688,6 @@ const createRunLogCopyProjection = ({
           message: "Chat run log reference summary is incomplete",
         });
       }
-      for (const messageId of resolved.userMessageIds) {
-        userMessageIds.add(messageId);
-      }
       for (const id of resolved.decisionIds) {
         references.add(id);
       }
@@ -752,22 +709,29 @@ const createRunLogCopyProjection = ({
     const marker = runMarker;
     return entries.map((entry) => {
       const chunk = entry.chunk;
-      const sequence = entry.seq?.toString() ?? entry.offset;
-      if (
-        isAuthoredEntry(chunk) ||
-        (sequence !== undefined && rebuilt?.authoredSequences.has(sequence))
-      ) {
-        return entry;
+      const attribution = roles.classify(chunk);
+      switch (attribution.type) {
+        case "unknown":
+        case "authored":
+          return entry;
+        case "generated":
+        case "protocol":
+          break;
+        default:
+          attribution satisfies never;
+          return panic("Unknown run message attribution");
       }
       if (marker === null) {
         return entry;
       }
       let text = marker;
       if (
-        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
-        chunk.type === EventType.TEXT_MESSAGE_CHUNK
+        (chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+          chunk.type === EventType.TEXT_MESSAGE_CHUNK) &&
+        attribution.type === "generated" &&
+        attribution.identity.type === "known"
       ) {
-        const messageKey = chunk.messageId ?? "current-text-message";
+        const messageKey = attribution.identity.messageId;
         text = shownMarkers.has(messageKey) ? "" : marker;
         shownMarkers.add(messageKey);
       }
@@ -775,6 +739,13 @@ const createRunLogCopyProjection = ({
     });
   };
   return {
+    restoreRoles(log: RunLogHeader) {
+      if (rolesRestored || log === undefined) {
+        return;
+      }
+      roles.restore(log.openMessages);
+      rolesRestored = true;
+    },
     async forHeader({ log, tx, captureEntry }: PrepareRunProjectionOptions) {
       if (log !== undefined && log.referenceSummary !== null) {
         const summary = log.referenceSummary;
@@ -941,12 +912,17 @@ const createRunLogReader = ({
 }): Pick<StreamDurability, "read" | "snapshot"> => {
   const needsCurrentTiming = (chunks: readonly StreamChunk[]) =>
     timingMode === "current" && chunks.some(hasRunningChunkTiming);
-  const loadHeader = async (tx: Transaction, includeReferences: boolean) =>
+  const loadHeader = async (
+    tx: Transaction,
+    includeReferences: boolean,
+    restoreRolesAfter?: bigint,
+  ) =>
     await readRunLogHeaderOnTx({
       tx,
       organizationId,
       runId,
       includeReferences,
+      restoreRolesAfter,
     });
   const unsettledTailAfter = (log: RunLogHeader) => {
     if (log?.closedAt !== null) {
@@ -969,13 +945,20 @@ const createRunLogReader = ({
     after,
     projection,
     includeReferences,
+    restoreRoles,
   }: {
     after: bigint;
     projection: ReturnType<typeof createRunLogCopyProjection>;
     includeReferences: boolean;
+    restoreRoles: boolean;
   }) =>
     await db(async (tx) => {
-      const log = await loadHeader(tx, includeReferences);
+      const log = await loadHeader(
+        tx,
+        includeReferences,
+        restoreRoles ? after : undefined,
+      );
+      projection.restoreRoles(log);
       if (log === undefined) {
         return { entries: [], log };
       }
@@ -1039,6 +1022,7 @@ const createRunLogReader = ({
           unsettledTailAfter(log) ??
           (log === undefined ? 0n : log.nextSeq - 1n);
       }
+      let restoreRoles = true;
       const deadline =
         Temporal.Now.instant().epochMilliseconds + FIRST_ENTRY_WAIT_MS;
       for (;;) {
@@ -1050,7 +1034,11 @@ const createRunLogReader = ({
           after,
           projection,
           includeReferences: offset !== "now",
+          restoreRoles,
         });
+        if (log !== undefined) {
+          restoreRoles = false;
+        }
         for (const entry of entries) {
           after = entry.seq;
           yield { offset: after.toString(), chunk: entry.chunk };

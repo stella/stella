@@ -1,4 +1,5 @@
 import type { StreamChunk } from "@tanstack/ai";
+import type { SQL } from "drizzle-orm";
 
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 import type { ChatSendRequest } from "@stll/api-contract/chat";
@@ -457,7 +458,9 @@ export const chatMessageRevisions = p.pgTable(
       .references(() => chatThreads.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
-      { onDelete: "restrict" },
+      {
+        onDelete: "restrict",
+      },
     ),
     /** Revision of the replaced content; revision zero is the original. */
     revision: p.integer().notNull(),
@@ -514,7 +517,9 @@ export const chatTurns = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
-      { onDelete: "restrict" },
+      {
+        onDelete: "restrict",
+      },
     ),
     userId: p
       .text("user_id")
@@ -785,6 +790,12 @@ export const chatRunLogs = p.pgTable(
   ],
 );
 
+/** Text boundaries carry roles; no document payload participates in this index. */
+export const chatRunTextStartSql = (chunk: SQL) =>
+  sql`(${chunk}->>'type' = 'TEXT_MESSAGE_START' OR (${chunk}->>'type' = 'TEXT_MESSAGE_CHUNK' AND ${chunk} ? 'role'))`;
+
+export const UNINDEXED_TEXT_MESSAGE_END_SEQ = -1n;
+
 /** Ordered chunks; deleting a log header removes its whole transient prefix. */
 export const chatRunLogEntries = p.pgTable(
   "chat_run_log_entries",
@@ -795,6 +806,10 @@ export const chatRunLogEntries = p.pgTable(
     batchId: p.uuid("batch_id").notNull(),
     batchIndex: p.integer("batch_index").notNull(),
     chunk: jsonb("chunk").$type<StreamChunk>().notNull(),
+    /** Exclusive message end; NULL is open and -1 awaits online initialization. */
+    textMessageEndSeq: p
+      .bigint("text_message_end_seq", { mode: "bigint" })
+      .default(UNINDEXED_TEXT_MESSAGE_END_SEQ),
   },
   (table) => [
     p.primaryKey({
@@ -811,6 +826,29 @@ export const chatRunLogEntries = p.pgTable(
     p
       .uniqueIndex("chat_run_log_entries_batch_uidx")
       .on(table.organizationId, table.runId, table.batchId, table.batchIndex),
+    p
+      .index("chat_run_log_entries_text_start_idx")
+      .on(table.organizationId, table.runId, table.seq)
+      .where(chatRunTextStartSql(sql`${table.chunk}`)),
+    p
+      .index("chat_run_log_entries_text_open_idx")
+      .on(table.organizationId, table.runId, table.textMessageEndSeq, table.seq)
+      .where(chatRunTextStartSql(sql`${table.chunk}`)),
+    p
+      .index("chat_run_log_entries_text_boundary_id_idx")
+      .on(
+        table.organizationId,
+        table.runId,
+        sql`md5(${table.chunk}->>'messageId')`,
+        table.seq,
+      )
+      .where(
+        sql`(${chatRunTextStartSql(sql`${table.chunk}`)} OR ${table.chunk}->>'type' = 'TEXT_MESSAGE_END')`,
+      ),
+    p.check(
+      "chat_run_log_entries_text_end_check",
+      sql`${table.textMessageEndSeq} IS NULL OR ${table.textMessageEndSeq} = ${UNINDEXED_TEXT_MESSAGE_END_SEQ} OR ${table.textMessageEndSeq} > ${table.seq}`,
+    ),
     p.check("chat_run_log_entries_seq_check", sql`${table.seq} > 0`),
     p.check(
       "chat_run_log_entries_batch_index_check",

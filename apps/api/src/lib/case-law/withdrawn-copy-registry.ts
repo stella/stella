@@ -329,7 +329,14 @@ const WITHDRAWN_COPY_REGISTRY = {
     fields: { referenceSummary: { kind: "snapshot", projection: "marker" } },
   },
   chatRunLogEntries: {
-    metadata: ["organizationId", "runId", "seq", "batchId", "batchIndex"],
+    metadata: [
+      "organizationId",
+      "runId",
+      "seq",
+      "batchId",
+      "batchIndex",
+      "textMessageEndSeq",
+    ],
     decision: "chunk;runId->chatTurns.threadId->chatThreads.subjectDecisionId",
     fields: { chunk: { kind: "snapshot", projection: "marker" } },
   },

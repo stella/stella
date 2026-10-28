@@ -1613,7 +1613,10 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
     ].flatMap((testCase) =>
       (
         [EventType.TEXT_MESSAGE_CONTENT, EventType.TEXT_MESSAGE_CHUNK] as const
-      ).map((event) => ({ ...testCase, event })),
+      ).map((event) => ({
+        ...testCase,
+        event,
+      })),
     ),
   )(
     "running generic logs reconstruct $deltas deltas split inside $split ($delivery, $event)",
@@ -2243,6 +2246,95 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       expect(large.queries.length).toBe(small.queries.length);
       expect(large.rows).toBe(small.rows);
       expect(large.bytes).toBeLessThanOrEqual(small.bytes + 1024);
+    },
+  );
+
+  test.each(["now", "cursor"] as const)(
+    "%s restores every open message role before interleaved deltas",
+    async (mode) => {
+      const {
+        writer,
+        options,
+        threadId: subjectThread,
+      } = await liveLogFixture("generic");
+      await scopedDb(
+        async (tx) =>
+          await tx
+            .update(chatThreads)
+            .set({ subjectDecisionId: decisionId })
+            .where(eq(chatThreads.id, subjectThread)),
+      );
+      const firstUser = createSafeId<"chatMessage">();
+      const assistant = createSafeId<"chatMessage">();
+      const secondUser = createSafeId<"chatMessage">();
+      const prefix = [
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: firstUser,
+          role: "user",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: assistant,
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: secondUser,
+          role: "user",
+        },
+      ] satisfies StreamChunk[];
+      await writer.append(prefix);
+      const ready = Promise.withResolvers<undefined>();
+      let reads = 0;
+      const observedDb = (async (read) => {
+        reads++;
+        if (reads === (mode === "now" ? 2 : 1)) {
+          ready.resolve(undefined);
+        }
+        return await scopedDb(read);
+      }) satisfies ScopedDb;
+      const live = createChatRunLog({ ...options, db: observedDb });
+      const delivery = live.read(
+        mode === "now" ? "now" : String(prefix.length),
+      );
+      const iterator = delivery[Symbol.asyncIterator]();
+      const first = request(async () => await iterator.next());
+      await ready.promise;
+      const suffix = [
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: assistant,
+          delta: secret,
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: firstUser,
+          delta: `${own} first`,
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: secondUser,
+          delta: `${own} second`,
+        },
+      ] satisfies StreamChunk[];
+      await writer.append(suffix);
+      const delivered = [
+        await first,
+        await request(async () => await iterator.next()),
+        await request(async () => await iterator.next()),
+      ];
+      expect(delivered.map(({ value }) => value?.chunk)).toEqual([
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: assistant,
+          delta: marker,
+        },
+        suffix[1],
+        suffix[2],
+      ]);
+      await writer.close();
+      expect((await iterator.next()).done).toBe(true);
     },
   );
 
