@@ -59,7 +59,8 @@ import {
   aiDefaultsPreviewOptions,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { PROVIDER_SCOPE } from "@/routes/-app-frame-scope";
 
 type AIAvailabilityContextValue = {
@@ -103,7 +104,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     [activeOrganizationId],
   );
   const dataQuery = useChromeQuery(availabilityOptions);
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -241,7 +242,7 @@ export const RequireAIKey = ({
   const dataQuery = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "RequireAIKey:query");
   const { isFetching, isPending } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -367,7 +368,7 @@ export const AIKeyRequiredDialog = ({
   const availabilityQuery = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const availabilityView = useQueryView(availabilityQuery);
+  const availabilityView = queryView(availabilityQuery);
   useQueryViewError(availabilityView, "AIKeyRequiredDialog:availability-query");
   const mayConfigure =
     availabilityView.type === "items" &&
@@ -376,7 +377,7 @@ export const AIKeyRequiredDialog = ({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
     enabled: open && mayConfigure,
   });
-  const configView = useQueryView(configQuery);
+  const configView = queryView(configQuery);
   useQueryViewError(configView, "AIKeyRequiredDialog:query");
   const configRefusalKey =
     configView.type === "error"
@@ -543,7 +544,7 @@ export const AIKeyRequiredDialog = ({
         }
       : {}),
   });
-  const defaultsView = useQueryView(defaultsQuery);
+  const defaultsView = queryView(defaultsQuery);
   useQueryViewError(defaultsView, "AIKeyRequiredDialog:defaults-query");
   const defaultModels =
     defaultsView.type === "items" ? defaultsView.items.defaultModels : null;

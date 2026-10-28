@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { CourtName } from "@stll/decision-reader/court-name";
 import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-title";
@@ -21,6 +21,7 @@ import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
+import { useFormatter } from "@/i18n/formatting-context";
 
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
@@ -44,8 +45,8 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
             <>
               <BreadcrumbSeparator className="max-sm:hidden" />
               <BreadcrumbItem className="max-sm:hidden">
-                <Link {...trail.yearLink}>
-                  {formatYear(format, trail.yearLink.search.year)}
+                <Link {...trail.yearLink.link}>
+                  {formatYear(format, trail.yearLink.year)}
                 </Link>
               </BreadcrumbItem>
             </>
@@ -116,8 +117,8 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
             <>
               <BreadcrumbSeparator className="max-sm:hidden" />
               <BreadcrumbItem className="max-sm:hidden">
-                <Link {...trail.yearLink}>
-                  {formatYear(format, trail.yearLink.search.year)}
+                <Link {...trail.yearLink.link}>
+                  {formatYear(format, trail.yearLink.year)}
                 </Link>
               </BreadcrumbItem>
             </>

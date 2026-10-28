@@ -49,6 +49,11 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
+beforeEach(() => {
+  putPacksMock.mockReset();
+  putPacksMock.mockImplementation(putPacksDefault);
+});
+
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
  * type cannot check is the ordering: the row and durable upload intent must
@@ -88,19 +93,18 @@ const packedDocumentIds = (pack: EncodedPack): string[] => [
 // redundancy decision and encodes a real pack, so a payload the planner
 // refuses contributes no member here for the same reason it would in
 // production, not because a fixture said so.
-const putPacksMock = mock(
-  async ({
-    packs,
-  }: Parameters<typeof putCorpusPacks>[0]): Promise<
-    Result<void, CorpusPackError>
-  > => {
-    for (const pack of packs) {
-      transferredPacks.push(pack);
-      events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
-    }
-    return await Promise.resolve(Result.ok(undefined));
-  },
-);
+const putPacksDefault = async ({
+  packs,
+}: Parameters<typeof putCorpusPacks>[0]): Promise<
+  Result<void, CorpusPackError>
+> => {
+  for (const pack of packs) {
+    transferredPacks.push(pack);
+    events.push(`corpus-pack:${packedDocumentIds(pack).join(",")}`);
+  }
+  return await Promise.resolve(Result.ok(undefined));
+};
+const putPacksMock = mock(putPacksDefault);
 
 /** A transfer that fails the way an unreachable bucket does. */
 const failTheTransfer = () => {

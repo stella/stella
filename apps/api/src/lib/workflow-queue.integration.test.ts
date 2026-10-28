@@ -16,6 +16,7 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
   mock,
   setDefaultTimeout,
   spyOn,
@@ -113,18 +114,23 @@ const executionPlan: ExecutionLevel[] = [
 
 const EXTRACTED_VALUE = "Laws of England and Wales";
 
-const settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
 type BatchGenerator = ReturnType<typeof batchGenerator.getBatchGenerator>;
 
 const generateSpy = mock<BatchGenerator>();
-const generatorSpy = spyOn(batchGenerator, "getBatchGenerator");
+let generatorSpy: Mock<typeof batchGenerator.getBatchGenerator>;
 const runActualStragglerCatchUp = stragglerCatchUp.startStragglerCatchUp;
-const stragglerSpy = spyOn(stragglerCatchUp, "startStragglerCatchUp");
-const runStateSpy = spyOn(rootRunStateStore, "getRootWorkflowRunStateStore");
+let stragglerSpy: Mock<typeof stragglerCatchUp.startStragglerCatchUp>;
+let runStateSpy: Mock<typeof rootRunStateStore.getRootWorkflowRunStateStore>;
 const clearedWorkspaceIds: string[] = [];
 const createdRunIds: string[] = [];
 
 beforeEach(() => {
+  settingsSpy = spyOn(aiConfigLoader, "loadOrgAISettings");
+  generatorSpy = spyOn(batchGenerator, "getBatchGenerator");
+  stragglerSpy = spyOn(stragglerCatchUp, "startStragglerCatchUp");
+  runStateSpy = spyOn(rootRunStateStore, "getRootWorkflowRunStateStore");
+
   settingsSpy.mockReset();
   generateSpy.mockReset();
   generatorSpy.mockReset();
@@ -150,6 +156,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb.delete(fields).where(eq(fields.propertyId, extractedPropertyId));
   for (const runId of createdRunIds.splice(0)) {
     // db-await-in-loop: test cleanup of at most one run per test.

@@ -1,3 +1,14 @@
+// parser-output-unchanged: [us-courtlistener] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-ns] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-uohs] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-courts] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-sn] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kio] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-tk] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-ncourt] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [eu-ecj] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kis] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-uokik] failure grading for public-read timeouts only; parser output unchanged
 // parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
@@ -18,6 +29,7 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
   upstream_unavailable: "transient",
   work_capacity_unavailable: "transient",
   work_deadline_exceeded: "transient",
@@ -75,6 +87,8 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
+  document_ocr_unconfigured: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",

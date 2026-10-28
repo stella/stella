@@ -256,6 +256,7 @@ const organizeSuggestionsHandler = async function* ({
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Failed to generate document summaries",
           }),
         );
@@ -397,6 +398,7 @@ const organizeSuggestionsHandler = async function* ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate organization suggestions",
         }),
       );
@@ -851,6 +853,7 @@ const generateMissingSummaries = async ({
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Failed to generate document summaries",
         }),
       );

@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   createProcessMemoryReader,
   parseLinuxProcessMemoryStatus,
@@ -122,10 +124,11 @@ posixTest.each(["leader", "leader-exit"] as const)(
           }
           return Result.try(() => process.kill(worker, 0)).isOk();
         };
-        for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
-          await Bun.sleep(10);
-        }
-        expect(alive()).toBe(false);
+        await waitForExternalState({
+          description: `worker ${String(worker)} exits`,
+          timeoutMs: 1000,
+          read: () => !alive(),
+        });
       } finally {
         await watchdog.stop();
       }

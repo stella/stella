@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import { APIError } from "@/lib/errors/api";
@@ -28,7 +29,9 @@ describe("VAT rate display", () => {
     test(`shows fractional percentage precision in ${locale}`, () => {
       const markup = renderToStaticMarkup(
         <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-          <VatRatePercentage rateBps={2125} />
+          <FormattingProvider locale={locale} timeZone="UTC">
+            <VatRatePercentage rateBps={2125} />
+          </FormattingProvider>
         </IntlProvider>,
       );
       const expected = new Intl.NumberFormat(locale, {
@@ -42,22 +45,26 @@ describe("VAT rate display", () => {
       for (const status of [409, 500]) {
         const markup = renderToStaticMarkup(
           <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-            <VatRateRefusal
-              error={
-                new APIError({
-                  status,
-                  message: "private-server-details",
-                  rawMessage: "private-raw-response",
-                })
-              }
-            />
+            <FormattingProvider locale={locale} timeZone="UTC">
+              <VatRateRefusal
+                error={
+                  new APIError({
+                    status,
+                    message: "private-server-details",
+                    rawMessage: "private-raw-response",
+                  })
+                }
+              />
+            </FormattingProvider>
           </IntlProvider>,
         );
         expect(markup).toContain('role="alert"');
         expect(markup).toContain(
-          status === 409
-            ? messages.billing.vatRates.overlap
-            : messages.errors.actionFailed,
+          renderToStaticMarkup(
+            status === 409
+              ? messages.billing.vatRates.overlap
+              : messages.errors.actionFailed,
+          ),
         );
         expect(markup).not.toContain("private-server-details");
         expect(markup).not.toContain("private-raw-response");

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -15,12 +15,13 @@ import {
   UserIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import {
   DocumentExtractionStatus,
   readDocumentProcessingStatus,
 } from "@/components/workspaces/document-extraction-status";
-import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import { orderedColumn } from "@/components/workspaces/properties/sort-property.logic";
 import { COLUMN_CONTEXT_MENU } from "@/components/workspaces/row-actions.logic";
 import type { ColumnContextMenu } from "@/components/workspaces/row-actions.logic";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
@@ -40,11 +41,12 @@ import {
   isTaskStatus,
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
   AuthorCell,
   LastUpdatedCell,
-  VersionCell,
+  VersionHistoryCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { getPropertyColumnRender } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
 import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema";
@@ -85,6 +87,10 @@ export const useWorkspaceTableSchema = ({
   );
 };
 
+type UseTableColumnDefsOptions = UseTableColumnsOptions & {
+  workspaceId: string;
+};
+
 /**
  * Shared column definitions for the flat table and every grouped section, so
  * grouped sections render the exact same columns and cells.
@@ -95,9 +101,10 @@ export const useWorkspaceTableSchema = ({
 export const useTableColumns = ({
   properties,
   view,
-}: UseTableColumnsOptions): TableColumnDef[] => {
+  workspaceId,
+}: UseTableColumnDefsOptions): TableColumnDef[] => {
   const schema = useWorkspaceTableSchema({ properties, view });
-  const toColumnDef = useColumnDefFactory(view);
+  const toColumnDef = useColumnDefFactory(view, workspaceId);
 
   return useMemo(
     () => schema.columns.map(toColumnDef),
@@ -135,6 +142,7 @@ type ColumnDefFactory = (column: WorkspaceColumnDescriptor) => TableColumnDef;
 
 const useColumnDefFactory = (
   view: WorkspaceView<"table">,
+  workspaceId: string,
 ): ColumnDefFactory => {
   const t = useTranslations();
   const format = useFormatter();
@@ -143,8 +151,8 @@ const useColumnDefFactory = (
     () =>
       (column: WorkspaceColumnDescriptor): TableColumnDef => {
         const base = columnBase(column);
-        const metadataHeader = (icon: LucideIcon, sortHint: SortHint) =>
-          createMetadataHeader({ icon, label: column.label, sortHint });
+        const metadataHeader = (icon: LucideIcon, sortKind: ColumnSortKind) =>
+          createMetadataHeader({ icon, label: column.label, sortKind });
         const { render } = column;
 
         switch (render.type) {
@@ -253,7 +261,12 @@ const useColumnDefFactory = (
               ...base,
               accessorKey: column.id,
               header: metadataHeader(HashIcon, "number"),
-              cell: renderVersionCell,
+              cell: ({ row }) => (
+                <VersionHistoryCell
+                  entity={row.original}
+                  workspaceId={workspaceId}
+                />
+              ),
             };
           case "property":
             return {
@@ -270,26 +283,31 @@ const useColumnDefFactory = (
           }
         }
       },
-    [format, t, view.layout.filters],
+    [format, t, view.layout.filters, workspaceId],
   );
 };
 
 type MetadataHeaderOptions = {
   icon: LucideIcon;
   label: string;
-  sortHint: SortHint;
+  sortKind: ColumnSortKind;
 };
 
-const createMetadataHeader =
-  ({ icon, label, sortHint }: MetadataHeaderOptions) =>
-  ({ header }: TableHeaderContext) => (
+const createMetadataHeader = ({
+  icon,
+  label,
+  sortKind,
+}: MetadataHeaderOptions) => {
+  const sort = orderedColumn(sortKind);
+  return ({ header }: TableHeaderContext) => (
     <MetadataPopover
       column={header.column}
       icon={icon}
       label={label}
-      sortHint={sortHint}
+      sort={sort}
     />
   );
+};
 
 const renderNothing = () => null;
 
@@ -299,8 +317,4 @@ const renderAuthorCell = ({ row }: TableCellContext) => (
 
 const renderLastUpdatedCell = ({ row }: TableCellContext) => (
   <LastUpdatedCell entity={row.original} />
-);
-
-const renderVersionCell = ({ row }: TableCellContext) => (
-  <VersionCell entity={row.original} />
 );

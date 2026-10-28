@@ -176,6 +176,7 @@ const prepareBilingualTranslation = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The translation could not be prepared. Try again.",
         }),
       );

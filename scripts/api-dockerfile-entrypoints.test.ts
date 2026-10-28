@@ -356,13 +356,23 @@ test("the builder stage sets NODE_ENV before its first bundle", () => {
 
 // A published artifact refuses local development access at startup only if
 // the release flag is compiled into it.
-test("every builder bundle is a release build", () => {
+// Minified with kept names: error tags and logs read class and function names
+// (errorClassName), which plain --minify would rename.
+const RELEASE_FLAGS = [RELEASE_DEFINE, "--minify", "--keep-names"] as const;
+
+test("every builder bundle is a minified release build", () => {
   const bundles = bundleBuilds(stage("builder"));
   expect(bundles.length).toBeGreaterThan(0);
-  expect(bundles.filter((bundle) => !bundle.includes(RELEASE_DEFINE))).toEqual(
-    [],
-  );
-  expect(runnerPackage.scripts.build).toContain(RELEASE_DEFINE);
+  for (const flag of RELEASE_FLAGS) {
+    expect(bundles.filter((bundle) => !bundle.includes(flag))).toEqual([]);
+  }
+  const runnerBuilds = runnerPackage.scripts.build
+    .split(/\bbun build\b/u)
+    .slice(1);
+  expect(runnerBuilds.length).toBeGreaterThan(0);
+  for (const flag of RELEASE_FLAGS) {
+    expect(runnerBuilds.filter((build) => !build.includes(flag))).toEqual([]);
+  }
 });
 
 // A package that loads its native binding by a path relative to its own module

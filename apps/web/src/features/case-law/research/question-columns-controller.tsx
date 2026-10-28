@@ -69,7 +69,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type QuestionColumnsInput = {
   /**
@@ -186,8 +186,8 @@ export const useQuestionColumns = ({
     enabled: enabled && activeOrganizationId !== null && decisionIds.length > 0,
   });
 
-  const columnsView = useQueryView(columnsQuery);
-  const answersView = useQueryView(answersQuery);
+  const columnsView = queryView(columnsQuery);
+  const answersView = queryView(answersQuery);
   const reads = questionReads({
     columns: columnsView,
     answers: decisionIds.length === 0 ? null : answersView,

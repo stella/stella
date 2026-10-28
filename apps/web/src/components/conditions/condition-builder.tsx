@@ -7,7 +7,7 @@ import { ConditionBuilder as WorkspaceConditionBuilder } from "@stll/workspace-u
 
 import { operatorLabelKey } from "@/components/conditions/condition-builder-logic";
 import { FormulaCell } from "@/components/conditions/formula-editor";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 
 export type { ConditionCapabilities } from "@stll/workspace-ui/conditions";
 
@@ -36,7 +36,7 @@ export const ConditionBuilder = ({
   ...props
 }: ConditionBuilderProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   const labels: ConditionBuilderLabels = {
     addCondition: addConditionLabel ?? t("templates.conditionAddRule"),
