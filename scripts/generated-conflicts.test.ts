@@ -347,19 +347,15 @@ describe("resolution across runs", () => {
 
   const env = {
     ...process.env,
-    GIT_AUTHOR_NAME: "Fixture",
-    GIT_AUTHOR_EMAIL: "fixture@example.invalid",
-    GIT_COMMITTER_NAME: "Fixture",
-    GIT_COMMITTER_EMAIL: "fixture@example.invalid",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_NOSYSTEM: "1",
   };
-  const run = (cwd: string, command: readonly string[]) => {
+  const run = (cwd: string, command: readonly string[], environment = env) => {
     const result = Bun.spawnSync([...command], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
-      env,
+      env: environment,
     });
     return {
       exitCode: result.exitCode,
@@ -371,6 +367,16 @@ describe("resolution across runs", () => {
     const result = run(cwd, ["git", "-c", "commit.gpgsign=false", ...args]);
     expect(result.exitCode, result.stderr).toBe(0);
     return result.stdout;
+  };
+  const configureGitFixture = (repo: string) => {
+    for (const [key, value] of [
+      ["user.name", "Fixture"],
+      ["user.email", "fixture@example.invalid"],
+      ["commit.gpgsign", "false"],
+      ["tag.gpgsign", "false"],
+    ] as const) {
+      git(repo, "config", "--local", key, value);
+    }
   };
   const write = (repo: string, file: string, text: string) => {
     mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
@@ -403,6 +409,7 @@ describe("resolution across runs", () => {
     const origin = path.join(root, "origin");
     mkdirSync(origin);
     git(origin, "init", "-q", "-b", "main");
+    configureGitFixture(origin);
     write(origin, MESSAGES, "type Messages = { a: string };\n");
     write(
       origin,
@@ -459,6 +466,7 @@ describe("resolution across runs", () => {
     const origin = path.join(root, "origin");
     mkdirSync(origin);
     git(origin, "init", "-q", "-b", "main");
+    configureGitFixture(origin);
     write(origin, file, "base\n");
     git(origin, "add", ".");
     git(origin, "commit", "-qm", "base");
@@ -491,6 +499,7 @@ describe("resolution across runs", () => {
       "type Messages = { a: string; b: string; c: string };\n";
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     git(repo, "checkout", "-q", "--detach", head);
     const planned = cli(
       repo,
@@ -529,6 +538,7 @@ describe("resolution across runs", () => {
   const publish = (origin: string, head: string, out: string) => {
     const bare = mkdtempSync(path.join(root, "publish-"));
     git(bare, "init", "-q", "--bare", ".");
+    configureGitFixture(bare);
     git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
     const mainTip = git(bare, "rev-parse", "refs/heads/main");
     const requests = path.join(bare, "requests");
@@ -826,6 +836,7 @@ describe("resolution across runs", () => {
     const { origin, head, main } = deletionFixture();
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     git(repo, "checkout", "-q", "--detach", head);
     const planned = plan(path.join(repo, ".git"), head, main, [
       deletionGenerator("derived"),
@@ -848,6 +859,7 @@ describe("resolution across runs", () => {
 
     const bare = path.join(root, "publish.git");
     git(root, "init", "-q", "--bare", bare);
+    configureGitFixture(bare);
     git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
     const requests = path.join(root, "requests");
     apply({
@@ -906,6 +918,7 @@ describe("resolution across runs", () => {
       const { origin, head, main } = rejection.fixture();
       const bare = path.join(root, "publish.git");
       git(root, "init", "-q", "--bare", bare);
+      configureGitFixture(bare);
       git(bare, "fetch", "-q", origin, "+refs/heads/*:refs/heads/*");
       const collected = path.join(root, "forged");
       mkdirSync(path.join(collected, "files"), { recursive: true });
@@ -945,6 +958,7 @@ describe("resolution across runs", () => {
     // Proof the attribute bites: a plain checkout merge reports no conflict.
     const plain = path.join(root, "plain");
     git(root, "clone", "-q", origin, plain);
+    configureGitFixture(plain);
     git(plain, "checkout", "-q", "--detach", head);
     const merged = run(plain, [
       "git",
@@ -1141,6 +1155,28 @@ describe("resolution across runs", () => {
     );
   });
 
+  test("fixture merge needs no machine-level Git configuration", () => {
+    const { origin, main } = fixture();
+    git(origin, "switch", "-q", "feature");
+    const home = path.join(root, "empty-home");
+    mkdirSync(home);
+    const isolatedEnv = {
+      PATH: process.env["PATH"] ?? "",
+      HOME: home,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_NOSYSTEM: "1",
+    };
+    const merged = run(
+      origin,
+      ["git", "merge", "--no-commit", "--no-ff", main],
+      isolatedEnv,
+    );
+    expect(merged.exitCode).toBe(1);
+    expect(merged.stderr).not.toContain("identity unknown");
+    expect(git(origin, "rev-parse", "MERGE_HEAD")).toBe(main);
+    git(origin, "merge", "--abort");
+  });
+
   test("local regeneration refuses source conflicts without touching the index or files", () => {
     const { origin, head, main } = fixture({
       branchEdits: (repo) => write(repo, "source.ts", "branch\n"),
@@ -1317,6 +1353,7 @@ describe("resolution across runs", () => {
     });
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
+    configureGitFixture(repo);
     const planned = cli(
       repo,
       "plan",
