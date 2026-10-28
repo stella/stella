@@ -9,7 +9,10 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
+import {
+  orderedProvisionAnchorSubtreeSql,
+  provisionAnchorSubtreeSql,
+} from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -134,14 +137,19 @@ export const caseLawProvisionFilterOf = ({
  * every read of a provision's citing decisions seeks that provision's own
  * links; the named levels are compared within them.
  */
-const provisionLinkConditions = (scope: ProvisionScopeOptions): SQL[] => {
+const provisionLinkConditions = (
+  scope: ProvisionScopeOptions,
+  access?: "ordered",
+): SQL[] => {
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
   const linkJurisdiction = linkJurisdictionOf(scope);
   const conditions: SQL[] = [
     sql`${link.jurisdiction} = ${linkJurisdiction}`,
     sql`${link.workIdentifier} = ${provision.work}`,
-    provisionAnchorSubtreeSql(link.anchor, {
+    (access === "ordered"
+      ? orderedProvisionAnchorSubtreeSql
+      : provisionAnchorSubtreeSql)(link.anchor, {
       jurisdiction: linkJurisdiction,
       anchor: provision.anchor,
     }),
@@ -216,7 +224,7 @@ export const provisionCitedSql = ({
   sql`EXISTS (SELECT 1 FROM ${caseLawProvisionCitations} WHERE ${sql.join(
     [
       sql`${caseLawProvisionCitations.decisionId} = ${decisionId}`,
-      ...provisionLinkConditions(scope),
+      sql`CASE WHEN ${sql.join(provisionLinkConditions(scope), sql` AND `)} THEN TRUE ELSE FALSE END`,
     ],
     sql` AND `,
   )} LIMIT 1 OFFSET 0)`;
@@ -238,8 +246,12 @@ export const provisionScopeLinksQuery = (
   tx
     .select({ decisionId: caseLawProvisionCitations.decisionId })
     .from(caseLawProvisionCitations)
-    .where(and(...provisionLinkConditions(scope)))
-    .orderBy(sql`${caseLawProvisionCitations.anchor} COLLATE "C"`)
+    .where(and(...provisionLinkConditions(scope, "ordered")))
+    .orderBy(
+      caseLawProvisionCitations.jurisdiction,
+      caseLawProvisionCitations.workIdentifier,
+      sql`${caseLawProvisionCitations.anchor} COLLATE "C"`,
+    )
     .limit((scope.idSetMax ?? LIMITS.caseLawProvisionIdSetMax) + 1);
 
 export const readCaseLawProvisionScope = async (

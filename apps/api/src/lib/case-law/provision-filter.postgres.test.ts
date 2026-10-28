@@ -79,7 +79,9 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
       const { db, sql: client } = openClient({
         max: 1,
         logger: {
-          logQuery: (query, params) => captured.push({ query, params }),
+          logQuery: (query, params) => {
+            captured.push({ query, params });
+          },
         },
       });
       const schemaName = `provision_plan_${Bun.randomUUIDv7().replaceAll("-", "")}`;

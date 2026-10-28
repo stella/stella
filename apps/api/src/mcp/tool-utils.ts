@@ -812,6 +812,11 @@ export const notFoundResult = (
   structuredErrorResult({ code: "not_found", hint, message });
 
 /** A bounded case-law read may be retried with a narrower search. */
+const CASE_LAW_SEARCH_TIMEOUT_SINK = failureSink({
+  event: "mcp.case_law_search_timeout",
+  expected: [],
+});
+
 export const caseLawSearchTimeoutResult = (
   error: unknown,
 ): InternalToolErrorResult | null => {
@@ -823,10 +828,10 @@ export const caseLawSearchTimeoutResult = (
   ) {
     return null;
   }
-  captureError(
-    error,
-    handlerErrorContext("mcp.caseLawSearchTimeout", { source: "mcp" }),
-  );
+  observeFailure(error, {
+    sink: CASE_LAW_SEARCH_TIMEOUT_SINK,
+    ctx: { source: "mcp" },
+  });
   return structuredErrorResult({
     code: "upstream_unavailable",
     message: "Case-law search exceeded its time budget.",
