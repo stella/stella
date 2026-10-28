@@ -221,7 +221,7 @@
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
     "apps/web/src/features/case-law/components/citation-timeline-panel.tsx": 4,
     "apps/web/src/features/knowledge/playbook-editor/position-editor.tsx": 1,
-    "apps/web/src/features/knowledge/views/templates/template-row-view.tsx": 5,
+    "apps/web/src/features/knowledge/views/templates/template-row-view.tsx": 1,
     "apps/web/src/features/statutes/components/statute-text.tsx": 5,
     "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 4,
