@@ -225,8 +225,8 @@ export const createDesktopRunnerGateway = (
       observeFailure(queued.error, { sink: LEASE_SWEEP_SINK });
       return;
     }
+    // One socket after another, so deliveries never burst.
     for (const sessionId of queued.value) {
-      // db-await-in-loop: one socket's delivery per iteration; each reads its own queue page by page
       await sessions.get(sessionId)?.deliver();
     }
   };
