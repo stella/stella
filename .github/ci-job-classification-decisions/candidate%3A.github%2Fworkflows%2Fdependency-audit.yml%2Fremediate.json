@@ -1,5 +1,5 @@
 {
   "kind": "priority",
   "qualifier": "Publishes dependency audit remediation as a signed-commit pull request.",
-  "reviewedDigest": "da7725c0120193c335ef5d2374a28e86c5bbbd78c91ff4f8b513cea451fd9c8c"
+  "reviewedDigest": "a14b78f833a44a1c584003ded3b5b556a0952df580b329984c6d4a7bfc034d1e"
 }
