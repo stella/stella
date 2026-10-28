@@ -188,7 +188,13 @@ const harnessSessionIdSchema = v.nullable(
   v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
 );
 const modelIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
-const tokenSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(8192));
+/** Longest MCP token a run message carries. */
+export const DESKTOP_RUNNER_MAX_TOKEN_LENGTH = 8192;
+const tokenSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_RUNNER_MAX_TOKEN_LENGTH),
+);
 
 const harnessModelSchema = v.object({
   id: modelIdSchema,

@@ -172,6 +172,8 @@ type SessionState = {
   queuedFrames: number;
   /** UTF-8 bytes of the frames waiting behind the one being stored. */
   queuedBytes: number;
+  /** Bun buffered the last command; delivery resumes when the socket drains. */
+  backpressured: boolean;
   queuedDelivery: Promise<void> | null;
   /** The last queued command this socket has sent. */
   deliveredThrough: number;
@@ -198,19 +200,26 @@ const close = (state: SessionState, reason: DesktopRunnerClose) => {
   socket.close(reason.code, reason.reason);
 };
 
+/**
+ * What a send did: `backpressure` means Bun buffered the frame and the socket
+ * should take no more until it drains.
+ */
+type Sent = "sent" | "backpressure" | "closed";
+
 const send = (
   state: SessionState,
   message: DesktopRunnerServerMessage,
-): boolean => {
+): Sent => {
   if (state.phase.type !== "awaiting_hello" && state.phase.type !== "ready") {
-    return false;
+    return "closed";
   }
+  const status = state.phase.socket.send(JSON.stringify(message));
   // 0 means Bun dropped the frame; the queue is replayed on the next socket.
-  if (state.phase.socket.send(JSON.stringify(message)) === 0) {
+  if (status === 0) {
     close(state, DESKTOP_RUNNER_CLOSE.internalError);
-    return false;
+    return "closed";
   }
-  return true;
+  return status === -1 ? "backpressure" : "sent";
 };
 
 const drain = (state: SessionState, afterMs: number) => {
@@ -301,6 +310,10 @@ const deliverPending = async (state: SessionState) => {
   }
   const { held } = state.phase;
   for (;;) {
+    // Commands wait in the queue, not in the socket's buffer, until it drains.
+    if (state.backpressured) {
+      return;
+    }
     // db-await-in-loop: keyset page per iteration; the page is the batch
     const pending = await readPendingCommands(state.context.db, {
       binding: state.binding,
@@ -316,10 +329,16 @@ const deliverPending = async (state: SessionState) => {
       const resend =
         command.kind !== DESKTOP_RUNNER_SERVER_MESSAGE.runStart ||
         !held.has(command.runId);
-      if (resend && !send(state, await compose(state, command))) {
+      const sent = resend ? send(state, await compose(state, command)) : "sent";
+      if (sent === "closed") {
         return;
       }
+      // A buffered frame was taken; the next command waits for the drain.
       state.deliveredThrough = command.id;
+      if (sent === "backpressure") {
+        state.backpressured = true;
+        return;
+      }
     }
     if (pending.commands.length < COMMAND_PAGE_SIZE) {
       return;
@@ -696,6 +715,7 @@ export const createRunnerSession = ({
     chain: Promise.resolve(),
     queuedFrames: 0,
     queuedBytes: 0,
+    backpressured: false,
     queuedDelivery: null,
     deliveredThrough: 0,
     claimed: false,
@@ -745,6 +765,10 @@ export const createRunnerSession = ({
     },
     pong: () => {
       state.heard = true;
+    },
+    drain: () => {
+      state.backpressured = false;
+      detached(deliver(state), "desktop-runner.drain");
     },
     close: () => {
       onSocketClosed(state);

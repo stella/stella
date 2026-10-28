@@ -14,6 +14,8 @@ export type ApiSocketSession = {
     message: string | Buffer,
   ) => void;
   readonly pong: (socket: ApiServerWebSocket) => void;
+  /** The socket's send buffer emptied after a send reported backpressure. */
+  readonly drain: (socket: ApiServerWebSocket) => void;
   readonly close: (
     socket: ApiServerWebSocket,
     code: number,
@@ -46,6 +48,7 @@ export const apiWebSocketHandler: WebSocketHandler<ApiSocketData> = {
   open: (socket) => socket.data.session.open(socket),
   message: (socket, message) => socket.data.session.message(socket, message),
   pong: (socket) => socket.data.session.pong(socket),
+  drain: (socket) => socket.data.session.drain(socket),
   close: (socket, code, reason) =>
     socket.data.session.close(socket, code, reason),
 };
