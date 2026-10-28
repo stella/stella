@@ -1,7 +1,12 @@
-import type { ComponentProps, ReactNode } from "react";
+import { useRef, useState } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
+
+import { panic } from "better-result";
 
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
+
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 type SuggestedAction = {
   id: string;
@@ -65,6 +70,167 @@ const SuggestedActionSurface = ({
 );
 
 /**
+ * Where a truncated label is in its reveal. `rest` shows the ellipsis;
+ * `revealing` slides the hidden end into view; `returning` slides back and
+ * hands over to `rest` once the label is home, so the ellipsis never jumps
+ * in under a label that is still moving.
+ */
+type LabelReveal =
+  | { type: "rest" }
+  | { type: "revealing"; offsetPx: number; durationMs: number }
+  | { type: "returning" };
+
+// A reading pace, not interface feedback: the label moves slowly enough to
+// read while it passes, so its duration grows with the hidden length and
+// is set per label instead of through a duration utility.
+const REVEAL_PX_PER_SECOND = 45;
+const REVEAL_MIN_DURATION_MS = 400;
+// A pointer crossing the row on its way elsewhere starts no slide.
+const REVEAL_DELAY_MS = 250;
+const RETURN_DURATION_MS = 200;
+
+const revealDurationMs = (hiddenPx: number): number =>
+  Math.max(
+    REVEAL_MIN_DURATION_MS,
+    Math.round((hiddenPx / REVEAL_PX_PER_SECOND) * 1000),
+  );
+
+const labelRevealStyle = (reveal: LabelReveal): CSSProperties | undefined => {
+  switch (reveal.type) {
+    case "rest":
+      return undefined;
+    case "revealing":
+      return {
+        transitionDelay: `${String(REVEAL_DELAY_MS)}ms`,
+        transitionDuration: `${String(reveal.durationMs)}ms`,
+        translate: `${String(reveal.offsetPx)}px 0`,
+      };
+    case "returning":
+      return {
+        transitionDuration: `${String(RETURN_DURATION_MS)}ms`,
+        translate: "0 0",
+      };
+    default:
+      reveal satisfies never;
+      return panic(`Unhandled label reveal: ${String(reveal)}`);
+  }
+};
+
+// The computed `translate` of a label that has not moved yet, as browsers
+// and the test DOM spell it.
+const UNMOVED_TRANSLATE = new Set(["", "none", "0px", "0px 0px"]);
+
+type SuggestedActionChipProps = {
+  action: SuggestedAction;
+  keyShortcut: string | undefined;
+  onSelect: (id: string) => void;
+  surface: SuggestedActionSurfaceName;
+};
+
+/**
+ * One chip. A label too long for the row ends in an ellipsis; hovering or
+ * focusing the chip slides the rest of the label into view inside the chip's
+ * own box, so the row never reflows. With reduced motion the label stays put
+ * and the chip's tooltip shows the whole text instead.
+ */
+const SuggestedActionChip = ({
+  action,
+  keyShortcut,
+  onSelect,
+  surface,
+}: SuggestedActionChipProps) => {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const clipRef = useRef<HTMLSpanElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const engagedRef = useRef({ focus: false, hover: false });
+  const [reveal, setReveal] = useState<LabelReveal>({ type: "rest" });
+
+  const engage = (source: "focus" | "hover") => {
+    engagedRef.current[source] = true;
+    const clip = clipRef.current;
+    const label = labelRef.current;
+    if (prefersReducedMotion || clip === null || label === null) {
+      return;
+    }
+    const hiddenPx = label.scrollWidth - clip.clientWidth;
+    if (hiddenPx <= 0) {
+      return;
+    }
+    // Toward the start: left in a left-to-right label, right in a
+    // right-to-left one (`dir="auto"` resolves per label).
+    const towardStart = getComputedStyle(label).direction === "rtl" ? 1 : -1;
+    setReveal({
+      type: "revealing",
+      durationMs: revealDurationMs(hiddenPx),
+      offsetPx: towardStart * hiddenPx,
+    });
+  };
+
+  const release = (source: "focus" | "hover") => {
+    engagedRef.current[source] = false;
+    if (engagedRef.current.focus || engagedRef.current.hover) {
+      return;
+    }
+    const label = labelRef.current;
+    // Released before the delay ran out: nothing moved, so no transition
+    // will end to hand back to `rest`.
+    const moved =
+      label !== null &&
+      !UNMOVED_TRANSLATE.has(getComputedStyle(label).translate);
+    setReveal((current) => {
+      if (current.type !== "revealing") {
+        return current;
+      }
+      return moved ? { type: "returning" } : { type: "rest" };
+    });
+  };
+
+  const settle = () => {
+    setReveal((current) =>
+      current.type === "returning" ? { type: "rest" } : current,
+    );
+  };
+
+  return (
+    <SuggestedActionSurface className="max-w-full" surface={surface}>
+      <Button
+        aria-keyshortcuts={keyShortcut}
+        className={cn("text-foreground font-normal", "max-w-full")}
+        onBlur={() => release("focus")}
+        onClick={() => onSelect(action.id)}
+        onFocus={() => engage("focus")}
+        onPointerEnter={() => engage("hover")}
+        onPointerLeave={() => release("hover")}
+        size="chip"
+        tooltip={prefersReducedMotion ? action.label : undefined}
+        type="button"
+        variant={surface === "plain" ? "outline" : "ghost"}
+      >
+        {action.icon}
+        <span className="min-w-0 overflow-hidden" ref={clipRef}>
+          <span
+            className={cn(
+              "block whitespace-nowrap ease-in-out",
+              reveal.type === "rest"
+                ? "truncate"
+                : "w-max transition-transform",
+            )}
+            data-reveal={reveal.type}
+            dir="auto"
+            onTransitionCancel={settle}
+            onTransitionEnd={settle}
+            ref={labelRef}
+            style={labelRevealStyle(reveal)}
+          >
+            {action.label}
+          </span>
+        </span>
+      </Button>
+    </SuggestedActionSurface>
+  );
+};
+
+/**
  * A wrapping row (or stack) of click-to-run suggested-action chips.
  */
 export const SuggestedActions = ({
@@ -93,25 +259,13 @@ export const SuggestedActions = ({
       role="group"
     >
       {actions.map((action) => (
-        <SuggestedActionSurface
-          className="max-w-full"
+        <SuggestedActionChip
+          action={action}
           key={action.id}
+          keyShortcut={keyShortcut}
+          onSelect={onSelect}
           surface={surface}
-        >
-          <Button
-            aria-keyshortcuts={keyShortcut}
-            className={cn("text-foreground font-normal", "max-w-full")}
-            onClick={() => onSelect(action.id)}
-            size="chip"
-            type="button"
-            variant={surface === "plain" ? "outline" : "ghost"}
-          >
-            {action.icon}
-            <span className="min-w-0 truncate" dir="auto" title={action.label}>
-              {action.label}
-            </span>
-          </Button>
-        </SuggestedActionSurface>
+        />
       ))}
     </div>
   );
