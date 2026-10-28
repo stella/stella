@@ -1101,7 +1101,7 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::<module>::test timeout",
-    "count": 8,
+    "count": 9,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
