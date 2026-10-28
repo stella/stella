@@ -32,6 +32,7 @@ import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/deskt
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { releaseRevokedRunners } from "@/api/lib/desktop-runner/store";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -355,6 +356,9 @@ const MEMBER_CREDENTIAL_REVOCATION = {
           eq(apikey.enabled, true),
         ),
       );
+    // The member's desktop keys are revoked with the rest, and with them the
+    // runner sockets they opened.
+    await releaseRevokedRunners(tx, { userId, organizationId });
   },
 } as const satisfies Record<string, RevokeMemberCredentials>;
 
@@ -513,6 +517,7 @@ export const revokeAllUserApiKeys = async (
     .update(apikey)
     .set({ enabled: false, updatedAt: new Date() })
     .where(and(eq(apikey.referenceId, userId), eq(apikey.enabled, true)));
+  await releaseRevokedRunners(tx, { userId });
 };
 
 /**

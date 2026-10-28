@@ -59,6 +59,7 @@ export const createRlsDesktopCredentials = async (
     return {
       /** The account token, for a request a test signs with another key. */
       credential: created.key,
+      keyId: created.id,
       deviceJkt: identity.deviceJkt,
       signRequest: async (request: Request) => {
         request.headers.set("authorization", `Bearer ${created.key}`);

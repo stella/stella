@@ -18,6 +18,8 @@ import {
 } from "@/api/db/schema";
 import type { HttpServer } from "@/api/http/context";
 import { apiWebSocketHandler } from "@/api/http/websocket";
+import { desktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
+import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
   createDesktopRunnerControl,
@@ -104,10 +106,15 @@ type Instance = {
 };
 const instances: Instance[] = [];
 
+type InstanceOverrides = {
+  limits?: Partial<DesktopRunnerLimits>;
+  timing?: Partial<DesktopRunnerTiming>;
+};
+
 const startInstance = async (
   instanceId: string,
   doorbell: DesktopRunnerDoorbell,
-  limits: Partial<DesktopRunnerLimits> = {},
+  overrides: InstanceOverrides = {},
 ): Promise<Instance> => {
   const gateway = createDesktopRunnerGateway({
     db: gatewayDb,
@@ -117,8 +124,12 @@ const startInstance = async (
     mintRunToken,
     now,
     random: () => 0.5,
-    timing: TIMING,
-    limits,
+    timing: { ...TIMING, ...overrides.timing },
+    limits: overrides.limits ?? {},
+    // SAFETY: PGlite and Bun SQL expose the same Drizzle select API.
+    isKeyLive: desktopKeyLiveness(
+      asTestRaw<Parameters<typeof desktopKeyLiveness>[0]>(db),
+    ),
   });
   await gateway.start();
   const server = Bun.serve({
@@ -946,7 +957,7 @@ describe("runner identity", () => {
 
   test("an account at its installation cap is refused until a disconnected one without open runs makes room", async () => {
     const capped = await startInstance("api-capped", sharedDoorbell, {
-      maxRunnersPerAccount: 2,
+      limits: { maxRunnersPerAccount: 2 },
     });
     const [busyId, idleId, newId] = [
       Bun.randomUUIDv7(),
@@ -986,5 +997,44 @@ describe("runner identity", () => {
       [busyId, newId].toSorted(),
     );
     await admitted.close();
+  });
+});
+
+describe("credential revocation", () => {
+  test("revoking the device key closes its socket at the next heartbeat and routes nothing more to it", async () => {
+    const fresh = await createRlsDesktopCredentials(db, ids);
+    // Heartbeats on a short interval; the socket's close is the signal awaited.
+    const beating = await startInstance("api-heartbeat", sharedDoorbell, {
+      timing: { pingIntervalMs: 50 },
+    });
+    const desktopId = Bun.randomUUIDv7();
+    const desktop = await openDesktop(
+      beating,
+      desktopId,
+      await upgradeRequest(beating, desktopId, fresh.a),
+    );
+    await desktop.hello();
+    await revokeDesktopRegistryCredential({
+      keyId: fresh.a.keyId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      recordAuditEvent: async () => await Promise.resolve(),
+      // SAFETY: PGlite and Bun SQL expose the same Drizzle transaction API.
+      db: asTestRaw<
+        NonNullable<Parameters<typeof revokeDesktopRegistryCredential>[0]["db"]>
+      >(db),
+    });
+    // Routing skips the revoked key's runner from the revocation on.
+    expect(
+      (
+        await control.startRun(startInput(desktopId, Bun.randomUUIDv7()))
+      ).unwrap(),
+    ).toEqual({ type: "no_computer" });
+    expect(await desktop.closed).toEqual({
+      code: DESKTOP_RUNNER_CLOSE.credentialRevoked.code,
+      reason: DESKTOP_RUNNER_CLOSE.credentialRevoked.reason,
+    });
+    // Nothing reached the socket after its welcome: no run, no token.
+    expect(desktop.received.map(({ type }) => type)).toEqual(["welcome"]);
   });
 });

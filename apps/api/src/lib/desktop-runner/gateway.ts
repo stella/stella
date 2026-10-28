@@ -10,6 +10,10 @@ import type { HttpServer } from "@/api/http/context";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import {
+  type DesktopKeyLiveness,
+  desktopKeyLiveness,
+} from "@/api/lib/business-registries/desktop/liveness";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import {
   DESKTOP_RUNNER_DESKTOP_ID_HEADER,
@@ -40,6 +44,8 @@ type DesktopRunnerCaller = {
   readonly organizationId: SafeId<"organization">;
   /** Thumbprint of the device key whose single-use proof signed the request. */
   readonly deviceJkt: string;
+  /** The desktop credential that authorized it. */
+  readonly keyId: string;
 };
 
 export type AuthorizeDesktopRunner = (
@@ -58,6 +64,7 @@ export const authorizeRunnerWith =
       userId: authorized.userId,
       organizationId: authorized.organizationId,
       deviceJkt: authorized.consumedProof.proof.thumbprint,
+      keyId: authorized.keyId,
     }));
 
 export type DesktopRunnerGatewayOptions = {
@@ -71,6 +78,8 @@ export type DesktopRunnerGatewayOptions = {
   random?: () => number;
   timing?: Partial<DesktopRunnerTiming>;
   limits?: Partial<DesktopRunnerLimits>;
+  /** Re-checked on every heartbeat; the owner connection's check by default. */
+  isKeyLive?: DesktopKeyLiveness;
 };
 
 /** Leases expired per sweep, so one sweep stays one short transaction. */
@@ -128,6 +137,7 @@ export const createDesktopRunnerGateway = (
     now,
     random,
     mintRunToken: options.mintRunToken,
+    isKeyLive: options.isKeyLive ?? desktopKeyLiveness(),
     ringPrevious: options.doorbell.ring,
   };
 

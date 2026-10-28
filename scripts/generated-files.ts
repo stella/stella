@@ -277,6 +277,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/db/operator-registrations/read.ts",
     "apps/api/src/lib/desktop-runner/run-transitions.ts",
     "apps/api/src/lib/desktop-runner/states.ts",
+    "apps/api/src/lib/desktop-runner/store.ts",
     "apps/api/src/lib/document-review/*",
     "apps/api/src/lib/document-translation/contract.ts",
     "apps/api/src/lib/document-translation/docx-language.ts",

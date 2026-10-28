@@ -42,6 +42,8 @@ export const DESKTOP_RUNNER_DESKTOP_ID_HEADER = "stella-desktop-id";
  * - `unknownRun`: a run message for a run this socket does not hold.
  * - `tooManyRunners`: the account holds as many installations as it may, and
  *   none can make room.
+ * - `credentialRevoked`: the device key's credential was revoked, expired or
+ *   unlinked; the desktop must link again.
  */
 export const DESKTOP_RUNNER_CLOSE = {
   goingAway: { code: 1001, reason: "going_away" },
@@ -56,6 +58,7 @@ export const DESKTOP_RUNNER_CLOSE = {
   helloTimeout: { code: 4005, reason: "hello_timeout" },
   unknownRun: { code: 4006, reason: "unknown_run" },
   tooManyRunners: { code: 4007, reason: "too_many_runners" },
+  credentialRevoked: { code: 4008, reason: "credential_revoked" },
 } as const;
 const DESKTOP_RUNNER_POLICY_VIOLATION_CODE = 1008;
 

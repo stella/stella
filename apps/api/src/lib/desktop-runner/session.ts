@@ -19,6 +19,7 @@ import type {
 } from "@/api/http/websocket";
 import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import { isFoldableChunk } from "@/api/lib/desktop-runner/chunk";
 import {
   DESKTOP_RUNNER_CLOSE,
@@ -62,6 +63,8 @@ type RunnerSessionContext = {
   readonly now: () => Date;
   readonly random: () => number;
   readonly mintRunToken: MintRunToken;
+  /** Whether the credential that opened a socket still authorizes it. */
+  readonly isKeyLive: DesktopKeyLiveness;
   /** Tell the socket a newer one replaced that it is no longer current. */
   readonly ringPrevious: (holder: RunHolder) => void;
 };
@@ -383,6 +386,12 @@ const storeSequenced = async (
 
 /** Renew the runner and its leases, and refresh tokens about to expire. */
 const renew = async (state: SessionState) => {
+  // A revoked, expired or unlinked credential ends the socket before anything
+  // else is renewed or minted for it.
+  if (!(await state.context.isKeyLive(state.binding))) {
+    close(state, DESKTOP_RUNNER_CLOSE.credentialRevoked);
+    return;
+  }
   const now = state.context.now();
   const current = await renewRunnerSession(state.context.db, {
     binding: state.binding,

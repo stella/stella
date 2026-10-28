@@ -28,6 +28,11 @@ export default {
           "Deletes the member's runners, and with them their runs, during organization membership removal.",
       },
       {
+        path: "apps/api/src/lib/auth-artifacts.postgres.test.ts",
+        reason:
+          "Builds the runner table into its fixture schema, so member credential cleanup can release the member's runners.",
+      },
+      {
         path: "apps/api/src/lib/desktop-runner/",
         reason:
           "The gateway's tests read the stored rows to check what the socket acknowledged.",
