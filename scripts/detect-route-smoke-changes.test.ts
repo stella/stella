@@ -86,6 +86,8 @@ describe("route traffic changes require the route smoke", () => {
     expect(closure.has("apps/web/e2e/helpers/api.ts")).toBe(true);
     expect(closure.has("apps/web/e2e/execution-profile.ts")).toBe(true);
     expect(closure.has("apps/web/e2e/global-teardown.ts")).toBe(true);
+    expect(closure.has("apps/web/e2e/specs/phone-layout.spec.ts")).toBe(true);
+    expect(closure.has("apps/web/e2e/helpers/phone-layout.ts")).toBe(true);
     for (const file of closure) {
       expect(routeSmokeAffected([file])).toBe(true);
     }
