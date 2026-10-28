@@ -1205,7 +1205,7 @@ export const TemplateStudioPage = ({
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.
           markDirty();
-          notifyUserError(slotRenameError, t("common.error"), {
+          notifyUserError(slotRenameError, t("errors.actionFailed"), {
             description: slotRenameErrorMessage,
           });
         }

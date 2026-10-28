@@ -7,12 +7,12 @@ import {
   parseTimeEntryDeleteResponse,
   parseTimeEntryIdResponse,
   parseTimeEntryListPage,
-  parseTimeEntryReturnResponse,
   parseTimeEntrySplitResponse,
   parseTimeEntrySuggestionDecision,
   parseTimeEntrySuggestionsResponse,
   parseTimeEntrySummary,
   parseTimeEntryUpdatedResponse,
+  parseTimeReturnBatch,
 } from "@stll/api-contract/time-entries";
 import type {
   TimeEntry,
@@ -32,6 +32,7 @@ import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
 
 type TimeApprovalBatch = NonNullable<ReturnType<typeof parseTimeApprovalBatch>>;
+type TimeReturnBatch = NonNullable<ReturnType<typeof parseTimeReturnBatch>>;
 
 const TIME_ENTRY_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -280,18 +281,21 @@ export const approveTimeEntries = async (
     workspaceId: null,
   });
 
-/** Returns one draft or approved entry to its owner with a comment. */
-export const returnTimeEntry = async ({
+/**
+ * Returns entries to their owners with one comment in one call; the API
+ * answers per entry, returned or refused with its reason.
+ */
+export const returnTimeEntries = async ({
   comment,
-  id,
+  ids,
 }: {
   comment: string;
-  id: string;
-}) =>
+  ids: readonly string[];
+}): Promise<TimeReturnBatch> =>
   await requestTimeEntries({
-    body: { comment, id },
+    body: { comment, ids },
     method: "POST",
-    parse: parseTimeEntryReturnResponse,
+    parse: parseTimeReturnBatch,
     path: "/approval-queue/return",
     workspaceId: null,
   });

@@ -11,6 +11,7 @@
     ".": "./src/index.ts",
     "./commonmark-code-oracle": "./src/commonmark-code-oracle.ts",
     "./external-state": "./src/external-state.ts",
+    "./fake-timers": "./src/fake-timers.ts",
     "./preload": "./src/preload.ts",
     "./rejection": "./src/rejection.ts",
     "./response-order": "./src/response-order.ts"
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "bun-types": "catalog:"
+    "bun-types": "catalog:",
+    "oxc-parser": "catalog:"
   }
 }
