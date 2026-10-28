@@ -119,7 +119,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         darkSrc={storyThumbnail.darkSrc}
         alt={storyThumbnail.alt}
         class="h-full w-full rounded-lg border object-cover"
-        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
+        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px color-mix(in srgb, var(--color-black) 50%, transparent); object-position: 0% 0%"
         loading="lazy"
         decoding="async"
         defer={deferThemeImage ? "manual" : undefined}
@@ -134,7 +134,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         darkSrc={media.darkSrc}
         alt={t(media.altKey)}
         class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
-        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px var(--preview-window-shadow)"
         loading="lazy"
         decoding="async"
         defer={deferThemeImage ? "manual" : undefined}
@@ -146,7 +146,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
     media.type === "video" && videoReady && (
       <video
         class={`absolute inset-0 h-full w-full border object-cover ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
-        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px var(--preview-window-shadow)"
         poster={posterReady ? media.poster : undefined}
         aria-label={media.alt}
         autoplay
@@ -216,7 +216,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
             : "/media/products/anonymization-dark.png"}
           alt={media.alt}
           class="h-full w-full rounded-lg border object-cover"
-          style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
+          style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px color-mix(in srgb, var(--color-black) 50%, transparent); object-position: 0% 0%"
           loading="lazy"
           decoding="async"
           defer={deferThemeImage ? "manual" : undefined}

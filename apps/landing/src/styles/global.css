@@ -112,6 +112,13 @@
   --accent-iris: #6264a7;
   --illustration-accent: #549cd1;
   --preview-window-shadow: rgb(15 23 42 / 0.5);
+  /* macOS window chrome drawn in the product mockups. */
+  --mac-close: #ff5f57;
+  --mac-maximize: #28c840;
+  --mac-minimize: #febc2e;
+  /* The press kit's fixed light and dark grounds for the logo previews. */
+  --press-tile-light: #ffffff;
+  --press-tile-dark: #0c0a09;
 }
 
 /* Tokens the @stll/workspace-ui feature previews (the Product menu's scenes)

@@ -35,6 +35,7 @@
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
+    "@stll/brand": "workspace:*",
     "@stll/clipboard": "workspace:*",
     "@stll/folio-react": "catalog:",
     "@stll/locales": "workspace:*",

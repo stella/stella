@@ -409,15 +409,13 @@ const proofItems = [
   .story-shot-main {
     /* .mac-window's shared rules read these from an ancestor with class
        "cli-story" (the hero's own scene wrapper); this window lives outside
-       that wrapper, so redeclare them locally. */
-    --mac-close: #ff5f57;
-    --mac-maximize: #28c840;
-    --mac-minimize: #febc2e;
+       that wrapper, so it takes the traffic-light colours from the landing
+       theme and redeclares the titlebar height locally. */
     --mac-titlebar-height: clamp(1.7rem, 2.35vw, 2.15rem);
     position: relative;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
-    box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+    box-shadow: 0 42px 110px -54px var(--preview-window-shadow);
   }
 
   /* .mac-window's ::after focus overlay only clears once
@@ -524,19 +522,19 @@ const proofItems = [
     background: color-mix(in srgb, var(--card) 52%, transparent);
     -webkit-backdrop-filter: blur(26px) saturate(1.7);
     backdrop-filter: blur(26px) saturate(1.7);
-    border: 1px solid color-mix(in srgb, white 34%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-white) 34%, transparent);
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, white 55%, transparent),
-      inset 0 -1px 0 color-mix(in srgb, white 12%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--color-white) 55%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, var(--color-white) 12%, transparent),
       0 36px 90px -58px color-mix(in srgb, var(--foreground) 45%, transparent);
   }
 
   :global(.dark) .control-rail {
-    border-color: color-mix(in srgb, white 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-white) 14%, transparent);
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
-      inset 0 -1px 0 color-mix(in srgb, white 6%, transparent),
-      0 36px 90px -58px rgba(0, 0, 0, 0.8);
+      inset 0 1px 0 color-mix(in srgb, var(--color-white) 20%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, var(--color-white) 6%, transparent),
+      0 36px 90px -58px color-mix(in srgb, var(--color-black) 80%, transparent);
   }
 
   .control-rail::before {
@@ -546,7 +544,7 @@ const proofItems = [
     inset: 0;
     background: linear-gradient(
       115deg,
-      color-mix(in srgb, white 30%, transparent),
+      color-mix(in srgb, var(--color-white) 30%, transparent),
       transparent 24%,
       transparent 70%,
       color-mix(in srgb, var(--auth-gradient-end) 14%, transparent)
@@ -556,7 +554,7 @@ const proofItems = [
   :global(.dark) .control-rail::before {
     background: linear-gradient(
       115deg,
-      color-mix(in srgb, white 10%, transparent),
+      color-mix(in srgb, var(--color-white) 10%, transparent),
       transparent 24%,
       transparent 70%,
       color-mix(in srgb, var(--auth-gradient-end) 18%, transparent)
