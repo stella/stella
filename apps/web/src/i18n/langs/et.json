@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Vastuse loomise aeg sai otsa. Proovi uuesti."
+    "timeout": "Päring võttis liiga kaua aega. Proovi uuesti."
   },
   "validation": {
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",

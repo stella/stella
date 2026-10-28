@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "The answer timed out. Try again."
+    "timeout": "The request took too long. Try again."
   },
   "validation": {
     "organizationNameRequired": "Organization name is required",

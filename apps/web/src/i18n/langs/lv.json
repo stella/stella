@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz."
+    "timeout": "Pieprasījums aizņēma pārāk ilgu laiku. Mēģiniet vēlreiz."
   },
   "validation": {
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",

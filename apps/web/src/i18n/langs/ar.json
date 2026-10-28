@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "انتهت مهلة توليد الإجابة. حاول مرة أخرى."
+    "timeout": "استغرق الطلب وقتًا طويلاً. حاول مرة أخرى."
   },
   "validation": {
     "organizationNameRequired": "اسم المؤسسة مطلوب",

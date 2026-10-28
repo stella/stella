@@ -77,7 +77,7 @@ export const useStartVerification = ({
 
     if (response.error) {
       if ("kind" in response.error) {
-        notifyUserError(response.error.cause, t("avt.runs.startFailed"), {
+        notifyUserError(toAPIError(response.error), t("avt.runs.startFailed"), {
           description: t("common.unexpectedError"),
         });
         return;

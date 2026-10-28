@@ -53,6 +53,23 @@ describe("API request retries", () => {
     expect(shouldRetryAPIRequest(2, transportError)).toBe(true);
     expect(shouldRetryAPIRequest(3, transportError)).toBe(false);
   });
+
+  test.each([
+    ["network", true],
+    ["timeout", true],
+    ["aborted", false],
+  ] as const)(
+    "handles %s transport retryability",
+    (transportKind, expected) => {
+      const error = new APIError({
+        message: "Transport failure",
+        status: 0,
+        transportKind,
+      });
+
+      expect(shouldRetryAPIRequest(0, error)).toBe(expected);
+    },
+  );
 });
 
 describe("user-visible transport and client failures", () => {
@@ -85,6 +102,15 @@ describe("user-visible transport and client failures", () => {
     expect(userErrorFromThrown(error, "Version upload failed")).toBe(
       error.message,
     );
+  });
+
+  test("hides an internal client operation message", () => {
+    const error = new ClientOperationError({
+      action: "prepare-file-upload",
+      message: "Prepared upload referenced an unknown file",
+    });
+
+    expect(userErrorFromThrown(error, "Upload failed")).toBe("Upload failed");
   });
 });
 

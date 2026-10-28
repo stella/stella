@@ -82,6 +82,11 @@ export const shouldRetryAPIRequest = (
       ACTION_ADMISSION_REFUSALS[error.code].retryable
     );
   }
+  if (APIError.is(error) && error.transportKind !== undefined) {
+    return (
+      failureCount < MAX_API_RETRY_COUNT && error.transportKind !== "aborted"
+    );
+  }
   // Any other typed error is a deliberate outcome (a disabled surface, a
   // refused operation), never a transient one: asking again cannot change it.
   if (!APIError.is(error) && isTaggedError(error)) {

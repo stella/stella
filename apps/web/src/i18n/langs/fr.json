@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Le délai de génération de la réponse a expiré. Réessayez."
+    "timeout": "La requête a pris trop de temps. Réessayez."
   },
   "validation": {
     "organizationNameRequired": "Le nom de l'organisation est requis",

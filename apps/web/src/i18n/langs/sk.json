@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Vypršal časový limit na odpoveď. Skúste to znova."
+    "timeout": "Požiadavka trvala príliš dlho. Skúste to znova."
   },
   "validation": {
     "organizationNameRequired": "Názov organizácie je povinný",

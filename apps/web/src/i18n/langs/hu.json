@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Lejárt a válaszadás időkorlátja. Próbálja újra."
+    "timeout": "A kérés túl sokáig tartott. Próbálja újra."
   },
   "validation": {
     "organizationNameRequired": "A szervezet neve kötelező",

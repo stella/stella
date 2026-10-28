@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą."
+    "timeout": "Užklausa truko per ilgai. Bandykite dar kartą."
   },
   "validation": {
     "organizationNameRequired": "Organizacijos pavadinimas yra privalomas",

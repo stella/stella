@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie."
+    "timeout": "Żądanie trwało zbyt długo. Spróbuj ponownie."
   },
   "validation": {
     "organizationNameRequired": "Nazwa organizacji jest wymagana",

@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo."
+    "timeout": "La solicitud tardó demasiado. Inténtalo de nuevo."
   },
   "validation": {
     "organizationNameRequired": "El nombre de la organización es obligatorio",

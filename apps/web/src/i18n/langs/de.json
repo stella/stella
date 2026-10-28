@@ -5989,7 +5989,7 @@
     }
   },
   "transportErrors": {
-    "timeout": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut."
+    "timeout": "Die Anfrage hat zu lange gedauert. Versuchen Sie es erneut."
   },
   "validation": {
     "organizationNameRequired": "Organisationsname ist erforderlich",
