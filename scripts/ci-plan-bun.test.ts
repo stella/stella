@@ -45,9 +45,9 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
     expect(typeof result, `Unresolved condition: ${condition}`).toBe("boolean");
     return result === true;
   };
-  // The planner installs Bun once from the trusted tooling copy before the
-  // checkout and once from the checkout's own package.json; each version
-  // source is set up at most once and every consumer runs after a setup.
+  // The trusted workflow revision installs Bun before checkout. Every later
+  // consumer reuses that executable, so setup remains outside the serial
+  // checkout, scope and dependency-planning prefix.
   const setups = new Map<string, number>();
   let consumers = 0;
   if (!enabled(candidate.if)) {
@@ -225,7 +225,7 @@ test("Bun setup contract rejects duplicate setup and missing setup fixtures", ()
     step.uses?.startsWith("oven-sh/setup-bun@");
   expect(
     plan.steps.filter(setup).map((step) => step.with?.["bun-version-file"]),
-  ).toEqual([".workflow-tooling/package.json", "package.json"]);
+  ).toEqual([".workflow-tooling/package.json"]);
   const duplicate = {
     ...plan,
     steps: plan.steps.flatMap((step) => (setup(step) ? [step, step] : [step])),

@@ -1012,17 +1012,6 @@ jobs:
       # One install serves every planner. The API test planners keep full
       # coverage when it is unavailable; heavy and thin-queue job derivation
       # cannot, so the step after it fails the plan instead.
-      - name: Setup Bun for dependency scope
-        if: >-
-          steps.completed-depth.outputs.run_required != 'false'
-          && (
-          steps.check.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch'
-          )
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-
       - name: Install planner dependencies
         id: planner-deps
         if: >-

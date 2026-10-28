@@ -277,6 +277,41 @@ const runSelector = (
     ]),
   ).plan;
 
+test("fixture changes retain every planner output", () => {
+  const fixtures = {
+    "api-only": ["apps/api/src/server.ts"],
+    "docs-only": ["README.md"],
+    "lockfile change": ["bun.lock"],
+    "web-only": ["apps/web/src/app.tsx"],
+    "workflow change": [".github/workflows/ci.yml"],
+  } as const;
+  const plans = Object.fromEntries(
+    Object.entries(fixtures).map(([name, files]) => [
+      name,
+      computeChangedFileScope(
+        {
+          changedFiles: files,
+          comparisonBase: "",
+          scopeUnknown: false,
+          eventName: "pull_request",
+          suiteDepth: "fast",
+          heavyOnly: false,
+          prTitle: "",
+          armed: false,
+        },
+        {
+          ...DEFAULT_DETECTORS,
+          desktopBrowser: () => false,
+          landingBuild: () => false,
+          landingDeploy: () => false,
+        },
+      ),
+    ]),
+  );
+
+  expect(plans).toMatchSnapshot();
+});
+
 const releaseExtraFiles = fc.array(fc.string(), { maxLength: 8 });
 
 const unrelatedDocNames = fc.array(fc.uuid(), { maxLength: 8 });
