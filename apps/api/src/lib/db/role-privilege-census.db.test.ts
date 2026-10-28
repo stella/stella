@@ -44,22 +44,92 @@ const readRolePrivilegeCensus = async (
       JOIN pg_catalog.pg_auth_members auth ON auth.member = memberships.parent
     ),
     application_schemas AS (
-      SELECT oid, nspname
+      SELECT oid, nspname, nspowner, nspacl
       FROM pg_catalog.pg_namespace
       WHERE nspname <> 'information_schema'
         AND nspname <> 'drizzle'
         AND nspname !~ '^pg_'
     ),
     application_relations AS (
-      SELECT class.oid, namespace.nspname, class.relname, class.relkind,
+      SELECT class.oid, class.relowner, class.relacl, namespace.nspname,
+             class.relname, class.relkind, class.relrowsecurity,
              class.relforcerowsecurity
       FROM pg_catalog.pg_class class
       JOIN application_schemas namespace ON namespace.oid = class.relnamespace
       WHERE class.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
     ),
-    table_privileges(privilege) AS (
-      VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'),
-             ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')
+    effective_grantees(role_oid, grant_oid) AS (
+      SELECT oid, oid FROM application_roles
+      UNION ALL
+      SELECT oid, 0::oid FROM application_roles
+      UNION
+      SELECT memberships.member, memberships.parent FROM memberships
+    ),
+    object_acl(kind, object_name, owner_oid, acl) AS (
+      SELECT CASE WHEN relation.relkind = 'S' THEN 'sequence' ELSE 'table' END,
+             relation.nspname || '.' || relation.relname, relation.relowner,
+             COALESCE(relation.relacl, pg_catalog.acldefault(
+               CASE WHEN relation.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END,
+               relation.relowner
+             ))
+      FROM application_relations relation
+      UNION ALL
+      SELECT 'column', relation.nspname || '.' || relation.relname || '.' || attribute.attname,
+             relation.relowner, attribute.attacl
+      FROM application_relations relation
+      JOIN pg_catalog.pg_attribute attribute ON attribute.attrelid = relation.oid
+      WHERE attribute.attnum > 0 AND NOT attribute.attisdropped
+        AND attribute.attacl IS NOT NULL
+      UNION ALL
+      SELECT 'function', namespace.nspname || '.' || procedure.proname ||
+             '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
+             procedure.proowner,
+             COALESCE(procedure.proacl, pg_catalog.acldefault('f', procedure.proowner))
+      FROM pg_catalog.pg_proc procedure
+      JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
+      WHERE procedure.prokind = 'f'
+      UNION ALL
+      SELECT 'procedure', namespace.nspname || '.' || procedure.proname ||
+             '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
+             procedure.proowner,
+             COALESCE(procedure.proacl, pg_catalog.acldefault('f', procedure.proowner))
+      FROM pg_catalog.pg_proc procedure
+      JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
+      WHERE procedure.prokind = 'p'
+      UNION ALL
+      SELECT 'schema', schema.nspname, schema.nspowner,
+             COALESCE(schema.nspacl, pg_catalog.acldefault('n', schema.nspowner))
+      FROM application_schemas schema
+      UNION ALL
+      SELECT CASE WHEN type.typtype = 'd' THEN 'domain' ELSE 'type' END,
+             namespace.nspname || '.' || type.typname, type.typowner,
+             COALESCE(type.typacl, pg_catalog.acldefault('T', type.typowner))
+      FROM pg_catalog.pg_type type
+      JOIN application_schemas namespace ON namespace.oid = type.typnamespace
+      UNION ALL
+      SELECT 'large_object', metadata.oid::text, metadata.lomowner,
+             COALESCE(metadata.lomacl, pg_catalog.acldefault('L', metadata.lomowner))
+      FROM pg_catalog.pg_largeobject_metadata metadata
+    ),
+    expanded_acl AS (
+      SELECT object_acl.kind, object_acl.object_name,
+             acl.grantee, acl.privilege_type, acl.is_grantable
+      FROM object_acl
+      CROSS JOIN LATERAL pg_catalog.aclexplode(object_acl.acl) acl
+    ),
+    effective_acl AS (
+      SELECT grantee.role_oid, acl.kind, acl.object_name, acl.privilege_type,
+             bool_or(acl.is_grantable) AS is_grantable
+      FROM expanded_acl acl
+      JOIN effective_grantees grantee ON grantee.grant_oid = acl.grantee
+      GROUP BY grantee.role_oid, acl.kind, acl.object_name, acl.privilege_type
+    ),
+    relation_roles AS (
+      SELECT DISTINCT acl.role_oid, relation.oid
+      FROM effective_acl acl
+      JOIN application_relations relation
+        ON acl.kind IN ('table', 'sequence')
+       AND acl.object_name = relation.nspname || '.' || relation.relname
     ),
     results AS (
       SELECT role.rolname AS role, 'attribute'::text AS kind,
@@ -77,44 +147,38 @@ const readRolePrivilegeCensus = async (
       JOIN application_roles member ON member.oid = membership.member
       JOIN pg_catalog.pg_roles parent ON parent.oid = membership.parent
       UNION ALL
-      SELECT role.rolname, 'privilege',
-             'schema:' || schema.nspname || ':' || privilege.name
-      FROM application_roles role
-      CROSS JOIN application_schemas schema
-      CROSS JOIN (VALUES ('USAGE'), ('CREATE')) privilege(name)
-      WHERE pg_catalog.has_schema_privilege(role.oid, schema.oid, privilege.name)
+      SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+             acl.privilege_type || ':GRANTABLE:' || acl.is_grantable
+      FROM effective_acl acl
+      JOIN application_roles role ON role.oid = acl.role_oid
       UNION ALL
       SELECT role.rolname, 'privilege',
-             'table:' || relation.nspname || '.' || relation.relname || ':' || privilege.privilege
-      FROM application_roles role
-      CROSS JOIN application_relations relation
-      CROSS JOIN table_privileges privilege
+             'table:' || relation.nspname || '.' || relation.relname ||
+             ':RLS_ENABLED:' || relation.relrowsecurity
+      FROM relation_roles accessible
+      JOIN application_roles role ON role.oid = accessible.role_oid
+      JOIN application_relations relation ON relation.oid = accessible.oid
       WHERE relation.relkind <> 'S'
-        AND pg_catalog.has_table_privilege(role.oid, relation.oid, privilege.privilege)
       UNION ALL
       SELECT role.rolname, 'privilege',
-             'table:' || relation.nspname || '.' || relation.relname || ':RLS_FORCED:' || relation.relforcerowsecurity
-      FROM application_roles role
-      CROSS JOIN application_relations relation
+             'table:' || relation.nspname || '.' || relation.relname ||
+             ':RLS_FORCED:' || relation.relforcerowsecurity
+      FROM relation_roles accessible
+      JOIN application_roles role ON role.oid = accessible.role_oid
+      JOIN application_relations relation ON relation.oid = accessible.oid
       WHERE relation.relkind <> 'S'
-        AND (pg_catalog.has_table_privilege(role.oid, relation.oid, 'INSERT')
-          OR pg_catalog.has_table_privilege(role.oid, relation.oid, 'UPDATE')
-          OR pg_catalog.has_table_privilege(role.oid, relation.oid, 'DELETE'))
       UNION ALL
       SELECT role.rolname, 'privilege',
-             'sequence:' || relation.nspname || '.' || relation.relname || ':USAGE'
-      FROM application_roles role
-      CROSS JOIN application_relations relation
-      WHERE relation.relkind = 'S'
-        AND pg_catalog.has_sequence_privilege(role.oid, relation.oid, 'USAGE')
-      UNION ALL
-      SELECT role.rolname, 'privilege',
-             'function:' || namespace.nspname || '.' || procedure.proname ||
-             '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || '):EXECUTE'
-      FROM application_roles role
-      CROSS JOIN pg_catalog.pg_proc procedure
-      JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
-      WHERE pg_catalog.has_function_privilege(role.oid, procedure.oid, 'EXECUTE')
+             'table:' || policy.schemaname || '.' || policy.tablename ||
+             ':POLICY:' || policy.policyname || ':COMMAND:' || policy.cmd ||
+             ':ROLES:' || array_to_string(policy.roles, ',') ||
+             ':PERMISSIVE:' || policy.permissive
+      FROM pg_catalog.pg_policies policy
+      JOIN application_schemas schema ON schema.nspname = policy.schemaname
+      JOIN application_relations relation
+        ON relation.nspname = policy.schemaname AND relation.relname = policy.tablename
+      JOIN relation_roles accessible ON accessible.oid = relation.oid
+      JOIN application_roles role ON role.oid = accessible.role_oid
     )
     SELECT role, kind, value FROM results ORDER BY role, kind, value
   `);
@@ -209,22 +273,87 @@ describePostgres("database role privilege census", () => {
   }, 120_000);
 
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
-  test("reports a fixture migration's additional role privilege", async () => {
+  test("reports disabled row-level security", async () => {
+    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCensus(expected, baseline);
+      try {
+        await database.unsafe(
+          `ALTER TABLE public.account_audit_logs DISABLE ROW LEVEL SECURITY`,
+        );
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCensus(expected, mutated)).toThrow(
+          "stella table:public.account_audit_logs:RLS_ENABLED:false",
+        );
+      } finally {
+        await database.unsafe(
+          `ALTER TABLE public.account_audit_logs ENABLE ROW LEVEL SECURITY`,
+        );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a sequence UPDATE grant", async () => {
     const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
     await withMigratedDatabase(async (database, baseline) => {
       assertCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
         await database.unsafe(
-          `CREATE ROLE "${role}" NOLOGIN; GRANT SELECT ON TABLE public.account TO "${role}"`,
+          `CREATE ROLE "${role}" NOLOGIN; GRANT UPDATE ON SEQUENCE public.corpus_index_projection_revisions_revision_seq TO "${role}"`,
         );
         const mutated = await readRolePrivilegeCensus(database);
         expect(() => assertCensus(expected, mutated)).toThrow(
-          `${role} table:public.account:SELECT`,
+          `${role} sequence:public.corpus_index_projection_revisions_revision_seq:UPDATE:GRANTABLE:false`,
         );
       } finally {
         await database.unsafe(
           `DROP OWNED BY "${role}"; DROP ROLE IF EXISTS "${role}"`,
+        );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a column-level grant", async () => {
+    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCensus(expected, baseline);
+      const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      try {
+        await database.unsafe(
+          `CREATE ROLE "${role}" NOLOGIN; GRANT SELECT (id) ON TABLE public.account TO "${role}"`,
+        );
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCensus(expected, mutated)).toThrow(
+          `${role} column:public.account.id:SELECT:GRANTABLE:false`,
+        );
+      } finally {
+        await database.unsafe(
+          `DROP OWNED BY "${role}"; DROP ROLE IF EXISTS "${role}"`,
+        );
+      }
+    });
+  }, 120_000);
+
+  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  test("reports a new row-level security policy", async () => {
+    const expected = JSON.parse(readFileSync(censusPath, "utf-8"));
+    await withMigratedDatabase(async (database, baseline) => {
+      assertCensus(expected, baseline);
+      const policy = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      try {
+        await database.unsafe(
+          `CREATE POLICY "${policy}" ON public.account_audit_logs AS PERMISSIVE FOR SELECT TO stella USING (false)`,
+        );
+        const mutated = await readRolePrivilegeCensus(database);
+        expect(() => assertCensus(expected, mutated)).toThrow(
+          `stella table:public.account_audit_logs:POLICY:${policy}:COMMAND:SELECT:ROLES:stella:PERMISSIVE:PERMISSIVE`,
+        );
+      } finally {
+        await database.unsafe(
+          `DROP POLICY IF EXISTS "${policy}" ON public.account_audit_logs`,
         );
       }
     });
