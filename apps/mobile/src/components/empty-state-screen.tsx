@@ -1,134 +1,74 @@
 import type { ReactNode } from "react";
 
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, StyleSheet, View } from "react-native";
 
-import { useAppColors } from "@/theme";
+import { Text } from "@/components/ui/text";
 
 type EmptyStateScreenProps = {
   children?: ReactNode;
-  description: string;
   emptyDescription: string;
   emptyTitle: string;
-  title: string;
 };
 
+/**
+ * A tab with nothing to list yet. Its name is the tab bar's to say, so the
+ * screen carries no heading of its own.
+ */
 export const EmptyStateScreen = ({
   children,
-  description,
   emptyDescription,
   emptyTitle,
-  title,
-}: EmptyStateScreenProps) => {
-  const colors = useAppColors();
-
-  return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.screen, { backgroundColor: colors.background }]}
+}: EmptyStateScreenProps) => (
+  <View className="bg-background flex-1">
+    <ScrollView
+      className="flex-1"
+      contentContainerStyle={screenStyles.content}
+      contentInsetAdjustmentBehavior="automatic"
     >
-      <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
-        <ScreenHeading description={description} title={title} />
-        {children}
-        <EmptyCard description={emptyDescription} title={emptyTitle} />
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
+      {children}
+      <EmptyCard description={emptyDescription} title={emptyTitle} />
+    </ScrollView>
+  </View>
+);
 
-export const ScreenHeading = ({
-  description,
-  title,
-}: {
-  description?: string | undefined;
-  title: string;
-}) => {
-  const colors = useAppColors();
-
-  return (
-    <View style={styles.heading}>
-      <Text
-        accessibilityRole="header"
-        style={[styles.title, { color: colors.text }]}
-      >
-        {title}
-      </Text>
-      {description === undefined ? null : (
-        <Text style={[styles.description, { color: colors.muted }]}>
-          {description}
-        </Text>
-      )}
-    </View>
-  );
-};
-
+/** What a list shows when it has nothing, centred in a quiet card. */
 export const EmptyCard = ({
   children,
   description,
   title,
-}: React.PropsWithChildren<{ description: string; title: string }>) => {
-  const colors = useAppColors();
+}: React.PropsWithChildren<{ description: string; title: string }>) => (
+  <View className="border-border bg-card min-h-64 flex-1 items-center justify-center gap-2 rounded-xl border p-8">
+    <Text variant="headline">{title}</Text>
+    <Text className="max-w-90 text-center" variant="caption">
+      {description}
+    </Text>
+    {children}
+  </View>
+);
 
-  return (
-    <View
-      style={[
-        styles.emptyState,
-        { backgroundColor: colors.card, borderColor: colors.border },
-      ]}
-    >
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>{title}</Text>
-      <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-        {description}
-      </Text>
-      {children}
-    </View>
-  );
-};
+/**
+ * The widest a column of content grows, as t3code caps its chat: on an iPad
+ * or a wide pane, lines and rows stay readable and the content centres.
+ */
+export const READABLE_MAX_WIDTH = 960;
 
 export const screenStyles = StyleSheet.create({
   content: {
+    alignSelf: "center",
     flexGrow: 1,
-    gap: 24,
-    padding: 20,
-    paddingTop: 28,
+    gap: 20,
+    maxWidth: READABLE_MAX_WIDTH,
+    padding: 16,
+    paddingTop: 24,
+    width: "100%",
+  },
+  /** A block, such as the message box, kept to the content's width. */
+  readable: {
+    alignSelf: "center",
+    maxWidth: READABLE_MAX_WIDTH,
+    width: "100%",
   },
   screen: {
     flex: 1,
-  },
-});
-
-const styles = StyleSheet.create({
-  ...screenStyles,
-  description: {
-    fontSize: 16,
-    lineHeight: 23,
-  },
-  emptyDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    maxWidth: 360,
-    textAlign: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    borderRadius: 20,
-    borderWidth: 1,
-    flex: 1,
-    gap: 8,
-    justifyContent: "center",
-    minHeight: 260,
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  heading: {
-    gap: 8,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "700",
-    letterSpacing: -1,
   },
 });

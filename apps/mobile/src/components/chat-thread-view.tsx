@@ -13,7 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { ChatComposer } from "@/components/chat-composer";
 import { ChatMessage } from "@/components/chat-message";
-import { EmptyCard } from "@/components/empty-state-screen";
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
 import { useChatTurn } from "@/components/use-chat-turn";
@@ -269,12 +269,14 @@ const ThreadMessages = ({
           {t("sendFailed")}
         </Text>
       ) : null}
-      <ChatComposer
-        busy={turn.busy}
-        canStop={turn.canStop}
-        onSend={turn.send}
-        onStop={turn.stop}
-      />
+      <View style={screenStyles.readable}>
+        <ChatComposer
+          busy={turn.busy}
+          canStop={turn.canStop}
+          onSend={turn.send}
+          onStop={turn.stop}
+        />
+      </View>
     </View>
   );
 };
@@ -318,6 +320,7 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
 
 const styles = StyleSheet.create({
   content: {
+    ...screenStyles.readable,
     flexGrow: 1,
     gap: 16,
     padding: 16,

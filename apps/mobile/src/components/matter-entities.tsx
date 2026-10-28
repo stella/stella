@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { EmptyCard } from "@/components/empty-state-screen";
+import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { EntityRow } from "@/components/entity-row";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
@@ -227,6 +227,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   content: {
+    ...screenStyles.readable,
     paddingBottom: 32,
     paddingHorizontal: 20,
   },
