@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -151,19 +150,17 @@ describe("fill_template grades the fill", () => {
     ]
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
     const { file } = await writeFieldFilters(
-      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      testDocxFile(await zip.generate({ compression: "store" })),
       [],
       [
         {
@@ -280,14 +277,12 @@ describe("fill_template grades the fill", () => {
   });
 
   test("a value still holding an anonymization placeholder records and returns the fill as partial", async () => {
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Signed by {{party_name}}.</w:t></w:r></w:p></w:body></w:document>',
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
@@ -304,7 +299,7 @@ describe("fill_template grades the fill", () => {
     // A placeholder the turn never sent cannot be restored, so the document
     // carries the placeholder instead of a name.
     const { result, rows } = await runFill({
-      docx: await zip.generateAsync({ type: "uint8array" }),
+      docx: await zip.generate({ compression: "store" }),
       values: { party_name: "[PERSON_4]" },
       thirdPartyBoundary,
     });

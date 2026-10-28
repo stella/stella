@@ -181,9 +181,9 @@ describe("DOCX final-view and comment handling", () => {
     );
     const before = await loadDocxArchive(source.bytes);
     const beforeCommentsXml = await before.readEntryString("word/comments.xml");
-    const unchangedPaths = Object.keys(before.zip.files).filter(
-      (path) => path !== "word/comments.xml" && !before.zip.files[path]?.dir,
-    );
+    const unchangedPaths = before.zip
+      .paths()
+      .filter((path) => path !== "word/comments.xml");
     const inspected = await Promise.all(
       outputs.map(async (output) => {
         const [reviewer, after] = await Promise.all([

@@ -2,8 +2,8 @@ import { Panic, UnhandledException } from "better-result";
 import { expect, test } from "bun:test";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
-import { DocxArchiveError } from "@stll/docx-utils";
 
+import { DocxArchiveError } from "@/api/lib/docx-archive";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 
 import {

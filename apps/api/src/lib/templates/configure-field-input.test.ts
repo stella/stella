@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { lookupFormatMarkerPaths } from "@/api/lib/docx/template-manifest";
@@ -20,16 +19,14 @@ import { configureTemplateDocument } from "./configure-template-document";
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 const makeDocx = async (...paragraphs: string[]) => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8"?>` +
       `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
       `<w:body>${paragraphs.map(P).join("")}</w:body></w:document>`,
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -37,7 +34,7 @@ const makeDocx = async (...paragraphs: string[]) => {
       `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
       `</Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const krsLookup = (...keys: string[]): FieldMeta["lookup"] => ({

@@ -1,9 +1,8 @@
 import { compile } from "@litko/yara-x";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -63,17 +62,17 @@ const rulesOf = (matches: readonly Match[]): string[] =>
   matches.map(({ rule }) => rule).toSorted();
 
 type Entry = { name: string; content: Buffer };
-type Compression = "STORE" | "DEFLATE";
+type Compression = "store" | "deflate";
 
 const zipOf = async (
   entries: readonly Entry[],
-  compression: Compression = "DEFLATE",
+  compression: Compression = "deflate",
 ): Promise<Uint8Array> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const { name, content } of entries) {
-    writeZipEntry(zip, name, content);
+    zip.set(name, content);
   }
-  return await zip.generateAsync({ type: "uint8array", compression });
+  return await zip.generate({ compression });
 };
 
 // The oracle: the archive as one buffer, every entry name and content whole,
@@ -198,7 +197,7 @@ describe("createArchiveContentScanner", () => {
         fc.record({
           entries: fc.array(entryArbitrary, { minLength: 1, maxLength: 4 }),
           step: fc.integer({ min: 32, max: 512 }),
-          compression: fc.constantFrom<Compression>("STORE", "DEFLATE"),
+          compression: fc.constantFrom<Compression>("store", "deflate"),
         }),
         async ({ entries, step, compression }) => {
           const named = uniqueNames(entries);
@@ -291,8 +290,8 @@ const centralHeaderAt = (view: DataView, nth: number): number => {
 const firstDataAt = (view: DataView): number =>
   30 + view.getUint16(26, true) + view.getUint16(28, true);
 
-// A name without a folder: JSZip would otherwise write a "word/" folder
-// entry first, and the header patches below would land on it.
+// A name without a folder keeps the entry first in the archive, where the
+// header patches below expect it.
 const ONE_ENTRY: readonly Entry[] = [
   { name: "document.xml", content: Buffer.from("x".repeat(2048)) },
 ];

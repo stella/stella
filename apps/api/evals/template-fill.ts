@@ -38,11 +38,10 @@
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
 import { panic } from "better-result";
-import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -118,10 +117,9 @@ const P = (text: string): string =>
 // minimal OPC package `fillTemplateDocx` needs (document part, content
 // types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -131,8 +129,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -141,7 +138,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Relationships>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return Buffer.from(buf);
 };
 

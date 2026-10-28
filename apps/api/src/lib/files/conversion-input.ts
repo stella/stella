@@ -1144,27 +1144,16 @@ const readInspectedPart = async (
     const value = await archive.readEntryUint8(path);
     return value === null ? { kind: "missing" } : decodeText(value);
   }
-  const entry = archive.zip.file(path);
-  if (entry === null) {
+  const entry = archive.zip.entry(path);
+  if (entry === undefined) {
     return { kind: "missing" };
   }
-  return await new Promise<InspectedPart>((resolve, reject) => {
-    const stream = entry.nodeStream("nodebuffer");
-    const chunks: Buffer[] = [];
-    let size = 0;
-    stream.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
-        stream.removeAllListeners("data");
-        stream.pause();
-        resolve({ kind: "too_large" });
-        return;
-      }
-      chunks.push(chunk);
-    });
-    stream.on("end", () => resolve(decodeText(Buffer.concat(chunks, size))));
-    stream.on("error", reject);
-  });
+  // Inflation stops at the declared size, so refusing that size bounds the
+  // read.
+  if (entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
+    return { kind: "too_large" };
+  }
+  return decodeText(await entry.bytes());
 };
 
 const archiveHas = async (
@@ -1174,7 +1163,7 @@ const archiveHas = async (
   inspect: (path: string, source: string) => boolean,
 ): Promise<boolean> => {
   const archive = await loadDocxArchive(bytes);
-  const selectedPaths = Object.keys(archive.zip.files).filter(select);
+  const selectedPaths = archive.zip.paths().filter(select);
   for (const path of selectedPaths) {
     const part = await readInspectedPart(archive, path, partSize(path));
     switch (part.kind) {
@@ -1202,9 +1191,13 @@ const archiveUnsupportedEncoding = async (
   format: "ooxml" | "odf",
 ): Promise<string | null> => {
   const archive = await loadDocxArchive(bytes);
-  const selectedPaths = Object.keys(archive.zip.files).filter((path) =>
-    format === "ooxml" ? isOoxmlInspectedPath(path) : isOdfInspectedPath(path),
-  );
+  const selectedPaths = archive.zip
+    .paths()
+    .filter((path) =>
+      format === "ooxml"
+        ? isOoxmlInspectedPath(path)
+        : isOdfInspectedPath(path),
+    );
   for (const path of selectedPaths) {
     const part = await readInspectedPart(
       archive,
@@ -1225,9 +1218,13 @@ const archiveCatchAllRefusal = async (
   referenceAllowlist: ReferenceAllowlist,
 ): Promise<ReferenceRefusal | null> => {
   const archive = await loadDocxArchive(bytes);
-  const selectedPaths = Object.keys(archive.zip.files).filter((path) =>
-    format === "ooxml" ? isOoxmlInspectedPath(path) : isOdfInspectedPath(path),
-  );
+  const selectedPaths = archive.zip
+    .paths()
+    .filter((path) =>
+      format === "ooxml"
+        ? isOoxmlInspectedPath(path)
+        : isOdfInspectedPath(path),
+    );
   for (const path of selectedPaths) {
     const part = await readInspectedPart(
       archive,
@@ -1263,9 +1260,9 @@ const ooxmlUnsupportedFieldType = async (
   bytes: Uint8Array,
 ): Promise<string | null> => {
   const archive = await loadDocxArchive(bytes);
-  const paths = Object.keys(archive.zip.files).filter(
-    (path) => isOoxmlInspectedPath(path) && !path.endsWith(".rels"),
-  );
+  const paths = archive.zip
+    .paths()
+    .filter((path) => isOoxmlInspectedPath(path) && !path.endsWith(".rels"));
   for (const path of paths) {
     const part = await readInspectedPart(archive, path, "body");
     if (part.kind === "too_large") {

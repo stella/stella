@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   buildEso9Table,
   buildFlexibeeXml,
@@ -205,16 +204,13 @@ const documentsFile = async (
   if (only && rest.length === 0) {
     return textFile(only.content, XML_MIME_TYPE, extension);
   }
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const taken = new Set<string>();
   for (const file of files) {
-    writeZipEntry(zip, uniqueEntryName(file.fileName, taken), file.content);
+    zip.set(uniqueEntryName(file.fileName, taken), file.content);
   }
   return {
-    body: await zip.generateAsync({
-      type: "uint8array",
-      compression: "DEFLATE",
-    }),
+    body: await zip.generate(),
     contentType: ZIP_MIME_TYPE,
     extension: "zip",
   };

@@ -2,10 +2,9 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import JSZip from "jszip";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -889,21 +888,19 @@ describe("the extraction's database", () => {
   });
 
   test("stamps a DOCX-declared language on the same connection", async () => {
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "word/styles.xml",
       `<w:styles xmlns:w="${WORD_NAMESPACE}"><w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="cs-CZ"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     );
     fake.put(
       envBase.S3_BUCKET,
       sourceKey("docx"),
-      new Uint8Array(await zip.generateAsync({ type: "arraybuffer" })),
+      new Uint8Array((await zip.generate({ compression: "store" })).buffer),
       DOCX_MIME_TYPE,
     );
     const docxContent = {

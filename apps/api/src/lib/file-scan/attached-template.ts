@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
+import { ZipArchive, type ZipEntry } from "@stll/docx-core/zip";
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
   isOpcRelationshipPartPath,
@@ -63,48 +63,25 @@ const isWordOpenXmlUpload = (context: ScanContext | undefined): boolean => {
   );
 };
 
+/**
+ * Read one relationship part, refusing it from its declared size. Inflation
+ * stops at that size, so the cap bounds memory, not just the result.
+ */
 const readRelationshipEntry = async (
-  entry: JSZip.JSZipObject,
+  entry: ZipEntry,
   maxBytes: number,
-): Promise<RelationshipEntryRead> =>
-  await new Promise<RelationshipEntryRead>((resolve) => {
-    const stream = entry.nodeStream("nodebuffer");
-    const chunks: Buffer[] = [];
-    let bytesRead = 0;
-    let settled = false;
-
-    const finish = (result: RelationshipEntryRead) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      const destroy: unknown = Reflect.get(stream, "destroy");
-      if (typeof destroy === "function") {
-        Reflect.apply(destroy, stream, []);
-      }
-      resolve(result);
-    };
-
-    stream.on("data", (chunk: Buffer | string) => {
-      if (settled) {
-        return;
-      }
-      const piece = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      bytesRead += piece.byteLength;
-      if (bytesRead > maxBytes) {
-        finish({ type: "too-large" });
-        return;
-      }
-      chunks.push(piece);
-    });
-    stream.on("end", () => {
-      if (!settled) {
-        settled = true;
-        resolve({ type: "ok", xml: Buffer.concat(chunks).toString("utf-8") });
-      }
-    });
-    stream.on("error", () => finish({ type: "unreadable" }));
+): Promise<RelationshipEntryRead> => {
+  if (entry.size > maxBytes) {
+    return { type: "too-large" };
+  }
+  const read = await Result.tryPromise({
+    try: async () => await entry.text(),
+    catch: (cause) => cause,
   });
+  return Result.isOk(read)
+    ? { type: "ok", xml: read.value }
+    : { type: "unreadable" };
+};
 
 /**
  * Structural attached-template detection. It inspects each relationship part
@@ -118,7 +95,7 @@ export const attachedTemplateScanner: Scanner = {
     }
 
     const loaded = await Result.tryPromise({
-      try: async () => await JSZip.loadAsync(bytes),
+      try: async () => await ZipArchive.read(bytes),
       catch: (cause) => cause,
     });
     if (Result.isError(loaded)) {
@@ -126,7 +103,7 @@ export const attachedTemplateScanner: Scanner = {
     }
     const zip = loaded.value;
 
-    const entries = Object.values(zip.files);
+    const entries = zip.entries();
     if (entries.length > MAX_ARCHIVE_ENTRIES) {
       // The zip-bomb guard owns this rejection and reports its exact limit.
       return [];
@@ -134,7 +111,7 @@ export const attachedTemplateScanner: Scanner = {
 
     let remainingBytes = MAX_RELATIONSHIPS_TOTAL_BYTES;
     for (const entry of entries) {
-      if (entry.dir || !isOpcRelationshipPartPath(entry.name)) {
+      if (!isOpcRelationshipPartPath(entry.path)) {
         continue;
       }
       if (remainingBytes <= 0) {
@@ -153,7 +130,7 @@ export const attachedTemplateScanner: Scanner = {
           remainingBytes -= Buffer.byteLength(read.xml);
           const sanitized = Result.try({
             try: () =>
-              sanitizeAttachedTemplateRelationships(read.xml, entry.name),
+              sanitizeAttachedTemplateRelationships(read.xml, entry.path),
             catch: (cause) => cause,
           });
           if (Result.isError(sanitized)) {

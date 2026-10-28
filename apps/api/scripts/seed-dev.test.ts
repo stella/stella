@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { ZipArchive } from "@stll/docx-core/zip";
+
 import {
   createMockDocx,
   createSeedEmail,
@@ -23,9 +25,8 @@ const nonEmptyBlockTexts = (title: string, bodyText: string): string[] =>
 // text list, so the guard exercises the real generator instead of only
 // re-deriving the same layout by hand.
 const paragraphTextsFromDocx = async (docx: Buffer): Promise<string[]> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = await JSZip.loadAsync(docx);
-  const documentXml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(docx);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("seeded docx is missing word/document.xml");
   }

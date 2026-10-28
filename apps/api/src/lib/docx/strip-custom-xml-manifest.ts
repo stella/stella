@@ -13,11 +13,10 @@
  * SharePoint metadata) that merely mentions the URI is never removed.
  */
 
-import type JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import { compareCodeUnit } from "@stll/collation";
-import { writeZipEntry } from "@stll/docx-utils";
+import type { ZipArchive } from "@stll/docx-core/zip";
 
 import { loadDocx } from "@/api/lib/docx-archive";
 
@@ -77,18 +76,23 @@ const isStellaManifestPart = (xml: string): boolean => {
 
 /** The slot the Stella manifest occupies, lowest index first so the choice is
  *  deterministic regardless of zip order. */
-const findManifestSlot = async (zip: JSZip): Promise<CustomXmlSlot | null> => {
-  const candidates = Object.entries(zip.files).flatMap(([path, entry]) => {
-    const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
-    return index === undefined
-      ? []
-      : [{ index, safeIndex: parseCustomXmlSlotIndex(index), entry }];
-  });
+const findManifestSlot = async (
+  zip: ZipArchive,
+): Promise<CustomXmlSlot | null> => {
+  const candidates = zip
+    .entries()
+    .map((archiveEntry) => [archiveEntry.path, archiveEntry] as const)
+    .flatMap(([path, entry]) => {
+      const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
+      return index === undefined
+        ? []
+        : [{ index, safeIndex: parseCustomXmlSlotIndex(index), entry }];
+    });
   const slots = await Promise.all(
     candidates.map(async ({ entry, index, safeIndex }) => ({
       index,
       safeIndex,
-      ours: isStellaManifestPart(await entry.async("string")),
+      ours: isStellaManifestPart(await entry.text()),
     })),
   );
   return (
@@ -100,31 +104,22 @@ const findManifestSlot = async (zip: JSZip): Promise<CustomXmlSlot | null> => {
 };
 
 const removeManifestSlot = async (
-  zip: JSZip,
+  zip: ZipArchive,
   slot: CustomXmlSlot,
 ): Promise<void> => {
   const propsPath = customXmlPropsPathForIndex(slot.index);
 
-  zip.remove(customXmlItemPathForIndex(slot.index));
-  zip.remove(propsPath);
-  zip.remove(customXmlRelsPathForIndex(slot.index));
+  zip.delete(customXmlItemPathForIndex(slot.index));
+  zip.delete(propsPath);
+  zip.delete(customXmlRelsPathForIndex(slot.index));
 
-  // Clean up empty customXml directory entries
-  const customXmlDir = "customXml/";
-  const remaining = zip.file(new RegExp(`^${customXmlDir}`, "u"));
-  if (remaining.length === 0) {
-    zip.remove("customXml/_rels/");
-    zip.remove(customXmlDir);
-  }
-
-  const ctEntry = zip.file(CONTENT_TYPES_PATH);
+  const ctEntry = zip.entry(CONTENT_TYPES_PATH);
   if (!ctEntry) {
     return;
   }
 
-  const ctXml = await ctEntry.async("string");
-  writeZipEntry(
-    zip,
+  const ctXml = await ctEntry.text();
+  zip.set(
     CONTENT_TYPES_PATH,
     ctXml.replace(
       new RegExp(
@@ -151,6 +146,6 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
   // Remove only our slot's part files; foreign custom XML parts stay intact.
   await removeManifestSlot(zip, found);
 
-  const output = await zip.generateAsync({ type: "nodebuffer" });
+  const output = Buffer.from(await zip.generate({ compression: "store" }));
   return Buffer.from(output);
 };

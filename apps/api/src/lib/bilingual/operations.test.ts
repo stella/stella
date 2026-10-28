@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
 import type { Paragraph } from "@stll/docx-core/model";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   createDocx,
   createEmptyDocument,
@@ -90,8 +89,8 @@ const paragraphSignature = async (
   buffer: ArrayBuffer,
   paraId: string,
 ): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -114,8 +113,8 @@ const wordElementCount = (xml: string, localName: string): number =>
 const addExtendedInlineControls = async (
   buffer: ArrayBuffer,
 ): Promise<ArrayBuffer> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -123,20 +122,19 @@ const addExtendedInlineControls = async (
   if (!marker.test(xml)) {
     throw new Error("fixture has no italic text marker");
   }
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     xml.replaceAll(marker, "$1<w:cr/><w:noBreakHyphen/><w:softHyphen/>"),
   );
-  return await zip.generateAsync({ type: "arraybuffer" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 const addParagraphPropertyTabStop = async (
   buffer: ArrayBuffer,
   paraId: string,
 ): Promise<ArrayBuffer> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const xml = await zip.file("word/document.xml")?.async("string");
+  const zip = await ZipArchive.read(buffer);
+  const xml = await zip.entry("word/document.xml")?.text();
   if (!xml) {
     throw new Error("fixture has no document part");
   }
@@ -156,12 +154,8 @@ const addParagraphPropertyTabStop = async (
   tab.setAttributeNS(W_NS, "w:pos", "720");
   tabs.append(tab);
   paragraphProperties.append(tabs);
-  writeZipEntry(
-    zip,
-    "word/document.xml",
-    slimdom.serializeToWellFormedString(doc),
-  );
-  return await zip.generateAsync({ type: "arraybuffer" });
+  zip.set("word/document.xml", slimdom.serializeToWellFormedString(doc));
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 /** A clause, a heading, a signature label, and a signature table. */

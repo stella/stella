@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -48,9 +47,9 @@ const manifestResponse = (
   );
 
 const detailResponse = async (): Promise<Response> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
-  return new Response(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("Gesamt/152257.Entscheidungstext.xml", await xmlFixture());
+  return new Response(await zip.generate({ compression: "store" }));
 };
 
 const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
@@ -200,9 +199,9 @@ describe("Austrian Findok adapter", () => {
     "<Segmente><Segment>",
   ]) {
     it(`isolates malformed or unexpected decision XML ${xml}`, async () => {
-      const zip = new JSZip();
-      writeZipEntry(zip, "Gesamt/152257.Entscheidungstext.xml", xml);
-      const bytes = await zip.generateAsync({ type: "uint8array" });
+      const zip = new ZipArchive();
+      zip.set("Gesamt/152257.Entscheidungstext.xml", xml);
+      const bytes = await zip.generate({ compression: "store" });
       let requests = 0;
       const adapter = createAtFindokAdapter({
         now: () => new Date("2026-08-12T00:00:00Z"),
@@ -240,11 +239,11 @@ describe("Austrian Findok adapter", () => {
   });
 
   it("retains the listing when a complete archive has no decision XML", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "Gesamt/152257.Rechtssaetze.xml", "<root/>");
+    const zip = new ZipArchive();
+    zip.set("Gesamt/152257.Rechtssaetze.xml", "<root/>");
     const responses = [
       manifestResponse(),
-      new Response(await zip.generateAsync({ type: "uint8array" })),
+      new Response(await zip.generate({ compression: "store" })),
     ];
     const adapter = createAtFindokAdapter({
       now: () => new Date("2026-08-12T00:00:00Z"),

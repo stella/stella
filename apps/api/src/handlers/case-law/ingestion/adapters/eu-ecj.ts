@@ -3,8 +3,8 @@
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
@@ -2252,14 +2252,13 @@ const fetchFormex = async (
 export const readEcjFormexArchive = async (
   bytes: ArrayBuffer,
 ): Promise<string> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const archive = await JSZip.loadAsync(bytes);
+  // The reader's default limits bound the entry count and the declared
+  // sizes, and each entry inflates no further than its declared size.
+  const archive = await ZipArchive.read(bytes);
   const entries = await Promise.all(
-    Object.values(archive.files)
-      .filter((file) => !file.dir)
-      .map(
-        async (file) => [file.name, await file.async("uint8array")] as const,
-      ),
+    archive
+      .entries()
+      .map(async (file) => [file.path, await file.bytes()] as const),
   );
   return encodeEcjFormexArchive(entries);
 };

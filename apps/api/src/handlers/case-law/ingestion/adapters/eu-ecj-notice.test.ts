@@ -11,9 +11,8 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -871,9 +870,9 @@ describe("stored Formex refresh", () => {
   });
 
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
-    const archive = new JSZip();
-    writeZipEntry(archive, "FORMEX/main.xml", "<new-formex />");
-    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const archive = new ZipArchive();
+    archive.set("FORMEX/main.xml", "<new-formex />");
+    const bytes = await archive.generate({ compression: "store" });
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
         ...ecjRawParts({

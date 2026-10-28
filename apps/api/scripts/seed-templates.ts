@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
@@ -107,10 +106,9 @@ const createTemplateDocx = async (
   title: string,
   bodyXml: string,
 ): Promise<Buffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -120,8 +118,7 @@ const createTemplateDocx = async (
       "</Types>",
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -129,20 +126,18 @@ const createTemplateDocx = async (
       "</Relationships>",
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
   );
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return Buffer.from(buf);
 };
 

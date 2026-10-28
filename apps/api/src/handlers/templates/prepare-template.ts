@@ -9,7 +9,6 @@
  * rewrite in apply-field-suggestions.ts.
  */
 
-import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { loadDocx } from "@/api/lib/docx-archive";
@@ -55,7 +54,7 @@ export const prepareTemplateFromDocument = async ({
   }
 
   const zip = await loadDocx(file.bytes);
-  if (!zip.file(MAIN_DOCUMENT_PART_PATH)) {
+  if (!zip.entry(MAIN_DOCUMENT_PART_PATH)) {
     return { file, fields: [], unapplied: suggestions };
   }
 
@@ -63,7 +62,7 @@ export const prepareTemplateFromDocument = async ({
   // of the pipeline covers through templateContentPartPaths. A literal the model read
   // from a letterhead or footer (extractDocxDocument concatenates headers, body, and
   // footers into the prompt) is then rewritten where it actually lives.
-  const partNames = templateContentPartPaths(Object.keys(zip.files));
+  const partNames = templateContentPartPaths(zip.paths());
 
   // Merge results across parts: a field is added once per path, and a
   // suggestion is reported unapplied only when no part matched it. Running
@@ -77,18 +76,18 @@ export const prepareTemplateFromDocument = async ({
   let stillUnapplied: Set<FieldSuggestion> | undefined;
 
   for (const partName of partNames) {
-    const entry = zip.file(partName);
+    const entry = zip.entry(partName);
     if (!entry) {
       continue;
     }
-    const partXml = await entry.async("text");
+    const partXml = await entry.text();
     const applied = applyFieldSuggestions(partXml, suggestions);
     if (applied.isErr()) {
       return { file, fields: [], unapplied: suggestions };
     }
     const result = applied.value;
     if (result.xml !== partXml) {
-      writeZipEntry(zip, partName, result.xml);
+      zip.set(partName, result.xml);
     }
     for (const field of result.fields) {
       if (!seenPaths.has(field.path)) {
@@ -112,7 +111,7 @@ export const prepareTemplateFromDocument = async ({
 
   const rewritten = derivedScannedFile(
     file,
-    await zip.generateAsync({ type: "uint8array" }),
+    await zip.generate({ compression: "store" }),
   );
 
   const { file: configured } = await writeFieldFilters(

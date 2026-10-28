@@ -17,9 +17,9 @@
  * proceed regardless.
  */
 import { Result } from "better-result";
-import type JSZip from "jszip";
 
 import { isVerificationCode } from "@stll/api-contract";
+import type { ZipArchive } from "@stll/docx-core/zip";
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -31,10 +31,9 @@ const DOCX_EXTENSION = ".docx";
  * stamped on the way out, so opening it could only ever answer `null` — at the
  * cost of inflating tens of megabytes on the main thread.
  *
- * This is also the only bound on the work: JSZip exposes no public way to cap
- * a single entry's inflation, and the server-side equivalent
- * (`docx-archive.ts`) is where a hostile archive would actually matter, since
- * a bomb opened here costs the user their own tab.
+ * The archive reader holds each entry to its declared size, and the
+ * server-side equivalent (`docx-archive.ts`) is where a hostile archive would
+ * actually matter, since a bomb opened here costs the user their own tab.
  */
 const MAX_REFERENCED_DOCX_BYTES = 50 * 1024 * 1024;
 
@@ -167,10 +166,10 @@ export const readDocumentReference = async (
 
   const result = await Result.tryPromise(async () => {
     // One archive, both carriers: the footer parts are a few kilobytes next
-    // to the file the user just dropped. JSZip stays out of the protected
-    // shell's eager bundle; only a qualifying DOCX pays to load it.
-    const { default: ZipArchive } = await import("jszip");
-    const zip = await ZipArchive.loadAsync(await file.arrayBuffer());
+    // to the file the user just dropped. The archive reader stays out of the
+    // protected shell's eager bundle; only a qualifying DOCX pays to load it.
+    const { ZipArchive } = await import("@stll/docx-core/zip");
+    const zip = await ZipArchive.read(await file.arrayBuffer());
     const properties = await readCustomPropertyReference(zip);
     const footer = await readFooterStamp(zip);
 
@@ -203,14 +202,14 @@ export const readDocumentReference = async (
 };
 
 const readCustomPropertyReference = async (
-  zip: JSZip,
+  zip: ZipArchive,
 ): Promise<CarriedReference | null> => {
-  const entry = zip.file(CUSTOM_PROPERTIES_PATH);
+  const entry = zip.entry(CUSTOM_PROPERTIES_PATH);
   if (entry === null) {
     return null;
   }
 
-  const xml = await entry.async("string");
+  const xml = await entry.text();
   const verificationCode = parseProperty(xml, CODE_PROPERTY_RE);
   if (verificationCode === null || !isVerificationCode(verificationCode)) {
     return null;
@@ -232,18 +231,16 @@ type FooterStamp =
   | { type: "unreadable" }
   | { type: "readable"; reference: CarriedReference };
 
-const readFooterStamp = async (zip: JSZip): Promise<FooterStamp> => {
-  const footerPaths = Object.keys(zip.files).filter((path) =>
-    FOOTER_FILE_RE.test(path),
-  );
+const readFooterStamp = async (zip: ZipArchive): Promise<FooterStamp> => {
+  const footerPaths = zip.paths().filter((path) => FOOTER_FILE_RE.test(path));
 
   let bookmarked = false;
   for (const path of footerPaths) {
-    const entry = zip.file(path);
-    if (entry === null) {
+    const entry = zip.entry(path);
+    if (entry === undefined) {
       continue;
     }
-    const xml = await entry.async("string");
+    const xml = await entry.text();
     if (!xml.includes(STAMP_BOOKMARK)) {
       continue;
     }

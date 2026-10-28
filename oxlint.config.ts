@@ -710,6 +710,19 @@ const noRetiredHttpFrameworkImports = [
     "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; the browser uses @stll/api-client.",
 }));
 
+// ZIP archives are read and written with @stll/docx-core/zip, whose reads
+// stay within the sizes an archive declares.
+const noRetiredZipImports = [
+  {
+    name: "jszip",
+    message: "Use ZipArchive from '@stll/docx-core/zip'.",
+  },
+  {
+    name: "client-zip",
+    message: "Use createZipStream from '@stll/docx-core/zip/stream'.",
+  },
+];
+
 // Every module of the retired frameworks, by scope, for files whose
 // `no-restricted-imports` entry can carry patterns. The rule fixtures use it:
 // a fixture written against a retired framework exercises a rule shape no
@@ -1456,6 +1469,7 @@ const config = defineConfig({
           noZodImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
+          ...noRetiredZipImports,
         ],
       },
     ],
@@ -1488,7 +1502,6 @@ const config = defineConfig({
     "no-direct-clause-variant-insert/no-direct-clause-variant-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
-    "no-raw-zip-load/no-raw-zip-load": "error",
     "no-document-xml-element-regex/no-document-xml-element-regex": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
     "no-direct-entity-insert/no-direct-entity-insert": "error",
@@ -1923,7 +1936,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-clause-variant-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
-    "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-document-xml-element-regex.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-field-write.ts",
@@ -2006,7 +2018,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-adhoc-email-fold.ts",
-    "./.oxlint-plugins/no-string-zip-entry.ts",
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -2211,6 +2222,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
             ],
             patterns: noRetiredHttpFrameworkImportPatterns,
           },
@@ -3117,21 +3129,6 @@ const config = defineConfig({
       ],
       rules: {
         "no-adhoc-email-fold/no-adhoc-email-fold": "error",
-      },
-    },
-    {
-      // Zip entry writes belong to writeZipEntry in @stll/docx-utils, which
-      // UTF-8 encodes text in one pass; JSZip's own string encoding splits
-      // surrogate pairs at its 16 KiB piece boundaries.
-      files: [
-        "apps/**/*.{ts,tsx}",
-        "packages/**/*.{ts,tsx}",
-        "scripts/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-string-zip-entry.fixture.ts",
-      ],
-      excludeFiles: ["packages/docx-utils/src/zip-entry.ts"],
-      rules: {
-        "no-string-zip-entry/no-string-zip-entry": "error",
       },
     },
     {
@@ -4051,6 +4048,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4071,6 +4069,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4094,6 +4093,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
             ],
             patterns: [
               ...uiStandaloneImports,
@@ -4123,6 +4123,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               workspaceUiUseIntlFormattingImport,
             ],
           },
@@ -4263,6 +4264,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4294,6 +4296,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4333,6 +4336,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
               webUseIntlLocaleImport,
@@ -4563,6 +4567,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4599,6 +4604,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4630,6 +4636,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4669,6 +4676,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4719,6 +4727,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4767,6 +4776,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -5579,6 +5589,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5608,6 +5619,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               {
                 name: "@/api/db/root",
                 message:
@@ -5641,6 +5653,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5661,6 +5674,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5684,6 +5698,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -6183,6 +6198,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -6238,6 +6254,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
             ],
           },
@@ -6311,6 +6328,7 @@ const config = defineConfig({
               noZodImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noRetiredZipImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,

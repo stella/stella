@@ -1,5 +1,4 @@
 import { panic, TaggedError } from "better-result";
-import { makeZip } from "client-zip";
 import { Buffer } from "node:buffer";
 import { createWriteStream } from "node:fs";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
@@ -8,6 +7,7 @@ import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
+import { zipStream } from "@stll/docx-core/zip/stream";
 import { Temporal } from "@stll/time";
 
 import {
@@ -134,7 +134,7 @@ export const buildAccountExportArchive = async ({
     const inventory: AccountExportFile[] = [];
     for await (const file of deps.files({ projections, db, userId, signal })) {
       signal.throwIfAborted();
-      // client-zip retains one central-directory record per entry.
+      // The archive writer retains one central-directory record per entry.
       if (inventory.length >= ACCOUNT_EXPORT_ARCHIVE_LIMITS.files) {
         throw new AccountExportArchiveError({
           message: "Account export exceeds its file-count limit",
@@ -180,7 +180,7 @@ export const buildAccountExportArchive = async ({
         }
         yield encoder.encode("]");
       };
-      yield { name: `${table}.json`, input: tableJson() };
+      yield { path: `${table}.json`, data: tableJson() };
     }
     const unavailable = new Map<
       AccountExportFile,
@@ -202,11 +202,7 @@ export const buildAccountExportArchive = async ({
           message: "Account export file size differs from its stored metadata",
         });
       }
-      yield {
-        name: file.data.archivePath,
-        input: source.body,
-        size: file.sizeBytes,
-      };
+      yield { path: file.data.archivePath, data: source.body };
     }
     // The inventory is already held in memory, so its records are too.
     const userFileRecords = inventory.map((file) =>
@@ -214,14 +210,14 @@ export const buildAccountExportArchive = async ({
     );
     userFilesSummary.count = userFileRecords.length;
     yield {
-      name: "user_files.json",
-      input: encoder.encode(`[${userFileRecords.join(",")}]`),
+      path: "user_files.json",
+      data: encoder.encode(`[${userFileRecords.join(",")}]`),
     };
-    // client-zip consumes each entry before requesting the next: these
+    // The archive writer consumes each entry before requesting the next: these
     // counts describe rows written, rather than a separate drifting census.
     yield {
-      name: "manifest.json",
-      input: encoder.encode(
+      path: "manifest.json",
+      data: encoder.encode(
         JSON.stringify({ schemaVersion: 1, generatedAt, tables }),
       ),
     };
@@ -236,7 +232,7 @@ export const buildAccountExportArchive = async ({
     let archiveBytes = 0;
     const ceiling = new Transform({
       transform: (chunk: unknown, _encoding, callback) => {
-        if (!Buffer.isBuffer(chunk)) {
+        if (!(chunk instanceof Uint8Array)) {
           callback(
             new AccountExportArchiveError({
               message: "Account export stream produced a non-byte chunk",
@@ -257,7 +253,7 @@ export const buildAccountExportArchive = async ({
       },
     });
     await pipeline(
-      Readable.from(makeZip(entries())),
+      Readable.from(zipStream(entries())),
       ceiling,
       createWriteStream(archivePath, { flags: "wx", mode: 0o600 }),
       { signal },

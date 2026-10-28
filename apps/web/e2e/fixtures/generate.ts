@@ -5,11 +5,10 @@
  *
  * The output is committed so CI doesn't need to regenerate.
  */
-import JSZip from "jszip";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { writeZipEntry } from "@stll/docx-utils";
 
 const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -31,25 +30,19 @@ const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </w:body>
 </w:document>`;
 
-const zip = new JSZip();
-writeZipEntry(zip, "[Content_Types].xml", contentTypesXml);
-writeZipEntry(zip, "_rels/.rels", rootRelsXml);
-writeZipEntry(zip, "word/document.xml", documentXml);
+const zip = new ZipArchive();
+zip.set("[Content_Types].xml", contentTypesXml);
+zip.set("_rels/.rels", rootRelsXml);
+zip.set("word/document.xml", documentXml);
 
-const out = await zip.generateAsync({
-  type: "uint8array",
-  compression: "DEFLATE",
-});
+const out = await zip.generate();
 const target = path.resolve(import.meta.dirname, "simple.docx");
 await writeFile(target, out);
 console.log(`wrote ${target} (${String(out.byteLength)} bytes)`);
 
 // Two outline entries make the outline available; explicit A4 dimensions
 // exercise page fitting independently of editor defaults.
-writeZipEntry(
-  zip,
-  "word/document.xml",
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+zip.set("word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr><w:r><w:t>Template fit heading</w:t></w:r></w:p>
@@ -58,12 +51,8 @@ writeZipEntry(
     <w:p><w:r><w:t>Used to verify fitting with the outline and inspector.</w:t></w:r></w:p>
     <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
   </w:body>
-</w:document>`,
-);
-const fitOutput = await zip.generateAsync({
-  type: "uint8array",
-  compression: "DEFLATE",
-});
+</w:document>`);
+const fitOutput = await zip.generate();
 const fitTarget = path.resolve(import.meta.dirname, "template-fit.docx");
 await writeFile(fitTarget, fitOutput);
 console.log(`wrote ${fitTarget} (${String(fitOutput.byteLength)} bytes)`);

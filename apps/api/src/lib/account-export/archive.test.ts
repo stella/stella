@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
@@ -35,8 +35,8 @@ const streamOf = (text: string) =>
     },
   });
 
-const readJson = async (zip: JSZip, name: string): Promise<unknown> => {
-  const text = await zip.file(name)?.async("string");
+const readJson = async (zip: ZipArchive, name: string): Promise<unknown> => {
+  const text = await zip.entry(name)?.text();
   if (text === undefined) {
     panic(`Archive entry ${name} required`);
   }
@@ -102,11 +102,11 @@ describe("account export archive", () => {
     }
     expect(publication.key).toBe("archive-key");
     expect(publication.mimeType).toBe("application/zip");
-    const zip = await JSZip.loadAsync(publication.bytes);
+    const zip = await ZipArchive.read(publication.bytes);
     for (const table of EXPORTED_ACCOUNT_TABLE_NAMES) {
-      expect(await zip.file(`${table}.json`)?.async("string")).toBe("[]");
+      expect(await zip.entry(`${table}.json`)?.text()).toBe("[]");
     }
-    const manifestText = await zip.file("manifest.json")?.async("string");
+    const manifestText = await zip.entry("manifest.json")?.text();
     if (manifestText === undefined) {
       panic("Manifest required");
     }
@@ -171,12 +171,12 @@ describe("account export archive", () => {
     if (publication === undefined) {
       panic("Archive publication required");
     }
-    const zip = await JSZip.loadAsync(publication.bytes);
+    const zip = await ZipArchive.read(publication.bytes);
     for (const table of EXPORTED_ACCOUNT_TABLE_NAMES) {
       if (table === "user_files") {
         continue;
       }
-      expect(await zip.file(`${table}.json`)?.async("string")).toBe(
+      expect(await zip.entry(`${table}.json`)?.text()).toBe(
         JSON.stringify([
           { table, ordinal: 1 },
           { table, ordinal: 2 },
@@ -186,9 +186,7 @@ describe("account export archive", () => {
     expect(await readJson(zip, "user_files.json")).toEqual([
       { organizationId, data: { archivePath: "files/attachment" } },
     ]);
-    expect(await zip.file("files/attachment")?.async("string")).toBe(
-      "first second",
-    );
+    expect(await zip.entry("files/attachment")?.text()).toBe("first second");
     expect(await readJson(zip, "manifest.json")).toMatchObject({
       tables: EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => ({
         table,
@@ -295,7 +293,7 @@ describe("account export archive", () => {
     if (publication === undefined) {
       panic("Archive publication required");
     }
-    const zip = await JSZip.loadAsync(publication.bytes);
+    const zip = await ZipArchive.read(publication.bytes);
     expect(await readJson(zip, "user_files.json")).toEqual([
       { organizationId, data: { archivePath: "files/kept" } },
       {
@@ -307,10 +305,10 @@ describe("account export archive", () => {
       },
     ]);
     // Every archivePath resolves to bytes, and every body has metadata.
-    expect(
-      Object.keys(zip.files).filter((name) => name.startsWith("files/")),
-    ).toEqual(["files/kept"]);
-    expect(await zip.file("files/kept")?.async("string")).toBe("kept");
+    expect(zip.paths().filter((name) => name.startsWith("files/"))).toEqual([
+      "files/kept",
+    ]);
+    expect(await zip.entry("files/kept")?.text()).toBe("kept");
     expect(await readJson(zip, "manifest.json")).toMatchObject({
       tables: expect.arrayContaining([{ table: "user_files", count: 2 }]),
     });

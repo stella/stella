@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ingestionStopKindOf } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
@@ -267,9 +266,9 @@ describe("publisher response contracts", () => {
     ).toBe("%PDF-1.7\n%%EOF\n");
   });
   test("accepts a complete publisher archive", async () => {
-    const zip = new JSZip();
-    writeZipEntry(zip, "decision.xml", "<r/>");
-    const bytes = await zip.generateAsync({ type: "uint8array" });
+    const zip = new ZipArchive();
+    zip.set("decision.xml", "<r/>");
+    const bytes = await zip.generate({ compression: "store" });
     expect(
       validatePublisherPage({
         ...context,

@@ -1,14 +1,12 @@
 import { Result } from "better-result";
 
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
   type AttachedTemplateTargetKind,
   isOpcRelationshipPartPath,
-  loadDocx,
-  repackZip,
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,
-  writeZipEntry,
 } from "@stll/docx-utils";
 
 import { isDocxFile } from "@/lib/consts";
@@ -26,24 +24,6 @@ export type PreparedAttachedTemplateFile = {
   originalFile: File;
   rule: typeof ATTACHED_TEMPLATE_SECURITY_RULE;
   targetKinds: readonly AttachedTemplateTargetKind[];
-};
-
-const declaredUncompressedSize = (value: unknown): number | null => {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-  if (!("_data" in value)) {
-    return null;
-  }
-  const data = value._data;
-  if (typeof data !== "object" || data === null) {
-    return null;
-  }
-  if (!("uncompressedSize" in data)) {
-    return null;
-  }
-  const size = data.uncompressedSize;
-  return typeof size === "number" && Number.isFinite(size) ? size : null;
 };
 
 /**
@@ -64,23 +44,23 @@ export const prepareAttachedTemplateFile = async (
 
   const prepared = await Result.tryPromise({
     try: async (): Promise<PreparedAttachedTemplateFile | null> => {
-      const zip = await loadDocx(await originalFile.arrayBuffer());
-      const entries = Object.values(zip.files);
-      if (entries.length > MAX_ARCHIVE_ENTRIES) {
-        return null;
-      }
+      // Reads stay within the sizes the archive declares; the entry cap
+      // refuses an archive with too many records before any is read.
+      const zip = await ZipArchive.read(await originalFile.arrayBuffer(), {
+        limits: { maxEntries: MAX_ARCHIVE_ENTRIES },
+      });
+      const entries = zip.entries();
 
       const targetKinds = new Set<AttachedTemplateTargetKind>();
       const sourceRelationshipIds = new Map<string, Set<string>>();
       let relationshipBytes = 0;
 
       for (const entry of entries) {
-        if (entry.dir || !isOpcRelationshipPartPath(entry.name)) {
+        if (!isOpcRelationshipPartPath(entry.path)) {
           continue;
         }
-        const declaredSize = declaredUncompressedSize(entry);
+        const declaredSize = entry.size;
         if (
-          declaredSize === null ||
           declaredSize > MAX_RELATIONSHIPS_ENTRY_BYTES ||
           relationshipBytes + declaredSize > MAX_RELATIONSHIPS_TOTAL_BYTES
         ) {
@@ -88,7 +68,7 @@ export const prepareAttachedTemplateFile = async (
         }
         relationshipBytes += declaredSize;
 
-        const xml = await entry.async("string");
+        const xml = await entry.text();
         if (
           new TextEncoder().encode(xml).byteLength >
           MAX_RELATIONSHIPS_ENTRY_BYTES
@@ -97,7 +77,7 @@ export const prepareAttachedTemplateFile = async (
         }
         const sanitized = sanitizeAttachedTemplateRelationships(
           xml,
-          entry.name,
+          entry.path,
         );
         if (sanitized.findings.length === 0) {
           continue;
@@ -108,7 +88,7 @@ export const prepareAttachedTemplateFile = async (
         ) {
           return null;
         }
-        writeZipEntry(zip, entry.name, sanitized.xml);
+        zip.set(entry.path, sanitized.xml);
         for (const finding of sanitized.findings) {
           targetKinds.add(finding.targetKind);
         }
@@ -125,18 +105,14 @@ export const prepareAttachedTemplateFile = async (
       }
 
       for (const [sourcePartPath, relationshipIds] of sourceRelationshipIds) {
-        const source = zip.file(sourcePartPath);
-        if (source === null) {
+        const source = zip.entry(sourcePartPath);
+        if (source === undefined) {
           continue;
         }
-        const declaredSize = declaredUncompressedSize(source);
-        if (
-          declaredSize === null ||
-          declaredSize > MAX_ATTACHED_TEMPLATE_SOURCE_BYTES
-        ) {
+        if (source.size > MAX_ATTACHED_TEMPLATE_SOURCE_BYTES) {
           return null;
         }
-        const sourceXml = await source.async("string");
+        const sourceXml = await source.text();
         if (
           new TextEncoder().encode(sourceXml).byteLength >
           MAX_ATTACHED_TEMPLATE_SOURCE_BYTES
@@ -147,11 +123,11 @@ export const prepareAttachedTemplateFile = async (
           ...relationshipIds,
         ]);
         if (sanitized.removed > 0) {
-          writeZipEntry(zip, sourcePartPath, sanitized.xml);
+          zip.set(sourcePartPath, sanitized.xml);
         }
       }
 
-      const bytes = await repackZip(zip);
+      const bytes = (await zip.generate()).buffer;
       return {
         file: new File([bytes], originalFile.name, {
           type: originalFile.type,

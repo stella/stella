@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { stripManifest } from "./strip-custom-xml-manifest";
 
@@ -59,10 +58,9 @@ type CustomXmlPart = { index: string; xml: string; withProps?: boolean };
 const buildDocx = async (
   ...parts: readonly CustomXmlPart[]
 ): Promise<Buffer> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", DOCUMENT_XML);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", DOCUMENT_XML);
+  zip.set(
     "[Content_Types].xml",
     contentTypes(
       ...parts
@@ -71,37 +69,36 @@ const buildDocx = async (
     ),
   );
   for (const { index, withProps, xml } of parts) {
-    writeZipEntry(zip, `customXml/item${index}.xml`, xml);
+    zip.set(`customXml/item${index}.xml`, xml);
     if (withProps !== true) {
       continue;
     }
-    writeZipEntry(
-      zip,
+    zip.set(
       `customXml/itemProps${index}.xml`,
       '<?xml version="1.0"?><ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml" ds:itemID="{SLOT}"/>',
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       `customXml/_rels/item${index}.xml.rels`,
       '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
         `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" Target="itemProps${index}.xml"/>` +
         "</Relationships>",
     );
   }
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return Buffer.from(Buffer.from(await zip.generate({ compression: "store" })));
 };
 
 const partText = async (
   docx: Buffer,
   path: string,
 ): Promise<string | undefined> => {
-  const zip = await JSZip.loadAsync(docx);
-  return zip.file(path)?.async("string");
+  const zip = await ZipArchive.read(docx);
+  return zip.entry(path)?.text();
 };
 
 const customXmlPaths = async (docx: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(docx);
-  return Object.keys(zip.files)
+  const zip = await ZipArchive.read(docx);
+  return zip
+    .paths()
     .filter((path) => path.startsWith("customXml/") && !path.endsWith("/"))
     .toSorted();
 };
@@ -176,10 +173,9 @@ describe("stripping the legacy custom XML manifest", () => {
       { index: "1", xml: FOREIGN_ITEM1, withProps: true },
       { index: "2", xml: LEGACY_MANIFEST_XML, withProps: true },
     );
-    const zip = await JSZip.loadAsync(docx);
-    const declared = await zip.file("[Content_Types].xml")!.async("string");
-    writeZipEntry(
-      zip,
+    const zip = await ZipArchive.read(docx);
+    const declared = await zip.entry("[Content_Types].xml")!.text();
+    zip.set(
       "[Content_Types].xml",
       declared.replace(
         /<Override PartName="\/customXml\/itemProps2\.xml"(?<rest>[^>]*)\/>/u,
@@ -187,7 +183,7 @@ describe("stripping the legacy custom XML manifest", () => {
       ),
     );
     const singleQuoted = Buffer.from(
-      await zip.generateAsync({ type: "nodebuffer" }),
+      Buffer.from(await zip.generate({ compression: "store" })),
     );
     expect(await partText(singleQuoted, "[Content_Types].xml")).toContain(
       "'/customXml/itemProps2.xml'",

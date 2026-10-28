@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
@@ -30,21 +29,21 @@ const makeDocx = async (
   paragraphs: readonly string[],
   extra: Readonly<Record<string, string>> = {},
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", WRAP(paragraphs.join("")));
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", WRAP(paragraphs.join("")));
   for (const [path, xml] of Object.entries(extra)) {
-    writeZipEntry(zip, path, xml);
+    zip.set(path, xml);
   }
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const documentXml = async (file: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const entry = zip.file("word/document.xml");
+  const zip = await ZipArchive.read(file.bytes);
+  const entry = zip.entry("word/document.xml");
   if (!entry) {
     throw new Error("no main document part");
   }
-  return await entry.async("string");
+  return await entry.text();
 };
 
 const rewrite = (field: FieldMeta) => ({
@@ -83,9 +82,9 @@ describe("writing a configuration into the document", () => {
       rewrite({ path: "client", label: "Client" }),
     ]);
 
-    const zip = await JSZip.loadAsync(file.bytes);
+    const zip = await ZipArchive.read(file.bytes);
     const body = await documentXml(file);
-    const headerXml = await zip.file("word/header1.xml")?.async("string");
+    const headerXml = await zip.entry("word/header1.xml")?.text();
     expect(body.match(/label\("Client"\)/gu)).toHaveLength(2);
     expect(headerXml).toContain('{{ client | label("Client") }}');
   });
