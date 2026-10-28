@@ -22,18 +22,23 @@ read_failed() {
   exit 1
 }
 
+# Active runs are read by status and across every page: a long candidate
+# proof can fall behind any number of newer runs.
 candidate_busy() {
-  local runs
-  runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?per_page=100" --jq \
-    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Staging release proof \")) | select(.status == \"queued\" or .status == \"in_progress\") | .id")" ||
-    read_failed
-  [[ -n "$runs" ]]
+  local status runs
+  for status in queued in_progress; do
+    runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=${status}&per_page=100" --jq \
+      ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Staging release proof \")) | .id" --paginate)" ||
+      read_failed
+    [[ -z "$runs" ]] || return 0
+  done
+  return 1
 }
 
 ordinary_promote_busy() {
   local runs run_id jobs
   runs="$(api "/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=in_progress&per_page=100" --jq \
-    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Deploy main to staging \")) | .id")" ||
+    ".workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.display_title | startswith(\"Deploy main to staging \")) | .id" --paginate)" ||
     read_failed
   # An ordinary promote owns staging from the moment its owner step succeeds
   # until its deploy step completes, including while that step is queued or

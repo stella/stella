@@ -24,9 +24,20 @@ const runGate = async (mode: "candidate" | "ordinary", fixture: unknown) => {
   const workspace = await mkdtemp(path.join(tmpdir(), "staging-owner-"));
   workspaces.push(workspace);
   const retry = path.join(workspace, "gh-retry.sh");
+  // Like the API: a status query returns only runs in that status, and
+  // without --paginate only the first page of 100.
   await writeFile(
     retry,
-    `#!/usr/bin/env bash\nset -euo pipefail\nfixture='${path.join(workspace, "fixture.json")}'\nif [[ "$2" == */jobs* ]]; then jq -r "$4" "$fixture"; else jq -r "$4" "$fixture"; fi\n`,
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      `fixture='${path.join(workspace, "fixture.json")}'`,
+      'status=$(sed -n "s/.*[?&]status=\\([a-z_]*\\).*/\\1/p" <<< "$2")',
+      "pages=false",
+      'if [[ " $* " == *" --paginate "* ]]; then pages=true; fi',
+      `jq --arg status "$status" --argjson pages "$pages" '.workflow_runs |= ([(. // [])[] | select($status == "" or .status == $status)] | if $pages then . else .[:100] end)' "$fixture" | jq -r "$4"`,
+      "",
+    ].join("\n"),
   );
   await writeFile(
     path.join(workspace, "fixture.json"),
@@ -77,6 +88,28 @@ describe("staging promotion ownership", () => {
       );
     });
   }
+
+  test("ordinary promotion waits for a candidate behind 100 newer runs", async () => {
+    const newer = Array.from({ length: 150 }, (_, index) => ({
+      id: 1000 + index,
+      display_title: `Deploy main to staging ${index}`,
+      status: "in_progress",
+    }));
+    const result = await runGate("ordinary", {
+      workflow_runs: [
+        ...newer,
+        {
+          id: 1,
+          display_title: "Staging release proof v1.2.3-rc.1 abc",
+          status: "in_progress",
+        },
+      ],
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "Timed out waiting for a release-candidate staging proof",
+    );
+  });
 
   test("ordinary promotion passes when no candidate owns staging", async () => {
     expect(
