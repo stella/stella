@@ -9,11 +9,11 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   type AppleSignInInput,
   resolveAppleSignIn,
-} from "@/api/lib/apple-sign-in-config";
+} from "@/api/env-apple-sign-in";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,

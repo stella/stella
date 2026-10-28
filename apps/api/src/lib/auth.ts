@@ -61,6 +61,7 @@ import {
 } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import type { AppleSignIn } from "@/api/env-apple-sign-in";
 import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
@@ -70,7 +71,6 @@ import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import { API_KEY_PLUGIN_CONFIGS } from "@/api/lib/api-key-plugin-configs";
-import type { AppleSignIn } from "@/api/lib/apple-sign-in-config";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import {

@@ -6,8 +6,8 @@ import { decodeJwt, decodeProtectedHeader, jwtVerify } from "jose";
 import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
 
-import { resolveAppleSignIn } from "@/api/lib/apple-sign-in-config";
-import type { AppleSignInSettings } from "@/api/lib/apple-sign-in-config";
+import { resolveAppleSignIn } from "@/api/env-apple-sign-in";
+import type { AppleSignInSettings } from "@/api/env-apple-sign-in";
 import {
   APPLE_FORM_POST,
   withAppleFormPostOrigin,

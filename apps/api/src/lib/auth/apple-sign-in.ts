@@ -6,13 +6,13 @@
  * Services ID (`sub`). This module mints that JWT in process from the key, so
  * no operator ever pastes or rotates a pre-made secret. Which settings a
  * deployment supplies, and whether they are usable, is decided in
- * `lib/apple-sign-in-config.ts`.
+ * `env-apple-sign-in.ts`.
  */
 import { sign } from "node:crypto";
 
 import { Temporal } from "@stll/time";
 
-import type { AppleSignInSettings } from "@/api/lib/apple-sign-in-config";
+import type { AppleSignInSettings } from "@/api/env-apple-sign-in";
 
 /** The audience Apple requires in a client secret. */
 export const APPLE_CLIENT_SECRET_AUDIENCE = "https://appleid.apple.com";

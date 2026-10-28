@@ -519,6 +519,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   "mcp-app-contracts": [
     "apps/api/package.json",
     "apps/api/src/db-url.ts",
+    "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
     "apps/api/src/env-schema.ts",
     "apps/api/src/db/role-names.ts",
