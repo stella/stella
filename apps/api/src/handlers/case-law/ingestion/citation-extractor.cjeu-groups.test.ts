@@ -77,7 +77,7 @@ test("a number printed with two different ECLIs is pinned to neither", () => {
 test("a joined second number resolves through the judgment's ECLI, not the file it shares", () => {
   const { references } = deriveDecisionReferences({
     citingDecisionId: toSafeId<"caseLawDecision">(
-      "01a11491-521d-705a-9cd9-8ad4818b5de9",
+      "00000000-0000-4000-8000-000000000001",
     ),
     citations: extractCitations(
       [
