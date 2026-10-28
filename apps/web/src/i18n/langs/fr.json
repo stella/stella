@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Maintenant",
       "currentSession": "En cours",
       "device": "Appareil",
       "deviceOnOs": "{browser} sur {os}",
@@ -1520,7 +1521,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
+      "unnamed": "{count, plural, one {# autre} many {# autres} other {# autres}}"
     },
     "historyTrimmed": "Les messages précédents n'ont pas pu être résumés : cette réponse ne tient compte que de la partie la plus récente de la conversation.",
     "improvePrompt": "Améliorer le prompt",
@@ -2468,10 +2469,10 @@
       "value": "Valeur du champ"
     },
     "datePrecision": "Précision de la date",
-    "deleteContact": "Supprimer le client",
+    "deleteContact": "Supprimer le contact",
     "deleteContactBlockedByMatters": "Ce contact est encore défini comme client dans des dossiers. Réattribuez ou supprimez ces dossiers avant de supprimer le contact.",
     "deleteContactConfirmDescription": "Voulez-vous vraiment supprimer ce contact ? Cette action est irréversible.",
-    "editContact": "Modifier le client",
+    "editContact": "Modifier le contact",
     "emailTypes": {
       "other": "Autre",
       "personal": "Personnel",
@@ -2484,7 +2485,7 @@
     "extractProcuracao": {
       "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
       "extracting": "Extraction du ou des mandants…",
-      "fileHint": "Stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
+      "fileHint": "stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
       "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
@@ -5056,7 +5057,7 @@
         "title": "Authentification à deux facteurs"
       },
       "wordEditIdentitySaved": "Identité d’édition Word mise à jour",
-      "wordEditShortcut": "Initiales d’édition Word",
+      "wordEditShortcut": "Initiales pour les modifications Word",
       "wordEditShortcutDescription": "Tag court pour vos initiales sur les modifications Word.",
       "wordEditShortcutPlaceholder": "p. ex. JK"
     },
@@ -5443,16 +5444,16 @@
     "savedDescription": "Jeu de styles enregistré",
     "sourceDocument": "DOCX source",
     "stellaDescription": "Mise en forme juridique complète et neutre de stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Jeux de styles",
     "untitledDocument": "Document sans titre"
   },
   "success": {
     "aiConfigDeleted": "Configuration de l’IA supprimée",
     "aiConfigUpdated": "Configuration de l’IA mise à jour",
-    "clientUpdated": "Client mis à jour",
-    "contactCreated": "Client créé",
-    "contactDeleted": "Client supprimé",
+    "clientUpdated": "Contact mis à jour",
+    "contactCreated": "Contact créé",
+    "contactDeleted": "Contact supprimé",
     "documentCreated": "Document créé",
     "folderCreated": "Dossier créé",
     "invitationCanceled": "Invitation annulée",
@@ -5989,6 +5990,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Saisissez une adresse e-mail valide.",
     "organizationNameRequired": "Le nom de l'organisation est requis",
     "slugFormat": "Le slug ne doit contenir que des lettres minuscules, des chiffres et des tirets",
     "slugRequired": "Le slug est requis"
