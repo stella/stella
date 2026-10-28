@@ -25,7 +25,7 @@ import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";

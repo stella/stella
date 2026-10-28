@@ -14,7 +14,7 @@ import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 

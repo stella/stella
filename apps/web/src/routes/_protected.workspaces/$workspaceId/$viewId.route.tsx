@@ -34,7 +34,7 @@ import {
   ensureRouteQueryData,
   prefetchRouteQuery,
 } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import {
   optionalIntegerSearchSchema,
   optionalSearchStringSchema,

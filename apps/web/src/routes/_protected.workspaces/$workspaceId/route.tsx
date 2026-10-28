@@ -18,7 +18,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";

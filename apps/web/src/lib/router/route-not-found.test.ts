@@ -5,12 +5,12 @@ import { readdir, readFile } from "node:fs/promises";
 import nodePath from "node:path";
 
 import { APIError } from "@/lib/errors/api";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import {
   assertRouteNotFoundCensus,
   type RouteNotFoundCensusEntry,
   type RouteParamExemption,
-} from "@/lib/route-not-found-census";
+} from "@/lib/router/route-not-found-census";
 
 const ID = "0194d94a-1122-7000-8000-123456789abc";
 
@@ -79,7 +79,7 @@ test("other loader failures are preserved", async () => {
   }
 });
 
-const RESOURCE_PATHS = new Set([
+const RESOURCE_PATHS: ReadonlySet<string> = new Set([
   "/_protected/chat/$threadId",
   "/_protected/chat/workspaces/$workspaceId/$threadId",
   "/_protected/contacts/$contactId",
@@ -203,7 +203,7 @@ const PARAM_EXEMPTIONS = [
 ] as const satisfies readonly RouteParamExemption[];
 
 test("every parameterized route and child-bearing layout has a not-found policy", async () => {
-  const routesDirectory = nodePath.join(import.meta.dir, "../routes");
+  const routesDirectory = nodePath.join(import.meta.dir, "../../routes");
   const files = await collectRouteFiles(routesDirectory);
   const routeSources = await Promise.all(
     files.map(async (file) => ({
@@ -225,7 +225,7 @@ test("every parameterized route and child-bearing layout has a not-found policy"
     ),
   })) satisfies RouteNotFoundCensusEntry[];
   const routerSource = await readFile(
-    nodePath.join(import.meta.dir, "../router.tsx"),
+    nodePath.join(import.meta.dir, "../../router.tsx"),
     "utf-8",
   );
 

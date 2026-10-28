@@ -57,7 +57,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { loadRouteResource } from "@/lib/route-not-found";
+import { loadRouteResource } from "@/lib/router/route-not-found";
 import { toSafeId } from "@/lib/safe-id";
 import {
   schemaFormOptions,

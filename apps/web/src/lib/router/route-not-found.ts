@@ -11,7 +11,7 @@ type LoadRouteResourceOptions<T> = {
   exists?: (resource: T) => boolean;
 };
 
-const MISSING_RESOURCE_STATUSES = new Set([403, 404]);
+const MISSING_RESOURCE_STATUSES = [403, 404] as const;
 
 /**
  * Loads a URL-addressed resource without leaking whether an inaccessible row
@@ -31,11 +31,12 @@ export async function loadRouteResource<T>({
     catch: (error) => error,
   });
   if (loaded.isErr()) {
+    const error = loaded.error;
     return Result.err(
-      APIError.is(loaded.error) &&
-        MISSING_RESOURCE_STATUSES.has(loaded.error.status)
+      APIError.is(error) &&
+        MISSING_RESOURCE_STATUSES.some((status) => status === error.status)
         ? notFound()
-        : loaded.error,
+        : error,
     );
   }
 
