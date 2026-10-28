@@ -15,17 +15,23 @@ while IFS= read -r tag; do
   if [[ "$(git rev-parse "$tag^{commit}")" == "$sha" ]]; then rc="$tag"; break; fi
 done < <(git tag --list "v$version-rc.*" --sort=-v:refname)
 [[ -n "$rc" ]] || { echo "No RC receipt on $sha" >&2; exit 0; }
-# A final tag is written once; release-finalize-eligibility.sh refuses runs
-# after it exists.
-if git show-ref --verify --quiet "refs/tags/$final"; then
-  echo "Final tag $final already exists" >&2
-  exit 1
-fi
-GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
+# A final tag is written once; release-finalize-eligibility.sh refuses new runs
+# after it exists. One already on this candidate is a finalization that stopped
+# before publishing (a rerun of the failed job resumes it): the tag stays as
+# pushed and only the publication below runs.
 rc_sha=$(git rev-parse "$rc^{commit}")
 [[ "$rc_sha" == "$sha" ]] || exit 1
-git tag -a "$final" "$rc_sha" -m "$final"
-git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
+if git show-ref --verify --quiet "refs/tags/$final"; then
+  if [[ "$(git rev-parse "$final^{commit}")" != "$sha" ]]; then
+    echo "Final tag $final already exists" >&2
+    exit 1
+  fi
+  echo "Final tag $final already targets $sha; resuming publication." >&2
+else
+  GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$script_dir/check-release-main-health.sh" "$repo" "$sha" "$sha"
+  git tag -a "$final" "$rc_sha" -m "$final"
+  git push "https://x-access-token:${GH_TOKEN:?}@github.com/$repo.git" "refs/tags/$final"
+fi
 is_draft=$(GH_TOKEN="${RELEASE_HEALTH_TOKEN:-${GH_TOKEN:-}}" bash "$gh_retry_script" release view "$rc" --repo "$repo" --json isDraft --jq '.isDraft')
 case "$is_draft" in
   true) bash "$gh_retry_script" release edit "$rc" --repo "$repo" --draft=false --prerelease --latest=false ;;

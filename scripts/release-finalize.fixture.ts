@@ -25,6 +25,7 @@ type ProofFixture = {
   noRc?: boolean;
   finalTag?: "candidate" | "previous";
   rcPublication?: "draft" | "published";
+  publicationFails?: boolean;
 };
 export const finalize = (fixture: ProofFixture = {}) => {
   const root = mkdtempSync(path.join(tmpdir(), "release-finalize-"));
@@ -116,7 +117,8 @@ case "$*" in
   *statuses?*) cat "$TEST_ROOT/statuses.json" ;;
   *actions/runs/*) run="\u0024{!#}"; cat "$TEST_ROOT/run-\u0024{run##*/}.json" ;;
   *issues?*) cat "$TEST_ROOT/incidents.json" ;;
-  'release edit '*) printf '%s\\n' "$*" >> "$TEST_ROOT/publications" ;;
+  'release edit '*)
+    ${fixture.publicationFails === true ? 'echo "release edit failed" >&2; exit 1' : 'printf \'%s\\n\' "$*" >> "$TEST_ROOT/publications"'} ;;
   *) echo "Unexpected API request $*" >&2; exit 1 ;;
 esac
 `,
