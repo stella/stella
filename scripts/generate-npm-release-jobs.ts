@@ -123,6 +123,7 @@ export const renderNpmReleaseJobs = (
       `  ${npmReleaseJobId(directory)}:`,
       `    name: Publish @stll/${directory}`,
       "    needs:",
+      "      - release-trigger",
       "      - pack",
       ...dependencies.map(
         (dependency) => `      - ${npmReleaseJobId(dependency)}`,
@@ -250,7 +251,11 @@ export const npmReleaseGraphProblems = ({
       continue;
     }
     const needs = job["needs"];
-    const required = ["pack", ...dependencies.map(npmReleaseJobId)];
+    const required = [
+      "release-trigger",
+      "pack",
+      ...dependencies.map(npmReleaseJobId),
+    ];
     if (
       !Array.isArray(needs) ||
       needs.length !== required.length ||

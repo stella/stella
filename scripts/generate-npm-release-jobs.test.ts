@@ -154,12 +154,18 @@ describe("generated npm publishing dependency graph", () => {
     expect(
       npmReleaseGraphProblems({
         workflow: {
-          jobs: { ...jobs, "release-adapter": { ...adapter, needs: ["pack"] } },
+          jobs: {
+            ...jobs,
+            "release-adapter": {
+              ...adapter,
+              needs: ["release-trigger", "pack"],
+            },
+          },
         },
         graph,
       }),
     ).toContain(
-      "Incorrect npm release dependencies: release-adapter needs pack, release-base",
+      "Incorrect npm release dependencies: release-adapter needs release-trigger, pack, release-base",
     );
   });
 

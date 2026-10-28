@@ -709,6 +709,7 @@ jobs:
   release-auth-model:
     name: Publish @stll/auth-model
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -739,6 +740,7 @@ jobs:
   release-ai-catalog:
     name: Publish @stll/ai-catalog
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -769,6 +771,7 @@ jobs:
   release-text-normalize:
     name: Publish @stll/text-normalize
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -799,6 +802,7 @@ jobs:
   release-anonymize-chat:
     name: Publish @stll/anonymize-chat
     needs:
+      - release-trigger
       - pack
       - release-text-normalize
     if: >-
@@ -831,6 +835,7 @@ jobs:
   release-ui:
     name: Publish @stll/ui
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -861,6 +866,7 @@ jobs:
   release-chat:
     name: Publish @stll/chat
     needs:
+      - release-trigger
       - pack
       - release-ai-catalog
       - release-ui
@@ -895,6 +901,7 @@ jobs:
   release-country-codes:
     name: Publish @stll/country-codes
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -925,6 +932,7 @@ jobs:
   release-business-registries:
     name: Publish @stll/business-registries
     needs:
+      - release-trigger
       - pack
       - release-text-normalize
       - release-country-codes
@@ -959,6 +967,7 @@ jobs:
   release-conditions:
     name: Publish @stll/conditions
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -989,6 +998,7 @@ jobs:
   release-template-conditions:
     name: Publish @stll/template-conditions
     needs:
+      - release-trigger
       - pack
       - release-conditions
     if: >-
@@ -1021,6 +1031,7 @@ jobs:
   release-docx-utils:
     name: Publish @stll/docx-utils
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1051,6 +1062,7 @@ jobs:
   release-start-runtime:
     name: Publish @stll/start-runtime
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1081,6 +1093,7 @@ jobs:
   release-ssr-kit:
     name: Publish @stll/ssr-kit
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1111,6 +1124,7 @@ jobs:
   release-ssr-testkit:
     name: Publish @stll/ssr-testkit
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1141,6 +1155,7 @@ jobs:
   release-money:
     name: Publish @stll/money
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1171,6 +1186,7 @@ jobs:
   release-calculations:
     name: Publish @stll/calculations
     needs:
+      - release-trigger
       - pack
       - release-money
     if: >-
@@ -1203,6 +1219,7 @@ jobs:
   release-workspace-model:
     name: Publish @stll/workspace-model
     needs:
+      - release-trigger
       - pack
       - release-conditions
       - release-calculations
@@ -1237,6 +1254,7 @@ jobs:
   release-workspace-ui:
     name: Publish @stll/workspace-ui
     needs:
+      - release-trigger
       - pack
       - release-ui
       - release-conditions
@@ -1275,6 +1293,7 @@ jobs:
   release-stable-stringify:
     name: Publish @stll/stable-stringify
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1305,6 +1324,7 @@ jobs:
   release-agent-input:
     name: Publish @stll/agent-input
     needs:
+      - release-trigger
       - pack
       - release-text-normalize
       - release-country-codes
@@ -1341,6 +1361,7 @@ jobs:
   release-mcp-kit:
     name: Publish @stll/mcp-kit
     needs:
+      - release-trigger
       - pack
       - release-agent-input
     if: >-
@@ -1373,6 +1394,7 @@ jobs:
   release-fetch:
     name: Publish @stll/fetch
     needs:
+      - release-trigger
       - pack
     if: >-
       always() && !cancelled()
@@ -1403,6 +1425,7 @@ jobs:
   release-scan-engine:
     name: Publish @stll/scan-engine
     needs:
+      - release-trigger
       - pack
       - release-fetch
     if: >-
@@ -1435,6 +1458,7 @@ jobs:
   release-cli:
     name: Publish @stll/cli
     needs:
+      - release-trigger
       - pack
       - release-stable-stringify
       - release-agent-input
