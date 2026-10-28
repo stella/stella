@@ -4,8 +4,6 @@
 # same value; scripts/check-standalone-lockfiles.ts fails when they differ.
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  # body-parser 2.4.0 is the first release outside GHSA-27r3-jxmh-p828.
-  "body-parser", # quarantine-expires: 2026-10-27T11:39:38.614Z
 ]
 # Fail on a missing import instead of installing it at run time.
 auto = "disable"
