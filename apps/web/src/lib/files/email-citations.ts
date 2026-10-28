@@ -2,8 +2,8 @@ import { useMemo, useSyncExternalStore } from "react";
 
 import {
   EMAIL_CITATION_HREF_PREFIX,
-  parseEmailCitationHref,
   type EmailCitationHrefTarget,
+  parseEmailCitationHref,
 } from "@stll/api-contract";
 
 export { EMAIL_CITATION_HREF_PREFIX, parseEmailCitationHref };

@@ -3,8 +3,8 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
-  compactChatMessagesForModel,
   chatThreadNeedsCompaction,
+  compactChatMessagesForModel,
 } from "@/api/handlers/chat/compaction";
 import type { CompactedHistory } from "@/api/handlers/chat/compaction";
 import {
@@ -21,6 +21,7 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
@@ -69,10 +70,16 @@ export const selectMessagesForContextInput = async ({
     threadId,
   });
   if (Result.isError(checkpointResult)) {
-    captureError(checkpointResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_read",
-    });
+    captureError(
+      checkpointResult.error,
+      handlerErrorContext(
+        "chat.selectMessagesForContextInput.checkpointResult_error",
+        {
+          threadId,
+          feature: "chat.compaction_checkpoint_read",
+        },
+      ),
+    );
     return messages;
   }
 
@@ -144,10 +151,13 @@ export const compactMessagesForContext = async ({
     modelId: chatModelOverride,
     tenantWorkspaceIds,
     onSummaryError: (error) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction",
-      });
+      captureError(
+        error,
+        handlerErrorContext("chat.compactMessagesForContext", {
+          threadId,
+          feature: "chat.compaction",
+        }),
+      );
     },
     organizationId,
     admission,
@@ -206,9 +216,12 @@ export const markChatCompactionDue = async ({
     async (tx) => await markChatThreadCompactionDue({ threadId, tx }),
   );
   if (Result.isError(marked)) {
-    captureError(marked.error, {
-      threadId,
-      feature: "chat.compaction_enqueue",
-    });
+    captureError(
+      marked.error,
+      handlerErrorContext("chat.markChatCompactionDue.marked_error", {
+        threadId,
+        feature: "chat.compaction_enqueue",
+      }),
+    );
   }
 };

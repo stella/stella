@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
+import type {
+  Middleware,
+  RouteDefinition,
+  RouteEntry,
+} from "../../src/http/route";
+import { fileSchema } from "../../src/lib/custom-schema";
+import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
+import type { RouteGate } from "../../src/lib/route-gates";
 import {
+  checkCapabilityRouteGates,
   checkTransportAgainstDerived,
   classifyVerbs,
   compareScopeStrictness,
@@ -25,7 +35,6 @@ import {
   scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
-  scanRouteHookGuards,
   schemaContainsBinaryFormat,
   serializeCatalog,
   serializeCoverageDoc,
@@ -1031,14 +1040,8 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
 });
 
 describe("schemaContainsBinaryFormat", () => {
-  test("detects a t.File-shaped field (format: binary) at any depth", () => {
-    // Exactly how t.File({ maxSize }) serializes.
-    const file = {
-      default: "File",
-      maxSize: "50m",
-      type: "string",
-      format: "binary",
-    };
+  test("detects a file field (format: binary) at any depth", () => {
+    const file = toRouteJsonSchema(fileSchema({ maxBytes: 50 * 1024 * 1024 }));
     expect(schemaContainsBinaryFormat(file)).toBe(true);
     expect(
       schemaContainsBinaryFormat({
@@ -1047,14 +1050,11 @@ describe("schemaContainsBinaryFormat", () => {
     ).toBe(true);
   });
 
-  test("detects t.Files (array items with format: binary)", () => {
-    // Exactly how t.Files() serializes.
+  test("detects a list of files (array items with format: binary)", () => {
     expect(
-      schemaContainsBinaryFormat({
-        elysiaMeta: "Files",
-        type: "array",
-        items: { default: "Files", type: "string", format: "binary" },
-      }),
+      schemaContainsBinaryFormat(
+        toRouteJsonSchema(v.array(fileSchema({ maxBytes: 1024 }))),
+      ),
     ).toBe(true);
   });
 
@@ -1087,8 +1087,8 @@ describe("schemaContainsBinaryFormat", () => {
   });
 });
 
-// The derived truth every declared `transport` is checked against. `t.File()`
-// serializes as `{ type: "string", format: "binary" }`; `t.Optional(t.File())`
+// The derived truth every declared `transport` is checked against. `v.file()`
+// renders as `{ type: "string", format: "binary" }`; `v.optional(v.file())`
 // differs only by absence from the part's `required` list, which is exactly the
 // distinction between a suppressed capability and a fileless-exposed one.
 const FILE_SCHEMA = {
@@ -1475,229 +1475,237 @@ describe("scanFileResponseReturns", () => {
   });
 });
 
-describe("scanRouteHookGuards", () => {
-  const hookedRoute = `
-import getStatus from "@/api/handlers/case-law/ingestion/get";
-import listLinks from "@/api/handlers/case-law/matter-links/list";
-const adminRoute = new Elysia({ prefix: "/case/admin" })
-  .use(authMacro)
-  .onBeforeHandle(({ memberRole, set }) => {
-    if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
-      set.status = 403;
-      return { error: "Forbidden" };
-    }
-    return undefined;
-  })
-  .get("/ingestion/status", getStatus.handler, {});
-const openRoute = new Elysia({ prefix: "/case" })
-  .get("/links", listLinks.handler, {});
-`;
+describe("checkCapabilityRouteGates", () => {
+  const passThrough = (): Middleware => async (_ctx, inner) => await inner();
+  const budget = passThrough();
+  const legalListsGate = passThrough();
+  const timeBillingGate = passThrough();
+  const ownerOnly = passThrough();
+  const gates = new Map<Middleware, RouteGate>([
+    [budget, { kind: "budget" }],
+    [
+      legalListsGate,
+      { kind: "deployment-feature", flag: "FEATURE_LEGAL_LISTS" },
+    ],
+    [timeBillingGate, { kind: "feature-access", featureId: "time-billing" }],
+  ]);
+  const classify = (middleware: Middleware): RouteGate =>
+    gates.get(middleware) ?? { kind: "other" };
 
-  test("flags a capability mounted under a route hook when unwaived", () => {
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set([
-        "case-law.ingestion.get",
-        "case-law.matter-links.list",
-      ]),
-      waivedIds: new Set(),
-    });
-    expect(scan.violations).toEqual([
-      { routeFile: "case-law/routes.ts", id: "case-law.ingestion.get" },
-    ]);
-    expect(scan.staleWaivers).toEqual([]);
+  const definition = (): RouteDefinition => ({
+    config: {},
+    access: "member",
+    run: async () => await Promise.resolve(null),
   });
 
-  test("every route-level gate form is a hook; auth and permission macros are not", () => {
-    const mount = (setup: string) => `
-import getStatus from "@/api/handlers/case-law/ingestion/get";
-const r = new Elysia()
-  ${setup}
-  .get("/s", getStatus.handler, {});
-`;
-    const scan = (setup: string) =>
-      scanRouteHookGuards({
-        routeFiles: [{ id: "x/routes.ts", source: mount(setup) }],
-        capabilityIds: new Set(["case-law.ingestion.get"]),
-        waivedIds: new Set(),
-      }).violations.length;
-    for (const hook of [
-      ".onBeforeHandle(() => undefined)",
-      ".onRequest(() => undefined)",
-      ".guard({ beforeHandle: () => undefined }, (app) => app)",
-      ".use(deploymentFeatureGate(isLocalDevOpen))",
-    ]) {
-      expect(scan(hook), hook).toBe(1);
-    }
-    for (const macro of [
-      ".use(rateLimit({ max: 10 }))",
-      ".use(authMacro)",
-      ".use(permissionMacro)",
-      '.guard({ auth: true, permission: { entity: ["read"] } })',
-      ".resolve(() => ({}))",
-    ]) {
-      expect(scan(macro), macro).toBe(0);
-    }
-  });
+  type Capability = {
+    id: string;
+    definition: object;
+    feature: string | undefined;
+    featureId: string | undefined;
+  };
+  /** A capability, its catalog `feature` tag and its config's `featureAccess`. */
+  const capability = (
+    id: string,
+    target: object,
+    feature?: string,
+    featureId?: string,
+  ): Capability => ({ id, definition: target, feature, featureId });
 
-  test("only a deployment gate over the tagged flag is reproduced", () => {
-    const source = (hooks: string) => `
-import getStatus from "@/api/handlers/case-law/ingestion/get";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
-import { listsAndDraftsDeployed } from "@/api/lib/lists/compound";
-const r = new Elysia()
-  ${hooks}
-  .get("/s", getStatus.handler, {});
-`;
-    const modules: Record<string, string> = {
-      "@/api/lib/lists/deployment":
-        'export const legalListsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS");\n',
-      "@/api/lib/lists/compound":
-        'export const listsAndDraftsDeployed = (): boolean =>\n  isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isDeploymentFeatureEnabled("FEATURE_DRAFTS");\n',
-    };
-    const violations = (hooks: string, feature: string | undefined) =>
-      scanRouteHookGuards({
-        routeFiles: [{ id: "x/routes.ts", source: source(hooks) }],
-        capabilityIds: new Set(["case-law.ingestion.get"]),
-        capabilityFeatures: new Map([["case-law.ingestion.get", feature]]),
-        readModule: (importPath) => modules[importPath],
-        waivedIds: new Set(),
-      }).violations.length;
-    const reproduced = [
-      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
-      ".use(deploymentFeatureGate(legalListsDeployed))",
-      // The formatter's wrapped forms.
-      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),\n    ),\n  )',
-      '.use(\n    deploymentFeatureGate(() =>\n      isDeploymentFeatureEnabled(\n        "FEATURE_LEGAL_LISTS",\n      ),\n    ),\n  )',
-    ];
-    for (const gate of reproduced) {
-      expect(violations(gate, "FEATURE_LEGAL_LISTS"), gate).toBe(0);
-      // Untagged or tagged with another flag.
-      expect(violations(gate, undefined), gate).toBe(1);
-      expect(violations(gate, "FEATURE_USAGE"), gate).toBe(1);
-    }
-    const notReproduced = [
-      // A custom hook is never inferred from the flags it mentions.
-      '.onBeforeHandle(({ set }) => { if (isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")) return undefined; set.status = 404; })',
-      // Compound and inverted conditions, directly or through a helper.
-      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS") && isOwner()))',
-      '.use(deploymentFeatureGate(() => !isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
-      ".use(deploymentFeatureGate(listsAndDraftsDeployed))",
-      // A raw flag read bypasses the owner's local-development policy.
-      ".use(deploymentFeatureGate(() => env.FEATURE_LEGAL_LISTS))",
-      ".use(deploymentFeatureGate(() => isLocalDevOpen() || env.FEATURE_LEGAL_LISTS))",
-      // A flag read once, not per request, is not the gate's contract.
-      '.use(deploymentFeatureGate(isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))',
-      // A second hook beside the gate.
-      '.use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))\n  .onBeforeHandle(() => undefined)',
-    ];
-    for (const hooks of notReproduced) {
-      expect(violations(hooks, "FEATURE_LEGAL_LISTS"), hooks).toBe(1);
-    }
-  });
+  type MountedRoute = Pick<
+    RouteEntry,
+    "method" | "path" | "middleware" | "definition"
+  >;
 
-  test("every hooked mount of a capability must be reproduced", () => {
-    const source = `
-import getStatus from "@/api/handlers/case-law/ingestion/get";
-const custom = new Elysia()
-  .onBeforeHandle(() => undefined)
-  .get("/a", getStatus.handler, {});
-const gated = new Elysia()
-  .use(deploymentFeatureGate(() => isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS")))
-  .get("/b", getStatus.handler, {});
-`;
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "x/routes.ts", source }],
-      capabilityIds: new Set(["case-law.ingestion.get"]),
-      capabilityFeatures: new Map([
-        ["case-law.ingestion.get", "FEATURE_LEGAL_LISTS"],
-      ]),
-      waivedIds: new Set(),
-    });
-    expect(scan.violations).toEqual([
-      { routeFile: "x/routes.ts", id: "case-law.ingestion.get" },
-    ]);
-  });
+  const check = (
+    capabilities: readonly Capability[],
+    routes: readonly MountedRoute[],
+    waivedIds: ReadonlySet<string> = new Set(),
+  ) => checkCapabilityRouteGates({ capabilities, routes, classify, waivedIds });
 
-  test("a child route mounted under a hook fails closed whatever its name", () => {
-    const scan = scanRouteHookGuards({
-      routeFiles: [
+  test("a budget is reproduced by the executors' own budgets", () => {
+    const listed = definition();
+    const result = check(
+      [capability("lists.list", listed)],
+      [
         {
-          id: "case-law/routes.ts",
-          source: `
-import { authMacro } from "@/api/lib/auth";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
-import adminApi from "./admin";
-import { research } from "@/api/handlers/case-law/research/routes";
-const routes = new Elysia().get("/x", () => "x");
-const app = new Elysia()
-  .onBeforeHandle(() => undefined)
-  .use(authMacro)
-  .use(adminApi)
-  .use(research)
-  .use(routes);
-const open = new Elysia().use(adminApi);
-`,
+          method: "GET",
+          path: "/v1/lists",
+          middleware: [budget],
+          definition: listed,
         },
       ],
-      capabilityIds: new Set(),
-      waivedIds: new Set(),
-    });
-    expect(scan.childRouteMounts).toEqual([
-      { routeFile: "case-law/routes.ts", route: "adminApi" },
-      { routeFile: "case-law/routes.ts", route: "research" },
-      { routeFile: "case-law/routes.ts", route: "routes" },
-    ]);
+    );
+    expect(result).toEqual({ violations: [], unmounted: [], staleWaivers: [] });
   });
 
-  test("a waived hook-guarded capability is not a violation", () => {
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set(["case-law.ingestion.get"]),
-      waivedIds: new Set(["case-law.ingestion.get"]),
-    });
-    expect(scan.violations).toEqual([]);
-    expect(scan.staleWaivers).toEqual([]);
+  test("a deployment gate is reproduced only when the entry carries its flag", () => {
+    const listed = definition();
+    const route: MountedRoute = {
+      method: "GET",
+      path: "/v1/lists",
+      middleware: [legalListsGate],
+      definition: listed,
+    };
+    expect(
+      check([capability("lists.list", listed, "FEATURE_LEGAL_LISTS")], [route])
+        .violations,
+    ).toEqual([]);
+    for (const feature of [undefined, "FEATURE_USAGE"]) {
+      expect(
+        check([capability("lists.list", listed, feature)], [route]).violations,
+        String(feature),
+      ).toEqual([
+        {
+          id: "lists.list",
+          method: "GET",
+          path: "/v1/lists",
+          reason: `deployment gate FEATURE_LEGAL_LISTS, but the catalog entry carries ${feature ?? "no feature"}`,
+        },
+      ]);
+    }
   });
 
-  test("a handler mounted only under a non-hooked instance is not flagged", () => {
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set(["case-law.matter-links.list"]),
-      waivedIds: new Set(),
-    });
-    expect(scan.violations).toEqual([]);
+  test("a feature gate is reproduced only when the handler config declares that feature", () => {
+    const listed = definition();
+    const route: MountedRoute = {
+      method: "POST",
+      path: "/v1/time-entries",
+      middleware: [timeBillingGate],
+      definition: listed,
+    };
+    expect(
+      check(
+        [
+          capability(
+            "time-entries.create",
+            listed,
+            "FEATURE_TIME_BILLING",
+            "time-billing",
+          ),
+        ],
+        [route],
+      ).violations,
+    ).toEqual([]);
+    for (const featureId of [undefined, "legal-lists"]) {
+      expect(
+        check(
+          [
+            capability(
+              "time-entries.create",
+              listed,
+              "FEATURE_TIME_BILLING",
+              featureId,
+            ),
+          ],
+          [route],
+        ).violations,
+        String(featureId),
+      ).toEqual([
+        {
+          id: "time-entries.create",
+          method: "POST",
+          path: "/v1/time-entries",
+          reason: `feature gate time-billing, but the handler config declares ${featureId ?? "no featureAccess"}`,
+        },
+      ]);
+    }
   });
 
-  test("resolves a named-export handler mount to its capability id", () => {
-    const source = `
-import { readLegacySummariesCount } from "@/api/handlers/entities/legacy-summaries";
-const r = new Elysia()
-  .beforeHandle(() => undefined)
-  .get("/count", readLegacySummariesCount.handler, {});
-`;
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "entities/routes.ts", source }],
-      capabilityIds: new Set([
-        "entities.legacy-summaries.readLegacySummariesCount",
-      ]),
-      waivedIds: new Set(),
-    });
-    expect(scan.violations).toEqual([
+  test("any other middleware is a gate the capability path skips", () => {
+    const status = definition();
+    const result = check(
+      [capability("case-law.ingestion.get", status)],
+      [
+        {
+          method: "GET",
+          path: "/v1/case-law/admin/ingestion/status",
+          middleware: [budget, ownerOnly],
+          definition: status,
+        },
+      ],
+    );
+    expect(result.violations).toEqual([
       {
-        routeFile: "entities/routes.ts",
-        id: "entities.legacy-summaries.readLegacySummariesCount",
+        id: "case-law.ingestion.get",
+        method: "GET",
+        path: "/v1/case-law/admin/ingestion/status",
+        reason: "a route middleware the capability path does not run",
       },
     ]);
   });
 
-  test("reports a stale waiver no longer mounted under any hook", () => {
-    const scan = scanRouteHookGuards({
-      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
-      capabilityIds: new Set(["case-law.ingestion.get"]),
-      waivedIds: new Set(["case-law.ingestion.get", "gone.capability"]),
-    });
-    expect(scan.staleWaivers).toEqual(["gone.capability"]);
+  test("every mount of a capability is checked, not only the first", () => {
+    const status = definition();
+    const result = check(
+      [capability("case-law.ingestion.get", status, "FEATURE_LEGAL_LISTS")],
+      [
+        {
+          method: "GET",
+          path: "/v1/a",
+          middleware: [legalListsGate],
+          definition: status,
+        },
+        {
+          method: "GET",
+          path: "/v1/b",
+          middleware: [ownerOnly],
+          definition: status,
+        },
+      ],
+    );
+    expect(result.violations.map(({ path }) => path)).toEqual(["/v1/b"]);
+  });
+
+  test("a mount is matched by its definition, not by a copy of it", () => {
+    const original = definition();
+    const result = check(
+      [capability("lists.list", original)],
+      [
+        {
+          method: "GET",
+          path: "/v1/lists",
+          middleware: [ownerOnly],
+          definition: { ...original },
+        },
+      ],
+    );
+    expect(result.violations).toEqual([]);
+    expect(result.unmounted).toEqual(["lists.list"]);
+  });
+
+  test("a waived capability is not a violation, and its waiver is not stale", () => {
+    const status = definition();
+    const result = check(
+      [capability("case-law.ingestion.get", status)],
+      [
+        {
+          method: "GET",
+          path: "/v1/case-law/admin/ingestion/status",
+          middleware: [ownerOnly],
+          definition: status,
+        },
+      ],
+      new Set(["case-law.ingestion.get"]),
+    );
+    expect(result).toEqual({ violations: [], unmounted: [], staleWaivers: [] });
+  });
+
+  test("a waiver that matches no skipped gate is stale", () => {
+    const listed = definition();
+    const result = check(
+      [capability("lists.list", listed)],
+      [
+        {
+          method: "GET",
+          path: "/v1/lists",
+          middleware: [budget],
+          definition: listed,
+        },
+      ],
+      new Set(["lists.list", "gone.capability"]),
+    );
+    expect(result.staleWaivers).toEqual(["gone.capability", "lists.list"]);
   });
 });
 

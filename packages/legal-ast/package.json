@@ -71,13 +71,25 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./document-kind": {
+      "types": "./src/document-kind.ts",
+      "import": "./src/document-kind.ts"
+    },
     "./fixtures/statute-viewer": {
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
     },
+    "./fixtures/cz-141-1961-section-72a": {
+      "types": "./src/fixtures/cz-141-1961-section-72a.ts",
+      "import": "./src/fixtures/cz-141-1961-section-72a.ts"
+    },
     "./fixtures/cz-262-2006-section-51": {
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
+    },
+    "./fixtures/sk-300-2005-section-128": {
+      "types": "./src/fixtures/sk-300-2005-section-128.ts",
+      "import": "./src/fixtures/sk-300-2005-section-128.ts"
     },
     "./court-paragraph-number": {
       "types": "./src/court-paragraph-number.ts",
@@ -127,6 +139,10 @@
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
     },
+    "./statute-list": {
+      "types": "./src/statute-list.ts",
+      "import": "./src/statute-list.ts"
+    },
     "./text-sanitize": {
       "types": "./src/text-sanitize.ts",
       "import": "./src/text-sanitize.ts"
@@ -142,8 +158,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/legal-ast",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
     "@stll/sha256": "workspace:*",

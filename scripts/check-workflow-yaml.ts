@@ -4,6 +4,7 @@ import { panic, TaggedError } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -142,6 +143,23 @@ export const validateNoRubyShell = (value: unknown, file: string): void => {
   }
 };
 
+export const validateWorkflowJobTimeouts = (
+  value: unknown,
+  file: string,
+): void => {
+  if (!isRecord(value) || !isRecord(value["jobs"])) {
+    return;
+  }
+  for (const [jobName, job] of Object.entries(value["jobs"])) {
+    if (isRecord(job) && "steps" in job && !("timeout-minutes" in job)) {
+      throw new WorkflowYamlError({
+        message: `${file}: job ${jobName} runs steps and must define timeout-minutes; every step-running workflow job requires a timeout`,
+        file,
+      });
+    }
+  }
+};
+
 export const validateNoRubyProcessSpawns = async (
   root: string,
 ): Promise<void> => {
@@ -168,7 +186,7 @@ export const validateNoRubyProcessSpawns = async (
   }
 };
 
-const localActionReferences = (value: unknown): string[] => {
+const localActionSteps = (value: unknown): Record<string, unknown>[] => {
   if (!isRecord(value)) {
     return [];
   }
@@ -185,14 +203,19 @@ const localActionReferences = (value: unknown): string[] => {
   }
   return groups
     .flatMap((steps) => flattenWorkflowSteps(steps))
-    .flatMap((step) => {
+    .filter((step) => {
       const uses = step["uses"];
-      return typeof uses === "string" &&
+      return (
+        typeof uses === "string" &&
         (uses.startsWith("$/") || uses.startsWith("./"))
-        ? [uses]
-        : [];
+      );
     });
 };
+
+const localActionReferences = (value: unknown): string[] =>
+  localActionSteps(value).flatMap((step) =>
+    typeof step["uses"] === "string" ? [step["uses"]] : [],
+  );
 
 type LocalActionReferencesOptions = {
   value: unknown;
@@ -255,10 +278,13 @@ export const actionlintWorkflowSource = ({
 }: ActionlintWorkflowSourceOptions): string => {
   const value: unknown = Bun.YAML.parse(source);
   validateLocalActionReferences({ value, root, file });
-  const expected = localActionReferences(value).filter((uses) =>
-    uses.startsWith("$/"),
-  );
-  const rewritten: string[] = [];
+  const expected = structuredClone(value);
+  for (const step of localActionSteps(expected)) {
+    const uses = step["uses"];
+    if (typeof uses === "string" && uses.startsWith("$/")) {
+      step["uses"] = `.${uses.slice(1)}`;
+    }
+  }
   const normalized = source
     .split("\n")
     .map((line) => {
@@ -285,7 +311,6 @@ export const actionlintWorkflowSource = ({
       ) {
         end += 1;
       }
-      const uses = actionValue.slice(0, end);
       const remainder = actionValue.slice(end);
       if (quote !== "" && !remainder.startsWith(quote)) {
         return line;
@@ -294,14 +319,13 @@ export const actionlintWorkflowSource = ({
       if (tail !== "" && !tail.startsWith("#")) {
         return line;
       }
-      rewritten.push(uses);
       const offset = line.length - scalar.length + quote.length;
       return `${line.slice(0, offset)}.${line.slice(offset + 1)}`;
     })
     .join("\n");
-  if (
-    JSON.stringify(rewritten.toSorted()) !== JSON.stringify(expected.toSorted())
-  ) {
+  // An anchored source step can expand into several jobs. Compare the
+  // parsed trees so every reference changes while scripts and inputs survive.
+  if (!isDeepStrictEqual(Bun.YAML.parse(normalized), expected)) {
     throw new WorkflowYamlError({
       message: `${file}: archive action normalization must be one-to-one`,
       file,
@@ -324,6 +348,7 @@ export const checkWorkflowYaml = async (root: string): Promise<void> => {
     const file = path.join(workflowDirectory, name);
     validateWorkflowSize(Bun.file(file).size, file);
     const value = await parseWorkflowYaml(file);
+    validateWorkflowJobTimeouts(value, file);
     validateNoRubyShell(value, file);
     validateLocalActionReferences({
       value,

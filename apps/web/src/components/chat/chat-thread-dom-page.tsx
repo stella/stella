@@ -1,5 +1,5 @@
 import { Profiler, StrictMode, Suspense } from "react";
-import type { ProfilerOnRenderCallback } from "react";
+import type { ProfilerOnRenderCallback, ReactNode } from "react";
 
 import {
   QueryClient,
@@ -99,10 +99,12 @@ const startRouteHandoff = async ({
 /** The thread page's chat, wired as `ChatThreadPage` wires it. */
 const ChatThreadDomPage = ({
   onSession,
+  renderComposer,
   organizationId,
   threadId,
 }: {
   onSession: (session: ChatThreadDomSession) => void;
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   organizationId: string;
   threadId: string;
 }) => {
@@ -117,6 +119,7 @@ const ChatThreadDomPage = ({
     key: threadRef,
   });
   const session = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.dom-page" },
     chat,
     timingSurface: "chat-thread",
     conversationId: threadId,
@@ -150,6 +153,7 @@ const ChatThreadDomPage = ({
         {/* The selection bar quotes into the composer through the editor
             manager, as on the real page. */}
         <ChatEditorProvider>
+          {renderComposer?.(session)}
           <ChatThreadMessages
             activitySession={session.activitySession}
             approvalPendingMessageId={session.approvalPendingMessageId}
@@ -192,7 +196,9 @@ export const openChatThreadDomPage = async ({
   routeHandoff,
   threadId,
   toolGrants = [],
+  renderComposer,
 }: {
+  renderComposer?: ((session: ChatThreadDomSession) => ReactNode) | undefined;
   onRender?: ProfilerOnRenderCallback | undefined;
   organizationId: string;
   /**
@@ -269,6 +275,7 @@ export const openChatThreadDomPage = async ({
                 >
                   <Suspense fallback={<p>{SUSPENDED}</p>}>
                     <ChatThreadDomPage
+                      renderComposer={renderComposer}
                       onSession={(next) => {
                         session = next;
                       }}

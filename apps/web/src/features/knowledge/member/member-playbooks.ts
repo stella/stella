@@ -3,14 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   knowledgeKeys,
   playbooksOptions,
   playbookStartersOptions,
   recentPlaybooksOptions,
 } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type StarterId = Parameters<
   (typeof api.playbooks)["from-starter"]["post"]
@@ -33,8 +34,8 @@ const useRecentPlaybooks = (organizationId: string) => {
     refetchOnWindowFocus: false,
   });
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "useRecentPlaybooks:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),
@@ -49,8 +50,8 @@ const usePlaybookStarters = (organizationId: string, enabled: boolean) => {
     enabled,
   });
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "usePlaybookStarters:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     status: isLoading ? ("loading" as const) : ("ready" as const),
@@ -87,7 +88,9 @@ const usePlaybookActions = (organizationId: string) => {
         fetch: { signal },
       }),
     createFromStarter: async (starterId: StarterId) =>
-      unwrapEden(await api.playbooks["from-starter"].post({ starterId })),
+      unwrapApiResponse(
+        await api.playbooks["from-starter"].post({ starterId }),
+      ),
   };
 };
 

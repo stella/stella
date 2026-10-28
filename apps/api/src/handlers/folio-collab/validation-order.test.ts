@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import Elysia from "elysia";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 // The folio-collab room endpoints authorize themselves from either a
 // caller-supplied room credential or a deployment service credential. Their route schemas
@@ -12,7 +14,17 @@ import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 // leaks parameter shape. These tests never present a
 // well-formed credential pair, so no request reaches the database.
 
-const app = new Elysia().use(folioCollabRoute);
+// The routes without their address budget: every probe below comes from one
+// address, and the budget's own refusal is the rate-limit tests' subject.
+const app = serveForTest(
+  createHttpApp({
+    routes: folioCollabRoute.map((entry) => ({ ...entry, middleware: [] })),
+    middleware: [errorBoundary],
+  }),
+);
+afterAll(async () => {
+  await app.stop();
+});
 
 const VALID_UUID = "0198c0de-0000-4000-8000-000000000000";
 const WELL_FORMED_TOKEN = "a".repeat(64);
@@ -30,10 +42,10 @@ const expectAuthShapedFailure = async (
   request: Request,
   expected: { body: { message: string }; status: 401 | 404 },
 ) => {
-  const response = await app.handle(request);
+  const response = await app.fetch(request);
   expect(response.status).toBe(expected.status);
-  // The handler's own auth failure, not an Elysia validation error
-  // (which would carry `type: "validation"` and the schema summary).
+  // The handler's own auth failure, not a validation error (which would
+  // carry the validation code and the failing fields).
   expect(await response.json()).toEqual(expected.body);
 };
 
@@ -114,15 +126,20 @@ describe("folio-collab probes with malformed bodies never see validation errors"
         jsonRequest(path, { token: "x", probe: "1", admin: "true" }),
         expected,
       );
-      // Unparseable JSON.
-      await expectAuthShapedFailure(
+      // Unparseable JSON cannot be read as the content type it declares, so
+      // the HTTP layer answers its generic 400 before any route code runs:
+      // the same fixed body every route sends, naming no field or schema.
+      const unparseable = await app.fetch(
         new Request(`http://localhost${path}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: "{not json",
         }),
-        expected,
       );
+      expect(unparseable.status).toBe(400);
+      expect(await unparseable.json()).toEqual({
+        message: "Malformed request",
+      });
       // Non-JSON content type.
       await expectAuthShapedFailure(
         new Request(`http://localhost${path}`, {

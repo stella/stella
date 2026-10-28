@@ -37,11 +37,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  type Node,
+  type ObjectProperty as Property,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
 import { addedEntries, runLedgerMembershipGuard } from "./ledger-membership.ts";
 
@@ -59,6 +64,17 @@ const REASONED = v.record(v.string(), v.pipe(v.string(), v.nonEmpty()));
 const BASELINE_SCHEMA = v.object({
   comment: v.string(),
   drivers: REASONED,
+  fingerprints: v.optional(
+    v.record(
+      v.string(),
+      v.object({
+        fingerprint: v.string(),
+        storedInputIdentity: v.optional(v.string(), ""),
+        version: v.number(),
+      }),
+    ),
+    {},
+  ),
   files: REASONED,
   writers: REASONED,
 });
@@ -69,6 +85,17 @@ type Section = (typeof SECTIONS)[number];
 const DRIVER_ROWS = v.array(
   v.object({ key: v.string(), reason: v.pipe(v.string(), v.nonEmpty()) }),
 );
+const DRIVER_CENSUS = v.object({
+  fingerprints: v.array(
+    v.object({
+      key: v.string(),
+      fingerprint: v.string(),
+      storedInputIdentity: v.string(),
+      version: v.number(),
+    }),
+  ),
+  misses: DRIVER_ROWS,
+});
 
 const LINT_OUTPUT = v.object({
   diagnostics: v.array(v.object({ code: v.string(), filename: v.string() })),
@@ -105,7 +132,9 @@ export const parseBaseline = (text: string, label: string): Baseline => {
   const parsed = v.safeParse(BASELINE_SCHEMA, JSON.parse(text));
   return parsed.success
     ? parsed.output
-    : panic(`${label} must hold reasoned drivers, files and writers`);
+    : panic(
+        `${label} must hold fingerprints and reasoned drivers, files and writers`,
+      );
 };
 
 /** Membership keys across sections, prefixed so sections cannot trade rows. */
@@ -119,88 +148,101 @@ export const ledgerKeys = (baseline: Baseline): string[] =>
 type SourceFile = { path: string; source: string };
 type WriterMember = { key: string; kind: WriterKind };
 
-const propertyNameOf = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
+const propertyNameOf = (name: Node): string | null => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  if (name.type === "Literal" && typeof name.value === "string") {
+    return name.value;
+  }
+  return null;
+};
 
-const enclosingName = (node: ts.Node): string => {
+const enclosingName = (ancestors: readonly Node[], source: string): string => {
   const names: string[] = [];
-  // Ancestors up to the source file, the root of every parsed node.
-  for (
-    let current = node.parent;
-    !ts.isSourceFile(current);
-    current = current.parent
-  ) {
+  for (const current of ancestors) {
     if (
-      (ts.isFunctionDeclaration(current) ||
-        ts.isMethodDeclaration(current) ||
-        ts.isClassDeclaration(current)) &&
-      current.name !== undefined
+      (current.type === "FunctionDeclaration" ||
+        current.type === "ClassDeclaration") &&
+      current.id
     ) {
-      names.unshift(current.name.getText());
+      names.push(current.id.name);
     } else if (
-      ts.isVariableDeclaration(current) &&
-      ts.isIdentifier(current.name)
+      (current.type === "MethodDefinition" && current.kind === "method") ||
+      (current.type === "Property" && current.method)
     ) {
-      names.unshift(current.name.text);
+      names.push(source.slice(current.key.start, current.key.end));
+    } else if (
+      current.type === "VariableDeclarator" &&
+      current.id.type === "Identifier"
+    ) {
+      names.push(current.id.name);
     }
   }
   return names.length === 0 ? "module" : names.join("/");
 };
 
-const isNullValue = (node: ts.Expression): boolean =>
-  node.kind === ts.SyntaxKind.NullKeyword ||
-  (ts.isTaggedTemplateExpression(node) &&
-    /^\s*NULL\s*$/iu.test(node.template.getText().slice(1, -1)));
+const isNullValue = (node: Node): boolean =>
+  (node.type === "Literal" && node.value === null) ||
+  (node.type === "TaggedTemplateExpression" &&
+    node.quasi.expressions.length === 0 &&
+    /^\s*NULL\s*$/iu.test(node.quasi.quasis.at(0)?.value.raw ?? ""));
 
 /** Whether an identifier or property in `node` names one of `names`. */
-const mentions = (node: ts.Node, names: ReadonlySet<string>): boolean => {
+const mentions = (node: Node, names: ReadonlySet<string>): boolean => {
   let found = false;
-  const visit = (child: ts.Node): void => {
+  walk(node, (child) => {
     if (found) {
-      return;
+      return "skip-children";
     }
-    if (ts.isIdentifier(child) && names.has(child.text)) {
+    if (child.type === "Identifier" && names.has(child.name)) {
       found = true;
-      return;
     }
-    ts.forEachChild(child, visit);
-  };
-  visit(node);
+    return undefined;
+  });
   return found;
 };
 
 const EXTERNAL_ID = new Set(["externalId"]);
 
+const dedupeFunctionName = (node: Node) => {
+  let name: string | undefined;
+  if (node.type === "FunctionDeclaration") {
+    name = node.id?.name;
+  } else if (
+    node.type === "VariableDeclarator" &&
+    node.id.type === "Identifier" &&
+    (node.init?.type === "ArrowFunctionExpression" ||
+      node.init?.type === "FunctionExpression")
+  ) {
+    name = node.id.name;
+  }
+  return name;
+};
+
 const writerMembersOf = ({
   path: file,
   source,
 }: SourceFile): WriterMember[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const members: WriterMember[] = [];
-  // A second write of the same kind in one function gets its own ordinal key
-  // (`#2`, …), so it is a new member rather than a duplicate of a listed one.
+  // A second write of the same kind in one function gets its own ordinal key.
   const seen = new Map<string, number>();
-  const add = (node: ts.Node, kind: WriterKind, name = enclosingName(node)) => {
+  const add = (kind: WriterKind, name: string) => {
     const base = `${file}::${kind}::${name}`;
     const ordinal = (seen.get(base) ?? 0) + 1;
     seen.set(base, ordinal);
-    members.push({
-      key: ordinal === 1 ? base : `${base}#${ordinal}`,
-      kind,
-    });
+    members.push({ key: ordinal === 1 ? base : `${base}#${ordinal}`, kind });
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isObjectLiteralExpression(node)) {
-      const properties = new Map<string, ts.ObjectLiteralElementLike>();
+  walk(program, (node, ancestors) => {
+    if (node.type === "ObjectExpression") {
+      const properties = new Map<string, Property>();
       for (const property of node.properties) {
         const name =
-          property.name === undefined ? null : propertyNameOf(property.name);
-        if (name !== null) {
+          property.type === "Property" && !property.computed
+            ? propertyNameOf(property.key)
+            : null;
+        if (name !== null && property.type === "Property") {
           properties.set(name, property);
         }
       }
@@ -209,101 +251,82 @@ const writerMembersOf = ({
         properties.has("externalSource") &&
         externalId !== undefined &&
         !(
-          ts.isPropertyAssignment(externalId) &&
-          isNullValue(externalId.initializer)
+          externalId.kind === "init" &&
+          !externalId.method &&
+          !externalId.shorthand &&
+          isNullValue(externalId.value)
         );
       if (
         writesExternalId &&
         ![...CHANGE_MARKERS].some((marker) => properties.has(marker))
       ) {
-        add(node, "external-id-write");
+        add("external-id-write", enclosingName(ancestors, source));
       }
       const dedupe = properties.get("dedupeKey");
       if (
-        dedupe !== undefined &&
-        ts.isPropertyAssignment(dedupe) &&
-        mentions(dedupe.initializer, EXTERNAL_ID) &&
-        !mentions(dedupe.initializer, CHANGE_MARKERS)
+        dedupe?.kind === "init" &&
+        !dedupe.method &&
+        !dedupe.shorthand &&
+        mentions(dedupe.value, EXTERNAL_ID) &&
+        !mentions(dedupe.value, CHANGE_MARKERS)
       ) {
-        add(dedupe, "external-id-dedupe-key");
+        add("external-id-dedupe-key", enclosingName(ancestors, source));
       }
     }
-    const isDedupeFunctionDeclaration =
-      ts.isFunctionDeclaration(node) &&
-      node.name?.text.endsWith("DedupeKey") === true;
-    const isDedupeFunctionVariable =
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text.endsWith("DedupeKey") &&
-      node.initializer !== undefined &&
-      (ts.isArrowFunction(node.initializer) ||
-        ts.isFunctionExpression(node.initializer));
-    const dedupeFunction =
-      (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) &&
-      (isDedupeFunctionDeclaration || isDedupeFunctionVariable)
-        ? node
-        : undefined;
+    const name = dedupeFunctionName(node);
     if (
-      dedupeFunction !== undefined &&
-      mentions(dedupeFunction, EXTERNAL_ID) &&
-      !mentions(dedupeFunction, CHANGE_MARKERS)
+      name?.endsWith("DedupeKey") &&
+      mentions(node, EXTERNAL_ID) &&
+      !mentions(node, CHANGE_MARKERS)
     ) {
-      add(
-        dedupeFunction,
-        "external-id-dedupe-key",
-        dedupeFunction.name?.getText() ?? "module",
-      );
+      add("external-id-dedupe-key", name);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return members;
 };
 
-/** A table literal (`pgTable("name", { … })`) with an `external_id` column and no change marker. */
+/** A table literal with an `external_id` column and no change marker. */
 const tableMembersOf = ({ path: file, source }: SourceFile): WriterMember[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(file, source);
   const members: WriterMember[] = [];
-  const visit = (node: ts.Node): void => {
-    const [tableName, columns] = ts.isCallExpression(node)
-      ? node.arguments
-      : [];
+  walk(program, (node) => {
+    const [tableName, columns] =
+      node.type === "CallExpression" ? node.arguments : [];
     if (
-      tableName !== undefined &&
-      columns !== undefined &&
-      ts.isStringLiteral(tableName) &&
-      ts.isObjectLiteralExpression(columns)
+      tableName?.type !== "Literal" ||
+      typeof tableName.value !== "string" ||
+      columns?.type !== "ObjectExpression"
     ) {
-      const columnNames = new Set<string>();
-      for (const property of columns.properties) {
-        if (!ts.isPropertyAssignment(property)) {
-          continue;
-        }
-        const first = ts.isCallExpression(property.initializer)
-          ? property.initializer.arguments.at(0)
-          : undefined;
-        if (first !== undefined && ts.isStringLiteral(first)) {
-          columnNames.add(first.text);
-        }
-      }
+      return;
+    }
+    const columnNames = new Set<string>();
+    for (const property of columns.properties) {
       if (
-        columnNames.has("external_id") &&
-        ![...CHANGE_MARKER_COLUMNS].some((column) => columnNames.has(column))
+        property.type !== "Property" ||
+        property.kind !== "init" ||
+        property.method ||
+        property.shorthand
       ) {
-        members.push({
-          key: `${file}::external-id-table::${tableName.text}`,
-          kind: "external-id-table",
-        });
+        continue;
+      }
+      const first =
+        property.value.type === "CallExpression"
+          ? property.value.arguments.at(0)
+          : undefined;
+      if (first?.type === "Literal" && typeof first.value === "string") {
+        columnNames.add(first.value);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    if (
+      columnNames.has("external_id") &&
+      ![...CHANGE_MARKER_COLUMNS].some((column) => columnNames.has(column))
+    ) {
+      members.push({
+        key: `${file}::external-id-table::${tableName.value}`,
+        kind: "external-id-table",
+      });
+    }
+  });
   return members;
 };
 
@@ -405,7 +428,9 @@ const fileCensus = (): string[] => {
 
 // ── drivers: the API guard test's census ──────────────────────────────────
 
-const driverCensus = (): { key: string; reason: string }[] => {
+type DriverCensus = v.InferOutput<typeof DRIVER_CENSUS>;
+
+const driverCensus = (): DriverCensus => {
   const directory = mkdtempSync(path.join(tmpdir(), "source-fingerprint-"));
   const out = path.join(directory, "drivers.json");
   const result = Bun.spawnSync(
@@ -419,7 +444,7 @@ const driverCensus = (): { key: string; reason: string }[] => {
   );
   const rows =
     result.exitCode === 0 && Bun.file(out).size > 0
-      ? v.parse(DRIVER_ROWS, JSON.parse(readFileSync(out, "utf-8")))
+      ? v.parse(DRIVER_CENSUS, JSON.parse(readFileSync(out, "utf-8")))
       : panic("The source fingerprint guard test failed or wrote no census");
   rmSync(directory, { recursive: true, force: true });
   return rows;
@@ -456,9 +481,18 @@ const reasoned = (
 
 const write = (): number => {
   const previous = readBaseline();
+  const census = driverCensus();
   const next: Baseline = {
     comment: previous.comment,
-    drivers: reasoned(driverCensus(), previous.drivers),
+    drivers: reasoned(census.misses, previous.drivers),
+    fingerprints: Object.fromEntries(
+      census.fingerprints.map(
+        ({ key, fingerprint, storedInputIdentity, version }) => [
+          key,
+          { fingerprint, storedInputIdentity, version },
+        ],
+      ),
+    ),
     files: reasoned(
       fileCensus().map((key) => ({ key, reason: FILE_REASON })),
       previous.files,
@@ -481,9 +515,90 @@ const write = (): number => {
   return 0;
 };
 
+type RecordedFingerprint = Baseline["fingerprints"][string];
+
+export const fingerprintEvolutionFailures = (
+  current: Readonly<Record<string, RecordedFingerprint>>,
+  base: Readonly<Record<string, RecordedFingerprint>>,
+): string[] => {
+  const failures: string[] = [];
+  for (const [key, recorded] of Object.entries(current)) {
+    const previous = base[key];
+    if (previous === undefined) {
+      continue;
+    }
+    if (recorded.version < previous.version) {
+      failures.push(`${key}: fingerprint version decreased`);
+      continue;
+    }
+    if (
+      recorded.storedInputIdentity === previous.storedInputIdentity &&
+      recorded.fingerprint !== previous.fingerprint &&
+      recorded.version <= previous.version
+    ) {
+      failures.push(
+        `${key}: fixture fingerprint changed without a version bump`,
+      );
+    }
+  }
+  return failures;
+};
+
+const baselineAt = (args: readonly string[]): Baseline | null => {
+  const baseIndex = args.indexOf("--base");
+  const baseRef = baseIndex === -1 ? "origin/main" : args[baseIndex + 1];
+  if (baseRef === undefined || baseRef === "") {
+    panic("--base requires a nonempty Git reference");
+  }
+  const result = Bun.spawnSync(["git", "show", `${baseRef}:${BASELINE}`], {
+    cwd: ROOT,
+    stderr: "pipe",
+  });
+  if (result.exitCode === 0) {
+    return parseBaseline(result.stdout.toString(), `${baseRef}:${BASELINE}`);
+  }
+  if (baseIndex !== -1) {
+    panic(`Cannot read source fingerprint baseline at ${baseRef}`);
+  }
+  console.warn(
+    `Source fingerprint evolution was not checked: ${baseRef}:${BASELINE} is unavailable`,
+  );
+  return null;
+};
+
 const check = (args: readonly string[]): number => {
   const baseline = readBaseline();
   const failures: string[] = [];
+  const census = driverCensus();
+  const fingerprints = Object.fromEntries(
+    census.fingerprints.map(
+      ({ key, fingerprint, storedInputIdentity, version }) => [
+        key,
+        { fingerprint, storedInputIdentity, version },
+      ],
+    ),
+  );
+  if (
+    Object.keys(fingerprints).length !==
+      Object.keys(baseline.fingerprints).length ||
+    Object.entries(fingerprints).some(([key, current]) => {
+      const recorded = baseline.fingerprints[key];
+      return (
+        recorded === undefined ||
+        current.fingerprint !== recorded.fingerprint ||
+        current.storedInputIdentity !== recorded.storedInputIdentity ||
+        current.version !== recorded.version
+      );
+    })
+  ) {
+    failures.push("Fixture fingerprints are stale (run --write)");
+  }
+  const base = baselineAt(args);
+  if (base !== null) {
+    failures.push(
+      ...fingerprintEvolutionFailures(baseline.fingerprints, base.fingerprints),
+    );
+  }
   const observed: Record<Exclude<Section, "drivers">, string[]> = {
     files: fileCensus(),
     writers: writerCensus().map(({ key }) => key),
@@ -517,7 +632,7 @@ const check = (args: readonly string[]): number => {
     return 1;
   }
   console.log(
-    `Source fingerprint baseline: ${String(observed.files.length)} files, ${String(observed.writers.length)} writers, exact sets verified.`,
+    `Source fingerprint baseline: ${String(Object.keys(baseline.fingerprints).length)} fixture fingerprints, ${String(observed.files.length)} files, ${String(observed.writers.length)} writers verified.`,
   );
   return 0;
 };
@@ -572,12 +687,14 @@ const selfTest = (): number => {
     ledgerKeys({
       comment: "",
       drivers: {},
+      fingerprints: {},
       files: { "a.ts": "r" },
       writers: {},
     }),
     ledgerKeys({
       comment: "",
       drivers: { "a.ts": "r" },
+      fingerprints: {},
       files: {},
       writers: {},
     }),

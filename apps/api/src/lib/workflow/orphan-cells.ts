@@ -1,9 +1,14 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { rootDb } from "@/api/db/root";
-import { fields } from "@/api/db/schema";
+import {
+  entityVersions,
+  extractionRuns,
+  fields,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -15,8 +20,82 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
  */
 export type OrphanCellsDatabase = Pick<
   typeof rootDb,
-  "selectDistinct" | "update"
+  "select" | "selectDistinct" | "update"
 >;
+
+export type PendingCellRow = {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  propertyId: string;
+  ownerRunId: string | null;
+  ownerBatchId: string | null;
+  deadlineAt: Date | null;
+  attempt: 0 | 1 | null;
+  organizationId: string | null;
+  requestedBy: string | null;
+};
+
+/** Bounded keyset page used on every scheduled reconciliation tick. */
+export const selectPendingCellPage = async (
+  database: OrphanCellsDatabase,
+  cursor: string | null,
+  limit: number,
+): Promise<PendingCellRow[]> =>
+  await database
+    .select({
+      id: fields.id,
+      workspaceId: fields.workspaceId,
+      entityId: entityVersions.entityId,
+      propertyId: fields.propertyId,
+      ownerRunId: fields.ownerRunId,
+      ownerBatchId: fields.ownerBatchId,
+      deadlineAt: fields.deadlineAt,
+      attempt: sql<0 | 1 | null>`${fields.attempt}`,
+      organizationId: workspaces.organizationId,
+      requestedBy: extractionRuns.requestedBy,
+    })
+    .from(fields)
+    .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
+    .innerJoin(workspaces, eq(workspaces.id, fields.workspaceId))
+    .leftJoin(
+      extractionRuns,
+      sql`${extractionRuns.id}::text = ${fields.ownerRunId}`,
+    )
+    .where(
+      and(
+        sql`${fields.content}->>'type' = 'pending'`,
+        cursor === null ? undefined : sql`${fields.id} > ${cursor}`,
+      ),
+    )
+    .orderBy(asc(fields.id))
+    .limit(limit);
+
+/** Settle exactly the pending ownership snapshot selected by the scheduler. */
+export const errorPendingCell = async (
+  database: OrphanCellsDatabase,
+  cell: Pick<PendingCellRow, "id" | "ownerRunId" | "attempt">,
+): Promise<boolean> => {
+  const rows = await database
+    .update(fields)
+    .set({
+      content: { type: "error", version: 1 },
+      ownerRunId: null,
+      ownerBatchId: null,
+      deadlineAt: null,
+      attempt: null,
+    })
+    .where(
+      and(
+        sql`${fields.id} = ${cell.id}`,
+        sql`${fields.content}->>'type' = 'pending'`,
+        sql`${fields.ownerRunId} IS NOT DISTINCT FROM ${cell.ownerRunId}`,
+        sql`${fields.attempt} IS NOT DISTINCT FROM ${cell.attempt}`,
+      ),
+    )
+    .returning({ id: fields.id });
+  return rows.length === 1;
+};
 
 /**
  * Workspaces that still hold `pending` cells: all of them, or those among

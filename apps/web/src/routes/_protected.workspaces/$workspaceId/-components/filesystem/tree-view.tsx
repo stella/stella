@@ -67,7 +67,7 @@ import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   draggable,
@@ -84,6 +84,11 @@ import type {
 } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  applySelectionGesture,
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 import {
   useMoveEntity,
   useRenameEntity,
@@ -573,9 +578,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     setExpandedIds((prev) => new Set(prev).add(entityId));
   };
 
-  const handleSubfolderCreated = (entityId: string, parentId: string) => {
+  const handleSubfolderCreated = (
+    entityId: string,
+    parentId: string | null,
+  ) => {
     setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    setExpandedIds((prev) => {
+      const next = new Set(prev).add(entityId);
+      return parentId === null ? next : next.add(parentId);
+    });
   };
 
   const flattenedRows = useMemo(
@@ -608,35 +619,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     entityId: string,
     mods: { meta: boolean; shift: boolean },
   ) => {
-    const selectedEntityId = toSafeId<"entity">(entityId);
-    setSelectedIds((prev) => {
-      if (mods.shift && anchorIdRef.current !== null) {
-        const from = orderedEntityIds.indexOf(
-          toSafeId<"entity">(anchorIdRef.current),
-        );
-        const to = orderedEntityIds.indexOf(selectedEntityId);
-        if (from !== -1 && to !== -1) {
-          const [lo, hi] = from <= to ? [from, to] : [to, from];
-          return new Set(orderedEntityIds.slice(lo, hi + 1));
-        }
-      }
-      // A plain or cmd/ctrl click makes this row the new range anchor.
-      anchorIdRef.current = selectedEntityId;
-      if (mods.meta) {
-        const next = new Set(prev);
-        if (next.has(selectedEntityId)) {
-          next.delete(selectedEntityId);
-        } else {
-          next.add(selectedEntityId);
-        }
-        return next;
-      }
+    const next = applySelectionGesture({
+      selection: { selectedIds, anchorId: anchorIdRef.current },
       // Plain click: sole selection (clicking the only selected row clears it).
-      if (prev.size === 1 && prev.has(selectedEntityId)) {
-        return new Set();
-      }
-      return new Set([selectedEntityId]);
+      gesture: selectionGestureForModifiers(
+        mods,
+        SELECTION_GESTURE.exclusiveToggle,
+      ),
+      id: entityId,
+      orderedIds: orderedEntityIds,
     });
+    anchorIdRef.current = next.anchorId;
+    setSelectedIds(new Set(next.selectedIds));
   };
 
   const rowsViewportRef = useRef<HTMLDivElement>(null);
@@ -1219,7 +1213,7 @@ type FilesystemRowProps = {
   ) => void;
   onClearSelection: () => void;
   onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
-  onSubfolderCreated: (entityId: string, parentId: string) => void;
+  onSubfolderCreated: (entityId: string, parentId: string | null) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
   getAncestorIds: (id: string) => string[];
@@ -1837,7 +1831,7 @@ const formatDateValue = (
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   if (column.type === "metadata") {
     switch (column.id) {
       case FILESYSTEM_CREATED_BY_ID:

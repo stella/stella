@@ -13,13 +13,12 @@ import * as React from "react";
 
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { textMarkHighlightRule } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 
+import { UnlocatedClaims } from "@/features/avt/original-claims";
+import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import { OriginalDocxHostContext } from "@/features/avt/original-docx-host";
 import {
   claimUnderPoint,
@@ -32,7 +31,7 @@ import {
   locateClaimsInDocument,
 } from "@/features/avt/original-docx.logic";
 import type { ClaimLocations } from "@/features/avt/original-docx.logic";
-import { STATE_COLOR, StateSwatch } from "@/features/avt/state-chip";
+import { STATE_COLOR } from "@/features/avt/state-chip";
 import type {
   ClaimState,
   VerificationClaim,
@@ -42,6 +41,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
   (mark): mark is TextMarkState => mark in MARK_PRIORITY,
@@ -57,12 +57,6 @@ const NOT_YET_LOCATED: ClaimLocations = { located: [], unlocated: [] };
 /** The block the original should bring into view. Each request is its own
  *  object, so asking for the same block twice scrolls twice. */
 export type OriginalScrollTarget = { blockId: string };
-
-/** How one claim is drawn; `mark: null` leaves it unmarked but clickable. */
-export type OriginalClaimMark = {
-  state: ClaimState;
-  mark: TextMarkState | null;
-};
 
 type OriginalDocxViewProps = {
   workspaceId: string;
@@ -83,8 +77,8 @@ export const OriginalDocxView = ({
   markOf,
   onSelect,
 }: OriginalDocxViewProps) => {
-  const t = useTranslations();
   const renderFileViewer = React.useContext(OriginalDocxHostContext);
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   const [doc, setDoc] = React.useState<ProseMirrorNode | null>(null);
   // Folio keeps host plugins for as long as the editor is mounted, so the
   // array is made once.
@@ -254,40 +248,18 @@ export const OriginalDocxView = ({
           fieldId: run.fileFieldId,
           filePurpose: "native-display",
           interactionMode: "preview-only",
+          pdfPageSource: "document",
           scaleOffset: 0,
-          viewId: "all",
+          viewId,
           workspaceId,
         })}
       </div>
-      {unlocated.length > 0 && (
-        <div className="flex max-h-32 shrink-0 flex-col border-t">
-          <ScrollArea axis="vertical" className="min-h-0">
-            <div className="space-y-1.5 px-4 py-2">
-              <p className="text-muted-foreground text-xs font-medium">
-                {t("avt.verification.notLocated", { count: unlocated.length })}
-              </p>
-              <ul className="flex flex-wrap gap-1.5">
-                {unlocated.map((claim) => (
-                  <li className="min-w-0" key={claim.id}>
-                    <Button
-                      aria-pressed={claim.id === selected}
-                      className="max-w-64"
-                      onClick={() => onSelect(claim.id)}
-                      size="sm"
-                      variant={claim.id === selected ? "secondary" : "outline"}
-                    >
-                      <StateSwatch state={markOf(claim).state} />
-                      <span className="truncate" dir="auto">
-                        {claim.text}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </ScrollArea>
-        </div>
-      )}
+      <UnlocatedClaims
+        claims={unlocated}
+        markOf={markOf}
+        onSelect={onSelect}
+        selected={selected}
+      />
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
-import { spawn, type ChildProcess } from "node:child_process";
-import { readFile, readdir, realpath } from "node:fs/promises";
+import { type ChildProcess, spawn } from "node:child_process";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -462,6 +462,26 @@ export const ownedProcessTreeRows = (snapshot: string, group: number) => {
   return rows.filter((row) => owned.has(row.pid)).map((row) => row.text);
 };
 
+export const processCpuSnapshot = (snapshot: string, group: number) => {
+  const rows = ownedProcessTreeRows(snapshot, group);
+  const activity = rows.some((row) => row.split(/\s+/u).at(3)?.startsWith("R"))
+    ? "runnable"
+    : "waiting";
+  const cpu = rows
+    .map((row) => {
+      const fields = row.split(/\s+/u);
+      const processId = fields.at(0);
+      const cpuTime = fields.at(4);
+      if (processId === undefined || cpuTime === undefined) {
+        return invalid("Malformed process CPU snapshot row");
+      }
+      return `${processId}:${cpuTime}`;
+    })
+    .toSorted()
+    .join("|");
+  return { activity, cpu };
+};
+
 export const ownedProcessGroupMembers = (snapshot: string, group: number) =>
   snapshot.split(/\r?\n/u).flatMap((line) => {
     const trimmed = line.trimStart();
@@ -715,20 +735,9 @@ const createTaskMonitor = ({
         report: reportDiagnostic,
       });
       if (pid === undefined) {
-        return "";
+        return processCpuSnapshot("", -1);
       }
-      return ownedProcessTreeRows(snapshot, pid)
-        .map((row) => {
-          const fields = row.split(/\s+/u);
-          const processId = fields.at(0);
-          const cpuTime = fields.at(4);
-          if (processId === undefined || cpuTime === undefined) {
-            return invalid("Malformed process CPU snapshot row");
-          }
-          return `${processId}:${cpuTime}`;
-        })
-        .toSorted()
-        .join("|");
+      return processCpuSnapshot(snapshot, pid);
     });
     if (completion.signal.aborted) {
       return;
@@ -744,8 +753,11 @@ const createTaskMonitor = ({
       }
       return;
     }
-    const cpu = cpuSnapshot.value;
-    if (previousCpu !== undefined && cpu !== previousCpu) {
+    const { activity, cpu } = cpuSnapshot.value;
+    if (
+      activity === "runnable" ||
+      (previousCpu !== undefined && cpu !== previousCpu)
+    ) {
       watchdog.progress();
     }
     previousCpu = cpu;

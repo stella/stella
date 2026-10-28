@@ -12,23 +12,23 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
-  toPersistedChatMessageContentV3,
   getAwaitingUserInteractions,
   toPersistableChatMessage,
+  toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   finalizeAssistantTurn,
   persistFailedChatTurn,
 } from "@/api/handlers/chat/chat-message-persistence";
 import {
+  canAcceptChatTurnOnTx,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
   CHAT_TURN_RUN_LEASE_MS,
-  canAcceptChatTurnOnTx,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
-  renewChatTurnExecutionLease,
   readChatTurnTiming,
+  renewChatTurnExecutionLease,
   settleChatTurnOnTx,
   stopChatTurnOnTx,
   withClaimedChatTurnExecution,

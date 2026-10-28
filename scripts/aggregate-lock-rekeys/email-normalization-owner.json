@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/lib/review-organization/reset.ts",
+    "from": "03f6366ff0d251d4f2f315b9ba62e71b2715927c341b8f60c1a52936a5f35c79",
+    "to": "7224a12a5c3044925eb22fbcc8c94d43c4d20ce2be95805097667ca9ad9c8199",
+    "reason": "Existing review reset transaction; the account lookup now compares the address through the email owner, which changes its source fingerprint while preserving the transaction boundary and count."
+  }
+]

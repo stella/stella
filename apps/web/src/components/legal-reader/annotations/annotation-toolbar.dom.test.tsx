@@ -1,6 +1,7 @@
 import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -8,6 +9,8 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 GlobalRegistrator.register({ url: "https://app.example.test/reader" });
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { AnnotationToolbar } = await import("./annotation-toolbar");
@@ -45,35 +48,39 @@ test.each([100, 650])(
     const rootRef = createRef<HTMLDivElement>();
     const onClearActiveCalls: string[] = [];
     const view = render(
-      <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <div ref={rootRef}>
-          <p>{SELECTED_TEXT}</p>
-        </div>
-        <AnnotationToolbar
-          activeAnnotation={null}
-          activeSpans={[]}
-          controller={{
-            create: () => undefined,
-            remove: () => undefined,
-            update: () => undefined,
-          }}
-          mode="guest"
-          onActivateAnnotation={() => undefined}
-          onClearActive={() => {
-            onClearActiveCalls.push("clear");
-          }}
-          scrollContainerRef={rootRef}
-          target={{
-            type: "statute",
-            id: "statute",
-            country: "CZ",
-            eli: "https://example.test/statute",
-            provisionByAnchorId: new Map(),
-            title: "Statute",
-            versionValidFrom: null,
-          }}
-        />
-      </IntlProvider>,
+      <QueryClientProvider client={new QueryClient()}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <div ref={rootRef}>
+            <p>{SELECTED_TEXT}</p>
+          </div>
+          <AnnotationToolbar
+            activeAnnotation={null}
+            activeSpans={[]}
+            controller={{
+              create: async () => Result.ok(undefined),
+              redo: async () => undefined,
+              remove: async () => Result.ok(undefined),
+              undo: async () => undefined,
+              update: async () => Result.ok(undefined),
+            }}
+            mode="guest"
+            onActivateAnnotation={() => undefined}
+            onClearActive={() => {
+              onClearActiveCalls.push("clear");
+            }}
+            scrollContainerRef={rootRef}
+            target={{
+              type: "statute",
+              id: "statute",
+              country: "CZ",
+              eli: "https://example.test/statute",
+              provisionByAnchorId: new Map(),
+              title: "Statute",
+              versionValidFrom: null,
+            }}
+          />
+        </IntlProvider>
+      </QueryClientProvider>,
     );
     const root = rootRef.current;
     const leaf = view.getByText(SELECTED_TEXT);

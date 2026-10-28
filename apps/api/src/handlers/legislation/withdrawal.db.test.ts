@@ -11,15 +11,15 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import {
-  processLegislationDocument,
   type LegislationCorpusDependencies,
+  processLegislationDocument,
 } from "@/api/handlers/legislation/ingestion";
 import {
   LEGISLATION_WITHDRAWAL_BATCH_LIMIT,
-  withdrawLegislationVersions,
   type LegislationWithdrawal,
+  withdrawLegislationVersions,
 } from "@/api/handlers/legislation/withdrawal";
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,

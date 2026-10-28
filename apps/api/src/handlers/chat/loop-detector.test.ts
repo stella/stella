@@ -9,8 +9,8 @@ import {
   detectModelLoop,
   getLoopRecoveryKey,
   shouldInjectLoopRecovery,
-  shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
+  shouldSurfaceFinalContentLoop,
 } from "./loop-detector";
 
 const toolCallMessage = ({

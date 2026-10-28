@@ -18,11 +18,18 @@ import {
   createRouteErrorLifecycleController,
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
+import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
+import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  shouldDehydrateServerQuery,
+} from "@/lib/react-query";
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
+import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -31,7 +38,7 @@ enableMapSet();
 export { routeTree };
 
 export function getRouter() {
-  const analyticsValue = createAnalyticsValue();
+  const analyticsValue = createAnalyticsValue(WEB_ROUTE_TEMPLATES);
   const routeErrorLifecycle = createRouteErrorLifecycleController(
     analyticsValue.analytics,
   );
@@ -76,6 +83,10 @@ export function getRouter() {
   const router = createRouter({
     routeTree,
     defaultPreload: "intent",
+    // A scalar param reaches its schema as the URL's text, never as a number
+    // or a boolean the default guessed from it.
+    parseSearch: parseRouteSearch,
+    stringifySearch: stringifyRouteSearch,
     context: { analyticsValue, queryClient, routeErrorLifecycle },
     defaultOnCatch: () => {
       routeErrorLifecycle.caught(readCaughtRouteTemplate());
@@ -95,6 +106,10 @@ export function getRouter() {
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
   });
+  getWebHangDetector()?.attach({
+    analytics: analyticsValue.analytics,
+    routeTemplates: new Set(WEB_ROUTE_TEMPLATES),
+  });
   readCaughtRouteTemplate = () =>
     resolveCaughtRouteTemplate(router.state.matches);
 
@@ -110,7 +125,9 @@ export function getRouter() {
     if (path === undefined) {
       return;
     }
+    getWebHangDetector()?.routeReady(path);
     routeErrorLifecycle.routeResolved(path);
+    setUserErrorRouteTemplate(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
 
@@ -118,6 +135,7 @@ export function getRouter() {
     router,
     queryClient,
     wrapQueryClient: false,
+    dehydrateOptions: { shouldDehydrateQuery: shouldDehydrateServerQuery },
   });
 
   return router;

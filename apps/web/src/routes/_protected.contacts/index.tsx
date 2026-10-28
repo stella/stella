@@ -46,17 +46,12 @@ import {
   DownloadIcon,
   EllipsisVerticalIcon,
   PlusIcon,
-  SearchIcon,
   UploadIcon,
   UserIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -84,16 +79,17 @@ import { api } from "@/lib/api";
 import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
 import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
@@ -156,7 +152,7 @@ function ContactsPage() {
     }),
   );
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = contactsQuery;
-  const view = useQueryView(contactsQuery, {
+  const view = queryView(contactsQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const items = (() => {
@@ -190,7 +186,7 @@ function ContactsPage() {
       const response = await api.contacts.export.get({
         query: { format: "csv" },
       });
-      const exportData = unwrapEden(response);
+      const exportData = unwrapApiResponse(response);
       return exportData instanceof Response
         ? await exportData.blob()
         : new Blob([String(exportData)], { type: "text/csv;charset=utf-8" });
@@ -209,23 +205,20 @@ function ContactsPage() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <ResponsiveActionToolbar>
         <ResponsiveActionToolbarItem slot="primary">
-          <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-            <InputGroupInput
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                updateSearch(val);
-              }}
-              placeholder={t("contacts.search")}
-              value={searchQuery}
-            />
-            <InputGroupAddon>
-              <SearchIcon />
-            </InputGroupAddon>
-          </InputGroup>
+          <SearchField
+            aria-label={t("contacts.search")}
+            clearLabel={t("common.clearSearch")}
+            groupClassName="sm:max-w-sm"
+            onValueChange={(value) => {
+              setSearchQuery(value);
+              updateSearch(value);
+            }}
+            placeholder={t("contacts.search")}
+            value={searchQuery}
+          />
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex flex-wrap gap-1">
             <FilterButton
               active={filter === "all"}
               label={t("common.all")}
@@ -243,7 +236,7 @@ function ContactsPage() {
             />
           </div>
         </ResponsiveActionToolbarItem>
-        <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+        <ResponsiveActionToolbarItem slot="action">
           <div className="flex gap-1">
             {canCreateContact && (
               <Button
@@ -441,10 +434,11 @@ const useContactColumns = () => {
           header: t("common.name"),
           cell: ({ row, getValue }) => (
             <Link
-              className="font-medium hover:underline"
+              className="block max-w-xs truncate font-medium hover:underline"
               dir="auto"
               onClick={(event) => event.stopPropagation()}
               params={{ contactId: row.original.id }}
+              title={getValue()}
               to="/contacts/$contactId"
             >
               {getValue()}
@@ -463,8 +457,9 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground hover:underline"
+                className="text-muted-foreground hover:text-foreground block max-w-xs truncate hover:underline"
                 href={`mailto:${primaryEmail.address}`}
+                title={primaryEmail.address}
               >
                 {primaryEmail.address}
               </a>
@@ -720,15 +715,18 @@ const ContactsToolbarPlaceholder = () => {
   return (
     <ResponsiveActionToolbar>
       <ResponsiveActionToolbarItem slot="primary">
-        <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
-          <InputGroupInput disabled placeholder={t("contacts.search")} />
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-        </InputGroup>
+        <SearchField
+          aria-label={t("contacts.search")}
+          clearLabel={t("common.clearSearch")}
+          disabled
+          groupClassName="sm:max-w-sm"
+          onValueChange={() => undefined}
+          placeholder={t("contacts.search")}
+          value=""
+        />
       </ResponsiveActionToolbarItem>
       <ResponsiveActionToolbarItem slot="secondary">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-wrap gap-1">
           <Button disabled size="sm" variant="default">
             {t("common.all")}
           </Button>
@@ -740,7 +738,7 @@ const ContactsToolbarPlaceholder = () => {
           </Button>
         </div>
       </ResponsiveActionToolbarItem>
-      <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+      <ResponsiveActionToolbarItem slot="action">
         <div className="flex gap-1">
           {canCreateContact && (
             <Button
@@ -899,8 +897,8 @@ const CreateContactDialog = ({
   const extraction = useProcuracaoExtraction();
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
-  const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
+  const mcpCatalogView = queryView(mcpCatalogQuery);
+  useQueryViewError(mcpCatalogView, "CreateContactDialog:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
       ? mcpCatalogView.items
@@ -992,7 +990,7 @@ const CreateContactDialog = ({
       const response = await api.contacts["business-registries"].get({
         query: { registry: "ares", q: ico },
       });
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       const hit = data.type === "lookup" ? data.hit : null;
 
@@ -1011,7 +1009,13 @@ const CreateContactDialog = ({
         type: "success",
       });
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CreateContactDialog.handleAresLookup:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsAresLoading(false);

@@ -3,16 +3,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import {
+  APPLICATION_RAIL_BUTTON_SIZE,
+  APPLICATION_RAIL_ICON_SIZE,
+  APPLICATION_RAIL_WIDTH,
   ApplicationRail,
   ApplicationRailButton,
   ApplicationRailContent,
   ApplicationRailFooter,
-  APPLICATION_RAIL_BUTTON_SIZE,
   ApplicationRailHeader,
   ApplicationRailMenu,
   ApplicationRailSeparator,
-  APPLICATION_RAIL_ICON_SIZE,
-  APPLICATION_RAIL_WIDTH,
 } from "./application-rail";
 
 const classesOf = (markup: string, slot: string) => {

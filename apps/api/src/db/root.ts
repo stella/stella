@@ -1,12 +1,13 @@
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
-
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { queryCountLogger } from "@/api/lib/db-query-counter";
+import {
+  instrumentSqlTransactionCounts,
+  queryCountLogger,
+} from "@/api/lib/db-query-counter";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
@@ -14,17 +15,26 @@ import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
+import {
+  changePartnerOAuthClientInTransaction,
+  createPartnerOAuthClientInTransaction,
+} from "@/api/lib/db/partner-client-operator";
+import type {
+  ChangePartnerOAuthClientOptions,
+  CreatePartnerOAuthClientOptions,
+} from "@/api/lib/db/partner-client-operator";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservation";
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
 import { readOAuthClientBinding } from "@/api/lib/db/service-client-binding";
 import {
-  createServiceOAuthClientInTransaction,
   changeServiceOAuthClientInTransaction,
+  createServiceOAuthClientInTransaction,
 } from "@/api/lib/db/service-client-operator";
 import type {
-  CreateServiceOAuthClientOptions,
   ChangeServiceOAuthClientOptions,
+  CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
@@ -55,7 +65,7 @@ const poolRecycling = {
 // its statements count toward that request's query budget, not a neighbour's.
 const rootPoolWindow = createRootPoolWindow();
 const rootPoolSettings = sharedPoolConnectionSettings("root");
-const nativeRootClient = new SQL({
+const nativeRootClient = createSqlClient({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
   ...poolRecycling,
@@ -80,12 +90,14 @@ export const readRootPoolReport = async () => {
   );
 };
 const rlsClient = runTransactionsInCallerContext(
-  new SQL({
-    url: envBase.DATABASE_URL,
-    max: envBase.DATABASE_RLS_POOL_MAX,
-    ...poolRecycling,
-    ...sharedPoolConnectionSettings("raw_rls"),
-  }),
+  instrumentSqlTransactionCounts(
+    createSqlClient({
+      url: envBase.DATABASE_URL,
+      max: envBase.DATABASE_RLS_POOL_MAX,
+      ...poolRecycling,
+      ...sharedPoolConnectionSettings("raw_rls"),
+    }),
+  ),
 );
 
 /**
@@ -94,13 +106,13 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = drizzle({
+export const rootDb = createDatabase({
   client: rootClient,
   relations: databaseRelations,
   logger: queryLogger,
 });
 
-const rawRlsDb = drizzle({
+const rawRlsDb = createDatabase({
   client: rlsClient,
   relations: databaseRelations,
   logger: queryLogger,
@@ -207,6 +219,27 @@ export const changeServiceOAuthClient = async (
     rootDb,
     async (tx) =>
       await changeServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+/** Whether a client is an operator-registered partner client. */
+export const isPartnerOAuthClient = async (clientId: string) =>
+  (await readOAuthClientBinding(rootDb, clientId))?.type ===
+  PARTNER_CLIENT_TYPE;
+/** Partner clients are global (no organization); each user consents. */
+export const createPartnerOAuthClient = async (
+  options: CreatePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await createPartnerOAuthClientInTransaction({ ...options, tx }),
+  );
+export const changePartnerOAuthClient = async (
+  options: ChangePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await changePartnerOAuthClientInTransaction({ ...options, tx }),
   );
 export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
   await withAggregateTransaction(

@@ -3,9 +3,9 @@ import { panic } from "better-result";
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   ASK_USER_TOOL_NAME,
-  CREATE_DOCUMENT_TOOL_NAME,
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   chatToolExecutor,
+  CREATE_DOCUMENT_TOOL_NAME,
 } from "@stll/api-contract/chat";
 import { REQUEST_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";

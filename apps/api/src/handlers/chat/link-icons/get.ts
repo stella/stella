@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { getLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import {
   createLinkIconOrigin,
-  isCanonicalIconHostname,
+  toRegistrableIconSite,
 } from "@/api/handlers/chat/link-icons/origin";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
@@ -27,7 +27,7 @@ const config = {
         "Decorative icons are optional; use the bundled globe when image bytes are unavailable.",
     },
   },
-  params: t.Object({ hostname: t.String({ maxLength: 253 }) }),
+  params: v.object({ hostname: v.pipe(v.string(), v.maxLength(253)) }),
 } satisfies HandlerConfig;
 
 const readOrigin = createLinkIconOrigin();
@@ -37,12 +37,13 @@ const readOrigin = createLinkIconOrigin();
 const getLinkIcon = createSafeRootHandler(
   config,
   async function* ({ params: { hostname }, user, request, set }) {
-    if (!isCanonicalIconHostname(hostname)) {
+    const site = toRegistrableIconSite(hostname);
+    if (Result.isError(site)) {
       return Result.ok(linkIconBody({ type: "no-icon" }, set));
     }
     const outcome = yield* Result.ok(
       await readLinkIcon({
-        hostname,
+        hostname: site.value,
         userId: user.id,
         ip: resolveClientIp(request, null) ?? "unresolved",
         cache: getLinkIconCache(),

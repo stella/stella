@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
-import { stripUnicodeMarks } from "@stll/text-normalize";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import {
   canApproveIntegrationAuthorization,
+  type IntegrationAuthorizationStatus,
   integrationStatus,
   matchesConnectionQuery,
-  type IntegrationAuthorizationStatus,
 } from "./connections.logic";
 
 const PROPERTY_MAX_TEXT_PARTS = 20;
@@ -37,11 +37,8 @@ const searchTextArbitrary = fc
   )
   .map((parts) => parts.join(""));
 
-const oldFold = (value: string): string =>
-  stripUnicodeMarks(value, {
-    form: "NFD",
-    markClass: "combining",
-  }).toLocaleLowerCase();
+const searchKey = (value: string): string =>
+  foldSearchMatchText(value.toWellFormed());
 
 describe("integration approval", () => {
   test("approval requires permission and a pending review", () => {
@@ -51,8 +48,7 @@ describe("integration approval", () => {
       "approved",
       "needs_reapproval",
     ] as const satisfies readonly (
-      | IntegrationAuthorizationStatus
-      | undefined
+      IntegrationAuthorizationStatus | undefined
     )[];
     for (const status of statuses) {
       expect(canApproveIntegrationAuthorization(false, status)).toBe(false);
@@ -89,10 +85,11 @@ describe("connection search", () => {
     ).toBe(true);
   });
 
-  test("matches punctuation literally and retains its existing NFD fold", () => {
+  test("matches punctuation literally and folds letters without a decomposition", () => {
     expect(matchesConnectionQuery("+", ["Drive + files"])).toBe(true);
     expect(matchesConnectionQuery("drive +", ["Drive files"])).toBe(false);
-    expect(matchesConnectionQuery("strasse", ["Straße"])).toBe(false);
+    expect(matchesConnectionQuery("strasse", ["Straße"])).toBe(true);
+    expect(matchesConnectionQuery("lodzi", ["Sąd w Łodzi"])).toBe(true);
   });
 
   test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
@@ -101,9 +98,9 @@ describe("connection search", () => {
     expect(matchesConnectionQuery("\ude00", ["😀"])).toBe(false);
   });
 
-  test("connection search matches the previous NFD word predicate for generated Unicode inputs", () => {
+  test("connection search requires every folded word for generated Unicode inputs", () => {
     assertProperty(
-      "connection search matches the previous NFD word predicate for generated Unicode inputs",
+      "connection search requires every folded word for generated Unicode inputs",
       fc.property(
         searchTextArbitrary,
         fc.array(
@@ -115,15 +112,10 @@ describe("connection search", () => {
           { maxLength: PROPERTY_MAX_FIELDS },
         ),
         (query, fields) => {
-          const words = oldFold(query)
+          const haystack = searchKey(fields.filter(Boolean).join(" "));
+          const expected = query
             .split(/\s+/u)
-            .filter(Boolean)
-            .map((word) => word.toWellFormed());
-          const expected = words.every((word) =>
-            oldFold(fields.filter(Boolean).join(" "))
-              .toWellFormed()
-              .includes(word),
-          );
+            .every((word) => haystack.includes(searchKey(word)));
           expect(matchesConnectionQuery(query, fields)).toBe(expected);
         },
       ),

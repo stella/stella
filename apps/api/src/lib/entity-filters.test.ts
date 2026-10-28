@@ -16,9 +16,9 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   applyFilters,
   applySorts,
-  buildSortExpressions,
   buildFilterConditions,
   buildFindConditions,
+  buildSortExpressions,
   FIELD_FIND_SUPPORT,
   FINDABLE_FIELD_TYPES,
 } from "./entity-filters";
@@ -169,7 +169,12 @@ describe("buildFindConditions", () => {
     // direct caller; it still refuses to compile an ILIKE the trigram index
     // cannot answer.
     const short = "a".repeat(ENTITY_FIND_TERM_MIN_LENGTH - 1);
-    for (const term of ["", "   ", short, `  ${short}  `]) {
+    // Long enough as typed, short once the fold deletes its combining marks.
+    const foldsShort = `${short}${"\u0301".repeat(ENTITY_FIND_TERM_MIN_LENGTH)}`;
+    expect(foldsShort.trim().length).toBeGreaterThanOrEqual(
+      ENTITY_FIND_TERM_MIN_LENGTH,
+    );
+    for (const term of ["", "   ", short, `  ${short}  `, foldsShort]) {
       expect(
         findConditions({ scope: { type: "all", propertyIds }, term }),
       ).toHaveLength(0);
@@ -178,9 +183,12 @@ describe("buildFindConditions", () => {
   });
 
   test("a padded term is matched trimmed", () => {
-    expect(
-      findParams({ scope: { type: "all", propertyIds }, term: "  lease  " }),
-    ).toContain("%lease%");
+    const params = findParams({
+      scope: { type: "all", propertyIds },
+      term: "  lease  ",
+    });
+    expect(params).toContain("lease");
+    expect(params).not.toContain("  lease  ");
   });
 
   test("an unrestricted scope with no columns matches the name only", () => {
@@ -242,7 +250,9 @@ describe("buildFindConditions", () => {
     });
     const subquery = sql.slice(sql.indexOf("IN ("));
     expect(subquery).toContain('"fields"."workspace_id" = ');
-    expect(subquery).toContain('field_find_text("fields"."content") ILIKE');
+    expect(subquery).toContain(
+      'search_fold(field_find_text("fields"."content")) LIKE',
+    );
     expect(subquery).toContain(
       `->>'type' IN (${FINDABLE_FIELD_TYPES.map((type) => `'${type}'`).join(", ")})`,
     );
@@ -259,16 +269,19 @@ describe("buildFindConditions", () => {
     });
     expect(sql).toContain("jsonb_array_elements_text");
     expect(sql).toContain("jsonb_typeof");
-    expect(sql).toContain("ILIKE");
+    expect(sql).toContain("search_fold(elem) LIKE");
   });
 
-  test("the term is trimmed and bound as a literal substring", () => {
+  test("both sides of every match are folded, so case and accents never decide it", () => {
+    const sql = findSql({
+      scope: { type: "all", propertyIds },
+      term: "Dvořák",
+    });
+    expect(sql).not.toContain("ILIKE");
+    expect(sql).toContain('search_fold("entities"."name") LIKE');
     expect(
-      findParams({
-        scope: { type: "all", propertyIds },
-        term: "  lease  ",
-      }),
-    ).toContain("%lease%");
+      findParams({ scope: { type: "all", propertyIds }, term: "Dvořák" }),
+    ).toContain("Dvořák");
   });
 
   test("only searchable cell types are reachable", () => {
@@ -288,15 +301,17 @@ describe("buildFindConditions", () => {
     }
   });
 
-  test("LIKE metacharacters in the term match themselves", () => {
+  test("LIKE metacharacters in the term are escaped after the fold", () => {
     // The highlighter matches literal text, so a wildcard that widened the
-    // server's match would return rows with nothing to mark.
-    expect(
-      findParams({
-        scope: { type: "all", propertyIds: [] },
-        term: "50%_off",
-      }),
-    ).toContain("%50\\%\\_off%");
+    // server's match would return rows with nothing to mark. The fold maps
+    // full-width `％` to `%`, so escaping has to come after it.
+    const sql = findSql({
+      scope: { type: "all", propertyIds: [] },
+      term: "50%_off",
+    });
+    expect(sql).toMatch(
+      /LIKE \('%' \|\| replace\(replace\(replace\(search_fold\(\$\d+\), /u,
+    );
   });
 });
 

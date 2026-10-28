@@ -17,7 +17,7 @@ import {
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
-import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
+import { type BatchState, initialBatchState } from "@stll/db-load-gate/health";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
@@ -29,13 +29,13 @@ import {
   caseLawDecisions,
   caseLawIndexJobs,
   databaseBackfillStates,
-  euCompletionApprovals,
-  euCompletionControls,
-  euCompletionReceipts,
-  euCompletionRequestHours,
   EU_COMPLETION_PAYLOAD_MAX_BYTES,
   EU_COMPLETION_REQUESTS_PER_HOUR,
+  euCompletionApprovals,
+  euCompletionControls,
   type EuCompletionProvenance,
+  euCompletionReceipts,
+  euCompletionRequestHours,
 } from "@/api/db/schema";
 import {
   setSharedLockTimeout,

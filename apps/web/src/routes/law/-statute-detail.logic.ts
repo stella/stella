@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { redirect, notFound } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";

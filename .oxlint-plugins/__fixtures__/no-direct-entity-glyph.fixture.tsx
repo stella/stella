@@ -36,7 +36,7 @@ const NeutralGlyph = Lucide.LinkIcon;
 
 // oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph -- named re-export
 export { FolderIcon as ReexportedGlyph } from "lucide-react";
-// oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph, no-direct-matter-glyph/no-direct-matter-glyph -- star re-export carries every glyph
+// oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph, no-direct-matter-glyph/no-direct-matter-glyph, no-unowned-icon/no-unowned-icon -- star re-export carries every glyph
 export * from "lucide-react";
 
 export const DirectEntityGlyphFixture = () => (

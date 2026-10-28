@@ -17,16 +17,17 @@ import type {
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import { CopyButton } from "@stll/ui/copy-button";
 import {
   Dialog,
-  DialogPopup,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
 } from "@stll/ui/dialog";
-import { CopyIcon, LockKeyholeIcon } from "@stll/ui/icons";
+import { LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
@@ -190,7 +191,7 @@ export const ActivityDayReview = ({
 }: {
   header: ReactNode;
   snapshot: ActivityDaySnapshot;
-  onCopy: (text: string, onSuccess: () => void) => void;
+  onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 }) => {
   const t = useTranslations("activity");
@@ -205,7 +206,6 @@ export const ActivityDayReview = ({
   });
   const [localDrafts, setLocalDrafts] = useState(snapshot.draftedEntries);
   const [errorMessage, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [leaveOut, setLeaveOut] = useState(false);
   const [discardPrompt, setDiscardPrompt] = useState<"closed" | "confirming">(
     "closed",
@@ -242,7 +242,6 @@ export const ActivityDayReview = ({
       ...edits,
       [group.matter?.id ?? "unmatched"]: { ...editFor(group), ...change },
     });
-    setCopied(false);
   };
   const eligible = day.groups.filter(
     (
@@ -453,17 +452,20 @@ export const ActivityDayReview = ({
         hours={hours(selectedTenths / 10)}
         snapshot={snapshot}
         submission={submission}
-        copied={copied}
-        onCopy={() =>
-          onCopy(
-            selected
-              .map(
-                (group) =>
-                  `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
-              )
-              .join("\n"),
-            () => setCopied(true),
-          )
+        onCopy={async () =>
+          // Resolves once the copy settles; a failed copy is reported by the
+          // command runner and resolves false, leaving the button unconfirmed.
+          new Promise<boolean>((resolve) => {
+            onCopy(
+              selected
+                .map(
+                  (group) =>
+                    `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
+                )
+                .join("\n"),
+              resolve,
+            );
+          })
         }
         onSubmit={submit}
         valid={
@@ -627,6 +629,7 @@ const withAwaySegments = (
         matterId: null,
         document: null,
         windowTitle: null,
+        call: false,
         matter: null,
         confidence: "unmatched",
         evidence: [],
@@ -644,7 +647,6 @@ const ReviewBar = ({
   hours,
   snapshot,
   submission,
-  copied,
   onCopy,
   onSubmit,
   valid,
@@ -654,8 +656,7 @@ const ReviewBar = ({
   hours: string;
   snapshot: ActivityDaySnapshot;
   submission: Submission;
-  copied: boolean;
-  onCopy: () => void;
+  onCopy: () => Promise<boolean>;
   onSubmit: () => void;
   valid: boolean;
 }) => {
@@ -678,15 +679,15 @@ const ReviewBar = ({
         <LockKeyholeIcon aria-hidden="true" className="size-3" />
         {t("batchPrivacy")}
       </span>
-      <Button
-        variant="outline"
-        size="sm"
+      <CopyButton
+        copiedLabel={t("copied")}
         disabled={selected.length === 0}
-        onClick={onCopy}
-      >
-        <CopyIcon aria-hidden="true" />
-        {copied ? t("copied") : t("copySummary")}
-      </Button>
+        iconClassName="size-4"
+        label={t("copySummary")}
+        onCopy={onCopy}
+        size="sm"
+        variant="outline"
+      />
       <Button size="sm" disabled={disabled} onClick={onSubmit}>
         {submission.type === "retry"
           ? t("pendingRetry")
@@ -828,7 +829,7 @@ const ReviewEntries = ({
           return (
             <div
               key={matter.id}
-              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 sm:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
+              className={`grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 px-4 py-3.5 min-[40rem]:grid-cols-[1.25rem_minmax(0,1fr)_auto] ${!edit.selected ? "opacity-55" : ""}`}
             >
               <Checkbox
                 className="mt-0.5"
@@ -878,7 +879,7 @@ const ReviewEntries = ({
                   }
                 />
               </div>
-              <div className="col-start-2 flex items-center justify-between gap-2 sm:col-start-3 sm:flex-col sm:items-end">
+              <div className="col-start-2 flex items-center justify-between gap-2 min-[40rem]:col-start-3 min-[40rem]:flex-col min-[40rem]:items-end">
                 <div className="text-base font-semibold tabular-nums">
                   {t("hours", { hours: hours(group.roundedTenths / 10) })}
                   <span className="text-muted-foreground text-2xs block font-normal">

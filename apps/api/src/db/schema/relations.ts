@@ -8,20 +8,20 @@ import {
   numberSeriesCounters,
   rateEntries,
   rateTables,
-  sellerProfiles,
   savedTimeNarratives,
+  sellerProfiles,
   timeEntries,
-  timeTimers,
   timeTimerConfirmations,
+  timeTimers,
 } from "./billing";
 import { billingArrangements } from "./billing-arrangements";
 import {
   caseLawCitations,
-  caseLawCourtWeights,
   caseLawCourtDirectoryRanks,
+  caseLawCourtWeights,
   caseLawDecisionIdentifiers,
-  caseLawDecisionSourceIdentities,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawFtsConfigs,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
@@ -31,22 +31,22 @@ import {
   caseLawSources,
 } from "./case-law";
 import {
-  chatMessageSearchDocuments,
-  chatMessages,
   chatMessageRevisions,
-  chatTurns,
+  chatMessages,
+  chatMessageSearchDocuments,
   chatThreadCompactions,
   chatThreadNames,
-  chatThreadSearchDocuments,
   chatThreads,
+  chatThreadSearchDocuments,
+  chatTurns,
   fileChatThreads,
   templateChatThreads,
 } from "./chat";
 import {
   clauseCategories,
+  clauses,
   clauseVariants,
   clauseVersions,
-  clauses,
   templateClauses,
   templateFills,
   templateRecipes,
@@ -85,10 +85,10 @@ import {
 import { entityViews } from "./entity-views";
 import {
   userFiles,
-  workspaceViewTemplates,
   workspaceViews,
+  workspaceViewTemplates,
 } from "./files-views";
-import { flowDefinitions, flowRunSteps, flowRuns } from "./flows";
+import { flowDefinitions, flowRuns, flowRunSteps } from "./flows";
 import {
   legalListColumns,
   legalListGenerationCandidates,
@@ -111,14 +111,14 @@ import {
 } from "./mcp";
 import {
   documentTypes,
-  playbookDefinitionVersions,
   playbookDefinitions,
+  playbookDefinitionVersions,
   properties,
   propertyDependencies,
 } from "./properties";
 import {
-  legalReaderAnswers,
   legalReaderAnswerMessages,
+  legalReaderAnswers,
 } from "./reader-answers";
 import { reportExports } from "./reports";
 import { savedSearches } from "./saved-searches";
@@ -129,18 +129,18 @@ import {
   extractedContent,
   searchDocuments,
   templateCategories,
-  templateVersions,
   templates,
+  templateVersions,
 } from "./templates";
 import { workObligationEvents, workObligations } from "./workflow";
 import {
   anonymizationAllowlistEntries,
   anonymizationBlacklistEntries,
+  businessRegistryCredentials,
   documentCounters,
   documentReferenceCounters,
   matterCounters,
   organizationSettings,
-  businessRegistryCredentials,
 } from "./workspace-admin";
 
 export const relations = defineRelations(
@@ -1089,6 +1089,10 @@ export const relations = defineRelations(
       }),
     },
     invoiceLines: {
+      workspace: r.one.workspaces({
+        from: r.invoiceLines.workspaceId,
+        to: r.workspaces.id,
+      }),
       invoice: r.one.invoices({
         from: r.invoiceLines.invoiceId,
         to: r.invoices.id,

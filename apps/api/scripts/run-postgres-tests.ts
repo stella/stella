@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { createSqlClient } from "../src/db/sql-client";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   mergeJunitReports,
@@ -13,7 +14,7 @@ import {
 import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
-  assertSharedTableDdlIsolated,
+  classifyPostgresTestIsolation,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
 import { postgresTestSelectionFromEnv } from "./postgres-test-selection-env";
@@ -46,6 +47,7 @@ const durations = measured?.unwrapOr({}) ?? {};
 
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
+let clusterExclusivePaths = new Set<string>();
 
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
@@ -59,7 +61,7 @@ process.exitCode = await runGatedTests({
   spawnTestProcess: spawnPostgresTestProcess,
   prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
-    await assertSharedTableDdlIsolated(apiRoot, files);
+    clusterExclusivePaths = await classifyPostgresTestIsolation(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
     if (shard !== null) {
       planPostgresTestShards({ files, durations, count: shard.count });
@@ -77,7 +79,7 @@ process.exitCode = await runGatedTests({
       "application_name",
       `stella-postgres-runner-${process.pid}`,
     );
-    const sql = new Bun.SQL({ url: adminUrl.toString(), max: 1 });
+    const sql = createSqlClient({ url: adminUrl.toString(), max: 1 });
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "stella-postgres-junit-"),
     );
@@ -92,6 +94,7 @@ process.exitCode = await runGatedTests({
         files,
         durations,
         exclusivePaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+        clusterExclusivePaths,
         workers: parsedWorkers.workers,
         databaseUrl,
         admin: {

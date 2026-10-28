@@ -19,22 +19,13 @@ import type { AppFrameScope } from "./-app-frame-scope";
  *   ask again with `audience`.
  */
 export type AppFrame =
-  | "none"
-  | "member"
-  | "admin"
-  | "public"
-  | "checking"
-  | "neutral"
-  | "unresolved";
+  "none" | "member" | "public" | "checking" | "neutral" | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
  *  session and an active organization; anyone else is anonymous, and a
  *  session that could not be read is `unavailable`. */
 export type AppFrameAudience =
-  | "checking"
-  | "anonymous"
-  | "unavailable"
-  | "member";
+  "checking" | "anonymous" | "unavailable" | "member";
 
 // Pages that show the same to every visitor: published catalogue entries.
 const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
@@ -67,8 +58,6 @@ export const selectAppFrame = ({
       return "none";
     case APP_FRAME_SCOPE.member:
       return hasRouteUser ? "member" : "checking";
-    case APP_FRAME_SCOPE.admin:
-      return hasRouteUser ? "admin" : "checking";
     case APP_FRAME_SCOPE.knowledge:
       if (!publicKnowledge) {
         return hasRouteUser ? "member" : "checking";
@@ -112,7 +101,6 @@ export const frameVisitor = (
 ): string | null => {
   switch (frame) {
     case "member":
-    case "admin":
       return member === undefined
         ? null
         : `member:${member.userId}:${member.organizationId}`;

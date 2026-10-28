@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Node,
+  parseSource,
+  type TSType,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const apiRoot = path.resolve(import.meta.dir, "../../..");
 const INPUT_COLUMNS = new Set([
@@ -28,6 +34,7 @@ const MUTATION_OWNERS = {
   },
   "handlers/case-law/erasure.ts": {
     redactCaseLawDecision: "redactCaseLawDecision",
+    eraseFencedDecision: "redactCaseLawDecision",
   },
   "handlers/case-law/withdraw-document.ts": {
     withdrawCaseLawDecisionDocument: "withdrawCaseLawDecisionDocument",
@@ -49,168 +56,199 @@ const MUTATION_OWNERS = {
   },
 } satisfies Record<string, Record<string, string>>;
 
-const functionName = (node: ts.Node): string | null => {
-  if (ts.isFunctionDeclaration(node)) {
-    return node.name?.text ?? null;
+const functionName = (node: Node, parent: Node | undefined): string | null => {
+  if (node.type === "FunctionDeclaration") {
+    return node.id?.name ?? null;
   }
-  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-    return ts.isVariableDeclaration(node.parent) &&
-      ts.isIdentifier(node.parent.name)
-      ? node.parent.name.text
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression"
+  ) {
+    return parent?.type === "VariableDeclarator" &&
+      parent.id.type === "Identifier"
+      ? parent.id.name
       : null;
   }
   return null;
 };
 
-const enclosingName = (node: ts.Node): string => {
-  const name = functionName(node);
-  return (
-    name ?? (ts.isSourceFile(node) ? "<module>" : enclosingName(node.parent))
-  );
+const enclosingName = (node: Node, ancestors: readonly Node[]): string => {
+  const chain = [...ancestors, node];
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const current = chain[index];
+    const name =
+      current === undefined ? null : functionName(current, chain[index - 1]);
+    if (name !== null) {
+      return name;
+    }
+  }
+  return "<module>";
 };
 
-const propertyName = (node: ts.PropertyName): string | null =>
-  ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : null;
+const propertyName = (key: Node, computed: boolean): string | null => {
+  if (computed) {
+    return null;
+  }
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : null;
+};
 
 const isCanonicalPayload = (
-  node: ts.Expression | undefined,
+  node: Node | undefined,
   owner: string,
   bookkeepingSafe = false,
 ): boolean => {
-  if (node && ts.isParenthesizedExpression(node)) {
+  if (node?.type === "ParenthesizedExpression") {
     return isCanonicalPayload(node.expression, owner, bookkeepingSafe);
   }
-  if (node && ts.isConditionalExpression(node)) {
+  if (node?.type === "ConditionalExpression") {
     return (
-      isCanonicalPayload(node.whenTrue, owner, bookkeepingSafe) ||
-      isCanonicalPayload(node.whenFalse, owner, bookkeepingSafe)
+      isCanonicalPayload(node.consequent, owner, bookkeepingSafe) ||
+      isCanonicalPayload(node.alternate, owner, bookkeepingSafe)
     );
   }
   if (
-    node &&
-    ts.isIdentifier(node) &&
-    node.text === "set" &&
+    node?.type === "Identifier" &&
+    node.name === "set" &&
     owner === "writeFetchBookkeeping" &&
     bookkeepingSafe
   ) {
     return false;
   }
   if (
-    node &&
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === "unchangedReadOutcomeMetadata"
+    node?.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === "unchangedReadOutcomeMetadata"
   ) {
     return false;
   }
-  if (node === undefined || !ts.isObjectLiteralExpression(node)) {
+  if (node?.type !== "ObjectExpression") {
     return true;
   }
   return node.properties.some((property) => {
-    if (ts.isSpreadAssignment(property)) {
-      return isCanonicalPayload(property.expression, owner, bookkeepingSafe);
+    if (property.type === "SpreadElement") {
+      return isCanonicalPayload(property.argument, owner, bookkeepingSafe);
     }
     return (
-      (ts.isPropertyAssignment(property) ||
-        ts.isShorthandPropertyAssignment(property)) &&
-      INPUT_COLUMNS.has(propertyName(property.name) ?? "")
+      !property.method &&
+      property.kind === "init" &&
+      INPUT_COLUMNS.has(propertyName(property.key, property.computed) ?? "")
     );
   });
 };
 
+/** Property signatures of a type literal, or undefined for any other type. */
+const typeLiteralMembers = (type: TSType | undefined) =>
+  type?.type === "TSTypeLiteral" ? type.members : undefined;
+
 const inspect = (file: string, text: string) => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const bookkeeping = source.statements.find(
-    (node) =>
-      ts.isTypeAliasDeclaration(node) &&
-      node.name.text === "WriteFetchBookkeepingOptions",
-  );
+  const source = parseSource(file, text);
+  const bookkeeping = source.program.body
+    .map((statement) =>
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement,
+    )
+    .find(
+      (node) =>
+        node?.type === "TSTypeAliasDeclaration" &&
+        node.id.name === "WriteFetchBookkeepingOptions",
+    );
   const setMember =
-    bookkeeping &&
-    ts.isTypeAliasDeclaration(bookkeeping) &&
-    ts.isTypeLiteralNode(bookkeeping.type)
-      ? bookkeeping.type.members.find(
+    bookkeeping?.type === "TSTypeAliasDeclaration"
+      ? typeLiteralMembers(bookkeeping.typeAnnotation)?.find(
           (member) =>
-            ts.isPropertySignature(member) &&
-            propertyName(member.name) === "set",
+            member.type === "TSPropertySignature" &&
+            propertyName(member.key, member.computed) === "set",
         )
       : undefined;
+  const setMembers =
+    setMember?.type === "TSPropertySignature"
+      ? typeLiteralMembers(setMember.typeAnnotation?.typeAnnotation)
+      : undefined;
   const bookkeepingSafe =
-    setMember &&
-    ts.isPropertySignature(setMember) &&
-    setMember.type &&
-    ts.isTypeLiteralNode(setMember.type)
-      ? setMember.type.members.every(
-          (member) =>
-            ts.isPropertySignature(member) &&
-            !INPUT_COLUMNS.has(propertyName(member.name) ?? ""),
-        )
-      : false;
+    setMembers?.every(
+      (member) =>
+        member.type === "TSPropertySignature" &&
+        !INPUT_COLUMNS.has(propertyName(member.key, member.computed) ?? ""),
+    ) ?? false;
   const tables = new Set(["caseLawDecisions"]);
-  const functions = new Map<string, ts.Node>();
+  const functions = new Map<string, Node>();
   const mutations = new Set<string>();
-  const visit = (node: ts.Node) => {
-    const name = functionName(node);
+  walk(source.program, (node, ancestors) => {
+    const name = functionName(node, ancestors.at(-1));
     if (name !== null) {
       functions.set(name, node);
     }
     if (
-      ts.isImportSpecifier(node) &&
-      (node.propertyName?.text ?? node.name.text) === "caseLawDecisions"
+      node.type === "ImportSpecifier" &&
+      (node.imported.type === "Identifier"
+        ? node.imported.name
+        : node.imported.value) === "caseLawDecisions"
     ) {
-      tables.add(node.name.text);
+      tables.add(node.local.name);
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier"
     ) {
-      const method = node.expression.name.text;
+      const method = node.callee.property.name;
       const table = node.arguments.at(0);
       if (
         (method === "insert" || method === "update") &&
-        table &&
-        ts.isIdentifier(table) &&
-        tables.has(table.text)
+        table?.type === "Identifier" &&
+        tables.has(table.name)
       ) {
-        const member = node.parent;
-        const call = member.parent;
+        const member = ancestors.at(-1);
+        const call = ancestors.at(-2);
         const payload =
-          ts.isPropertyAccessExpression(member) &&
-          member.name.text === "set" &&
-          ts.isCallExpression(call)
+          member?.type === "MemberExpression" &&
+          !member.computed &&
+          member.property.type === "Identifier" &&
+          member.property.name === "set" &&
+          call?.type === "CallExpression"
             ? call.arguments.at(0)
             : undefined;
         if (
           method === "insert" ||
-          isCanonicalPayload(payload, enclosingName(node), bookkeepingSafe)
+          isCanonicalPayload(
+            payload,
+            enclosingName(node, ancestors),
+            bookkeepingSafe,
+          )
         ) {
-          mutations.add(enclosingName(node));
+          mutations.add(enclosingName(node, ancestors));
         }
       }
     }
-    if (ts.isTaggedTemplateExpression(node)) {
-      const sql = node.template.getText(source);
+    if (node.type === "TaggedTemplateExpression") {
+      const sql = text.slice(node.quasi.start, node.quasi.end);
       if (
         /\bUPDATE\s+case_law_decisions\b[^;]*\bSET\s+(?:decision_date|country|language|redacted_at|fulltext|sections|document_ast|content_hash|text_s3_key|normalized_s3_key|ast_s3_key)\s*=/isu.test(
           sql,
         ) ||
         /\bINSERT\s+INTO\s+case_law_decisions\b/iu.test(sql)
       ) {
-        mutations.add(enclosingName(node));
+        mutations.add(enclosingName(node, ancestors));
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  const calls = (node: ts.Node): Set<string> => {
+  });
+  const calls = (node: Node): Set<string> => {
     const names = new Set<string>();
-    const walk = (child: ts.Node) => {
-      if (ts.isCallExpression(child) && ts.isIdentifier(child.expression)) {
-        names.add(child.expression.text);
+    walk(node, (child) => {
+      if (
+        child.type === "CallExpression" &&
+        child.callee.type === "Identifier"
+      ) {
+        names.add(child.callee.name);
       }
-      ts.forEachChild(child, walk);
-    };
-    walk(node);
+    });
     return names;
   };
   const reaches = (

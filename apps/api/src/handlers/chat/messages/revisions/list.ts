@@ -1,13 +1,15 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, getColumns, lt, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  chatMessages,
   chatMessageRevisions,
+  chatMessages,
   chatThreads,
 } from "@/api/db/schema";
 import { revisionText } from "@/api/handlers/chat/chat-revision-context";
@@ -19,7 +21,10 @@ import { serializeRevisionSnapshot } from "@/api/handlers/chat/messages/revision
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
@@ -52,9 +57,11 @@ const config = {
     consumesServices: false,
   },
   params: revisionParams,
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(tPaginationLimit(MAX_REVISION_PAGE_SIZE)),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(paginationLimitSchema(MAX_REVISION_PAGE_SIZE)),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -216,9 +223,7 @@ type RevisionListItem = NonNullable<
 // Successor/current snapshots are used only to derive the displayed text;
 // raw replaced snapshots keep their existing serialized contract.
 type InternalRevisionColumns =
-  | "nextContent"
-  | "currentContent"
-  | "currentRevision";
+  "nextContent" | "currentContent" | "currentRevision";
 type StoredRevisionProjection = Omit<
   RevisionListItem,
   "beforeText" | "afterText"

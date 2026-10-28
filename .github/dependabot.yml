@@ -325,13 +325,6 @@ updates:
           - "drizzle-kit"
         update-types:
           - "major"
-      elysia:
-        patterns:
-          - "elysia"
-          - "@elysia/*"
-          - "@elysiajs/*"
-        update-types:
-          - "major"
       react-email:
         patterns:
           - "react-email"
@@ -377,11 +370,6 @@ updates:
       - dependency-name: "@formatjs/icu-messageformat-parser"
         versions:
           - ">3.5.16"
-      # v5 requires Elysia 2. Remove this guard when Elysia 2 reaches stable and
-      # the API migrates rate-limit scoping from `scoped` to `plugin`.
-      - dependency-name: "elysia-rate-limit"
-        update-types:
-          - "version-update:semver-major"
       # Expo packages ship as one SDK-coordinated major. Upgrade the complete
       # SDK intentionally instead of mixing majors through partial PRs.
       - dependency-name: "expo"
@@ -393,13 +381,13 @@ updates:
       - dependency-name: "@expo/*"
         update-types:
           - "version-update:semver-major"
-      # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
-      # when Expo's supported range advances to 4.27 or newer.
+      # Expo SDK 58 requires react-native-screens ~4.30.0. Remove this guard
+      # when Expo's supported range advances to 4.31 or newer.
       - dependency-name: "react-native-screens"
         update-types:
           - "version-update:semver-minor"
-      # Expo SDK 57 requires react-native 0.86.x (`expo doctor` fails on
-      # 0.87). Remove this guard when the SDK upgrade moves react-native.
+      # Expo SDK 58 requires react-native 0.88.x (`expo doctor` fails on
+      # 0.89). Remove this guard when the SDK upgrade moves react-native.
       - dependency-name: "react-native"
         update-types:
           - "version-update:semver-minor"

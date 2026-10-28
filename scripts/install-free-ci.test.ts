@@ -12,17 +12,17 @@ import path from "node:path";
 
 import {
   boundedInstallProblems,
-  installWorkflowPolicy,
   compositeInstallProblems,
+  installWorkflowPolicy,
 } from "./ci-install-policy";
 import {
+  type Classification,
   conditionOperands,
   impliesCondition,
   importProblems,
+  type InstallFreeInvocation,
   installFreeInvocations,
   lexShell,
-  type Classification,
-  type InstallFreeInvocation,
 } from "./install-free-ci";
 import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
@@ -1569,6 +1569,7 @@ describe("install-free invocation classification", () => {
       '"$RELEASE_TOOLING/scripts/retry.sh"',
       "./scripts/retry.sh",
       "tooling/retry.sh",
+      '"$NETWORK_RETRY_SCRIPT"',
     ]) {
       expect(
         classify(`bash ${helper} bun ci --ignore-scripts`).map(
@@ -1579,6 +1580,25 @@ describe("install-free invocation classification", () => {
     // A helper whose name only ends in retry.sh is a different program.
     expect(
       classify("bash scripts/gh-retry.sh bun ci --ignore-scripts").map(
+        ({ classification }) => classification.type,
+      ),
+    ).not.toEqual(["install"]);
+  });
+
+  test("a release gate recorder run is followed to the command it runs", () => {
+    for (const helper of [
+      '"$RUNNER_TEMP/release-gate.sh"',
+      "scripts/release-gate.sh",
+    ]) {
+      expect(
+        classify(`bash ${helper} run audit bun ci --ignore-scripts`).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install"]);
+    }
+    // Only `run <gate>` hands its words to a command.
+    expect(
+      classify("bash scripts/release-gate.sh verdict bun ci").map(
         ({ classification }) => classification.type,
       ),
     ).not.toEqual(["install"]);

@@ -1,4 +1,4 @@
-// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
+// parser-output-unchanged: replay enrolment chooses which stored rows are re-parsed, never how a row is parsed.
 import { panic } from "better-result";
 
 import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
@@ -27,7 +27,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NS]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NSS]: { mode: "off" },
-  [ADAPTER_KEYS.CZ_US]: { mode: "off" },
+  [ADAPTER_KEYS.CZ_US]: { mode: "dry-run", dailyBudget: 10_000 },
   [ADAPTER_KEYS.SK_COURTS]: { mode: "off" },
   [ADAPTER_KEYS.SK_US]: { mode: "off" },
   [ADAPTER_KEYS.PL_COURTS]: { mode: "off" },
@@ -50,6 +50,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.AT_FINDOK]: { mode: "off" },
   [ADAPTER_KEYS.EU_ECJ]: { mode: "off" },
   [ADAPTER_KEYS.HU_BHGY]: { mode: "off" },
+  [ADAPTER_KEYS.UK_FCL]: { mode: "off" },
   [ADAPTER_KEYS.PL_KIS]: { mode: "off" },
   [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },

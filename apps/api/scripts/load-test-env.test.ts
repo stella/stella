@@ -101,12 +101,14 @@ for (const runner of ["run-postgres-tests.ts", "run-valkey-tests.ts"]) {
         await readFile(entrypoint, "utf-8"),
       );
       for (const { path: dependency } of imports) {
-        if (!dependency.startsWith("./") || dependency === "./load-test-env") {
+        if (!dependency.startsWith(".") || dependency === "./load-test-env") {
           continue;
         }
+        const staged = path.join(directory, "scripts", `${dependency}.ts`);
+        await mkdir(path.dirname(staged), { recursive: true });
         await symlink(
           path.join(apiRoot, "scripts", `${dependency}.ts`),
-          path.join(directory, "scripts", `${dependency}.ts`),
+          staged,
         );
       }
       await Bun.write(
@@ -149,10 +151,12 @@ test("migration preserves the deployment environment despite a local test file",
         path.join(directory, "src", dependency),
       );
     }
-    await symlink(
-      path.join(apiRoot, "src/db/migration-runner.ts"),
-      path.join(directory, "src/db/migration-runner.ts"),
-    );
+    for (const module of ["migration-runner.ts", "sql-client.ts"]) {
+      await symlink(
+        path.join(apiRoot, "src/db", module),
+        path.join(directory, "src/db", module),
+      );
+    }
     await Bun.write(path.join(directory, ".env.test"), environmentSource);
     const result = await runEntrypoint({
       directory,

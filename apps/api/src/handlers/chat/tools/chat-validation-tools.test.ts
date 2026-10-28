@@ -35,6 +35,7 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -46,8 +47,8 @@ import {
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import {
-  FEATURE_REGISTRY,
   AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
   GENERATED_VIEWS_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
 import {
@@ -93,6 +94,7 @@ const urlFetcher: UrlFetcher = {
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",

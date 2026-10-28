@@ -15,11 +15,11 @@ import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
-  EFFORT_LABEL_KEY,
   type ComposerModelsMenuProps,
+  EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
 import { modelOptionsOptions } from "@/features/chat/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 type ChatModelSelectorProps = {
   disabled?: boolean;
@@ -40,7 +40,7 @@ export const ChatModelSelector = ({
     ...modelOptionsOptions(activeOrganizationId),
     enabled: open || detailsRequested || selectedModel !== null,
   });
-  const modelsView = useQueryView(modelsQuery);
+  const modelsView = queryView(modelsQuery);
   const selectedOption =
     modelsView.type === "items"
       ? modelsView.items.options.find(

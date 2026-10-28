@@ -57,18 +57,19 @@
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isStringLiteral,
+  isUnshadowedGlobalIdentifier as hasGlobalBinding,
   memberPropertyName,
   resolveImport,
   resolveVariable,
   stableInitializer,
   unwrapExpression,
-  type AstNode,
 } from "./utils.ts";
 
 // Fetch-shaped sinks (target first, request options second), keyed by the
@@ -374,16 +375,8 @@ export default eslintCompatPlugin({
           return aliases;
         };
 
-        const isGlobalReference = (identifier: unknown): boolean => {
-          if (!isIdentifierReference(identifier)) {
-            return false;
-          }
-          if (context.sourceCode.isGlobalReference(identifier)) {
-            return true;
-          }
-          const variable = resolveVariable(context, identifier);
-          return variable === null || variable.defs.length === 0;
-        };
+        const isGlobalReference = (identifier: unknown) =>
+          hasGlobalBinding(context, identifier);
 
         const isGlobalObjectExpression = (
           node: unknown,

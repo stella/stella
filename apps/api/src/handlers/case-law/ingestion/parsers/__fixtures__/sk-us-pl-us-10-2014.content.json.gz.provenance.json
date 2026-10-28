@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "dd676d5b6747c92bbcb12795917017aff310605ddd6fc59e8f4fda541f233c49",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-10-25T20:43:48.341Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"2fecbc69-fb5c-4ae8-92cf-1b0b5d9e4d3e\",\"docType\":\"USSR_DECISION_MK\"}; PL. ÚS 10/2014, a nález printing every hyphen as U+00AD"
+}

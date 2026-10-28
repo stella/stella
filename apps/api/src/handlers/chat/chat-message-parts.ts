@@ -34,9 +34,9 @@ import type {
   ChatMessageRole,
   ChatPart,
   ChatTanStackPart,
-  PersistableChatPartType,
-  PersistableChatMessageCandidate,
   PersistableChatMessage,
+  PersistableChatMessageCandidate,
+  PersistableChatPartType,
   PersistableTerminalAssistantMessage,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
@@ -695,6 +695,27 @@ export const getAwaitingUserInteractions = (
   return interactions;
 };
 
+/** The tools whose calls in `message` await an approval. */
+export const getAwaitedApprovalToolNames = (
+  message: Pick<ChatMessage, "metadata" | "parts" | "role"> | null,
+): ReadonlySet<string> => {
+  if (message === null) {
+    return new Set();
+  }
+  const awaitedCallIds = new Set(
+    getAwaitingUserInteractions(message).flatMap((interaction) =>
+      interaction.type === "approval" ? [interaction.toolCallId] : [],
+    ),
+  );
+  return new Set(
+    message.parts.flatMap((part) =>
+      part.type === "tool-call" && awaitedCallIds.has(part.id)
+        ? [part.name]
+        : [],
+    ),
+  );
+};
+
 export const getAwaitingUserInteraction = (
   message: Pick<ChatMessage, "parts" | "role"> | null,
 ): AwaitingUserInteraction | null =>
@@ -1210,8 +1231,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 type ChatPartPersistenceDecision =
-  | { type: "drop"; partType: string }
-  | { type: "persist"; part: ChatPart };
+  { type: "drop"; partType: string } | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,

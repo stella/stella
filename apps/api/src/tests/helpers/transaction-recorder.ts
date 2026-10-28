@@ -49,8 +49,7 @@ export const NO_ADVISORY_LOCKS = Symbol("NO_ADVISORY_LOCKS");
 type TransactionRecorderOptions = {
   tables?: Readonly<Record<string, string>>;
   resolveAdvisory:
-    | ((query: AdvisoryTarget) => string)
-    | typeof NO_ADVISORY_LOCKS;
+    ((query: AdvisoryTarget) => string) | typeof NO_ADVISORY_LOCKS;
 };
 
 const IDENTIFIER = '(?:"(?:[^"]|"")+"|[a-zA-Z_][a-zA-Z_0-9$]*)';

@@ -27,16 +27,16 @@ import {
 } from "./mcp-client.js";
 import {
   CACHE_SCHEMA_VERSION,
+  type CacheEnv,
   cachePathFor,
   computeDelta,
   DEFAULT_TTL_SECONDS,
   isCacheStale,
   isDeltaEmpty,
   readCacheFile,
-  writeCacheFile,
-  type CacheEnv,
   type RegistryCacheFile,
   type RegistryDelta,
+  writeCacheFile,
 } from "./registry-cache.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
 import type {

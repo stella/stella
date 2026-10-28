@@ -1,21 +1,31 @@
-/** Checks the route graph without importing or initializing the API stack. */
+// Write contracts of every mutation the API serves.
+//
+// The route table the API serves (`apiRoutes`) is read as data: every POST,
+// PUT, PATCH and DELETE route declares `patch` or `replace`, through the
+// contract its safe factory recorded for the definition or, for a route no
+// safe factory built, through `RAW_WRITE_CONTRACTS` keyed by method and path.
+// A replacement names its precondition, and one checked against a stored
+// timestamp or revision must reach the owner's enforcement in the source of
+// the handler export the route mounts. Deferred replacements sit in the
+// reasoned, shrink-only baseline and the owner's debt id list, which move
+// together.
 import { panic } from "better-result";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { SAFE_HANDLER_FACTORIES } from "../apps/api/src/lib/safe-handler-factories";
-import { writeContractRouteKey } from "../apps/api/src/lib/write-contract";
+import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/write-contract/raw-write-contracts";
 import { BASELINE_PATHS } from "./baseline-paths";
-import { enumerateAggregateMutations } from "./check-aggregate-mutations";
-import type { MutationRegistration } from "./check-aggregate-mutations";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const OWNER = "apps/api/src/lib/write-contract.ts";
+const OWNER = "apps/api/src/lib/write-contract/write-contract.ts";
 const BASELINE = BASELINE_PATHS.writeContracts;
-export const writeContractBaselineSchema = v.array(
+const writeContractBaselineSchema = v.array(
   v.strictObject({
     key: v.string(),
     count: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -32,13 +42,6 @@ type LocatedExpression = {
   file: string;
   node: ts.Expression;
   scope?: LexicalScope | undefined;
-};
-export type WriteRegistration = MutationRegistration & {
-  contract: string | undefined;
-  precondition: string | undefined;
-  baselineId: string | undefined;
-  description: string | undefined;
-  violations: string[];
 };
 
 const unwrap = (node: ts.Expression): ts.Expression => {
@@ -550,8 +553,7 @@ class WriteSourceResolver {
     seen = new Set<string>(),
     scope,
   }: FactoryBindingOptions):
-    | { module: string; imported: string }
-    | undefined => {
+    { module: string; imported: string } | undefined => {
     const node = unwrap(expression);
     if (!ts.isIdentifier(node) && !ts.isPropertyAccessExpression(node)) {
       return undefined;
@@ -715,7 +717,6 @@ class WriteSourceResolver {
         modulePath(resolved.file, definition.module) === imported.module,
     );
     if (factory !== undefined) {
-      this.safeBoundaries.add(handler);
       return [
         {
           file: resolved.file,
@@ -756,7 +757,6 @@ class WriteSourceResolver {
       handler,
     });
   };
-  private readonly safeBoundaries = new Set<string>();
   private readonly handlers = new Map<string, SafeCall[]>();
 
   /** Follow only invoked functions and callbacks, never unrelated module declarations. */
@@ -916,7 +916,6 @@ class WriteSourceResolver {
     if (calls === undefined || calls.length === 0) {
       return new Map();
     }
-    this.safeBoundaries.add(handler);
     this.handlers.set(handler, calls);
     const configs = calls.map(this.callConfig);
     const first = configs.at(0);
@@ -983,7 +982,6 @@ class WriteSourceResolver {
     }
     return result;
   };
-  isSafe = (handler: string) => this.safeBoundaries.has(handler);
 }
 
 const isShortCircuit = (kind: ts.SyntaxKind): boolean =>
@@ -1017,26 +1015,86 @@ const preconditionFields = (type: string | undefined): string[] => {
   }
 };
 
-export const enumerateWriteContracts = (
-  load: SourceLoader,
-): WriteRegistration[] => {
+/** One mutation route the served table mounts, read off the route table. */
+export type WriteRoute = {
+  method: string;
+  /** The path as mounted, prefix included. */
+  path: string;
+  /**
+   * The handler export the route's definition is (`file` for a default
+   * export, `file#name` for a named one), when handler discovery found it.
+   */
+  endpoint: string | undefined;
+  /** The contract the safe factory recorded for the definition, if one built it. */
+  recorded: unknown;
+};
+
+export type WriteRegistration = {
+  /** `METHOD /path`. */
+  key: string;
+  endpoint: string | undefined;
+  contract: string | undefined;
+  precondition: string | undefined;
+  baselineId: string | undefined;
+  description: string | undefined;
+  violations: string[];
+};
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const stringField = (
+  record: Readonly<Record<string, unknown>> | undefined,
+  name: string,
+): string | undefined => {
+  const value = record?.[name];
+  return typeof value === "string" ? value : undefined;
+};
+
+const stringsField = (
+  record: Readonly<Record<string, unknown>> | undefined,
+  name: string,
+): string[] | undefined => {
+  const value = record?.[name];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items: readonly unknown[] = value;
+  const strings: string[] = [];
+  for (const item of items) {
+    if (typeof item !== "string") {
+      return undefined;
+    }
+    strings.push(item);
+  }
+  return strings;
+};
+
+const routeKey = ({ method, path: routePath }: WriteRoute) =>
+  `${method} ${routePath}`;
+
+type EnumerateWriteContractsOptions = {
+  routes: readonly WriteRoute[];
+  /** Contracts declared for routes no safe factory built, by route key. */
+  raw: Readonly<Record<string, unknown>>;
+  /** Reads repository sources, for the registered revisions and owner enforcement. */
+  load: SourceLoader;
+};
+
+/**
+ * Every served mutation route with the contract it declares: the one its safe
+ * factory recorded, or its raw declaration. A replacement's owner enforcement
+ * is traced in the source of the handler export the route mounts.
+ */
+export const enumerateWriteContracts = ({
+  routes,
+  raw,
+  load,
+}: EnumerateWriteContractsOptions): WriteRegistration[] => {
   const resolver = new WriteSourceResolver(load);
-  const rawDeclaration = resolver.binding({
-    file: OWNER,
-    name: "RAW_WRITE_CONTRACTS",
-  });
-  const raw =
-    rawDeclaration === undefined
-      ? new Map<string, LocatedExpression>()
-      : resolver.fields(rawDeclaration);
-  const routes = enumerateAggregateMutations(load).filter(
-    (route) => route.method !== "GENERIC" && route.method !== "INTERCEPT",
-  );
-  const stableKeys = new Set(
-    routes.map((route) => writeContractRouteKey(route.key)),
-  );
-  for (const key of raw.keys()) {
-    if (!stableKeys.has(key)) {
+  const keys = new Set(routes.map(routeKey));
+  for (const key of Object.keys(raw)) {
+    if (!keys.has(key)) {
       panic(`Stale raw write contract: ${key}`);
     }
   }
@@ -1049,84 +1107,92 @@ export const enumerateWriteContracts = (
       ? []
       : [...resolver.fields(revisionRegistry).values()].map(resolver.strings);
   return routes.map((route) => {
-    const stableKey = writeContractRouteKey(route.key);
-    const rawValue = raw.get(stableKey);
-    const canonical = resolver.config(route.handler);
-    if (rawValue !== undefined && resolver.isSafe(route.handler)) {
-      panic(`Raw write contract cannot override a safe handler: ${route.key}`);
+    const key = routeKey(route);
+    const rawValue = raw[key];
+    if (rawValue !== undefined && route.recorded !== undefined) {
+      panic(`Raw write contract cannot override a safe handler: ${key}`);
     }
-    const config =
-      rawValue === undefined ? canonical : resolver.fields(rawValue);
-    const preconditionValue = config.get("precondition");
-    const precondition =
-      preconditionValue === undefined
-        ? new Map<string, LocatedExpression>()
-        : resolver.fields(preconditionValue);
+    // At most one of the two is declared: a raw override fails above.
+    const declared = route.recorded ?? rawValue;
+    const config = isRecord(declared) ? declared : undefined;
+    const contract = stringField(config, "contract");
+    const declaredPrecondition = config?.["precondition"];
+    const precondition = isRecord(declaredPrecondition)
+      ? declaredPrecondition
+      : undefined;
     const violations: string[] = [];
-    const type = resolver.text(precondition.get("type"));
+    const type = stringField(precondition, "type");
     const allowedFields = preconditionFields(type);
     if (
-      [...precondition.keys()].some((field) => !allowedFields.includes(field))
+      (declaredPrecondition !== undefined && precondition === undefined) ||
+      Object.keys(precondition ?? {}).some(
+        (field) => !allowedFields.includes(field),
+      )
     ) {
       violations.push("Precondition fields must match the declared protocol");
     }
     if (
       type === "updatedAt" &&
-      resolver.text(precondition.get("field")) !== "expectedUpdatedAt"
+      stringField(precondition, "field") !== "expectedUpdatedAt"
     ) {
       violations.push(
         "Timestamp precondition requires field expectedUpdatedAt",
       );
     }
-    if (type === "revision") {
-      const values = resolver.strings(precondition.get("fields"));
-      if (
-        values === undefined ||
-        values.length === 0 ||
+    const revisionFields = stringsField(precondition, "fields");
+    if (
+      type === "revision" &&
+      (revisionFields === undefined ||
+        revisionFields.length === 0 ||
         !revisions.some(
           (revision) =>
             revision !== undefined &&
-            JSON.stringify(revision) === JSON.stringify(values),
-        )
-      ) {
-        violations.push("Revision precondition requires registered fields");
-      }
+            JSON.stringify(revision) === JSON.stringify(revisionFields),
+        ))
+    ) {
+      violations.push("Revision precondition requires registered fields");
     }
     if (
-      resolver.text(config.get("contract")) === "replace" &&
+      contract === "replace" &&
       (type === "updatedAt" || type === "revision")
     ) {
       const required =
         type === "updatedAt"
-          ? [resolver.text(precondition.get("field"))]
-          : (resolver.strings(precondition.get("fields")) ?? []);
-      const enforced = resolver.enforcementFields(route.handler, type);
-      for (const field of required) {
-        if (field !== undefined && !enforced.has(field)) {
-          violations.push(
-            `Replacement must reach owner enforcement for ${field}`,
-          );
+          ? [stringField(precondition, "field")]
+          : (revisionFields ?? []);
+      if (route.endpoint === undefined) {
+        violations.push(
+          "Replacement must be an exported handler endpoint so its owner enforcement can be traced",
+        );
+      } else {
+        const handler = `${route.endpoint}.handler`;
+        resolver.config(handler);
+        const enforced = resolver.enforcementFields(handler, type);
+        for (const field of required) {
+          if (field !== undefined && !enforced.has(field)) {
+            violations.push(
+              `Replacement must reach owner enforcement for ${field}`,
+            );
+          }
         }
       }
     }
-    if (
-      resolver.text(config.get("contract")) === "patch" &&
-      preconditionValue !== undefined
-    ) {
+    if (contract === "patch" && declaredPrecondition !== undefined) {
       violations.push("Patch contract cannot declare a precondition");
     }
     return {
-      ...route,
+      key,
+      endpoint: route.endpoint,
       violations,
-      contract: resolver.text(config.get("contract")),
-      precondition: resolver.text(precondition.get("type")),
-      baselineId: resolver.text(precondition.get("baselineId")),
-      description: resolver.text(config.get("description")),
+      contract,
+      precondition: type,
+      baselineId: stringField(precondition, "baselineId"),
+      description: stringField(config, "description"),
     };
   });
 };
 
-export const readWriteContractDebtIds = (load: SourceLoader): string[] => {
+const readWriteContractDebtIds = (load: SourceLoader): string[] => {
   const resolver = new WriteSourceResolver(load);
   const declaration = resolver.binding({
     file: OWNER,
@@ -1150,8 +1216,8 @@ export const readWriteContractDebtIds = (load: SourceLoader): string[] => {
 type CheckWriteContractsOptions = {
   registrations: readonly WriteRegistration[];
   baseline: WriteContractBaseline;
+  /** The base revision's baseline; undefined when this change introduces it. */
   previous: WriteContractBaseline | undefined;
-  previousRegistrations: readonly MutationRegistration[];
   debtIds?: readonly string[] | undefined;
 };
 const writeRouteErrors = (route: WriteRegistration): string[] => {
@@ -1178,10 +1244,9 @@ const writeRouteErrors = (route: WriteRegistration): string[] => {
   if (route.precondition !== "deferred") {
     return errors;
   }
-  const expectedId = route.handler.endsWith(".handler")
-    ? route.handler.slice(0, -8)
-    : writeContractRouteKey(route.key);
-  if (route.baselineId !== expectedId) {
+  // A deferred replacement is bound to its handler export, or to its route
+  // when no exported handler backs it.
+  if (route.baselineId !== (route.endpoint ?? route.key)) {
     errors.push(`Misbound deferred baseline ID: ${route.key}`);
   }
   return errors;
@@ -1229,24 +1294,46 @@ const collectDeferredRegistrations = (
   return { counts, deferred };
 };
 
+/** The one reason a generated deferral row carries. */
+export const DEFERRED_REPLACEMENT_REASON =
+  "Existing replacement awaits required schema precondition and caller enrollment.";
+
+/** The deferral rows the served routes need, as `--generate` writes them. */
+export const writeContractBaseline = (
+  registrations: readonly WriteRegistration[],
+): WriteContractBaseline => {
+  const { counts, deferred } = collectDeferredRegistrations(registrations);
+  return [...deferred]
+    .map(([key, route]) => ({
+      key,
+      count: counts.get(key) ?? 0,
+      reason: DEFERRED_REPLACEMENT_REASON,
+      baselineId: route.baselineId ?? "",
+    }))
+    .toSorted((left, right) => compareCodeUnit(left.key, right.key));
+};
+
 type WriteBaselineOptions = Pick<
   CheckWriteContractsOptions,
-  "baseline" | "previous" | "previousRegistrations"
+  "baseline" | "previous" | "registrations"
 > &
   ReturnType<typeof collectDeferredRegistrations>;
 const writeBaselineErrors = ({
   baseline,
   previous,
-  previousRegistrations,
+  registrations,
   counts,
   deferred,
 }: WriteBaselineOptions): string[] => {
   const errors: string[] = [];
-  const oldCounts = new Map<string, number>();
-  for (const route of previousRegistrations) {
-    oldCounts.set(route.key, (oldCounts.get(route.key) ?? 0) + 1);
-  }
-  const previousRows = new Map(previous?.map((row) => [row.key, row]));
+  // On introduction the rows must be exactly the generated ones: no
+  // hand-written reason, and every count and id as the routes need them.
+  const previousRows = new Map(
+    (previous ?? writeContractBaseline(registrations)).map((row) => [
+      row.key,
+      row,
+    ]),
+  );
   const seen = new Set<string>();
   for (const row of baseline) {
     if (seen.has(row.key)) {
@@ -1261,12 +1348,6 @@ const writeBaselineErrors = ({
     }
     if (row.baselineId !== deferred.get(row.key)?.baselineId) {
       errors.push(`Misbound write baseline ID: ${row.key}`);
-    }
-    if (previous === undefined) {
-      if (row.count > (oldCounts.get(row.key) ?? 0)) {
-        errors.push(`New route cannot be deferred: ${row.key}`);
-      }
-      continue;
     }
     const old = previousRows.get(row.key);
     if (
@@ -1290,7 +1371,6 @@ export const checkWriteContracts = ({
   registrations,
   baseline,
   previous,
-  previousRegistrations,
   debtIds,
 }: CheckWriteContractsOptions): string[] => {
   const errors = registrations.flatMap(writeRouteErrors);
@@ -1300,7 +1380,7 @@ export const checkWriteContracts = ({
     ...writeBaselineErrors({
       baseline,
       previous,
-      previousRegistrations,
+      registrations,
       counts,
       deferred,
     }),
@@ -1308,13 +1388,56 @@ export const checkWriteContracts = ({
   return errors;
 };
 
-if (import.meta.main) {
+// --- CLI ------------------------------------------------------------------------
+
+const MUTATION_METHODS: ReadonlySet<string> = new Set([
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+]);
+
+/**
+ * The served mutation routes. Handler discovery seeds the API env defaults the
+ * route modules read at load, so the route table is imported after it.
+ */
+const servedWriteRoutes = async (): Promise<WriteRoute[]> => {
+  const { discoverSafeHandlers } =
+    await import("../apps/api/scripts/lib/enumerate-safe-handlers");
+  const discovery = await discoverSafeHandlers();
+  if (discovery.importErrors.length > 0) {
+    return panic(
+      `Handler modules failed to import, so write routes cannot be traced: ${discovery.importErrors.map(({ id, message }) => `${id}: ${message}`).join("; ")}`,
+    );
+  }
+  const endpointByDefinition = new Map<object, string>(
+    discovery.endpoints.map((endpoint) => [endpoint.definition, endpoint.id]),
+  );
+  const { apiRoutes } = await import("../apps/api/src/api-routes");
+  const { getWriteContract } =
+    await import("../apps/api/src/lib/write-contract/write-contract");
+  return apiRoutes
+    .filter((entry) => MUTATION_METHODS.has(entry.method))
+    .map((entry) => {
+      const handler =
+        "handler" in entry.definition ? entry.definition.handler : undefined;
+      return {
+        method: entry.method,
+        path: entry.path,
+        endpoint: endpointByDefinition.get(entry.definition),
+        recorded:
+          typeof handler === "function" ? getWriteContract(handler) : undefined,
+      };
+    });
+};
+
+const comparisonCommit = () => {
   const requested =
     process.env["BASE_SHA"] ?? process.env["BASE_REF"] ?? "origin/main";
   const reference = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (reference.status !== 0) {
     panic(`Write contract comparison ref unavailable: ${requested}`);
@@ -1323,49 +1446,70 @@ if (import.meta.main) {
     process.env["BASE_SHA"] !== undefined
       ? reference
       : spawnSync("git", ["merge-base", "HEAD", reference.stdout.trim()], {
+          maxBuffer: 2 ** 30,
           cwd: ROOT,
           encoding: "utf-8",
         });
   if (comparison.status !== 0) {
     panic("Write contract merge-base unavailable");
   }
-  const commit = comparison.stdout.trim();
+  return comparison.stdout.trim();
+};
+
+if (import.meta.main) {
+  const commit = comparisonCommit();
   const load: SourceLoader = (file) =>
     existsSync(path.join(ROOT, file))
       ? readFileSync(path.join(ROOT, file), "utf-8")
       : undefined;
-  const previousLoad: SourceLoader = (file) => {
-    const result = spawnSync("git", ["show", `${commit}:${file}`], {
-      cwd: ROOT,
-      encoding: "utf-8",
-    });
-    return result.status === 0 ? result.stdout : undefined;
-  };
-  const previousSource = previousLoad(BASELINE);
-  const baseline = v.parse(
-    writeContractBaselineSchema,
-    JSON.parse(readFileSync(path.join(ROOT, BASELINE), "utf-8")),
-  );
-  const previous =
-    previousSource === undefined
-      ? undefined
-      : v.parse(writeContractBaselineSchema, JSON.parse(previousSource));
-  const registrations = enumerateWriteContracts(load);
-  const errors = checkWriteContracts({
-    registrations,
-    baseline,
-    previous,
-    previousRegistrations:
-      previous === undefined ? enumerateAggregateMutations(previousLoad) : [],
-    debtIds: readWriteContractDebtIds(load),
+  const previousSource = spawnSync("git", ["show", `${commit}:${BASELINE}`], {
+    maxBuffer: 2 ** 30,
+    cwd: ROOT,
+    encoding: "utf-8",
   });
-  for (const error of errors) {
-    process.stderr.write(`${error}\n`);
+  const previous =
+    previousSource.status === 0
+      ? v.parse(writeContractBaselineSchema, JSON.parse(previousSource.stdout))
+      : undefined;
+  const registrations = enumerateWriteContracts({
+    routes: await servedWriteRoutes(),
+    raw: Object.fromEntries(RAW_WRITE_CONTRACTS),
+    load,
+  });
+  if (process.argv.includes("--generate")) {
+    if (previous !== undefined) {
+      panic(
+        "The write contract baseline is shrink-only; generation is initial-only",
+      );
+    }
+    writeFileSync(
+      path.join(ROOT, BASELINE),
+      `${JSON.stringify(writeContractBaseline(registrations), null, 2)}\n`,
+    );
+  } else {
+    const baseline = v.parse(
+      writeContractBaselineSchema,
+      JSON.parse(readFileSync(path.join(ROOT, BASELINE), "utf-8")),
+    );
+    const errors = checkWriteContracts({
+      registrations,
+      baseline,
+      previous,
+      debtIds: readWriteContractDebtIds(load),
+    });
+    for (const error of errors) {
+      process.stderr.write(`${error}\n`);
+    }
+    process.stdout.write(
+      `Write contracts: ${registrations.length} surfaces, ${baseline.length} deferred entries\n`,
+    );
+    if (errors.length !== 0) {
+      process.exitCode = 1;
+    }
   }
-  process.stdout.write(
-    `Write contracts: ${registrations.length} surfaces, ${baseline.length} deferred entries\n`,
-  );
-  if (errors.length !== 0) {
-    process.exitCode = 1;
-  }
+  // The route table's modules open Redis clients at import (the rate
+  // limiter connects at construction so a server's first requests reach it)
+  // and never unref them, so this one-off script's event loop would hang.
+  // The work is done here; exit explicitly like export-capability-catalog.ts.
+  process.exit();
 }

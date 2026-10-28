@@ -1,14 +1,16 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rateEntries } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,15 +25,22 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedRateEntryId } from "@/api/lib/safe-id-boundaries";
 
-const readRateEntriesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.rateEntriesPageSizeMax }),
+const readRateEntriesQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.rateEntriesPageSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const rateEntryParamsSchema = workspaceParams({
-  rateTableId: tSafeId("rateTable"),
+  rateTableId: resourceIdSchema("rateTable"),
 });
 
 type RateEntryCursor = {

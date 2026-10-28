@@ -41,11 +41,15 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
   useChatEditorManager,
 } from "@/components/chat-editor-provider";
-import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import type {
+  ChatInputDraft,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
@@ -99,13 +103,14 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import type { SuggestedSkill } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -113,7 +118,7 @@ import {
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -125,7 +130,14 @@ export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.index.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/",
+        },
+      });
     };
 
     detached(
@@ -239,14 +251,14 @@ function ChatIndex() {
       userId,
     }),
   );
-  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesDataView = queryView(workspacesDataQuery);
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
   const workspaces = workspacesData?.workspaces;
   const groupedThreadPagesQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
-  const groupedThreadPagesView = useQueryView(groupedThreadPagesQuery);
+  const groupedThreadPagesView = queryView(groupedThreadPagesQuery);
   const groupedThreadPages =
     groupedThreadPagesView.type === "items"
       ? groupedThreadPagesView.items
@@ -300,10 +312,13 @@ function ChatIndex() {
           ),
         })
         .patch({ webSearchEnabled: true }, { query: {} });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ChatIndex:failure",
+        scope: { type: "handler", handlerId: "ChatIndex:failure" },
+      });
     },
   });
   const seededDraftRef = useRef<string | null>(null);
@@ -407,8 +422,8 @@ function ChatIndex() {
       workspaceIds: visibleMatters.map((matter) => matter.id),
     }),
   );
-  const memberPreviewsView = useQueryView(memberPreviewsQuery);
-  useQueryViewError(memberPreviewsView);
+  const memberPreviewsView = queryView(memberPreviewsQuery);
+  useQueryViewError(memberPreviewsView, "ChatIndex:query");
   const memberPreviews =
     memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
   const mattersHeading =
@@ -441,7 +456,9 @@ function ChatIndex() {
     detached(navigate({ to: "/chat" }), "chat.navigate");
   };
 
-  const handleSubmit = async (draft: ChatInputDraft) => {
+  const handleSubmit = async (
+    draft: ChatInputDraft,
+  ): Promise<ChatSendOutcome> => {
     const newThreadMessages: string[] = [];
     const handledReserved = runReservedChatCommand(draft.html, {
       new: (args) => {
@@ -466,15 +483,13 @@ function ChatIndex() {
     if (handledReserved) {
       const newThreadMessage = newThreadMessages.at(0);
       if (newThreadMessage === undefined) {
-        return;
+        return CHAT_SEND_SENT;
       }
       if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+        return CHAT_SEND_KEPT;
       }
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
-        throw new ChatSubmitPreservedError({
-          message: "Model selection failed",
-        });
+        return CHAT_SEND_KEPT;
       }
       const chatThreadContext = {
         allowMissingThread: true,
@@ -498,10 +513,10 @@ function ChatIndex() {
         invalidateGroupedChatThreads(queryClient),
         "chat.invalidate-grouped-chat-threads",
       );
-      return;
+      return CHAT_SEND_SENT;
     }
     if (!(await ensureAIAvailable())) {
-      return;
+      return CHAT_SEND_KEPT;
     }
     // A model just picked in the (+) menu may still be
     // mid-PATCH: wait for it to settle so the route-handoff
@@ -512,7 +527,7 @@ function ChatIndex() {
     // sending with a model that may not match what the server
     // has persisted.
     if (Result.isError(await modelSelection.awaitPendingSelection())) {
-      return;
+      return CHAT_SEND_KEPT;
     }
     // Build the request payload and fetch the pure thread data
     // in parallel, then resolve (and register) the Chat<>
@@ -576,6 +591,7 @@ function ChatIndex() {
       invalidateGroupedChatThreads(queryClient),
       "chat.invalidate-grouped-chat-threads",
     );
+    return CHAT_SEND_SENT;
   };
 
   const composerModels = {

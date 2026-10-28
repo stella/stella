@@ -34,6 +34,10 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
+import {
+  orderedColumn,
+  UNORDERED_COLUMN,
+} from "@/components/workspaces/properties/sort-property.logic";
 import { ColumnToggle } from "@/components/workspaces/table/column-toggle";
 import { TableGroupHeader } from "@/components/workspaces/table/group-header";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
@@ -71,11 +75,12 @@ import { useTableStore } from "@/lib/workspaces/table-store";
 
 import {
   ENTITY_VIEW_GROUP,
-  entryId,
+  ENTITY_VIEW_SORT_KINDS,
+  entityViewSortValues,
   entryDueDate,
+  entryId,
   entryStatus,
   entryType,
-  entityViewSortValues,
   isEntityViewSortColumn,
 } from "./model";
 import { NewEntityViewTask } from "./new-task";
@@ -122,6 +127,7 @@ export const useEntityViewSortProperties = (): SortableProperty[] => {
       id,
       name: t(COLUMN_MODEL[id].label),
       type,
+      sortKind: ENTITY_VIEW_SORT_KINDS[id],
     });
   }
   return properties;
@@ -255,6 +261,11 @@ export const EntityViewTable = ({
                 column={header.column}
                 icon={model.icon}
                 label={t(model.label)}
+                sort={
+                  isEntityViewSortColumn(columnId)
+                    ? orderedColumn(ENTITY_VIEW_SORT_KINDS[columnId])
+                    : UNORDERED_COLUMN
+                }
               />
             ),
             cell: ({ row }) => (

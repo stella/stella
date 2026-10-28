@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcilePublisherRemovals": platform(
+    "case-law-publisher-removals.ts",
+    "Reconciles publisher removals in the public legal corpus.",
+  ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
     "Retention sweep of usage records past their window.",
@@ -92,6 +96,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.censusRawObjects": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
+  ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
   ),
   "caseLaw.reportFreshness": platform(
     "case-law-freshness-report.ts",
@@ -155,6 +163,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "document-processing-ocr.ts",
     "Hands queued document processing runs to their queue.",
   ),
+  "documentProcessing.dispatchNativeExtraction": platform(
+    "document-processing-native-extraction.ts",
+    "Hands queued native extraction runs to their queue.",
+  ),
   "documentProcessing.recoverDeadlineScouts": platform(
     "document-deadline-scout-recovery.ts",
     "Hands pending deadline scans to their queue.",
@@ -192,6 +204,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "flows.reconcileOrphanRuns": platform(
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
+  ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
   ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",
@@ -258,6 +274,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "sanctions.refreshSources": platform(
     "sanctions-refresh.ts",
     "Refreshes public sanctions lists.",
+  ),
+  "scheduler.auditPauses": platform(
+    "scheduler-pause-audit.ts",
+    "Reports overdue scheduler operator pauses.",
   ),
   "scheduler.dispatchBullMq": {
     authority: "unclassified",

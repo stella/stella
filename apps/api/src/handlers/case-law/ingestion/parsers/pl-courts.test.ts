@@ -1,9 +1,19 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import {
+  PL_KIO_HTML_BUDGET,
+  PlKioHtmlBudgetError,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const baseInput = (
   content: string,
@@ -44,6 +54,26 @@ const flattenInlineText = (inlines: Inline[]): string =>
     .join("");
 
 describe("parsePlDecisionContent", () => {
+  test.each(["x\n\nx\n\nx\n\nx", "x\r\n\r\nx\r\n\r\nx\r\n\r\nx"])(
+    "rejects bounded plaintext %j before constructing paragraph strings",
+    (content) => {
+      const split = spyOn(String.prototype, "split");
+
+      expect(() =>
+        parsePlDecisionContent(
+          baseInput(content, {
+            htmlExpansionBudget: {
+              ...PL_KIO_HTML_BUDGET,
+              maxDomAllocations: 2,
+            },
+          }),
+        ),
+      ).toThrow(PlKioHtmlBudgetError);
+      expect(split).not.toHaveBeenCalled();
+      split.mockRestore();
+    },
+  );
+
   test("parses SAOS HTML into headings, holdings, and argumentation", () => {
     const html = `
       <p><strong>Sygn. akt I ACa 772/13</strong></p>
@@ -227,6 +257,296 @@ describe("parsePlDecisionContent", () => {
     );
 
     expect(intro?.plainText).toBe("Przewodniczący SSA Tomasz Nowicki");
+  });
+});
+
+describe("markup whitespace", () => {
+  const ADAPTER_FIXTURES = new URL(
+    "../adapters/__fixtures__/",
+    import.meta.url,
+  );
+  const gunzipText = async (name: string): Promise<string> =>
+    new TextDecoder().decode(
+      Bun.gunzipSync(
+        new Uint8Array(
+          await Bun.file(new URL(name, ADAPTER_FIXTURES)).arrayBuffer(),
+        ),
+      ),
+    );
+  // Captured HTML of the publishers this reader serves, each pretty-printed
+  // or wrapped by its exporter.
+  const CAPTURED_HTML = [
+    "pl-ncourt-content-155020000001003_II_Ca_000236_2018_Uz_2018-03-22_001.html.gz",
+    "pl-ncourt-content-151020200002521_V_P_000335_2013_Uz_2015-11-02_001.html.gz",
+    "pl-kio-content-30308.html.gz",
+  ];
+
+  const leavesOf = (blocks: readonly Block[]): string[] => {
+    const leaves: string[] = [];
+    const walk = (inlines: readonly Inline[]): void => {
+      for (const inline of inlines) {
+        if (inline.type === "text") {
+          leaves.push(inline.text);
+        } else if (hasInlineChildren(inline)) {
+          walk(inline.children);
+        }
+      }
+    };
+    for (const block of blocks) {
+      if (block.type === "table") {
+        for (const cell of block.rows.flat()) {
+          walk(cell.inlines);
+        }
+      } else if ("inlines" in block) {
+        walk(block.inlines);
+      }
+    }
+    return leaves;
+  };
+
+  test.each(CAPTURED_HTML)(
+    "%s: no line break, tab or run of spaces of the markup reaches the text",
+    async (name) => {
+      const html = await gunzipText(name);
+      // The capture reaches the fault: a paragraph whose markup puts a line
+      // break or a run of spaces between two of its words.
+      const $ = cheerio.load(html);
+      expect(
+        $("p")
+          .toArray()
+          .some((paragraph) =>
+            /\S(?:[ \t]*\n|[ \t]{2,})\s*\S/u.test($(paragraph).text()),
+          ),
+      ).toBe(true);
+      const { documentAst } = parsePlDecisionContent(
+        baseInput(html, { decisionType: undefined }),
+      );
+      const leaves = leavesOf(documentAst.blocks);
+      expect(leaves.length).toBeGreaterThan(0);
+      expect(leaves.filter((text) => /[\t\n\r\f]| {2}/u.test(text))).toEqual(
+        [],
+      );
+    },
+  );
+
+  test("a source line break inside a paragraph reads as a space", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        '<p>Przewodniczący: <span class="underline">\n<!-- -->SSO A. B.</span>\n</p>',
+        {
+          decisionType: undefined,
+        },
+      ),
+    );
+    expect(documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Przewodniczący: SSO A. B.",
+    ]);
+  });
+
+  const plainTextsOf = (html: string): string[] =>
+    parsePlDecisionContent(
+      baseInput(html, { decisionType: undefined }),
+    ).documentAst.blocks.map((block) => block.plainText);
+
+  test.each([
+    ["<pre>A\tB\nC\tD</pre>", ["A\tB\nC\tD"]],
+    ['<p style="white-space:pre-wrap">A  B\n  C</p>', ["A  B\n  C"]],
+    ['<p style="white-space: pre">A\t\tB</p>', ["A\t\tB"]],
+    ['<p style="white-space:break-spaces">A   B</p>', ["A   B"]],
+    ['<p style="white-space:pre-line">A   B\n   C</p>', ["A B\nC"]],
+    // Inherited from a container, and undone by a descendant.
+    ['<div style="white-space:pre-wrap"><p>A  B</p></div>', ["A  B"]],
+    [
+      '<div style="white-space:pre-wrap"><p style="white-space:normal">A  B</p></div>',
+      ["A B"],
+    ],
+    // The cascade's priority: the important declaration wins.
+    [
+      '<p style="white-space:pre !important; white-space:normal">A  B</p>',
+      ["A  B"],
+    ],
+    // A block element its style keeps in the line ends no line.
+    [
+      '<table><tr><td>art. <div style="display:inline">3</div><div style="display:inline">94</div> k.p.c.</td></tr></table>',
+      ["art. 394 k.p.c."],
+    ],
+    [
+      '<table><tr><td>art. <div style="display: inline-block !important">3</div><span>94</span> k.p.c.</td></tr></table>',
+      ["art. 394 k.p.c."],
+    ],
+    [
+      '<table><tr><td><span style="display:block">A</span><span style="display:block">B</span></td></tr></table>',
+      ["A\nB"],
+    ],
+  ])("%s keeps the whitespace its style preserves", (html, expected) => {
+    expect(plainTextsOf(html)).toEqual(expected);
+  });
+
+  test("a kept line break is a line break inline, not text", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<pre>A\nB</pre>", { decisionType: undefined }),
+    );
+    expect(documentAst.blocks.at(0)).toMatchObject({
+      inlines: [
+        { type: "text", text: "A" },
+        { type: "line-break" },
+        { type: "text", text: "B" },
+      ],
+    });
+  });
+
+  test("paragraphs inside one cell stay apart, a line each", () => {
+    // Captured KIO markup: each paragraph ends in a space and the next
+    // follows with nothing between them.
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<table><tr><td><p><span>Sp. z o.o. </span></p><p><span>ul. Zabytkowa 2 </span></p></td></tr></table>",
+        { decisionType: undefined },
+      ),
+    );
+    const table = documentAst.blocks.find((block) => block.type === "table");
+    expect(table?.rows[0]?.[0]?.plainText).toBe("Sp. z o.o.\nul. Zabytkowa 2");
+  });
+});
+
+describe("ordered list items print the number a browser gives them", () => {
+  const itemsOf = (html: string): string[] =>
+    parsePlDecisionContent(
+      baseInput(html, { decisionType: undefined }),
+    ).documentAst.blocks.map((block) => block.plainText);
+
+  test.each([
+    ["<ol><li>a</li><li>b</li></ol>", ["1. a", "2. b"]],
+    ['<ol start="4"><li>a</li><li>b</li></ol>', ["4. a", "5. b"]],
+    [
+      '<ol><li>a</li><li value="7">b</li><li>c</li></ol>',
+      ["1. a", "7. b", "8. c"],
+    ],
+    [
+      "<ol reversed><li>a</li><li>b</li><li>c</li></ol>",
+      ["3. a", "2. b", "1. c"],
+    ],
+    ['<ol type="a"><li>a</li><li>b</li></ol>', ["a. a", "b. b"]],
+    ['<ol type="A" start="27"><li>a</li></ol>', ["AA. a"]],
+    ['<ol type="i" start="4"><li>a</li></ol>', ["iv. a"]],
+    ['<ol type="I" start="9"><li>a</li><li>b</li></ol>', ["IX. a", "X. b"]],
+    ['<ol type="I" start="0"><li>a</li></ol>', ["0. a"]],
+    ["<ol><li>a</li><li> </li><li>c</li></ol>", ["1. a", "3. c"]],
+    ['<ol style="list-style-type: none;"><li>a</li></ol>', ["a"]],
+    ['<ol type="a" style="list-style-type: decimal"><li>a</li></ol>', ["1. a"]],
+    [
+      '<ol><li style="list-style: upper-roman inside">a</li><li>b</li></ol>',
+      ["I. a", "2. b"],
+    ],
+    [
+      '<ol style="list-style-type: none"><li style="list-style-type: lower-alpha">a</li></ol>',
+      ["a. a"],
+    ],
+    // The cascade's priority: the important declaration wins.
+    [
+      '<ol><li style="list-style-type:none !important;list-style-type:decimal">A</li></ol>',
+      ["A"],
+    ],
+    ['<ol style="list-style: inside"><li>a</li></ol>', ["a"]],
+    // Counters outside a style's range print in decimal, and a counter past
+    // the safe integer range is not one the list counts from.
+    [
+      '<ol type="I" start="3999"><li>a</li><li>b</li></ol>',
+      ["MMMCMXCIX. a", "4000. b"],
+    ],
+    ['<ol type="i" start="4000"><li>a</li></ol>', ["4000. a"]],
+    [
+      '<ol type="a" start="-1"><li>a</li><li>b</li><li>c</li></ol>',
+      ["-1. a", "0. b", "a. c"],
+    ],
+    ['<ol type="a" start="703"><li>a</li></ol>', ["aaa. a"]],
+    ['<ol type="I" start="100000000000000000000"><li>a</li></ol>', ["I. a"]],
+    [
+      '<ol><li value="100000000000000000000">a</li><li>b</li></ol>',
+      ["1. a", "2. b"],
+    ],
+    // A nested list is its own list, numbered on its own counter, in place.
+    [
+      '<ol><li>Parent<ol type="a"><li>Child</li></ol></li><li>Next</li></ol>',
+      ["1. Parent", "a. Child", "2. Next"],
+    ],
+    [
+      '<ol reversed><li>P<ol><li value="5">C1</li><li>C2</li></ol> tail</li><li>Q</li></ol>',
+      ["2. P", "5. C1", "6. C2", "tail", "1. Q"],
+    ],
+    [
+      '<ol start="3"><li><p>One</p><p>More</p></li><li><ul><li>Deep</li></ul></li></ol>',
+      ["3. One", "More", "4.", "Deep"],
+    ],
+    ['<ol><li>a <p style="display:inline">b</p> c</li></ol>', ["1. a b c"]],
+    ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
+  ])("%s", (html, expected) => {
+    expect(itemsOf(html)).toEqual(expected);
+  });
+
+  test("reading an item's runs around its blocks costs work linear in the item", () => {
+    // Every inline walk lists an element's children once; the total listed
+    // is the work. Copying the item per run made it quadratic.
+    type ContentsOwner = { contents: () => { length: number } };
+    const ownsContents = (value: unknown): value is ContentsOwner =>
+      typeof value === "object" &&
+      value !== null &&
+      Object.hasOwn(value, "contents");
+    // The prototype cheerio defines `contents` on, above each load's class.
+    let contentsOwner: unknown = cheerio.load("<p></p>").root();
+    while (contentsOwner !== null && !ownsContents(contentsOwner)) {
+      contentsOwner = Object.getPrototypeOf(contentsOwner);
+    }
+    if (!ownsContents(contentsOwner)) {
+      expect.unreachable("cheerio defines no contents method");
+    }
+    const owner = contentsOwner;
+    const listed = (runs: number): number => {
+      const spy = spyOn(owner, "contents");
+      try {
+        const { documentAst } = parsePlDecisionContent(
+          baseInput(
+            `<ol><li>${"text<p>paragraph</p>".repeat(runs)}</li></ol>`,
+            {
+              decisionType: undefined,
+            },
+          ),
+        );
+        expect(documentAst.blocks).toHaveLength(runs * 2);
+        let total = 0;
+        for (const result of spy.mock.results) {
+          total += result.type === "return" ? result.value.length : 0;
+        }
+        return total;
+      } finally {
+        spy.mockRestore();
+      }
+    };
+    const small = listed(100);
+    const large = listed(400);
+    // Four times the runs: about four times the work, never sixteen.
+    expect(large / small).toBeLessThan(5);
+  });
+
+  test("the number does not decide the item's role", () => {
+    // A list in the reasons stays argumentation; a number the item states
+    // itself would read as an operative point.
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<h2>UZASADNIENIE</h2><ol><li>Pytanie pierwsze?</li></ol>"),
+    );
+    expect(documentAst.blocks.at(-1)).toMatchObject({
+      plainText: "1. Pytanie pierwsze?",
+      role: "argumentation",
+    });
+    const preamble = parsePlDecisionContent(
+      baseInput("<ol><li>Wnioskodawca zapytał.</li></ol>", {
+        decisionType: undefined,
+      }),
+    );
+    expect(preamble.documentAst.blocks.at(-1)).toMatchObject({
+      plainText: "1. Wnioskodawca zapytał.",
+      role: "intro",
+    });
   });
 });
 

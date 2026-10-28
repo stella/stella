@@ -25,27 +25,32 @@ import {
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { chatRoute } from "@/api/handlers/chat/routes";
-import { getAuth } from "@/api/lib/auth";
+import { createHttpApp } from "@/api/http/app";
+import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { sweepBoundStreams } from "@/api/lib/sse";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // A chat turn keeps running while the session of the device watching it ends:
-// another device signs it out, or it expires. The real chat routes and their
-// auth macro, the real revocation endpoint, and a run log written the way a
+// another device signs it out, or it expires. The real chat routes served over
+// HTTP with their member authentication, the real revocation endpoint, and a
+// run log written the way a
 // producing turn writes it. The ended session can neither probe nor rejoin
 // the turn, nobody else in the organization can either, and the turn still
 // runs to its settlement for the owner's live session.
@@ -58,7 +63,12 @@ beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
 });
 
+const server = serveForTest(
+  createHttpApp({ routes: chatRoute, middleware: [errorBoundary] }),
+);
+
 afterAll(async () => {
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
@@ -93,7 +103,7 @@ const turnRequest = async (
   action: "join" | "resume",
   cookie: string,
 ): Promise<Response> =>
-  await chatRoute.handle(
+  await server.fetch(
     new Request(
       `${BASE}/chat/threads/${turn.threadId}/turns/${turn.turnId}/${action}?runId=${turn.runId}`,
       { headers: { cookie } },
@@ -290,6 +300,30 @@ const readJoinUntil = async (response: Response, text: string) => {
   return received;
 };
 
+/** The reader of a join stream the test holds open; the caller releases it. */
+const joinReader = (response: Response) => {
+  const body = response.body ?? panic("The join stream has no body");
+  const reader = body.getReader();
+  return reader;
+};
+
+/** A join stream held open: read as far as a text, or to its end. */
+const holdJoin = (reader: ReturnType<typeof joinReader>) => {
+  const decoder = new TextDecoder();
+  let received = "";
+  const readUntil = async (text: string): Promise<"ended" | "received"> => {
+    while (!received.includes(text)) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return "ended";
+      }
+      received += decoder.decode(value, { stream: true });
+    }
+    return "received";
+  };
+  return { readUntil, received: () => received };
+};
+
 /** A refusal must not carry any of the turn: no stream, no answer text. */
 const expectRefusal = async (response: Response, status: number) => {
   expect(response.status).toBe(status);
@@ -381,6 +415,41 @@ describe("a running chat turn whose watching session ends", () => {
       });
       // And the ended session still learns nothing about how it ended.
       await expectRefusal(await turnRequest(turn, "resume", ended), 401);
+    });
+
+    test(`a join stream the ${ending} session already holds ends at the next credential sweep, while the owner's other device keeps the answer`, async () => {
+      const fixture = await createRunningTurn();
+      const { leaving, staying, turn } = fixture;
+      const leavingReader = joinReader(
+        await turnRequest(turn, "join", leaving.cookieHeader()),
+      );
+      const stayingReader = joinReader(
+        await turnRequest(turn, "join", staying.cookieHeader()),
+      );
+      try {
+        const leavingJoin = holdJoin(leavingReader);
+        const stayingJoin = holdJoin(stayingReader);
+        expect(await leavingJoin.readUntil("The lease runs")).toBe("received");
+        expect(await stayingJoin.readUntil("The lease runs")).toBe("received");
+
+        await endSession(fixture);
+        await sweepBoundStreams(realtimeAuthorizers.sessions);
+
+        // The stream that was already open ends with its session, before the
+        // rest of the answer exists.
+        expect(await leavingJoin.readUntil(" until 2031.")).toBe("ended");
+        await fixture.settle();
+        expect(leavingJoin.received()).not.toContain(" until 2031.");
+        // The same person's live device follows the turn to its end.
+        expect(await stayingJoin.readUntil(" until 2031.")).toBe("received");
+      } finally {
+        // swallow-ok: a stream the test held open; cancelling only detaches it
+        await leavingReader.cancel().catch(() => undefined);
+        // swallow-ok: a stream the test held open; cancelling only detaches it
+        await stayingReader.cancel().catch(() => undefined);
+        leavingReader.releaseLock();
+        stayingReader.releaseLock();
+      }
     });
   }
 });

@@ -4,11 +4,11 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { clean_scan_rgba, initSync } from "../generated/scan_engine.js";
 import type {
+  CleanScanResult,
   ContentBox,
   RasterizedScanPage,
   ScanEngine,
   ScanOptions,
-  CleanScanResult,
 } from "./types";
 import { ScanEngineError } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-protocol";

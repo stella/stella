@@ -8,8 +8,7 @@
     "test": "bun test src",
     "test:browser": "bun test browser ../../scripts/browser/visual-preview-composition.spec.ts",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/visual-preview",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/visual-preview"
   },
   "dependencies": {
     "@sparticuz/chromium-min": "153.0.0",

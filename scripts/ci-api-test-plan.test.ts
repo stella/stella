@@ -77,7 +77,15 @@ test("dispatches and unreadable scopes retain every API shard without invoking t
       },
     });
     expect(plan.impact).toEqual(allApiTests());
-    expect(matrixShards(plan)).toEqual(["api-1", "api-2", "api-3", "rest-web"]);
+    expect(matrixShards(plan)).toEqual([
+      "api-1",
+      "api-2",
+      "api-3",
+      "api-4",
+      "api-5",
+      "api-6",
+      "rest-web",
+    ]);
   }
 });
 
@@ -232,11 +240,9 @@ test("matrix admission follows the executable Turbo test plan", () => {
       })),
     });
   expect(selectedTestJobs(turboPlan(["@stll/web"]))).toEqual(["rest-web"]);
-  expect(selectedTestJobs(turboPlan(["@stll/api"]))).toEqual([
-    "api-1",
-    "api-2",
-    "api-3",
-  ]);
+  expect(selectedTestJobs(turboPlan(["@stll/api"]))).toEqual(
+    FULL_TEST_JOB_SHARDS.filter((shard) => shard !== "rest-web"),
+  );
   expect(selectedTestJobs(turboPlan([]))).toEqual([]);
 });
 

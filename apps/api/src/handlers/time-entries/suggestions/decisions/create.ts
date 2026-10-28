@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -22,6 +21,11 @@ import { readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
+  timeEntryBillableSchema,
+  timeEntryNarrativeSchema,
+  utbmsCodeSchema,
+} from "@/api/lib/billing/time-entry-body";
+import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
@@ -31,54 +35,45 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
+import { resolveSuggestionBillingDefault } from "../billing-default";
+
 const SUGGESTION_UNAVAILABLE_HINT =
   "The suggestion was already accepted or dismissed, or the day's activity " +
   "regrouped it. Call time-entries.suggestions.list for the day again and " +
   "use a fingerprint from that response.";
 
-const acceptDecisionSchema = t.Object({
-  type: t.Literal("accept"),
-  durationMinutes: t.Integer({
-    minimum: 1,
-    description:
+const acceptDecisionSchema = v.object({
+  type: v.literal("accept"),
+  durationMinutes: v.pipe(
+    v.pipe(v.number(), v.integer(), v.minValue(1)),
+    v.description(
       "Minutes to record; the suggestion's engaged minutes unless edited",
-  }),
-  narrative: t.String({
-    minLength: 0,
-    maxLength: 10_000,
-    description: "Description of the work",
-  }),
-  narrativeLanguage: t.Optional(narrativeLanguageSchema),
-  billable: t.Optional(
-    t.Boolean({ description: "Whether the entry is billable to the client" }),
-  ),
-  taskCode: t.Optional(
-    t.Nullable(
-      t.String({ maxLength: 20, description: "UTBMS/LEDES task code" }),
     ),
   ),
-  activityCode: t.Optional(
-    t.Nullable(
-      t.String({ maxLength: 20, description: "UTBMS/LEDES activity code" }),
-    ),
-  ),
+  narrative: timeEntryNarrativeSchema,
+  narrativeLanguage: v.optional(narrativeLanguageSchema),
+  billable: v.optional(timeEntryBillableSchema),
+  taskCode: v.optional(utbmsCodeSchema("UTBMS/LEDES task code")),
+  activityCode: v.optional(utbmsCodeSchema("UTBMS/LEDES activity code")),
 });
 
-const dismissDecisionSchema = t.Object({
-  type: t.Literal("dismiss"),
-});
+const dismissDecisionSchema = v.object({ type: v.literal("dismiss") });
 
-const createTimeSuggestionDecisionBodySchema = t.Object({
+const createTimeSuggestionDecisionBodySchema = v.object({
   fingerprint: timeSuggestionFingerprintSchema,
   date: timeSuggestionDateSchema,
   timezoneId: timeSuggestionTimezoneSchema,
-  decision: t.Union([acceptDecisionSchema, dismissDecisionSchema], {
-    description:
+  decision: v.pipe(
+    v.union([acceptDecisionSchema, dismissDecisionSchema]),
+    v.description(
       "`accept` records a time entry from the suggestion; `dismiss` hides it for good",
-  }),
+    ),
+  ),
 });
 
-type DecisionBody = Static<typeof createTimeSuggestionDecisionBodySchema>;
+type DecisionBody = v.InferOutput<
+  typeof createTimeSuggestionDecisionBodySchema
+>;
 
 type DecisionContext = {
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
@@ -101,8 +96,36 @@ const acceptSuggestion = async function* ({
   recordAuditEvent,
   body,
 }: DecisionContext & {
-  body: DecisionBody & { decision: Static<typeof acceptDecisionSchema> };
+  body: DecisionBody & { decision: v.InferOutput<typeof acceptDecisionSchema> };
 }) {
+  const existingDecision = yield* Result.await(
+    safeDb(async (tx) => {
+      const [existing] = await tx
+        .select({
+          status: timeEntrySuggestions.status,
+          timeEntryId: timeEntrySuggestions.timeEntryId,
+        })
+        .from(timeEntrySuggestions)
+        .where(
+          and(
+            eq(timeEntrySuggestions.workspaceId, workspaceId),
+            eq(timeEntrySuggestions.userId, userId),
+            eq(timeEntrySuggestions.fingerprint, body.fingerprint),
+          ),
+        );
+      return existing;
+    }),
+  );
+  // A repeated accept replays the stored acceptance. A dismissed suggestion is
+  // never reported as accepted: that accept falls through to the pending check
+  // below and is refused.
+  if (existingDecision?.status === "accepted") {
+    return {
+      fingerprint: body.fingerprint,
+      status: existingDecision.status,
+      timeEntryId: existingDecision.timeEntryId,
+    };
+  }
   const loaded = yield* loadTimeSuggestions({
     safeDb,
     featureAccessSnapshot,
@@ -128,19 +151,27 @@ const acceptSuggestion = async function* ({
   const policy = yield* Result.await(
     readTimePolicy({ safeDb, organizationId }),
   );
+  const billingDefault = yield* resolveSuggestionBillingDefault({
+    safeDb,
+    workspaceId,
+    userId,
+    dateWorked: body.date,
+  });
+  const billable = body.decision.billable ?? billingDefault.billable;
   const prepared = yield* prepareTimeEntryInsert({
     safeDb,
     policy,
     canApprove: canApproveTimeEntries(memberRole),
     workspaceId,
     userId,
+    resolvedRate: billingDefault.rate,
     body: {
       dateWorked: body.date,
       timezoneId: body.timezoneId,
       durationMinutes: body.decision.durationMinutes,
       narrative: body.decision.narrative,
       narrativeLanguage: body.decision.narrativeLanguage,
-      billable: body.decision.billable,
+      billable,
       taskCode: body.decision.taskCode,
       activityCode: body.decision.activityCode,
     },
@@ -228,7 +259,7 @@ const dismissSuggestion = async function* ({
     date: body.date,
     timezoneId: body.timezoneId,
   });
-  const pending = loaded.pending.some(
+  const pending = loaded.pending.find(
     (candidate) => candidate.fingerprint === body.fingerprint,
   );
   const stored = yield* Result.await(
@@ -274,6 +305,7 @@ const dismissSuggestion = async function* ({
         dateWorked: body.date,
         fingerprint: body.fingerprint,
         status: TIME_ENTRY_SUGGESTION_STATUS.DISMISSED,
+        evidence: pending.evidence,
       });
       return Result.ok({
         status: TIME_ENTRY_SUGGESTION_STATUS.DISMISSED,
@@ -296,8 +328,9 @@ const createTimeSuggestionDecision = createSafeHandler(
       "Decide on a suggested time entry from time-entries.suggestions.list. " +
       "`decision.type: accept` records a time entry with the given minutes " +
       "and narrative (source `suggested`) and keeps the suggestion's " +
-      "evidence with the decision; it fails with 409 when the fingerprint " +
-      "is no longer pending for that day. `decision.type: dismiss` hides " +
+      "evidence with the decision; repeating an accept returns the stored " +
+      "acceptance, and it fails with 409 when the fingerprint is no longer " +
+      "pending for that day, including after a dismissal. `decision.type: dismiss` hides " +
       "the suggestion for good and is idempotent: repeating it returns the " +
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },

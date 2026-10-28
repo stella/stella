@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import {
   BackfillFailedError,
@@ -19,9 +19,9 @@ import type {
 } from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
-  LONG_TRANSACTION_SQL,
   autovacuumOnTarget,
   busyWindow,
+  LONG_TRANSACTION_SQL,
   longTransaction,
 } from "@stll/db-load-gate/indicators";
 import {

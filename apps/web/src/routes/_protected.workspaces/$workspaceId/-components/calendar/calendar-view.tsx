@@ -14,19 +14,19 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { appToday } from "@/lib/local-iso-date";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { captureInvalidTaskOption } from "@/lib/task-option-telemetry";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
-import { useQueryView } from "@/lib/use-query-view";
 import { useUpsertField } from "@/lib/workspaces/mutations/entities";
 import {
   calendarTasksKeys,
@@ -43,14 +43,14 @@ import {
   getMonthWeekRows,
   getMonthWindowStartContaining,
   getUTCMonthKey,
-  startOfUTCMonth,
   MONTH_WINDOW_SHIFT,
+  startOfUTCMonth,
 } from "./calendar-scroll.logic";
 import type { MonthAnchor } from "./calendar-scroll.logic";
 import {
   formatMonthYearLabel,
-  getWeekDays,
   getWeekdayLabels,
+  getWeekDays,
   isInternalDateProperty,
   isTaskDateProperty,
   TASK_DATE_IDS,
@@ -78,7 +78,7 @@ type HandleDropParams = {
 
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
@@ -232,7 +232,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       endDatePropertyId,
     }),
   });
-  const calendarTasksView = useQueryView(calendarTasksQuery);
+  const calendarTasksView = queryView(calendarTasksQuery);
   const calendarTasks =
     calendarTasksView.type === "items" ? calendarTasksView.items : [];
 
@@ -442,7 +442,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -452,7 +452,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(
@@ -466,7 +472,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       detached(
         (async () => {
           const requested = await Result.tryPromise(async () =>
-            unwrapEden(
+            unwrapApiResponse(
               await api
                 .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
                 .patch({
@@ -477,7 +483,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             ),
           );
           if (Result.isError(requested)) {
-            getAnalytics().captureError(requested.error);
+            getAnalytics().captureError(requested.error, {
+              fingerprintKey: "CalendarView.handleDrop:failure-2",
+              scope: {
+                type: "handler",
+                handlerId: "CalendarView.handleDrop:failure-2",
+              },
+            });
             notifyUserError(requested.error, t("errors.actionFailed"));
           }
           detached(

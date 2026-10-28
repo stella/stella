@@ -314,6 +314,40 @@ const createAdditionalBudgets = (
     },
   },
   MCP_RATE_LIMITS: {
+    handoffMint: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_MINT_MAX;
+      },
+      get windowMs() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_MINT_WINDOW_MS;
+      },
+    },
+    handoffRedeemAddress: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_ADDRESS_MAX;
+      },
+      get windowMs() {
+        return getConfiguration()
+          .RATE_LIMIT_MCP_HANDOFF_REDEEM_ADDRESS_WINDOW_MS;
+      },
+    },
+    handoffRedeemUser: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_USER_MAX;
+      },
+      get windowMs() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_USER_WINDOW_MS;
+      },
+    },
+    handoffRedeemGlobal: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_GLOBAL_MAX;
+      },
+      get windowMs() {
+        return getConfiguration()
+          .RATE_LIMIT_MCP_HANDOFF_REDEEM_GLOBAL_WINDOW_MS;
+      },
+    },
     capability: {
       get max() {
         return getConfiguration().RATE_LIMIT_MCP_CAPABILITY_MAX;

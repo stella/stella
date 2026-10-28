@@ -11,6 +11,16 @@ export const DOCUMENT_VERSION_UPLOAD_TRANSPORT = {
   toolName: "upload_document_version",
 } as const;
 
+/**
+ * How long a client lets one presigned document PUT run before it gives up.
+ * A stall ceiling, not a target duration: the largest document at the slowest
+ * supported link rate fits inside it. The API keeps an upload finalizable for
+ * the URL lifetime plus this budget, so a PUT that starts just before its URL
+ * expires and runs to this ceiling still finalizes. The web app, the CLI and
+ * the API all read this one value.
+ */
+export const DOCUMENT_UPLOAD_PUT_TIMEOUT_MS = 1_800_000;
+
 export const DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS: readonly string[] = [
   DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
   DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.finalize,

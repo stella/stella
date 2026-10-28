@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -57,7 +57,7 @@ export const useSetChatWebSearch = (
                 : {},
           },
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: async (nextEnabled) => {
       // Every cached query for this thread (the thread page's

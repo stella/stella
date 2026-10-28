@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   InfoSoudAPIError,
@@ -11,9 +11,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export { getInfoSoudClient } from "@/api/lib/infosoud/client";
 
-export const infosoudLookupBodySchema = t.Object({
-  courtCode: t.String({ minLength: 1, maxLength: 16 }),
-  spisZn: t.String({ minLength: 1, maxLength: 64 }),
+export const infosoudLookupBodySchema = v.object({
+  courtCode: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
+  spisZn: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
 export const toInfoSoudLookupError = (error: unknown): HandlerError => {
@@ -25,13 +25,19 @@ export const toInfoSoudLookupError = (error: unknown): HandlerError => {
     });
   }
 
+  if (error instanceof InfoSoudAPIError && error.status === 400) {
+    return new HandlerError({
+      status: 404,
+      message: "InfoSoud case not found",
+      cause: error,
+    });
+  }
+
   if (error instanceof InfoSoudAPIError) {
     return new HandlerError({
-      status: error.status === 400 ? 404 : 502,
-      message:
-        error.status === 400
-          ? "InfoSoud case not found"
-          : "InfoSoud returned an error",
+      status: 502,
+      code: error.status >= 500 ? "upstream_unavailable" : "internal_error",
+      message: "InfoSoud returned an error",
       cause: error,
     });
   }
@@ -47,6 +53,7 @@ export const toInfoSoudLookupError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudRequestError) {
     return new HandlerError({
       status: 502,
+      code: "upstream_unavailable",
       message: "InfoSoud request failed",
       cause: error,
     });

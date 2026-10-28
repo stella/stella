@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { randomFillSync } from "node:crypto";
+import * as v from "valibot";
+
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -22,11 +26,11 @@ import {
 import type { PackedCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { corpusMemberDigest } from "@/api/lib/legal-search/corpus-pack";
 import {
+  CORPUS_TRANSFER_MAX_BYTES,
   corpusContentHash,
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
-  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
@@ -38,6 +42,7 @@ import {
   readCorpusText,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
+  writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   CorpusPayload,
@@ -901,4 +906,74 @@ describe("deleteCorpusDocument", () => {
     // deleted object would outlive the key it names.
     expect(erasure.tombstoned).toEqual([[]]);
   });
+});
+
+test("standalone writes validate structure before comparing the stored payload", async () => {
+  const invalidAst = {
+    version: 1,
+    source: {
+      system: "synthetic",
+      documentId: "synthetic",
+      webUrl: "",
+      printUrl: "",
+    },
+    metadata: {
+      caseNumber: null,
+      ecli: null,
+      court: null,
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      {
+        id: "p1",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+      {
+        id: "p2",
+        anchorId: "p1",
+        type: "paragraph",
+        inlines: [{ type: "text", text: "Body." }],
+        plainText: "Body.",
+      },
+    ],
+  } satisfies DocumentAst;
+  expect(v.safeParse(persistedDocumentAstSchema, invalidAst).success).toBe(
+    false,
+  );
+  const payload = {
+    text: "Synthetic decision.",
+    sections: null,
+    ast: EMPTY_AST,
+  };
+  expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
+    corpusContentHash(payload),
+  );
+  const plan = planCorpusDocumentWrite({
+    ...payload,
+    documentId: "synthetic",
+    jurisdiction: "SVK",
+    stored: null,
+  });
+  if (plan.type !== "put") {
+    expect.unreachable("Fixture must carry text");
+  }
+  // A rejected AST must converge to the already stored text-only payload. The
+  // aborted signal makes any unintended transfer fail before reaching S3.
+  const outcome = await writeCorpusDocument(
+    {
+      ...payload,
+      ast: invalidAst,
+      documentId: "synthetic",
+      jurisdiction: "SVK",
+      stored: plan.written,
+    },
+    { signal: AbortSignal.abort() },
+  );
+  expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

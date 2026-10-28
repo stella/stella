@@ -1,14 +1,14 @@
 import type { PublicCorpusBookkeepingTable } from "../../apps/api/src/lib/db/public-corpus-audit/membership.ts";
 import {
   type AstNode,
+  exactModuleId,
   type ImportedFromOptions,
   isAstNode,
-  isIdentifierReference,
   isIdentifier,
+  isIdentifierReference,
   memberPropertyName,
-  resolveImportedExpressionForEnforcement,
-  exactModuleId,
   repoRelativeFilename,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
   unwrapExpression,

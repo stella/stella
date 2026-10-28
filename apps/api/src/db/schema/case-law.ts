@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
@@ -93,6 +94,8 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import { REMOVAL_RETRY_KINDS } from "@/api/lib/legal-search/removal-reconciliation-state";
+import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
@@ -110,18 +113,18 @@ import {
   jsonb,
   orgPolicies,
   p,
-  pUuid,
   publicCaseLawReaderPolicies,
   publicLawReaderPolicies,
+  pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
   stellaPublicLawReader,
+  timestamptz,
   tsvector,
   user,
   wsPolicies,
-  timestamptz,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -373,6 +376,8 @@ export const caseLawSources = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
+    /** Weekly publisher-removal checkpoint; null begins the next bounded cycle. */
+    removalCheckpoint: jsonb("removal_checkpoint").$type<RemovalCheckpoint>(),
     lastSyncAt: timestamptz("last_sync_at"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
@@ -510,6 +515,43 @@ export const caseLawCorpusJurisdictions = p.pgTable(
   () => [...globalCaseLawPolicies()],
 );
 
+type ParsedSourceSchemaColumns = {
+  id: PgColumn;
+  parsedSourceHash: SQLWrapper;
+  parsedSourceHashVersion: SQLWrapper;
+  parsedSourceRawS3Key: SQLWrapper;
+  sourceRawS3Key: SQLWrapper;
+};
+const parsedSourceComplete = (t: ParsedSourceSchemaColumns) =>
+  p.check(
+    "case_law_decisions_parsed_source_complete",
+    sql`(${t.parsedSourceHash} IS NULL AND ${t.parsedSourceHashVersion} IS NULL AND ${t.parsedSourceRawS3Key} IS NULL) OR (${t.parsedSourceHash} IS NOT NULL AND ${t.parsedSourceHashVersion} IS NOT NULL AND ${t.parsedSourceHashVersion} >= 0 AND ${t.parsedSourceRawS3Key} IS NOT NULL)`,
+  );
+const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
+  p
+    .index("case_law_decisions_parse_pending_idx")
+    .on(t.id)
+    .where(sql`${t.parsedSourceRawS3Key} IS DISTINCT FROM ${t.sourceRawS3Key}`);
+
+type PublishedCourtDateColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  court: PgColumn;
+  decisionDate: PgColumn;
+  id: PgColumn;
+};
+const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
+  p
+    .index("case_law_decisions_country_court_date_published_idx")
+    .on(
+      t.country,
+      t.court,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -643,6 +685,15 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    /** Algorithm version under which `sourceHash` was computed. */
+    sourceHashVersion: p.smallint("source_hash_version").default(0).notNull(),
+    /** Input fingerprint retained with the parse, not a guess for legacy output. */
+    parsedSourceHash: p.varchar("parsed_source_hash", { length: 64 }),
+    parsedSourceHashVersion: p.smallint("parsed_source_hash_version"),
+    /** Immutable raw object actually used for the stored parse. */
+    parsedSourceRawS3Key: p.varchar("parsed_source_raw_s3_key", {
+      length: 512,
+    }),
     sourceObservedAt: timestamptz("source_observed_at"),
     sourceObservationOrder: p.bigint("source_observation_order", {
       mode: "bigint",
@@ -713,6 +764,7 @@ export const caseLawDecisions = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    parsedSourceComplete(t),
     p.check(
       "case_law_decisions_projection_epoch_nonnegative",
       sql`${t.projectionEpoch} >= 0`,
@@ -788,11 +840,18 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_docket_family_key_idx")
       .on(t.docketFamilyKey)
       .where(isNotNull(t.docketFamilyKey)),
+    // Bounded cross-publisher ruling lookup: jurisdiction and court first,
+    // then the normalized docket family shared by equivalent publications.
+    p
+      .index("case_law_decisions_republished_ruling_idx")
+      .on(t.country, t.court, t.docketFamilyKey, t.id)
+      .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
       .on(t.languageGroupKey)
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+    parsedSourcePendingIndex(t),
     // The generation rebuild walks its snapshot in decision-date order, so the
     // documents one split receives cover a contiguous span of dates and a
     // timestamp-filtered query can skip the splits outside its window. The
@@ -814,6 +873,9 @@ export const caseLawDecisions = p.pgTable(
         sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
         t.id,
       ),
+    // The vocabulary's loose scan needs no heap publication filter. Keep the
+    // all-row twin for administrative country/court candidate reads.
+    publishedCourtDateIndex(t),
     // The same walk with no court chosen, which is how the browse page opens.
     // Court sits between country and the sort key above, so that index orders
     // a country's rows by court first and cannot serve this walk's ORDER BY;
@@ -1314,6 +1376,15 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
       .varchar("source_document_id", { length: 256 })
       .notNull(),
     decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    /** Raw payload for this publisher observation, including republished copies. */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
+    sourceUrl: p.varchar("source_url", { length: 2048 }),
+    sourceObservedAt: timestamptz("source_observed_at"),
+    /** The source's observation order of the provenance above; only a later order replaces it. */
+    sourceObservationOrder: p.bigint("source_observation_order", {
+      mode: "bigint",
+    }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
@@ -1355,6 +1426,34 @@ export const caseLawDecisionAliases = p.pgTable(
       "case_law_decision_aliases_not_self",
       sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
     ),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Exact source identities moved by a reversible decision-alias repair. */
+export const caseLawDecisionAliasMovedIdentities = p.pgTable(
+  "case_law_decision_alias_moved_identities",
+  {
+    retiredDecisionId: safeUuid<"caseLawDecision">(
+      "retired_decision_id",
+    ).notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    sourceDocumentId: p
+      .varchar("source_document_id", { length: 1024 })
+      .notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      columns: [t.retiredDecisionId, t.sourceId, t.sourceDocumentId],
+      name: "case_law_decision_alias_moved_identities_pk",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_decision_alias_moved_identities_alias_fk",
+        columns: [t.retiredDecisionId],
+        foreignColumns: [caseLawDecisionAliases.retiredDecisionId],
+      })
+      .onDelete("cascade"),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -1695,6 +1794,7 @@ export const caseLawCoverageSlices = p.pgTable(
       sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -1788,6 +1888,57 @@ export const caseLawReconciliationItems = p.pgTable(
     p.check(
       "case_law_reconciliation_items_parked_is_scheduled",
       sql`${t.status} <> ${RECONCILIATION_ITEM_STATUS.PARKED} OR ${t.nextAttemptAt} IS NOT NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/** Removal work is physically separate from every listing worker version. */
+export const caseLawRemovalReconciliationItems = p.pgTable(
+  "case_law_removal_reconciliation_items",
+  {
+    id: pUuid<"caseLawRemovalReconciliationItem">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    kind: p.varchar({ length: 32, enum: REMOVAL_RETRY_KINDS }).notNull(),
+    payload: jsonb().$type<unknown>().notNull(),
+    attempts: p.integer().default(0).notNull(),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull(),
+    lastError: p.text("last_error").notNull(),
+    firstSeenAt: timestamptz("first_seen_at").defaultNow().notNull(),
+    lastAttemptAt: timestamptz("last_attempt_at").notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+        name: "case_law_removal_items_source_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_removal_items_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("case_law_removal_items_source_decision_idx")
+      .on(t.sourceId, t.decisionId),
+    p
+      .index("case_law_removal_items_due_idx")
+      .on(t.sourceId, t.kind, t.nextAttemptAt, t.id),
+    p.check(
+      "case_law_removal_items_kind_values",
+      sql`${t.kind} IN (${sql.join(
+        REMOVAL_RETRY_KINDS.map((kind) => sql`${kind}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_removal_items_attempts_nonnegative",
+      sql`${t.attempts} >= 0`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -2126,20 +2277,10 @@ export const caseLawProvisionCitations = p.pgTable(
         t.spanStart.desc(),
         t.anchor.desc(),
       ),
-    p
-      .index("case_law_provision_citations_work_anchor_idx")
-      .on(
-        t.jurisdiction,
-        t.workIdentifier,
-        t.anchor,
-        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
-        t.decisionId.desc(),
-        t.spanStart.desc(),
-      ),
-    // The same two walks keyed by the work's identifier instead of its
-    // display citation, for a reader arriving from the act itself. Partial:
-    // a reference to a work the corpus does not hold carries no ELI, and
-    // those rows are never a starting point for this walk.
+    // The same walk keyed by the work's identifier instead of its display
+    // citation, for a reader arriving from the act itself. Partial: a
+    // reference to a work the corpus does not hold carries no ELI, and those
+    // rows are never a starting point for this walk.
     p
       .index("case_law_provision_citations_eli_idx")
       .on(
@@ -2151,16 +2292,16 @@ export const caseLawProvisionCitations = p.pgTable(
         t.anchor.desc(),
       )
       .where(isNotNull(t.workEli)),
+    // One provision with every subdivision under it, for either work key.
+    // The anchor compares byte-wise so a subtree is one contiguous range
+    // (`provisionAnchorSubtreeSql`); under the database collation `par_510`
+    // sorts between `par_51` and `par_51-odst_1`.
     p
-      .index("case_law_provision_citations_eli_anchor_idx")
-      .on(
-        t.jurisdiction,
-        t.workEli,
-        t.anchor,
-        sql`(coalesce(${t.decisionDate}, '0001-01-01'::date)) DESC`,
-        t.decisionId.desc(),
-        t.spanStart.desc(),
-      )
+      .index("case_law_provision_citations_work_subtree_idx")
+      .on(t.jurisdiction, t.workIdentifier, sql`${t.anchor} COLLATE "C"`),
+    p
+      .index("case_law_provision_citations_eli_subtree_idx")
+      .on(t.jurisdiction, t.workEli, sql`${t.anchor} COLLATE "C"`)
       .where(isNotNull(t.workEli)),
     p.check(
       "provision_citations_work_number_shape",
@@ -2407,6 +2548,37 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
  */
+const removalSnapshotPolicies = () => [
+  p.pgPolicy("case_law_removal_ingestion_select", {
+    for: "select",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+  p.pgPolicy("case_law_removal_ingestion_delete", {
+    for: "delete",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+];
+
+/** Persistent country epochs fence counts staged after a corpus removal. */
+export const caseLawSitemapCountryGenerations = p.pgTable(
+  "case_law_sitemap_country_generations",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    generation: p.bigint({ mode: "bigint" }).default(0n).notNull(),
+  },
+  () => [
+    p.pgPolicy("case_law_sitemap_generation_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_sitemap_country_generations'::regclass)`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
 export const caseLawSitemapShards = p.pgTable(
   "case_law_sitemap_shards",
   {
@@ -2423,6 +2595,7 @@ export const caseLawSitemapShards = p.pgTable(
       columns: [t.country, t.year, t.month, t.bucket],
     }),
     p.check("case_law_sitemap_shards_total_positive", sql`${t.total} > 0`),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_owner_access", {
       for: "all",
       to: "public",
@@ -2430,6 +2603,33 @@ export const caseLawSitemapShards = p.pgTable(
       withCheck: sql`true`,
     }),
     ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * One country's month counts, staged by the sitemap refresh until every
+ * public country is counted and `case_law_sitemap_shards` is replaced whole.
+ */
+export const caseLawSitemapShardCounts = p.pgTable(
+  "case_law_sitemap_shard_counts",
+  {
+    country: p.varchar({ length: 3 }).primaryKey(),
+    months: p.jsonb().notNull(),
+    pages: p.integer().notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_sitemap_shard_counts_pages_positive",
+      sql`${t.pages} > 0`,
+    ),
+    ...removalSnapshotPolicies(),
+    p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
   ],
 );
 
@@ -2464,6 +2664,7 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",
       to: "public",
@@ -2502,6 +2703,7 @@ export const caseLawSourceArrivals = p.pgTable(
       "case_law_source_arrivals_added_nonnegative",
       sql`${t.addedLastWeek} >= 0`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_source_arrival_owner_access", {
       for: "all",
       to: "public",
@@ -2517,6 +2719,31 @@ export const caseLawSourceArrivals = p.pgTable(
         WHERE arrival_source.id = ${t.sourceId}
           AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
       )`,
+    }),
+  ],
+);
+
+/** The complete coverage answer, replaced atomically by the governed refresh. */
+export const caseLawCoverageSummaries = p.pgTable(
+  "case_law_coverage_summaries",
+  {
+    key: p.text().primaryKey(),
+    sourcePolicy: p.text("source_policy").notNull(),
+    answer: jsonb().notNull(),
+    generatedAt: timestamptz("generated_at").notNull(),
+  },
+  (t) => [
+    p.check("case_law_coverage_summaries_singleton", sql`${t.key} = 'current'`),
+    p.check(
+      "case_law_coverage_summaries_policy_array",
+      sql`jsonb_typeof(${t.sourcePolicy}::text::jsonb) = 'array'`,
+    ),
+    ...removalSnapshotPolicies(),
+    p.pgPolicy("case_law_coverage_summary_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
     }),
   ],
 );

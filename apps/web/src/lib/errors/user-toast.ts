@@ -3,13 +3,20 @@ import { createElement } from "react";
 import { Result } from "better-result";
 
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
-import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
+import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
+import { BoundedSet } from "@/lib/bounded-set";
+import type { DetachedOperationId } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -17,16 +24,144 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],
   "title" | "type"
-> & { toastId?: string | undefined };
+> & {
+  feature?: string | undefined;
+  occurrence?: string | number | undefined;
+  routeTemplate?: string | undefined;
+  toastId?: string | undefined;
+};
+
+type UserVisibleErrorReportOptions = {
+  notice?: string | undefined;
+  occurrence?: string | number | undefined;
+};
+
+let currentRouteTemplate = "unknown";
+const REPORTED_ERROR_LIMIT = 1000;
+const reportedFingerprints = new BoundedSet<string>(REPORTED_ERROR_LIMIT);
+const reportedApiErrorsWithoutNotice = new BoundedSet<string>(
+  REPORTED_ERROR_LIMIT,
+);
+
+export const resetUserErrorReportDedupeForTests = (): void => {
+  reportedFingerprints.clear();
+  reportedApiErrorsWithoutNotice.clear();
+  resetReportedErrorsForTests();
+};
+
+const featureFromRoute = (routeTemplate: string): string => {
+  if (routeTemplate === "unknown") {
+    return "web";
+  }
+  const feature = routeTemplate.split("/").find((part) => part !== "");
+  return feature?.replace(/^_protected\.?/u, "") || "web";
+};
+
+export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
+  currentRouteTemplate = routeTemplate;
+};
+
+export const reportUserVisibleError = (
+  error: unknown,
+  feature: string | undefined,
+  routeTemplate: string | undefined,
+  { notice, occurrence }: UserVisibleErrorReportOptions = {},
+): void => {
+  const reportable = error ?? new Error("UserVisibleError");
+  const template =
+    (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
+  const isApiError = APIError.is(error);
+  const apiIdentity = isApiError
+    ? `${error.status}:${error.code ?? "unknown"}`
+    : "not-api";
+  const noticeIdentity =
+    notice ??
+    actionAdmissionOutcome(error)?.messageKey ??
+    userErrorFromThrown(error, "user-visible");
+  const occurrenceIdentity =
+    occurrence === undefined ? "default" : `${typeof occurrence}:${occurrence}`;
+  const fingerprint = [
+    noticeIdentity,
+    template,
+    telemetryErrorType(reportable),
+    apiIdentity,
+    occurrenceIdentity,
+  ].join("|");
+  const apiOccurrence = [
+    template,
+    telemetryErrorType(reportable),
+    apiIdentity,
+    occurrenceIdentity,
+  ].join("|");
+  if (reportedFingerprints.has(fingerprint)) {
+    return;
+  }
+  if (
+    notice !== undefined &&
+    isApiError &&
+    reportedApiErrorsWithoutNotice.delete(apiOccurrence)
+  ) {
+    reportedFingerprints.add(fingerprint);
+    return;
+  }
+  reportedFingerprints.add(fingerprint);
+  if (notice === undefined && isApiError) {
+    reportedApiErrorsWithoutNotice.add(apiOccurrence);
+  }
+  getAnalytics().captureError(reportable, {
+    fingerprintKey: "reportUserVisibleError:failure",
+    scope: { type: "request", method: "GET", routeTemplate: template },
+    context: {
+      type: "user-visible",
+      routeTemplate: template,
+      feature: feature ?? featureFromRoute(template),
+    },
+  });
+};
 
 export const notifyUserError = (
   error: unknown,
   fallback: string,
-  { toastId, ...options }: UserErrorToastOptions = {},
+  {
+    feature,
+    occurrence,
+    routeTemplate,
+    toastId,
+    ...options
+  }: UserErrorToastOptions = {},
 ): boolean => {
-  // The stable refusal id coalesces Eden's observer and local error handlers;
-  // raw fetch and SDK errors also need to emit the same notice here.
-  if (notifyActionAdmissionRefusal(error)) {
+  if (notifyStepUp(error)) {
+    return false;
+  }
+  // The stable refusal id coalesces the API client's observer and local error
+  // handlers; raw fetch and SDK errors also need to emit the same notice here.
+  const refusal = actionAdmissionOutcome(error);
+  const title = userErrorFromThrown(error, fallback);
+  reportUserVisibleError(error, feature, routeTemplate, {
+    notice: refusal?.messageKey ?? title,
+    occurrence,
+  });
+  if (refusal) {
+    const t = getTranslator();
+    stellaToast.add({
+      id: refusal.code,
+      title: t(refusal.messageKey),
+      type: "info",
+      ...(refusal.contactUrl
+        ? {
+            description: createElement(
+              "a",
+              {
+                className: "underline underline-offset-4",
+                href: sanitizeHref(refusal.contactUrl),
+                rel: "noreferrer",
+                target: "_blank",
+              },
+              t("errors.actionAdmission.contact"),
+            ),
+          }
+        : {}),
+    });
     if (toastId !== undefined) {
       stellaToast.close(toastId);
     }
@@ -37,7 +172,7 @@ export const notifyUserError = (
     ...options,
     title:
       diagnostic === undefined
-        ? userErrorFromThrown(error, fallback)
+        ? title
         : createElement(ProviderDiagnosticToast, {
             diagnostic,
             onCopy: async () => {
@@ -45,7 +180,6 @@ export const notifyUserError = (
                 `${diagnostic.provider}: ${diagnostic.message}`,
               );
               if (Result.isError(copied)) {
-                getAnalytics().captureError(copied.error);
                 notifyUserError(
                   copied.error,
                   getTranslator()("errors.actionFailed"),
@@ -80,7 +214,7 @@ export const notifyAuthClientError = (
 
 type DetachedUserActionOptions = {
   /** A fixed label for telemetry, as `detached` takes. */
-  context: string;
+  context: DetachedOperationId;
   /** What the person is told when the action fails. */
   failureMessage: string;
 };
@@ -94,8 +228,7 @@ export const detachedUserAction = (
   operation: unknown,
   { context, failureMessage }: DetachedUserActionOptions,
 ): void => {
-  createDetached((error, label) => {
-    getAnalytics().captureError(error, { type: "detached", operation: label });
+  createDetached((error) => {
     notifyUserError(error, failureMessage);
   })(operation, context);
 };

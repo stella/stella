@@ -34,10 +34,11 @@ import { plUodoAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uod
 import { plUokikAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { ukFclAdapter } from "@/api/handlers/case-law/ingestion/adapters/uk-fcl";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 
@@ -82,6 +83,7 @@ const ADAPTER_REGISTRY = {
   [ADAPTER_KEYS.AT_FINDOK]: atFindokAdapter,
   [ADAPTER_KEYS.EU_ECJ]: euEcjAdapter,
   [ADAPTER_KEYS.HU_BHGY]: huBhgyAdapter,
+  [ADAPTER_KEYS.UK_FCL]: ukFclAdapter,
   [ADAPTER_KEYS.PL_KIS]: plKisAdapter,
   [ADAPTER_KEYS.PL_UODO]: plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: plUokikAdapter,

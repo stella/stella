@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import {
+  Sidebar,
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
-  Sidebar,
   SidebarProvider,
   SidebarRail,
 } from "./sidebar";

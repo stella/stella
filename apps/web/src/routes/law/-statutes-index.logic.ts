@@ -10,9 +10,9 @@ import { publicLawLoadMode } from "@/components/public-law-table/public-law-resu
 import { createStatuteFilters } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
-  statutesInfiniteOptions,
   type StatuteListFilters,
   type StatuteListItem,
+  statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
 import {
   readStatuteIntent,
@@ -79,7 +79,13 @@ export const loadPublicStatutesIndex = async ({
       queryClient,
       statuteFacetsOptions(country.toUpperCase()),
       (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "loadPublicStatutesIndex:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadPublicStatutesIndex:failure",
+          },
+        });
       },
     ),
     "statutes.facets-prefetch",

@@ -17,9 +17,10 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import {
-  Navigate,
   createFileRoute,
+  Navigate,
   stripSearchParams,
+  useRouter,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -66,6 +67,10 @@ import { getEntityFileDownloadRenditions } from "@/components/inspector/file-dow
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  PdfSignDialogs,
+  usePdfSignFlow,
+} from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
@@ -102,6 +107,10 @@ import {
 } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import {
+  optionalFlagSearchSchema,
+  optionalIntegerSearchSchema,
+} from "@/lib/schema";
 import { docxSuggestionsOptions } from "@/lib/workspaces/queries/docx-suggestions";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
@@ -112,6 +121,8 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
+import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 import { loadDocumentEntityWithChatPrefetch } from "./-document-loader";
@@ -137,21 +148,19 @@ export const Route = createFileRoute(
   component: RouteComponent,
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.
-  validateSearch: v.object({
+  validateSearch: routeSearchSchema({
     entity: v.optional(v.string()),
     field: v.optional(v.string()),
     justification: v.optional(v.string()),
-    justificationPage: v.optional(
-      v.pipe(v.number(), v.integer(), v.minValue(1)),
-    ),
-    pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+    justificationPage: optionalIntegerSearchSchema({ min: 1 }),
+    pdfPage: optionalIntegerSearchSchema({ min: 1 }),
     pdfMode: v.optional(v.picklist(["organize"])),
     pdfColorMode: v.optional(v.picklist(PDF_COLOR_MODES)),
     // Folio block to land on in a DOCX (report citation links). Consumed once
     // on mount through the inspector's pending block scroll.
     block: v.optional(v.string()),
     panel: v.optional(v.picklist(["versions"])),
-    editing: v.optional(v.boolean()),
+    editing: optionalFlagSearchSchema,
     // Which pane reads the document review. Absent is the default
     // arrangement: the document here, the review in the inspector.
     pane: v.optional(v.picklist(DOCUMENT_PANE_SEARCH_VALUES)),
@@ -175,7 +184,16 @@ export const Route = createFileRoute(
     const entityPromise = loadDocumentEntityWithChatPrefetch({
       activeOrganizationId: context.user.activeOrganizationId,
       captureError: (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey:
+            "workspaces.workspaceId.viewId.document.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate:
+              "/_protected/workspaces/$workspaceId/$viewId/document",
+          },
+        });
       },
       loadEntity: async () =>
         await ensureRouteQueryData(
@@ -197,7 +215,16 @@ export const Route = createFileRoute(
           entityId: deps.entity,
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-2",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -217,7 +244,16 @@ export const Route = createFileRoute(
           entityIds: [deps.entity],
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-3",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -250,7 +286,16 @@ export const Route = createFileRoute(
             entityId: deps.entity,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -270,7 +315,16 @@ export const Route = createFileRoute(
             "cached",
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-5",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -290,7 +344,16 @@ export const Route = createFileRoute(
             fieldId: deps.field,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-6",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -311,7 +374,16 @@ export const Route = createFileRoute(
             purpose: "native-display",
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-7",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -331,7 +403,16 @@ export const Route = createFileRoute(
           context.queryClient,
           fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-8",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -637,7 +718,10 @@ function RouteComponentInner({
     const leaveResult = await Result.tryPromise(actions.leave);
     isLeavingDocxRef.current = false;
     if (Result.isError(leaveResult)) {
-      getAnalytics().captureError(leaveResult.error);
+      getAnalytics().captureError(leaveResult.error, {
+        fingerprintKey: "RouteComponentInner:failure",
+        scope: { type: "handler", handlerId: "RouteComponentInner:failure" },
+      });
       return true;
     }
     return !leaveResult.value;
@@ -773,6 +857,9 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  // Signing from the page editor outlives it: saving first replaces the
+  // version, which remounts the editor, and the stamp dialog must stay.
+  const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -901,9 +988,14 @@ function RouteComponentInner({
     );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
+  const editorPdfSignTarget = editorPdfSignFlow.preparedTarget ?? pdfSignTarget;
+
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
+      {editorPdfSignTarget !== null && (
+        <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
+      )}
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
           entityId={entityId}
@@ -1152,6 +1244,14 @@ function RouteComponentInner({
                           fieldId={fieldId}
                           fileName={activeFileLabel}
                           onClose={() => setIsPDFPageOrganizerOpen(false)}
+                          pdfSign={
+                            pdfSignTarget === null
+                              ? null
+                              : {
+                                  flow: editorPdfSignFlow,
+                                  target: pdfSignTarget,
+                                }
+                          }
                           workspaceId={workspaceId}
                         />
                       </Suspense>
@@ -1196,6 +1296,7 @@ function RouteComponentInner({
 /** Recovers by opening the file where every format renders, the side panel. */
 const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
   const t = useTranslations();
+  const router = useRouter();
   const navigate = Route.useNavigate();
   const { viewId, workspaceId } = Route.useParams({
     select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
@@ -1215,9 +1316,22 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { viewId, workspaceId },
                 });
-                await openEntityInInspector(entityId, "", workspaceId);
+                await openEntityInInspector({
+                  documentOnScreen: getCurrentWorkspaceDocument(
+                    router.state.matches,
+                  ),
+                  entityId,
+                  label: "",
+                  workspaceId,
+                });
               } catch (openError) {
-                getAnalytics().captureError(openError);
+                getAnalytics().captureError(openError, {
+                  fingerprintKey: "DocumentDisplayUnavailable:openError",
+                  scope: {
+                    type: "handler",
+                    handlerId: "DocumentDisplayUnavailable:openError",
+                  },
+                });
                 notifyUserError(openError, t("errors.actionFailed"));
               }
             })(),

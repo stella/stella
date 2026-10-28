@@ -4,6 +4,7 @@ export type ReaderMessageKey =
   | "statutes.diffRemoved"
   | "statutes.diffInserted"
   | "common.copyLink"
+  | "common.copied"
   | "common.back"
   | "caseLaw.viewer.legalSentence"
   | "caseLaw.viewer.abstract"

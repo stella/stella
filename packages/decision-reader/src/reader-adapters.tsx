@@ -38,6 +38,8 @@ export type ReaderDecisionLinkProps = {
   decision: CitedDecisionTarget;
   citation: CitationAnchorSource;
   treatment: ReaderCitationTreatment;
+  /** The block whose text names the decision at this link. */
+  blockId: string;
 };
 
 export type ReaderStatuteLinkProps =
@@ -57,8 +59,12 @@ export type ProvisionPreviewRef = {
 
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
-  /** Omit when the host cannot copy a permalink; copy controls are hidden. */
-  copyPermalink?: ((anchorId: string) => void) | undefined;
+  /**
+   * Copies the block's permalink and reports whether it worked; the mark
+   * confirms a success in place, so the host raises no success toast.
+   * Omit when the host cannot copy a permalink; copy controls are hidden.
+   */
+  copyPermalink?: ((anchorId: string) => Promise<boolean>) | undefined;
 };
 
 export type DecisionReaderAdapters = ReaderPresentationAdapters & {

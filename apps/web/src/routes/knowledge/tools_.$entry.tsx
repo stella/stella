@@ -20,6 +20,7 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
+import { routeSearchSchema } from "@/route-search-params";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
 
@@ -31,7 +32,7 @@ const LazyMemberSkillEditorPage = lazy(async () => {
 
 // A bad `?install=` value degrades to "no install intent" rather than
 // throwing into the router's error boundary.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
@@ -113,7 +114,10 @@ function ToolEntryPage() {
         markdown={page.markdown}
         onClearInstallIntent={() => {
           navigate({ replace: true, search: {} }).catch((error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey: "ToolEntryPage:failure",
+              scope: { type: "handler", handlerId: "ToolEntryPage:failure" },
+            });
           });
         }}
       />

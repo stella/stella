@@ -1,6 +1,6 @@
 {
   "name": "@stll/agent-input",
-  "version": "0.1.7",
+  "version": "0.2.1",
   "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "keywords": [
     "agent",
@@ -33,6 +33,7 @@
     "./country": "./src/country.ts",
     "./date-value": "./src/date-value.ts",
     "./locale": "./src/locale.ts",
+    "./numeric-token": "./src/numeric-token.ts",
     "./string-list": "./src/string-list.ts"
   },
   "publishConfig": {
@@ -47,7 +48,6 @@
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/agent-input",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-input",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"
   },
   "dependencies": {
@@ -63,6 +63,7 @@
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

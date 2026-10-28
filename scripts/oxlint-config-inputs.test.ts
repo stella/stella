@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
+import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 import { OXLINT_CONFIGURATION_CACHE_INPUTS } from "./code-check-affected";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -72,6 +75,72 @@ const turboTasks = (): TurboTasks => {
 
 // turbo.json cannot import the planner's list, so every task that runs Oxlint
 // repeats it. A task is one that runs Oxlint when it lists the config.
+/**
+ * Relative value imports of every module the lint config and its JS plugins
+ * load, transitively. Type-only imports are erased before anything runs.
+ */
+const lintModuleImports = (): { file: string; specifier: string }[] => {
+  const pending = [
+    CONFIG_PATH,
+    ...readdirSync(path.join(REPO_ROOT, ".oxlint-plugins"))
+      .filter((file) => /\.[cm]?ts$/u.test(file))
+      .map((file) => `.oxlint-plugins/${file}`),
+  ];
+  const seen = new Set<string>();
+  const imports: { file: string; specifier: string }[] = [];
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    if (seen.has(file)) {
+      continue;
+    }
+    seen.add(file);
+    const { module } = parseSource(file, read(file));
+    const specifiers = [
+      ...module.staticImports
+        .filter(
+          ({ entries }) =>
+            entries.length === 0 || entries.some(({ isType }) => !isType),
+        )
+        .map(({ moduleRequest }) => moduleRequest.value),
+      ...module.staticExports.flatMap(({ entries }) =>
+        entries.flatMap(({ isType, moduleRequest }) =>
+          moduleRequest === null || isType ? [] : [moduleRequest.value],
+        ),
+      ),
+    ];
+    for (const specifier of specifiers.filter((value) =>
+      value.startsWith("."),
+    )) {
+      imports.push({ file, specifier });
+      const target = repoRelativePath(
+        REPO_ROOT,
+        path.resolve(REPO_ROOT, path.dirname(file), specifier),
+      );
+      const source = [target, `${target}.ts`].find(
+        (candidate) =>
+          /\.[cm]?[jt]sx?$/u.test(candidate) &&
+          existsSync(path.join(REPO_ROOT, candidate)),
+      );
+      if (source !== undefined) {
+        pending.push(source);
+      }
+    }
+  }
+  return imports;
+};
+
+// Oxlint runs JS plugins under Node, whose ES module loader resolves a
+// relative import only by its full file name; an extensionless one stops the
+// whole lint from loading.
+test("every relative import the lint plugins load names its file", () => {
+  const imports = lintModuleImports();
+  expect(imports.length).toBeGreaterThan(100);
+  expect(
+    imports
+      .filter(({ specifier }) => !/\.(?:[cm]?[jt]sx?|json)$/u.test(specifier))
+      .map(({ file, specifier }) => `${file}: ${specifier}`),
+  ).toEqual([]);
+});
+
 test("every Turbo task that runs Oxlint lists every lint cache input", () => {
   const configInput = `${ROOT_PREFIX}${CONFIG_PATH}`;
   const lintTasks = Object.entries(turboTasks()).filter(

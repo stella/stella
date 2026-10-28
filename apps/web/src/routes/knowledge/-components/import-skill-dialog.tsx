@@ -8,9 +8,9 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -32,7 +32,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 import {
@@ -137,7 +137,7 @@ const ImportSkillDialogBody = ({
       const response = await api.skills["discover-url"].post({
         url: url.trim(),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result) => {
       setDiscovery(result);
@@ -167,7 +167,7 @@ const ImportSkillDialogBody = ({
           })),
         scope,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (result, source) => {
       if (result.installed.length > 0) {

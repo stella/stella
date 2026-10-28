@@ -105,7 +105,11 @@ for (const paths of [
     const tree = execFileSync(
       "git",
       ["ls-tree", "-r", "--full-tree", "HEAD", "--", ...normalized],
-      { cwd: nodePath.resolve(import.meta.dir, ".."), encoding: "utf-8" },
+      {
+        maxBuffer: 2 ** 30,
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        encoding: "utf-8",
+      },
     ).trim();
     expect(watchedPathsHashAtHead(paths)).toBe(
       createLegacyNodeHash()

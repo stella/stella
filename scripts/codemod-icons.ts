@@ -20,8 +20,7 @@
 //   bun scripts/codemod-icons.ts           rewrite in place
 //   bun scripts/codemod-icons.ts --check   exit 1 when a rewrite is pending
 
-import { panic } from "better-result";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
@@ -66,39 +65,41 @@ const checkOnly = process.argv.includes("--check");
 const failures: string[] = [];
 const changed: string[] = [];
 
-const listSourceFiles = (): string[] => {
-  const result = Bun.spawnSync({
-    cmd: [
-      "git",
-      "ls-files",
-      "-z",
-      "--cached",
-      "--others",
-      "--exclude-standard",
-      "--",
-      "apps",
-      "packages",
-    ],
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic("listing the repository's files failed");
-  }
-  return [
-    ...new Set(
-      result.stdout
-        .toString()
-        .split("\0")
-        .filter(
-          (file) =>
-            SOURCE_FILE.test(file) &&
-            file !== ICON_MODULE &&
-            existsSync(path.join(REPO_ROOT, file)),
-        ),
-    ),
-  ];
-};
+// Directories that hold dependencies or build output, never sources. The
+// check runs offline, so it walks the tree instead of asking git.
+const EXCLUDED_DIRECTORIES = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  "playwright-report",
+  "test-results",
+  ".turbo",
+  ".output",
+  ".cache",
+  ".astro",
+  ".tanstack",
+  ".wrangler",
+  "target",
+]);
+
+const listSourceFiles = (): string[] =>
+  [
+    ...new Bun.Glob("{apps,packages}/**/*.{ts,mts,cts,tsx}").scanSync({
+      cwd: REPO_ROOT,
+      onlyFiles: true,
+      dot: true,
+      followSymlinks: false,
+    }),
+  ]
+    .filter(
+      (file) =>
+        SOURCE_FILE.test(file) &&
+        file !== ICON_MODULE &&
+        file.split("/").every((part) => !EXCLUDED_DIRECTORIES.has(part)),
+    )
+    .toSorted();
 
 const iconSpecifierFor = (file: string): string => {
   if (!file.startsWith(UI_SOURCE_ROOT)) {
@@ -330,14 +331,16 @@ const moduleSource = readFileSync(modulePath, "utf-8");
 
 // The semantic entries the module declares by hand, e.g.
 // `export { BookOpenIcon as SkillIcon } from "lucide-react";`.
-const semantic = new Set(
-  Array.from(
-    moduleSource.matchAll(
-      /^export \{ \w+ as (?<name>\w+) \} from "lucide-react";$/gmu,
-    ),
-    (match) => match.groups?.["name"] ?? "",
+const semanticEntries = Array.from(
+  moduleSource.matchAll(
+    /^export \{ (?<glyph>\w+) as (?<name>\w+) \} from "lucide-react";$/gmu,
   ),
+  (match) => ({
+    glyph: match.groups?.["glyph"] ?? "",
+    name: match.groups?.["name"] ?? "",
+  }),
 );
+const semantic = new Set(semanticEntries.map((entry) => entry.name));
 
 // Every name a file imports from the icon module, semantic entries aside.
 const ICON_IMPORT =
@@ -427,10 +430,17 @@ const main = (): void => {
       failures.push(
         `'${name}' is imported from the icon module but is not a lucide icon.`,
       );
-    } else if (SEMANTIC_REWRITES[glyph] !== undefined) {
-      failures.push(
-        `'${name}' has a semantic entry; import the entry instead of the plain glyph.`,
-      );
+    } else {
+      // Read from the module rather than SEMANTIC_REWRITES, so a glyph that
+      // gains a semantic entry can never return to the plain list.
+      const entries = semanticEntries
+        .filter((entry) => glyphOf(entry.glyph) === glyph)
+        .map((entry) => entry.name);
+      if (entries.length > 0) {
+        failures.push(
+          `'${name}' has a semantic entry; import ${entries.join(" or ")} instead of the plain glyph, or add an entry for the meaning it draws.`,
+        );
+      }
     }
   }
 

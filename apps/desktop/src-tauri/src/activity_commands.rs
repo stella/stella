@@ -20,8 +20,8 @@ use crate::{
 
 const MAX_COPY_BYTES: usize = 16 * 1024;
 
-fn lock_error() -> String {
-  "activity timeline is unavailable".to_string()
+fn lock_error<T>(poisoned: std::sync::PoisonError<T>) -> String {
+  crate::logging::with_cause_logged("activity timeline is unavailable")(poisoned)
 }
 
 fn update<E: From<String>>(
@@ -30,7 +30,9 @@ fn update<E: From<String>>(
   caller: &ActivityCaller,
   change: impl FnOnce(&mut ActivityManager) -> Result<(), E>,
 ) -> Result<(), E> {
-  let mut manager = state.lock().map_err(|_| E::from(lock_error()))?;
+  let mut manager = state
+    .lock()
+    .map_err(|poisoned| E::from(lock_error(poisoned)))?;
   caller.require_current(app).map_err(E::from)?;
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
@@ -53,13 +55,13 @@ pub fn activity_get_day(
     None => now.with_timezone(&chrono::Local).date_naive(),
   };
   let capture_details = {
-    let manager = state.lock().map_err(|_| lock_error())?;
+    let manager = state.lock().map_err(lock_error)?;
     caller.require_current(&app)?;
     manager.require_caller(&caller)?;
     manager.capture_details()
   };
   let details_access = activity_details::access_status(capture_details);
-  let manager = state.lock().map_err(|_| lock_error())?;
+  let manager = state.lock().map_err(lock_error)?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   let other_account_history_days = manager.other_account_history_days()?;
@@ -178,7 +180,7 @@ pub fn activity_copy_text(
   if text.trim().is_empty() || text.len() > MAX_COPY_BYTES {
     return Err("activity summary is empty or too large to copy".to_string());
   }
-  let manager = state.lock().map_err(|_| lock_error())?;
+  let manager = state.lock().map_err(lock_error)?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   // The lock is held through the write: an account switch takes it, so the
@@ -196,7 +198,7 @@ pub fn activity_set_capture_details(
   enabled: bool,
 ) -> Result<(), String> {
   let should_prompt = {
-    let mut manager = state.lock().map_err(|_| lock_error())?;
+    let mut manager = state.lock().map_err(lock_error)?;
     caller.require_current(&app)?;
     manager.require_caller(&caller)?;
     manager.set_capture_details(enabled, Utc::now())?
@@ -204,6 +206,23 @@ pub fn activity_set_capture_details(
   if should_prompt {
     caller.require_current(&app)?;
     activity_details::request_permission();
+  }
+  let _ = app.emit(activity::CHANGED_EVENT, ());
+  Ok(())
+}
+
+#[tauri::command]
+pub fn activity_set_detect_calls(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  enabled: bool,
+) -> Result<(), String> {
+  {
+    let mut manager = state.lock().map_err(lock_error)?;
+    caller.require_current(&app)?;
+    manager.require_caller(&caller)?;
+    manager.set_detect_calls(enabled, Utc::now())?;
   }
   let _ = app.emit(activity::CHANGED_EVENT, ());
   Ok(())
@@ -229,7 +248,7 @@ pub fn activity_open_accessibility_settings(
   app: AppHandle,
   state: State<'_, ActivityAppState>,
 ) -> Result<(), String> {
-  let manager = state.lock().map_err(|_| lock_error())?;
+  let manager = state.lock().map_err(lock_error)?;
   caller.require_current(&app)?;
   manager.require_caller(&caller)?;
   drop(manager);

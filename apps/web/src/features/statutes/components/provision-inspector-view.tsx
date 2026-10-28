@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { pickVersionAt } from "@stll/api-contract/statute-version";
@@ -13,6 +12,7 @@ import { InfoIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@stll/ui/tooltip";
+import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
 import { useRequireAccount } from "@/components/auth/use-require-account";
@@ -23,12 +23,11 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
-import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
-import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,
@@ -56,8 +55,9 @@ import { resolveStatuteDisplayStatus } from "@/features/statutes/statute-status"
 import { useFormatter } from "@/i18n/formatting-context";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
+import { queryView } from "@/lib/query-view.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 // The ask actions pull the prompt builders the chat needs; the pane is read
 // far more often than it is asked a question, so they arrive on demand.
@@ -82,7 +82,7 @@ export const ProvisionInspectorView = ({
   const navigate = useNavigate();
   const search = useRouterState({ select: (state) => state.location.search });
   const citingFilters = readProvisionCitingSearch(search);
-  const countsView = useQueryView(
+  const countsView = queryView(
     useQuery(
       statuteCitationCountsOptions({
         eli: payload.eli,
@@ -96,11 +96,11 @@ export const ProvisionInspectorView = ({
           (row) => row.anchor === payload.anchorId,
         )?.decisionCount ?? 0)
       : null;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("provision");
   const updateView = useInspectorTabsStore((state) => state.updateView);
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
-  const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  const versionsView = queryView(versionsQuery);
+  useQueryViewError(versionsView, "ProvisionInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
   const availableVersions = optionalArray(versions);
@@ -140,7 +140,7 @@ export const ProvisionInspectorView = ({
     };
     updateView({ id: tab.id, label: tab.label, payload: nextPayload });
   };
-  const leadingView = useQueryView(
+  const leadingView = queryView(
     useQuery(
       topCitingDecisionsOptions({
         anchor: payload.anchorId,
@@ -151,12 +151,6 @@ export const ProvisionInspectorView = ({
   );
   const leadingDecisions =
     leadingView.type === "items" ? uniqueByDecision(leadingView.items) : [];
-  const leadingPresentations = decisionCitationPresentationsById(
-    leadingDecisions.map((decision) => ({
-      decisionId: decision.decisionId,
-      courtShortCode: decisionCitationCourtLabel(decision),
-    })),
-  );
   const leadingCount =
     leadingView.type === "pending" || leadingView.type === "error"
       ? null
@@ -207,51 +201,61 @@ export const ProvisionInspectorView = ({
             {/* The floating bar owns the top corner, so the first row starts
                 below it rather than under the zoom controls. */}
             <div
-              className="flex flex-col gap-6 pt-12 pb-4"
+              className={cn(
+                "flex flex-col gap-6 pb-4",
+                VIEWER_OVERLAY_BAR_TOP_CLEARANCE,
+              )}
               ref={contentRef}
               {...textScale.rootProps}
             >
-              {selectedVersion !== undefined && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <ProvisionVersionContext
-                    decisionContext={payload.decisionContext}
-                    documentId={payload.documentId}
-                    currentVersionId={currentVersion?.id}
-                    onVersionChange={switchVersion}
-                    expression={selectedVersion}
-                    status={selectedVersion.status}
-                    validFrom={selectedVersion.versionValidFrom}
-                    validTo={selectedVersion.versionValidTo}
-                  />
-                  <OpenOriginalButton
-                    href={
-                      selectedVersion.documentUrl ?? selectedVersion.sourceUrl
-                    }
-                  />
-                </div>
-              )}
-
               {/* The tab header already names the provision and the act; this
-              row offers the consolidation to read and the way out. */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <StatuteVersionSwitcher
-                  currentVersionId={payload.documentId}
-                  onVersionChange={switchVersion}
-                  versions={availableVersions}
-                />
-                <Link
-                  className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
-                  hash={payload.highlightAnchorId ?? payload.anchorId}
-                  {...createStatuteLinkTarget({
-                    country: selectedVersion?.country ?? payload.jurisdiction,
-                    documentId: payload.documentId,
-                    eli: selectedVersion?.eli ?? null,
-                    slug: selectedVersion?.slug ?? null,
-                    versionValidFrom: selectedVersion?.versionValidFrom ?? null,
-                  })}
-                >
-                  {t("statutes.showInText")}
-                </Link>
+                  zone says which consolidation is on screen, then offers
+                  another one and the way into the full text. */}
+              <div className="flex flex-col gap-2">
+                {selectedVersion !== undefined && (
+                  <div className="flex min-w-0 items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <ProvisionVersionContext
+                        decisionContext={payload.decisionContext}
+                        documentId={payload.documentId}
+                        currentVersionId={currentVersion?.id}
+                        onVersionChange={switchVersion}
+                        expression={selectedVersion}
+                        status={selectedVersion.status}
+                        validFrom={selectedVersion.versionValidFrom}
+                        validTo={selectedVersion.versionValidTo}
+                      />
+                    </div>
+                    <OpenOriginalButton
+                      className="-my-0.5"
+                      href={
+                        selectedVersion.documentUrl ?? selectedVersion.sourceUrl
+                      }
+                      size="icon-xs"
+                    />
+                  </div>
+                )}
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <StatuteVersionSwitcher
+                    currentVersionId={payload.documentId}
+                    onVersionChange={switchVersion}
+                    versions={availableVersions}
+                  />
+                  <Link
+                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                    hash={payload.highlightAnchorId ?? payload.anchorId}
+                    {...createStatuteLinkTarget({
+                      country: selectedVersion?.country ?? payload.jurisdiction,
+                      documentId: payload.documentId,
+                      eli: selectedVersion?.eli ?? null,
+                      slug: selectedVersion?.slug ?? null,
+                      versionValidFrom:
+                        selectedVersion?.versionValidFrom ?? null,
+                    })}
+                  >
+                    {t("statutes.showInText")}
+                  </Link>
+                </div>
               </div>
 
               <ProvisionWording
@@ -266,7 +270,7 @@ export const ProvisionInspectorView = ({
                 title={t("statutes.leadingDecisions")}
               >
                 <ProvisionLeadingDecisions view={leadingView}>
-                  <ul className="m-0 flex list-none flex-col p-0">
+                  <ul className="divide-border/60 m-0 flex list-none flex-col divide-y p-0">
                     {leadingDecisions.map((decision) => (
                       <li key={decision.decisionId}>
                         <CitingDecisionItem
@@ -275,10 +279,6 @@ export const ProvisionInspectorView = ({
                             payload.versionValidFrom
                           }
                           decision={decision}
-                          presentation={
-                            leadingPresentations.get(decision.decisionId) ??
-                            panic("Leading decision missing collected identity")
-                          }
                         />
                       </li>
                     ))}

@@ -22,8 +22,7 @@ export {
 export const OFFICE_EVIDENCE_PARSER_VERSION = 1;
 
 export type OfficeEvidenceBlock =
-  | PptxOfficeEvidenceBlock
-  | XlsxOfficeEvidenceBlock;
+  PptxOfficeEvidenceBlock | XlsxOfficeEvidenceBlock;
 
 export type PptxOfficeEvidenceBlock = {
   id: string;

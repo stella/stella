@@ -12,17 +12,24 @@ import { assertProperty } from "@stll/property-testing";
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
+  CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  type CheckPoolJob,
   checkPoolRegistryPath,
+  checkPoolStepRun,
+  type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
-  type ReadCheckPool,
 } from "./ci-check-pool-registry";
 import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
-import { DELEGATED_CHECKS_ENV } from "./generated-files-guard";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
+import {
+  DELEGATED_CHECKS_ENV,
+  UNCHANGED_CHECKS_ENV,
+} from "./generated-files-guard";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -50,6 +57,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // Matrix metadata selects a disjoint slice of the same pool;
+                // it does not change the check represented by this step.
+                "CI_CHECK_POOL_PARTITION",
               ].includes(key),
           ),
         );
@@ -345,7 +355,11 @@ const normalizeGuardPathLines = (run: string, tracked: ReadonlySet<string>) =>
       return `${prefix} \\\n${kept.map((line) => line.replace(/[ \t]*\\$/u, "")).join(" \\\n")}`;
     },
   );
-const mergeBase = git(["merge-base", "origin/main", "HEAD"]);
+// A migration test must also hold once its migration is on the base:
+// CI_CHECKS_PARTITION_BASE=HEAD compares the head with itself.
+const mergeBase =
+  process.env["CI_CHECKS_PARTITION_BASE"] ??
+  git(["merge-base", "origin/main", "HEAD"]);
 const baseCancellationSource = new Bun.Transpiler({
   loader: "ts",
 }).transformSync(
@@ -354,7 +368,7 @@ const baseCancellationSource = new Bun.Transpiler({
 const baseCancellation = v.parse(
   v.object({ CANONICAL_CANCEL_STEP: v.record(v.string(), v.unknown()) }),
   await import(
-    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
+    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
 const readBaseCheckPool: ReadCheckPool = (pool) =>
@@ -370,8 +384,46 @@ const jobs = v.parse(
     readFileSync(new URL(`../${workflowPath}`, import.meta.url), "utf-8"),
   ),
 ).jobs;
-const baseWorkflow: unknown = Bun.YAML.parse(
-  git(["show", `${mergeBase}:${workflowPath}`]),
+// Pool steps once ran `bun scripts/ci-check-pool.ts run <job>` with `needs`
+// in the environment; a merge base from before the file hand-over reads in
+// today's form, so its pooled checks still expand and compare. Matches only
+// the old form, so it is inert once the merge base carries the new one.
+const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// Pool steps then ran the pool without `exec`; that form reads as today's too.
+const preExecPoolRun = (job: CheckPoolJob) =>
+  checkPoolStepRun(job).replace(" exec bun ", " bun ");
+const withCurrentPoolSteps = (workflow: unknown): unknown => {
+  const parsed = v.parse(
+    v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
+    workflow,
+  );
+  for (const job of CHECK_POOL_JOBS) {
+    const body = parsed.jobs[job];
+    if (!v.is(v.looseObject({ steps: v.array(v.unknown()) }), body)) {
+      continue;
+    }
+    body.steps = body.steps.map((step) => {
+      if (
+        !v.is(
+          v.looseObject({
+            run: v.string(),
+            env: v.record(v.string(), v.unknown()),
+          }),
+          step,
+        ) ||
+        (LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job &&
+          step.run !== preExecPoolRun(job))
+      ) {
+        return step;
+      }
+      const { CI_CHECK_POOL_NEEDS: _needs, ...env } = step.env;
+      return { ...step, env, run: checkPoolStepRun(job) };
+    });
+  }
+  return parsed;
+};
+const baseWorkflow: unknown = withCurrentPoolSteps(
+  Bun.YAML.parse(git(["show", `${mergeBase}:${workflowPath}`])),
 );
 const baseJobs = v.parse(workflowSchema, baseWorkflow).jobs;
 const removedChecks = v.parse(
@@ -450,7 +502,6 @@ const CONTINUATION_PREFIXES = {
   installPackages: `\${{ !cancelled() && steps.install.outcome == 'success'`,
 } as const;
 const outcomeDependencies: Record<string, string> = {
-  Format: "affected",
   "Changeset present for published package changes": "policy",
 };
 const preInstallGuards = new Map([
@@ -738,7 +789,8 @@ const withoutTestTimeout = (step: Step): Step => {
 };
 
 // Delegation drops only a family whose owning job runs the same check in this
-// run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
+// run, and an unchanged family only when the plan proves its paths untouched;
+// scripts/generated-files-guard.test.ts binds each to its job's `if:` or plan.
 const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   const { env } = v.parse(
     v.looseObject({ env: v.optional(v.record(v.string(), v.unknown())) }),
@@ -747,11 +799,18 @@ const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   if (
     step.name !== "Generated files manifest guard" ||
     env === undefined ||
-    !Object.hasOwn(env, DELEGATED_CHECKS_ENV)
+    !(
+      Object.hasOwn(env, DELEGATED_CHECKS_ENV) ||
+      Object.hasOwn(env, UNCHANGED_CHECKS_ENV)
+    )
   ) {
     return step;
   }
-  const { [DELEGATED_CHECKS_ENV]: _delegated, ...environment } = env;
+  const {
+    [DELEGATED_CHECKS_ENV]: _delegated,
+    [UNCHANGED_CHECKS_ENV]: _unchanged,
+    ...environment
+  } = env;
   const { env: _env, ...original } = step;
   return Object.keys(environment).length === 0
     ? original
@@ -971,6 +1030,20 @@ const expectScope = ({
       CI_GENERATED_SOURCES_MANIFEST: `\${{ github.workspace }}/.cache/ci-generated-sources/manifest.json`,
     });
   const migrated = { ...scope };
+  // A check-pool matrix changes scheduling, not the inherited job scope.
+  // Accept only the exact exhaustive two-way partition used by the runner;
+  // arbitrary strategy changes remain visible to this comparison. Normalize
+  // only an added partition: a baseline that owns it must retain it.
+  if (
+    job === "ci-checks-rest" &&
+    originalScope["strategy"] === undefined &&
+    isDeepStrictEqual(migrated["strategy"], {
+      "fail-fast": false,
+      matrix: { partition: [1, 2] },
+    })
+  ) {
+    delete migrated["strategy"];
+  }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (
     job !== undefined &&
@@ -1100,6 +1173,46 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (step.name === "CLI sharded registry and derived runtime guard") {
+    const run = v.parse(v.string(), fields.run);
+    const continuation = " \\";
+    const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
+    const additions = CI_GENERATED_OUTPUTS.cliRegistry
+      .filter((output) => !run.includes(`  ${output}${continuation}`))
+      .map((output) => `  ${output}${continuation}`)
+      .join("\n");
+    if (additions.length > 0) {
+      expect(run).toContain(anchor);
+      return Object.assign(step, {
+        run: run.replace(anchor, () => `${anchor}\n${additions}`),
+      });
+    }
+  }
+  // These structural guards no longer own expiry, so their failures block
+  // merge groups as well. Normalize only their former clock-based lenience.
+  if (
+    (step.name === "Dated waiver lifecycle guards" ||
+      step.name === "Quarantine-exclude guards") &&
+    step["continue-on-error"] === `\${{ github.event_name == 'merge_group' }}`
+  ) {
+    const original = { ...step };
+    delete original["continue-on-error"];
+    return original;
+  }
+  // Format checks the tracked tree with `bun fmt --check`; it no longer
+  // filters by affected packages, so it no longer waits on that step.
+  if (step.name === "Format" && fields.run?.includes("turbo run format")) {
+    const { AFFECTED_FLAG: _flag, ...env } = v.parse(
+      v.record(v.string(), v.unknown()),
+      step["env"] ?? {},
+    );
+    return {
+      ...step,
+      env,
+      if: fields.if?.replace(" && steps.affected.outcome == 'success'", ""),
+      run: "bun fmt --check",
+    };
+  }
   // The classification check derives its manifest instead of reading a
   // committed one, and exposes its sensitive-change output by step id.
   if (
@@ -1280,6 +1393,87 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
     removed: newRemovals.map(({ name }) => name),
   });
 });
+
+test("code-quality pool preserves every moved check exactly once", () => {
+  const movedNames = [
+    "Code quality (web)",
+    "Result consumption (web)",
+    "Code quality (rest)",
+    "Query cache types",
+    "Dead columns",
+    "Projection totality",
+    "Aggregate ownership",
+    "Split-button census",
+    "Database awaits in loops",
+    "API timeout mutation guard",
+    "Result consumption (rest)",
+  ];
+  const withoutPoolMetadata = (step: Record<string, unknown>) => {
+    const normalized = { ...step };
+    // An expanded pooled check carries its generated budget as its timeout.
+    delete normalized["timeout-minutes"];
+    // An ordinary step's implicit success() is `!cancelled()` in the pool.
+    if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
+      delete normalized["if"];
+    } else if (typeof normalized["if"] === "string") {
+      normalized["if"] = normalized["if"].replace(
+        /^\$\{\{\s*([\s\S]*?)\s*\}\}$/u,
+        "$1",
+      );
+    }
+    const env = normalized["env"];
+    if (typeof env === "object" && env !== null && !Array.isArray(env)) {
+      const originalEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          ([key]) =>
+            !["CI_CHECK_KIND", "CI_CHECK_INPUTS", "CI_CHECK_CONTEXT"].includes(
+              key,
+            ),
+        ),
+      );
+      if (Object.keys(originalEnv).length === 0) {
+        delete normalized["env"];
+      } else {
+        normalized["env"] = originalEnv;
+      }
+    }
+    return normalized;
+  };
+
+  // Before the move the merge base runs these checks inline; once it lands,
+  // the base schema expands the base pool. Either way the head's pool
+  // preserves the base's checks.
+  const originals = v
+    .parse(headJobSchema, baseJobs["code-quality-web-rest"])
+    .steps.filter(({ name }) => movedNames.includes(name))
+    .map(withoutPoolMetadata);
+  const pooled = readCheckPool("code-quality-web-rest").map(({ step }) => step);
+
+  expect(pooled.map(({ name }) => name)).toEqual(movedNames);
+  // A merge base may already carry the pool; normalize both sides alike.
+  expect(pooled.map(withoutPoolMetadata)).toEqual(
+    originals.map(withoutPoolMetadata),
+  );
+});
+
+// A migration-shape test that reads the old shape from the merge base fails
+// main once its own migration lands there. Every test here must also pass
+// with the head as its own base.
+test.skipIf(process.env["CI_CHECKS_PARTITION_BASE"] !== undefined)(
+  "every partition test also holds once its migration is on the base",
+  () => {
+    const run = Bun.spawnSync(
+      ["bun", "test", "./scripts/ci-checks-partition.test.ts"],
+      {
+        cwd: repository,
+        env: { ...process.env, CI_CHECKS_PARTITION_BASE: "HEAD" },
+      },
+    );
+    expect(run.stderr.toString()).toContain(" 0 fail");
+    expect(run.exitCode).toBe(0);
+  },
+  60_000,
+);
 
 test("task result cache checks belong exactly once to the rest leg", () => {
   const checks = partitions.flatMap(({ steps }, index) =>

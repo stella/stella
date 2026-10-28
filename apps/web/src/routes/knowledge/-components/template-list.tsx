@@ -26,15 +26,16 @@ import {
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  AiActionIcon,
   CheckIcon,
   DownloadIcon,
   PencilLineIcon,
@@ -42,13 +43,13 @@ import {
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
-  AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
@@ -877,6 +878,7 @@ const TemplateLanguagesField = ({
       {!atLimit && (
         <Combobox<LanguagePick>
           autoHighlight
+          filter={matchesComboboxItem}
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={options}
           itemToStringLabel={(item) => item.label}

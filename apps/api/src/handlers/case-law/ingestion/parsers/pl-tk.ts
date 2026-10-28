@@ -40,10 +40,10 @@ import {
   type ValidationResult,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import {
-  toMetadataUrl,
   type MetadataUrlDefect,
   type SafeHref,
   sanitizeUrl,
+  toMetadataUrl,
 } from "@/api/lib/sanitize-url";
 
 export const PL_TK_ORIGIN = "https://ipo.trybunal.gov.pl";

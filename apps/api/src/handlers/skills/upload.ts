@@ -1,13 +1,14 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   authorizeSkillInstallScope,
@@ -19,9 +20,9 @@ import {
   SKILL_ARCHIVE_OPTIONS,
 } from "@/api/lib/skills/skill-package";
 
-const uploadSkillBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.skillPack }),
+const uploadSkillBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack }),
 });
 
 const config = {

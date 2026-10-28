@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 
 type OrganizationSettings =
   WebApiRoutes["organization-settings"]["get"]["response"][200];

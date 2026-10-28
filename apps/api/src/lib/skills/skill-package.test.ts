@@ -9,8 +9,8 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
-  SafeOutboundFetchResponse,
   safeOutboundFetchBytes,
+  SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
@@ -802,7 +802,13 @@ Instructions.`,
       ]),
     );
     const unavailable = await fetchCatalogue(async () =>
-      Result.err(new HandlerError({ status: 503, message: "Upstream busy" })),
+      Result.err(
+        new HandlerError({
+          status: 503,
+          code: "internal_error",
+          message: "Upstream busy",
+        }),
+      ),
     );
     const crashed = await fetchCatalogue(
       async () => await Promise.reject(new Error("socket closed")),

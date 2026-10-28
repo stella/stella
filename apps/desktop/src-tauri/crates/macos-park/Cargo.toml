@@ -8,6 +8,7 @@ publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+map_err_ignore = "deny"
 await_holding_lock = "deny"
 significant_drop_in_scrutinee = "deny"
 significant_drop_tightening = "warn"
@@ -33,26 +34,20 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
   "NSPanel",
   "NSResponder",
+  "NSRunningApplication",
   "NSView",
   "NSWindow",
+  "libc",
 ] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFNumber", "CFPreferences", "CFString", "std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSBundle",
   "NSError",
   "NSString",
   "NSURL",
 ] }
-objc2-service-management = { version = "0.3", default-features = false, features = [
-  "SMAppService",
-  "objc2",
-  "objc2-foundation",
-  "std",
-] }
-objc2-user-notifications = { version = "0.3", default-features = false, features = [
-  "UNNotificationSettings",
-  "UNUserNotificationCenter",
-  "block2",
-] }
+objc2-service-management = { version = "0.3", default-features = false, features = ["SMAppService", "objc2", "objc2-foundation", "std"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["UNNotificationSettings", "UNUserNotificationCenter", "block2"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.61", features = [
@@ -62,6 +57,10 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "NSEvent",
+  "NSWorkspace",
+] }
 objc2-foundation = "0.3"
 objc2-web-kit = { version = "0.3", default-features = false, features = [
   "WKWebView",

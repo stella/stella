@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test, spyOn } from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceEntity } from "@/lib/types";
@@ -403,7 +403,7 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
-    expect(invalidate).toHaveBeenCalledTimes(4);
+    expect(invalidate).toHaveBeenCalledTimes(5);
   } finally {
     refresh.resolve(undefined);
     invalidate.mockRestore();

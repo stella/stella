@@ -12,9 +12,9 @@ import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_VIEW_NAME,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_VIEW_NAME,
 } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import {
@@ -32,9 +32,9 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
-  fetchStellaUserSelectColumnPrivileges,
-  fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchStellaTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -206,12 +206,34 @@ const isStoredEntityFeatureFence = (policy: RestrictivePolicy): boolean => {
   );
 };
 
-/** Every other restrictive policy is a deny; widening one must fail coverage. */
+// This owner predicate pins both scopes inside its SECURITY DEFINER function.
+const isInvoiceAccessPredicate = (expression: string | null): boolean =>
+  expression
+    ?.replaceAll(/::text\b/gu, "")
+    .replaceAll(/["()\s]/gu, "")
+    .replaceAll("public.", "")
+    .replaceAll("invoices.", "") ===
+  "stella_invoice_accessid,organization_id,workspace_id,client_id,original_invoice_id";
+
+const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
+  policy.table_name === "invoice_lines" &&
+  policy.policy_name === "invoice_lines_complete_invoice" &&
+  policy.using_expr === policy.check_expr &&
+  policy.using_expr
+    ?.replaceAll(/["()\s]/gu, "")
+    .replaceAll("public.", "")
+    .toLowerCase() ===
+    "existsselect1frominvoicesiwherei.id=invoice_lines.invoice_id";
+
+/** Other restrictive policies deny rows unless their canonical fence is exact. */
 const restrictivePolicyViolation = (
   policy: RestrictivePolicy,
 ): string | undefined => {
   const name = `${policy.table_name}.${policy.policy_name}`;
   const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
+  if (isCompleteInvoiceFence(policy)) {
+    return undefined;
+  }
   if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
     return expr === "false"
       ? undefined
@@ -252,6 +274,54 @@ describe("policy coverage", () => {
       check_expr: null,
     };
     expect(restrictivePolicyViolation(deny)).toBeUndefined();
+    const invoiceFence = {
+      table_name: "invoice_lines",
+      policy_name: "invoice_lines_complete_invoice",
+      command: "*",
+      using_expr:
+        "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
+      check_expr:
+        "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
+    };
+    expect(restrictivePolicyViolation(invoiceFence)).toBeUndefined();
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        using_expr: "true",
+        check_expr: "true",
+      }),
+    ).toBeDefined();
+    expect(
+      restrictivePolicyViolation({ ...invoiceFence, check_expr: "false" }),
+    ).toBeDefined();
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, organization_id, workspace_id, client_id, original_invoice_id)",
+      ),
+    ).toBe(true);
+    expect(
+      isInvoiceAccessPredicate(
+        'public.stella_invoice_access("invoices"."id", ("invoices"."organization_id")::text, "invoices"."workspace_id", "invoices"."client_id", "invoices"."original_invoice_id")',
+      ),
+    ).toBe(true);
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, organization_id, NULL, client_id, original_invoice_id)",
+      ),
+    ).toBe(false);
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, NULL::text, workspace_id, client_id, original_invoice_id)",
+      ),
+    ).toBe(false);
+
+    for (const expression of [
+      "stella_invoice_access(id, organization_id, workspace_id, NULL, original_invoice_id)",
+      "stella_invoice_access(id, organization_id, workspace_id, client_id, NULL)",
+    ]) {
+      expect(isInvoiceAccessPredicate(expression)).toBe(false);
+    }
+
     expect(
       restrictivePolicyViolation({ ...deny, using_expr: "true" }),
     ).toBeDefined();
@@ -388,6 +458,8 @@ describe("policy coverage", () => {
     "agent_delegation",
     // Operator-managed OAuth bindings use the auth deny policy asserted below.
     "service_oauth_clients",
+    // Root-owned OAuth state denies all app-role access.
+    "mcp_web_handoff",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -584,6 +656,28 @@ describe("policy coverage", () => {
     }
   });
 
+  test("invoice access pins tenant, membership and every participating matter", async () => {
+    const rows = await testDb.execute<{ definition: string }>(sql`
+      SELECT pg_get_functiondef('public.stella_invoice_access(uuid,text,uuid,uuid,uuid)'::regprocedure) AS definition
+    `);
+    const definition = rows.rows.at(0)?.definition;
+    expect(definition).toBeDefined();
+    for (const boundary of [
+      "SECURITY DEFINER",
+      "org_id = current_setting('app.organization_id'",
+      "m.organization_id = org_id",
+      "m.user_id = current_setting('app.user_id'",
+      "current_setting('app.workspace_access_mode', true) = 'membership'",
+      "l.workspace_id NOT IN",
+      "original.id = source_original_id",
+      "original.client_id IS NOT DISTINCT FROM",
+      "original_line.workspace_id NOT IN",
+      "stella_authorized_workspaces",
+    ]) {
+      expect(definition).toContain(boundary);
+    }
+  });
+
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -616,6 +710,10 @@ describe("policy coverage", () => {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
           expect(restrictivePolicyViolation(pol)).toBeUndefined();
+          continue;
+        }
+        if (table === "invoices") {
+          expect(isInvoiceAccessPredicate(expr)).toBe(true);
           continue;
         }
         expect(expr).toContain("workspace_id");
@@ -663,9 +761,10 @@ describe("policy coverage", () => {
         }
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (
-          expr === null ||
-          !expr.includes("organization_id") ||
-          !expr.includes(SETTING_ORGANIZATION_ID)
+          !isInvoiceAccessPredicate(table === "invoices" ? expr : null) &&
+          (expr === null ||
+            !expr.includes("organization_id") ||
+            !expr.includes(SETTING_ORGANIZATION_ID))
         ) {
           unpinned.push(`${table}.${pol.policy_name}`);
         }
@@ -1362,6 +1461,7 @@ describe("policy coverage", () => {
       "oauth_access_token",
       "oauth_client",
       "service_oauth_clients",
+      "mcp_web_handoff",
       "oauth_consent",
       "oauth_refresh_token",
       "session",
@@ -1459,6 +1559,27 @@ describe("policy coverage", () => {
     const policy = result.rows.at(0);
     expect(policy?.rls_enabled).toBe(true);
     expect(policy?.rls_forced).toBe(true);
+    expect(policy?.owner_using).toContain("CURRENT_USER");
+    expect(policy?.owner_using).toContain("pg_get_userbyid");
+    expect(policy?.owner_check).toBe(policy?.owner_using);
+  });
+
+  test("web handoffs retain an owner-only RLS policy", async () => {
+    const result = await testDb.execute<{
+      rls_enabled: boolean;
+      owner_using: string | null;
+      owner_check: string | null;
+    }>(sql`
+      SELECT rel.relrowsecurity AS rls_enabled,
+        pg_catalog.pg_get_expr(policy.polqual, policy.polrelid) AS owner_using,
+        pg_catalog.pg_get_expr(policy.polwithcheck, policy.polrelid) AS owner_check
+      FROM pg_catalog.pg_class rel
+      JOIN pg_catalog.pg_policy policy ON policy.polrelid = rel.oid
+      WHERE rel.oid = 'public.mcp_web_handoff'::regclass
+        AND policy.polname = 'mcp_web_handoff_owner_access'
+    `);
+    const policy = result.rows.at(0);
+    expect(policy?.rls_enabled).toBe(true);
     expect(policy?.owner_using).toContain("CURRENT_USER");
     expect(policy?.owner_using).toContain("pg_get_userbyid");
     expect(policy?.owner_check).toBe(policy?.owner_using);

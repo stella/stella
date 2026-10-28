@@ -37,7 +37,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,16 +50,17 @@ import {
 } from "@/api/lib/chat/compaction-summary";
 import type { IncrementalSummaryPrompt } from "@/api/lib/chat/compaction-summary";
 import {
+  compactionGenerationRequest,
+  estimateTextTokens,
   FILE_PART_ESTIMATED_TOKENS,
   MAX_TEXT_PART_CHARS,
   MESSAGE_OVERHEAD_TOKENS,
-  compactionGenerationRequest,
-  estimateTextTokens,
   renderTaggedValue,
   safeStringify,
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
 import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
+import { createSkillSummaryProjection } from "@/api/lib/chat/skill-summary-projection";
 import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
@@ -230,7 +231,15 @@ export const runChatThreadCompaction = async (
     }
 
     const summaryMarkdown = yield* Result.await(
-      summarizeDelta({ options, plan, priorSummary: checkpoint }),
+      summarizeDelta({
+        availableMessages:
+          delta.nextMessage === null
+            ? delta.messages
+            : [...delta.messages, delta.nextMessage],
+        options,
+        plan,
+        priorSummary: checkpoint,
+      }),
     );
     if (summaryMarkdown === null) {
       return Result.ok<ChatCompactionOutcome>({ type: "no-summary" });
@@ -638,6 +647,7 @@ const trimToUserTurn = (preserved: readonly DeltaMessage[]): DeltaMessage[] => {
 };
 
 type SummarizeDeltaOptions = {
+  availableMessages: readonly DeltaMessage[];
   options: RunChatThreadCompactionOptions;
   plan: Extract<IncrementalCompactionPlan, { type: "compact" }>;
   priorSummary: ChatCompactionCheckpointRow | null;
@@ -650,6 +660,7 @@ type SummarizeDeltaOptions = {
  * as complete.
  */
 const summarizeDelta = async ({
+  availableMessages,
   options,
   plan,
   priorSummary,
@@ -658,11 +669,17 @@ const summarizeDelta = async ({
 > => {
   const summarize = options.summarize ?? createModelSummarizer(options);
   const summaryResult = await Result.tryPromise({
-    try: async () =>
-      await summarize({
-        newMessages: renderDeltaTranscript(plan.messagesToSummarize),
+    try: async () => {
+      const availableParts = availableMessages.map(deltaMessageParts);
+      const projection = createSkillSummaryProjection(availableParts);
+      return await summarize({
+        newMessages: renderDeltaTranscript(
+          plan.messagesToSummarize,
+          projection.parts,
+        ),
         previousCheckpoint: priorSummary?.summaryMarkdown ?? null,
-      }),
+      });
+    },
     catch: (cause) =>
       new ChatCompactionError({
         message: "Failed to summarize chat compaction delta",
@@ -909,11 +926,14 @@ const deltaMessageParts = (message: DeltaMessage): unknown[] => {
  * the send path's transcript renderer uses, so a checkpoint written by the
  * compactor reads to the model exactly like one written inline used to.
  */
-const renderDeltaTranscript = (messages: readonly DeltaMessage[]): string => {
+const renderDeltaTranscript = (
+  messages: readonly DeltaMessage[],
+  projectParts: ReturnType<typeof createSkillSummaryProjection>["parts"],
+): string => {
   const rendered: string[] = [];
 
   for (const message of messages) {
-    const parts = deltaMessageParts(message);
+    const parts = projectParts(deltaMessageParts(message));
     if (parts.length === 0) {
       continue;
     }

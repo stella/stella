@@ -19,9 +19,9 @@ import { citationRowOf } from "@/api/handlers/case-law/ingestion/pipeline/citati
 import { createSafeId } from "@/api/lib/branded-types";
 
 import {
+  assertCitationStorageField,
   CITATION_STORAGE_WIDTHS,
   CitationStorageFieldError,
-  assertCitationStorageField,
   fitsCitationStorageField,
 } from "./citation-storage-bounds";
 

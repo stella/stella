@@ -5,10 +5,8 @@ import path from "node:path";
 
 import { childExitStatus } from "./child-exit-status";
 
-const tsc = path.join(
-  import.meta.dir,
-  "../../../node_modules/typescript/bin/tsc",
-);
+// tsrs, the Rust port of the TypeScript 7 compiler, compiles like `tsc`.
+const tsc = path.join(import.meta.dir, "../../../node_modules/tsrs/bin/tsrs");
 
 // Flags by which a caller takes over the checker split itself.
 const THREADING_FLAGS = new Set(["--singleThreaded", "--checkers"]);
@@ -18,8 +16,8 @@ const THREADING_FLAGS = new Set(["--singleThreaded", "--checkers"]);
  *
  * Native tsc splits a project across parallel checkers whose type caches are
  * independent, and assigns files to checkers by position. Every checker
- * therefore re-instantiates the Eden treaty surface the first time one of its
- * own files touches it, and TypeScript abandons any single statement that
+ * therefore re-instantiates a widely shared generic surface the first time one
+ * of its own files touches it, and TypeScript abandons any single statement that
  * instantiates more than five million types: it yields `any`, which cascades
  * as `any`/`unknown` errors through files that contain no defect. Which
  * statement pays that cold cost is decided by the file-to-checker split, so
@@ -41,7 +39,7 @@ if (import.meta.main) {
   const result = spawnSync(
     process.execPath,
     [tsc, ...withCheckerSplit(process.argv.slice(2))],
-    { stdio: "inherit" },
+    { maxBuffer: 2 ** 30, stdio: "inherit" },
   );
 
   if (result.error) {

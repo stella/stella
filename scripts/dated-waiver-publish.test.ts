@@ -15,9 +15,9 @@ import {
 } from "./dated-waiver-healing";
 import type { HealingActions } from "./dated-waiver-healing";
 import {
-  type PublishedRemoval,
   listRemovalProposals,
   orphanRemovalProposals,
+  type PublishedRemoval,
   publishRemoval,
   REMOVAL_TITLE,
   retireRemoval,
@@ -913,9 +913,7 @@ describe("independent proposal file failures", () => {
       );
       files["nonmodule.txt"] = "export const value = (;";
       if (invalid.length === 0) {
-        expect(() => {
-          validateRemovalModules(files);
-        }).not.toThrow();
+        await validateRemovalModules(files);
         continue;
       }
       let githubCalls = 0;

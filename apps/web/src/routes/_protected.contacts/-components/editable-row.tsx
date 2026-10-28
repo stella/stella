@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { contactOptions } from "@/lib/contacts/queries";
@@ -15,8 +15,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
-  contactRateInput,
   buildTextContactPayload,
+  contactRateInput,
   EDITABLE_FIELD_POLICY,
   getEditableFieldInputAttributes,
   isNumericEditableField,
@@ -44,7 +44,7 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const updateContact = useUpdateContact();
   const queryClient = useQueryClient();
   const [scope] = useState(() => ({

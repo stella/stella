@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
+import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -78,8 +78,7 @@ const findPhraseEnd = (text: string, from: number, closers: string): number => {
  * change what the reader asked to match adjacently.
  */
 export type CorpusQueryToken =
-  | { type: "phrase"; value: string }
-  | { type: "term"; value: string };
+  { type: "phrase"; value: string } | { type: "term"; value: string };
 
 /**
  * Split free user text into phrase and term tokens. The single splitter over

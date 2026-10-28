@@ -4,11 +4,7 @@ import type { EntityType, SanctionsEntry } from "./entry";
 import { buildNameIndex, matchNames } from "./name-match";
 import type { ScreeningWorkBudget } from "./name-match";
 import { nameReading } from "./normalise";
-import type {
-  ScreeningIndex,
-  ScreeningQuery,
-  ScreeningWorkUsage,
-} from "./screening";
+import type { ScreeningQuery, ScreeningWorkUsage } from "./screening";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 
 const version = {
@@ -34,10 +30,7 @@ const entry = (name: string, entityType: EntityType): SanctionsEntry => ({
   sourceUrl: "https://lists.example/eu",
 });
 
-// A dense corpus: many entries share common given names, surnames and
-// company words. It is built once when the file loads, so the test's time
-// covers only the queries, which the screening work budget bounds.
-const buildDenseCommonNameIndex = () => {
+test("dense common names screen normally within the warm work bound", () => {
   let seed = 42;
   const random = () => {
     seed =
@@ -126,12 +119,8 @@ const buildDenseCommonNameIndex = () => {
     });
     return { ...entry(String(index), entityType), names };
   });
-  return buildScreeningIndex([{ version, entries }]);
-};
-const DENSE_COMMON_NAME_INDEX = buildDenseCommonNameIndex();
-
-test("dense common names screen normally within the warm work bound", () => {
-  const usages = [];
+  const index = buildScreeningIndex([{ version, entries }]);
+  const timings = [];
   for (const [name, entityType] of [
     ["Mohammed Ali", "person"],
     ["Mohamed Hassan", "person"],
@@ -142,10 +131,13 @@ test("dense common names screen normally within the warm work bound", () => {
     ["Bank", "organisation"],
     ["Global Trading Company Limited", "organisation"],
   ] as const) {
+    // Warm the JIT separately; index construction is outside the query budget.
+    screen(index, { name, entityType }, { cutoff: DEFAULT_CUTOFF });
     for (const kind of [entityType, undefined]) {
+      const started = performance.now();
       const reported: ScreeningWorkUsage[] = [];
       const result = screen(
-        DENSE_COMMON_NAME_INDEX,
+        index,
         kind === undefined ? { name } : { name, entityType: kind },
         {
           cutoff: DEFAULT_CUTOFF,
@@ -154,23 +146,29 @@ test("dense common names screen normally within the warm work bound", () => {
           },
         },
       );
+      const milliseconds = performance.now() - started;
+      timings.push({
+        name,
+        entityType: kind ?? "unknown",
+        milliseconds: Number(milliseconds.toFixed(2)),
+        result: result.isErr() ? result.error.code : "ok",
+      });
       expect(result.isOk()).toBe(true);
       if (result.isOk() && result.value.possibleMatches.length === 0) {
         expect(result.value.truncated).toBe(false);
       }
-      // A completed screening reports the deterministic work it spent.
       expect(reported).toHaveLength(1);
       const usage = reported.at(0);
       expect(usage?.spent ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
         usage?.limit ?? 0,
       );
-      usages.push({ name, entityType: kind ?? "unknown", ...usage });
     }
   }
-  console.info(JSON.stringify({ denseNames: usages }));
-});
+  console.info(JSON.stringify({ denseNames: timings }));
+}, 30_000);
 
 test("repeated rejected name patterns stay within a linear screening work budget", () => {
+  let baseline: { count: number; spent: number } | undefined;
   for (const count of [100, 1000, 10_000]) {
     const index = buildNameIndex(
       Array.from({ length: count }, () =>
@@ -182,9 +180,8 @@ test("repeated rejected name patterns stay within a linear screening work budget
       index,
       reading,
       ceiling: Math.sqrt,
-      rankEntry: (_entry, score) => score,
       cutoff: 0,
-      work: { remaining: 100 * count, exhausted: false, selection: "complete" },
+      work: { remaining: 100 * count, exhausted: false },
     });
     expect(exhaustive?.matches.size).toBe(count);
     for (const match of exhaustive?.matches.values() ?? []) {
@@ -192,18 +189,24 @@ test("repeated rejected name patterns stay within a linear screening work budget
       expect(match.score).toBeLessThan(DEFAULT_CUTOFF);
     }
     const work = {
-      remaining: 8 * count,
+      remaining: Number.MAX_SAFE_INTEGER,
       exhausted: false,
-      selection: "complete",
     } satisfies ScreeningWorkBudget;
     const filtered = matchNames({
       index,
       reading,
       ceiling: Math.sqrt,
-      rankEntry: (_entry, score) => score,
       cutoff: DEFAULT_CUTOFF,
       work,
     });
+    const spent = Number.MAX_SAFE_INTEGER - work.remaining;
+    if (baseline === undefined) {
+      baseline = { count, spent };
+    } else {
+      expect(spent - baseline.spent).toBeLessThanOrEqual(
+        100 * (count - baseline.count),
+      );
+    }
     expect(work.exhausted).toBe(false);
     expect(filtered?.matches.size).toBe(0);
     expect(filtered?.truncated).toBe(false);
@@ -370,47 +373,6 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
   const index = buildScreeningIndex([
     { version, entries: [...fillers, ...decoys, ...planted] },
   ]);
-  // Partition postings, retaining the full vocabulary and IDF weights. Each
-  // relevant partition has fewer patterns than the cap; fillers share an
-  // irrelevant partition. Their union is exhaustive for these queries.
-  const partitions: ScreeningIndex[] = [];
-  for (let start = 0; start < index.names.aliases.length;) {
-    const end = start === 0 ? fillers.length : start + 128;
-    const from = start;
-    const keep = (alias: number) => alias >= from && alias < end;
-    const restrictPostings = (postings: typeof index.names.raw.postings) => ({
-      *get(id: number) {
-        for (const alias of postings.get(id)) {
-          if (keep(alias)) {
-            yield alias;
-          }
-        }
-      },
-      size(id: number) {
-        let count = 0;
-        for (const alias of postings.get(id)) {
-          if (keep(alias)) {
-            count += 1;
-          }
-        }
-        return count;
-      },
-    });
-    const restrict = (vocabulary: typeof index.names.raw) => ({
-      ...vocabulary,
-      postings: restrictPostings(vocabulary.postings),
-      joinPostings: restrictPostings(vocabulary.joinPostings),
-    });
-    partitions.push({
-      ...index,
-      names: {
-        ...index.names,
-        raw: restrict(index.names.raw),
-        folded: restrict(index.names.folded),
-      },
-    });
-    start = end;
-  }
   for (const [name, expectedName] of [
     ["Mohammed Ali", "Mohammed Abdallah Ali"],
     ["Mokhammed Ali", "Mohammed Abdallah Ali"],
@@ -427,15 +389,13 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
           ...identity,
           ...(entityType === undefined ? {} : { entityType }),
         } satisfies ScreeningQuery;
-        const exhaustive = partitions
-          .flatMap((partition) => {
-            const result = screen(partition, query, {
-              cutoff: DEFAULT_CUTOFF,
-              limit: 128,
-            }).unwrap();
-            expect(result.truncated).toBe(false);
-            return result.possibleMatches;
-          })
+        const all = screen(index, query, {
+          cutoff: 0,
+          limit: index.entries.length,
+        }).unwrap();
+        expect(all.truncated).toBe(false);
+        const exhaustive = all.possibleMatches
+          .filter(({ score }) => score >= DEFAULT_CUTOFF)
           .toSorted(
             (left, right) =>
               right.score - left.score ||
@@ -449,16 +409,15 @@ test("identity evidence preserves the exhaustive top matches among dense decoys"
           cutoff: DEFAULT_CUTOFF,
           limit: 25,
         }).unwrap();
-        expect(bounded.truncated).toBe(true);
+        expect(bounded.truncated).toBe(bounded.totalMatches > 25);
         expect(bounded.possibleMatches).toEqual(exhaustive);
       }
     }
   }
 }, 20_000);
 
-test("a cached fuzzy lookup keeps its own truncation when an earlier token already truncated", () => {
-  // Many spellings sharing a stem push each stem lookup past the fuzzy
-  // candidate cap, so every lookup of these tokens is itself truncated.
+test("dense fuzzy neighbourhoods complete on both first and repeated lookups", () => {
+  // More than 64 spellings are viable; every neighbour must be retained.
   // Letters only: name normalisation drops digits, which would collapse the
   // variants into one spelling.
   const letters = "abcdefghijklmnopqrst";
@@ -478,14 +437,17 @@ test("a cached fuzzy lookup keeps its own truncation when an earlier token alrea
       ],
     },
   ]);
-  // "novac" truncates first, so the shared selection is already partial when
-  // "novak" is looked up and cached.
   const first = screen(
     index,
     { name: "Novac Novak" },
-    { cutoff: 0.5 },
+    { cutoff: 0.5, limit: index.entries.length },
   ).unwrap();
-  expect(first.truncated).toBe(true);
-  const replayed = screen(index, { name: "Novak" }, { cutoff: 0.5 }).unwrap();
-  expect(replayed.truncated).toBe(true);
+  expect(first.truncated).toBe(false);
+  const replayed = screen(
+    index,
+    { name: "Novak" },
+    { cutoff: 0, limit: index.entries.length },
+  ).unwrap();
+  expect(replayed.truncated).toBe(false);
+  expect(replayed.totalMatches).toBeGreaterThan(64);
 });

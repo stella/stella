@@ -12,7 +12,7 @@ import {
   clauseVersions,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
-import { createAuditRecorder, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE, createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -524,6 +524,7 @@ if (!databaseUrl || !runPostgresTests) {
           recordAuditEvent: async () => {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Audit unavailable",
             });
           },

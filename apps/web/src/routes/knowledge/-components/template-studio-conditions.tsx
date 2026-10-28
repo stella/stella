@@ -12,13 +12,13 @@ import { serializeCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   ArrowLeftIcon,
   CircleHelpIcon,
-  CopyIcon,
+  DuplicateIcon,
   ListFilterIcon,
   MessageCircleQuestionIcon,
   PlusIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
@@ -729,7 +729,7 @@ const ConditionReusePicker = ({
     return (
       <section className="flex flex-col gap-2">
         <h4 className="flex items-center gap-1.5 text-sm font-medium">
-          <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+          <DuplicateIcon className="text-muted-foreground size-4 shrink-0" />
           {t("templates.studio.conditionReuse")}
         </h4>
         <Button
@@ -746,7 +746,7 @@ const ConditionReusePicker = ({
   return (
     <section className="flex flex-col gap-2">
       <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+        <DuplicateIcon className="text-muted-foreground size-4 shrink-0" />
         {t("templates.studio.conditionReuse")}
       </h4>
       <ul className="flex flex-col">

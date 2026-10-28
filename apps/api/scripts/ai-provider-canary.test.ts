@@ -7,10 +7,10 @@ import * as v from "valibot";
 import {
   BYOK_MODEL_OPTIONS,
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
-  resolveDefaultModel,
-  MODEL_TASK_OVERRIDE_GROUP,
   isBYOKProviderRoleSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
   MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
 import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 
@@ -26,12 +26,12 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
+  canaryCapabilityProbeTimeout,
   CanaryCredentialRejectedError,
   CanaryError,
-  CanaryProviderUnavailableError,
   CanaryProviderRunError,
+  CanaryProviderUnavailableError,
   CATALOG_SWEEP_BUDGET_MS,
-  canaryCapabilityProbeTimeout,
   catalogModelIds,
   classifyCanaryFailure,
   createCanaryConfig,
@@ -265,7 +265,11 @@ describe("AI provider catalog canary coverage", () => {
           apiKey: "test-key",
           provider: "bedrock",
           probeModel: async () => {
-            throw new HandlerError({ message, status: 502 });
+            throw new HandlerError({
+              code: "provider_error",
+              message,
+              status: 502,
+            });
           },
           runProbe: runProbeWithoutBackoff,
         },
@@ -1314,6 +1318,7 @@ describe("AI provider canary wrapped generate errors", () => {
   test("reads a prefixed provider body for its status and rejection", () => {
     const tier = new HandlerError({
       status: 502,
+      code: "provider_error",
       message:
         'Mistral API error 403: {"object":"error","message":"This model is not available in your subscription tier","type":"tier_not_allowed","param":null,"code":"1910","raw_status_code":403}',
     });
@@ -1326,6 +1331,7 @@ describe("AI provider canary wrapped generate errors", () => {
       errorSummary(
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message:
             'Mistral API error 503: {"object":"error","message":"busy","type":"service_unavailable","raw_status_code":503}',
         }),

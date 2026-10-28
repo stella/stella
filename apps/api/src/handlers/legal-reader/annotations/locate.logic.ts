@@ -11,8 +11,11 @@
 import { panic } from "better-result";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { plainTextOf, tableCellPieceId } from "@stll/legal-ast/document-ast";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
+
+import { servedParagraphQuoteOf } from "@/api/lib/case-law/served-paragraph-number";
 
 type AnnotationPassage = {
   /**
@@ -109,33 +112,6 @@ const findOccurrences = (raw: string, quote: string): Occurrence[] => {
   }
 };
 
-/** The places a block's words are rendered, each under its own anchor. */
-type TextPiece = { anchorId: string; text: string };
-
-const piecesOf = (block: Block): TextPiece[] => {
-  switch (block.type) {
-    case "heading":
-    case "paragraph":
-      return [{ anchorId: block.anchorId, text: plainTextOf(block.inlines) }];
-    case "table":
-      return block.rows.flatMap((row, rowIndex) =>
-        row.map((cell, columnIndex) => ({
-          anchorId: tableCellPieceId({
-            blockId: block.id,
-            columnIndex,
-            rowIndex,
-          }),
-          text: plainTextOf(cell.inlines),
-        })),
-      );
-    case "image":
-      return [];
-    default:
-      block satisfies never;
-      return panic(`Unhandled block type: ${String(block)}`);
-  }
-};
-
 type LocateContext = {
   blocks: readonly Block[];
   blocksByAnchor: ReadonlyMap<string, Block>;
@@ -168,7 +144,7 @@ const AMBIGUITY_ANCHORS_SHOWN = 8;
 const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
   const quote = rawQuote.toWellFormed();
   return blocks.flatMap((block) =>
-    piecesOf(block).flatMap((rawPiece) => {
+    readerAnchorPiecesOf(block).flatMap((rawPiece) => {
       const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
       return findOccurrences(piece.text, quote).map((occurrence) => ({
         block,
@@ -176,6 +152,26 @@ const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
         piece,
       }));
     }),
+  );
+};
+
+/**
+ * A quote copied with the court's paragraph number the served text prints
+ * in front of a paragraph (`¶ 48 The applicant…`). The number is structure,
+ * not the paragraph's text, so the words are matched at the start of the
+ * paragraph the court numbered so.
+ */
+const servedParagraphMatches = (blocks: readonly Block[], rawQuote: string) => {
+  const served = servedParagraphQuoteOf(rawQuote);
+  if (served === null) {
+    return [];
+  }
+  return matchesIn(
+    blocks.filter((block) => courtParagraphNumber(block) === served.number),
+    served.words,
+  ).filter(
+    ({ occurrence, piece }) =>
+      piece.text.slice(0, occurrence.startOffset).trim() === "",
   );
 };
 
@@ -201,7 +197,10 @@ const locateOne = (
       message: `Block "${block.anchorId}" is an image and has no text to mark.`,
     });
   }
-  const matches = matchesIn(block === undefined ? blocks : [block], quote);
+  const candidates = block === undefined ? blocks : [block];
+  const literal = matchesIn(candidates, quote);
+  const matches =
+    literal.length > 0 ? literal : servedParagraphMatches(candidates, quote);
   const [match, ...others] = matches;
   if (match === undefined) {
     return issue({
