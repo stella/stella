@@ -2750,7 +2750,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Prepares and validates baseline using target revision and external recording context."
         id: network_manifest_prepare
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ steps.checkout.outcome == 'success' && (!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true')) }}
         timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -6989,7 +6989,7 @@ jobs:
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
         timeout-minutes: 2
-        if: ${{ !cancelled() }}
+        if: ${{ steps.source-checkout.outcome == 'success' && (!cancelled()) }}
         id: consumer-install-osv-scanner
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures

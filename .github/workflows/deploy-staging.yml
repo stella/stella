@@ -919,7 +919,7 @@ jobs:
 
       - name: Run deployed application journeys
         id: deployed-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ steps.source-checkout-deployed-source.outcome == 'success' && (!cancelled() && steps.smoke-deps.conclusion == 'success') }}
         timeout-minutes: 20
         uses: ./.github/actions/user-journeys
         with:
@@ -937,7 +937,7 @@ jobs:
 
       - name: Run mock-model application journeys
         id: mock-journeys
-        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        if: ${{ steps.source-checkout-deployed-source.outcome == 'success' && (!cancelled() && steps.smoke-deps.conclusion == 'success') }}
         timeout-minutes: 40
         uses: ./.github/actions/user-journeys
         with:
