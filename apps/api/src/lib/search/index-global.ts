@@ -25,6 +25,7 @@ import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { LIMITS } from "@/api/lib/limits";
@@ -49,7 +50,6 @@ import {
 import {
   compareScoredSearchHits,
   globalSearchCursorSql,
-  isAfterGlobalSearchCursor,
   paginateScoredSearchHits,
   parseGlobalSearchCursor,
 } from "@/api/lib/search/pagination";
@@ -69,7 +69,11 @@ import type {
   GlobalSearchResultType,
   MatterGlobalSearchHit,
 } from "@/api/lib/search/types";
-import { projectChatSearchCandidates } from "@/api/lib/search/withdrawn-chat-candidates";
+import {
+  projectChatSearchCandidates,
+  readChatCandidateBatches,
+} from "@/api/lib/search/withdrawn-chat-candidates";
+import type { ChatSearchCandidateRow } from "@/api/lib/search/withdrawn-chat-candidates";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -83,8 +87,6 @@ type ScoredGlobalSearchHit = {
   hit: GlobalSearchHit;
   score: number;
 };
-
-type SearchPromise = Promise<RawRow[]>;
 
 type ReadLanguageAlternates = (
   languageGroupKeys: readonly string[],
@@ -456,10 +458,10 @@ const facetBuckets = (
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
-const rowsWhen = async (
+const rowsWhen = async <Row extends RawRow>(
   condition: boolean,
-  query: () => SearchPromise,
-): SearchPromise => {
+  query: () => Promise<Row[]>,
+) => {
   if (!condition) {
     return [];
   }
@@ -960,8 +962,10 @@ const readGlobalSearch = async (
 
   const chatPromise = rowsWhen(
     !restrictToEntities && shouldSearchType(selected, "chat"),
-    () =>
-      database.execute(sql`
+    async () => {
+      const read = await readChatCandidateBatches({
+        readBatch: async (batchCursor) =>
+          await database.execute<ChatSearchCandidateRow>(sql`
       SELECT
         t.id AS id,
         t.workspace_id,
@@ -969,14 +973,23 @@ const readGlobalSearch = async (
         t.title,
         t.title_source,
         t.subject_decision_id,
-        (SELECT coalesce(jsonb_agg(source_message), '[]'::jsonb) FROM (
-          SELECT m.role, m.content
+        (SELECT coalesce(jsonb_agg(jsonb_build_object(
+          'role', source_message.role,
+          'content', CASE WHEN source_message.source_bytes <= ${LIMITS.searchChatCandidateSourceBytesMax}
+            AND source_message.source_position <= ${LIMITS.searchChatCandidateSourceMessagesMax}
+            THEN source_message.content ELSE NULL END,
+          'overflow', source_message.source_bytes > ${LIMITS.searchChatCandidateSourceBytesMax}
+            OR source_message.source_position > ${LIMITS.searchChatCandidateSourceMessagesMax}
+        )), '[]'::jsonb) FROM (
+          SELECT m.role, m.content,
+            sum(octet_length(m.content::text)) OVER (ORDER BY ms.created_at DESC, ms.message_id DESC) AS source_bytes,
+            row_number() OVER (ORDER BY ms.created_at DESC, ms.message_id DESC) AS source_position
           FROM chat_message_search_documents ms
           JOIN chat_messages m ON m.id = ms.message_id AND m.thread_id = ms.thread_id
           WHERE ms.thread_id = t.id
             ${hasSearchQuery ? sql`AND ms.tsv @@ ${tsQuery}` : sql``}
           ORDER BY ms.created_at DESC, ms.message_id DESC
-          LIMIT ${LIMITS.searchChatPreviewMessageLimit}
+          LIMIT ${hasSearchQuery ? LIMITS.searchChatCandidateSourceMessagesMax + 1 : LIMITS.searchChatPreviewMessageLimit}
         ) source_message) AS source_messages,
         NULL::text AS headline,
         ${searchScore({ tsv: sql`cst.tsv`, updatedAt: sql`t.updated_at` })},
@@ -990,10 +1003,23 @@ const readGlobalSearch = async (
           ${CHAT_SEARCH_DISPLAY_METADATA_GENERATION}::uuid
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-
+        ${globalSearchCursorSql({
+          cursor: batchCursor,
+          score: searchScoreValue({
+            tsv: sql`cst.tsv`,
+            updatedAt: sql`t.updated_at`,
+          }),
+          id: sql`'chat:' || cst.thread_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
-      LIMIT ${LIMITS.searchChatCandidateThreadsMax}
+      LIMIT ${LIMITS.searchChatCandidateThreadsMax + 1}
     `),
+      });
+      if (read.isErr()) {
+        return abortTransaction(read.error);
+      }
+      return read.value;
+    },
   );
 
   const hasAlternativeFacetPredicate =
@@ -1305,19 +1331,15 @@ const readGlobalSearch = async (
     database,
     rows: chatRows,
     query,
+    cursor: searchCursor,
+    limit: fetchLimit,
   });
   const scoredHits = [
     ...entityRows.map(mapEntityHit),
     ...matterRows.map(mapMatterHit),
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
-    ...projectedChatRows
-      .map(mapChatHit)
-      .filter(
-        ({ hit, score }) =>
-          searchCursor === null ||
-          isAfterGlobalSearchCursor({ id: hit.id, score }, searchCursor),
-      ),
+    ...projectedChatRows.map(mapChatHit),
     // hit.id tiebreak for deterministic ranking, not display text
   ].toSorted(compareScoredSearchHits);
 

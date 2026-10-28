@@ -21,6 +21,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@stll/api-contract";
+import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -152,7 +153,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -323,6 +324,7 @@ type SearchResultsStatus =
   | { type: "hidden" }
   | { type: "unavailable" }
   | { type: "error" }
+  | { type: "refine" }
   | { type: "loading" }
   | { query: string | null; type: "empty" }
   | { type: "results" };
@@ -521,6 +523,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError,
   isLoading,
   searchQuery,
+  searchError,
 }: {
   hasActiveSearch: boolean;
   hasQuery: boolean;
@@ -530,6 +533,7 @@ const resolveSearchResultsStatus = ({
   isBlockingSearchError: boolean;
   isLoading: boolean;
   searchQuery: string;
+  searchError: unknown;
 }): SearchResultsStatus => {
   if (!hasVisibleSearch) {
     return { type: "hidden" };
@@ -538,6 +542,12 @@ const resolveSearchResultsStatus = ({
     return { type: "unavailable" };
   }
   if (hasActiveSearch && isBlockingSearchError) {
+    if (
+      APIError.is(searchError) &&
+      searchError.code === GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE
+    ) {
+      return { type: "refine" };
+    }
     return { type: "error" };
   }
   if (
@@ -1566,6 +1576,7 @@ export const SearchDialog = ({
     isBlockingSearchError,
     isLoading,
     searchQuery,
+    searchError,
   });
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
@@ -2573,6 +2584,14 @@ const SearchResultsContent = ({
         <div className="flex h-full items-center justify-center px-4 py-8">
           <p className="text-muted-foreground text-sm">
             {t("common.comingSoon")}
+          </p>
+        </div>
+      );
+    case "refine":
+      return (
+        <div className="flex h-full items-center justify-center px-4 py-8">
+          <p className="text-muted-foreground text-sm">
+            {t("caseLaw.pagination.refineForMore")}
           </p>
         </div>
       );

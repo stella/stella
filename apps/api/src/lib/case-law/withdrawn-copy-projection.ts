@@ -132,7 +132,7 @@ export class WithdrawnCopyProjection {
     if (row.role === "user") {
       return row;
     }
-    const marker = this.marker(row.citations, decisionId);
+    const marker = this.marker(row, decisionId);
     return marker === null ? row : { ...row, content: marker, citations: [] };
   }
 

@@ -222,7 +222,7 @@ describe("global search SQL scope", () => {
     });
   });
 
-  test("applies the score/id cursor to sources and projects a fixed chat candidate window", async () => {
+  test("applies source cursors and bounds each chat candidate batch", async () => {
     const sourceCases = [
       {
         tableSql: "FROM search_documents sd",
@@ -296,7 +296,9 @@ describe("global search SQL scope", () => {
       CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
     );
     expect(chatQuery?.sql).not.toContain('COLLATE "C" <');
-    expect(chatQuery?.params.at(-1)).toBe(LIMITS.searchChatCandidateThreadsMax);
+    expect(chatQuery?.params.at(-1)).toBe(
+      LIMITS.searchChatCandidateThreadsMax + 1,
+    );
   });
 
   test("continues legacy offset cursors during a rolling deployment", async () => {
@@ -321,7 +323,7 @@ describe("global search SQL scope", () => {
       expect(compiled.sql).not.toContain('COLLATE "C" <');
       expect(compiled.params.at(-1)).toBe(
         compiled.sql.includes("FROM chat_thread_search_documents cst")
-          ? LIMITS.searchChatCandidateThreadsMax
+          ? LIMITS.searchChatCandidateThreadsMax + 1
           : 29,
       );
     }

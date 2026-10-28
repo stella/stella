@@ -462,7 +462,6 @@ const readLegalReaderAnswersPage = async ({
       .from(legalReaderAnswerMessages)
       .where(
         and(
-          eq(legalReaderAnswerMessages.role, "user"),
           inArray(
             legalReaderAnswerMessages.answerId,
             rows.map(({ id }) => id),
@@ -477,12 +476,16 @@ const readLegalReaderAnswersPage = async ({
     if (messages.length > maximumMessages) {
       panic("Reader answer messages exceed their owning limit");
     }
-    const withdrawal = await readWithdrawnCopyProjection({ values: rows });
+    const withdrawal = await readWithdrawnCopyProjection({
+      values: [rows, messages],
+    });
     return rows.map((row) => ({
       id: row.id,
       value: projections.legal_reader_answers(
         withdrawal.answer(row),
-        messages.filter(({ answerId }) => answerId === row.id),
+        messages
+          .filter(({ answerId }) => answerId === row.id)
+          .map((message) => withdrawal.answerMessage(message, row.decisionId)),
       ),
     }));
   });

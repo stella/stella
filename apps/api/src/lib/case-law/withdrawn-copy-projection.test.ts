@@ -118,3 +118,14 @@ test("tagged decision identities share the canonical verdict and authored thread
     recapText: marker,
   });
 });
+
+test("assistant text links retain their decision association without a citation record", () => {
+  const row = {
+    role: "assistant" as const,
+    content: `Derived explanation [decision](#stella-decision=${id})`,
+    citations: [],
+  };
+  expect(
+    projection.answerMessage(row, "00000000-0000-4000-8000-000000000002"),
+  ).toEqual({ ...row, content: marker, citations: [] });
+});

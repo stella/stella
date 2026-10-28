@@ -4,6 +4,8 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -63,6 +65,7 @@ import {
   runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
+import { chatSearchVectorSql } from "@/api/lib/search/chat-search-text";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { readSearchPreview } from "@/api/lib/search/preview";
@@ -814,6 +817,249 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
       }
     });
   }
+
+  test.each([
+    { query: "paginateplain", masked: 0, admitted: 125 },
+    { query: "paginatemasked", masked: 120, admitted: 73 },
+  ])(
+    "chat search paginates every admitted thread: $query",
+    async ({ query, masked, admitted }) => {
+      const now = new Date("2026-10-18T10:00:00Z");
+      const rows = Array.from({ length: masked + admitted }, (_, index) => {
+        const hidden = index < masked;
+        const titleMasked = hidden || (masked > 0 && index % 3 === 0);
+        return {
+          id: createSafeId<"chatThread">(),
+          messageId: createSafeId<"chatMessage">(),
+          subjectDecisionId: titleMasked ? decisionId : activeId,
+          title: titleMasked
+            ? `${query} ${query} ${query} ${secret}`
+            : "Thread",
+          role: hidden ? ("assistant" as const) : ("user" as const),
+          text: hidden ? `${query} ${secret}` : query,
+          hidden,
+        };
+      });
+      const olderMatch =
+        rows.at(masked + 1) ??
+        panic("Pagination fixture requires an admitted thread");
+      const newerMessages =
+        masked === 0
+          ? []
+          : Array.from({ length: 6 }, () => ({
+              id: createSafeId<"chatMessage">(),
+              threadId: olderMatch.id,
+              text: `${query} ${secret} [decision](#stella-decision=${decisionId})`,
+            }));
+      const newerText = newerMessages.map(({ text }) => text).join(" ");
+      seededThreads.push(...rows.map(({ id }) => id));
+      await scopedDb(async (tx) => {
+        await tx.insert(chatThreads).values(
+          rows.map((row) => ({
+            id: row.id,
+            organizationId,
+            userId,
+            workspaceId,
+            title: row.title,
+            titleSource: "ai" as const,
+            subjectDecisionId: row.subjectDecisionId,
+          })),
+        );
+        await tx.insert(chatMessages).values(
+          rows.map((row) => ({
+            id: row.messageId,
+            threadId: row.id,
+            userId,
+            workspaceId,
+            role: row.role,
+            content: proveTextOnlyPersistedChatMessageContent({
+              version: 3,
+              data: [{ type: "text", content: row.text }],
+            }),
+          })),
+        );
+        if (newerMessages.length > 0) {
+          await tx.insert(chatMessages).values(
+            newerMessages.map((row) => ({
+              id: row.id,
+              threadId: row.threadId,
+              userId,
+              workspaceId,
+              role: "assistant" as const,
+              content: proveTextOnlyPersistedChatMessageContent({
+                version: 3,
+                data: [{ type: "text", content: row.text }],
+              }),
+            })),
+          );
+          await tx.insert(chatMessageSearchDocuments).values(
+            newerMessages.map((row) => ({
+              messageId: row.id,
+              threadId: row.threadId,
+              role: "assistant" as const,
+              searchableText: row.text,
+              tsv: chatSearchVectorSql(sql`${row.text}`),
+              createdAt: new Date("2026-10-19T10:00:00Z"),
+            })),
+          );
+        }
+        await tx.insert(chatThreadSearchDocuments).values(
+          rows.map((row) => ({
+            threadId: row.id,
+            title: row.title,
+            searchableText:
+              row.id === olderMatch.id ? `${row.text} ${newerText}` : row.text,
+            tsv: chatSearchVectorSql(
+              sql`${`${row.title} ${row.text} ${row.id === olderMatch.id ? newerText : ""}`}`,
+            ),
+            previewGeneration: CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
+          })),
+        );
+        await tx.insert(chatMessageSearchDocuments).values(
+          rows.map((row) => ({
+            messageId: row.messageId,
+            threadId: row.id,
+            role: row.role,
+            searchableText: row.text,
+            tsv: chatSearchVectorSql(sql`${row.text}`),
+            createdAt: now,
+          })),
+        );
+      });
+      const expected = rows
+        .filter(({ hidden }) => !hidden)
+        .map(({ id }) => `chat:${id}`)
+        .toSorted((a, b) => compareCodeUnit(b, a));
+      const received: string[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < 16; page++) {
+        const pageQuery = {
+          organizationId,
+          userId,
+          accessibleWorkspaceIds: [workspaceId],
+          selectedWorkspaceIds: [],
+          types: ["chat"],
+          editedByUserIds: [],
+          mimeTypes: [],
+          limit: 17,
+          query,
+          ...(cursor === undefined ? {} : { cursor }),
+        } satisfies Parameters<typeof searchGlobal>[0];
+        const result = await request(async () =>
+          searchGlobal(pageQuery, { scopedDb }),
+        );
+        if (page === 0) {
+          expect(result.totalCount).toBe(rows.length);
+          expect(result.hits).toHaveLength(17);
+        }
+        expect(result.hits).toHaveLength(
+          Math.min(17, admitted - received.length),
+        );
+        expect(JSON.stringify(result)).not.toContain(secret);
+        received.push(...result.hits.map(({ id }) => id));
+        if (result.nextCursor === null) {
+          break;
+        }
+        cursor = result.nextCursor;
+      }
+      expect(received).toEqual(expected);
+      expect(new Set(received).size).toBe(admitted);
+    },
+  );
+
+  test.each(["direct", "cited", "linked"] as const)(
+    "account export projects every reader message before serialization: %s withdrawal",
+    async (association) => {
+      const exportedAnswerId = createSafeId<"legalReaderAnswer">();
+      const parentDecisionId = association === "direct" ? decisionId : activeId;
+      await scopedDb(async (tx) => {
+        await tx.insert(legalReaderAnswers).values({
+          id: exportedAnswerId,
+          organizationId,
+          userId,
+          decisionId: parentDecisionId,
+          kind: "explain",
+          paragraphId: "p1",
+          startOffset: 0,
+          endOffset: 12,
+          quote: "Active quote",
+        });
+        await tx.insert(legalReaderAnswerMessages).values([
+          {
+            id: createSafeId<"legalReaderAnswerMessage">(),
+            answerId: exportedAnswerId,
+            sequence: 1,
+            role: "user",
+            content: own,
+            status: "complete",
+          },
+          {
+            id: createSafeId<"legalReaderAnswerMessage">(),
+            answerId: exportedAnswerId,
+            sequence: 2,
+            role: "assistant",
+            content:
+              association === "linked"
+                ? `${secret} [decision](#stella-decision=${decisionId})`
+                : secret,
+            citations:
+              association === "linked"
+                ? []
+                : [{ decisionId, paragraphId: "p1" }],
+            status: "complete",
+          },
+        ]);
+      });
+      try {
+        let projected = false;
+        const output = await request(async () => {
+          const rows: unknown[] = [];
+          for await (const row of exportAccountRows({
+            db,
+            scopedDatabase: markRlsDatabase(db),
+            userId,
+            table: "legal_reader_answers",
+            signal: new AbortController().signal,
+            projections: {
+              ...ACCOUNT_EXPORT_PROJECTIONS,
+              legal_reader_answers: (answer, messages) => {
+                if (answer.id === exportedAnswerId) {
+                  projected = true;
+                  const assistant = messages.find(
+                    ({ role }) => role === "assistant",
+                  );
+                  expect(assistant?.content).toBe(marker);
+                  expect(assistant?.citations).toEqual([]);
+                  expect(
+                    messages.find(({ role }) => role === "user")?.content,
+                  ).toBe(own);
+                  expect(answer.quote).toBe(
+                    association === "direct" ? marker : "Active quote",
+                  );
+                }
+                return ACCOUNT_EXPORT_PROJECTIONS.legal_reader_answers(
+                  answer,
+                  messages,
+                );
+              },
+            },
+          })) {
+            rows.push(row);
+          }
+          return rows;
+        });
+        expect(projected).toBe(true);
+        expect(JSON.stringify(output)).toContain(own);
+        expect(JSON.stringify(output)).not.toContain(secret);
+      } finally {
+        await scopedDb((tx) =>
+          tx
+            .delete(legalReaderAnswers)
+            .where(eq(legalReaderAnswers.id, exportedAnswerId)),
+        );
+      }
+    },
+  );
 
   test("a withdrawal after the corpus read refuses model preparation before creating a turn", async () => {
     const readMessages = async () =>
