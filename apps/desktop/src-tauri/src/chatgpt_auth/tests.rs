@@ -62,6 +62,11 @@ struct FakeState {
   /// The scopes a renewal grants.
   refresh_scope: String,
   revoke_status: StatusCode,
+  /// While set, the key set waits for this before it answers.
+  jwks_gate: Option<Arc<tokio::sync::Notify>>,
+  /// Told after each code exchange and each revocation.
+  exchanged: Arc<tokio::sync::Notify>,
+  revoked_any: Arc<tokio::sync::Notify>,
   /// Bytes of padding added to the discovery document and the key set.
   discovery_padding: usize,
   jwks_padding: usize,
@@ -98,6 +103,9 @@ impl FakeOpenAi {
       refresh_errors: VecDeque::new(),
       refresh_scope: ALL_SCOPES.into(),
       revoke_status: StatusCode::OK,
+      jwks_gate: None,
+      exchanged: Arc::new(tokio::sync::Notify::new()),
+      revoked_any: Arc::new(tokio::sync::Notify::new()),
       discovery_padding: 0,
       jwks_padding: 0,
     }));
@@ -144,9 +152,15 @@ async fn discovery(State(state): State<Shared>) -> Json<Value> {
 }
 
 async fn jwks(State(state): State<Shared>) -> Json<Value> {
-  let fake = state.lock().unwrap();
-  let mut jwks = fake.issuer.jwks_json();
-  jwks["padding"] = json!("x".repeat(fake.jwks_padding));
+  let gate = state.lock().unwrap().jwks_gate.clone();
+  if let Some(gate) = gate {
+    gate.notified().await;
+  }
+  let (mut jwks, padding) = {
+    let fake = state.lock().unwrap();
+    (fake.issuer.jwks_json(), fake.jwks_padding)
+  };
+  jwks["padding"] = json!("x".repeat(padding));
   Json(jwks)
 }
 
@@ -212,6 +226,7 @@ async fn token(
       fake.issued += 1;
       let refresh = format!("refresh-{}", fake.issued);
       fake.live_refresh.insert(refresh.clone(), client_id);
+      fake.exchanged.notify_one();
       Json(json!({
         "access_token": format!("access-{}", fake.issued),
         "refresh_token": refresh,
@@ -258,6 +273,7 @@ async fn revoke(
     fake.live_refresh.remove(token);
   }
   fake.revocations.push(form);
+  fake.revoked_any.notify_one();
   fake.revoke_status
 }
 
@@ -1156,7 +1172,7 @@ async fn a_sign_in_without_plan_usage_revokes_old_and_new_tokens() {
 
 #[tokio::test]
 async fn oversized_discovery_or_key_sets_are_refused() {
-  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  let harness = Harness::new(Duration::from_secs(30)).await;
   harness
     .fake
     .with(|fake| fake.discovery_padding = MAX_METADATA_BYTES);
@@ -1182,6 +1198,45 @@ async fn oversized_discovery_or_key_sets_are_refused() {
   assert!(harness.record().registrations.is_empty());
   // The issued tokens were revoked, as for any refused sign-in.
   assert_eq!(revoked(&harness), ["refresh-1"]);
+}
+
+#[tokio::test]
+async fn a_cancelled_sign_in_never_keeps_its_tokens() {
+  let mut harness = Harness::new(Duration::from_secs(30)).await;
+  let gate = Arc::new(tokio::sync::Notify::new());
+  let (exchanged, revoked_any) = harness.fake.with(|fake| {
+    fake.jwks_gate = Some(Arc::clone(&gate));
+    (Arc::clone(&fake.exchanged), Arc::clone(&fake.revoked_any))
+  });
+  harness.auth.start(SignInIntent::SameAccount);
+  let params = harness.authorization().await;
+  let callback = Harness::callback_url(&params, &params["state"], true);
+  let browser = tokio::spawn({
+    let http = harness.http.clone();
+    async move {
+      http
+        .get(callback)
+        .send()
+        .await
+        .map(|response| response.status())
+    }
+  });
+  // The code is exchanged; the ID token check waits on the key set.
+  tokio::time::timeout(Duration::from_secs(10), exchanged.notified())
+    .await
+    .unwrap();
+  harness.auth.cancel();
+  assert_eq!(harness.settled().await, ChatGptState::SignedOut);
+  gate.notify_one();
+  tokio::time::timeout(Duration::from_secs(10), revoked_any.notified())
+    .await
+    .unwrap();
+  assert_eq!(revoked(&harness), ["refresh-1"]);
+  assert_eq!(harness.record(), store::ChatGptRecord::default());
+  let status = harness.auth.status().await;
+  assert_eq!(status.state, ChatGptState::SignedOut);
+  assert!(!status.session_stored);
+  assert_eq!(browser.await.unwrap().unwrap(), StatusCode::BAD_REQUEST);
 }
 
 #[test]

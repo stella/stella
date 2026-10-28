@@ -480,6 +480,43 @@ impl ChatGptAuth {
   async fn save(&self, record: ChatGptRecord) -> Result<(), VaultUnavailable> {
     let shown = stored_status(&record);
     self.with_vault(move |vault| vault.save(&record)).await?;
+    self.show_stored(shown);
+    Ok(())
+  }
+
+  /// Saves a sign-in's record only while its attempt is still the current
+  /// one. The check and the write happen under the attempt lock, so a
+  /// cancel either comes first, and nothing is stored, or after.
+  async fn save_for_attempt(
+    &self,
+    attempt: u64,
+    record: ChatGptRecord,
+  ) -> Result<(), ChatGptFailure> {
+    let shown = stored_status(&record);
+    let inner = Arc::clone(&self.0);
+    tokio::task::spawn_blocking(move || {
+      let current = inner
+        .attempt
+        .lock()
+        .map_err(|_poisoned| ChatGptFailure::Storage)?;
+      if current.as_ref().map(|current| current.id) != Some(attempt) {
+        // The attempt ended; its tokens are revoked by the caller.
+        return Err(ChatGptFailure::TimedOut);
+      }
+      let saved = inner
+        .vault
+        .save(&record)
+        .map_err(|VaultUnavailable| ChatGptFailure::Storage);
+      drop(current);
+      saved
+    })
+    .await
+    .map_err(|_join| ChatGptFailure::Storage)??;
+    self.show_stored(shown);
+    Ok(())
+  }
+
+  fn show_stored(&self, shown: ChatGptStatus) {
     let changed = self.0.stored.lock().is_ok_and(|mut stored| {
       let changed = stored.as_ref() != Some(&shown);
       *stored = Some(shown);
@@ -488,7 +525,6 @@ impl ChatGptAuth {
     if changed {
       (self.0.hooks.changed)();
     }
-    Ok(())
   }
 
   async fn with_vault<T: Send + 'static>(
@@ -643,6 +679,7 @@ impl ChatGptAuth {
     // The listener has served its one callback.
     drop(listener);
     let pending = PendingSignIn {
+      attempt: id,
       discovery: &discovery,
       target: &target,
       redirect_uri: &redirect_uri,
@@ -692,26 +729,45 @@ impl ChatGptAuth {
       }
     };
 
+    let exchange = CodeExchange {
+      attempt: pending.attempt,
+      client_id,
+      code,
+      verifier: pending.verifier.to_owned(),
+      redirect_uri: pending.redirect_uri.to_owned(),
+      token_endpoint: pending.discovery.token_endpoint.clone(),
+      issuer: pending.discovery.issuer.clone(),
+      nonce: pending.nonce.to_owned(),
+      expected_subject: pending.target.expected_subject.clone(),
+      registers: matches!(pending.target.client, ClientSelection::Register),
+    };
+    // Once a code is exchanged, the tokens are either stored for a live
+    // attempt or revoked: this work runs to its end even if the attempt is
+    // cancelled meanwhile.
+    let auth = self.clone();
+    tokio::spawn(async move { auth.exchange_code(exchange).await })
+      .await
+      .unwrap_or(Err(ChatGptFailure::Storage))
+  }
+
+  async fn exchange_code(&self, exchange: CodeExchange) -> Result<(), ChatGptFailure> {
     let body = oauth::form_body(&[
       ("grant_type", "authorization_code"),
-      ("client_id", &client_id),
-      ("code", &code),
-      ("code_verifier", pending.verifier),
-      ("redirect_uri", pending.redirect_uri),
+      ("client_id", &exchange.client_id),
+      ("code", &exchange.code),
+      ("code_verifier", &exchange.verifier),
+      ("redirect_uri", &exchange.redirect_uri),
       ("resource", &self.0.config.resource),
     ]);
-    let tokens = match self
-      .post_token(&pending.discovery.token_endpoint, body)
-      .await
-    {
+    let tokens = match self.post_token(&exchange.token_endpoint, body).await {
       Ok(tokens) => tokens,
       Err(ExchangeError::Rejected(error)) => {
         return Err(match error.as_str() {
           "invalid_grant" => {
             // The retry this attempt needs must reuse the client it was
             // issued, without that client standing for any account yet.
-            if matches!(pending.target.client, ClientSelection::Register) {
-              self.keep_pending_client(client_id).await?;
+            if exchange.registers {
+              self.keep_pending_client(exchange.client_id.clone()).await?;
             }
             ChatGptFailure::CodeExpired
           }
@@ -725,11 +781,13 @@ impl ChatGptAuth {
     };
     // Every refusal from here on revokes the tokens this exchange issued.
     let issued = tokens.refresh_token.clone();
-    let accepted = self.accept(pending, &client_id, tokens).await;
+    let accepted = self.accept(&exchange, tokens).await;
     if accepted.is_err()
       && let Some(refresh_token) = issued
     {
-      self.revoke_dropped(&client_id, &refresh_token).await;
+      self
+        .revoke_dropped(&exchange.client_id, &refresh_token)
+        .await;
     }
     accepted
   }
@@ -738,24 +796,18 @@ impl ChatGptAuth {
   /// registration. Another registration and its tokens are never changed.
   async fn accept(
     &self,
-    pending: &PendingSignIn<'_>,
-    client_id: &str,
+    exchange: &CodeExchange,
     tokens: TokenResponse,
   ) -> Result<(), ChatGptFailure> {
+    let client_id = exchange.client_id.as_str();
     let id_token = tokens
       .id_token
       .clone()
       .ok_or(ChatGptFailure::Verification)?;
     let identity = self
-      .verify_id_token(
-        &id_token,
-        &pending.discovery.issuer,
-        client_id,
-        pending.nonce,
-      )
+      .verify_id_token(&id_token, &exchange.issuer, client_id, &exchange.nonce)
       .await?;
-    if pending
-      .target
+    if exchange
       .expected_subject
       .as_deref()
       .is_some_and(|expected| expected != identity.subject)
@@ -769,7 +821,7 @@ impl ChatGptAuth {
     let plan_usage_granted = scopes.iter().any(|scope| scope == PLAN_USAGE_SCOPE);
     let saved_at = now_ms();
     let session = ChatGptSession {
-      issuer: pending.discovery.issuer.clone(),
+      issuer: exchange.issuer.clone(),
       // The ID token is only verified; nothing keeps or resends it.
       session_id: oauth::random_token(32),
       access_token: tokens.access_token.clone(),
@@ -813,10 +865,7 @@ impl ChatGptAuth {
     if record.pending_client.as_deref() == Some(client_id) {
       record.pending_client = None;
     }
-    self
-      .save(record)
-      .await
-      .map_err(|VaultUnavailable| ChatGptFailure::Storage)?;
+    self.save_for_attempt(exchange.attempt, record).await?;
     if let Some(replaced) = replaced
       && Some(&replaced) != tokens.refresh_token.as_ref()
     {
@@ -1208,12 +1257,28 @@ impl ChatGptAuth {
 }
 
 struct PendingSignIn<'a> {
+  attempt: u64,
   discovery: &'a Discovery,
   target: &'a Target,
   redirect_uri: &'a str,
   state: &'a str,
   nonce: &'a str,
   verifier: &'a str,
+}
+
+/// One code exchange, owned so it can finish after its attempt ends.
+struct CodeExchange {
+  attempt: u64,
+  client_id: String,
+  code: String,
+  verifier: String,
+  redirect_uri: String,
+  token_endpoint: String,
+  issuer: String,
+  nonce: String,
+  expected_subject: Option<String>,
+  /// The attempt registers a new client rather than reusing one.
+  registers: bool,
 }
 
 /// The client an attempt signs in with, and the account it must return.
