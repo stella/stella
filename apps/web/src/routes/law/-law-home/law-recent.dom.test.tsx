@@ -1172,176 +1172,8 @@ test("removing a saved query after import failure keeps unrelated local history"
   }
 });
 
-// These flows render two signed-in clients, fail and retry server writes and
-// wait on several imports; on a loaded runner they exceed the 5 s default.
-const MULTI_CLIENT_FLOW_TIMEOUT_MS = 20_000;
-
 for (const operation of ["clear", "remove"]) {
-  test(
-    `${operation} can be retried after a failed server write without losing local history`,
-    async () => {
-      const { userStorageKey } =
-        await import("@/lib/account/user-scoped-storage");
-      const key = userStorageKey("law_search_history", {
-        kind: "user",
-        userId: "scoped-history-reader",
-      });
-      const storage = browserStateStorage("local");
-      const raw = JSON.stringify([
-        { query: "Saved query", at: "2026-01-01T12:00:00Z" },
-      ]);
-      storage.setItem(key, raw);
-      const savedEntry = {
-        ...seed[0],
-        id: "history-saved",
-        query: "Saved query",
-      };
-      const finishFailedWrite = Promise.withResolvers<undefined>();
-      let imports = 0;
-      let deleteAttempts = 0;
-      let serverEntries = [savedEntry];
-      const fixture = await mountServerHistory(async ({ url, method }) => {
-        if (url.pathname.endsWith("/import")) {
-          imports += 1;
-          return Response.json(
-            { message: "Temporarily unavailable" },
-            { status: 400 },
-          );
-        }
-        if (method === "DELETE") {
-          deleteAttempts += 1;
-          if (operation === "remove") {
-            expect(url.pathname.endsWith(`/${savedEntry.id}`)).toBe(true);
-          }
-          if (deleteAttempts === 1) {
-            await finishFailedWrite.promise;
-            return Response.json(
-              { message: "Temporarily unavailable" },
-              { status: 400 },
-            );
-          }
-          serverEntries = [];
-          return Response.json({ deleted: 1 });
-        }
-        return Response.json({
-          items: serverEntries,
-          nextCursor: null,
-          scope: {
-            userId: "scoped-history-reader",
-            organizationId: "scoped-history-org-a",
-          },
-        });
-      });
-      try {
-        await waitFor(() => {
-          expect(imports).toBe(1);
-          expect(
-            screen.getByRole("button", { name: /Saved query/u }),
-          ).toBeTruthy();
-          expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
-          expect(
-            screen.getByRole("button", { name: messages.common.retry }),
-          ).toBeTruthy();
-        });
-        if (operation === "clear") {
-          await click(messages.lawHome.clearRecent);
-          await click(messages.common.delete);
-        } else {
-          const row = screen.getByRole("button", {
-            name: /Saved query/u,
-          }).parentElement;
-          if (row === null) {
-            throw new TypeError("Saved query row is absent");
-          }
-          await act(async () => {
-            fireEvent.click(
-              within(row).getByRole("button", { name: messages.common.remove }),
-            );
-          });
-        }
-        await waitFor(() => {
-          const button = screen.getByRole("button", {
-            name:
-              operation === "clear"
-                ? messages.common.delete
-                : messages.common.remove,
-          });
-          expect(deleteAttempts).toBe(1);
-          expect(
-            button.hasAttribute("disabled") ||
-              button.getAttribute("aria-disabled") === "true",
-          ).toBe(true);
-        });
-        await act(async () => finishFailedWrite.resolve(undefined));
-        await waitFor(() => {
-          expect(deleteAttempts).toBe(1);
-          expect(storage.getItem(key)).toBe(raw);
-          expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
-          expect(
-            screen.getByRole("button", {
-              name: messages.common.retry,
-              hidden: operation === "clear",
-            }),
-          ).toBeTruthy();
-          if (operation === "clear") {
-            expect(screen.getByRole("alertdialog")).toBeTruthy();
-            expect(
-              screen
-                .getByRole("button", { name: messages.common.delete })
-                .hasAttribute("disabled"),
-            ).toBe(false);
-          } else {
-            expect(
-              screen.getByRole("button", { name: /Saved query/u }),
-            ).toBeTruthy();
-            expect(
-              screen
-                .getByRole("button", { name: messages.common.remove })
-                .getAttribute("aria-disabled"),
-            ).not.toBe("true");
-          }
-        });
-
-        if (operation === "clear") {
-          await click(messages.common.delete);
-        } else {
-          const row = screen.getByRole("button", {
-            name: /Saved query/u,
-          }).parentElement;
-          if (row === null) {
-            throw new TypeError("Saved query row is absent");
-          }
-          await act(async () => {
-            fireEvent.click(
-              within(row).getByRole("button", { name: messages.common.remove }),
-            );
-          });
-        }
-        await waitFor(() => {
-          expect(deleteAttempts).toBe(2);
-          expect(serverEntries).toEqual([]);
-          expect(storage.getItem(key)).toBeNull();
-          expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
-          expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
-          expect(screen.queryByRole("alertdialog")).toBeNull();
-          expect(imports).toBe(1);
-        });
-      } finally {
-        finishFailedWrite.resolve(undefined);
-        await fixture.dispose();
-        storage.removeItem(key);
-      }
-    },
-    MULTI_CLIENT_FLOW_TIMEOUT_MS,
-  );
-}
-
-test(
-  "a delayed second-client import cannot restore history cleared by the first client",
-  async () => {
-    const { QueryClient, QueryClientProvider } =
-      await import("@tanstack/react-query");
-    const { sessionOptions } = await import("@/lib/auth-query-options");
+  test(`${operation} can be retried after a failed server write without losing local history`, async () => {
     const { userStorageKey } =
       await import("@/lib/account/user-scoped-storage");
     const key = userStorageKey("law_search_history", {
@@ -1352,184 +1184,339 @@ test(
     const raw = JSON.stringify([
       { query: "Saved query", at: "2026-01-01T12:00:00Z" },
     ]);
-    storage.removeItem(key);
-    storage.removeItem("law_search_history");
-    const firstClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false, retryDelay: 0 },
-        mutations: { retry: false },
-      },
-    });
-    const secondClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false, retryDelay: 0 },
-        mutations: { retry: false },
-      },
-    });
-    const signedSession = createSignedSession({
-      userId: "scoped-history-reader",
-      organizationId: "scoped-history-org-a",
-    });
-    firstClient.setQueryData(sessionOptions.queryKey, signedSession);
-    secondClient.setQueryData(sessionOptions.queryKey, signedSession);
-    const importStarted = Promise.withResolvers<undefined>();
-    const finishImport = Promise.withResolvers<undefined>();
+    storage.setItem(key, raw);
     const savedEntry = {
       ...seed[0],
       id: "history-saved",
       query: "Saved query",
     };
+    const finishFailedWrite = Promise.withResolvers<undefined>();
+    let imports = 0;
+    let deleteAttempts = 0;
     let serverEntries = [savedEntry];
-    let clearedAt: number | null = null;
-    let capturedBatch: unknown;
-    let skippedByClearWatermark = 0;
-    const transport = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (
-          input: Parameters<typeof fetch>[0],
-          init?: Parameters<typeof fetch>[1],
-        ) => {
-          const url = new URL(
-            input instanceof Request ? input.url : String(input),
+    const fixture = await mountServerHistory(async ({ url, method }) => {
+      if (url.pathname.endsWith("/import")) {
+        imports += 1;
+        return Response.json(
+          { message: "Temporarily unavailable" },
+          { status: 400 },
+        );
+      }
+      if (method === "DELETE") {
+        deleteAttempts += 1;
+        if (operation === "remove") {
+          expect(url.pathname.endsWith(`/${savedEntry.id}`)).toBe(true);
+        }
+        if (deleteAttempts === 1) {
+          await finishFailedWrite.promise;
+          return Response.json(
+            { message: "Temporarily unavailable" },
+            { status: 400 },
           );
-          const method =
-            init?.method ?? (input instanceof Request ? input.method : "GET");
-          if (url.pathname.endsWith("/import")) {
-            const body = readStoredJson(
-              typeof init?.body === "string" ? init.body : null,
-              queryImportBatchSchema,
-            );
-            if (body === null) {
-              throw new TypeError("Expected an import batch");
-            }
-            capturedBatch = body;
-            importStarted.resolve(undefined);
-            await finishImport.promise;
-            let accepted = 0;
-            let skipped = 0;
-            for (const {
-              entry: { query },
-              usedAt,
-            } of body.entries) {
-              if (
-                clearedAt !== null &&
-                Temporal.Instant.from(usedAt).epochMilliseconds <= clearedAt
-              ) {
-                skipped += 1;
-                continue;
-              }
-              serverEntries = [
-                ...serverEntries.filter(
-                  ({ query: existing }) => existing !== query,
-                ),
-                { ...savedEntry, query },
-              ];
-              accepted += 1;
-            }
-            skippedByClearWatermark += skipped;
-            return Response.json({ entries: accepted, skipped });
+        }
+        serverEntries = [];
+        return Response.json({ deleted: 1 });
+      }
+      return Response.json({
+        items: serverEntries,
+        nextCursor: null,
+        scope: {
+          userId: "scoped-history-reader",
+          organizationId: "scoped-history-org-a",
+        },
+      });
+    });
+    try {
+      await waitFor(() => {
+        expect(imports).toBe(1);
+        expect(
+          screen.getByRole("button", { name: /Saved query/u }),
+        ).toBeTruthy();
+        expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+        expect(
+          screen.getByRole("button", { name: messages.common.retry }),
+        ).toBeTruthy();
+      });
+      if (operation === "clear") {
+        await click(messages.lawHome.clearRecent);
+        await click(messages.common.delete);
+      } else {
+        const row = screen.getByRole("button", {
+          name: /Saved query/u,
+        }).parentElement;
+        if (row === null) {
+          throw new TypeError("Saved query row is absent");
+        }
+        await act(async () => {
+          fireEvent.click(
+            within(row).getByRole("button", { name: messages.common.remove }),
+          );
+        });
+      }
+      await waitFor(() => {
+        const button = screen.getByRole("button", {
+          name:
+            operation === "clear"
+              ? messages.common.delete
+              : messages.common.remove,
+        });
+        expect(deleteAttempts).toBe(1);
+        expect(
+          button.hasAttribute("disabled") ||
+            button.getAttribute("aria-disabled") === "true",
+        ).toBe(true);
+      });
+      await act(async () => finishFailedWrite.resolve(undefined));
+      await waitFor(() => {
+        expect(deleteAttempts).toBe(1);
+        expect(storage.getItem(key)).toBe(raw);
+        expect(screen.getByText(messages.lawHome.importFailed)).toBeTruthy();
+        expect(
+          screen.getByRole("button", {
+            name: messages.common.retry,
+            hidden: operation === "clear",
+          }),
+        ).toBeTruthy();
+        if (operation === "clear") {
+          expect(screen.getByRole("alertdialog")).toBeTruthy();
+          expect(
+            screen
+              .getByRole("button", { name: messages.common.delete })
+              .hasAttribute("disabled"),
+          ).toBe(false);
+        } else {
+          expect(
+            screen.getByRole("button", { name: /Saved query/u }),
+          ).toBeTruthy();
+          expect(
+            screen
+              .getByRole("button", { name: messages.common.remove })
+              .getAttribute("aria-disabled"),
+          ).not.toBe("true");
+        }
+      });
+
+      if (operation === "clear") {
+        await click(messages.common.delete);
+      } else {
+        const row = screen.getByRole("button", {
+          name: /Saved query/u,
+        }).parentElement;
+        if (row === null) {
+          throw new TypeError("Saved query row is absent");
+        }
+        await act(async () => {
+          fireEvent.click(
+            within(row).getByRole("button", { name: messages.common.remove }),
+          );
+        });
+      }
+      await waitFor(() => {
+        expect(deleteAttempts).toBe(2);
+        expect(serverEntries).toEqual([]);
+        expect(storage.getItem(key)).toBeNull();
+        expect(screen.queryByText(messages.lawHome.importFailed)).toBeNull();
+        expect(screen.getByText(messages.lawHome.noRecent)).toBeTruthy();
+        expect(screen.queryByRole("alertdialog")).toBeNull();
+        expect(imports).toBe(1);
+      });
+    } finally {
+      finishFailedWrite.resolve(undefined);
+      await fixture.dispose();
+      storage.removeItem(key);
+    }
+  });
+}
+
+test("a delayed second-client import cannot restore history cleared by the first client", async () => {
+  const { QueryClient, QueryClientProvider } =
+    await import("@tanstack/react-query");
+  const { sessionOptions } = await import("@/lib/auth-query-options");
+  const { userStorageKey } = await import("@/lib/account/user-scoped-storage");
+  const key = userStorageKey("law_search_history", {
+    kind: "user",
+    userId: "scoped-history-reader",
+  });
+  const storage = browserStateStorage("local");
+  const raw = JSON.stringify([
+    { query: "Saved query", at: "2026-01-01T12:00:00Z" },
+  ]);
+  storage.removeItem(key);
+  storage.removeItem("law_search_history");
+  const firstClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, retryDelay: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const secondClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, retryDelay: 0 },
+      mutations: { retry: false },
+    },
+  });
+  const signedSession = createSignedSession({
+    userId: "scoped-history-reader",
+    organizationId: "scoped-history-org-a",
+  });
+  firstClient.setQueryData(sessionOptions.queryKey, signedSession);
+  secondClient.setQueryData(sessionOptions.queryKey, signedSession);
+  const importStarted = Promise.withResolvers<undefined>();
+  const finishImport = Promise.withResolvers<undefined>();
+  const savedEntry = {
+    ...seed[0],
+    id: "history-saved",
+    query: "Saved query",
+  };
+  let serverEntries = [savedEntry];
+  let clearedAt: number | null = null;
+  let capturedBatch: unknown;
+  let skippedByClearWatermark = 0;
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const method =
+          init?.method ?? (input instanceof Request ? input.method : "GET");
+        if (url.pathname.endsWith("/import")) {
+          const body = readStoredJson(
+            typeof init?.body === "string" ? init.body : null,
+            queryImportBatchSchema,
+          );
+          if (body === null) {
+            throw new TypeError("Expected an import batch");
           }
-          if (method === "DELETE") {
-            serverEntries = [];
-            clearedAt = Temporal.Instant.from(
-              "2026-01-02T00:00:00Z",
-            ).epochMilliseconds;
-            return Response.json({ deleted: 1 });
+          capturedBatch = body;
+          importStarted.resolve(undefined);
+          await finishImport.promise;
+          let accepted = 0;
+          let skipped = 0;
+          for (const {
+            entry: { query },
+            usedAt,
+          } of body.entries) {
+            if (
+              clearedAt !== null &&
+              Temporal.Instant.from(usedAt).epochMilliseconds <= clearedAt
+            ) {
+              skipped += 1;
+              continue;
+            }
+            serverEntries = [
+              ...serverEntries.filter(
+                ({ query: existing }) => existing !== query,
+              ),
+              { ...savedEntry, query },
+            ];
+            accepted += 1;
           }
-          return Response.json({
-            items: serverEntries,
-            nextCursor: null,
-            scope: {
+          skippedByClearWatermark += skipped;
+          return Response.json({ entries: accepted, skipped });
+        }
+        if (method === "DELETE") {
+          serverEntries = [];
+          clearedAt = Temporal.Instant.from(
+            "2026-01-02T00:00:00Z",
+          ).epochMilliseconds;
+          return Response.json({ deleted: 1 });
+        }
+        return Response.json({
+          items: serverEntries,
+          nextCursor: null,
+          scope: {
+            userId: "scoped-history-reader",
+            organizationId: "scoped-history-org-a",
+          },
+        });
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  const renderClient = (client: typeof firstClient) =>
+    render(
+      <QueryClientProvider client={client}>
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <LawRecent country="CZE" onSearch={() => undefined} />
+          </FormattingProvider>
+        </IntlProvider>
+      </QueryClientProvider>,
+    );
+  try {
+    const first = renderClient(firstClient);
+    await waitFor(() =>
+      expect(
+        within(first.container).getByRole("button", { name: /Saved query/u }),
+      ).toBeTruthy(),
+    );
+    await waitFor(() =>
+      expect(
+        firstClient.getQueryCache().find({
+          queryKey: [
+            "law-search-history",
+            {
               userId: "scoped-history-reader",
               organizationId: "scoped-history-org-a",
             },
-          });
-        },
-        { preconnect: () => undefined },
-      ),
+            "import",
+          ],
+          exact: true,
+        })?.state.status,
+      ).toBe("success"),
     );
-    const renderClient = (client: typeof firstClient) =>
-      render(
-        <QueryClientProvider client={client}>
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <LawRecent country="CZE" onSearch={() => undefined} />
-            </FormattingProvider>
-          </IntlProvider>
-        </QueryClientProvider>,
-      );
-    try {
-      const first = renderClient(firstClient);
-      await waitFor(() =>
-        expect(
-          within(first.container).getByRole("button", { name: /Saved query/u }),
-        ).toBeTruthy(),
-      );
-      await waitFor(() =>
-        expect(
-          firstClient.getQueryCache().find({
-            queryKey: [
-              "law-search-history",
-              {
-                userId: "scoped-history-reader",
-                organizationId: "scoped-history-org-a",
-              },
-              "import",
-            ],
-            exact: true,
-          })?.state.status,
-        ).toBe("success"),
-      );
-      storage.setItem(key, raw);
-      const second = renderClient(secondClient);
-      await importStarted.promise;
-      expect(capturedBatch).toMatchObject({
-        entries: [
-          {
-            entry: { query: "Saved query" },
-            usedAt: "2026-01-01T12:00:00Z",
-          },
-        ],
-      });
+    storage.setItem(key, raw);
+    const second = renderClient(secondClient);
+    await importStarted.promise;
+    expect(capturedBatch).toMatchObject({
+      entries: [
+        {
+          entry: { query: "Saved query" },
+          usedAt: "2026-01-01T12:00:00Z",
+        },
+      ],
+    });
 
-      await act(async () => {
-        fireEvent.click(
-          within(first.container).getByRole("button", {
-            name: messages.lawHome.clearRecent,
-          }),
-        );
-      });
-      await act(async () => {
-        fireEvent.click(
-          screen.getByRole("button", { name: messages.common.delete }),
-        );
-      });
-      await waitFor(() => {
-        expect(clearedAt).not.toBeNull();
-        expect(serverEntries).toEqual([]);
-        expect(storage.getItem(key)).toBeNull();
-      });
-      await act(async () => finishImport.resolve(undefined));
-      await waitFor(() => {
-        expect(serverEntries).toEqual([]);
-        expect(skippedByClearWatermark).toBe(1);
-        expect(storage.getItem(key)).toBeNull();
-        expect(
-          within(first.container).getByText(messages.lawHome.noRecent),
-        ).toBeTruthy();
-        expect(
-          within(second.container).getByText(messages.lawHome.noRecent),
-        ).toBeTruthy();
-      });
-    } finally {
-      finishImport.resolve(undefined);
-      await act(async () => cleanup());
-      firstClient.clear();
-      secondClient.clear();
-      transport.mockRestore();
-      storage.removeItem(key);
-      storage.removeItem("law_search_history");
-    }
-  },
-  MULTI_CLIENT_FLOW_TIMEOUT_MS,
-);
+    await act(async () => {
+      fireEvent.click(
+        within(first.container).getByRole("button", {
+          name: messages.lawHome.clearRecent,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.delete }),
+      );
+    });
+    await waitFor(() => {
+      expect(clearedAt).not.toBeNull();
+      expect(serverEntries).toEqual([]);
+      expect(storage.getItem(key)).toBeNull();
+    });
+    await act(async () => finishImport.resolve(undefined));
+    await waitFor(() => {
+      expect(serverEntries).toEqual([]);
+      expect(skippedByClearWatermark).toBe(1);
+      expect(storage.getItem(key)).toBeNull();
+      expect(
+        within(first.container).getByText(messages.lawHome.noRecent),
+      ).toBeTruthy();
+      expect(
+        within(second.container).getByText(messages.lawHome.noRecent),
+      ).toBeTruthy();
+    });
+  } finally {
+    finishImport.resolve(undefined);
+    await act(async () => cleanup());
+    firstClient.clear();
+    secondClient.clear();
+    transport.mockRestore();
+    storage.removeItem(key);
+    storage.removeItem("law_search_history");
+  }
+});

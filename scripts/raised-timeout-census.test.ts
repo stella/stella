@@ -61,20 +61,6 @@ const propertyName = (node: Node): string | undefined => {
   return undefined;
 };
 
-const timeoutInObject = (
-  node: Node | Argument | undefined,
-): number | undefined => {
-  if (node?.type !== "ObjectExpression") {
-    return undefined;
-  }
-  for (const property of node.properties) {
-    if (property.type === "Property" && propertyName(property) === "timeout") {
-      return numericValue(property.value);
-    }
-  }
-  return undefined;
-};
-
 const nodeName = (node: Node): string | undefined => {
   if (node.type === "Identifier") {
     return node.name;
@@ -88,13 +74,15 @@ const nodeName = (node: Node): string | undefined => {
 type BunTestBindings = {
   readonly named: ReadonlyMap<string, string>;
   readonly namespaces: ReadonlySet<string>;
+  readonly jestObjects: ReadonlySet<string>;
 };
 
 const bunTestBindings = (program: Node): BunTestBindings => {
   const named = new Map<string, string>();
   const namespaces = new Set<string>();
+  const jestObjects = new Set(["jest"]);
   if (program.type !== "Program") {
-    return { named, namespaces };
+    return { jestObjects, named, namespaces };
   }
   for (const statement of program.body) {
     if (
@@ -112,6 +100,10 @@ const bunTestBindings = (program: Node): BunTestBindings => {
         continue;
       }
       const imported = nodeName(specifier.imported);
+      if (imported === "jest") {
+        jestObjects.add(specifier.local.name);
+        continue;
+      }
       if (
         imported !== undefined &&
         (TEST_CALLS.has(imported) || imported === "setDefaultTimeout")
@@ -120,7 +112,7 @@ const bunTestBindings = (program: Node): BunTestBindings => {
       }
     }
   }
-  return { named, namespaces };
+  return { jestObjects, named, namespaces };
 };
 
 const calleePath = (callee: Node): string[] | undefined => {
@@ -151,7 +143,7 @@ const calleePath = (callee: Node): string[] | undefined => {
 
 const bunTestApi = (
   callee: Node,
-  { named, namespaces }: BunTestBindings,
+  { jestObjects, named, namespaces }: BunTestBindings,
 ): string | undefined => {
   const chain = calleePath(callee);
   const root = chain?.at(0);
@@ -159,6 +151,17 @@ const bunTestApi = (
     return undefined;
   }
   const namedApi = named.get(root);
+  if (
+    (jestObjects.has(root) &&
+      chain.length === 2 &&
+      chain.at(1) === "setTimeout") ||
+    (namespaces.has(root) &&
+      chain.length === 3 &&
+      chain.at(1) === "jest" &&
+      chain.at(2) === "setTimeout")
+  ) {
+    return "jest.setTimeout";
+  }
   const api = namedApi ?? (namespaces.has(root) ? chain.at(1) : undefined);
   const modifiers = chain.slice(namedApi === undefined ? 2 : 1);
   if (
@@ -197,11 +200,29 @@ export const raisedTimeoutViolations = (
     }
     const args = node.arguments;
     let raised: number | undefined;
-    if (name === "setDefaultTimeout") {
+    if (name === "setDefaultTimeout" || name === "jest.setTimeout") {
       raised = numericValue(args.at(0));
     } else if (TEST_CALLS.has(name)) {
       const timeout = args.at(HOOK_CALLS.has(name) ? 1 : 2);
-      raised = numericValue(timeout) ?? timeoutInObject(timeout);
+      const timeoutValue =
+        timeout?.type === "ObjectExpression"
+          ? timeout.properties.find(
+              (property) =>
+                property.type === "Property" &&
+                propertyName(property) === "timeout",
+            )?.value
+          : timeout;
+      if (timeoutValue !== undefined) {
+        const literal = numericValue(timeoutValue);
+        if (literal === undefined || literal === 0) {
+          violations.push({
+            line: parsed.locate(node.start).line,
+            kind: `${name} timeout ${literal === 0 ? "0" : "non-literal"}`,
+          });
+          return;
+        }
+        raised = literal;
+      }
     }
     if (raised !== undefined && raised > DEFAULT_TIMEOUT_MS) {
       violations.push({
@@ -260,6 +281,7 @@ describe("raised timeout detector", () => {
         test,
       } from "bun:test";
       import * as bt from "bun:test";
+      import { jest as runner } from "bun:test";
       // timeout: slow fixture
       setDefaultTimeout(6_000);
       test("positional", () => {}, 7_000);
@@ -276,6 +298,12 @@ describe("raised timeout detector", () => {
       test.todoIf(true)("todoIf", () => {}, 18_000);
       describe.each([1])("describe each", () => {}, 19_000);
       bt.test("namespace", () => {}, 20_000);
+      jest.setTimeout(21_000);
+      runner.setTimeout(22_000);
+      bt.jest.setTimeout(23_000);
+      test("disabled", () => {}, 0);
+      test("dynamic", () => {}, timeoutBudget);
+      test("dynamic object", () => {}, { timeout: getTimeout() });
     `;
     expect(
       raisedTimeoutViolations("fixture.test.ts", source).map(
@@ -298,6 +326,12 @@ describe("raised timeout detector", () => {
       "test timeout 18000",
       "describe timeout 19000",
       "test timeout 20000",
+      "jest.setTimeout timeout 21000",
+      "jest.setTimeout timeout 22000",
+      "jest.setTimeout timeout 23000",
+      "test timeout 0",
+      "test timeout non-literal",
+      "test timeout non-literal",
     ]);
   });
 
@@ -313,6 +347,7 @@ describe("raised timeout detector", () => {
         test,
       } from "bun:test";
       import * as bt from "bun:test";
+      import { jest as runner } from "bun:test";
       setDefaultTimeout(5_000);
       test("positional", () => {}, 5_000);
       beforeAll(() => {}, 5_000);
@@ -328,6 +363,9 @@ describe("raised timeout detector", () => {
       test.todoIf(true)("todoIf", () => {}, 5_000);
       describe.each([1])("describe each", () => {}, 5_000);
       bt.test("namespace", () => {}, 5_000);
+      jest.setTimeout(5_000);
+      runner.setTimeout(5_000);
+      bt.jest.setTimeout(5_000);
     `;
     expect(raisedTimeoutViolations("fixture.test.ts", source)).toEqual([]);
   });

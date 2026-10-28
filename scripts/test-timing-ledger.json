@@ -1101,7 +1101,7 @@
   },
   {
     "id": "no-unreasoned-timeout::apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts::<module>::test timeout",
-    "count": 9,
+    "count": 8,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3895,18 +3895,8 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::test timeout",
-    "count": 4,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/web/src/lib/organization/feature-access/capability-action-coverage.test.ts::<module>::test timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/routes/law/-law-home/law-recent.dom.test.tsx::<module>::test timeout",
-    "count": 2,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -4131,7 +4121,7 @@
   },
   {
     "id": "no-unreasoned-timeout::scripts/ci-plan.test.ts::<module>::test timeout",
-    "count": 9,
+    "count": 8,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

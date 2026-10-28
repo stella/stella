@@ -2679,7 +2679,7 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
     });
   }
   expectResultGates(gates);
-}, 30_000);
+});
 
 const MatrixJob = v.object({
   strategy: v.object({
