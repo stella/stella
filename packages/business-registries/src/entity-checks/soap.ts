@@ -172,10 +172,10 @@ export const parseXmlDocument = (
     text: "",
   };
   const stack: OpenElement[] = [root];
-  let malformed = false;
+  const errors: Error[] = [];
   const parser = new SaxesParser();
-  parser.on("error", () => {
-    malformed = true;
+  parser.on("error", (error) => {
+    errors.push(error);
   });
   parser.on("text", (value) => {
     const current = stack.at(-1);
@@ -226,7 +226,7 @@ export const parseXmlDocument = (
     });
   });
   const written = Result.try(() => parser.write(text).close());
-  return written.isErr() || malformed
+  return written.isErr() || errors.length > 0
     ? { status: "malformed" }
     : { status: "parsed", document: Object.fromEntries(root.children) };
 };
