@@ -8,7 +8,7 @@ import {
   inArray,
   isNotNull,
   isNull,
-  notInArray,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import * as v from "valibot";
@@ -33,6 +33,11 @@ import {
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import {
+  transitionLifecycle,
+  transitionLifecycleBatch,
+} from "@/api/lib/db/transitions";
+import { DESKTOP_RUNNER_RUN_TRANSITIONS } from "@/api/lib/desktop-runner/run-transitions";
 import {
   DESKTOP_RUNNER_LEASED_RUN_STATES,
   DESKTOP_RUNNER_OPEN_RUN_STATES,
@@ -86,6 +91,17 @@ const boundTo = ({
 
 const leaseUntil = (now: Date, leaseMs: number) =>
   new Date(now.getTime() + leaseMs);
+
+/** Every condition must hold; a run write is always bound to its socket. */
+const guarded = (...conditions: (SQL | undefined)[]): SQL =>
+  and(...conditions) ?? panic("A desktop runner write needs its conditions");
+
+/** Records the moment a run was accepted, keeping the first one. */
+const acceptedNow = (now: Date) =>
+  sql`coalesce(${runs.acceptedAt}, ${now}::timestamptz)`;
+
+// Run states are socket bookkeeping; the caller that starts a run audits it.
+const skipRunAudit = async () => await Promise.resolve();
 
 /** `hello` lists at most this many held runs, by the wire contract. */
 const MAX_HELD_RUNS = 64;
@@ -173,33 +189,56 @@ export const claimRunnerSession = async (
         target: [runner.userId, runner.organizationId, runner.desktopId],
         set: values,
       });
-    const heldIds = hello.activeRuns.map(({ runId }) => runId);
-    const open = and(
-      boundTo(binding),
-      inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-    );
+    const heldIds = new Set(hello.activeRuns.map(({ runId }) => runId));
+    const openIds = (
+      await tx
+        .select({ runId: runs.runId })
+        .from(runs)
+        .where(
+          and(
+            boundTo(binding),
+            inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          ),
+        )
+    ).map(({ runId }) => runId);
+    const stillHeld = openIds.filter((runId) => heldIds.has(runId));
+    const away = openIds.filter((runId) => !heldIds.has(runId));
     const lease = leaseUntil(now, leaseMs);
-    await tx
-      .update(runs)
-      .set({
-        state: "running",
-        acceptedAt: sql`coalesce(${runs.acceptedAt}, ${now}::timestamptz)`,
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: stillHeld,
+      moves: { state: { from: DESKTOP_RUNNER_OPEN_RUN_STATES, to: "running" } },
+      guard: guarded(boundTo(binding)),
+      set: {
+        acceptedAt: acceptedNow(now),
         leaseExpiresAt: lease,
         updatedAt: now,
-      })
-      .where(and(open, inArray(runs.runId, heldIds)));
-    await tx
-      .update(runs)
-      .set({ state: "assigned", leaseExpiresAt: lease, updatedAt: now })
-      .where(
-        and(open, notInArray(runs.runId, heldIds), isNull(runs.acceptedAt)),
-      );
-    await tx
-      .update(runs)
-      .set({ state: "lost", updatedAt: now })
-      .where(
-        and(open, notInArray(runs.runId, heldIds), isNotNull(runs.acceptedAt)),
-      );
+      },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: away,
+      moves: {
+        state: { from: ["assigned", "waiting_for_computer"], to: "assigned" },
+      },
+      guard: guarded(boundTo(binding), isNull(runs.acceptedAt)),
+      set: { leaseExpiresAt: lease, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: away,
+      moves: {
+        state: { from: ["running", "waiting_for_computer"], to: "lost" },
+      },
+      guard: guarded(boundTo(binding), isNotNull(runs.acceptedAt)),
+      set: { updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
     const held = await tx
       .select({
         runId: runs.runId,
@@ -208,7 +247,7 @@ export const claimRunnerSession = async (
         workspaceIds: runs.workspaceIds,
       })
       .from(runs)
-      .where(and(boundTo(binding), inArray(runs.runId, heldIds)))
+      .where(and(boundTo(binding), inArray(runs.runId, [...heldIds])))
       .orderBy(asc(runs.runId))
       .limit(MAX_HELD_RUNS);
     return {
@@ -261,17 +300,38 @@ export const renewRunnerSession = async (
     if (seen.length === 0) {
       return false;
     }
+    const lapsed = (
+      await tx
+        .select({ runId: runs.runId })
+        .from(runs)
+        .where(and(boundTo(binding), eq(runs.state, "waiting_for_computer")))
+    ).map(({ runId }) => runId);
+    const lease = leaseUntil(now, leaseMs);
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: lapsed,
+      moves: { state: { from: ["waiting_for_computer"], to: "assigned" } },
+      guard: guarded(boundTo(binding), isNull(runs.acceptedAt)),
+      set: { leaseExpiresAt: lease, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    await transitionLifecycleBatch({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      ids: lapsed,
+      moves: { state: { from: ["waiting_for_computer"], to: "running" } },
+      guard: guarded(boundTo(binding), isNotNull(runs.acceptedAt)),
+      set: { leaseExpiresAt: lease, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
     await tx
       .update(runs)
-      .set({
-        leaseExpiresAt: leaseUntil(now, leaseMs),
-        state: sql`CASE WHEN ${runs.state} <> 'waiting_for_computer' THEN ${runs.state} WHEN ${runs.acceptedAt} IS NULL THEN 'assigned' ELSE 'running' END`,
-        updatedAt: now,
-      })
+      .set({ leaseExpiresAt: lease, updatedAt: now })
       .where(
         and(
           boundTo(binding),
-          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
+          inArray(runs.state, DESKTOP_RUNNER_LEASED_RUN_STATES),
         ),
       );
     return true;
@@ -344,23 +404,20 @@ export const recordRunAccepted = async (
 ): Promise<RunTransition> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const accepted = await tx
-      .update(runs)
-      .set({
-        state: "running",
-        acceptedAt: sql`coalesce(${runs.acceptedAt}, ${now}::timestamptz)`,
+    const accepted = await transitionLifecycle({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      id: runId,
+      moves: { state: { from: DESKTOP_RUNNER_OPEN_RUN_STATES, to: "running" } },
+      guard: guarded(boundTo(binding)),
+      set: {
+        acceptedAt: acceptedNow(now),
         leaseExpiresAt: leaseUntil(now, leaseMs),
         updatedAt: now,
-      })
-      .where(
-        and(
-          boundTo(binding),
-          eq(runs.runId, runId),
-          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-        ),
-      )
-      .returning({ runId: runs.runId });
-    if (accepted.length > 0) {
+      },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    if (accepted.type === "transitioned") {
       return { type: "applied" };
     }
     const run = await readBoundRun(tx, binding, runId);
@@ -383,19 +440,18 @@ export const recordRunRejected = async (
 ): Promise<RunTransition> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const rejected = await tx
-      .update(runs)
-      .set({ state: "rejected", rejectReason: reason, updatedAt: now })
-      .where(
-        and(
-          boundTo(binding),
-          eq(runs.runId, runId),
-          inArray(runs.state, DESKTOP_RUNNER_OPEN_RUN_STATES),
-          isNull(runs.acceptedAt),
-        ),
-      )
-      .returning({ runId: runs.runId });
-    if (rejected.length > 0) {
+    const rejected = await transitionLifecycle({
+      tx,
+      spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+      id: runId,
+      moves: {
+        state: { from: ["assigned", "waiting_for_computer"], to: "rejected" },
+      },
+      guard: guarded(boundTo(binding), isNull(runs.acceptedAt)),
+      set: { rejectReason: reason, updatedAt: now },
+      recordTransitionAuditEvent: skipRunAudit,
+    });
+    if (rejected.type === "transitioned") {
       return { type: "applied" };
     }
     const run = await readBoundRun(tx, binding, runId);
@@ -431,18 +487,58 @@ const SEQUENCED_RUN_STATES = [
   "waiting_for_computer",
 ] as const satisfies readonly DesktopRunnerRunState[];
 
-const finishedFields = (message: SequencedRunMessage, now: Date) => {
+type AdvanceOptions = {
+  tx: Transaction;
+  binding: RunnerBinding;
+  message: SequencedRunMessage;
+  now: Date;
+  leaseMs: number;
+};
+
+/**
+ * Advance a run's acknowledged position by one. A message proves the desktop
+ * accepted the run; `run.finished` ends it, anything else keeps it running.
+ */
+const advanceRun = async ({
+  tx,
+  binding,
+  message,
+  now,
+  leaseMs,
+}: AdvanceOptions) => {
+  const guard = guarded(boundTo(binding), eq(runs.ackSeq, message.seq - 1));
+  const advanced = {
+    ackSeq: message.seq,
+    acceptedAt: acceptedNow(now),
+    leaseExpiresAt: leaseUntil(now, leaseMs),
+    updatedAt: now,
+  };
   switch (message.type) {
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runFinished:
-      return {
-        state: "finished" as const,
-        outcome: message.outcome,
-        harnessSessionId: message.harnessSessionId,
-        updatedAt: now,
-      };
+      return await transitionLifecycle({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        id: message.runId,
+        moves: { state: { from: SEQUENCED_RUN_STATES, to: "finished" } },
+        guard,
+        set: {
+          ...advanced,
+          outcome: message.outcome,
+          harnessSessionId: message.harnessSessionId,
+        },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runEvent:
     case DESKTOP_RUNNER_DESKTOP_MESSAGE.runApprovalRequest:
-      return { state: "running" as const, updatedAt: now };
+      return await transitionLifecycle({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        id: message.runId,
+        moves: { state: { from: SEQUENCED_RUN_STATES, to: "running" } },
+        guard,
+        set: advanced,
+        recordTransitionAuditEvent: skipRunAudit,
+      });
     default: {
       message satisfies never;
       return panic("Unknown sequenced desktop runner message");
@@ -468,23 +564,8 @@ export const persistRunMessage = async (
 ): Promise<PersistedRunMessage> =>
   await withAggregateTransaction(db, async (tx) => {
     // audit: skip - runner socket bookkeeping; the run's caller audits the work
-    const advanced = await tx
-      .update(runs)
-      .set({
-        ackSeq: message.seq,
-        leaseExpiresAt: leaseUntil(now, leaseMs),
-        ...finishedFields(message, now),
-      })
-      .where(
-        and(
-          boundTo(binding),
-          eq(runs.runId, message.runId),
-          eq(runs.ackSeq, message.seq - 1),
-          inArray(runs.state, SEQUENCED_RUN_STATES),
-        ),
-      )
-      .returning({ runId: runs.runId });
-    if (advanced.length > 0) {
+    const advanced = await advanceRun({ tx, binding, message, now, leaseMs });
+    if (advanced.type === "transitioned") {
       await tx.insert(desktopRunnerEvents).values({
         runId: message.runId,
         seq: message.seq,
@@ -541,20 +622,19 @@ export const expireRunLeases = async (
         return [];
       }
       // audit: skip - runner socket bookkeeping; the run's caller audits the work
-      const expired = await tx
-        .update(runs)
-        .set({ state: "waiting_for_computer", updatedAt: now })
-        .where(
-          and(
-            inArray(
-              runs.runId,
-              rows.map(({ runId }) => runId),
-            ),
-            inArray(runs.state, DESKTOP_RUNNER_LEASED_RUN_STATES),
-          ),
-        )
-        .returning({ runId: runs.runId });
-      return expired.map(({ runId }) => runId);
+      return await transitionLifecycleBatch({
+        tx,
+        spec: DESKTOP_RUNNER_RUN_TRANSITIONS,
+        ids: rows.map(({ runId }) => runId),
+        moves: {
+          state: {
+            from: DESKTOP_RUNNER_LEASED_RUN_STATES,
+            to: "waiting_for_computer",
+          },
+        },
+        set: { updatedAt: now },
+        recordTransitionAuditEvent: skipRunAudit,
+      });
     },
   });
 
