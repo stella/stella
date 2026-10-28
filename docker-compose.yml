@@ -29,7 +29,7 @@ services:
 
   rustfs:
     profiles: [dev]
-    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: stella-rustfs-dev
@@ -58,7 +58,7 @@ services:
     # One-shot bucket bootstrap over RustFS's S3 API. The AWS CLI is the
     # maintained generic client; the MinIO client it replaces is no longer
     # published.
-    image: amazon/aws-cli:2.37.12@sha256:ce44b800602264c12298bbf3399055a4cefdb9ed4a098abe564afe26e7071bce
+    image: amazon/aws-cli:2.39.0@sha256:6014c77975a4ae237395924cc821333f20bf87c91964a45dd4ed5f3b13b424f5
     depends_on:
       rustfs:
         condition: service_healthy
@@ -80,7 +80,7 @@ services:
 
   valkey:
     profiles: [dev]
-    image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+    image: valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
     ports:
       - "127.0.0.1:${STELLA_VALKEY_HOST_PORT:-6379}:6379"
     healthcheck:
@@ -113,7 +113,7 @@ services:
   # minor releases.
   quickwit09-postgres-setup:
     profiles: [quickwit09]
-    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    image: postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f
     environment:
       PGPASSWORD: postgres
     depends_on:
@@ -130,7 +130,7 @@ services:
 
   quickwit09:
     profiles: [quickwit09]
-    image: quickwit/quickwit:0.9.1@sha256:3e0f079eb57dd5563f36a457e9a7a2963ff882316d6c77e3180ac3c59767a68f
+    image: quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd
     command: run
     environment:
       QW_CLUSTER_ID: stella-local-q09

@@ -1,4 +1,4 @@
-FROM postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+FROM postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f
 
 COPY docker/postgres/prod-parity.conf /etc/postgresql/prod-parity.conf
 COPY docker/postgres/init.sql /docker-entrypoint-initdb.d/init.sql
