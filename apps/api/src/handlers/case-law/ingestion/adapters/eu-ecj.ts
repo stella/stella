@@ -1,4 +1,5 @@
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: [eu-ecj] capture retains original ZIP bytes; replay of existing envelopes is unchanged.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
@@ -1351,6 +1352,7 @@ const RAW_PART = {
   NOTICE_STATE: "notice-state",
   DOCUMENT: "document",
   FORMEX: "formex",
+  FORMEX_ORIGINAL_ZIP: "formex-original-zip",
   FORMEX_STATE: "formex-state",
 } as const;
 
@@ -1450,6 +1452,7 @@ type EcjRawPartsOptions = {
   html: string;
   notice: string | undefined;
   formex: string | undefined;
+  formexOriginalZip?: string | undefined;
 };
 
 /**
@@ -1467,11 +1470,15 @@ export const ecjRawParts = ({
   html,
   notice,
   formex,
+  formexOriginalZip,
 }: EcjRawPartsOptions): SourceRawParts => ({
   [RAW_PART.LISTING]: JSON.stringify(binding),
   [RAW_PART.DOCUMENT]: html,
   ...(notice === undefined ? {} : { [RAW_PART.NOTICE]: notice }),
   ...(formex === undefined ? {} : { [RAW_PART.FORMEX]: formex }),
+  ...(formexOriginalZip === undefined
+    ? {}
+    : { [RAW_PART.FORMEX_ORIGINAL_ZIP]: formexOriginalZip }),
 });
 
 /**
@@ -1672,6 +1679,7 @@ const ecjDecisionFromParts = ({
   }
   const noticeXml = parts[RAW_PART.NOTICE];
   const formexXml = parts[RAW_PART.FORMEX];
+  const formexOriginalZip = parts[RAW_PART.FORMEX_ORIGINAL_ZIP];
   const facts = noticeXml === undefined ? undefined : parseEcjNotice(noticeXml);
   const bibliography =
     formexXml === undefined
@@ -1805,6 +1813,10 @@ const ecjDecisionFromParts = ({
           formexXml === undefined
             ? (parts[RAW_PART.FORMEX_STATE] ?? "formex:not-located")
             : hashContent(formexXml)
+        }${
+          formexOriginalZip === undefined
+            ? ""
+            : `|formex-original-zip:${hashContent(Buffer.from(formexOriginalZip, "base64"))}`
         }`,
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
@@ -2015,7 +2027,10 @@ export const refreshEcjStoredFormex = async ({
     return { type: "write-rejected", rejection: "invalid-envelope" };
   }
   const existingFormex = parts[RAW_PART.FORMEX];
-  if (existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX)) {
+  if (
+    existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX) &&
+    parts[RAW_PART.FORMEX_ORIGINAL_ZIP] !== undefined
+  ) {
     // Decode to ensure the marker is a valid archive before treating it as current.
     ecjFormexDocuments(existingFormex);
     return { type: "unchanged-already-current" };
@@ -2066,6 +2081,9 @@ export const refreshEcjStoredFormex = async ({
   const nextRaw = encodeSourceRawEnvelope({
     ...parts,
     [RAW_PART.FORMEX]: fetched.formex,
+    ...(fetched.formexOriginalZip === undefined
+      ? {}
+      : { [RAW_PART.FORMEX_ORIGINAL_ZIP]: fetched.formexOriginalZip }),
   });
   const reparsed = reparseStoredRaw({
     ...stored,
@@ -2165,7 +2183,11 @@ export const fetchNotice = async ({
 };
 
 type EcjFormexRead =
-  | { type: "fetched"; formex: string }
+  | {
+      type: "fetched";
+      formex: string;
+      formexOriginalZip: string | undefined;
+    }
   | { type: "gone" }
   | { type: "refused"; status: number }
   | { type: "not-located" };
@@ -2240,11 +2262,17 @@ const fetchFormex = async (
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
-    return Result.ok({ type: "fetched", formex: await response.text() });
+    return Result.ok({
+      type: "fetched",
+      formex: await response.text(),
+      formexOriginalZip: undefined,
+    });
   }
+  const bytes = await response.arrayBuffer();
   return Result.ok({
     type: "fetched",
-    formex: await readEcjFormexArchive(await response.arrayBuffer()),
+    formex: await readEcjFormexArchive(bytes),
+    formexOriginalZip: Buffer.from(bytes).toBase64(),
   });
 };
 
@@ -2353,7 +2381,16 @@ export const buildDecision = async (
   const formex =
     formexResult?.type === "fetched" ? formexResult.formex : undefined;
   const parts = {
-    ...ecjRawParts({ binding, html: served.html, notice, formex }),
+    ...ecjRawParts({
+      binding,
+      html: served.html,
+      notice,
+      formex,
+      formexOriginalZip:
+        formexResult?.type === "fetched"
+          ? formexResult.formexOriginalZip
+          : undefined,
+    }),
     ...(noticeRead.type === "refused"
       ? { [RAW_PART.NOTICE_STATE]: `notice:refused:${noticeRead.status}` }
       : {}),
