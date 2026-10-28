@@ -13,6 +13,17 @@ import {
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  compareStatuteBlocks,
+  groupCompareRows,
+} from "@stll/legal-ast/statute-compare";
+import type {
+  StatuteCompareGroup,
+  StatuteCompareMove,
+  StatuteCompareRow,
+} from "@stll/legal-ast/statute-compare";
+import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -35,8 +46,6 @@ import type {
 } from "@/features/statutes/queries/statutes";
 import {
   actCompareSide,
-  compareStatuteBlocks,
-  groupCompareRows,
   locateCompareRows,
   pairCompareSides,
   provisionCompareSide,
@@ -49,17 +58,12 @@ import type {
   CompareSideState,
   PairedCompareSides,
   ProvisionWording,
-  StatuteCompareGroup,
-  StatuteCompareMove,
-  StatuteCompareRow,
 } from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type {
   StatuteCompareSearch,
   StatuteCompareShow,
 } from "@/features/statutes/statute-compare-search";
-import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";

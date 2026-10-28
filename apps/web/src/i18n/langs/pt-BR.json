@@ -5368,6 +5368,11 @@
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}",
     "versionAppliedInDecision": "Versão aplicada na decisão <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dispositivo incluído} other {# dispositivos incluídos}}",
+    "versionChangesChanged": "{count, plural, one {# dispositivo alterado} other {# dispositivos alterados}}",
+    "versionChangesNone": "Redação inalterada",
+    "versionChangesRemoved": "{count, plural, one {# dispositivo suprimido} other {# dispositivos suprimidos}}",
+    "versionChangesWords": "{inserted, plural, one {# palavra incluída} other {# palavras incluídas}}, {deleted, plural, one {# palavra suprimida} other {# palavras suprimidas}}",
     "wordingVersionUnknown": "Data da versão da redação indisponível"
   },
   "styleSets": {

@@ -18,6 +18,24 @@ const readArguments = ({
   return { value, integer, uuid, after, now, environment, args };
 };
 
+/**
+ * A report-by-default backfill's mode: `--apply` writes, `--dry-run` (the
+ * default) only reports. Bare flags, and never both.
+ */
+const readApplyFlag = (args: readonly string[]): boolean => {
+  if (
+    args.some(
+      (arg) => arg.startsWith("--apply=") || arg.startsWith("--dry-run="),
+    )
+  ) {
+    panic("--apply and --dry-run do not accept values");
+  }
+  if (args.includes("--apply") && args.includes("--dry-run")) {
+    panic("--apply contradicts --dry-run");
+  }
+  return args.includes("--apply");
+};
+
 type BackfillPlan = { name: string; tableName: string; initialSize: number };
 
 const withRuntime = <Plan extends BackfillPlan>(plan: Plan) => ({
@@ -83,22 +101,24 @@ export const backfillEntrypoints = {
   "legislation-work-names": (options: ParserOptions) => {
     const { args, integer, uuid } = readArguments(options);
     const after = uuid("after");
-    if (
-      args.some(
-        (arg) => arg.startsWith("--apply=") || arg.startsWith("--dry-run="),
-      )
-    ) {
-      panic("--apply and --dry-run do not accept values");
-    }
-    if (args.includes("--apply") && args.includes("--dry-run")) {
-      panic("--apply contradicts --dry-run");
-    }
     return withRuntime({
       name: `legislation-work-names:${after ?? "start"}`,
       tableName: "legislation_documents",
       initialSize: integer("page", 1000),
       limit: integer("limit", 200_000),
-      apply: args.includes("--apply"),
+      apply: readApplyFlag(args),
+      after,
+    });
+  },
+  "legislation-version-changes": (options: ParserOptions) => {
+    const { args, integer, after } = readArguments(options);
+    return withRuntime({
+      name: `legislation-version-changes:${after ?? "start"}`,
+      tableName: "legislation_documents",
+      // Works, not rows: each one compares its consolidations pairwise.
+      initialSize: integer("page", 20),
+      limit: integer("limit", 100_000),
+      apply: readApplyFlag(args),
       after,
     });
   },

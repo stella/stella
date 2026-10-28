@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./document-search-pieces": {
+      "types": "./src/document-search-pieces.ts",
+      "import": "./src/document-search-pieces.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -139,6 +143,14 @@
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
     },
+    "./statute-compare": {
+      "types": "./src/statute-compare.ts",
+      "import": "./src/statute-compare.ts"
+    },
+    "./statute-diff-marks": {
+      "types": "./src/statute-diff-marks.ts",
+      "import": "./src/statute-diff-marks.ts"
+    },
     "./statute-list": {
       "types": "./src/statute-list.ts",
       "import": "./src/statute-list.ts"
@@ -161,6 +173,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
+    "@stll/folio-core": "catalog:",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

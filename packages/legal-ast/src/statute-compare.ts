@@ -1,0 +1,522 @@
+import { panic } from "better-result";
+import type { Result } from "better-result";
+
+import { compareContent } from "@stll/folio-core";
+import type {
+  FolioContentBlock,
+  FolioContentComparisonError,
+  FolioContentComparisonEvent,
+} from "@stll/folio-core";
+import { diffWordSegments } from "@stll/folio-core/ai-edits";
+import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
+
+import type { Block } from "./document-ast";
+import {
+  compareText,
+  hasVisibleChange,
+  isWhitespaceReplacement,
+} from "./statute-diff-marks";
+import type { StatuteCompareSide } from "./statute-diff-marks";
+
+/**
+ * Two consolidations of one statute aligned row by row: the comparison the
+ * reader draws side by side and the change counts ingestion stores for each
+ * version are this one computation, so the two cannot disagree.
+ */
+
+/** What the comparison pairs blocks by: a heading only pairs a heading. */
+type CompareBlockKind = Extract<
+  FolioContentBlock["kind"],
+  "heading" | "paragraph"
+>;
+
+type ComparedBlock = FolioContentBlock<CompareBlockKind> & {
+  idStability: "positional";
+  /** The block the reader renders; the comparison itself reads `text`. */
+  block: Block;
+};
+
+/**
+ * Anchors are not used as identities: a consolidation that numbers a
+ * formerly unnumbered paragraph renames its anchor (`frag_…` becomes
+ * `par_34-odst_1`), and pairing by text reads that as the rewording it is
+ * rather than as a deletion plus an insertion.
+ */
+const toComparedBlock = (block: Block, index: number): ComparedBlock =>
+  block.type === "heading"
+    ? {
+        id: `b${index}`,
+        kind: "heading",
+        text: compareText([block]),
+        idStability: "positional",
+        statedNumbering: { kind: "inherit" },
+        headingLevel: block.level,
+        block,
+      }
+    : {
+        id: `b${index}`,
+        kind: "paragraph",
+        text: compareText([block]),
+        idStability: "positional",
+        statedNumbering: { kind: "inherit" },
+        block,
+      };
+
+const astBlocks = (blocks: readonly ComparedBlock[]): Block[] =>
+  blocks.map((compared) => compared.block);
+
+/** A side whose wording both versions share, unmarked. */
+const unmarkedSide = (blocks: readonly ComparedBlock[]): StatuteCompareSide => {
+  const ast = astBlocks(blocks);
+  return { blocks: ast, segments: [{ type: "equal", text: compareText(ast) }] };
+};
+
+type CompareRowStatus = "unchanged" | "changed";
+
+/**
+ * One end of a paragraph that moved: the row where the older consolidation
+ * had it (`source`), or the row where the newer one has it (`target`).
+ */
+export type StatuteCompareMove = {
+  end: "source" | "target";
+  /** The row at the other end of the move. */
+  counterpartKey: string;
+};
+
+/**
+ * One aligned row: the older wording on the left, the newer on the right.
+ * A side is null when that consolidation has no counterpart block; on a
+ * moved row, the empty side is where the paragraph went or came from.
+ */
+export type StatuteCompareRow = {
+  key: string;
+  type: CompareBlockKind;
+  status: CompareRowStatus;
+  move: StatuteCompareMove | null;
+  before: StatuteCompareSide | null;
+  after: StatuteCompareSide | null;
+};
+
+type DiffSides = {
+  before: WordDiffSegment[];
+  after: WordDiffSegment[];
+};
+
+/**
+ * One segment list, read from each side: the older wording is everything but
+ * the insertions, the newer everything but the deletions. Both sides come
+ * from the same diff, so what is struck on the left is exactly what the
+ * right no longer says.
+ *
+ * The diff carries a word's leading whitespace with it, so a doubled or
+ * non-breaking space reads as the word replaced by itself. Such a
+ * replacement is equal on each side: nothing a reader can see changed.
+ */
+export const splitDiffSides = (
+  segments: readonly WordDiffSegment[],
+): DiffSides => {
+  const before: WordDiffSegment[] = [];
+  const after: WordDiffSegment[] = [];
+
+  let pairedWithPrevious = false;
+
+  for (const [index, segment] of segments.entries()) {
+    if (pairedWithPrevious) {
+      pairedWithPrevious = false;
+      continue;
+    }
+    const next = segments.at(index + 1);
+
+    if (next !== undefined && isWhitespaceReplacement(segment, next)) {
+      const [removed, added] =
+        segment.type === "del" ? [segment, next] : [next, segment];
+      before.push({ type: "equal", text: removed.text });
+      after.push({ type: "equal", text: added.text });
+      pairedWithPrevious = true;
+      continue;
+    }
+
+    switch (segment.type) {
+      case "equal":
+        before.push(segment);
+        after.push(segment);
+        break;
+      case "del":
+        before.push(segment);
+        break;
+      case "ins":
+        after.push(segment);
+        break;
+      default:
+        segment.type satisfies never;
+        panic("Unhandled word diff segment");
+    }
+  }
+
+  return { before, after };
+};
+
+type RowFromSegmentsOptions = {
+  key: string;
+  segments: readonly WordDiffSegment[];
+  base: readonly ComparedBlock[];
+  revised: readonly [ComparedBlock, ...ComparedBlock[]];
+};
+
+/**
+ * A paired row. Whitespace alone does not make it changed: the renderer
+ * marks nothing for it, and a row listed as changed with nothing marked
+ * reads as a fault.
+ */
+const rowFromSegments = ({
+  base,
+  key,
+  revised,
+  segments,
+}: RowFromSegmentsOptions): StatuteCompareRow => {
+  const { after, before } = splitDiffSides(segments);
+
+  return {
+    key,
+    type: revised[0].kind,
+    status:
+      hasVisibleChange(before) || hasVisibleChange(after)
+        ? "changed"
+        : "unchanged",
+    move: null,
+    before: { blocks: astBlocks(base), segments: before },
+    after: { blocks: astBlocks(revised), segments: after },
+  };
+};
+
+const rowKey = (index: number): string => `r${index}`;
+
+type ComparisonEvent = FolioContentComparisonEvent<ComparedBlock>;
+
+/** Both ends of one move, each with its own side of the rewording it carried. */
+type MoveEnds = {
+  sourceKey: string;
+  targetKey: string;
+  before: StatuteCompareSide;
+  after: StatuteCompareSide;
+};
+
+type MoveSource = { key: string; block: ComparedBlock };
+
+/**
+ * Folio reports a move as two events, one where the paragraph left and one
+ * where it arrived; the rewording travels on the arriving one. Each row needs
+ * both, so the events are paired once up front.
+ */
+const indexMoves = (
+  events: readonly ComparisonEvent[],
+): ReadonlyMap<number, MoveEnds> => {
+  const sources = new Map<number, MoveSource>();
+  const targets = new Map<
+    number,
+    {
+      key: string;
+      block: ComparedBlock;
+      segments: readonly WordDiffSegment[] | undefined;
+    }
+  >();
+
+  for (const [index, event] of events.entries()) {
+    if (event.type === "movedFrom") {
+      sources.set(event.moveId, {
+        key: rowKey(index),
+        block: event.baseBlocks[0],
+      });
+    }
+    if (event.type === "movedTo") {
+      targets.set(event.moveId, {
+        key: rowKey(index),
+        block: event.revisedBlocks[0],
+        segments: event.segments,
+      });
+    }
+  }
+
+  const moves = new Map<number, MoveEnds>();
+  for (const [moveId, source] of sources) {
+    const target = targets.get(moveId);
+    if (target === undefined) {
+      return panic("Folio reported a move without its destination");
+    }
+    // A move that carried no rewording states no segments; each end then
+    // reads as its own wording, unmarked.
+    const sides =
+      target.segments === undefined
+        ? {
+            before: unmarkedSide([source.block]),
+            after: unmarkedSide([target.block]),
+          }
+        : {
+            before: {
+              blocks: astBlocks([source.block]),
+              segments: splitDiffSides(target.segments).before,
+            },
+            after: {
+              blocks: astBlocks([target.block]),
+              segments: splitDiffSides(target.segments).after,
+            },
+          };
+    moves.set(moveId, {
+      ...sides,
+      sourceKey: source.key,
+      targetKey: target.key,
+    });
+  }
+  if (moves.size !== targets.size) {
+    return panic("Folio reported a move without its origin");
+  }
+
+  return moves;
+};
+
+const moveEnds = (
+  moves: ReadonlyMap<number, MoveEnds>,
+  moveId: number,
+): MoveEnds => moves.get(moveId) ?? panic("Unpaired content move");
+
+/** A side only one version has, marked whole. */
+const wholeSide = (
+  blocks: readonly ComparedBlock[],
+  type: "del" | "ins",
+): StatuteCompareSide => {
+  const ast = astBlocks(blocks);
+  return { blocks: ast, segments: [{ type, text: compareText(ast) }] };
+};
+
+/**
+ * The row one comparison event is drawn as. A moved paragraph gets a row at
+ * each end, each naming the other, so the reader sees where it went rather
+ * than a deletion here and an unrelated insertion there.
+ */
+const rowFromEvent = (
+  event: ComparisonEvent,
+  index: number,
+  moves: ReadonlyMap<number, MoveEnds>,
+): StatuteCompareRow => {
+  const key = rowKey(index);
+
+  switch (event.type) {
+    case "unchanged":
+    case "formatting":
+      return {
+        key,
+        type: event.revisedBlocks[0].kind,
+        status: "unchanged",
+        move: null,
+        before: unmarkedSide(event.baseBlocks),
+        after: unmarkedSide(event.revisedBlocks),
+      };
+    case "modified":
+      return rowFromSegments({
+        key,
+        segments: event.segments,
+        base: event.baseBlocks,
+        revised: event.revisedBlocks,
+      });
+    case "inserted":
+      return {
+        key,
+        type: event.revisedBlocks[0].kind,
+        status: "changed",
+        move: null,
+        before: null,
+        after: wholeSide(event.revisedBlocks, "ins"),
+      };
+    case "deleted":
+      return {
+        key,
+        type: event.baseBlocks[0].kind,
+        status: "changed",
+        move: null,
+        before: wholeSide(event.baseBlocks, "del"),
+        after: null,
+      };
+    case "movedFrom": {
+      const ends = moveEnds(moves, event.moveId);
+      return {
+        key,
+        type: event.baseBlocks[0].kind,
+        status: "changed",
+        move: { end: "source", counterpartKey: ends.targetKey },
+        before: ends.before,
+        after: null,
+      };
+    }
+    case "movedTo": {
+      const ends = moveEnds(moves, event.moveId);
+      return {
+        key,
+        type: event.revisedBlocks[0].kind,
+        status: "changed",
+        move: { end: "target", counterpartKey: ends.sourceKey },
+        before: null,
+        after: ends.after,
+      };
+    }
+    case "split":
+    case "merge":
+      return rowFromSegments({
+        key,
+        segments: diffWordSegments(
+          compareText(astBlocks(event.baseBlocks)),
+          compareText(astBlocks(event.revisedBlocks)),
+        ),
+        base: event.baseBlocks,
+        revised: event.revisedBlocks,
+      });
+    default:
+      event satisfies never;
+      return panic("Unhandled content comparison event");
+  }
+};
+
+type CompareStatuteBlocksOptions = {
+  older: readonly Block[];
+  newer: readonly Block[];
+};
+
+/**
+ * Two consolidations' blocks aligned row by row with Folio's content
+ * comparison, each row carrying the blocks it shows and its word diff.
+ */
+export const compareStatuteBlocks = ({
+  newer,
+  older,
+}: CompareStatuteBlocksOptions): Result<
+  StatuteCompareRow[],
+  FolioContentComparisonError
+> =>
+  compareContent({
+    base: { blocks: older.map(toComparedBlock) },
+    revised: { blocks: newer.map(toComparedBlock) },
+  }).map(({ events }) => {
+    const moves = indexMoves(events);
+
+    return events.map((event, index) => rowFromEvent(event, index, moves));
+  });
+
+/** A provision's rows: its heading run and the text under it. */
+export type StatuteCompareGroup = {
+  key: string;
+  status: CompareRowStatus;
+  rows: StatuteCompareRow[];
+};
+
+/**
+ * Rows grouped into provisions. A heading opens a group, and the headings
+ * stacked right above it (part, title, division) open it with it, so a
+ * changed first section of a division still shows where it stands.
+ */
+export const groupCompareRows = (
+  rows: readonly StatuteCompareRow[],
+): StatuteCompareGroup[] => {
+  const groups: StatuteCompareGroup[] = [];
+  let previous: StatuteCompareRow | undefined;
+
+  for (const row of rows) {
+    const opensGroup = row.type === "heading" && previous?.type !== "heading";
+    const current = groups.at(-1);
+
+    if (current === undefined || opensGroup) {
+      groups.push({ key: row.key, status: row.status, rows: [row] });
+    } else {
+      current.rows.push(row);
+      if (row.status === "changed") {
+        current.status = "changed";
+      }
+    }
+    previous = row;
+  }
+
+  return groups;
+};
+
+/**
+ * How much one consolidation changed against the one before it: provisions
+ * by what happened to them, and words as a rough size. Counts, never a
+ * verdict: a single word ("may" becoming "may not") can be the amendment that
+ * matters most, so nothing here ranks a change as minor or major.
+ */
+export type StatuteChangeCounts = {
+  provisions: {
+    /** Provisions both consolidations carry, worded differently. */
+    changed: number;
+    /** Provisions only the newer consolidation carries. */
+    added: number;
+    /** Provisions only the older consolidation carries. */
+    removed: number;
+  };
+  words: {
+    /** Words the newer consolidation inserted, moved text excluded. */
+    inserted: number;
+    /** Words the newer consolidation struck, moved text excluded. */
+    deleted: number;
+  };
+};
+
+const WORD_SEPARATOR = /\s+/u;
+
+const wordCount = (text: string): number =>
+  text.split(WORD_SEPARATOR).filter((word) => word !== "").length;
+
+const markedWords = (
+  side: StatuteCompareSide | null,
+  type: "del" | "ins",
+): number =>
+  side === null
+    ? 0
+    : side.segments
+        .filter((segment) => segment.type === type)
+        .reduce((total, segment) => total + wordCount(segment.text), 0);
+
+/** A row only one side has, and not as one end of a move. */
+const onlyIn = (row: StatuteCompareRow, side: "older" | "newer"): boolean =>
+  row.move === null &&
+  (side === "newer"
+    ? row.before === null && row.after !== null
+    : row.after === null && row.before !== null);
+
+/**
+ * The counts a comparison's rows add up to. A provision is a group of
+ * `groupCompareRows`: added when every row of it is new, removed when every
+ * row of it is gone, changed otherwise. Words are counted on the marks the
+ * reader draws, so a paragraph that only moved adds none and whitespace
+ * alone never counts.
+ */
+export const countStatuteChanges = (
+  rows: readonly StatuteCompareRow[],
+): StatuteChangeCounts => {
+  const provisions = { changed: 0, added: 0, removed: 0 };
+
+  for (const group of groupCompareRows(rows)) {
+    if (group.status === "unchanged") {
+      continue;
+    }
+    if (group.rows.every((row) => onlyIn(row, "newer"))) {
+      provisions.added += 1;
+    } else if (group.rows.every((row) => onlyIn(row, "older"))) {
+      provisions.removed += 1;
+    } else {
+      provisions.changed += 1;
+    }
+  }
+
+  return {
+    provisions,
+    words: {
+      inserted: rows.reduce(
+        (total, row) => total + markedWords(row.after, "ins"),
+        0,
+      ),
+      deleted: rows.reduce(
+        (total, row) => total + markedWords(row.before, "del"),
+        0,
+      ),
+    },
+  };
+};

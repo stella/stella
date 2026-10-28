@@ -101,6 +101,7 @@
     "./legal-citation-links": "./src/legal-citation-links.ts",
     "./legal-resolve": "./src/legal-resolve.ts",
     "./statute-version": "./src/statute-version.ts",
+    "./statute-version-changes": "./src/statute-version-changes.ts",
     "./legislation-publisher-evidence": "./src/legislation-publisher-evidence.ts",
     "./legislation-expression": "./src/legislation-expression.ts",
     "./hosted-checkout": "./src/hosted-checkout.ts",

@@ -5368,6 +5368,11 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {لا مواد مضافة} one {مادة واحدة مضافة} two {مادتان مضافتان} few {# مواد مضافة} many {# مادةً مضافة} other {# مادة مضافة}}",
+    "versionChangesChanged": "{count, plural, zero {لا مواد معدلة} one {مادة واحدة معدلة} two {مادتان معدلتان} few {# مواد معدلة} many {# مادةً معدلة} other {# مادة معدلة}}",
+    "versionChangesNone": "الصياغة دون تغيير",
+    "versionChangesRemoved": "{count, plural, zero {لا مواد محذوفة} one {مادة واحدة محذوفة} two {مادتان محذوفتان} few {# مواد محذوفة} many {# مادةً محذوفة} other {# مادة محذوفة}}",
+    "versionChangesWords": "{inserted, plural, zero {لا كلمات مضافة} one {كلمة واحدة مضافة} two {كلمتان مضافتان} few {# كلمات مضافة} many {# كلمةً مضافة} other {# كلمة مضافة}}، {deleted, plural, zero {لا كلمات محذوفة} one {كلمة واحدة محذوفة} two {كلمتان محذوفتان} few {# كلمات محذوفة} many {# كلمةً محذوفة} other {# كلمة محذوفة}}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {

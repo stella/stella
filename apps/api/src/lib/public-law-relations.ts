@@ -555,6 +555,10 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     expression_kind: "required",
     window_disposition: "required",
     window_disposition_basis: "required",
+    // What a consolidation changed against the one before it, served only
+    // while the row's payload revision is the one it was computed from.
+    change_summary: "required",
+    payload_revision: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",

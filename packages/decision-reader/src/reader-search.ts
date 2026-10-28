@@ -1,3 +1,5 @@
+import type { DocumentTextPiece } from "@stll/legal-ast/document-search-pieces";
+
 import {
   foldMarkText,
   originalWordRange,
@@ -6,10 +8,8 @@ import {
 } from "./query-marks";
 import type { FoldedMarkText } from "./query-marks";
 
-export type SearchPiece = {
-  id: string;
-  text: string;
-};
+/** One rendered stretch of a reader's text; legal-ast owns the shape. */
+export type SearchPiece = DocumentTextPiece;
 
 /**
  * What a marked span of a reader's text means. A search match carries its

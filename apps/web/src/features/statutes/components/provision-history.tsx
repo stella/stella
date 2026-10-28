@@ -10,6 +10,7 @@ import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
+import { diffMarkRanges } from "@stll/legal-ast/statute-diff-marks";
 import { Button } from "@stll/ui/button";
 import { Columns2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -21,7 +22,6 @@ import {
 } from "@/features/statutes/provision-diff";
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
-import { diffMarkRanges } from "@/features/statutes/statute-diff-marks";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";

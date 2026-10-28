@@ -5368,6 +5368,11 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# vložené ustanovenie} few {# vložené ustanovenia} many {# vloženého ustanovenia} other {# vložených ustanovení}}",
+    "versionChangesChanged": "{count, plural, one {# zmenené ustanovenie} few {# zmenené ustanovenia} many {# zmeneného ustanovenia} other {# zmenených ustanovení}}",
+    "versionChangesNone": "Znenie bez zmeny",
+    "versionChangesRemoved": "{count, plural, one {# vypustené ustanovenie} few {# vypustené ustanovenia} many {# vypusteného ustanovenia} other {# vypustených ustanovení}}",
+    "versionChangesWords": "{inserted, plural, one {# vložené slovo} few {# vložené slová} many {# vloženého slova} other {# vložených slov}}, {deleted, plural, one {# vypustené slovo} few {# vypustené slová} many {# vypusteného slova} other {# vypustených slov}}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {

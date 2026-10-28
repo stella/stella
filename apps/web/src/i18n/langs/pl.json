@@ -5368,6 +5368,11 @@
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
     "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dodany przepis} few {# dodane przepisy} many {# dodanych przepisów} other {# dodanego przepisu}}",
+    "versionChangesChanged": "{count, plural, one {# zmieniony przepis} few {# zmienione przepisy} many {# zmienionych przepisów} other {# zmienionego przepisu}}",
+    "versionChangesNone": "Brzmienie bez zmian",
+    "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
+    "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {

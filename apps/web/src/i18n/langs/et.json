@@ -5368,6 +5368,11 @@
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}",
     "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# säte lisatud} other {# sätet lisatud}}",
+    "versionChangesChanged": "{count, plural, one {# säte muudetud} other {# sätet muudetud}}",
+    "versionChangesNone": "Sõnastus muutmata",
+    "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
+    "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
     "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
   },
   "styleSets": {

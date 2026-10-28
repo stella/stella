@@ -5368,6 +5368,11 @@
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}",
     "versionAppliedInDecision": "In der Entscheidung <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> angewandte Fassung (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# Vorschrift eingefügt} other {# Vorschriften eingefügt}}",
+    "versionChangesChanged": "{count, plural, one {# Vorschrift geändert} other {# Vorschriften geändert}}",
+    "versionChangesNone": "Wortlaut unverändert",
+    "versionChangesRemoved": "{count, plural, one {# Vorschrift gestrichen} other {# Vorschriften gestrichen}}",
+    "versionChangesWords": "{inserted, plural, one {# Wort eingefügt} other {# Wörter eingefügt}}, {deleted, plural, one {# Wort gestrichen} other {# Wörter gestrichen}}",
     "wordingVersionUnknown": "Datum der Wortlautversion nicht verfügbar"
   },
   "styleSets": {

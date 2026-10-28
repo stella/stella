@@ -5368,6 +5368,11 @@
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}",
     "versionAppliedInDecision": "Nolēmumā <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> piemērotā redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, zero {# pievienotu noteikumu} one {# pievienots noteikums} other {# pievienoti noteikumi}}",
+    "versionChangesChanged": "{count, plural, zero {# grozītu noteikumu} one {# grozīts noteikums} other {# grozīti noteikumi}}",
+    "versionChangesNone": "Formulējums nav mainīts",
+    "versionChangesRemoved": "{count, plural, zero {# svītrotu noteikumu} one {# svītrots noteikums} other {# svītroti noteikumi}}",
+    "versionChangesWords": "{inserted, plural, zero {# ievietotu vārdu} one {# ievietots vārds} other {# ievietoti vārdi}}, {deleted, plural, zero {# svītrotu vārdu} one {# svītrots vārds} other {# svītroti vārdi}}",
     "wordingVersionUnknown": "Redakcijas versijas datums nav pieejams"
   },
   "styleSets": {

@@ -1,21 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import {
-  buildDocumentAstSearchPieces,
-  inlinesToPlainText,
-} from "@stll/decision-reader/document-ast-text";
-import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
-import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
+import { plainTextOf } from "./document-ast";
+import type { Block, Inline } from "./document-ast";
+import { buildDocumentAstSearchPieces } from "./document-search-pieces";
 import {
   compareText,
   diffMarkRanges,
   markSide,
   splitSurroundingWhitespace,
-} from "@/features/statutes/statute-diff-marks";
+} from "./statute-diff-marks";
+import type { DiffMarkRange } from "./statute-diff-marks";
 
 const WHITESPACE = /\s/u;
 
@@ -44,7 +42,7 @@ const positioned = (segments: readonly WordDiffSegment[]): Positioned[] => {
   return list;
 };
 
-const covered = (ranges: readonly ReaderMarkRange[]): Set<number> => {
+const covered = (ranges: readonly DiffMarkRange[]): Set<number> => {
   const positions = new Set<number>();
   for (const range of ranges) {
     for (let index = range.start; index < range.end; index += 1) {
@@ -160,7 +158,7 @@ const blockArbitrary = (id: string): fc.Arbitrary<Block> =>
       anchorId: id,
       level: 6,
       inlines,
-      plainText: inlinesToPlainText(inlines),
+      plainText: plainTextOf(inlines),
     })),
     fc
       .tuple(inlineArbitrary, fc.option(fc.integer({ min: 1, max: 999 })))
@@ -169,7 +167,7 @@ const blockArbitrary = (id: string): fc.Arbitrary<Block> =>
         id,
         anchorId: id,
         inlines,
-        plainText: inlinesToPlainText(inlines),
+        plainText: plainTextOf(inlines),
         number: number ?? undefined,
       })),
     fc
@@ -183,7 +181,7 @@ const blockArbitrary = (id: string): fc.Arbitrary<Block> =>
         rows: rows.map((row) =>
           row.map((inlines) => ({
             inlines,
-            plainText: inlinesToPlainText(inlines),
+            plainText: plainTextOf(inlines),
           })),
         ),
         plainText: "",
@@ -242,10 +240,10 @@ describe("compareText", () => {
 
         expect(compareText([block])).toBe(expected.join("\n"));
         if (block.type === "heading") {
-          expect(compareText([block])).toBe(inlinesToPlainText(block.inlines));
+          expect(compareText([block])).toBe(plainTextOf(block.inlines));
         }
         if (block.type === "paragraph" && block.number === undefined) {
-          expect(compareText([block])).toBe(inlinesToPlainText(block.inlines));
+          expect(compareText([block])).toBe(plainTextOf(block.inlines));
         }
       }),
       propertyConfig({ seed: propertySeed() }),

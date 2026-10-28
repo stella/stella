@@ -246,6 +246,12 @@ export const brandPersistedLegislationDocumentId = (
 ): SafeId<"legislationDocument"> =>
   toSafeId<"legislationDocument">(legislationDocumentId);
 
+/** A legislation source id an operator typed, or null when it is no UUID. */
+export const brandValidatedLegislationSourceId = (
+  sourceId: string,
+): SafeId<"legislationSource"> | null =>
+  isUuid(sourceId) ? toSafeId<"legislationSource">(sourceId) : null;
+
 export const brandValidatedCorpusIndexProjectionIntentId = (
   intentId: string,
 ): SafeId<"corpusIndexProjectionIntent"> | null =>

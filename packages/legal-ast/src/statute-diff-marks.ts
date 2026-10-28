@@ -1,9 +1,19 @@
 import { panic } from "better-result";
 
-import { buildDocumentAstSearchPieces } from "@stll/decision-reader/document-ast-text";
-import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
-import type { Block } from "@stll/legal-ast/document-ast";
+
+import type { Block } from "./document-ast";
+import { buildDocumentAstSearchPieces } from "./document-search-pieces";
+
+/**
+ * A changed run of one piece's text, as offsets into it: the shape a reader
+ * marks a comparison by.
+ */
+export type DiffMarkRange = {
+  type: "deleted" | "inserted";
+  start: number;
+  end: number;
+};
 
 type SurroundedText = { leading: string; core: string; trailing: string };
 
@@ -32,8 +42,8 @@ export const splitSurroundingWhitespace = (text: string): SurroundedText => {
  */
 export const diffMarkRanges = (
   segments: readonly WordDiffSegment[],
-): ReaderMarkRange[] => {
-  const ranges: ReaderMarkRange[] = [];
+): DiffMarkRange[] => {
+  const ranges: DiffMarkRange[] = [];
   let offset = 0;
 
   for (const segment of segments) {
@@ -120,7 +130,7 @@ export type StatuteCompareSide = {
 /** A block to render, with the diff marks that fall in each of its pieces. */
 type MarkedBlock = {
   block: Block;
-  rangesByPieceId: Record<string, ReaderMarkRange[]>;
+  rangesByPieceId: Record<string, DiffMarkRange[]>;
 };
 
 /**
@@ -143,13 +153,13 @@ export const markSide = ({
   let pieceStart = 0;
 
   for (const block of blocks) {
-    const rangesByPieceId: Record<string, ReaderMarkRange[]> = {};
+    const pieceRanges: [string, DiffMarkRange[]][] = [];
 
     for (const piece of comparePieces(block)) {
       const pieceEnd = pieceStart + piece.text.length;
 
       if (piece.id !== null) {
-        const inPiece: ReaderMarkRange[] = [];
+        const inPiece: DiffMarkRange[] = [];
         for (const range of ranges) {
           const start = Math.max(range.start, pieceStart);
           const end = Math.min(range.end, pieceEnd);
@@ -162,12 +172,12 @@ export const markSide = ({
           }
         }
         if (inPiece.length > 0) {
-          rangesByPieceId[piece.id] = inPiece;
+          pieceRanges.push([piece.id, inPiece]);
         }
       }
       pieceStart = pieceEnd + PIECE_SEPARATOR.length;
     }
-    marked.push({ block, rangesByPieceId });
+    marked.push({ block, rangesByPieceId: Object.fromEntries(pieceRanges) });
   }
 
   return marked;

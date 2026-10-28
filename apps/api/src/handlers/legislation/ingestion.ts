@@ -63,6 +63,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { refreshWorkVersionChanges } from "@/api/lib/legal-search/legislation-version-changes";
 import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
@@ -331,6 +332,49 @@ const reportWindowJunctions = async ({
       overlapDays:
         defect.junction.type === "overlap" ? defect.junction.days : 0,
     });
+  }
+};
+
+type RefreshVersionChangesOptions = {
+  input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
+  documentId: SafeId<"legislationDocument">;
+  scopedDb: ScopedDb;
+};
+
+/**
+ * Recount what the stored version changed against the one before it, and
+ * what the version after it changed against it: the two summaries this write
+ * can have outdated. Derived state, so a failure here does not fail the
+ * store; the summary stays stale and the `legislation-version-changes`
+ * backfill, which runs the same refresh, recomputes it.
+ */
+const refreshVersionChanges = async ({
+  input,
+  documentId,
+  scopedDb,
+}: RefreshVersionChangesOptions): Promise<void> => {
+  const refreshed = await Result.tryPromise({
+    try: async () =>
+      await refreshWorkVersionChanges({
+        db: scopedDb,
+        work: {
+          sourceId: input.sourceId,
+          eli: input.eli,
+          language: input.language,
+        },
+        around: documentId,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(refreshed)) {
+    captureError(
+      refreshed.error,
+      handlerErrorContext("legislation.refreshVersionChanges", {
+        documentId,
+        sourceId: input.sourceId,
+        step: "processLegislationDocument.versionChanges",
+      }),
+    );
   }
 };
 
@@ -1072,6 +1116,14 @@ export const processLegislationDocument = async (
       scopedDb,
     });
   }
+
+  // Last: settling the corpus pointers advances the payload revision, and a
+  // summary records the revision it was computed from.
+  await refreshVersionChanges({
+    input: revisionInput,
+    documentId: id,
+    scopedDb,
+  });
 
   return {
     type: "stored",

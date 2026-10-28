@@ -5368,6 +5368,11 @@
     "title": "Statutes",
     "validity": "Valid from {from} to {to}",
     "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# provision added} other {# provisions added}}",
+    "versionChangesChanged": "{count, plural, one {# provision changed} other {# provisions changed}}",
+    "versionChangesNone": "Wording unchanged",
+    "versionChangesRemoved": "{count, plural, one {# provision removed} other {# provisions removed}}",
+    "versionChangesWords": "{inserted, plural, one {# word inserted} other {# words inserted}}, {deleted, plural, one {# word deleted} other {# words deleted}}",
     "wordingVersionUnknown": "Wording version date unavailable"
   },
   "styleSets": {

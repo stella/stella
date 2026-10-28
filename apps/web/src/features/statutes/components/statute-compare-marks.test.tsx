@@ -9,14 +9,14 @@ import {
   InlineContent,
 } from "@stll/decision-reader/document-ast-text";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { compareStatuteBlocks } from "@stll/legal-ast/statute-compare";
+import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { StatuteBlock } from "@/features/statutes/components/statute-text";
-import { compareStatuteBlocks } from "@/features/statutes/statute-compare";
-import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 

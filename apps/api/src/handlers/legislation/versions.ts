@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { servedStatuteVersionChanges } from "@stll/api-contract/statute-version-changes";
 
 import { legislationDocuments } from "@/api/db/schema";
 import {
@@ -160,6 +161,8 @@ export const listStatuteVersionsHandler = async ({
         ...legislationExpressionLabelColumns,
         sourceUrl: legislationDocuments.sourceUrl,
         documentUrl: legislationDocuments.documentUrl,
+        changeSummary: legislationDocuments.changeSummary,
+        payloadRevision: legislationDocuments.payloadRevision,
       })
       .from(legislationDocuments)
       .where(and(...conditions))
@@ -216,10 +219,15 @@ export const listStatuteVersionsHandler = async ({
     }
     return {
       type: "found",
-      rows: page.map((row) =>
+      rows: page.map(({ changeSummary, payloadRevision, ...row }) =>
         projectStatuteVersion({
           ...row,
           isDefault: row.id === defaultId,
+          // Counts computed from the wording the row holds now, or none.
+          changes: servedStatuteVersionChanges({
+            stored: changeSummary,
+            payloadRevision,
+          }),
           // The actor comes from an explicit publisher relation; multiple acts
           // starting on one day remain separate effects in that day's wording.
           amendedBy: projectStatuteAmendments({
