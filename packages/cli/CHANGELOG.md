@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.1.1
+
+### Patch Changes
+
+- [#7188](https://github.com/stella/stella/pull/7188) [`5aeb625`](https://github.com/stella/stella/commit/5aeb6257e2457a300fd4db319b612ebd00878f4d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve retry hints and advisory delays for concurrent public-law reads.
+
 ## 6.1.0
 
 ### Minor Changes
