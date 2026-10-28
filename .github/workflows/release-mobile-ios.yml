@@ -38,9 +38,9 @@ jobs:
   testflight:
     name: TestFlight ${{ inputs.variant }}
     if: github.ref == 'refs/heads/main'
-    # The signing secrets live only in this environment, which needs a
-    # reviewer's approval and deploys from main alone, so a dispatch of an
-    # edited workflow on another branch cannot read them.
+    # The signing secrets live only in this environment, which deploys from
+    # main alone, so a dispatch of an edited workflow on another branch
+    # cannot read them. It needs no reviewer: a release runs on dispatch.
     environment: mobile-release
     # Expo SDK 58 builds with Swift 6.2, which only Xcode 26 and later ship.
     runs-on: macos-26
