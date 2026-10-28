@@ -5167,7 +5167,7 @@
         "bilingual_translation_run": "dvojjazyčný preklad",
         "billing_code": "fakturačný kód",
         "case_law_decision_annotation": "anotácia súdneho rozhodnutia",
-        "case_law_matter_link": "prepojenie judikátu so záležitosťou",
+        "case_law_matter_link": "prepojenie judikátu so spisom",
         "case_law_reader_answer": "odpoveď čítačky judikatúry",
         "case_law_research_column": "stĺpec rešerše judikatúry",
         "chat_file": "súbor v konverzácii",
@@ -5200,7 +5200,7 @@
         "legal_list_generation": "vytvorenie právneho zoznamu",
         "legal_list_item": "položka právneho zoznamu",
         "legal_list_verification": "overenie právneho zoznamu",
-        "legal_resolve": "právne riešenie",
+        "legal_resolve": "dohľadanie právneho odkazu",
         "machine_api_key": "strojový kľúč API",
         "mcp_connection": "pripojenie MCP",
         "mcp_gateway_tool": "nástroj brány MCP",
@@ -5210,7 +5210,7 @@
         "organization_settings": "nastavenia organizácie",
         "pdf_signing_session": "relácia podpisu PDF",
         "personal_api_key": "osobný kľúč API",
-        "playbook": "kontrolný postup",
+        "playbook": "playbook",
         "property": "vlastnosť",
         "rate_entry": "položka sadzby",
         "rate_table": "sadzobník",
@@ -5237,8 +5237,8 @@
         "view": "zobrazenie",
         "view_template": "vzor zobrazenia",
         "work_obligation": "pracovná povinnosť",
-        "workspace_contact": "kontakt záležitosti",
-        "workspace_member": "člen záležitosti"
+        "workspace_contact": "kontakt spisu",
+        "workspace_member": "člen spisu"
       },
       "documentProcessing": {
         "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",

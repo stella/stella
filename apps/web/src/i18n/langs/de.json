@@ -5167,7 +5167,7 @@
         "bilingual_translation_run": "zweisprachiger Übersetzungslauf",
         "billing_code": "Abrechnungscode",
         "case_law_decision_annotation": "Rechtsprechungsanmerkung",
-        "case_law_matter_link": "Fallverknüpfung zur Rechtsprechung",
+        "case_law_matter_link": "Verknüpfung von Rechtsprechung mit einer Akte",
         "case_law_reader_answer": "Antwort des Rechtsprechungslesers",
         "case_law_research_column": "Rechtsprechungsrecherchespalte",
         "chat_file": "Chatdatei",
@@ -5200,7 +5200,7 @@
         "legal_list_generation": "Rechtslistenerstellung",
         "legal_list_item": "Rechtslisteneintrag",
         "legal_list_verification": "Rechtslistenprüfung",
-        "legal_resolve": "Rechtsklärung",
+        "legal_resolve": "Abfrage eines Rechtsverweises",
         "machine_api_key": "Maschinen-API-Schlüssel",
         "mcp_connection": "MCP-Verbindung",
         "mcp_gateway_tool": "MCP-Gateway-Werkzeug",
@@ -5210,7 +5210,7 @@
         "organization_settings": "Organisationseinstellungen",
         "pdf_signing_session": "PDF-Signatursitzung",
         "personal_api_key": "persönlicher API-Schlüssel",
-        "playbook": "Prüfleitfaden",
+        "playbook": "Playbook",
         "property": "Eigenschaft",
         "rate_entry": "Tarifeintrag",
         "rate_table": "Tariftabelle",
@@ -5237,8 +5237,8 @@
         "view": "Ansicht",
         "view_template": "Ansichtsvorlage",
         "work_obligation": "Arbeitspflicht",
-        "workspace_contact": "Mandatskontakt",
-        "workspace_member": "Mandatsmitglied"
+        "workspace_contact": "Kontakt der Akte",
+        "workspace_member": "Mitglied der Akte"
       },
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",

@@ -5167,7 +5167,7 @@
         "bilingual_translation_run": "tradução bilíngue",
         "billing_code": "código de faturamento",
         "case_law_decision_annotation": "anotação de jurisprudência",
-        "case_law_matter_link": "vínculo entre jurisprudência e assunto",
+        "case_law_matter_link": "vínculo entre jurisprudência e caso",
         "case_law_reader_answer": "resposta do leitor de jurisprudência",
         "case_law_research_column": "coluna de pesquisa jurisprudencial",
         "chat_file": "arquivo da conversa",
@@ -5200,7 +5200,7 @@
         "legal_list_generation": "geração de lista jurídica",
         "legal_list_item": "entrada da lista jurídica",
         "legal_list_verification": "verificação da lista jurídica",
-        "legal_resolve": "resolução jurídica",
+        "legal_resolve": "consulta de referência jurídica",
         "machine_api_key": "chave de API da máquina",
         "mcp_connection": "conexão MCP",
         "mcp_gateway_tool": "ferramenta de gateway MCP",
@@ -5210,7 +5210,7 @@
         "organization_settings": "configurações da organização",
         "pdf_signing_session": "sessão para assinatura em PDF",
         "personal_api_key": "chave de API pessoal",
-        "playbook": "guia de revisão",
+        "playbook": "playbook",
         "property": "propriedade",
         "rate_entry": "entrada de tarifa",
         "rate_table": "tabela de tarifas",
@@ -5237,8 +5237,8 @@
         "view": "visualização",
         "view_template": "modelo de visualização",
         "work_obligation": "obrigação de trabalho",
-        "workspace_contact": "contato do assunto",
-        "workspace_member": "membro do assunto"
+        "workspace_contact": "contato do caso",
+        "workspace_member": "membro do caso"
       },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",

@@ -5200,7 +5200,7 @@
         "legal_list_generation": "legal list generation",
         "legal_list_item": "legal list item",
         "legal_list_verification": "legal list verification",
-        "legal_resolve": "legal resolution",
+        "legal_resolve": "legal reference lookup",
         "machine_api_key": "machine API key",
         "mcp_connection": "MCP connection",
         "mcp_gateway_tool": "MCP gateway tool",

@@ -44,6 +44,10 @@ const auditResourceKindsByLocale = {
 const unknownItemPrefixes =
   /^(?:unknown item|عنصر غير معروف|neznámá položka|unbekanntes Element|elemento desconocido|tundmatu üksus|élément inconnu|ismeretlen elem|nežinomas elementas|nezināms vienums|nieznany element|item desconhecido|neznáma položka)(?::|$)/iu;
 
+// Product terms the glossary (apps/web/src/i18n/TERMINOLOGY.md) keeps
+// untranslated, so a locale may legitimately show the English word.
+const GLOSSARY_KEEPS_ENGLISH: ReadonlySet<string> = new Set(["playbook"]);
+
 test("audit resource kind labels remain natural localized phrases", () => {
   const englishKinds = auditResourceKindsByLocale.en;
   const englishKeys = Object.keys(englishKinds).toSorted();
@@ -57,6 +61,7 @@ test("audit resource kind labels remain natural localized phrases", () => {
     for (const [key, value] of Object.entries(kinds)) {
       const matchesSource =
         locale !== "en" &&
+        !GLOSSARY_KEEPS_ENGLISH.has(key) &&
         (value === key || value === englishValueByKey.get(key));
       expect(
         matchesSource,

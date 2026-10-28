@@ -783,6 +783,16 @@
     "settings.account.desktop": [
       "de"
     ],
+    "settings.organization.auditResourceKinds.playbook": [
+      "cs",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "styleSets.stellaStyle": [
       "ar",
       "cs",
