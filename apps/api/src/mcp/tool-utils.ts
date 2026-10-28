@@ -36,7 +36,10 @@ import {
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
+import {
+  PUBLIC_READ_TIMEOUT_CODE,
+  publicReadTimeoutError,
+} from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -886,25 +889,35 @@ export const internalFailureResult = (
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(
-        error,
-        handlerErrorContext(fingerprintKey, { source: "mcp" }),
-      );
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  const timeout = publicReadTimeoutError(error);
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
   }
-  captureError(error, handlerErrorContext(fingerprintKey, { source: "mcp" }));
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
+  if (timeout !== null) {
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      retryable: true,
+    });
+  }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
+  }
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",

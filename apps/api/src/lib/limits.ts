@@ -329,6 +329,8 @@ export const LIMITS = {
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
   timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  /** Ceiling of the approval queue's pending count; the badge shows more as "999+". */
+  timeApprovalPendingCountMax: 1000,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -355,6 +357,8 @@ export const LIMITS = {
   /** Longest span of work dates one personal time read covers: a week. */
   timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
