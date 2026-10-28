@@ -1063,15 +1063,28 @@ const managedProviderCheckInvariantViolation = ({
   ) {
     return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
   }
+  const standardCredential =
+    !!OPENROUTER_API_KEY?.trim() ||
+    (OPENROUTER_WIF_POLICY_ID !== undefined && configuredSharedWifFields === 2);
+  const fastCredential =
+    !!OPENROUTER_FAST_TIER_API_KEY?.trim() ||
+    (OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined &&
+      configuredSharedWifFields === 2);
+  // Instance availability is answered once for the deployment, while each
+  // request dispatches on its own tier's credential. Requiring the standard
+  // credential beside the fast one (and the fast one under the free floor
+  // below) keeps the two answers equal for every organization's tier.
+  if (fastCredential && !standardCredential) {
+    return "OPENROUTER_FAST_TIER_API_KEY or OPENROUTER_FAST_TIER_WIF_POLICY_ID requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration for the standard tier.";
+  }
   // The free floor runs on the fast tier's own credential and never on the
   // standard one, so a managed free tier without it would refuse every
-  // request; refuse the configuration at boot instead.
-  if (
-    FEATURE_FREE_TIER &&
-    AI_PROVIDER === "openrouter" &&
-    !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
-    !(OPENROUTER_FAST_TIER_WIF_POLICY_ID && configuredSharedWifFields === 2)
-  ) {
+  // request; refuse the configuration at boot instead. Without AI_PROVIDER the
+  // deployment may still resolve to OpenRouter from its standard credential.
+  const openRouterMayServe =
+    AI_PROVIDER === "openrouter" ||
+    (AI_PROVIDER === undefined && standardCredential);
+  if (FEATURE_FREE_TIER && openRouterMayServe && !fastCredential) {
     return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
