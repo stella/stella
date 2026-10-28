@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import type { Expression, Program } from "../packages/scripts/src/syntax-tree";
+import type { Expression, Node } from "../packages/scripts/src/syntax-tree";
 import { staticPropertyName, walk } from "../packages/scripts/src/syntax-tree";
 import { parseSyntax } from "./parse-memo";
 
@@ -51,31 +51,50 @@ const isJsonStringify = (expression: Expression | undefined): boolean =>
   expression.callee.property.type === "Identifier" &&
   expression.callee.property.name === "stringify";
 
-const topLevelBindings = (program: Program) => {
-  const bindings = new Map<string, Expression>();
-  for (const statement of program.body) {
-    if (
-      statement.type !== "VariableDeclaration" ||
-      statement.kind !== "const"
-    ) {
-      continue;
-    }
-    for (const declaration of statement.declarations) {
-      if (declaration.id.type === "Identifier" && declaration.init !== null) {
-        bindings.set(declaration.id.name, declaration.init);
-      }
-    }
-  }
-  return bindings;
-};
-
 const resolvesToJsonStringify = (
   expression: Expression | undefined,
-  bindings: ReadonlyMap<string, Expression>,
+  ancestors: readonly Node[],
 ): boolean =>
   isJsonStringify(expression) ||
   (expression?.type === "Identifier" &&
-    isJsonStringify(bindings.get(expression.name)));
+    isJsonStringify(resolveLexicalBinding(expression.name, ancestors)));
+
+const resolveLexicalBinding = (
+  name: string,
+  ancestors: readonly Node[],
+): Expression | undefined => {
+  for (const scope of ancestors.toReversed()) {
+    if (
+      (scope.type === "FunctionDeclaration" ||
+        scope.type === "FunctionExpression" ||
+        scope.type === "ArrowFunctionExpression") &&
+      scope.params.some(
+        (parameter) =>
+          parameter.type === "Identifier" && parameter.name === name,
+      )
+    ) {
+      return undefined;
+    }
+    const statements =
+      scope.type === "Program" || scope.type === "BlockStatement"
+        ? scope.body
+        : [];
+    for (const statement of statements) {
+      if (statement.type !== "VariableDeclaration") {
+        continue;
+      }
+      for (const declaration of statement.declarations) {
+        if (
+          declaration.id.type === "Identifier" &&
+          declaration.id.name === name
+        ) {
+          return declaration.init ?? undefined;
+        }
+      }
+    }
+  }
+  return undefined;
+};
 
 export type RawJsonApiCensus = {
   violations: string[];
@@ -91,9 +110,8 @@ export const censusRawJsonApiCalls = async (
   for (const filePath of paths) {
     const source = await readFile(filePath, "utf-8");
     const { program } = parseSyntax({ fileName: filePath, text: source });
-    const bindings = topLevelBindings(program);
     const modulePath = repoRelativePath(sourceRoot, filePath);
-    walk(program, (node) => {
+    walk(program, (node, ancestors) => {
       if (
         node.type !== "CallExpression" ||
         node.callee.type !== "Identifier" ||
@@ -113,7 +131,7 @@ export const censusRawJsonApiCalls = async (
       );
       if (
         body?.type !== "Property" ||
-        !resolvesToJsonStringify(body.value, bindings)
+        !resolvesToJsonStringify(body.value, ancestors)
       ) {
         return;
       }

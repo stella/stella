@@ -35,6 +35,41 @@ test("rejects a pre-built JSON request body", async () => {
   await rm(directory, { recursive: true });
 });
 
+test("rejects function-local and block-local JSON request bodies", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "raw-json-api-census-"));
+  const fixture = path.join(directory, "local.ts");
+  await writeFile(
+    fixture,
+    `async function save(data: unknown) {
+      const body = JSON.stringify(data);
+      await fetch(apiUrl("/function-local"), { body });
+      {
+        const blockBody = JSON.stringify(data);
+        await fetch(apiUrl("/block-local"), { body: blockBody });
+      }
+    }`,
+  );
+  expect(await findRawJsonApiCalls([fixture], directory)).toEqual([
+    'local.ts#"/block-local"',
+    'local.ts#"/function-local"',
+  ]);
+  await rm(directory, { recursive: true });
+});
+
+test("does not resolve a parameter to a JSON binding in an outer scope", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "raw-json-api-census-"));
+  const fixture = path.join(directory, "parameter.ts");
+  await writeFile(
+    fixture,
+    `const body = JSON.stringify({ unsafe: true });
+    async function save(body: FormData) {
+      await fetch(apiUrl("/parameter"), { body });
+    }`,
+  );
+  expect(await findRawJsonApiCalls([fixture], directory)).toEqual([]);
+  await rm(directory, { recursive: true });
+});
+
 test("reports an allowlisted call that no longer exists", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "raw-json-api-census-"));
   const fixture = path.join(directory, "empty.ts");
