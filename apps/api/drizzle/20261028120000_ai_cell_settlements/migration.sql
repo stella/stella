@@ -1,4 +1,3 @@
--- Hand-rolled (drizzle-kit generate requires unresolved repository-wide hints in this harness).
 -- requires: 20261027160600_case_law_redaction_retirement
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
