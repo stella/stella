@@ -63,7 +63,10 @@ import {
 } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
-import { getEntityFileDownloadRenditions } from "@/components/inspector/file-download-service.logic";
+import {
+  getEntityFileDownloadRenditions,
+  getPrimaryDownloadVariant,
+} from "@/components/inspector/file-download-service.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -892,7 +895,7 @@ function RouteComponentInner({
       downloadTabFile({
         fieldId,
         fileName: activeFileLabel,
-        variant: "original",
+        variant: getPrimaryDownloadVariant(downloadRenditions),
         workspaceId,
         onError: (message, error) => {
           notifyUserError(error, message);

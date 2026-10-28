@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DownloadIcon, FileOutputIcon } from "@stll/ui/icons";
+import { DownloadIcon, FileIcon, FileOutputIcon } from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
   MenuItem,
@@ -16,6 +16,7 @@ import {
   type DownloadRendition,
   type DownloadVariant,
   getDownloadVariant,
+  getPrimaryDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 
 type DownloadRenditionMenuItemsProps = {
@@ -38,17 +39,25 @@ export const DownloadRenditionMenuItems = ({
   const canIncludeReference = renditions.includes("reference");
   const canStripMetadata = renditions.includes("scrubbed");
   const canTransform = canIncludeReference || canStripMetadata;
+  const canDownloadOriginal = renditions.includes("original");
+  const canDownloadPdf = renditions.includes("pdf");
 
   return (
     <>
-      {renditions.includes("pdf") && (
-        <>
-          <MenuItem onClick={() => onSelect("pdf")}>
-            <FileOutputIcon />
-            {t("workspaces.files.downloadPdf")}
-          </MenuItem>
-          {canTransform && <MenuSeparator />}
-        </>
+      {canDownloadOriginal && (
+        <MenuItem onClick={() => onSelect("original")}>
+          <FileIcon />
+          {t("workspaces.files.downloadOriginal")}
+        </MenuItem>
+      )}
+      {canDownloadPdf && (
+        <MenuItem onClick={() => onSelect("pdf")}>
+          <FileOutputIcon />
+          {t("workspaces.files.downloadPdf")}
+        </MenuItem>
+      )}
+      {(canDownloadOriginal || canDownloadPdf) && canTransform && (
+        <MenuSeparator />
       )}
       {canIncludeReference && (
         <MenuCheckboxItem
@@ -76,6 +85,7 @@ export const DownloadRenditionMenuItems = ({
               onSelect(
                 getDownloadVariant({
                   metadata: stripMetadata ? "strip" : "keep",
+                  primary: getPrimaryDownloadVariant(renditions),
                   reference: includeReference ? "include" : "omit",
                 }),
               )
@@ -95,12 +105,16 @@ type DownloadSplitButtonProps = {
   renditions: readonly DownloadRendition[];
 };
 
-/** The uploaded bytes remain one click away; optional copies require confirm. */
+/**
+ * The plain Download is one click; the upload as stored, where that is not
+ * the plain Download, and the optional copies are in the menu.
+ */
 export const DownloadSplitButton = ({
   onDownload,
   renditions,
 }: DownloadSplitButtonProps) => {
   const t = useTranslations();
+  const primary = getPrimaryDownloadVariant(renditions);
   const downloadLabel = t("common.download");
   const downloadAsLabel = t("workspaces.files.downloadAs");
   const hasRenditions = renditions.length > 0;
@@ -108,7 +122,7 @@ export const DownloadSplitButton = ({
     return (
       <Button
         aria-label={downloadLabel}
-        onClick={() => onDownload("original")}
+        onClick={() => onDownload(primary)}
         size="xs"
         tooltip={downloadLabel}
         variant="ghost"
@@ -122,7 +136,7 @@ export const DownloadSplitButton = ({
       primaryContent="icon"
       primaryLabel={downloadLabel}
       menuLabel={downloadAsLabel}
-      onPrimaryClick={() => onDownload("original")}
+      onPrimaryClick={() => onDownload(primary)}
       size="sm"
       menu={
         <MenuPopup align="end" className="min-w-72">

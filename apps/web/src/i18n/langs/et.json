@@ -6150,6 +6150,7 @@
       "downloadAsZip": "Laadi alla .zip-fail",
       "downloadExtractedText": "Eraldatud tekst (.txt)",
       "downloadFailed": "Allalaadimine ebaõnnestus",
+      "downloadOriginal": "Originaalfail",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
       "emptyFile": "Fail on tühi.",

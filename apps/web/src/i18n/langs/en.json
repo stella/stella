@@ -6150,6 +6150,7 @@
       "downloadAsZip": "Download as ZIP",
       "downloadExtractedText": "Extracted text (.txt)",
       "downloadFailed": "Download failed",
+      "downloadOriginal": "Original file",
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
       "emptyFile": "The file is empty.",

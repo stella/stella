@@ -2,36 +2,55 @@ import {
   DOCUMENT_PROPERTIES_MAX_BYTES,
   hasDocumentProperties,
 } from "@stll/api-contract";
+import { FILE_DOWNLOAD_RENDITIONS } from "@stll/api-contract/file-download-renditions";
+import type { FileDownloadRendition } from "@stll/api-contract/file-download-renditions";
 
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 
 /**
- * The alternative copies of a file the app can build, in the order they are
- * offered. The plain Download is always the bytes as uploaded, on every
- * surface, so `original` is deliberately not one of them: nothing here decides
- * what a Download click does.
+ * The alternative copies of a file the app can offer, in the order they are
+ * offered. `original` is listed only where the plain Download hands over
+ * something else: a PDF downloads with the reader's highlights and comments
+ * written in, so its untouched upload is one click further.
  */
-const DOWNLOAD_RENDITIONS = ["reference", "pdf", "scrubbed"] as const;
+export type DownloadRendition = FileDownloadRendition;
 
-export type DownloadRendition = (typeof DOWNLOAD_RENDITIONS)[number];
-
-/** What a download hands over: the uploaded bytes, or one rendition of them. */
+/**
+ * What a download hands over: the uploaded bytes, the PDF with the reader's
+ * marks (`marked`), or one rendition of them.
+ */
 export type DownloadVariant =
-  "original" | DownloadRendition | "reference-scrubbed";
+  DownloadRendition | "marked" | "reference-scrubbed";
+
+/** What the plain Download hands over. */
+type PrimaryDownloadVariant = Extract<DownloadVariant, "original" | "marked">;
+
+/**
+ * What the plain Download of a file hands over, read off the renditions it is
+ * offered: where the upload is listed as an alternative, the Download is the
+ * PDF with the reader's marks. One rule for every Download button.
+ */
+export const getPrimaryDownloadVariant = (
+  renditions: readonly DownloadRendition[],
+): PrimaryDownloadVariant =>
+  renditions.includes("original") ? "marked" : "original";
 
 export type DownloadOptions = {
   metadata: "keep" | "strip";
+  /** The plain Download, which the options apply to when none is chosen. */
+  primary: PrimaryDownloadVariant;
   reference: "include" | "omit";
 };
 
 export const getDownloadVariant = ({
   metadata,
+  primary,
   reference,
 }: DownloadOptions): DownloadVariant => {
   if (reference === "include") {
     return metadata === "strip" ? "reference-scrubbed" : "reference";
   }
-  return metadata === "strip" ? "scrubbed" : "original";
+  return metadata === "strip" ? "scrubbed" : primary;
 };
 
 type DownloadRenditionsInput = {
@@ -60,7 +79,8 @@ type DownloadRenditionsInput = {
  * as, shared by the matter row menu and the inspector header so the two entry
  * points cannot offer different lists. Only DOCX can be handed over with its
  * reference: the reference is written into the document body, which no other
- * format the app serves can carry.
+ * format the app serves can carry. A PDF the server can read downloads with
+ * the reader's marks, so its upload as stored is offered beside it.
  */
 export const getDownloadRenditions = ({
   canScrub,
@@ -70,6 +90,7 @@ export const getDownloadRenditions = ({
   mimeType,
 }: DownloadRenditionsInput): readonly DownloadRendition[] => {
   const isAvailable = {
+    original: encrypted === false && mimeType === PDF_MIME,
     pdf: hasPdfConversion,
     reference:
       Boolean(currentVersionReference) &&
@@ -78,7 +99,7 @@ export const getDownloadRenditions = ({
     scrubbed: canScrub,
   } as const satisfies Record<DownloadRendition, boolean>;
 
-  return DOWNLOAD_RENDITIONS.filter((rendition) => isAvailable[rendition]);
+  return FILE_DOWNLOAD_RENDITIONS.filter((rendition) => isAvailable[rendition]);
 };
 
 /**

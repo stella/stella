@@ -368,6 +368,9 @@ export const LIMITS = {
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  /** Mark rows a downloaded copy of a matter document's PDF carries, read in
+   *  one query; far above what readers leave on one document. */
+  markedPdfMarkRowsMax: 10_000,
   decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,

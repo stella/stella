@@ -101,6 +101,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop account presence supports handoff on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/marked",
+    "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
+  ],
+  [
     "/v1/tasks",
     "Tasks are part of every matter on every deployment; legal-list placement keeps its own feature access",
   ],

@@ -2,9 +2,10 @@ import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { mergePdfTextBoxes } from "@stll/api-contract/pdf-mark-placement";
+
 import {
   findPDFSearchResults,
-  mergePDFSearchBoxes,
   toPDFSearchViewportBox,
 } from "@/lib/pdf/pdf-search";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
@@ -354,7 +355,7 @@ describe("canonical PDF search", () => {
 describe("PDF search highlight geometry", () => {
   test("merges adjacent character boxes but preserves separate lines", () => {
     expect(
-      mergePDFSearchBoxes([
+      mergePdfTextBoxes([
         { x: 10, y: 20, width: 4, height: 8 },
         { x: 14, y: 20, width: 5, height: 8 },
         { x: 10, y: 8, width: 6, height: 8 },
@@ -367,7 +368,7 @@ describe("PDF search highlight geometry", () => {
 
   test("merges nearby RTL boxes without bridging distant visual segments", () => {
     expect(
-      mergePDFSearchBoxes([
+      mergePdfTextBoxes([
         { x: 100, y: 20, width: 5, height: 8 },
         { x: 95, y: 20, width: 5, height: 8 },
         { x: 20, y: 20, width: 5, height: 8 },

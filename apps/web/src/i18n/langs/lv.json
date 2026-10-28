@@ -6150,6 +6150,7 @@
       "downloadAsZip": "Lejupielādēt .zip failu",
       "downloadExtractedText": "Izvilktais teksts (.txt)",
       "downloadFailed": "Lejupielāde neizdevās",
+      "downloadOriginal": "Oriģinālais fails",
       "downloadPdf": "Lejupielādēt kā PDF",
       "downloadSearchablePdf": "Meklējams PDF",
       "emptyFile": "Fails ir tukšs.",

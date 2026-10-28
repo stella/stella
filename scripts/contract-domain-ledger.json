@@ -920,10 +920,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/file-download-service.logic.ts::DOWNLOAD_RENDITIONS::domain:[\"reference\",\"pdf\",\"scrubbed\"]::1",
-    "reason": "Existing DOWNLOAD_RENDITIONS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/inspector-group-controls.tsx::InspectorGroupEditor::maxLength:80::1",
     "reason": "Existing InspectorGroupEditor UI validation or presentation bound; contract migration pending."
   },

@@ -7,6 +7,7 @@ import {
   getDownloadRenditions,
   getDownloadVariant,
   getPdfDownloadFileName,
+  getPrimaryDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 
@@ -25,10 +26,44 @@ describe("download renditions", () => {
     expect(
       METADATA_OPTIONS.flatMap((metadata) =>
         REFERENCE_OPTIONS.map((reference) =>
-          getDownloadVariant({ metadata, reference }),
+          getDownloadVariant({ metadata, primary: "original", reference }),
         ),
       ),
     ).toEqual(["original", "reference", "scrubbed", "reference-scrubbed"]);
+  });
+
+  test("hands over the plain Download when no option is chosen", () => {
+    expect(
+      getDownloadVariant({
+        metadata: "keep",
+        primary: "marked",
+        reference: "omit",
+      }),
+    ).toBe("marked");
+  });
+
+  test("downloads a readable PDF with its marks and offers the upload beside it", () => {
+    const renditions = getDownloadRenditions({
+      ...NOTHING_AVAILABLE,
+      mimeType: PDF_MIME,
+    });
+    expect(renditions).toEqual(["original"]);
+    expect(getPrimaryDownloadVariant(renditions)).toBe("marked");
+  });
+
+  test("downloads the upload itself where the server cannot add marks", () => {
+    for (const file of [
+      { encrypted: true, mimeType: PDF_MIME },
+      { encrypted: undefined, mimeType: PDF_MIME },
+      { encrypted: false, mimeType: DOCX_MIME },
+    ]) {
+      const renditions = getDownloadRenditions({
+        ...NOTHING_AVAILABLE,
+        ...file,
+      });
+      expect(renditions).not.toContain("original");
+      expect(getPrimaryDownloadVariant(renditions)).toBe("original");
+    }
   });
 
   test("offers the reference copy of a readable DOCX whose version is referenced", () => {
@@ -62,7 +97,7 @@ describe("download renditions", () => {
           currentVersionReference: "2026/001/015.v3",
           mimeType,
         }),
-      ).toEqual([]);
+      ).not.toContain("reference");
     }
   });
 

@@ -16,7 +16,10 @@ import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
-import { documentAnnotationScalingScenarios } from "./document-annotations";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -49,6 +52,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
 ];

@@ -6150,6 +6150,7 @@
       "downloadAsZip": "Atsisiųsti .zip failą",
       "downloadExtractedText": "Išgautas tekstas (.txt)",
       "downloadFailed": "Nepavyko atsisiųsti",
+      "downloadOriginal": "Originalus failas",
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
       "emptyFile": "Failas tuščias.",

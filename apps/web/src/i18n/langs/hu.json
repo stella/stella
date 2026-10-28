@@ -6150,6 +6150,7 @@
       "downloadAsZip": ".zip fájl letöltése",
       "downloadExtractedText": "Kinyert szöveg (.txt)",
       "downloadFailed": "A letöltés sikertelen",
+      "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "Letöltés PDF-ként",
       "downloadSearchablePdf": "Kereshető PDF",
       "emptyFile": "A fájl üres.",

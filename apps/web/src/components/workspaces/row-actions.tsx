@@ -67,6 +67,7 @@ import {
   type DownloadRendition,
   type DownloadVariant,
   getDownloadRenditions,
+  getPrimaryDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
@@ -1819,7 +1820,10 @@ const RowFileOperationsMenu = ({
       {hasAnyFile && (
         <MenuItem
           onClick={() =>
-            detached(onDownload("original"), "row-actions.download")
+            detached(
+              onDownload(getPrimaryDownloadVariant(downloadRenditions)),
+              "row-actions.download",
+            )
           }
         >
           <DownloadIcon />

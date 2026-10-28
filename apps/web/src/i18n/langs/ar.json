@@ -6150,6 +6150,7 @@
       "downloadAsZip": "تنزيل بصيغة ZIP",
       "downloadExtractedText": "النص المستخرج (.txt)",
       "downloadFailed": "فشل التنزيل",
+      "downloadOriginal": "الملف الأصلي",
       "downloadPdf": "تنزيل بصيغة PDF",
       "downloadSearchablePdf": "ملف PDF قابل للبحث",
       "emptyFile": "الملف فارغ.",

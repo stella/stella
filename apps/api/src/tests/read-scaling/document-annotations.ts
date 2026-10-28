@@ -20,6 +20,7 @@ import createDocumentAnnotation from "@/api/handlers/entities/annotations/create
 import deleteDocumentAnnotation from "@/api/handlers/entities/annotations/delete";
 import listDocumentAnnotations from "@/api/handlers/entities/annotations/list";
 import updateDocumentAnnotation from "@/api/handlers/entities/annotations/update";
+import { markedDownloadEndpoint } from "@/api/handlers/files/routes";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -277,6 +278,45 @@ export const seedDocumentAnnotationScaling = async ({
       await db.delete(user).where(eq(user.id, tenant.userId));
     },
   };
+};
+
+/**
+ * The PDF download that carries the marks: one read of every visible mark
+ * and one of the file, however many marks the document holds, with each
+ * mark one annotation in the copy.
+ */
+export const markedPdfDownloadScalingScenario = {
+  name: "marked PDF download",
+  definition: markedDownloadEndpoint,
+  measure: async ({ db, tenant }: DocumentAnnotationScalingFixture) =>
+    await runWithMeasuredQueryCounter(async (counter) => {
+      const response = await markedDownloadEndpoint.handler(
+        createTestHandlerContext<
+          Parameters<typeof markedDownloadEndpoint.handler>[0]
+        >({
+          ...handlerContext(db, tenant),
+          scopedDb: createScopedDb(
+            markRlsDatabase(db),
+            [tenant.workspaceId],
+            tenant.organizationId,
+            tenant.userId,
+          ),
+          params: { workspaceId: tenant.workspaceId, fieldId: tenant.fieldId },
+        }),
+      );
+      if (!(response instanceof Response) || !response.ok) {
+        return panic("Marked PDF download scaling requires the PDF");
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const annotations =
+        (await PDF.load(bytes)).getPages().at(0)?.getAnnotations() ?? [];
+      return {
+        statements: counter.count,
+        transactionRoundTrips: counter.transactions,
+        responseBytes: bytes.byteLength,
+        rows: annotations.length,
+      };
+    }),
 };
 
 const markAt = (

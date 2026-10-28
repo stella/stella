@@ -16,6 +16,7 @@ import { downloadFile } from "@/lib/utils";
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
 const BUILT_RENDITION_REQUEST = {
+  marked: { path: "marked", query: "" },
   reference: { path: "stamped", query: "?metadata=keep" },
   "reference-scrubbed": { path: "stamped", query: "?metadata=strip" },
   scrubbed: { path: "scrubbed", query: "" },
@@ -83,14 +84,16 @@ const fetchBuiltFile = async ({
 const isBuiltRendition = (
   variant: DownloadVariant,
 ): variant is BuiltRendition =>
+  variant === "marked" ||
   variant === "reference" ||
   variant === "reference-scrubbed" ||
   variant === "scrubbed";
 
 /**
  * Downloads one field's file in the requested copy: the uploaded original and
- * the stored PDF conversion through a presigned URL, the reference and
- * metadata-free copies from the API that builds them. Every download entry
+ * the stored PDF conversion through a presigned URL, the PDF with the
+ * reader's marks, the reference and metadata-free copies from the API that
+ * builds them. Every download entry
  * point goes through here, so the inspector header and the matter row menu
  * cannot hand over different bytes for the same choice.
  */

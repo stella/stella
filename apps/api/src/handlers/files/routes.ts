@@ -13,6 +13,7 @@ import {
   STAMPED_DOWNLOAD_METADATA,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
+import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import {
   OCR_EXPORT_FORMATS,
   readOcrExport,
@@ -333,6 +334,44 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
   },
 );
 
+/**
+ * A PDF as uploaded, with the caller's visible highlights and comments
+ * appended as PDF annotations; the stored bytes unchanged when the file
+ * cannot take them without harm.
+ */
+export const markedDownloadEndpoint = createSafeHandler(
+  {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: { type: "audited" },
+    permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
+    access: "read",
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
+  } satisfies WorkspaceHandlerConfig,
+  async function* ({
+    params: { fieldId },
+    recordAuditEvent,
+    safeDb,
+    scopedDb,
+    session,
+    user,
+    workspaceId,
+  }) {
+    // The plain Download of a PDF, so the same refusal as the uploaded bytes.
+    yield* checkDemoAccountOperation(user.email);
+    return yield* readMarkedDownload({
+      fieldId,
+      organizationId: session.activeOrganizationId,
+      recordAuditEvent,
+      safeDb,
+      scopedDb,
+      userId: user.id,
+      workspaceId,
+    });
+  },
+);
+
 export const ocrExportEndpoint = createSafeHandler(
   {
     contract: "patch",
@@ -388,6 +427,7 @@ export const filesRoute = routes(
       PATCH: updateDocumentPropertiesEndpoint,
     },
     "/scrubbed/:fieldId": { GET: scrubbedDownloadEndpoint },
+    "/marked/:fieldId": { GET: markedDownloadEndpoint },
     "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
     "/email-attachment/:fieldId/:attachmentId": {
       GET: emailAttachmentEndpoint,

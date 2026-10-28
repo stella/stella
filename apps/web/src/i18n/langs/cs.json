@@ -6150,6 +6150,7 @@
       "downloadAsZip": "Stáhnout .zip soubor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
       "downloadFailed": "Stažení se nezdařilo",
+      "downloadOriginal": "Původní soubor",
       "downloadPdf": "Stáhnout jako PDF",
       "downloadSearchablePdf": "Prohledávatelné PDF",
       "emptyFile": "Soubor je prázdný.",
