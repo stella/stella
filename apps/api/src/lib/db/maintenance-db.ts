@@ -17,14 +17,10 @@ import type { Transaction } from "@/api/db/root";
  * fails with SQLSTATE 25006 at its first statement instead of quietly
  * applying.
  */
-type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
-  ReturnType<typeof rootDb.execute<TRow>>
->;
-
 export type MaintenanceDb = {
   execute: <TRow extends Record<string, unknown> = Record<string, unknown>>(
     query: SQLWrapper | string,
-  ) => Promise<ExecuteResult<TRow>>;
+  ) => Promise<TRow[]>;
   transaction: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
 };
 
