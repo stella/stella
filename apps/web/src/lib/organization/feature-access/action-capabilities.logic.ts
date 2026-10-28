@@ -6,8 +6,8 @@ import { acceptsDocumentOcrRequests } from "@stll/api-contract/document-ocr-avai
 import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 
 import type { TranslationKey } from "@/i18n/types";
-import { anyAvailable } from "@/lib/availability";
-import type { Availability } from "@/lib/availability";
+import { anyAvailable } from "@/lib/organization/feature-access/availability";
+import type { Availability } from "@/lib/organization/feature-access/availability";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { OrganizationSettings } from "@/queries/organization-settings";
 
@@ -37,7 +37,7 @@ const CAPABILITY_SETTINGS_ROUTES = {
 } as const satisfies Record<string, NonNullable<LinkProps["to"]>>;
 export type CapabilitySettingsRoute =
   (typeof CAPABILITY_SETTINGS_ROUTES)[keyof typeof CAPABILITY_SETTINGS_ROUTES];
-export type CapabilityAvailability =
+type CapabilityAvailability =
   | { type: "available" }
   | { type: "pending" }
   | { type: "error" }
