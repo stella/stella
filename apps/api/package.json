@@ -108,7 +108,7 @@
     "@google/genai": "^2.31.0",
     "@jitl/quickjs-wasmfile-release-asyncify": "0.32.0",
     "@libpdf/core": "catalog:",
-    "@litko/yara-x": "^0.7.5",
+    "@litko/yara-x": "^0.10.0",
     "@modelcontextprotocol/server": "2.3.1",
     "@myriaddreamin/typst-ts-web-compiler": "0.7.0",
     "@openrouter/sdk": "1.5.6",
