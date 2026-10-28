@@ -1,16 +1,19 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftModelResponseSchema,
+  desktopBillingDraftResponseSchema,
   desktopBillingDraftReviewSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import { assertProperty } from "@stll/property-testing";
 
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -33,6 +36,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
+  type BillingDraftPrompt,
   createBillingDraftReferenceMap,
   createDesktopBillingDraftEndpoint,
 } from "./billing-drafts";
@@ -137,6 +141,8 @@ type ExerciseOptions = {
   refused?: boolean;
   hiddenFeature?: boolean;
   malformedResult?: boolean;
+  unknownReference?: boolean;
+  copyPromptGuideline?: boolean;
   output?: DesktopBillingDraftResponse;
   draftContext?: typeof context;
 };
@@ -145,6 +151,8 @@ const exercise = async ({
   refused,
   hiddenFeature,
   malformedResult,
+  unknownReference,
+  copyPromptGuideline,
   output = fixture,
   draftContext = context,
 }: ExerciseOptions = {}) => {
@@ -183,7 +191,40 @@ const exercise = async ({
         EARLIER_ID,
         GUIDELINE_ID,
       ]);
-      const result: unknown = JSON.parse(refs.serialize(output));
+      const result = refs.aliasResponse(output);
+      if (copyPromptGuideline) {
+        const prompt = asTestRaw<BillingDraftPrompt>(
+          JSON.parse(options.prompt ?? "{}"),
+        );
+        const guideline = prompt.guidelines.at(0);
+        const section = guideline?.sections.at(0);
+        if (!guideline || !section) {
+          throw new HandlerError({
+            status: 500,
+            message: "Fixture has no guideline section",
+          });
+        }
+        result.checkedGuidelines = [
+          { fileId: guideline.fileId, fileName: guideline.fileName },
+        ];
+        result.drafts = result.drafts.map((draft) => ({
+          ...draft,
+          flags: draft.flags.map((flag) => ({
+            ...flag,
+            ruleRef: {
+              fileId: guideline.fileId,
+              fileName: guideline.fileName,
+              section,
+            },
+          })),
+        }));
+      }
+      if (unknownReference) {
+        result.checkedGuidelines = result.checkedGuidelines.map((file) => ({
+          ...file,
+          fileId: "unknown-reference",
+        }));
+      }
       if (malformedResult) {
         return { drafts: [], checkedGuidelines: [] };
       }
@@ -494,15 +535,47 @@ test("malformed model output is refused", async () => {
 });
 
 test("unknown model references return a bounded failure", async () => {
-  const unknownReference = {
-    ...fixture,
-    checkedGuidelines: [
-      { fileId: "unknown-reference", fileName: "references/billing.md" },
-    ],
-  };
-  const { response, calls } = await exercise({ output: unknownReference });
+  const { response, calls } = await exercise({ unknownReference: true });
   expect(response.status).toBe(502);
   expect(calls).toHaveLength(1);
+});
+
+test("entry identifiers cannot rewrite guideline names, sections or discriminators", async () => {
+  const entryIds = [
+    "references/billing.md",
+    "Narratives",
+    "activity_group",
+    "client",
+  ];
+  const entries = entryIds.flatMap((entryId) =>
+    body.entries.map((entry) => ({ ...entry, entryId })),
+  );
+  const output = {
+    ...fixture,
+    drafts: entryIds.flatMap((entryId) =>
+      fixture.drafts.map((draft) => ({ ...draft, entryId })),
+    ),
+  };
+  const { response, calls } = await exercise({
+    input: { entries, steer: "client", previousResult: output },
+    output,
+    copyPromptGuideline: true,
+  });
+  expect(response.status).toBe(200);
+  expect(calls).toHaveLength(1);
+  const prompt = asTestRaw<BillingDraftPrompt>(
+    JSON.parse(calls.at(0)?.prompt ?? "{}"),
+  );
+  expect(prompt.guidelines.at(0)).toMatchObject({
+    fileName: "references/billing.md",
+    sections: ["Narratives"],
+  });
+  expect(prompt.previousResult?.drafts.at(0)?.classification).toEqual({
+    type: "activity_group",
+    activityGroup: "client",
+  });
+  expect(prompt.steer).toBe("client");
+  expect(await response.json()).toMatchObject({ result: output });
 });
 
 test("opaque references remain UUID-compatible, collision-free and confined to reference fields", () => {
@@ -514,20 +587,12 @@ test("opaque references remain UUID-compatible, collision-free and confined to r
     GUIDELINE_ID,
     collision,
   ]);
-  const modelResult = asTestRaw<DesktopBillingDraftResponse>(
-    JSON.parse(refs.serialize(fixture)),
-  );
+  const modelResult = refs.aliasResponse(fixture);
   const draft = modelResult.drafts.at(0);
   if (!draft) {
     throw new HandlerError({ status: 500, message: "Fixture has no draft" });
   }
-  const targetAlias: unknown = JSON.parse(refs.serialize(collision));
-  if (typeof targetAlias !== "string") {
-    throw new HandlerError({
-      status: 500,
-      message: "Fixture has no reference",
-    });
-  }
+  const targetAlias = refs.alias(collision);
   expect(targetAlias).not.toBe(collision);
   expect(targetAlias).toMatch(/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/u);
   draft.narrative = targetAlias;
@@ -631,4 +696,176 @@ test("compact model output still passes canonical bounds before proposals are ac
   });
   expect(calls).toHaveLength(1);
   expect(response.status).toBe(502);
+});
+
+test("billing reference mapping preserves every colliding text field", () => {
+  assertProperty(
+    "billing reference mapping preserves every colliding text field",
+    fc.property(fc.string({ minLength: 1, maxLength: 20 }), (text) => {
+      const classification = {
+        type: "ledes",
+        taskCode: text,
+        activityCode: text,
+      } as const;
+      const part = {
+        durationMinutes: 15,
+        narrative: text,
+        classification,
+        billable: true,
+      };
+      const operations = [
+        { type: "rewrite", narrative: text },
+        { type: "change_classification", classification },
+        { type: "set_billable", billable: true },
+        { type: "split", parts: [part, part] },
+        {
+          type: "merge",
+          entryIds: ["entry_1", "entry_2"],
+          narrative: text,
+          classification,
+          billable: true,
+        },
+        {
+          type: "move",
+          targetMatterId: MATTER_ID,
+          targetMatterName: text,
+          ...part,
+        },
+      ] satisfies DesktopBillingDraftResponse["drafts"][number]["operations"];
+      const output = {
+        checkedGuidelines: [{ fileId: GUIDELINE_ID, fileName: text }],
+        drafts: [
+          {
+            entryId: "entry_1",
+            narrative: text,
+            classification,
+            flags: [
+              {
+                text,
+                fix: "split",
+                ruleRef: {
+                  fileId: GUIDELINE_ID,
+                  fileName: text,
+                  section: text,
+                },
+              },
+            ],
+            matchedEarlierEntryIds: [EARLIER_ID],
+            operations,
+          },
+        ],
+      } satisfies DesktopBillingDraftResponse;
+      const prompt = {
+        entries: body.entries.map((entry) => ({
+          ...entry,
+          appNames: [text],
+          evidence: { documentNames: [text], windowTitles: [text] },
+        })),
+        steer: text,
+        previousResult: output,
+        personalPreference: text,
+        matters: context.matters.map((matter) => ({ ...matter, name: text })),
+        earlierEntries: context.earlierEntries.map((entry) => ({
+          ...entry,
+          narrative: text,
+          taskCode: text,
+          activityCode: text,
+        })),
+        guidelines: context.guidelines.map((file) => ({
+          ...file,
+          fileName: text,
+          content: text,
+          sections: [text],
+          matterIds: [MATTER_ID],
+        })),
+        activityGroups: ["client"],
+      } satisfies BillingDraftPrompt;
+      // Every string, including discriminators and dates, is also an entry ID.
+      const ids = new Set<string>();
+      JSON.stringify(prompt, (_key, value: unknown) => {
+        if (typeof value === "string") {
+          ids.add(value);
+        }
+        return value;
+      });
+      prompt.entries = [...ids].flatMap((entryId) =>
+        body.entries.map((entry) => ({
+          ...entry,
+          entryId,
+          appNames: [text],
+          evidence: { documentNames: [text], windowTitles: [text] },
+        })),
+      );
+      const refs = createBillingDraftReferenceMap([...ids]);
+      expect(v.parse(desktopBillingDraftResponseSchema, output)).toEqual(
+        output,
+      );
+      const aliased = refs.aliasResponse(output);
+      expect(aliased.drafts.at(0)).toMatchObject({
+        narrative: text,
+        classification,
+        flags: [
+          { text, fix: "split", ruleRef: { fileName: text, section: text } },
+        ],
+        operations: operations.map((operation) => {
+          switch (operation.type) {
+            case "merge": {
+              const { entryIds: _ids, ...free } = operation;
+              return free;
+            }
+            case "move": {
+              const { targetMatterId: _id, ...free } = operation;
+              return free;
+            }
+            case "rewrite":
+            case "change_classification":
+            case "set_billable":
+            case "split":
+              return operation;
+            default:
+              return operation satisfies never;
+          }
+        }),
+      });
+      expect(refs.restore(aliased).unwrap()).toEqual(output);
+      const modelPrompt = refs.aliasPrompt(prompt);
+      expect(JSON.parse(refs.serializePrompt(prompt))).toEqual(modelPrompt);
+      expect(modelPrompt).toMatchObject({
+        steer: text,
+        personalPreference: text,
+        activityGroups: ["client"],
+        matters: [{ name: text, narrativeLanguage: "cs" }],
+        earlierEntries: [
+          {
+            narrative: text,
+            taskCode: text,
+            activityCode: text,
+            activityGroup: "client",
+            dateWorked: "2026-10-01",
+          },
+        ],
+        guidelines: [{ fileName: text, content: text, sections: [text] }],
+      });
+      expect(modelPrompt.previousResult).toEqual(aliased);
+      for (const entry of modelPrompt.entries) {
+        expect(entry).toMatchObject({
+          appNames: [text],
+          evidence: { documentNames: [text], windowTitles: [text] },
+          date: body.entries.at(0)?.date,
+          timezone: body.entries.at(0)?.timezone,
+        });
+      }
+      expect(modelPrompt.entries.map(({ entryId }) => entryId)).toEqual(
+        [...ids].map(refs.alias),
+      );
+      expect(modelPrompt.guidelines.at(0)?.matterIds).toEqual([
+        refs.alias(MATTER_ID),
+      ]);
+      expect(modelPrompt.earlierEntries.at(0)?.id).toBe(refs.alias(EARLIER_ID));
+      expect(modelPrompt.earlierEntries.at(0)?.matterId).toBe(
+        refs.alias(MATTER_ID),
+      );
+      expect(modelPrompt.matters.at(0)?.matterId).toBe(refs.alias(MATTER_ID));
+    }),
+  );
 });

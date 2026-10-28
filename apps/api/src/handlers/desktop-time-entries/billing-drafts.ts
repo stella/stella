@@ -57,6 +57,66 @@ type BillingDraftEndpointOptions = {
   admit?: typeof withActionAdmission;
 };
 
+type BillingDraftPromptContext = ReturnType<
+  Awaited<ReturnType<typeof loadBillingDraftContext>>["unwrap"]
+>;
+
+export type BillingDraftPrompt = Pick<
+  DesktopBillingDraftRequest,
+  "entries" | "steer" | "previousResult"
+> & {
+  personalPreference: BillingDraftPromptContext["preference"];
+  matters: Pick<
+    BillingDraftPromptContext["matters"][number],
+    "matterId" | "name" | "narrativeLanguage" | "ledesEnabled"
+  >[];
+  earlierEntries: BillingDraftPromptContext["earlierEntries"];
+  guidelines: Pick<
+    BillingDraftPromptContext["guidelines"][number],
+    "fileId" | "fileName" | "content" | "sections" | "matterIds"
+  >[];
+  activityGroups: readonly string[];
+};
+
+// This traversal owns response reference positions in both directions; free
+// text and discriminators are copied without interpreting their values.
+const mapBillingDraftResponseReferences = (
+  value: DesktopBillingDraftResponse,
+  reference: (id: string) => string,
+): DesktopBillingDraftResponse => ({
+  checkedGuidelines: value.checkedGuidelines.map((file) => ({
+    ...file,
+    fileId: reference(file.fileId),
+  })),
+  drafts: value.drafts.map((draft) => ({
+    ...draft,
+    entryId: reference(draft.entryId),
+    flags: draft.flags.map((flag) => ({
+      ...flag,
+      ruleRef: { ...flag.ruleRef, fileId: reference(flag.ruleRef.fileId) },
+    })),
+    matchedEarlierEntryIds: draft.matchedEarlierEntryIds.map(reference),
+    operations: draft.operations.map((operation) => {
+      switch (operation.type) {
+        case "move":
+          return {
+            ...operation,
+            targetMatterId: reference(operation.targetMatterId),
+          };
+        case "merge":
+          return { ...operation, entryIds: operation.entryIds.map(reference) };
+        case "rewrite":
+        case "change_classification":
+        case "set_billable":
+        case "split":
+          return operation;
+        default:
+          return panic("Unknown billing operation", operation satisfies never);
+      }
+    }),
+  })),
+});
+
 // Per-call aliases keep internal matter identifiers out of model input while
 // allowing returned operations to resolve only within authorized context.
 export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
@@ -72,18 +132,42 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
     aliases.set(id, alias);
   }
   const originals = new Map(Array.from(aliases, ([id, alias]) => [alias, id]));
-  const reference = (alias: string) => {
-    const original = originals.get(alias);
-    if (original === undefined) {
-      return panic("Validated billing reference is missing", alias);
-    }
-    return original;
-  };
+  const alias = (id: string) =>
+    aliases.get(id) ?? panic("Billing prompt reference is missing", id);
+  const aliasResponse = (value: DesktopBillingDraftResponse) =>
+    mapBillingDraftResponseReferences(value, alias);
+  const aliasPrompt = (value: BillingDraftPrompt) => ({
+    ...value,
+    entries: value.entries.map((entry) => ({
+      ...entry,
+      entryId: alias(entry.entryId),
+      matterId: alias(entry.matterId),
+    })),
+    previousResult:
+      value.previousResult === undefined
+        ? undefined
+        : aliasResponse(value.previousResult),
+    matters: value.matters.map((matter) => ({
+      ...matter,
+      matterId: alias(matter.matterId),
+    })),
+    earlierEntries: value.earlierEntries.map((entry) => ({
+      ...entry,
+      id: alias(entry.id),
+      matterId: alias(entry.matterId),
+    })),
+    guidelines: value.guidelines.map((file) => ({
+      ...file,
+      fileId: alias(file.fileId),
+      matterIds: file.matterIds?.map(alias),
+    })),
+  });
   return {
-    serialize: (value: unknown) =>
-      JSON.stringify(value, (_key, item: unknown) =>
-        typeof item === "string" ? (aliases.get(item) ?? item) : item,
-      ),
+    alias,
+    aliasResponse,
+    aliasPrompt,
+    serializePrompt: (value: BillingDraftPrompt) =>
+      JSON.stringify(aliasPrompt(value)),
     restore: (value: DesktopBillingDraftResponse) => {
       const parsed = v.safeParse(desktopBillingDraftResponseSchema, value);
       if (!parsed.success) {
@@ -98,36 +182,19 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           ),
         );
       }
-      const referencedIds = parsed.output.checkedGuidelines.map(
-        ({ fileId }) => fileId,
-      );
-      for (const draft of parsed.output.drafts) {
-        referencedIds.push(draft.entryId, ...draft.matchedEarlierEntryIds);
-        for (const flag of draft.flags) {
-          referencedIds.push(flag.ruleRef.fileId);
-        }
-        for (const operation of draft.operations) {
-          switch (operation.type) {
-            case "move":
-              referencedIds.push(operation.targetMatterId);
-              break;
-            case "merge":
-              referencedIds.push(...operation.entryIds);
-              break;
-            case "rewrite":
-            case "change_classification":
-            case "set_billable":
-            case "split":
-              break;
-            default:
-              return panic(
-                "Unknown billing operation",
-                operation satisfies never,
-              );
+      const unknownReferences: string[] = [];
+      const restored = mapBillingDraftResponseReferences(
+        parsed.output,
+        (id) => {
+          const original = originals.get(id);
+          if (original === undefined) {
+            unknownReferences.push(id);
+            return id;
           }
-        }
-      }
-      if (referencedIds.some((alias) => !originals.has(alias))) {
+          return original;
+        },
+      );
+      if (unknownReferences.length > 0) {
         return Result.err(
           classifyFailure(
             new HandlerError({
@@ -139,48 +206,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           ),
         );
       }
-      return Result.ok({
-        checkedGuidelines: parsed.output.checkedGuidelines.map((file) => ({
-          ...file,
-          fileId: reference(file.fileId),
-        })),
-        drafts: parsed.output.drafts.map((draft) => ({
-          ...draft,
-          entryId: reference(draft.entryId),
-          flags: draft.flags.map((flag) => ({
-            ...flag,
-            ruleRef: {
-              ...flag.ruleRef,
-              fileId: reference(flag.ruleRef.fileId),
-            },
-          })),
-          matchedEarlierEntryIds: draft.matchedEarlierEntryIds.map(reference),
-          operations: draft.operations.map((operation) => {
-            switch (operation.type) {
-              case "move":
-                return {
-                  ...operation,
-                  targetMatterId: reference(operation.targetMatterId),
-                };
-              case "merge":
-                return {
-                  ...operation,
-                  entryIds: operation.entryIds.map(reference),
-                };
-              case "rewrite":
-              case "change_classification":
-              case "set_billable":
-              case "split":
-                return operation;
-              default:
-                return panic(
-                  "Unknown billing operation",
-                  operation satisfies never,
-                );
-            }
-          }),
-        })),
-      });
+      return Result.ok(restored);
     },
   };
 };
@@ -204,7 +230,7 @@ const prepareBillingDraftPrompt = ({
     ...context.earlierEntries.map(({ id }) => id),
     ...context.guidelines.map(({ fileId }) => fileId),
   ]);
-  const prompt = refs.serialize({
+  const prompt = refs.serializePrompt({
     entries: selectedEntries,
     steer: body.steer,
     previousResult: body.previousResult,
@@ -224,7 +250,7 @@ const prepareBillingDraftPrompt = ({
         fileName,
         content,
         sections,
-        matterIds,
+        ...(matterIds === undefined ? {} : { matterIds }),
       }),
     ),
     activityGroups: [TIME_ENTRY_ACTIVITY_GROUP.CLIENT],
