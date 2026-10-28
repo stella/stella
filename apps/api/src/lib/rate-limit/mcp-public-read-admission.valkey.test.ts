@@ -18,6 +18,7 @@ const caller = () => ({
   userId: toSafeId<"user">("public_read_user"),
   clientId: "public_read_client",
 });
+const leased = <T>(value: T) => Result.ok({ status: "leased" as const, value });
 
 const withStore = async (
   run: (
@@ -98,7 +99,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         } finally {
           finish.resolve(undefined);
           expect(await Promise.all(owners)).toEqual(
-            Array.from({ length: 4 }, () => Result.ok("complete")),
+            Array.from({ length: 4 }, () => leased("complete")),
           );
         }
         expect(
@@ -108,7 +109,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             limit: 4,
             run: async () => "next",
           }),
-        ).toEqual(Result.ok("next"));
+        ).toEqual(leased("next"));
       });
     });
 
@@ -156,9 +157,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
                 }),
             ),
           );
-          expect(outcomes).toEqual(
-            identities.map(() => Result.ok("independent")),
-          );
+          expect(outcomes).toEqual(identities.map(() => leased("independent")));
         } finally {
           finish.resolve(undefined);
           expect(Result.isOk(await owner)).toBe(true);
@@ -220,9 +219,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           } finally {
             finish.resolve(undefined);
             expect(await owner).toEqual(
-              outcome === "success"
-                ? Result.ok("complete")
-                : Result.err(failure),
+              outcome === "success" ? leased("complete") : Result.err(failure),
             );
           }
           expect(
@@ -232,7 +229,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               limit: 1,
               run: async () => "next",
             }),
-          ).toEqual(Result.ok("next"));
+          ).toEqual(leased("next"));
         });
       });
     }
@@ -327,7 +324,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           );
         } finally {
           finish.resolve(undefined);
-          expect(await owner).toEqual(Result.ok("complete"));
+          expect(await owner).toEqual(leased("complete"));
         }
         expect(cancellations).toBe(1);
         expect(schedules).toBe(2);
@@ -338,7 +335,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             limit: 1,
             run: async () => "next",
           }),
-        ).toEqual(Result.ok("next"));
+        ).toEqual(leased("next"));
       });
     });
 
@@ -399,7 +396,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             limit: 1,
             run: async () => "next",
           }),
-        ).toEqual(Result.ok("next"));
+        ).toEqual(leased("next"));
       });
     });
 
@@ -423,7 +420,9 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           },
           run: async () => "complete",
         });
-        expect(completed).toEqual(Result.ok("complete"));
+        expect(completed).toMatchObject(
+          Result.ok({ status: "degraded", value: "complete" }),
+        );
         expectBusy(
           await withMcpPublicReadAdmission({
             caller: identity,
@@ -441,7 +440,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
             limit: 1,
             run: async () => "next",
           }),
-        ).toEqual(Result.ok("next"));
+        ).toEqual(leased("next"));
       });
     });
   });

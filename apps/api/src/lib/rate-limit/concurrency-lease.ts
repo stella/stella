@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -193,7 +193,21 @@ const settledAdmissionOutcome = <T>(
   return outcome;
 };
 
+export type LeaseDegradation = {
+  phase: "renewal" | "release";
+  reason: "unavailable" | "invalid_reply" | "lease_uncertain";
+};
+
+type LeaseAvailabilityPolicy =
+  | { type: "required" }
+  | {
+      type: "best_effort";
+      onDegraded: (event: LeaseDegradation) => void;
+      onLost: () => void;
+    };
+
 type AcquiredConcurrencyLeaseOptions<T> = {
+  availability: LeaseAvailabilityPolicy;
   leaseMs: number;
   leaseId: string;
   initialAttemptAt: number;
@@ -207,6 +221,7 @@ type AcquiredConcurrencyLeaseOptions<T> = {
 
 // Work must settle before release, including after cancellation or lease loss.
 export const withAcquiredConcurrencyLease = async <T>({
+  availability,
   leaseMs,
   leaseId,
   initialAttemptAt,
@@ -216,25 +231,56 @@ export const withAcquiredConcurrencyLease = async <T>({
 }: AcquiredConcurrencyLeaseOptions<T>): Promise<Result<T, unknown>> => {
   let leaseDeadline = initialAttemptAt + leaseMs;
   const controller = new AbortController();
-  let leaseLost: ActionAdmissionError | null = null;
+  let leaseState: "active" | "degraded" | "lost" = "active";
   let stopped = false;
   let cancelScheduled: () => void = () => undefined;
   let renewal: Promise<void> | null = null;
 
   const loseLease = () => {
-    if (stopped || leaseLost !== null) {
+    if (leaseState !== "active") {
       return;
     }
-    leaseLost = new ActionAdmissionError({
+    if (stopped) {
+      if (availability.type === "best_effort") {
+        leaseState = "lost";
+        availability.onLost();
+      }
+      return;
+    }
+    const leaseLost = new ActionAdmissionError({
       message: "Action lease was lost",
       reason: "unavailable",
     });
+    leaseState = "lost";
     cancelScheduled();
+    if (availability.type === "best_effort") {
+      availability.onLost();
+    }
     controller.abort(leaseLost);
   };
 
+  const degrade = (event: LeaseDegradation) => {
+    if (leaseState !== "active") {
+      return;
+    }
+    if (availability.type !== "best_effort") {
+      panic("Required leases cannot degrade");
+    }
+    leaseState = "degraded";
+    cancelScheduled();
+    availability.onDegraded(event);
+  };
+
+  const deadline = () => {
+    if (availability.type === "best_effort") {
+      degrade({ phase: "renewal", reason: "lease_uncertain" });
+      return;
+    }
+    loseLease();
+  };
+
   const scheduleRenewal = (delayMs: number) => {
-    if (!stopped && leaseLost === null) {
+    if (!stopped && leaseState === "active") {
       cancelScheduled = timing.schedule(() => {
         renewal = Result.tryPromise({
           try: renew,
@@ -242,8 +288,12 @@ export const withAcquiredConcurrencyLease = async <T>({
         })
           .then((outcome) => {
             if (Result.isError(outcome)) {
-              observeFailure(outcome.error, { sink: RENEW_FAILURE });
-              loseLease();
+              if (availability.type === "best_effort") {
+                degrade({ phase: "renewal", reason: "unavailable" });
+              } else {
+                observeFailure(outcome.error, { sink: RENEW_FAILURE });
+                loseLease();
+              }
             }
             return undefined;
           })
@@ -257,17 +307,29 @@ export const withAcquiredConcurrencyLease = async <T>({
   const renew = async () => {
     const attemptAt = timing.now();
     if (attemptAt >= leaseDeadline) {
-      loseLease();
+      deadline();
       return;
     }
     const result = await execute(RENEW_SCRIPT, [leaseId, String(leaseMs)]);
     if (Result.isOk(result)) {
-      if (result.value !== 1) {
+      if (result.value === 0) {
         loseLease();
+        return;
+      }
+      if (result.value !== 1) {
+        if (availability.type === "best_effort") {
+          degrade({ phase: "renewal", reason: "invalid_reply" });
+        } else {
+          loseLease();
+        }
         return;
       }
       leaseDeadline = attemptAt + leaseMs;
       scheduleRenewal(Math.max(1, Math.floor(leaseMs / 2)));
+      return;
+    }
+    if (availability.type === "best_effort") {
+      degrade({ phase: "renewal", reason: "unavailable" });
       return;
     }
     observeFailure(result.error, { sink: RENEW_FAILURE });
@@ -280,7 +342,7 @@ export const withAcquiredConcurrencyLease = async <T>({
   };
 
   if (timing.now() >= leaseDeadline) {
-    loseLease();
+    deadline();
   } else {
     scheduleRenewal(Math.max(1, Math.floor(leaseMs / 2)));
   }
@@ -299,7 +361,13 @@ export const withAcquiredConcurrencyLease = async <T>({
     if (Result.isError(released)) {
       // The lease expires on its own. A release outage must not make a
       // completed action look retryable and invite duplicate side effects.
-      observeFailure(released.error, { sink: RELEASE_FAILURE });
+      if (availability.type === "best_effort") {
+        availability.onDegraded({ phase: "release", reason: "unavailable" });
+      } else {
+        observeFailure(released.error, { sink: RELEASE_FAILURE });
+      }
+    } else if (released.value !== 1 && availability.type === "best_effort") {
+      availability.onDegraded({ phase: "release", reason: "invalid_reply" });
     }
   }
   return settledAdmissionOutcome(outcome, controller.signal);

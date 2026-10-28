@@ -1,9 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
-import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpRequestContext } from "@/api/mcp/context";
 
@@ -13,10 +15,42 @@ import {
   concurrencyBusyRefusal,
   defaultAdmissionTiming,
   executeAdmissionCommand,
+  type LeaseDegradation,
   withAcquiredConcurrencyLease,
 } from "./concurrency-lease";
 
 const PUBLIC_READ_LEASE_MS = 30_000;
+
+type PublicReadDegradation = {
+  phase: "acquire" | LeaseDegradation["phase"];
+  reason: LeaseDegradation["reason"];
+};
+
+type PublicReadAdmissionOutcome<T> =
+  | { status: "leased"; value: T }
+  | { status: "degraded"; degradation: PublicReadDegradation; value: T };
+
+class PublicReadAdmissionCoordinationError extends TaggedError(
+  "PublicReadAdmissionCoordinationError",
+)<{
+  message: string;
+  phase: PublicReadDegradation["phase"];
+  outcome: "degraded" | "lease_lost";
+  reason: PublicReadDegradation["reason"] | "definite_loss";
+}> {
+  static {
+    declareFingerprintFields(this, ["phase", "reason"]);
+  }
+}
+
+const DEGRADED_FAILURE = failureSink({
+  event: "mcp.public_read.admission_degraded",
+  expected: [],
+});
+const LEASE_LOST_FAILURE = failureSink({
+  event: "mcp.public_read.lease_lost",
+  expected: [],
+});
 
 type McpPublicReadAdmissionOptions<T> = {
   caller: Pick<McpRequestContext, "organizationId" | "userId" | "clientId">;
@@ -26,6 +60,7 @@ type McpPublicReadAdmissionOptions<T> = {
   leaseMs?: number;
   timing?: AdmissionTiming;
   redis?: Parameters<typeof executeAdmissionCommand>[0]["redis"];
+  redisReady?: Parameters<typeof executeAdmissionCommand>[0]["redisReady"];
 };
 
 export const withMcpPublicReadAdmission = async <T>({
@@ -36,7 +71,10 @@ export const withMcpPublicReadAdmission = async <T>({
   leaseMs = PUBLIC_READ_LEASE_MS,
   timing = defaultAdmissionTiming,
   redis,
-}: McpPublicReadAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+  redisReady,
+}: McpPublicReadAdmissionOptions<T>): Promise<
+  Result<PublicReadAdmissionOutcome<T>, unknown>
+> => {
   // OAuth client IDs come from verified session claims, never tool arguments.
   // Other authenticated credentials for one user share the same caller pool.
   const callerHash = sha256Hex(
@@ -55,7 +93,7 @@ export const withMcpPublicReadAdmission = async <T>({
   const keys = [key, key];
   const leaseId = Bun.randomUUIDv7();
   const execute = async (script: string, args: string[]) =>
-    await executeAdmissionCommand({ script, keys, args, redis });
+    await executeAdmissionCommand({ script, keys, args, redis, redisReady });
   const initialAttemptAt = timing.now();
   const acquired = await execute(ACQUIRE_SCRIPT, [
     String(leaseMs),
@@ -63,22 +101,82 @@ export const withMcpPublicReadAdmission = async <T>({
     String(limit),
     leaseId,
   ]);
+  let admission:
+    | { status: "leased" }
+    | { status: "lease_lost" }
+    | { status: "degraded"; degradation: PublicReadDegradation } = {
+    status: "leased",
+  };
+  const degraded = (event: PublicReadDegradation) => {
+    if (admission.status !== "leased") {
+      return;
+    }
+    admission = { status: "degraded", degradation: event };
+    // Coordination context is closed and contains no caller or command data.
+    observeFailure(
+      new PublicReadAdmissionCoordinationError({
+        message: "Public-read admission is degraded",
+        outcome: "degraded",
+        ...event,
+      }),
+      {
+        sink: DEGRADED_FAILURE,
+        ctx: {
+          source: "mcp_public_read",
+          phase: event.phase,
+          operation: event.reason,
+        },
+      },
+    );
+  };
+  const lost = () => {
+    if (admission.status !== "leased") {
+      return;
+    }
+    admission = { status: "lease_lost" };
+    observeFailure(
+      new PublicReadAdmissionCoordinationError({
+        message: "Public-read lease was lost",
+        outcome: "lease_lost",
+        phase: "renewal",
+        reason: "definite_loss",
+      }),
+      {
+        sink: LEASE_LOST_FAILURE,
+        ctx: {
+          source: "mcp_public_read",
+          phase: "renewal",
+          operation: "definite_loss",
+        },
+      },
+    );
+  };
+  const runUnleased = async (event: PublicReadDegradation) => {
+    degraded(event);
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const requestSignal = signal ?? new AbortController().signal;
+        requestSignal.throwIfAborted();
+        return await run(requestSignal);
+      },
+      catch: (error: unknown) => error,
+    });
+    return outcome.map(
+      (value) => ({ status: "degraded", degradation: event, value }) as const,
+    );
+  };
   if (Result.isError(acquired)) {
-    return acquired;
+    return await runUnleased({ phase: "acquire", reason: "unavailable" });
   }
   const busy = concurrencyBusyRefusal(acquired.value);
   if (busy !== null) {
     return Result.err(busy);
   }
   if (acquired.value !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
+    return await runUnleased({ phase: "acquire", reason: "invalid_reply" });
   }
-  return await withAcquiredConcurrencyLease({
+  const outcome = await withAcquiredConcurrencyLease({
+    availability: { type: "best_effort", onDegraded: degraded, onLost: lost },
     leaseMs,
     leaseId,
     initialAttemptAt,
@@ -92,5 +190,21 @@ export const withMcpPublicReadAdmission = async <T>({
       combined.throwIfAborted();
       return await run(combined);
     },
+  });
+  return outcome.map((value) => {
+    switch (admission.status) {
+      case "leased":
+      case "lease_lost":
+        return { status: "leased", value } as const;
+      case "degraded":
+        return {
+          status: "degraded",
+          degradation: admission.degradation,
+          value,
+        } as const;
+      default:
+        admission satisfies never;
+        return panic("Unhandled public-read admission outcome");
+    }
   });
 };

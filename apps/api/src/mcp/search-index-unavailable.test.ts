@@ -1,3 +1,4 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
@@ -44,6 +45,7 @@ import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
+import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
@@ -518,7 +520,10 @@ describe("public corpus statement budgets", () => {
         dependencies: {
           admitPublicRead: async ({ run }) => {
             admitted.push(toolName);
-            return Result.ok(await run(new AbortController().signal));
+            return Result.ok({
+              status: "leased",
+              value: await run(new AbortController().signal),
+            });
           },
           dispatchGatewayToolCall: async () => {
             exercised.push(toolName);
@@ -598,6 +603,49 @@ describe("public corpus statement budgets", () => {
     });
   });
 
+  test("degraded public-read admission preserves success and its statement budget", async () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    const success = {
+      content: [{ type: "text", text: "read complete" }],
+    } satisfies CallToolResult;
+    try {
+      const result = await handleMcpToolCall({
+        toolName: "search_case_law",
+        args: {},
+        context: createContext(),
+        dependencies: {
+          admitPublicRead: async (options) =>
+            await withMcpPublicReadAdmission({
+              ...options,
+              redis: {
+                send: async () =>
+                  await Promise.reject(
+                    new TypeError("Coordination unavailable"),
+                  ),
+              },
+            }),
+          dispatchGatewayToolCall: async () => {
+            expect(getPublicReadStatementTimeoutMs()).toBe(
+              PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
+            );
+            return { type: "external_mcp", result: success };
+          },
+        },
+      });
+      expect(result).toEqual(success);
+      expect(
+        logs.records.filter(
+          ({ message }) => message === "mcp.public_read.admission_degraded",
+        ),
+      ).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(1);
+    } finally {
+      analytics.restore();
+      logs.restore();
+    }
+  });
+
   test("a public-read lease cancellation keeps its typed admission outcome", async () => {
     const context = createContext();
     const result = await handleMcpToolCall({
@@ -655,7 +703,10 @@ describe("public corpus statement budgets", () => {
       dependencies: {
         admitPublicRead: async ({ run }) => {
           slots += 1;
-          return Result.ok(await run(new AbortController().signal));
+          return Result.ok({
+            status: "leased",
+            value: await run(new AbortController().signal),
+          });
         },
         dispatchGatewayToolCall: async () => null,
       },

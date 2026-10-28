@@ -318,7 +318,10 @@ export const authorizedMcpContextForTest = <
   [authorizedMcpRequestContextBrand]: true,
   testDependencies: {
     admitPublicRead: async ({ run }) =>
-      Result.ok(await run(new AbortController().signal)),
+      Result.ok({
+        status: "leased",
+        value: await run(new AbortController().signal),
+      }),
     ...context.testDependencies,
   },
 });

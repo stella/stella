@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { waitForExternalState } from "@stll/property-testing/external-state";
@@ -22,6 +22,10 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 describe.skipIf(!enabled)(
   "public-read cancellation with PostgreSQL and Valkey",
   () => {
+    afterAll(async () => {
+      await rootDb.$client.close();
+    });
+
     test("lease loss cancels the running backend before releasing the caller slot", async () => {
       const databaseUrl =
         process.env["DATABASE_URL"] ?? panic("PostgreSQL URL required");
@@ -179,7 +183,7 @@ describe.skipIf(!enabled)(
                 redis: admissionRedis,
                 run: async () => "next",
               }),
-            ).toEqual(Result.ok("next"));
+            ).toEqual(Result.ok({ status: "leased", value: "next" }));
           } finally {
             finishRelease.resolve(undefined);
             await observer`SELECT pg_cancel_backend(pid) FROM unnest(${`{${activePids.join(",")}}`}::int[]) AS pid`;
@@ -188,7 +192,91 @@ describe.skipIf(!enabled)(
         });
       } finally {
         redis.close();
-        await rootDb.$client.close();
+      }
+    });
+
+    test("renewal outage lets the active PostgreSQL query finish degraded", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("PostgreSQL URL required");
+      if (!process.env["REDIS_URL"]) {
+        panic("Public-read cancellation requires Valkey");
+      }
+      const redis = createRedisClient({ storeClass: "cache" });
+      await redis.connect();
+      try {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const observer = openClient().sql;
+          const caller = {
+            organizationId: toSafeId<"organization">(
+              `renew_${Bun.randomUUIDv7()}`,
+            ),
+            userId: toSafeId<"user">("renew_user"),
+            clientId: "renew_client",
+          };
+          const entered = Promise.withResolvers<number>();
+          const renewReady = Promise.withResolvers<() => void>();
+          const renewalFailed = Promise.withResolvers<undefined>();
+          let signalAborted: boolean | undefined;
+          const admitted = withMcpPublicReadAdmission({
+            caller,
+            limit: 1,
+            redis: {
+              send: async (command, args) => {
+                if (args.at(0) === RENEW_SCRIPT) {
+                  renewalFailed.resolve(undefined);
+                  throw new Error("renewal transport unavailable");
+                }
+                return await redis.send(command, args);
+              },
+            },
+            timing: {
+              now: () => performance.now(),
+              schedule: (callback) => {
+                renewReady.resolve(callback);
+                return () => undefined;
+              },
+            },
+            run: async (signal) =>
+              await runWithPublicReadScope(
+                { budgetMs: 30_000, signal },
+                async () =>
+                  await publicLawReadDb(async (tx) => {
+                    const [row] = await tx.execute<{ pid: number }>(
+                      sql`SELECT pg_backend_pid() AS pid`,
+                    );
+                    if (row === undefined) {
+                      panic("Expected backend PID");
+                    }
+                    entered.resolve(row.pid);
+                    await tx.execute(sql`SELECT pg_sleep(0.5)`);
+                    signalAborted = signal.aborted;
+                    return "query-complete";
+                  }),
+              ),
+          });
+
+          const pid = await entered.promise;
+          const renew = await renewReady.promise;
+          await waitForExternalState({
+            description:
+              "public-read backend is running pg_sleep before renewal",
+            timeoutMs: 3000,
+            read: async () => {
+              const [row] =
+                await observer`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid = ${pid} AND state = 'active' AND wait_event = 'PgSleep') AS running`;
+              return row?.["running"] === true;
+            },
+          });
+          renew();
+          await renewalFailed.promise;
+          const outcome = await admitted;
+          expect(outcome).toMatchObject(
+            Result.ok({ status: "degraded", value: "query-complete" }),
+          );
+          expect(signalAborted).toBe(false);
+        });
+      } finally {
+        redis.close();
       }
     });
   },

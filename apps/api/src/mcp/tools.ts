@@ -784,7 +784,16 @@ export const handleMcpToolCall = async ({
       await runWithPublicReadScope({ budgetMs, signal }, run),
   });
   if (Result.isOk(admitted)) {
-    return admitted.value;
+    const outcome = admitted.value;
+    switch (outcome.status) {
+      case "leased":
+        return outcome.value;
+      case "degraded":
+        return outcome.value;
+      default:
+        outcome satisfies never;
+        return panic("Unhandled public-read admission outcome");
+    }
   }
   return internalErrorResult({
     mode,

@@ -1072,6 +1072,7 @@ const withEnabledActionAdmission = async <T>({
   }
 
   return await withAcquiredConcurrencyLease({
+    availability: { type: "required" },
     leaseMs: limits.leaseMs,
     leaseId,
     initialAttemptAt,
