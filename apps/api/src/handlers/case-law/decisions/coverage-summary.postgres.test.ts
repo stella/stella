@@ -68,6 +68,7 @@ describe.skipIf(!runPostgresTests)(
         read: async (tx) => {
           const rows = await tx.execute(
             sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+            "objects",
           );
           expect(rows).toHaveLength(1);
           expect(rows.at(0)?.["answer"]).toEqual(CASE_LAW_COVERAGE_FIXTURE);

@@ -203,7 +203,13 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
                 Transaction["query"]["invoices"]["findFirst"]
               >[0],
             ) => {
-              const predicate = options?.where?.RAW;
+              const where = options?.where;
+              if (typeof where !== "object" || where === null) {
+                return panic(
+                  "Invoice detail query omitted its scope predicate",
+                );
+              }
+              const predicate = where.RAW;
               if (typeof predicate !== "function") {
                 return panic(
                   "Invoice detail query omitted its scope predicate",

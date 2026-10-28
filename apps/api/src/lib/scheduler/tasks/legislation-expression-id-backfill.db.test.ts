@@ -23,6 +23,7 @@ describe.skipIf(!enabled)("expression backfill on PostgreSQL 18", () => {
     openDatabase: async () => {
       const version = await db.execute(
         sql`SELECT current_setting('server_version_num')::int AS version`,
+        "objects",
       );
       expect(version.at(0)?.["version"]).toBeGreaterThanOrEqual(180_000);
       expect(version.at(0)?.["version"]).toBeLessThan(190_000);

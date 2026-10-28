@@ -56,6 +56,7 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
     const version = (
       await db.execute(
         sql`SELECT current_setting('server_version_num')::int AS version`,
+        "objects",
       )
     ).at(0)?.["version"];
     expect(version).toBeGreaterThanOrEqual(180_000);
@@ -123,10 +124,17 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
   });
 
   test("the production exact count sees source-specific rows including an empty source", async () => {
-    const large = await db.execute(sourceStoredTotalCountQuery(first));
-    const small = await db.execute(sourceStoredTotalCountQuery(second));
+    const large = await db.execute(
+      sourceStoredTotalCountQuery(first),
+      "objects",
+    );
+    const small = await db.execute(
+      sourceStoredTotalCountQuery(second),
+      "objects",
+    );
     const empty = await db.execute(
       sourceStoredTotalCountQuery(createSafeId<"caseLawSource">()),
+      "objects",
     );
     expect(large.at(0)?.["total"]).toBe(700);
     expect(small.at(0)?.["total"]).toBe(300);

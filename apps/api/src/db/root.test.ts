@@ -59,7 +59,10 @@ if (!databaseUrl || !runPostgresTests) {
               }
 
               const queryResult = await Promise.race([
-                peerPool.db.execute(sql<ProbeRow>`SELECT 42::int AS value`),
+                peerPool.db.execute(
+                  sql<ProbeRow>`SELECT 42::int AS value`,
+                  "objects",
+                ),
                 Bun.sleep(queryTimeoutMs).then(() => "timeout" as const),
               ]);
 

@@ -496,9 +496,9 @@ if (!databaseUrl || !runPostgres) {
         ).toBeInstanceOf(InterleavingTimeout);
         expect(stepSettled).toBe(true);
         expect(
-          (await connection.db.execute(sql`SELECT 1 AS value`)).at(0)?.[
-            "value"
-          ],
+          (await connection.db.execute(sql`SELECT 1 AS value`, "objects")).at(
+            0,
+          )?.["value"],
         ).toBe(1);
       });
     }, 5000);
@@ -557,7 +557,9 @@ if (!databaseUrl || !runPostgres) {
         expect(performance.now() - started).toBeLessThan(2000);
         for (const { db } of Object.values(connections)) {
           expect(
-            (await db.execute(sql`SELECT 1 AS value`)).at(0)?.["value"],
+            (await db.execute(sql`SELECT 1 AS value`, "objects")).at(0)?.[
+              "value"
+            ],
           ).toBe(1);
         }
       });

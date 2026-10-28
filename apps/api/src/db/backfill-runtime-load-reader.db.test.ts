@@ -31,11 +31,14 @@ const restrictedRunner = (db: GatedTestDb, role: string, schema: string) => ({
         sql.raw(`SET LOCAL search_path TO ${schema}, pg_catalog, public`),
       );
       const visibility = (
-        await tx.execute(sql`
+        await tx.execute(
+          sql`
         SELECT current_user AS role,
           pg_has_role(current_user, 'pg_read_all_stats', 'USAGE')
           OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper) AS visible
-      `)
+      `,
+          "objects",
+        )
       ).at(0);
       expect(visibility?.["role"]).toBe(role);
       expect(visibility?.["visible"]).toBe(false);
@@ -76,6 +79,7 @@ describe.skipIf(!enabled)(
       const version = (
         await db.execute(
           sql`SELECT current_setting('server_version_num')::int AS version`,
+          "objects",
         )
       ).at(0);
       expect(version?.["version"]).toBeGreaterThanOrEqual(180_000);
@@ -90,6 +94,7 @@ describe.skipIf(!enabled)(
         const existing = (
           await tx.execute(
             sql`SELECT to_regprocedure('public.stella_database_load_indicators(regclass)') IS NOT NULL AS installed`,
+            "objects",
           )
         ).at(0);
         if (existing?.["installed"] === true) {
@@ -160,12 +165,14 @@ describe.skipIf(!enabled)(
         const access = (
           await tx.execute(
             sql`SELECT pg_catalog.has_table_privilege('stella_ingestion', ${target}::regclass, 'SELECT') AS permitted`,
+            "objects",
           )
         ).at(0);
         expect(access?.["permitted"]).toBe(true);
         const row = (
           await tx.execute(
             sql`SELECT * FROM public.stella_database_load_indicators(${target}::regclass)`,
+            "objects",
           )
         ).at(0);
         if (row === undefined) {
@@ -182,13 +189,16 @@ describe.skipIf(!enabled)(
         expect(row["observed_at"]).toBeInstanceOf(Date);
       });
       const definition = (
-        await db.execute(sql`
+        await db.execute(
+          sql`
         SELECT p.prosecdef AS definer, p.provolatile AS volatility, p.proconfig AS configuration,
           r.rolsuper OR pg_has_role(r.oid, 'pg_read_all_stats', 'USAGE') AS owner_visible,
           pg_get_function_result(p.oid) AS result
         FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
         WHERE p.oid = 'public.stella_database_load_indicators(regclass)'::regprocedure
-      `)
+      `,
+          "objects",
+        )
       ).at(0);
       expect(definition?.["definer"]).toBe(true);
       expect(definition?.["volatility"]).toBe("v");
@@ -261,6 +271,7 @@ describe.skipIf(!enabled)(
       const rights = (
         await db.execute(
           sql`SELECT has_function_privilege(${role}, 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS executable`,
+          "objects",
         )
       ).at(0);
       expect(rights?.["executable"]).toBe(false);
@@ -356,6 +367,7 @@ describe.skipIf(!enabled)(
                 const visible = (
                   await tx.execute(
                     sql`SELECT pg_has_role(${blindOwner}, 'pg_read_all_stats', 'USAGE') AS visible`,
+                    "objects",
                   )
                 ).at(0);
                 expect(visible?.["visible"]).toBe(false);
@@ -493,6 +505,7 @@ describe.skipIf(!enabled)(
             const other = (
               await tx.execute(
                 sql`SELECT * FROM public.stella_database_load_indicators(${`${schema}.pg_database`}::regclass)`,
+                "objects",
               )
             ).at(0);
             expect(other?.["vacuum_active"]).toBe(false);

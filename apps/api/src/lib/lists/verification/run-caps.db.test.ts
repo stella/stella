@@ -512,7 +512,10 @@ describe.skipIf(!enabled)(
           });
         } finally {
           const role = (
-            await fixture.db.execute(sql`SELECT current_user AS name`)
+            await fixture.db.execute(
+              sql`SELECT current_user AS name`,
+              "objects",
+            )
           ).at(0);
           if (typeof role?.["name"] !== "string") {
             panic("Fixture owner required");

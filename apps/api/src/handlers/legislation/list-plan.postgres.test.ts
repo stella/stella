@@ -146,10 +146,13 @@ describe.skipIf(!enabled)(
           }
           await db.execute(sql`SET search_path TO ${schema}, public`);
           // LIKE copies the production index definition but assigns a fixture name.
-          const indexes = await db.execute(sql`SELECT indexname FROM pg_indexes
+          const indexes = await db.execute(
+            sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
             AND indexdef LIKE '%(source_id, eli, version_valid_from, language)%'
-            AND indexdef NOT LIKE 'CREATE UNIQUE%'`);
+            AND indexdef NOT LIKE 'CREATE UNIQUE%'`,
+            "objects",
+          );
           expect(indexes).toHaveLength(1);
           const indexName = indexes.at(0)?.["indexname"];
           if (typeof indexName !== "string") {
@@ -159,10 +162,12 @@ describe.skipIf(!enabled)(
             await db.execute(sql`ALTER INDEX ${schema}.${sql.identifier(indexName)}
             RENAME TO ${sql.identifier(WORK_INDEX)}`);
           }
-          const trigramIndexes =
-            await db.execute(sql`SELECT indexname FROM pg_indexes
+          const trigramIndexes = await db.execute(
+            sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'legislation_documents'
-            AND indexdef LIKE '%gin%eli%gin_trgm_ops%'`);
+            AND indexdef LIKE '%gin%eli%gin_trgm_ops%'`,
+            "objects",
+          );
           expect(trigramIndexes).toHaveLength(1);
           const trigramIndexName = trigramIndexes.at(0)?.["indexname"];
           if (typeof trigramIndexName !== "string") {

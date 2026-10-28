@@ -66,14 +66,20 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
         }
         await db.execute(sql`SET search_path TO ${schema}, public`);
         const view = getViewConfig(publishedCaseLawDecisions);
+        if (view.query === undefined) {
+          panic("Fixture view must have a query definition");
+        }
         await db.execute(sql`CREATE VIEW ${schema}.${sql.identifier(view.name)}
           AS (${sql.raw(new PgDialect().sqlToQuery(view.query).sql)})`);
         // Remove any cloned published twin, so the guard exercises the online
         // declaration even when the template already has this index installed.
-        const clones = await db.execute(sql`SELECT indexname FROM pg_indexes
+        const clones = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
             AND indexdef LIKE '%(country, court, COALESCE(decision_date%'
-            AND indexdef LIKE '% WHERE %'`);
+            AND indexdef LIKE '% WHERE %'`,
+          "objects",
+        );
         for (const row of clones) {
           const name = row["indexname"];
           if (typeof name !== "string") {

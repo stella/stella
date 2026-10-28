@@ -47,12 +47,15 @@ if (!databaseUrl || !enabled) {
           // expression gives the batch a deliberately different collation.
           await tx.execute(sql`CREATE TEMP VIEW organization AS
             SELECT id COLLATE "en-x-icu" AS id FROM public.organization`);
-          const localeRows = await tx.execute(sql`SELECT id FROM organization
+          const localeRows = await tx.execute(
+            sql`SELECT id FROM organization
             WHERE id IN (${sql.join(
               ids.map((id) => sql`${id}`),
               sql`, `,
             )})
-            ORDER BY id COLLATE "en-x-icu"`);
+            ORDER BY id COLLATE "en-x-icu"`,
+            "objects",
+          );
           expect(localeRows.map((row) => row["id"])).not.toEqual(sorted);
           const parents = await lockForWrite(tx, { organizationIds: ids });
           expect([...parents.organizationIds]).toEqual(sorted);

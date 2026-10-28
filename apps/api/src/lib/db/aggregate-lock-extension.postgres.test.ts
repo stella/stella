@@ -173,7 +173,10 @@ if (!databaseUrl || !enabled) {
                 expect(acquisition.rows.map((row) => row.id)).toEqual(
                   extra === "other-only" ? [] : [organizationId],
                 );
-                const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+                const healthy = await tx.execute(
+                  sql`SELECT 1 AS healthy`,
+                  "objects",
+                );
                 expect(healthy.at(0)?.["healthy"]).toBe(1);
                 expect(
                   await withAggregateLock({
@@ -339,9 +342,11 @@ if (!databaseUrl || !enabled) {
               expect(AggregateLockBusy.is(second.error)).toBe(true);
               const firstHealthy = await firstTx.execute(
                 sql`SELECT 1 AS healthy`,
+                "objects",
               );
               const secondHealthy = await secondTx.execute(
                 sql`SELECT 1 AS healthy`,
+                "objects",
               );
               expect(firstHealthy.at(0)?.["healthy"]).toBe(1);
               expect(secondHealthy.at(0)?.["healthy"]).toBe(1);
@@ -383,7 +388,10 @@ if (!databaseUrl || !enabled) {
                 if (acquisition.status === "busy") {
                   expect(AggregateLockBusy.is(acquisition.error)).toBe(true);
                 }
-                const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+                const healthy = await tx.execute(
+                  sql`SELECT 1 AS healthy`,
+                  "objects",
+                );
                 expect(healthy.at(0)?.["healthy"]).toBe(1);
               });
             });
@@ -405,9 +413,11 @@ if (!databaseUrl || !enabled) {
               }),
             ).toEqual({ status: "locked" });
             await contender.transaction(async (otherTx) => {
-              const legacy =
-                await otherTx.execute(sql`SELECT pg_try_advisory_xact_lock(
-              ${0x0f_10_cc_aa}::integer, hashtext(${`flows:${organizationId}`})) AS acquired`);
+              const legacy = await otherTx.execute(
+                sql`SELECT pg_try_advisory_xact_lock(
+              ${0x0f_10_cc_aa}::integer, hashtext(${`flows:${organizationId}`})) AS acquired`,
+                "objects",
+              );
               expect(legacy.at(0)?.["acquired"]).toBe(false);
             });
             await contender.transaction(async (otherTx) => {
@@ -476,7 +486,10 @@ if (!databaseUrl || !enabled) {
                   tx,
                 }),
               ).toEqual({ status: "locked" });
-              const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+              const healthy = await tx.execute(
+                sql`SELECT 1 AS healthy`,
+                "objects",
+              );
               expect(healthy.at(0)?.["healthy"]).toBe(1);
               expect(
                 await rejectionOf(
@@ -522,7 +535,10 @@ if (!databaseUrl || !enabled) {
                 panic("The other session must contend on the organization row");
               }
               expect(AggregateLockBusy.is(refusal.error)).toBe(true);
-              const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+              const healthy = await tx.execute(
+                sql`SELECT 1 AS healthy`,
+                "objects",
+              );
               expect(healthy.at(0)?.["healthy"]).toBe(1);
               expect(
                 await withAggregateLock({
@@ -597,6 +613,7 @@ if (!databaseUrl || !enabled) {
               await inFixture(tx, schema);
               const effects = await tx.execute(
                 sql`SELECT count(*)::int AS count FROM effects`,
+                "objects",
               );
               expect(effects.at(0)?.["count"]).toBe(0);
             });
@@ -664,7 +681,10 @@ if (!databaseUrl || !enabled) {
                 if (acquisition.status === "busy") {
                   expect(AggregateLockBusy.is(acquisition.error)).toBe(true);
                 }
-                const healthy = await tx.execute(sql`SELECT 1 AS healthy`);
+                const healthy = await tx.execute(
+                  sql`SELECT 1 AS healthy`,
+                  "objects",
+                );
                 expect(healthy.at(0)?.["healthy"]).toBe(1);
                 expect(
                   await rejectionOf(
@@ -716,13 +736,17 @@ if (!databaseUrl || !enabled) {
             const insertedId = createSafeId<"workspace">();
             await contender.transaction(async (otherTx) => {
               await inFixture(otherTx, schema);
-              const inserted = await otherTx.execute(sql`
+              const inserted = await otherTx.execute(
+                sql`
               INSERT INTO children (id, organization_id)
-              VALUES (${insertedId}::uuid, ${organizationId}) RETURNING id`);
+              VALUES (${insertedId}::uuid, ${organizationId}) RETURNING id`,
+                "objects",
+              );
               expect(inserted.at(0)?.["id"]).toBe(insertedId);
             });
             const committed = await tx.execute(
               sql`SELECT id FROM children WHERE id = ${insertedId}::uuid`,
+              "objects",
             );
             expect(committed.at(0)?.["id"]).toBe(insertedId);
           });

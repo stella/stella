@@ -75,18 +75,22 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           publishedCaseLawDecisions,
           unredactedCaseLawDecisions,
         ]) {
-          // Both views are defined with `.as()`, so drizzle types the query
-          // as present; an `.existing()` view would fail to compile here.
           const config = getViewConfig(view);
+          if (config.query === undefined) {
+            panic("Fixture view must have a query definition");
+          }
           const rendered = dialect.sqlToQuery(config.query);
           await db.execute(sql`CREATE VIEW ${schema}.${sql.identifier(config.name)}
             AS (${sql.raw(rendered.sql)})`);
         }
         // The coverage index is still online-only: exercise its production DDL
         // rather than depending on what this Postgres fixture has installed.
-        const existing = await db.execute(sql`SELECT indexname FROM pg_indexes
+        const existing = await db.execute(
+          sql`SELECT indexname FROM pg_indexes
           WHERE schemaname = ${schemaName} AND tablename = 'case_law_decisions'
-            AND indexdef LIKE '%(source_id, decision_date, id)%'`);
+            AND indexdef LIKE '%(source_id, decision_date, id)%'`,
+          "objects",
+        );
         for (const row of existing) {
           const indexName = row["indexname"];
           if (typeof indexName !== "string") {

@@ -70,6 +70,9 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             unredactedCaseLawDecisions,
           ]) {
             const config = getViewConfig(view);
+            if (config.query === undefined) {
+              panic("Fixture view must have a query definition");
+            }
             const rendered = dialect.sqlToQuery(config.query);
             // db-await-in-loop: bind each production view to the isolated corpus.
             await tx.execute(sql`CREATE VIEW ${schema}.${sql.identifier(config.name)}

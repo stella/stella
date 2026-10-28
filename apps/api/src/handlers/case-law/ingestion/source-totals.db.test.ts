@@ -83,6 +83,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     const version = (
       await db.execute(
         sql`SELECT current_setting('server_version_num')::int AS version`,
+        "objects",
       )
     ).at(0)?.["version"];
     expect(version).toBeGreaterThanOrEqual(180_000);
@@ -598,9 +599,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       ): Promise<T> =>
         await db.transaction(async (tx) => {
           const value = await fn(tx);
-          const role = (await tx.execute(sql`SELECT current_user AS role`)).at(
-            0,
-          )?.["role"];
+          const role = (
+            await tx.execute(sql`SELECT current_user AS role`, "objects")
+          ).at(0)?.["role"];
           if (typeof role === "string") {
             observedRoles.push(role);
           }
@@ -946,10 +947,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           return await callback(asTestRaw<Transaction>(tx));
         });
       const firstPid = (
-        await firstDb.execute(sql`SELECT pg_backend_pid() AS pid`)
+        await firstDb.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
       ).at(0)?.["pid"];
       const secondPid = (
-        await secondDb.execute(sql`SELECT pg_backend_pid() AS pid`)
+        await secondDb.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
       ).at(0)?.["pid"];
       if (typeof firstPid !== "number" || typeof secondPid !== "number") {
         throw new TypeError("Expected PostgreSQL backend identifiers");
@@ -1741,7 +1742,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           sql.raw(`SET search_path TO ${schema}, public`),
         );
         const pid = (
-          await worker.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          await worker.db.execute(
+            sql`SELECT pg_backend_pid() AS pid`,
+            "objects",
+          )
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing independent worker pid");
@@ -2050,7 +2054,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     });
     expect(budgets).toEqual([120_000, 120_000]);
     const fixturePid = (
-      await db.execute(sql`SELECT pg_backend_pid() AS pid`)
+      await db.execute(sql`SELECT pg_backend_pid() AS pid`, "objects")
     ).at(0)?.["pid"];
     for (const pid of pids) {
       expect(pid).not.toBe(fixturePid);
@@ -2059,9 +2063,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
 
   test("the production database clock ignores a worker wall clock that is a month ahead", async () => {
     const sourceId = await seedCountedSource(0);
-    const before = (await db.execute(sql`SELECT clock_timestamp() AS now`)).at(
-      0,
-    )?.["now"];
+    const before = (
+      await db.execute(sql`SELECT clock_timestamp() AS now`, "objects")
+    ).at(0)?.["now"];
     if (!(before instanceof Date)) {
       panic("Expected PostgreSQL database clock Date");
     }
@@ -2079,9 +2083,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     } finally {
       setSystemTime();
     }
-    const after = (await db.execute(sql`SELECT clock_timestamp() AS now`)).at(
-      0,
-    )?.["now"];
+    const after = (
+      await db.execute(sql`SELECT clock_timestamp() AS now`, "objects")
+    ).at(0)?.["now"];
     if (!(after instanceof Date)) {
       panic("Expected PostgreSQL database clock Date");
     }
