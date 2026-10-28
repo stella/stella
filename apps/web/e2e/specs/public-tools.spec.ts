@@ -185,25 +185,31 @@ test("anonymous visitors can search and browse by legal task", async ({
   }).toPass({ timeout: 15_000 });
 
   // Resolve canonical chrome values through CSS without mirroring each palette.
-  const chromeStyle = matterChromeStyle(null);
-  expect(Object.keys(chromeStyle).length).toBeGreaterThan(0);
+  // Pass plain entries across Playwright's serialization boundary so its
+  // recursive argument type does not expand React's entire CSSProperties.
+  const chromeProperties = Object.entries(matterChromeStyle(null)).map(
+    ([name, value]) => {
+      if (typeof value !== "string") {
+        throw new TypeError("Chrome fixture values must be strings");
+      }
+      return { name, value };
+    },
+  );
+  expect(chromeProperties.length).toBeGreaterThan(0);
   const chromeValues = await page
     .locator('[data-slot="workspace-shell"]')
     .filter({ has: search })
-    .evaluate((shell, style) => {
+    .evaluate((shell, properties) => {
       const probe = document.createElement("span");
       probe.hidden = true;
-      for (const [name, value] of Object.entries(style)) {
-        if (typeof value !== "string") {
-          throw new TypeError("Chrome fixture values must be strings");
-        }
+      for (const { name, value } of properties) {
         probe.style.setProperty(name, value);
       }
       shell.append(probe);
       const rootStyle = getComputedStyle(document.documentElement);
       const shellStyle = getComputedStyle(shell);
       const probeStyle = getComputedStyle(probe);
-      const values = Object.keys(style).map((name) => ({
+      const values = properties.map(({ name }) => ({
         name,
         rootValue: rootStyle.getPropertyValue(name).trim(),
         shellValue: shellStyle.getPropertyValue(name).trim(),
@@ -211,7 +217,7 @@ test("anonymous visitors can search and browse by legal task", async ({
       }));
       probe.remove();
       return values;
-    }, chromeStyle);
+    }, chromeProperties);
   for (const { name, rootValue, shellValue, expectedValue } of chromeValues) {
     expect(expectedValue, name).not.toBe("");
     expect(rootValue, name).toBe("");
