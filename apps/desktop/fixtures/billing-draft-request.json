@@ -29,5 +29,11 @@
         }
       ]
     }
+  ],
+  "failures": [
+    { "type": "refused" },
+    { "type": "guidelinesRequired" },
+    { "type": "tooLarge" },
+    { "type": "failed" }
   ]
 }

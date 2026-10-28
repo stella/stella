@@ -108,6 +108,32 @@ export const draftRequestEntries = ({
     return { ...entry, evidence: { documentNames, windowTitles } };
   });
 
+const DRAFT_FAILURE_MESSAGES = {
+  refused: "aiDraftRefused",
+  guidelinesRequired: "aiDraftGuidelinesRequired",
+  tooLarge: "aiDraftTooLarge",
+  failed: "aiDraftFailed",
+} as const;
+
+const isDraftFailure = (
+  type: unknown,
+): type is keyof typeof DRAFT_FAILURE_MESSAGES =>
+  typeof type === "string" && Object.hasOwn(DRAFT_FAILURE_MESSAGES, type);
+
+/**
+ * The message for a failed drafting request: the shell's typed refusals the
+ * user can act on, and one generic failure for anything else.
+ */
+export const draftFailureMessage = (cause: unknown) => {
+  const type =
+    typeof cause === "object" && cause !== null && "type" in cause
+      ? cause.type
+      : undefined;
+  return isDraftFailure(type)
+    ? DRAFT_FAILURE_MESSAGES[type]
+    : DRAFT_FAILURE_MESSAGES.failed;
+};
+
 /** One structural change a draft proposes; scalar changes edit the entry. */
 export type DraftStructure = Extract<
   DesktopBillingDraftOperation,

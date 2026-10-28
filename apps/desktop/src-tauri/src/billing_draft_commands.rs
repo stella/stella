@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::{
   account::AccountState,
-  billing_draft_submit::{self, Consent, DraftRequest},
+  billing_draft_submit::{self, Consent, DraftError, DraftRequest},
   feature_gate::FeatureGates,
   local_window::ActivityCaller,
   time_entry_commands::{linked_account, require_account},
@@ -58,10 +58,12 @@ pub async fn billing_draft_create_confirmed(
   gates: State<'_, FeatureGates>,
   accounts: State<'_, AccountState>,
   request: DraftRequest,
-) -> Result<serde_json::Value, String> {
-  let account = linked_account(&caller, &gates, &accounts).await?;
+) -> Result<serde_json::Value, DraftError> {
+  let account = linked_account(&caller, &gates, &accounts)
+    .await
+    .map_err(|_| DraftError::Failed)?;
   let review = billing_draft_submit::draft(&account, &request).await?;
-  require_account(&caller, &gates, &account)?;
+  require_account(&caller, &gates, &account).map_err(|_| DraftError::Failed)?;
   drop(account);
   Ok(review)
 }

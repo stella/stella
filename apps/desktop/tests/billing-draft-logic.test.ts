@@ -15,6 +15,7 @@ import billingDraftRequest from "../fixtures/billing-draft-request.json" with { 
 import timeEntryBatchRequest from "../fixtures/time-entry-batch-request.json" with { type: "json" };
 import {
   confirmedBatchItem,
+  draftFailureMessage,
   draftRequestEntries,
   draftScalars,
   materializeStructure,
@@ -181,6 +182,27 @@ describe("draft request", () => {
       expect(
         v.safeParse(desktopBillingDraftRequestSchema, request).success,
       ).toBe(true);
+    }
+  });
+
+  test("names each failure the desktop shell reports", () => {
+    const failureKeys = billingDraftRequest.failures.map(draftFailureMessage);
+    expect(failureKeys).toEqual([
+      "aiDraftRefused",
+      "aiDraftGuidelinesRequired",
+      "aiDraftTooLarge",
+      "aiDraftFailed",
+    ]);
+    for (const cause of [
+      new Error("ipc"),
+      "failed",
+      null,
+      { type: "toString" },
+    ]) {
+      expect(draftFailureMessage(cause)).toBe("aiDraftFailed");
+    }
+    for (const key of failureKeys) {
+      expect(messages.activity).toHaveProperty(key);
     }
   });
 

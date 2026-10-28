@@ -67,6 +67,54 @@ impl DraftRequest {
   }
 }
 
+/// Why a drafting request failed, as the window shows it. The server's
+/// refusals the user can act on keep their meaning; anything else is one
+/// failure whose cause stays in the local log.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum DraftError {
+  /// The organization turned drafting off, consent is missing, or a selected
+  /// matter or time entry creation is no longer available.
+  Refused,
+  /// The firm has not added a billing guideline file.
+  GuidelinesRequired,
+  /// The selected entries bring more context than one request may carry.
+  TooLarge,
+  Failed,
+}
+
+impl DraftError {
+  fn from_status(status: u16) -> Self {
+    match status {
+      403 => Self::Refused,
+      409 => Self::GuidelinesRequired,
+      413 => Self::TooLarge,
+      _ => Self::Failed,
+    }
+  }
+}
+
+impl From<ResponseFailure> for DraftError {
+  fn from(failure: ResponseFailure) -> Self {
+    match failure {
+      ResponseFailure::Status(status) => Self::from_status(status),
+      ResponseFailure::Failed => Self::Failed,
+    }
+  }
+}
+
+/// A non-success status, or a failure whose cause is already logged.
+enum ResponseFailure {
+  Status(u16),
+  Failed,
+}
+
+impl From<ResponseFailure> for String {
+  fn from(_: ResponseFailure) -> Self {
+    FAILURE.to_string()
+  }
+}
+
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Consent {
@@ -93,26 +141,31 @@ fn client(timeout: Duration) -> Result<DesktopHttpClient, String> {
 /// only bounds its size and requires JSON.
 async fn json_response(
   request: crate::http_client::DeviceProofRequest,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, ResponseFailure> {
+  let failed = |_: String| ResponseFailure::Failed;
   let mut response = request
     .send()
     .await
-    .map_err(request_cause_logged(FAILURE))?;
+    .map_err(request_cause_logged(FAILURE))
+    .map_err(failed)?;
   if !response.status().is_success() {
-    return Err(FAILURE.to_string());
+    return Err(ResponseFailure::Status(response.status().as_u16()));
   }
   let mut body = Vec::new();
   while let Some(chunk) = response
     .chunk()
     .await
-    .map_err(request_cause_logged(FAILURE))?
+    .map_err(request_cause_logged(FAILURE))
+    .map_err(failed)?
   {
     if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
-      return Err(FAILURE.to_string());
+      return Err(ResponseFailure::Failed);
     }
     body.extend_from_slice(&chunk);
   }
-  serde_json::from_slice(&body).map_err(json_cause_logged(FAILURE))
+  serde_json::from_slice(&body)
+    .map_err(json_cause_logged(FAILURE))
+    .map_err(failed)
 }
 
 fn settings_url(account: &AccountRequest) -> String {
@@ -123,13 +176,15 @@ fn settings_url(account: &AccountRequest) -> String {
 }
 
 pub async fn settings(account: &AccountRequest) -> Result<serde_json::Value, String> {
-  json_response(crate::http_client::device_proof_request(
-    client(SETTINGS_TIMEOUT)?.get(settings_url(account)),
-    &account.device_key,
-    Some(&account.credential.key),
-    None,
-  )?)
-  .await
+  Ok(
+    json_response(crate::http_client::device_proof_request(
+      client(SETTINGS_TIMEOUT)?.get(settings_url(account)),
+      &account.device_key,
+      Some(&account.credential.key),
+      None,
+    )?)
+    .await?,
+  )
 }
 
 pub async fn set_consent(
@@ -155,34 +210,43 @@ async fn update_settings(
   account: &AccountRequest,
   update: &SettingsUpdate<'_>,
 ) -> Result<serde_json::Value, String> {
-  json_response(crate::http_client::device_proof_request(
-    client(SETTINGS_TIMEOUT)?
-      .put(settings_url(account))
-      .json(update),
-    &account.device_key,
-    Some(&account.credential.key),
-    None,
-  )?)
-  .await
+  Ok(
+    json_response(crate::http_client::device_proof_request(
+      client(SETTINGS_TIMEOUT)?
+        .put(settings_url(account))
+        .json(update),
+      &account.device_key,
+      Some(&account.credential.key),
+      None,
+    )?)
+    .await?,
+  )
 }
 
 pub async fn draft(
   account: &AccountRequest,
   request: &DraftRequest,
-) -> Result<serde_json::Value, String> {
-  request.validate()?;
-  json_response(crate::http_client::device_proof_request(
-    client(DRAFT_TIMEOUT)?
-      .post(format!(
-        "{}/v1/desktop/billing-drafts",
-        account.api_base_url
-      ))
-      .json(request),
-    &account.device_key,
-    Some(&account.credential.key),
-    None,
-  )?)
-  .await
+) -> Result<serde_json::Value, DraftError> {
+  let failed = |_: String| DraftError::Failed;
+  request.validate().map_err(failed)?;
+  Ok(
+    json_response(
+      crate::http_client::device_proof_request(
+        client(DRAFT_TIMEOUT)
+          .map_err(failed)?
+          .post(format!(
+            "{}/v1/desktop/billing-drafts",
+            account.api_base_url
+          ))
+          .json(request),
+        &account.device_key,
+        Some(&account.credential.key),
+        None,
+      )
+      .map_err(failed)?,
+    )
+    .await?,
+  )
 }
 
 #[cfg(test)]
@@ -291,6 +355,27 @@ mod tests {
       .validate()
       .is_ok()
     );
+  }
+
+  /// The window maps these to its messages; the shared fixture keeps both
+  /// sides on the same names.
+  #[test]
+  fn draft_errors_match_the_fixture() {
+    let fixture: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/billing-draft-request.json"))
+        .unwrap();
+    let errors = [
+      DraftError::from_status(403),
+      DraftError::from_status(409),
+      DraftError::from_status(413),
+      DraftError::from_status(500),
+      DraftError::from(ResponseFailure::Failed),
+    ];
+    assert_eq!(
+      serde_json::to_value(&errors[..4]).unwrap(),
+      fixture["failures"]
+    );
+    assert_eq!(errors[4], DraftError::Failed);
   }
 
   #[test]

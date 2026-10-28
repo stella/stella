@@ -29,6 +29,7 @@ import {
 import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import {
   absorbedGroupIds,
+  draftFailureMessage,
   draftRequestEntries,
   draftsByGroup,
   draftStructure,
@@ -213,8 +214,8 @@ export const useBillingDraftSession = ({
     const request = ++draftRequest.current;
     onError(null);
     setDrafting({ type: "drafting", groupIds: groups.map(({ id }) => id) });
-    void Result.tryPromise(
-      async () =>
+    void Result.tryPromise({
+      try: async () =>
         await invoke<unknown>("billing_draft_create_confirmed", {
           request: {
             entries: draftRequestEntries({
@@ -227,7 +228,8 @@ export const useBillingDraftSession = ({
             ...(previousResult === null ? {} : { previousResult }),
           },
         }),
-    ).then(async (response) => {
+      catch: draftFailureMessage,
+    }).then(async (response) => {
       if (request !== draftRequest.current) {
         return undefined;
       }
@@ -237,7 +239,7 @@ export const useBillingDraftSession = ({
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
-        onError(t("aiDraftFailed"));
+        onError(t(response.error));
         return undefined;
       }
       const parsed = await desktopBillingDraftReviewSchema[
