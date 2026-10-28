@@ -2861,7 +2861,7 @@ const config = defineConfig({
             // same file still fails.
             allowedFiles: [
               {
-                path: "apps/web/src/components/globe.tsx",
+                path: "apps/web/src/routes/onboarding/-components/globe.tsx",
                 reason:
                   "Decorative globe canvas fades in once after it draws; nothing waits on it.",
                 utilities: ["duration-700"],
