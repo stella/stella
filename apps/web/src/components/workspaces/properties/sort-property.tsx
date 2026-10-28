@@ -2,16 +2,16 @@ import { useId } from "react";
 
 import { useTranslations } from "use-intl";
 
-import { SORT_DIRECTIONS } from "@stll/api-contract/column-sort";
-import type {
-  ColumnSortKind,
-  SortDirection,
-} from "@stll/api-contract/column-sort";
 import { Button } from "@stll/ui/button";
 import { ArrowDownIcon, ArrowUpIcon, CheckIcon } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { SORT_DIRECTIONS } from "@stll/workspace-ui/column-sort";
+import type {
+  ColumnSortKind,
+  SortDirection,
+} from "@stll/workspace-ui/column-sort";
 
-import { SORT_DIRECTION_LABEL_KEYS } from "@/components/workspaces/properties/sort-property.logic";
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import type { SortDirectionOffers } from "@/components/workspaces/properties/sort-property.logic";
 import type {
   TableColumn,
@@ -38,6 +38,7 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
   kind,
 }: SortPropertyProps<TRow>) => {
   const t = useTranslations();
+  const labels = sortDirectionLabels((key) => t(key));
   const reasonIdPrefix = useId();
   const canSort = column.getCanSort();
   const active = column.getIsSorted();
@@ -66,7 +67,7 @@ export const SortProperty = <TRow extends TableRowData = TableTreeNode>({
             >
               <Icon />
               <span className="flex-1 text-start">
-                {t(SORT_DIRECTION_LABEL_KEYS[kind][direction])}
+                {labels[kind][direction]}
               </span>
               {isActive && <CheckIcon aria-hidden />}
             </Button>

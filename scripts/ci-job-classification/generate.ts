@@ -15,7 +15,11 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import { isPrivilegedJobClosure, ReviewRequiredError } from "./review";
+import {
+  isPrivilegedJobClosure,
+  isRepositoryWritingJob,
+  ReviewRequiredError,
+} from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -287,7 +291,11 @@ const createDocumentDigest = ({
   return documentDigest;
 };
 
-export type DerivedJob = { digest: string; privileged: boolean };
+export type DerivedJob = {
+  digest: string;
+  privileged: boolean;
+  writesRepository: boolean;
+};
 type ReviewJobsOptions = DocumentDigestOptions & {
   decisions: v.InferOutput<typeof DECISIONS>;
   documentDigest: (id: string) => string;
@@ -368,16 +376,24 @@ const reviewJobs = ({
         const target = node.edges[reference];
         return target ? [target] : [];
       });
+      const reachable = reachableDocuments({
+        initialTargets: targets,
+        nodes,
+        parsedDocuments,
+      });
       const privileged = isPrivilegedJobClosure({
         kind: decision?.kind,
         shape: job.shape,
-        reachableDocuments: reachableDocuments({
-          initialTargets: targets,
-          nodes,
-          parsedDocuments,
+        reachableDocuments: reachable,
+      });
+      derivedJobs.set(key, {
+        digest,
+        privileged,
+        writesRepository: isRepositoryWritingJob({
+          shape: job.shape,
+          reachableDocuments: reachable,
         }),
       });
-      derivedJobs.set(key, { digest, privileged });
       if (!decision || decision.reviewedDigest !== digest) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",

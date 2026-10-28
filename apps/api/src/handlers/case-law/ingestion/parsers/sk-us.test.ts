@@ -333,3 +333,195 @@ describe("numbered reasoning set without blank lines", () => {
     ]);
   });
 });
+
+describe("page numbers the markup keeps", () => {
+  /** The court's markup: one span, a `<br/>` after every printed line. */
+  const markup = (lines: readonly string[]) =>
+    parse(
+      `<html><body><div><span style="font-size: 12px; ">${lines
+        .map((line) => `${line}<br/>`)
+        .join("\n")}</span></div></body></html>`,
+    ).documentAst.blocks;
+  const texts = (lines: readonly string[]) =>
+    markup(lines).flatMap((block) =>
+      block.type === "paragraph" || block.type === "heading"
+        ? [block.plainText]
+        : [],
+    );
+  /** A page's worth of prose: about 1,500 characters in 20 lines. */
+  const page = (label: string) =>
+    Array.from(
+      { length: 20 },
+      (_, line) =>
+        `${label} ${line} pokračuje ďalej a opisuje priebeh konania pred súdom,`,
+    );
+
+  test.each([
+    ["an amount", "2 eurá."],
+    ["a docket", "5 Cdo 12/2020 rozhodol."],
+    ["a paragraph number", "2. Sťažovateľ podal sťažnosť."],
+  ])(
+    "a number opening a line after a blank line keeps it when no page sequence confirms it: %s",
+    (_, line) => {
+      expect(
+        texts(["O d ô v o d n e n i e :", "", "Zostáva zaplatiť", "", line]),
+      ).toEqual(["Odôvodnenie:", "Zostáva zaplatiť", line]);
+    },
+  );
+
+  test("numbers glued to body lines a page apart do not vouch for each other", () => {
+    for (const [third, fourth] of [
+      ["3 eurá.", "4 eurá."],
+      ["3 Ďalšie odôvodnenie.", "4 Ďalšie odôvodnenie."],
+    ] as const) {
+      const paragraphs = texts([
+        "Odôvodnenie:",
+        "Text odôvodnenia. ".repeat(130),
+        "",
+        third,
+        "Text odôvodnenia. ".repeat(70),
+        "",
+        fourth,
+      ]);
+      expect(paragraphs.some((text) => text.startsWith(third))).toBe(true);
+      expect(paragraphs.at(-1)).toBe(fourth);
+    }
+  });
+
+  test("an amount where a page's number is due keeps its number, and the pages stay unproven", () => {
+    const paragraphs = texts([
+      "O d ô v o d n e n i e :",
+      "",
+      ...page("Prvá strana"),
+      "",
+      "2",
+      "",
+      ...page("Druhá strana"),
+      "",
+      "3 eurá za každý deň omeškania.",
+      ...page("Tretia strana"),
+      "",
+      "4",
+    ]);
+    expect(
+      paragraphs.some((text) =>
+        text.startsWith("3 eurá za každý deň omeškania."),
+      ),
+    ).toBe(true);
+  });
+
+  test("an amount on a page of a numbered document is not that page's number", () => {
+    const paragraphs = texts([
+      "O d ô v o d n e n i e :",
+      "",
+      ...page("Prvá strana"),
+      "Zostáva zaplatiť",
+      "",
+      "2 eurá za každý deň omeškania.",
+      ...page("Ešte prvá strana"),
+      "",
+      "2 strana sa začína tu.",
+      ...page("Druhá strana"),
+      "",
+      "3 Tretia strana sa začína tu.",
+      ...page("Tretia strana"),
+      "",
+      "4",
+    ]);
+    expect(
+      paragraphs.some((text) =>
+        text.startsWith("2 eurá za každý deň omeškania."),
+      ),
+    ).toBe(true);
+    // The page sequence still reads: both pages go on with the sentence the
+    // page before cut, their numbers gone.
+    for (const opening of [
+      "strana sa začína tu.",
+      "Tretia strana sa začína tu.",
+    ]) {
+      expect(
+        paragraphs.some((text) => text.includes(`pred súdom, ${opening}`)),
+      ).toBe(true);
+    }
+  });
+
+  test("a standalone footer after a part title stays out of the heading", () => {
+    const blocks = markup([
+      "Odôvodnenie:",
+      "",
+      "I.",
+      ...page("Prvá strana"),
+      "Predchádzajúca časť skončila.",
+      "",
+      "II.",
+      "Argumentácia",
+      "2",
+      "",
+      "1. Nový odsek.",
+      ...page("Druhá strana"),
+      "",
+      "3",
+    ]);
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading" ? [block.plainText] : [],
+    );
+    expect(headings).toContain("II. Argumentácia");
+    expect(headings).not.toContain("II. Argumentácia 2");
+  });
+
+  test("a page number on a line of its own does not join a part heading to the page before", () => {
+    const blocks = markup([
+      "O d ô v o d n e n i e :",
+      "",
+      "I.",
+      ...page("Prvá strana"),
+      "Text predchádzajúcej časti",
+      "",
+      "2",
+      "II. Argumentácia",
+      "",
+      "Nový odsek.",
+      ...page("Druhá strana"),
+      "",
+      "3",
+    ]);
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading" ? [block.plainText] : [],
+    );
+    expect(headings).toContain("II. Argumentácia");
+    expect(
+      blocks.some(
+        (block) =>
+          block.type === "paragraph" &&
+          block.plainText.endsWith("Text predchádzajúcej časti"),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("letter spacing across inline boundaries", () => {
+  // The same text in every case, its spans cut at different places: a span's
+  // edge is not a gap between words.
+  test.each([
+    ["one span", ["Podanie bolo doručené k elektronickému podaniu."]],
+    [
+      "the short word on its own",
+      ["Podanie bolo doručené ", "k e", "lektronickému podaniu."],
+    ],
+    [
+      "split inside the word",
+      ["Podanie bolo doručené k e", "lektro", "nickému podaniu."],
+    ],
+  ])("%s", (_, runs) => {
+    const { documentAst } = parse(
+      `<html><body><div>${runs
+        .map((run) => `<span style="font-size: 12px; ">${run}</span>`)
+        .join("")}</div></body></html>`,
+    );
+    expect(
+      documentAst.blocks.flatMap((block) =>
+        block.type === "paragraph" ? [block.plainText] : [],
+      ),
+    ).toEqual(["Podanie bolo doručené k elektronickému podaniu."]);
+  });
+});

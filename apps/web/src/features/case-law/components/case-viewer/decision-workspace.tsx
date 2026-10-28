@@ -81,6 +81,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
+import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
@@ -116,7 +117,6 @@ import { APIError } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import { useUnresolvedCitationTelemetry } from "./paragraph-citation-telemetry";
@@ -168,9 +168,9 @@ type DecisionWorkspaceBaseProps = {
 };
 
 /**
- * A reader without an account, or a member whose own workspace chunk has not
- * arrived yet. The layer is named and offered where it would be drawn instead
- * of being hidden, and the account is asked for on the run.
+ * A reader without an account, or a member whose AI gate (in the member chunk)
+ * has not arrived yet. The layer is named and offered where it would be drawn
+ * instead of being hidden, and the account is asked for on the run.
  *
  * Nothing is read here: the public decision payload deliberately carries no
  * persisted analysis (`case-law-public-route-invariants.test.ts`, "public
@@ -182,16 +182,16 @@ type DecisionWorkspaceBaseProps = {
  * thing this component can decide.
  */
 type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "gated";
+  aiMode: typeof DECISION_AI_MODE.gated;
   /**
-   * Opens the account gate. Absent while a member's workspace loads: the
+   * Opens the account gate. Absent while a member's AI gate loads: the
    * column then names the layer without offering a run nobody owns yet.
    */
   onRequestAnalysis?: (() => void) | undefined;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "enabled";
+  aiMode: typeof DECISION_AI_MODE.enabled;
   ensureAIAvailable: () => Promise<boolean>;
 };
 
@@ -390,7 +390,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
-  const citationSummary = useQueryView(
+  const citationSummary = queryView(
     useQuery(decisionCitationSummaryOptions(decisionId)),
   );
   const citedLater =
@@ -896,7 +896,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   }[];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    // A member's reader is gated until its AI gate arrives, then enabled on
+    // the same mounted reader; the mode names which one it is now.
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      data-ai-mode={props.aiMode}
+    >
       {/* The margin's panel holds the toggle. Below `lg` neither is drawn
           and the provisions open under their paragraphs, so the header holds
           it, as the inspector's pane does. */}

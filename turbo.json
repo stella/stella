@@ -962,6 +962,7 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/mobile/**",
         "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
@@ -1125,6 +1126,7 @@
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
+        "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/cli/**",
@@ -1465,7 +1467,6 @@
         "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
-        "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/apps/desktop/src-tauri/Cargo.toml",
         "$TURBO_ROOT$/apps/desktop/src-tauri/src/http_client.rs",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",

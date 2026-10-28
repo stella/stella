@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -13,14 +14,20 @@ import path from "node:path";
 
 import {
   apply,
+  assertFinalAutofixLockfile,
+  assertFrozenLockfile,
+  assertLockfileWorkspaces,
   classifyConflicts,
   collect,
   conflictsOf,
+  indentationOnly,
   isAllowedResolution,
+  mergeLockfile,
   parseStageEntries,
   pathShapeProblem,
   plan,
   push,
+  refreshLockfile,
 } from "./generated-conflicts";
 import { type Generator, GENERATORS } from "./generated-files";
 
@@ -41,6 +48,177 @@ const field = (value: unknown, ...keys: string[]): unknown => {
   return current;
 };
 const SCRIPT = path.join(import.meta.dirname, "generated-conflicts.ts");
+
+describe("conservative format and lockfile proofs", () => {
+  test("indentation changes preserve literals and line boundaries", () => {
+    expect(
+      indentationOnly({
+        before: 'const x = {\n  value: "two words",\n};\n',
+        after: 'const x = {\n    value: "two words",\n};\n',
+      }),
+    ).toBe(true);
+    for (const [before, after] of [
+      ["return\n  value;", "return value;"],
+      ['const x = "two words";', 'const x = "twowords";'],
+      ["const x = `line\n  value`;", "const x = `line\n    value`;"],
+      ["/* line\n  value */", "/* line\n    value */"],
+      ["const x = <p>\n  value</p>;", "const x = <p>\n    value</p>;"],
+    ] as const) {
+      expect(indentationOnly({ before, after })).toBe(false);
+    }
+  });
+
+  test.each(["\u2028", "\u2029"])(
+    "literal Unicode separator %j does not hide changes to JSON string values",
+    (separator) => {
+      const before = `{"value":"first${separator}  second"}`;
+      const after = `{"value":"first${separator}    second"}`;
+      expect(before).toContain(separator);
+      expect(JSON.parse(before).value).not.toBe(JSON.parse(after).value);
+      expect(indentationOnly({ before, after })).toBe(false);
+    },
+  );
+
+  test("independent lock additions retain every parent pin", () => {
+    const base = {
+      packages: { common: ["common@1.0.0", "", {}, "integrity"] },
+    };
+    const head = { packages: { ...base.packages, a: ["a@1.0.0"] } };
+    const main = { packages: { ...base.packages, b: ["b@2.0.0"] } };
+    expect(mergeLockfile({ base, head, main })).toEqual({
+      packages: { ...base.packages, a: ["a@1.0.0"], b: ["b@2.0.0"] },
+    });
+    expect(() =>
+      mergeLockfile({
+        base,
+        head: { packages: { common: ["common@2.0.0"] } },
+        main: { packages: { common: ["common@3.0.0"] } },
+      }),
+    ).toThrow("competing edits");
+  });
+
+  test("workspace metadata is derived from merged manifests and rejects forged specs", () => {
+    const manifest = {
+      name: "fixture",
+      version: "1",
+      dependencies: { a: "1.0.0" },
+    };
+    const before = {
+      workspaces: { "": { name: "fixture", dependencies: { a: "0.9.0" } } },
+    };
+    const after = {
+      workspaces: { "": { name: "fixture", dependencies: { a: "1.0.0" } } },
+    };
+    expect(() =>
+      assertLockfileWorkspaces({ before, after, readManifest: () => manifest }),
+    ).not.toThrow();
+    expect(() =>
+      assertLockfileWorkspaces({
+        before,
+        after: {
+          workspaces: {
+            "": { ...after.workspaces[""], dependencies: { a: "*" } },
+          },
+        },
+        readManifest: () => manifest,
+      }),
+    ).toThrow("differs from merged manifest");
+    expect(() =>
+      assertLockfileWorkspaces({
+        before,
+        after: { workspaces: {} },
+        readManifest: () => manifest,
+      }),
+    ).toThrow("changed the merged workspace set");
+  });
+
+  test("metadata refresh cannot upgrade, add, remove or change integrity of any frozen pin", () => {
+    const before = {
+      lockfileVersion: 3,
+      packages: { a: ["a@1.0.0", "", {}, "sha512-old"] },
+      workspaces: { "": { version: "1" } },
+    };
+    expect(() =>
+      assertFrozenLockfile({
+        before,
+        after: {
+          ...before,
+          workspaces: { "": { version: "2" } },
+        },
+      }),
+    ).not.toThrow();
+    for (const packages of [
+      {},
+      { a: ["a@2.0.0"] },
+      { ...before.packages, b: ["b@1.0.0"] },
+      { a: ["a@1.0.0", "", {}, "sha512-other"] },
+    ]) {
+      expect(() =>
+        assertFrozenLockfile({ before, after: { ...before, packages } }),
+      ).toThrow("frozen pins or policy");
+    }
+    expect(() =>
+      assertFrozenLockfile({
+        before,
+        after: { ...before, trustedDependencies: ["a"] },
+      }),
+    ).toThrow("frozen pins or policy");
+  });
+
+  test("the final autofix boundary rejects lockfile drift after refresh", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "autofix-final-lock-"));
+    const frozen = path.join(root, "refresh-approved.lock");
+    const manifest = {
+      name: "fixture",
+      dependencies: { a: "1.0.0" },
+    };
+    const approved = {
+      lockfileVersion: 3,
+      workspaces: { "": manifest },
+      packages: { a: ["a@1.0.0", "", {}, "sha512-approved"] },
+    };
+    writeFileSync(path.join(root, "package.json"), JSON.stringify(manifest));
+    writeFileSync(frozen, JSON.stringify(approved));
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(approved));
+
+    expect(() =>
+      assertFinalAutofixLockfile({ repo: root, frozen }),
+    ).not.toThrow();
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({
+        ...approved,
+        workspaces: {
+          "": { ...approved.workspaces[""], dependencies: { a: "*" } },
+        },
+      }),
+    );
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "differs from merged manifest",
+    );
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({ ...approved, workspaces: {} }),
+    );
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "changed the merged workspace set",
+    );
+
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({
+        ...approved,
+        packages: { a: ["a@2.0.0", "", {}, "sha512-changed"] },
+      }),
+    );
+    expect(() => assertFinalAutofixLockfile({ repo: root, frozen })).toThrow(
+      "frozen pins or policy",
+    );
+    rmSync(root, { recursive: true });
+  });
+});
 
 describe("classification", () => {
   test("a conflict only in an autofix generator's output is regenerable", () => {
@@ -212,13 +390,14 @@ describe("resolution across runs", () => {
   };
 
   type Fixture = {
+    baseEdits?: (origin: string) => void;
     branchEdits?: (origin: string) => void;
     mainEdits?: (origin: string) => void;
   };
   // main and the branch both regenerate the message types from catalogue
   // edits that merge cleanly; each side also edits a different hunk of an
   // ordinary file, which the merge combines into a blob neither side has.
-  const fixture = ({ branchEdits, mainEdits }: Fixture = {}) => {
+  const fixture = ({ baseEdits, branchEdits, mainEdits }: Fixture = {}) => {
     root = mkdtempSync(path.join(tmpdir(), "generated-conflicts-"));
     const origin = path.join(root, "origin");
     mkdirSync(origin);
@@ -229,6 +408,7 @@ describe("resolution across runs", () => {
       NOTES,
       lines(() => {}),
     );
+    baseEdits?.(origin);
     git(origin, "add", ".");
     git(origin, "commit", "-qm", "base");
     git(origin, "switch", "-qc", "feature");
@@ -297,13 +477,17 @@ describe("resolution across runs", () => {
     return { origin, head, main };
   };
 
+  type ResolveOptions = {
+    origin: string;
+    head: string;
+    main: string;
+    regenerate?: (repo: string) => void;
+  };
+
   /** The untrusted resolve run, with a stand-in generator. */
-  const resolve = (
-    origin: string,
-    head: string,
-    main: string,
-    regenerated = "type Messages = { a: string; b: string; c: string };\n",
-  ) => {
+  const resolve = ({ origin, head, main, regenerate }: ResolveOptions) => {
+    const regenerated =
+      "type Messages = { a: string; b: string; c: string };\n";
     const repo = path.join(root, "resolve");
     git(root, "clone", "-q", origin, repo);
     git(repo, "checkout", "-q", "--detach", head);
@@ -324,6 +508,7 @@ describe("resolution across runs", () => {
     expect(parsed.eligible).toBe(true);
     git(repo, "read-tree", "-m", "-u", "HEAD", parsed.baseline);
     write(repo, MESSAGES, regenerated);
+    regenerate?.(repo);
     const out = path.join(root, "resolution");
     const collected = cli(
       repo,
@@ -377,9 +562,228 @@ describe("resolution across runs", () => {
     writeFileSync(file, JSON.stringify(manifest));
   };
 
+  test("lock refresh skips lifecycle scripts and rolls back unpinned resolutions", () => {
+    root = mkdtempSync(path.join(tmpdir(), "lock-refresh-"));
+    write(
+      root,
+      "peer/package.json",
+      JSON.stringify({ name: "fixture-peer", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "other-peer/package.json",
+      JSON.stringify({ name: "fixture-other", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "dependency/package.json",
+      JSON.stringify({
+        name: "local-dependency",
+        version: "1.0.0",
+        bin: { fixture: "index.js" },
+        dependencies: { "fixture-peer": "workspace:*" },
+        devDependencies: { "fixture-other": "workspace:*" },
+        peerDependencies: {
+          "fixture-peer": "workspace:*",
+          "fixture-other": "workspace:*",
+        },
+        peerDependenciesMeta: {
+          "fixture-peer": { optional: true },
+          "fixture-other": { optional: true },
+        },
+      }),
+    );
+    const manifest = {
+      name: "fixture",
+      workspaces: ["dependency", "peer", "other-peer"],
+      dependencies: { "local-dependency": "workspace:*" },
+      scripts: { postinstall: "touch lifecycle-ran" },
+    };
+    write(root, "package.json", JSON.stringify(manifest));
+    const seeded = run(root, [
+      "bun",
+      "--no-env-file",
+      "install",
+      "--lockfile-only",
+      "--ignore-scripts",
+    ]);
+    expect(seeded.exitCode, seeded.stderr).toBe(0);
+    refreshLockfile(root);
+    expect(existsSync(path.join(root, "lifecycle-ran"))).toBe(false);
+    expect(existsSync(path.join(root, "node_modules"))).toBe(false);
+    write(
+      root,
+      "second/package.json",
+      JSON.stringify({ name: "second-dependency", version: "1.0.0" }),
+    );
+    write(
+      root,
+      "package.json",
+      JSON.stringify({
+        ...manifest,
+        dependencies: {
+          ...manifest.dependencies,
+          "second-dependency": "file:./second",
+        },
+      }),
+    );
+    const before = readFileSync(path.join(root, "bun.lock"), "utf-8");
+    expect(() => refreshLockfile(root)).toThrow("frozen pins or policy");
+    expect(readFileSync(path.join(root, "bun.lock"), "utf-8")).toBe(before);
+    expect(existsSync(path.join(root, "lifecycle-ran"))).toBe(false);
+  });
+
+  test("format-only conflict keeps the semantic side and rejects an artifact changing logic", () => {
+    const source = "apps/api/format.ts";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) =>
+        write(repo, source, "const x = {\n  value: 1,\n};\n"),
+      branchEdits: (repo) =>
+        write(repo, source, "const x = {\n    value: 1,\n};\n"),
+      mainEdits: (repo) =>
+        write(repo, source, "const x = {\n  value: 2,\n};\n"),
+    });
+    const { out } = resolve({ origin, head, main });
+    expect(readFileSync(path.join(out, "files", source), "utf-8")).toContain(
+      "value: 2",
+    );
+    const published = publish(origin, head, out);
+    expect(published.exitCode, published.stderr).toBe(0);
+    write(path.join(out, "files"), source, "const x = 99;\n");
+    expect(publish(origin, head, out).stderr).toContain(
+      "format-only resolution changed source logic",
+    );
+  });
+
+  test.each(["rewrite", "delete"] as const)(
+    "allowed non-conflicted generator outputs can %s during resolution",
+    (operation) => {
+      const compose = "docker-compose.selfhost.yml";
+      const docs = "docs/self-hosting.md";
+      const before =
+        "Hand-written introduction\n<!-- BEGIN GENERATED SELF-HOST CONTRACT -->\nold contract\n<!-- END GENERATED SELF-HOST CONTRACT -->\n";
+      const after = before.replace("old contract", "merged contract");
+      expect(after).not.toBe(before);
+      const { origin, head, main } = fixture({
+        baseEdits: (repo) => {
+          write(repo, compose, "services: {}\n");
+          write(repo, docs, before);
+        },
+        branchEdits: (repo) =>
+          write(repo, compose, "services: { branch: {} }\n"),
+        mainEdits: (repo) => write(repo, compose, "services: { main: {} }\n"),
+      });
+      const { out } = resolve({
+        origin,
+        head,
+        main,
+        regenerate: (repo) => {
+          if (operation === "delete") {
+            rmSync(path.join(repo, docs));
+            return;
+          }
+          write(repo, docs, after);
+        },
+      });
+      const planned = JSON.parse(
+        readFileSync(path.join(root, "plan.json"), "utf-8"),
+      );
+      expect(planned.conflicts).toEqual(
+        [MESSAGES, compose]
+          .toSorted()
+          .map((file) => ({ path: file, kind: "both-modified" })),
+      );
+      expect(planned.allowed).toContain(docs);
+      const published = publish(origin, head, out);
+      expect(published.exitCode, published.stderr).toBe(0);
+      const manifest: { tree: string } = JSON.parse(
+        readFileSync(path.join(out, "manifest.json"), "utf-8"),
+      );
+      if (operation === "delete") {
+        expect(git(published.bare, "ls-tree", manifest.tree, "--", docs)).toBe(
+          "",
+        );
+        return;
+      }
+      expect(git(published.bare, "show", `${manifest.tree}:${docs}`)).toBe(
+        after.trim(),
+      );
+    },
+  );
+
+  test("source logic conflicts remain ineligible", () => {
+    const source = "apps/api/logic.ts";
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => write(repo, source, "const x = 1;\n"),
+      branchEdits: (repo) => write(repo, source, "const x = 2;\n"),
+      mainEdits: (repo) => write(repo, source, "const x = 3;\n"),
+    });
+    const planned = cli(
+      origin,
+      "plan",
+      "--git-dir",
+      ".git",
+      "--head",
+      head,
+      "--main",
+      main,
+    );
+    expect(planned.exitCode, planned.stderr).toBe(0);
+    expect(JSON.parse(planned.stdout).eligible).toBe(false);
+  });
+
+  test("lockfile-only conflicts combine existing pins and reject a forged upgrade", () => {
+    const lock = (packages: Record<string, unknown>) =>
+      JSON.stringify({
+        lockfileVersion: 3,
+        workspaces: { "": { name: "fixture" } },
+        packages,
+      });
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) => {
+        write(repo, "package.json", JSON.stringify({ name: "fixture" }));
+        write(repo, "bun.lock", lock({ common: ["common@1.0.0"] }));
+      },
+      branchEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          lock({ common: ["common@1.0.0"], a: ["a@1.0.0"] }),
+        ),
+      mainEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          lock({ common: ["common@1.0.0"], b: ["b@1.0.0"] }),
+        ),
+    });
+    const { out } = resolve({ origin, head, main });
+    const merged = JSON.parse(
+      readFileSync(path.join(out, "files", "bun.lock"), "utf-8"),
+    );
+    expect(Object.keys(merged.packages).toSorted()).toEqual([
+      "a",
+      "b",
+      "common",
+    ]);
+    const published = publish(origin, head, out);
+    expect(published.exitCode, published.stderr).toBe(0);
+    merged.workspaces[""].dependencies = { arbitrary: "*" };
+    write(path.join(out, "files"), "bun.lock", JSON.stringify(merged));
+    expect(publish(origin, head, out).stderr).toContain(
+      "differs from merged manifest",
+    );
+    delete merged.workspaces[""].dependencies;
+    merged.packages.common = ["common@2.0.0"];
+    write(path.join(out, "files"), "bun.lock", JSON.stringify(merged));
+    expect(publish(origin, head, out).stderr).toContain(
+      "frozen pins or policy",
+    );
+  });
+
   test("the trusted run rebuilds exactly the collected tree", () => {
     const { origin, head, main } = fixture();
-    const { out, regenerated } = resolve(origin, head, main);
+    const { out, regenerated } = resolve({ origin, head, main });
     const published = publish(origin, head, out);
     expect(published.exitCode, published.stderr).toBe(0);
     const commit = JSON.parse(
@@ -550,7 +954,7 @@ describe("resolution across runs", () => {
       main,
     ]);
     expect(merged.exitCode, merged.stderr).toBe(0);
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     const storedPlan = JSON.parse(
       readFileSync(path.join(root, "plan.json"), "utf-8"),
     );
@@ -568,7 +972,7 @@ describe("resolution across runs", () => {
         symlinkSync(tmpdir(), path.join(repo, "docs/module-ownership"));
       },
     });
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     // The output glob docs/module-ownership/*.md is an owning generator's.
     write(path.join(out, "files"), "docs/module-ownership/x.md", "owned\n");
     editManifest(out, (manifest) => {
@@ -585,9 +989,10 @@ describe("resolution across runs", () => {
     );
   });
 
+  // timeout: checks three rejected Git-backed publish attempts.
   test("tampered or foreign data never reaches a request", () => {
     const { origin, head, main } = fixture();
-    const { out, regenerated } = resolve(origin, head, main);
+    const { out, regenerated } = resolve({ origin, head, main });
 
     writeFileSync(path.join(out, "files", MESSAGES), "tampered\n");
     const tampered = publish(origin, head, out);
@@ -620,11 +1025,11 @@ describe("resolution across runs", () => {
     // A symlink inside the collected data itself.
     symlinkSync("/etc/hosts", path.join(out, "files", "link"));
     expect(publish(origin, head, out).stderr).toContain("non-regular entry");
-  });
+  }, 15_000);
 
   test("a deletion of a file nobody conflicted on is refused", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     for (const target of [
       // An ordinary file the merge resolved cleanly.
       NOTES,
@@ -646,9 +1051,49 @@ describe("resolution across runs", () => {
     expect(publish(origin, head, out).exitCode).toBe(0);
   });
 
+  test("a collected artifact cannot delete a non-conflicted bun.lock", () => {
+    const { origin, head, main } = fixture({
+      baseEdits: (repo) =>
+        write(
+          repo,
+          "bun.lock",
+          JSON.stringify({
+            lockfileVersion: 3,
+            workspaces: { "": { name: "fixture" } },
+            packages: { common: ["common@1.0.0"] },
+          }),
+        ),
+    });
+    const { out } = resolve({
+      origin,
+      head,
+      main,
+      regenerate: (repo) => rmSync(path.join(repo, "bun.lock")),
+    });
+    const planned = JSON.parse(
+      readFileSync(path.join(root, "plan.json"), "utf-8"),
+    );
+    expect(planned.conflicts).toEqual([
+      { path: MESSAGES, kind: "both-modified" },
+    ]);
+    const manifest = JSON.parse(
+      readFileSync(path.join(out, "manifest.json"), "utf-8"),
+    );
+    expect(manifest.files).toContainEqual({
+      path: "bun.lock",
+      deleted: true,
+      mode: "100644",
+    });
+    const published = publish(origin, head, out);
+    expect(published.exitCode).not.toBe(0);
+    expect(published.stderr).toContain(
+      "bun.lock: cannot delete a format or lockfile resolution",
+    );
+  });
+
   test("a branch that moved between the jobs gets no merge from the old resolution", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     git(origin, "switch", "-q", "feature");
     write(origin, "apps/api/later.txt", "pushed after the resolve run\n");
     git(origin, "add", "-A");
@@ -664,7 +1109,7 @@ describe("resolution across runs", () => {
 
   test("main that moved between the jobs still merges the commit that was resolved", () => {
     const { origin, head, main } = fixture();
-    const { out } = resolve(origin, head, main);
+    const { out } = resolve({ origin, head, main });
     write(origin, "apps/api/later.txt", "landed after the resolve run\n");
     git(origin, "add", "-A");
     git(origin, "commit", "-qm", "later");

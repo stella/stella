@@ -10,7 +10,8 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /** Work-level citations resolve to the wording applicable on the decision date. */
 export const useDecisionStatuteCitationAnchors = (
@@ -32,7 +33,7 @@ export const useDecisionStatuteCitationAnchors = (
           })),
     ),
   );
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   useQueryViewError(resolvedView, "useDecisionStatuteCitationAnchors:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;

@@ -45,7 +45,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { isPublicLawMissError } from "@/lib/public-law-api";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -282,7 +282,7 @@ export const CitedDecisionCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
-  const view = useQueryView(read);
+  const view = queryView(read);
 
   if (view.type === "pending") {
     return (

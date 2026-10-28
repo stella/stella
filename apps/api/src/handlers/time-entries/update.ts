@@ -17,13 +17,18 @@ import {
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
-import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { recordBillingCapCrossingsForMatters } from "@/api/lib/billing/arrangements";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";
 import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/lib/billing/time-entry-authorization";
+import {
+  guardTimeEntryMove,
+  timeEntryMoveStatusError,
+  timeEntryMoveTargetError,
+} from "@/api/lib/billing/time-entry-move";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -53,6 +58,13 @@ const updateTimeEntryBodySchema = v.object({
   activityCode: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(20)))),
 });
 
+// The route also moves a draft to another matter; the shared handler takes
+// that target only once the route has checked the actor can use it.
+const updateTimeEntryRouteBodySchema = v.object({
+  ...updateTimeEntryBodySchema.entries,
+  moveToWorkspaceId: v.optional(resourceIdSchema("workspace")),
+});
+
 export type UpdateTimeEntryHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
@@ -62,6 +74,11 @@ export type UpdateTimeEntryHandlerProps = {
   };
   recordAuditEvent: AuditRecorder;
   body: v.InferOutput<typeof updateTimeEntryBodySchema>;
+  /**
+   * The matter a draft moves to, which the caller has already confirmed the
+   * actor can use. Rate and currency then come from its rate table.
+   */
+  moveTo?: SafeId<"workspace"> | undefined;
 };
 
 type ResolvedRateUpdate =
@@ -72,6 +89,116 @@ type ResolvedRateUpdate =
       currency: string;
     };
 
+/** Why the actor cannot edit this entry, or move it, if they cannot. */
+const editRefusal = ({
+  existing,
+  actor,
+  moving,
+}: {
+  existing: { status: string; userId: string | null };
+  actor: UpdateTimeEntryHandlerProps["actor"];
+  moving: boolean;
+}): HandlerError | null => {
+  if (
+    !canManageTimeEntry({
+      memberRole: actor.memberRole,
+      currentUserId: actor.userId,
+      entryUserId: existing.userId,
+    })
+  ) {
+    return new HandlerError({ status: 404, message: "Time entry not found" });
+  }
+  if (
+    existing.status !== BILLING_STATUS.DRAFT &&
+    !canApproveTimeEntries(actor.memberRole)
+  ) {
+    return new HandlerError({
+      status: 400,
+      message: "Only draft time entries can be edited",
+    });
+  }
+  if (
+    existing.status === BILLING_STATUS.BILLED ||
+    existing.status === BILLING_STATUS.WRITTEN_OFF
+  ) {
+    return new HandlerError({
+      status: 400,
+      message: "Cannot edit a billed or written-off entry",
+    });
+  }
+  return moving ? timeEntryMoveStatusError(existing.status) : null;
+};
+
+// The rate an edit leaves the entry at. Making it billable, moving its date
+// or pricing an unpriced entry re-resolves the rate; a moved entry is priced
+// by its new matter's rate table, billable or not. A billable entry needs a
+// rate, so finding none refuses the edit.
+const rateUpdateFor = async function* ({
+  safeDb,
+  workspaceId,
+  existing,
+  billable,
+  changedDateWorked,
+  moving,
+}: {
+  safeDb: SafeDb;
+  /** The matter the entry ends up in. */
+  workspaceId: SafeId<"workspace">;
+  existing: {
+    billable: boolean;
+    currency: string;
+    dateWorked: string;
+    userId: string | null;
+  };
+  billable: boolean | undefined;
+  changedDateWorked: string | null;
+  moving: boolean;
+}) {
+  const willBeBillable = billable ?? existing.billable;
+  const reprice =
+    moving ||
+    (willBeBillable &&
+      (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
+        changedDateWorked !== null ||
+        (billable === true && !existing.billable)));
+  if (!reprice) {
+    const unchanged: ResolvedRateUpdate = { type: "unchanged" };
+    return unchanged;
+  }
+  const resolved =
+    existing.userId === null
+      ? null
+      : yield* resolveRate({
+          safeDb,
+          workspaceId,
+          userId: brandPersistedUserId(existing.userId),
+          dateWorked: changedDateWorked ?? existing.dateWorked,
+        });
+  if (resolved !== null) {
+    const priced: ResolvedRateUpdate = {
+      type: "resolved",
+      rateAtEntry: cents(resolved.hourlyRate),
+      currency: resolved.currency,
+    };
+    return priced;
+  }
+  if (willBeBillable) {
+    return new HandlerError({
+      status: 400,
+      message:
+        existing.userId === null
+          ? "Billable time entries need an assigned timekeeper"
+          : "Billable time entries need an effective rate",
+    });
+  }
+  const unpriced: ResolvedRateUpdate = {
+    type: "resolved",
+    rateAtEntry: cents(0),
+    currency: UNPRICED_TIME_ENTRY_CURRENCY,
+  };
+  return unpriced;
+};
+
 // Shared time-entry update logic reused by the HTTP handler and the
 // `save_time_entry` MCP tool, so both enforce the billed/written-off guard and
 // emit the same audit diff.
@@ -81,7 +208,10 @@ export const updateTimeEntryHandler = async function* ({
   actor,
   recordAuditEvent,
   body,
+  moveTo,
 }: UpdateTimeEntryHandlerProps) {
+  const targetWorkspaceId = moveTo ?? workspaceId;
+  const moving = targetWorkspaceId !== workspaceId;
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.timeEntries.findFirst({
@@ -118,40 +248,9 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
-  if (
-    !canManageTimeEntry({
-      memberRole: actor.memberRole,
-      currentUserId: actor.userId,
-      entryUserId: existing.userId,
-    })
-  ) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Time entry not found" }),
-    );
-  }
-
-  if (
-    existing.status !== BILLING_STATUS.DRAFT &&
-    !canApproveTimeEntries(actor.memberRole)
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Only draft time entries can be edited",
-      }),
-    );
-  }
-
-  if (
-    existing.status === BILLING_STATUS.BILLED ||
-    existing.status === BILLING_STATUS.WRITTEN_OFF
-  ) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Cannot edit a billed or written-off entry",
-      }),
-    );
+  const refusal = editRefusal({ existing, actor, moving });
+  if (refusal) {
+    return Result.err(refusal);
   }
 
   const policy = yield* Result.await(
@@ -208,7 +307,7 @@ export const updateTimeEntryHandler = async function* ({
         tx.query.entities.findFirst({
           where: {
             id: { eq: workItemId },
-            workspaceId: { eq: workspaceId },
+            workspaceId: { eq: targetWorkspaceId },
           },
           columns: { id: true },
         }),
@@ -225,43 +324,16 @@ export const updateTimeEntryHandler = async function* ({
     }
   }
 
-  const willBeBillable = body.billable ?? existing.billable;
-  const becomingBillable = body.billable === true && !existing.billable;
-  const shouldResolveRate =
-    willBeBillable &&
-    (existing.currency === UNPRICED_TIME_ENTRY_CURRENCY ||
-      changedDateWorked !== null ||
-      becomingBillable);
-  let resolvedRateUpdate: ResolvedRateUpdate = { type: "unchanged" };
-  if (shouldResolveRate) {
-    if (!existing.userId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Billable time entries need an assigned timekeeper",
-        }),
-      );
-    }
-
-    const resolvedRate = yield* resolveRate({
-      safeDb,
-      workspaceId,
-      userId: brandPersistedUserId(existing.userId),
-      dateWorked: changedDateWorked ?? existing.dateWorked,
-    });
-    if (!resolvedRate) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Billable time entries need an effective rate",
-        }),
-      );
-    }
-    resolvedRateUpdate = {
-      type: "resolved",
-      rateAtEntry: cents(resolvedRate.hourlyRate),
-      currency: resolvedRate.currency,
-    };
+  const resolvedRateUpdate = yield* rateUpdateFor({
+    safeDb,
+    workspaceId: targetWorkspaceId,
+    existing,
+    billable: body.billable,
+    changedDateWorked,
+    moving,
+  });
+  if (HandlerError.is(resolvedRateUpdate)) {
+    return Result.err(resolvedRateUpdate);
   }
 
   const updates = {
@@ -278,6 +350,13 @@ export const updateTimeEntryHandler = async function* ({
       "activityCode",
     ]),
     ...(changedTimezoneId !== null ? { timezoneId: changedTimezoneId } : {}),
+    // A work item belongs to its matter, so a move leaves the old one behind.
+    ...(moving
+      ? {
+          workspaceId: targetWorkspaceId,
+          ...(body.workItemId === undefined ? { workItemId: null } : {}),
+        }
+      : {}),
     ...(body.durationMinutes !== undefined
       ? {
           billedMinutes: roundToBillingIncrement(
@@ -300,11 +379,22 @@ export const updateTimeEntryHandler = async function* ({
       const runningError = await guardRunningTimeEntries({
         tx,
         workspaceId,
+        ...(moving ? { additionalWorkspaceIds: [targetWorkspaceId] } : {}),
         selection: { type: "entries", ids: [body.id] },
         actorUserId: actor.userId,
       });
       if (runningError) {
         return runningError;
+      }
+      const moveError = moving
+        ? await guardTimeEntryMove(tx, {
+            entryId: body.id,
+            from: workspaceId,
+            to: targetWorkspaceId,
+          })
+        : null;
+      if (moveError) {
+        return moveError;
       }
       const rows = await tx
         .update(timeEntries)
@@ -353,9 +443,12 @@ export const updateTimeEntryHandler = async function* ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
         resourceId: body.id,
-        changes: buildTimeEntryDiff(existing, updates),
+        changes: buildTimeEntryDiff({ ...existing, workspaceId }, updates),
       });
-      await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
+      await recordBillingCapCrossingsForMatters(tx, {
+        workspaceIds: [workspaceId, targetWorkspaceId],
+        recordAuditEvent,
+      });
       return true;
     }),
   );
@@ -386,13 +479,17 @@ const updateTimeEntryById = createSafeHandler(
       "refused. Making an entry billable or moving its date re-resolves the " +
       "rate and fails when none applies. The write is conditional on the " +
       "entry being unchanged since it was read, so a concurrent edit returns " +
-      "a conflict instead of overwriting.",
+      "a conflict instead of overwriting. A draft can move to another " +
+      "active matter you can access (moveToWorkspaceId): its rate and currency " +
+      "come from that matter's rates, its work item is cleared unless one " +
+      "in the new matter is given, and an entry on an invoice or with a " +
+      "running timer is refused.",
     permissions: { timeEntry: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: timeEntryRealtimeUpdates,
     mcp: { type: "covered", by: "save_time_entry" },
-    body: updateTimeEntryBodySchema,
+    body: updateTimeEntryRouteBodySchema,
   },
   async function* ({
     memberRole,
@@ -401,13 +498,26 @@ const updateTimeEntryById = createSafeHandler(
     workspaceId,
     body,
     recordAuditEvent,
+    getWorkspaceAccess,
   }) {
+    const { moveToWorkspaceId, ...fields } = body;
+    // The target is the matter access confirms, never the requested id.
+    const target =
+      moveToWorkspaceId === undefined
+        ? null
+        : await getWorkspaceAccess(moveToWorkspaceId);
+    const targetError =
+      moveToWorkspaceId === undefined ? null : timeEntryMoveTargetError(target);
+    if (targetError) {
+      return Result.err(targetError);
+    }
     return yield* updateTimeEntryHandler({
       safeDb,
       workspaceId,
       actor: { userId: user.id, memberRole },
       recordAuditEvent,
-      body,
+      body: fields,
+      moveTo: target?.id,
     });
   },
 );

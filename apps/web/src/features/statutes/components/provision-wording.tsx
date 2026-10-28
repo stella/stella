@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
@@ -97,6 +98,7 @@ export const ProvisionWording = ({
     );
   }
 
+  const statuteLists = statuteListSchemeFor(statute.country);
   // The wording is unfolded inside another document's reader, so it names its
   // own publisher rather than inheriting the citing decision's.
   return (
@@ -114,6 +116,7 @@ export const ProvisionWording = ({
             block={block}
             key={block.id}
             rangesByPieceId={NO_RANGES}
+            statuteLists={statuteLists}
             variant="statute"
           />
         ))}

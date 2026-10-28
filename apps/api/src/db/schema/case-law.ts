@@ -529,6 +529,25 @@ const parsedSourcePendingIndex = (t: ParsedSourceSchemaColumns) =>
     .on(t.id)
     .where(sql`${t.parsedSourceRawS3Key} IS DISTINCT FROM ${t.sourceRawS3Key}`);
 
+type PublishedCourtDateColumns = Parameters<
+  typeof publishedCaseLawDecisionFor
+>[0] & {
+  country: PgColumn;
+  court: PgColumn;
+  decisionDate: PgColumn;
+  id: PgColumn;
+};
+const publishedCourtDateIndex = (t: PublishedCourtDateColumns) =>
+  p
+    .index("case_law_decisions_country_court_date_published_idx")
+    .on(
+      t.country,
+      t.court,
+      sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
+      t.id,
+    )
+    .where(publishedCaseLawDecisionFor(t));
+
 export const caseLawDecisions = p.pgTable(
   "case_law_decisions",
   {
@@ -850,6 +869,9 @@ export const caseLawDecisions = p.pgTable(
         sql`coalesce(${t.decisionDate}, '-infinity'::date)`,
         t.id,
       ),
+    // The vocabulary's loose scan needs no heap publication filter. Keep the
+    // all-row twin for administrative country/court candidate reads.
+    publishedCourtDateIndex(t),
     // The same walk with no court chosen, which is how the browse page opens.
     // Court sits between country and the sort key above, so that index orders
     // a country's rows by court first and cannot serve this walk's ORDER BY;
@@ -2607,6 +2629,30 @@ export const caseLawSourceArrivals = p.pgTable(
         WHERE arrival_source.id = ${t.sourceId}
           AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
       )`,
+    }),
+  ],
+);
+
+/** The complete coverage answer, replaced atomically by the governed refresh. */
+export const caseLawCoverageSummaries = p.pgTable(
+  "case_law_coverage_summaries",
+  {
+    key: p.text().primaryKey(),
+    sourcePolicy: p.text("source_policy").notNull(),
+    answer: jsonb().notNull(),
+    generatedAt: timestamptz("generated_at").notNull(),
+  },
+  (t) => [
+    p.check("case_law_coverage_summaries_singleton", sql`${t.key} = 'current'`),
+    p.check(
+      "case_law_coverage_summaries_policy_array",
+      sql`jsonb_typeof(${t.sourcePolicy}::text::jsonb) = 'array'`,
+    ),
+    p.pgPolicy("case_law_coverage_summary_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
     }),
   ],
 );

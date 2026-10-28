@@ -30,6 +30,7 @@ import {
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
@@ -235,7 +236,9 @@ const measure = async (credential: string): Promise<Measured> => {
   const keyFetchesBefore = signingKeyFetches;
   const { session, authenticate } = await runWithQueryCounter(
     async (counter) => {
-      const authenticated = await authenticateMcpRequest(credential);
+      const authenticated = await authenticateMcpRequest(credential, {
+        resolveApiKeySession: resolveMachineApiKeySession,
+      });
       return {
         session: authenticated.unwrap(),
         authenticate: counter.count,
@@ -291,7 +294,9 @@ const measure = async (credential: string): Promise<Measured> => {
 };
 
 const credentialTypeOf = async (credential: string) => {
-  const authenticated = await authenticateMcpRequest(credential);
+  const authenticated = await authenticateMcpRequest(credential, {
+    resolveApiKeySession: resolveMachineApiKeySession,
+  });
   return Result.isOk(authenticated)
     ? (authenticated.value satisfies McpSession).credential?.type
     : undefined;
