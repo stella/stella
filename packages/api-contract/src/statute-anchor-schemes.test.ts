@@ -35,6 +35,14 @@ describe("statute anchor schemes", () => {
     expect(statuteAnchorSchemeFor(" usa ")).toBe(US_CODE_ANCHORS);
   });
 
+  test("case and surrounding whitespace preserve every public jurisdiction's scheme", () => {
+    for (const country of PUBLIC_COUNTRIES) {
+      expect(statuteAnchorSchemeFor(` ${country.toLowerCase()} `)).toBe(
+        STATUTE_ANCHOR_SCHEMES[country],
+      );
+    }
+  });
+
   test("a country outside the public list is a bug, not a statute read whole", () => {
     expect(() => statuteAnchorSchemeFor("cz")).toThrow(
       'No statute anchor scheme for country "cz".',

@@ -192,6 +192,8 @@ test("citation previews cap block count and serialize within their derived byte 
       const text = fragment.repeat(8000);
       const heading = { id: text, anchorId: text, level: 1 as const, text };
       const result = projectProvisionPreview({
+        country: text,
+        url: text,
         documentId: id,
         language: text,
         anchorId: text,
@@ -215,6 +217,43 @@ test("citation previews cap block count and serialize within their derived byte 
   );
 });
 
+test("citation previews preserve their metadata through response encoding", async () => {
+  const preview = {
+    documentId: id,
+    country: "CZE",
+    url: "https://example.test/statutes/fixture#par_1",
+    language: "cs",
+    anchorId: "par_1",
+    citedAnchorId: null,
+    headings: [],
+    heading: null,
+    blocks: [
+      { id: "paragraph-1", anchorId: "par_1", text: "Text ustanovení." },
+    ],
+  };
+  const projected = projectProvisionPreview(preview);
+  const encoded = projectProvisionPreview(projected);
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/preview": {
+          GET: {
+            access: "public",
+            config: {
+              response: { 200: provisionPreviewSuccessResponseSchema },
+            },
+            run: async () => await Promise.resolve(encoded),
+          },
+        },
+      }),
+      middleware: [errorBoundary],
+    }),
+  );
+  const response = await server.fetch(new Request("http://localhost/preview"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(preview);
+});
+
 test("reader plain text keeps literal markup and entities as text", () => {
   assertProperty(
     "reader plain text keeps literal markup and entities as text",
@@ -227,6 +266,8 @@ test("reader plain text keeps literal markup and entities as text", () => {
       (tokens, repeat) => {
         const text = tokens.join("").repeat(repeat);
         const preview = projectProvisionPreview({
+          country: "CZE",
+          url: null,
           documentId: id,
           language: "cs",
           anchorId: "par_1",

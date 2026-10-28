@@ -28,6 +28,50 @@ const PURE_AUTOFIX = {
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
   "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
+  // Toolchain pins are read from committed manifests; temporary git state
+  // merely exposes those files to the pinned cloud-setup renderer.
+  "cloud-setup": "scripts/generate-cloud-setup.ts",
+  // Parses the install tooling import closure and replaces one Docker block.
+  "api-image-install-tooling": "scripts/docker-source-closure.ts",
+  // Serializes package.json's packageManager pin.
+  "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses schema source without opening a database connection.
+  "status-tables": "apps/api/scripts/generate-status-tables.ts",
+  "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
+  "schema-index": "apps/api/scripts/generate-schema-index.ts",
+  // Renders the versioned transition spec into its existing migration;
+  // directory discovery chooses exactly one committed version-one migration.
+  "transition-triggers": "apps/api/scripts/generate-transition-triggers.ts",
+  // Static source analysis and pinned formatters render the catalog and CLI
+  // contracts; setup-env supplies static validation defaults, never live data.
+  "capability-catalog": "apps/api/scripts/export-capability-catalog.ts",
+  "cli-registry": "codegen",
+  // Compiler input discovery and pinned bundlers consume repository sources.
+  "api-typecheck-projects": "packages/scripts/src/api-typecheck-regenerate.ts",
+  "visual-sandbox-bundle": "build:visual-sandbox",
+  // Fixed image construction uses integer pixels, not external image tools.
+  "scan-engine-fixtures": "generate:fixtures",
+  // Source-owned module metadata and CSS tokens render Markdown blocks.
+  "module-ownership": "scripts/ownership.ts",
+  "design-tokens": "scripts/design-tokens-doc.ts",
+  // Resolves the committed web theme against the lockfile-pinned Tailwind
+  // palette with lightningcss; no network, clock or environment.
+  "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
+  // The committed release policy renders package names inside fixed markers.
+  "published-package-list": "scripts/check-published-package-lists.ts",
+  // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
+  "i18n-glossary": "packages/scripts/src/glossary-gen.ts",
+  // Reads sorted in-tree manifests, icons and skill files; GitHub entries
+  // remain references and never trigger network access.
+  catalogue: "generate",
+  // Hashes pinned content-submodule and fixture DOCX bytes, reading their
+  // committed manifests, public-pack policy and README files only.
+  "template-packs": "generate",
+  // Validates sorted in-tree skill packages and emits literal imports.
+  "skill-manifests": "generate",
+  // Pinned shared shell renders the manifest, local fragments and skills;
+  // temporary paths never enter output and no network commands are invoked.
+  "ai-instructions": "sync-ai",
   // Reads `<dir>/en.json` alone and prints its key tree in source order.
   "i18n-messages-landing": "packages/scripts/src/i18n-typegen.ts",
   "i18n-messages-transactional": "packages/scripts/src/i18n-typegen.ts",
@@ -42,11 +86,49 @@ const PURE_AUTOFIX = {
   // Parsers and AST repairs are pure (no clock, network or database on the
   // re-parse path); it fails rather than re-stamping an analysis.
   "case-law-fixture-reparse": "apps/api/scripts/reparse-case-law-fixtures.ts",
-  // Copies .ai/shared modules and skills (the pinned submodule, checked out
-  // by autofix) and .ai/local* into AGENTS.md, GEMINI.md and skill copies,
-  // staging in a temp directory; no network, clock or environment input.
-  "ai-instructions": "sync-ai",
 } as const;
+
+// A committed generator must have an explicit purity decision. Native builds
+// need toolchains outside the Bun install, and recorders need live services.
+const EXCLUDED_AUTOFIX = {
+  "playwright-devices":
+    "Device descriptors are refreshed explicitly from the installed SDK",
+  "ci-job-classification-digests":
+    "Protected workflow metadata is refreshed outside pull-request autofix",
+  "failure-tags": "Generated census is excluded by the current owner policy",
+  "migration-lock-baseline": "Migration lock decisions require human review",
+  "model-catalog-inputs": "Fetches upstream model catalogs",
+  "model-rates": "Model catalogs are explicitly excluded from automatic repair",
+  "model-capabilities":
+    "Model catalogs are explicitly excluded from automatic repair",
+  "model-benchmarks": "Fetches upstream benchmark data",
+  "catalogue-pinned-facts": "Fetches upstream content facts",
+  "us-courts": "Upstream court data refresh is excluded",
+  "us-reporters": "Fetches pinned upstream reporter data",
+  snowball: "Fetches/builds upstream Snowball sources",
+  "infosoud-codes": "Fetches live code tables",
+  "mojibake-exemplars": "Extracts upstream exemplars",
+  "mcp-surface": "Human-reviewed protected baseline",
+  "desktop-rpc":
+    "Cargo test requires native platform dependencies and toolchain state",
+  "scan-engine-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "chat-transcripts": "Runs service-backed chat recording suites",
+  "case-law-publication-migration":
+    "Migration SQL requires review rather than automatic rewriting",
+} as const;
+
+test("every committed generator has an explicit autofix purity decision", () => {
+  const committed = GENERATORS.filter(
+    ({ outputKind }) => outputKind === "committed",
+  );
+  expect(
+    Object.keys({ ...PURE_AUTOFIX, ...EXCLUDED_AUTOFIX }).toSorted(),
+  ).toEqual(committed.map(({ id }) => id).toSorted());
+  for (const id of Object.keys(EXCLUDED_AUTOFIX)) {
+    expect(generator(id).autofix, id).toBe(false);
+  }
+});
 
 const generator = (id: string) => {
   const found = GENERATORS.find((candidate) => candidate.id === id);
@@ -234,7 +316,8 @@ test("no autofix generator writes a protected decision record", () => {
       ).toBe(false);
       for (const pattern of AUTOFIX_PROTECTED_PATHS) {
         expect(
-          matchesGeneratedGlob(output, witness(pattern)),
+          isAutofixProtectedPath(witness(pattern)) &&
+            matchesGeneratedGlob(output, witness(pattern)),
           `${entry.id}: ${output} covers ${pattern}`,
         ).toBe(false);
       }

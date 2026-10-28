@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -682,7 +683,7 @@ export const oauthScopeRecoveryHint = ({
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `{"error":{"code","message","hint?","issues?","retryable?","retryAfterMs?","requestId?"}}`;
  * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
@@ -698,6 +699,7 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  retryAfterMs,
   contactUrl,
 }: {
   code: McpErrorCode;
@@ -705,6 +707,7 @@ export const structuredErrorResult = ({
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
   contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
   const requestId = getRequestId();
@@ -714,6 +717,7 @@ export const structuredErrorResult = ({
     ...(hint === undefined ? {} : { hint }),
     ...(issues === undefined || issues.length === 0 ? {} : { issues }),
     ...(retryable === undefined ? {} : { retryable }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     ...(contactUrl === undefined ? {} : { contactUrl }),
     ...(requestId === undefined ? {} : { requestId }),
   } as const;
@@ -859,25 +863,35 @@ export const internalFailureResult = (
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(
-        error,
-        handlerErrorContext(fingerprintKey, { source: "mcp" }),
-      );
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  const timeout = publicReadTimeoutError(error);
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
   }
-  captureError(error, handlerErrorContext(fingerprintKey, { source: "mcp" }));
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
+  if (timeout !== null) {
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      retryable: true,
+    });
+  }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
+  }
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",

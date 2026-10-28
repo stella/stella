@@ -446,6 +446,8 @@
       "scripts/check-desktop-release-policy.sh",
       "scripts/check-published-versions*",
       "scripts/check-npm-publish-lag.ts",
+      "scripts/promoted-release-policy.ts",
+      "scripts/changeset-entry.ts",
       ".github/workflows/journey-canary.yml",
       ".github/workflows/scheduled-run-alerts.yml",
       ".github/workflows/publish-npm.yml"
@@ -503,6 +505,7 @@
     "Test promoted release resolution": [
       "@stll/collation",
       "scripts/resolve-promoted-release*",
+      "scripts/promoted-release-policy.ts",
       "scripts/offline-network-preload.ts",
       "apps/landing/src/data/changelog-release-dates.json",
       ".github/workflows/ci.yml"
@@ -601,6 +604,7 @@
       "scripts/**",
       "@stll/sha256",
       "@stll/api",
+      "@stll/concurrency",
       "@stll/errors"
     ],
     "Task result cache contract": [

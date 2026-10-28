@@ -7,6 +7,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import type { SseStreamBinding } from "@/api/lib/sse";
 
 /** Builds a recorder whose events default to another matter (or none). */
 export type AuditRecorderFactory = (opts?: {
@@ -26,6 +27,11 @@ export type MemberCaller = {
     /** The browser session, or `null` for a credential that has none (MCP). */
     readonly id: string | null;
     readonly activeOrganizationId: SafeId<"organization">;
+    /**
+     * What keeps an event stream this caller opens authorized when no
+     * browser session backs it (an app's access token).
+     */
+    readonly stream?: SseStreamBinding;
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;
   readonly scopedDb: ScopedDb;

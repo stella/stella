@@ -4,11 +4,12 @@ import type { ReactElement, RefObject } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteEliParts } from "@stll/api-contract/statute-act-number";
 import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
-  splitStatuteTitleCitation,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 import {
@@ -28,8 +29,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
-import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import {
   InspectorFindBar,
@@ -66,7 +65,6 @@ import {
 import type { StatuteCompareSearch } from "@/features/statutes/statute-compare-search";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
@@ -78,11 +76,6 @@ const LazyStatuteCompareView = lazy(async () => {
   const module =
     await import("@/features/statutes/components/statute-compare-view");
   return { default: module.StatuteCompareView };
-});
-
-const LazyAuthenticatedStatuteChat = lazy(async () => {
-  const module = await import("./-authenticated-statute-chat");
-  return { default: module.AuthenticatedStatuteChat };
 });
 
 type OutlineJumpState = {
@@ -124,78 +117,46 @@ type PublicStatuteViewerProps = PublicStatuteRouteData & {
 
 /**
  * The chat over the wording. Without a version in force there is nothing to
- * bind it to; a signed-in reader loads the full chat lazily behind the gated
- * composer, everyone else gets the public one.
+ * bind it to. Otherwise a visitor and a member get the one reader: the chat
+ * asks a visitor for an account and binds a member's conversation itself, and
+ * its overlay loads beside the text and brings its own composer providers, so
+ * nothing the member's chat needs is mounted around the text after it.
  */
 const StatuteReaderChat = ({
   activeLegal,
   children,
-  signedIn,
 }: {
   activeLegal: ActiveLegalDocument | null;
   children: ReactElement;
-  signedIn: boolean;
-}) => {
-  if (activeLegal === null) {
-    return children;
-  }
-  if (!signedIn) {
-    return (
-      <LegalReaderAIChat
-        activeLegal={activeLegal}
-        aiMode="gated"
-        className="h-full"
-      >
-        {children}
-      </LegalReaderAIChat>
-    );
-  }
-  return (
-    <Suspense
-      fallback={
-        <FileViewerWithAI
-          activeLegal={activeLegal}
-          className="h-full"
-          overlayActivation={FILE_CHAT_OVERLAY_ACTIVATION.gated}
-        >
-          {children}
-        </FileViewerWithAI>
-      }
+}) =>
+  activeLegal === null ? (
+    children
+  ) : (
+    <LegalReaderAIChat
+      activeLegal={activeLegal}
+      aiMode="enabled"
+      className="h-full"
     >
-      <LazyAuthenticatedStatuteChat activeLegal={activeLegal}>
-        {children}
-      </LazyAuthenticatedStatuteChat>
-    </Suspense>
+      {children}
+    </LegalReaderAIChat>
   );
-};
 
-/**
- * Records the act in the reader's recent law, titled `number/year · title`
- * when the stored title carries no citation of its own.
- */
-const useRecordStatuteOpen = ({
-  eli,
-  title,
-}: {
-  eli: string;
-  title: string;
-}) => {
-  const { citation, rest } = splitStatuteTitleCitation(title);
-  const eliCitation = /\/(\d{4})\/(\d+)$/u.exec(eli);
-  const year = eliCitation?.at(1);
-  const number = eliCitation?.at(2);
+/** Records the same act identity and subject used by the list and reader. */
+const useRecordStatuteOpen = (
+  statute: Parameters<typeof statuteDisplayLabel>[0],
+) => {
+  const label = statuteDisplayLabel(statute);
+  const { year, number } = statuteEliParts(statute.eli);
   useRecordOpenedLawDocument({
     kind: "statute",
-    documentId: eli,
+    documentId: statute.eli,
     documentIdentity:
-      number === undefined || year === undefined
+      number === null || year === null
         ? { kind: "unknown" }
         : { kind: "statute", number, year },
     title: {
-      identifier:
-        citation ??
-        (year === undefined || number === undefined ? "" : `${number}/${year}`),
-      description: rest,
+      identifier: label.identity ?? "",
+      description: label.subject ?? "",
     },
   });
 };
@@ -215,7 +176,6 @@ export const PublicStatuteViewer = ({
   windowGap,
   work,
 }: PublicStatuteViewerProps) => {
-  const user = useMaybeAuthenticatedUser();
   const t = useTranslations();
   const navigate = useNavigate();
   const asOfLabelId = useId();
@@ -232,7 +192,7 @@ export const PublicStatuteViewer = ({
   } = useReaderElement<HTMLDivElement>();
   const panelRef = useRef<HTMLElement>(null);
   const header = statute ?? work;
-  useRecordStatuteOpen({ eli: work.eli, title: header.title });
+  useRecordStatuteOpen(header);
   const find = useInspectorFind({
     contentRef,
     enabled: statute !== null && comparison.compare === undefined,
@@ -377,10 +337,14 @@ export const PublicStatuteViewer = ({
   const activeLegal: ActiveLegalDocument | null =
     statute === null
       ? null
-      : { type: "statute", documentId: statute.id, title: statute.title };
+      : {
+          type: "statute",
+          documentId: statute.id,
+          title: statuteDisplayLabel(statute).text,
+        };
 
   const readerWithChat = (
-    <StatuteReaderChat activeLegal={activeLegal} signedIn={user !== null}>
+    <StatuteReaderChat activeLegal={activeLegal}>
       <div
         className="reader-scroll h-full overflow-y-auto"
         ref={attachViewport}
