@@ -50,6 +50,33 @@ describe("EU refresh command boundaries", () => {
     expect(rootPoolConnectionCount()).toBe(0);
   });
 
+  test("the missing-languages mode runs the backfill with its own flags", async () => {
+    const calls: (readonly string[])[] = [];
+    const exitCode = await runEuEcjRefetch(
+      ["--missing-languages", "--newest", "2026-10", "--oldest", "2023-01"],
+      {
+        missingLanguages: async (argv) => {
+          calls.push(argv);
+          return 0;
+        },
+        formexRefresh: async () => {
+          throw new Error("a backfill run must not reach the Formex refresh");
+        },
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([["--newest", "2026-10", "--oldest", "2023-01"]]);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
+  test("the missing-languages mode refuses an applied run without a journal", async () => {
+    expect(await runEuEcjRefetch(["--missing-languages", "--apply"])).toBe(1);
+    expect(
+      await runEuEcjRefetch(["--missing-languages", "--newest", "2026-13"]),
+    ).toBe(1);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
   test("returns exit 0 after a completed Formex refresh", async () => {
     const exitCode = await runEuEcjRefetch(
       ["--formex-only", "--ids-file", "ids.txt"],

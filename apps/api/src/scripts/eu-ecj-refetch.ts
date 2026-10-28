@@ -24,6 +24,7 @@ import {
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { runEcjFormexRefresh } from "@/api/scripts/eu-ecj-formex-refresh";
+import { runEuEcjLanguageBackfill } from "@/api/scripts/eu-ecj-language-backfill";
 import { operatorFlags } from "@/api/scripts/operator-flags";
 
 /**
@@ -63,6 +64,8 @@ const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
   --after <id>         Resume after a CELEX or Formex row id (sorted order).
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
   --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).
+  --missing-languages  Instead: fill in language versions no row holds, month
+                       by month (see --missing-languages --help).
 
 A publisher rate-limit stop exits 1; resume after its reported cooldown.`;
 
@@ -483,13 +486,25 @@ const runCelexRefresh = async ({
   return haltReason === null || haltReason === "interrupted" ? 0 : 1;
 };
 
+/** Selects the missing-language-versions backfill instead of a refetch. */
+const MISSING_LANGUAGES_FLAG = "--missing-languages";
+
 type EuEcjRefetchOptions = {
   formexRefresh?: typeof runStoredFormexRefresh;
+  missingLanguages?: typeof runEuEcjLanguageBackfill;
 };
 export const runEuEcjRefetch = async (
   argv: readonly string[],
-  { formexRefresh = runStoredFormexRefresh }: EuEcjRefetchOptions = {},
+  {
+    formexRefresh = runStoredFormexRefresh,
+    missingLanguages = runEuEcjLanguageBackfill,
+  }: EuEcjRefetchOptions = {},
 ): Promise<number> => {
+  if (argv.includes(MISSING_LANGUAGES_FLAG)) {
+    return await missingLanguages(
+      argv.filter((arg) => arg !== MISSING_LANGUAGES_FLAG),
+    );
+  }
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(USAGE);
     return 0;

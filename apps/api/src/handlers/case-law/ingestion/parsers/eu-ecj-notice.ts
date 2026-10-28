@@ -118,6 +118,20 @@ export type EcjNoticeFacts = {
   caseIdentifier: readonly string[];
   /** Every format of this expression, so a later fetch needs no query. */
   manifestations: readonly EcjNoticeManifestation[];
+  /**
+   * Every language expression the Office holds for this work, and the formats
+   * each is published in: the work's own language manifest. A row is one
+   * expression, so this is what says which other rows the work should have.
+   */
+  workExpressions: readonly EcjWorkExpression[];
+};
+
+/** One language expression of the work, as the notice embeds it. */
+export type EcjWorkExpression = {
+  /** The language authority code as the Office states it (`DEU`). */
+  language: string;
+  /** Manifestation types the expression is published in, sorted. */
+  formats: readonly string[];
 };
 
 type Selection = cheerio.Cheerio<Element>;
@@ -348,6 +362,51 @@ const noticeManifestations = (
   return manifestations;
 };
 
+/**
+ * The work's language expressions, from `WORK_HAS_EXPRESSION`: one entry per
+ * language, with the union of the formats stated for it. Read from the
+ * authority code rather than the label, which the notice translates into the
+ * negotiated language. Sorted, so every row of one work states one value.
+ */
+const workExpressions = (
+  $: cheerio.CheerioAPI,
+  work: Selection,
+): readonly EcjWorkExpression[] => {
+  const formatsByLanguage = new Map<string, Set<string>>();
+  for (const embedded of work
+    .children("WORK_HAS_EXPRESSION")
+    .children("EMBEDDED_NOTICE")
+    .toArray()) {
+    const notice = $(embedded);
+    const language = textOf(
+      notice
+        .children("EXPRESSION")
+        .children("EXPRESSION_USES_LANGUAGE")
+        .children("IDENTIFIER"),
+    );
+    if (language === undefined) {
+      continue;
+    }
+    const formats = formatsByLanguage.get(language) ?? new Set<string>();
+    for (const manifestation of notice.children("MANIFESTATION").toArray()) {
+      const node = $(manifestation);
+      const type =
+        textOf(node.children("MANIFESTATION_TYPE").children("VALUE")) ??
+        node.attr("manifestation-type");
+      if (type !== undefined) {
+        formats.add(type);
+      }
+    }
+    formatsByLanguage.set(language, formats);
+  }
+  return [...formatsByLanguage]
+    .toSorted(([left], [right]) => (left < right ? -1 : 1))
+    .map(([language, formats]) => ({
+      language,
+      formats: [...formats].toSorted(),
+    }));
+};
+
 /** Parse one branch notice into the facts a row keeps from it. */
 export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
   const $ = cheerio.load(xml, { xml: true });
@@ -432,6 +491,7 @@ export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
       "EXPRESSION_CASE-LAW_IDENTIFIER_CASE",
     ),
     manifestations: noticeManifestations($),
+    workExpressions: workExpressions($, work),
   };
 };
 

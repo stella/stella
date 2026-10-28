@@ -1156,6 +1156,67 @@ describe("what the notice adds to a stored row", () => {
   });
 });
 
+describe("the work's language manifest", () => {
+  test("a stored row states every language expression of its work", async () => {
+    // A row is one expression; the list of the others is what makes a
+    // missing translation checkable, and a replay of the stored notice is
+    // how rows written before it was kept come to state it.
+    const decision = await decisionFrom(noticeEn);
+    const expressions = decision.metadata["workExpressions"];
+
+    expect(Array.isArray(expressions)).toBe(true);
+    const languages = Array.isArray(expressions)
+      ? expressions.map((expression: unknown) =>
+          isRecord(expression) ? expression["language"] : undefined,
+        )
+      : [];
+    expect(languages).toHaveLength(24);
+    expect(new Set(languages).size).toBe(24);
+    expect(languages).toEqual(
+      // Authority codes, compared by code unit as the parser orders them.
+      languages.toSorted((left, right) =>
+        String(left) < String(right) ? -1 : 1,
+      ),
+    );
+    expect(languages).toContain("ENG");
+    expect(languages).toContain("GLE");
+    // Stated alike in every row of the work, whatever language it holds.
+    expect(parseEcjNotice(noticeEl).workExpressions).toEqual(
+      parseEcjNotice(noticeEn).workExpressions,
+    );
+  });
+
+  test("states translations published only as the Court's HTML", async () => {
+    const notice = await gunzipText(
+      new URL(
+        "__fixtures__/eu-ecj-notice-62026CO0122-cs.xml.gz",
+        import.meta.url,
+      ),
+    );
+    const expressions = parseEcjNotice(notice).workExpressions;
+    const htmlOnly = expressions.filter(
+      ({ formats }) => formats.includes("html") && !formats.includes("xhtml"),
+    );
+
+    expect(expressions).toHaveLength(20);
+    // The languages a listing limited to XHTML could not see: everything but
+    // the four the Office had converted when this notice was recorded.
+    expect(htmlOnly.map(({ language }) => language)).toContain("CES");
+    expect(htmlOnly.length).toBe(16);
+    expect(
+      expressions
+        .filter(({ formats }) => formats.includes("xhtml"))
+        .map(({ language }) => language),
+    ).toEqual(["DAN", "ENG", "FRA", "RON"]);
+  });
+
+  test("a row stored without a notice states no manifest rather than an empty one", async () => {
+    const decision = await decisionFrom(undefined);
+
+    expect(Object.hasOwn(decision.metadata, "workExpressions")).toBe(false);
+  });
+});
+
 describe("the Formex bibliography", () => {
   test("states the docket and the court without a language", () => {
     // Both are rendered into the negotiated language by the notice, so this

@@ -290,11 +290,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+        "the work's language manifest and the listed manifestation type join the row's metadata, which has no feature storage of its own",
     },
   },
   [ADAPTER_KEYS.UK_FCL]: {

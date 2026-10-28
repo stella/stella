@@ -289,6 +289,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   lodgedOn: INSPECTED,
   lowerCourtJudgments: INSPECTED,
   manifestations: INSPECTED,
+  manifestationType: INSPECTED,
   manifestationUri: INSPECTED,
   meansOfAppeal: INSPECTED,
   mentionedStatutes: INSPECTED,
@@ -474,6 +475,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   volumeOfLawReports: INSPECTED,
   webTitle: INSPECTED,
   wordDocumentUrl: INSPECTED,
+  workExpressions: INSPECTED,
   yearOfLawReports: INSPECTED,
   zverejnenoNaWebu: INSPECTED,
 } as const satisfies Record<string, MetadataTextDisposition>;
