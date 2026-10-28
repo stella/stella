@@ -43,6 +43,7 @@ import { Temporal } from "@stll/time";
 
 import { runUnderCorpusSchemaLane } from "@/api/db/corpus-schema-lane";
 import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";
+import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 /**
  * The lane's advisory-lock key, as the `(int, int)` form of
@@ -57,18 +58,8 @@ export const CASE_LAW_MAINTENANCE_LANE = {
 /** Waits longer than this are logged so a stuck pass is visible. */
 const MAINTENANCE_LANE_WAIT_LOG_MS = 30_000;
 
-/** What `execute` resolves to for a row shape, as the drizzle instance types it. */
-type ExecuteResult<TRow extends Record<string, unknown>> = Awaited<
-  ReturnType<typeof rootDatabase.execute<TRow>>
->;
-
-/** A root-connection handle: the subset scripts use of the drizzle instance. */
-export type CaseLawRootHandle = {
-  execute: <TRow extends Record<string, unknown> = Record<string, unknown>>(
-    query: SQLWrapper | string,
-  ) => PromiseLike<ExecuteResult<TRow>>;
-  transaction: <T>(fn: (tx: Transaction) => Promise<T>) => Promise<T>;
-};
+/** A root-connection handle with the shared single-rowset maintenance contract. */
+export type CaseLawRootHandle = MaintenanceDb;
 
 /** A transaction runner that sets the ingestion role, as the pipeline uses. */
 export type CaseLawIngestionHandle = <T>(
@@ -152,7 +143,8 @@ const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
   };
 };
 
@@ -267,7 +259,10 @@ export const createCaseLawMaintenanceCleanupHandles = async ({
       transaction,
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
-      ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+      ) =>
+        await transaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: createIngestionDb(markRlsDatabase({ transaction }), {
       laneWaitMs: timeoutMs,
@@ -343,7 +338,10 @@ const runBoundedMaintenanceLane = async <T>({
         transaction,
         execute: async <TRow extends Record<string, unknown>>(
           query: SQLWrapper | string,
-        ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+        ) =>
+          await transaction(
+            async (tx) => await tx.execute<TRow>(query, "objects"),
+          ),
       };
       const scoped = createIngestionDb(markRlsDatabase(queuedDatabase), {
         laneWaitMs: lockTimeout,
@@ -427,7 +425,9 @@ export const readOnlyHandles = ({
       execute: async <TRow extends Record<string, unknown>>(
         query: SQLWrapper | string,
       ) =>
-        await readOnlyTransaction(async (tx) => await tx.execute<TRow>(query)),
+        await readOnlyTransaction(
+          async (tx) => await tx.execute<TRow>(query, "objects"),
+        ),
     },
     ingestionDb: async (fn) =>
       await ingestionDb(async (tx) => {

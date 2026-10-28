@@ -329,7 +329,8 @@ const observeReplaySessionHandles = ({
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
       query: SQLWrapper | string,
-    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+    ) =>
+      await transaction(async (tx) => await tx.execute<TRow>(query, "objects")),
   };
   const ingestionDb: ScopedDb = async (work) =>
     await handles.ingestionDb(async (tx) => {
@@ -644,7 +645,10 @@ const resetReplayDryRun = async ({
         transaction,
         execute: async <TRow extends Record<string, unknown>>(
           query: SQLWrapper | string,
-        ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+        ) =>
+          await transaction(
+            async (tx) => await tx.execute<TRow>(query, "objects"),
+          ),
       };
       const source = await transaction(async (tx) =>
         (

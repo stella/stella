@@ -20,12 +20,15 @@ import { rootDb } from "@/api/db/root";
 
 const applyPgFtsMigration = async () => {
   // Check if an existing generated column needs migration
-  const colInfo = await rootDb.execute(sql`
+  const colInfo = await rootDb.execute(
+    sql`
     SELECT is_generated
     FROM information_schema.columns
     WHERE table_name = 'search_documents'
       AND column_name = 'tsv'
-  `);
+  `,
+    "objects",
+  );
 
   const isGenerated =
     colInfo.length > 0 && colInfo[0]?.["is_generated"] === "ALWAYS";

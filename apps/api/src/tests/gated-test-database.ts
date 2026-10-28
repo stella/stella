@@ -193,14 +193,20 @@ export const copyIngestionTablePrivileges = async ({
     tableNames.map((name) => sql`${name}`),
     sql`, `,
   );
-  const tableGrants = await sourceDb.execute(sql`
+  const tableGrants = await sourceDb.execute(
+    sql`
     SELECT table_name, privilege_type FROM information_schema.table_privileges
     WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
-      AND table_name IN (${tables}) ORDER BY table_name, privilege_type`);
-  const columnGrants = await sourceDb.execute(sql`
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type`,
+    "objects",
+  );
+  const columnGrants = await sourceDb.execute(
+    sql`
     SELECT table_name, column_name, privilege_type FROM information_schema.column_privileges
     WHERE table_schema = 'public' AND grantee = 'stella_ingestion'
-      AND table_name IN (${tables}) ORDER BY table_name, privilege_type, column_name`);
+      AND table_name IN (${tables}) ORDER BY table_name, privilege_type, column_name`,
+    "objects",
+  );
   await targetDb.execute(
     sql`GRANT USAGE ON SCHEMA ${sql.identifier(targetSchema)} TO stella_ingestion`,
   );
