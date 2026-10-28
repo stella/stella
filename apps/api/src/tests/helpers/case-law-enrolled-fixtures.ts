@@ -2211,7 +2211,7 @@ export const atFindokFixture = (): EnrolledAdapterFixture => ({
         .toArray()
         .flatMap((node) => {
           const parent = node.parent;
-          if (parent?.type !== "tag") {
+          if (parent === null || !("name" in parent)) {
             return [];
           }
           return [[`${parent.name}/${node.name}`, AT_FINDOK_DECISION_XML]];
