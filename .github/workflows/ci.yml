@@ -1125,6 +1125,7 @@ jobs:
           COMPARISON_BASE: ${{ steps.changed-files.outputs.comparison_base }}
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             : > "$RUNNER_TEMP/api-test-files"
             {
@@ -1258,6 +1259,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : "${RUNNER_TEMP:?RUNNER_TEMP must name the runner temporary directory}"
           changed_files=()
           if [[ -s "$RUNNER_TEMP/api-test-changed-paths" ]]; then
             while IFS= read -r -d '' file; do

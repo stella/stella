@@ -6742,8 +6742,8 @@ test("a crashed API planner widens the real workflow outputs", () => {
   );
   const directory = mkdtempSync(nodePath.join(tmpdir(), "api-plan-fallback-"));
   const output = nodePath.join(directory, "output");
-  try {
-    const result = Bun.spawnSync(
+  const runStep = (runnerTemp: Record<string, string>) =>
+    Bun.spawnSync(
       [
         "bash",
         "-e",
@@ -6758,12 +6758,26 @@ test("a crashed API planner widens the real workflow outputs", () => {
           PACKAGE_CHECKS_REQUIRED: "true",
           API_SCOPE_UNKNOWN: "false",
           PLANNER_CALLED: nodePath.join(directory, "called"),
+          ...runnerTemp,
         },
         stdout: "pipe",
         stderr: "pipe",
       },
     );
+  try {
+    // Without the runner's temporary directory the handoff file would land
+    // at the filesystem root, so the step refuses before planning.
+    const unset = runStep({});
+    expect(unset.exitCode).not.toBe(0);
+    expect(unset.stderr.toString()).toContain(
+      "RUNNER_TEMP must name the runner temporary directory",
+    );
+    expect(existsSync(nodePath.join(directory, "called"))).toBe(false);
+    const result = runStep({ RUNNER_TEMP: directory });
     expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(
+      readFileSync(nodePath.join(directory, "api-test-files"), "utf-8"),
+    ).toBe("");
     expect(readFileSync(nodePath.join(directory, "called"), "utf-8")).toBe(
       "invoked\n",
     );
