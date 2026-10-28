@@ -130,7 +130,7 @@ describe("hyperlinks a source document carries", () => {
     expect(html).toContain("§ 46 s. ř. s.");
   });
 
-  test("an excerpt keeps a footnote reference's words without its jump", () => {
+  test("an excerpt keeps a footnote reference's words and superscript without its jump", () => {
     const footnoteRef: Inline = {
       children: [{ text: "2)", type: "text" }],
       href: "#ppc_2",
@@ -151,7 +151,8 @@ describe("hyperlinks a source document carries", () => {
     // An excerpt carries no `ppc_2`, and the page around it may.
     const embedded = render("embedded");
     expect(embedded).not.toContain("<a");
-    expect(embedded).toContain("2)");
+    // Still set as the published text prints it: a superscript mark.
+    expect(embedded).toContain('<span class="reader-note-ref">2)</span>');
   });
 
   test("a bare vendor URL printed in the text is not auto-linked", () => {

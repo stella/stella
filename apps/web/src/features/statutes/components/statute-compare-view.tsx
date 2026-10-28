@@ -18,6 +18,12 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 // The move flash is the reader's own `[data-highlight]` animation.
 import "@stll/decision-reader/reader.css";
@@ -38,6 +44,7 @@ import type {
 import {
   actCompareSide,
   compareStatuteBlocks,
+  comparisonAfterPick,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
@@ -62,12 +69,16 @@ import type {
 } from "@/features/statutes/statute-compare-search";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { provisionInVersionOptions } from "@/lib/statutes/provision-preview";
-import { formatValidityDate } from "@/lib/statutes/statute-format";
+import {
+  formatValidityDate,
+  formatValidityRange,
+} from "@/lib/statutes/statute-format";
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",
@@ -108,6 +119,11 @@ type StatuteCompareViewProps = {
   provision: string | undefined;
   show: StatuteCompareShow;
   onNavigate: CompareNavigate;
+  /**
+   * Put another consolidation on screen and keep comparing: the route names
+   * the text on screen, so swapping that side is a move to its address.
+   */
+  onOpenVersion: (versionId: string, comparison: StatuteCompareSearch) => void;
   /** The reader's own text size, so the comparison reads at the same size. */
   textScale: ReaderTextScale;
 };
@@ -122,6 +138,7 @@ type ReaderTextScale = ReturnType<typeof useWebReaderTextScale>;
 export const StatuteCompareView = ({
   compare,
   onNavigate,
+  onOpenVersion,
   onScreen,
   onScreenBlocks,
   provision,
@@ -158,13 +175,44 @@ export const StatuteCompareView = ({
       return panic("Unhandled statute comparison state");
   }
 
+  const pick = (
+    replaced: PublicStatuteVersion,
+    picked: PublicStatuteVersion,
+  ) => {
+    const next = comparisonAfterPick({
+      newer: resolved.newer,
+      older: resolved.older,
+      onScreenId: onScreen.id,
+      picked,
+      replaced,
+    });
+    switch (next.type) {
+      case "compare":
+        onNavigate({ compare: next.compare, provision, show });
+        return;
+      case "open":
+        onOpenVersion(next.versionId, {
+          compare: next.compare,
+          provision,
+          show,
+        });
+        return;
+      case "none":
+        return;
+      default:
+        next satisfies never;
+        panic("Unhandled comparison pick");
+    }
+  };
   const frame = {
     language: onScreen.language,
     newer: resolved.newer,
     older: resolved.older,
     onClose: close,
+    onPick: pick,
     statuteLists: statuteListSchemeFor(onScreen.country),
     textScale,
+    versions,
   };
 
   // Both consolidations are the same act from the same publisher, so its
@@ -204,9 +252,16 @@ type CompareFrame = {
   older: PublicStatuteVersion;
   newer: PublicStatuteVersion;
   onClose: () => void;
+  /** Show `picked` in the column that shows `replaced`. */
+  onPick: (
+    replaced: PublicStatuteVersion,
+    picked: PublicStatuteVersion,
+  ) => void;
   /** The act's publisher scheme, which both sides' anchors nest lists in. */
   statuteLists: StatuteListScheme;
   textScale: ReaderTextScale;
+  /** Every consolidation of the act, for either column to take. */
+  versions: readonly PublicStatuteVersion[];
 };
 
 type OrderSidesOptions = {
@@ -423,20 +478,18 @@ const CompareFrameLayout = ({
         <div className="grid items-center gap-x-8 border-b py-1.5 md:grid-cols-2">
           {/* Stacked, every cell names its own version instead. */}
           <div className="min-w-0 max-md:hidden">
-            <StatuteValidityIndicator
-              expression={frame.older}
-              status={frame.older.status}
-              validFrom={frame.older.versionValidFrom}
-              validTo={frame.older.versionValidTo}
+            <CompareVersionPicker
+              frame={frame}
+              other={frame.newer}
+              shown={frame.older}
             />
           </div>
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0 max-md:hidden">
-              <StatuteValidityIndicator
-                expression={frame.newer}
-                status={frame.newer.status}
-                validFrom={frame.newer.versionValidFrom}
-                validTo={frame.newer.versionValidTo}
+              <CompareVersionPicker
+                frame={frame}
+                other={frame.older}
+                shown={frame.newer}
               />
             </div>
             <div className="ms-auto flex shrink-0 items-center gap-1">
@@ -466,6 +519,80 @@ const CompareFrameLayout = ({
         {children}
       </div>
     </section>
+  );
+};
+
+type CompareVersionPickerProps = {
+  frame: CompareFrame;
+  /** The version the column shows. */
+  shown: PublicStatuteVersion;
+  /** The other column's version, which this one cannot also show. */
+  other: PublicStatuteVersion;
+};
+
+/**
+ * A column's head, which picks the version the column shows. Only a version
+ * with an opening day can be compared: the comparison is addressed by it.
+ */
+const CompareVersionPicker = ({
+  frame,
+  other,
+  shown,
+}: CompareVersionPickerProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const comparable = frame.versions.filter(
+    (version) => version.id === shown.id || version.versionValidFrom !== null,
+  );
+
+  return (
+    <Select
+      onValueChange={(value) => {
+        const picked = comparable.find((version) => version.id === value);
+        if (picked !== undefined && picked.id !== shown.id) {
+          frame.onPick(shown, picked);
+        }
+      }}
+      value={shown.id}
+    >
+      <SelectTrigger
+        aria-label={t("common.version")}
+        className="w-auto max-w-full min-w-0"
+        size="sm"
+      >
+        <StatuteValidityIndicator
+          expression={shown}
+          status={shown.status}
+          validFrom={shown.versionValidFrom}
+          validTo={shown.versionValidTo}
+        />
+      </SelectTrigger>
+      <SelectPopup>
+        {comparable.map((version) => {
+          const range = formatValidityRange({
+            format,
+            openEnded: t("statutes.openEnded"),
+            validFrom: version.versionValidFrom,
+            validTo: version.versionValidTo,
+          });
+          const ineligibleLabel = ineligibleExpressionLabelKey(version);
+          return (
+            <SelectItem
+              disabled={version.id === other.id}
+              key={version.id}
+              value={version.id}
+            >
+              {ineligibleLabel === null
+                ? range
+                : t("statutes.ineligibleVersion", {
+                    label: t(ineligibleLabel),
+                    range,
+                  })}
+            </SelectItem>
+          );
+        })}
+      </SelectPopup>
+    </Select>
   );
 };
 

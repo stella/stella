@@ -330,15 +330,19 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
 }
 
 /* In-text note reference: superscript mark, no underline; the anchor jump
-   plus the :target flash is the interaction. */
+   plus the :target flash is the interaction. An excerpt, which has no note
+   to jump to, keeps the mark in the text's own colour. */
 .reader-note-ref {
   font-size: 0.72em;
   vertical-align: super;
   text-decoration: none;
+}
+
+a.reader-note-ref {
   color: var(--color-primary);
 }
 
-.reader-note-ref:hover {
+a.reader-note-ref:hover {
   text-decoration: underline;
 }
 

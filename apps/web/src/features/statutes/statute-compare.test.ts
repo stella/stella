@@ -8,6 +8,7 @@ import { propertyConfig, propertySeed } from "@stll/property-testing";
 import {
   actCompareSide,
   compareStatuteBlocks,
+  comparisonAfterPick,
   groupCompareRows,
   locateCompareRows,
   pairCompareSides,
@@ -457,6 +458,58 @@ describe("resolveCompareVersions", () => {
         expect(resolved.newer.id).toBe("c");
       }
     }
+  });
+
+  test("a column takes another version and the other column stays, on screen or not", () => {
+    const [c, b, a] = versions;
+    if (a === undefined || b === undefined || c === undefined) {
+      throw new Error("The fixture lists three versions");
+    }
+    const unknown = { id: "x", versionValidFrom: null };
+    // On screen: c (newer); compared: a (older).
+    const pair = { older: a, newer: c, onScreenId: "c" };
+    // The compared column takes b: only `compare` moves.
+    expect(comparisonAfterPick({ ...pair, replaced: a, picked: b })).toEqual({
+      type: "compare",
+      compare: "2025-01-01",
+    });
+    // The on-screen column takes b: b goes on screen, a stays compared.
+    expect(comparisonAfterPick({ ...pair, replaced: c, picked: b })).toEqual({
+      type: "open",
+      versionId: "b",
+      compare: "2024-01-01",
+    });
+    // Every pick resolves back to the pair the reader asked for.
+    for (const [replaced, picked, kept] of [
+      [a, b, c],
+      [c, b, a],
+    ] as const) {
+      const next = comparisonAfterPick({ ...pair, replaced, picked });
+      if (next.type === "none") {
+        throw new Error("A pick of a third version moves the comparison");
+      }
+      const resolved = resolveCompareVersions({
+        compare: next.compare,
+        onScreenId: next.type === "open" ? next.versionId : "c",
+        versions,
+      });
+      expect(
+        resolved?.type === "ready"
+          ? [resolved.older.id, resolved.newer.id].toSorted()
+          : null,
+      ).toEqual([picked.id, kept.id].toSorted());
+    }
+    // Nothing to name the comparison by, or nothing that changes.
+    expect(
+      comparisonAfterPick<{ id: string; versionValidFrom: string | null }>({
+        ...pair,
+        replaced: a,
+        picked: unknown,
+      }),
+    ).toEqual({ type: "none" });
+    expect(comparisonAfterPick({ ...pair, replaced: a, picked: c })).toEqual({
+      type: "none",
+    });
   });
 
   test("names the consolidation the URL asked for as the other one", () => {

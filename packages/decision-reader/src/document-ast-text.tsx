@@ -575,9 +575,13 @@ const renderInline = ({
   if (safeHref.startsWith("#")) {
     // An excerpt carries none of the ids a fragment points at, and the page
     // around it may carry the same id for something else: the reference
-    // keeps its words and loses the jump.
+    // keeps its words and its superscript, and loses the jump.
     if (!ANCHOR_ATTRIBUTES[context.anchorPresentation].domId) {
-      return <Fragment key={key}>{children}</Fragment>;
+      return (
+        <span className="reader-note-ref" key={key}>
+          {children}
+        </span>
+      );
     }
     return (
       <NoteRefLink key={key} targetId={safeHref.slice(1)}>
