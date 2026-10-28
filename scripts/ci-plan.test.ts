@@ -8412,7 +8412,13 @@ const resolveTargetBase = (
   writeFileSync(output, "");
   const result = Bun.spawnSync(["bash", TARGET_BASE_SCRIPT], {
     cwd,
-    env: { PATH: Bun.env["PATH"] ?? "", GITHUB_OUTPUT: output, ...env },
+    // A missing ref is retried like any failed fetch; no waits here.
+    env: {
+      PATH: Bun.env["PATH"] ?? "",
+      GITHUB_OUTPUT: output,
+      RETRY_DELAYS_SECONDS: "0",
+      ...env,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });

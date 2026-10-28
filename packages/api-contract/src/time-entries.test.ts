@@ -22,6 +22,7 @@ test("every canonical entry source survives list response parsing", () => {
       narrativeLanguage: null,
       noCharge: false,
       rateAtEntry: 1000,
+      returnComment: null,
       taskCode: null,
       timerStartedAt: null,
       timerStoppedAt: null,

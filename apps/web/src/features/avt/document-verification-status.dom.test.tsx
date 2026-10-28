@@ -1,5 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
@@ -13,20 +22,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondLatest: (request: Request) => Promise<Response> | Response = () => {
   throw new TypeError("Unexpected status request");
 };
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      expect(request.method).toBe("POST");
-      expect(new URL(request.url).pathname).toContain("/verifications");
-      return await respondLatest(request);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, waitFor } =
@@ -82,7 +78,25 @@ const answerLatest = (
   fetchBoundary.mockClear();
   return fetchBoundary;
 };
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        expect(request.method).toBe("POST");
+        expect(new URL(request.url).pathname).toContain("/verifications");
+        return await respondLatest(request);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients.splice(0)) {
     client.clear();

@@ -4,7 +4,18 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import ts from "typescript6";
+import { parseSync } from "oxc-parser";
+
+import {
+  type ArrayExpression,
+  type CallExpression,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  parseSource,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
@@ -33,6 +44,11 @@ export type TestRetryFinding = {
 
 type SourceMap = ReadonlyMap<string, string>;
 
+type Source = { file: string; program: Program; text: string };
+
+type Wrapper =
+  "ParenthesizedExpression" | "TSAsExpression" | "TSSatisfiesExpression";
+
 const isPlaywrightConfig = (file: string): boolean =>
   PLAYWRIGHT_CONFIG.test(file);
 
@@ -43,89 +59,98 @@ const hasRetryRelevantSyntax = (source: string): boolean =>
     source,
   );
 
-const isTsxOrJsx = (file: string): boolean =>
-  file.endsWith(".tsx") || file.endsWith(".jsx");
-
-const parseSource = (file: string, source: string): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    isTsxOrJsx(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-
-const propertyName = (
-  name: ts.PropertyName | undefined,
-): string | undefined => {
-  if (name === undefined) {
-    return undefined;
-  }
-  if (ts.isComputedPropertyName(name)) {
-    const expression = name.expression;
-    if (
-      ts.isStringLiteral(expression) ||
-      ts.isNoSubstitutionTemplateLiteral(expression) ||
-      ts.isNumericLiteral(expression)
-    ) {
-      return expression.text;
-    }
-    return undefined;
-  }
-  if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNumericLiteral(name)
+const unwrap = (node: Node, wrappers: readonly Wrapper[]): Node => {
+  let value = node;
+  while (
+    (value.type === "ParenthesizedExpression" ||
+      value.type === "TSAsExpression" ||
+      value.type === "TSSatisfiesExpression") &&
+    wrappers.includes(value.type)
   ) {
-    return name.text;
+    value = value.expression;
+  }
+  return value;
+};
+
+// Numbers read as their value's text, like TypeScript's literal text.
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal") {
+    if (typeof node.value === "string") {
+      return node.value;
+    }
+    if (typeof node.value === "number") {
+      return String(node.value);
+    }
   }
   return undefined;
 };
 
-const configObject = (
-  statement: ts.Statement,
-): ts.ObjectLiteralExpression | undefined => {
-  if (!ts.isExportAssignment(statement)) {
+const propertyName = (property: ObjectProperty): string | undefined => {
+  const key = property.key;
+  if (property.computed) {
+    if (key.type === "TemplateLiteral" && key.expressions.length === 0) {
+      return key.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    return literalText(key);
+  }
+  return key.type === "Identifier" ? key.name : literalText(key);
+};
+
+// A `key: value` entry: neither shorthand nor a method or accessor.
+const isPropertyAssignment = (property: ObjectProperty): boolean =>
+  !property.shorthand && !property.method && property.kind === "init";
+
+const isObjectExpression = (node: Node): node is ObjectExpression =>
+  node.type === "ObjectExpression";
+
+const configObject = (statement: Node): ObjectExpression | undefined => {
+  let expression: Node;
+  if (statement.type === "ExportDefaultDeclaration") {
+    expression = statement.declaration;
+  } else if (statement.type === "TSExportAssignment") {
+    expression = statement.expression;
+  } else {
     return undefined;
   }
-  let expression = statement.expression;
-  while (
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression)
-  ) {
-    expression = expression.expression;
+  expression = unwrap(expression, ["TSAsExpression", "TSSatisfiesExpression"]);
+  const call =
+    expression.type === "ChainExpression" ? expression.expression : expression;
+  if (call.type === "CallExpression") {
+    return call.arguments.toReversed().find(isObjectExpression);
   }
-  if (ts.isCallExpression(expression)) {
-    return expression.arguments.toReversed().find(ts.isObjectLiteralExpression);
-  }
-  return ts.isObjectLiteralExpression(expression) ? expression : undefined;
+  return isObjectExpression(expression) ? expression : undefined;
 };
 
 // Resolve imported device presets from the pinned package's literal data,
 // rather than exempting spreads by identifier or trusting arbitrary imports.
 const resolveDevicePreset = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
-): ts.ObjectLiteralExpression | undefined => {
+  expression: Node,
+  source: Source,
+): ObjectExpression | undefined => {
+  const access =
+    expression.type === "ChainExpression" ? expression.expression : expression;
   if (
-    !ts.isElementAccessExpression(expression) ||
-    !ts.isIdentifier(expression.expression) ||
-    !ts.isStringLiteral(expression.argumentExpression)
+    access.type !== "MemberExpression" ||
+    !access.computed ||
+    access.object.type !== "Identifier" ||
+    access.property.type !== "Literal" ||
+    typeof access.property.value !== "string"
   ) {
     return undefined;
   }
-  const binding = expression.expression.text;
-  const imported = source.statements.some(
+  const binding = access.object.name;
+  const presetName = access.property.value;
+  const imported = source.program.body.some(
     (statement) =>
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      statement.moduleSpecifier.text === "@playwright/test" &&
-      statement.importClause?.namedBindings !== undefined &&
-      ts.isNamedImports(statement.importClause.namedBindings) &&
-      statement.importClause.namedBindings.elements.some(
+      statement.type === "ImportDeclaration" &&
+      statement.source.value === "@playwright/test" &&
+      statement.specifiers.some(
         (entry) =>
-          entry.name.text === binding &&
-          (entry.propertyName?.text ?? entry.name.text) === "devices",
+          entry.type === "ImportSpecifier" &&
+          entry.local.name === binding &&
+          (entry.imported.type === "Identifier"
+            ? entry.imported.name
+            : entry.imported.value) === "devices",
       ),
   );
   if (!imported) {
@@ -133,9 +158,7 @@ const resolveDevicePreset = (
   }
   // Dependency resolution and descriptor reads are filesystem boundaries.
   try {
-    const requireConfig = createRequire(
-      path.resolve(REPO_ROOT, source.fileName),
-    );
+    const requireConfig = createRequire(path.resolve(REPO_ROOT, source.file));
     const testEntry = requireConfig.resolve("@playwright/test");
     const playwrightEntry = createRequire(testEntry).resolve("playwright");
     const coreEntry = createRequire(playwrightEntry).resolve("playwright-core");
@@ -151,7 +174,7 @@ const resolveDevicePreset = (
     if (!isRecord(descriptors)) {
       return undefined;
     }
-    const descriptor = descriptors[expression.argumentExpression.text];
+    const descriptor = descriptors[presetName];
     if (!isRecord(descriptor)) {
       return undefined;
     }
@@ -159,165 +182,154 @@ const resolveDevicePreset = (
       "device-preset.ts",
       `export default ${JSON.stringify(descriptor)};`,
     );
-    const statement = literal.statements.at(0);
+    const statement = literal.program.body.at(0);
     return statement === undefined ? undefined : configObject(statement);
   } catch {
     return undefined;
   }
 };
 
-const resolveObject = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
-  visited = new Set<string>(),
-): ts.ObjectLiteralExpression | undefined => {
-  let value = expression;
-  while (
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value) ||
-    ts.isParenthesizedExpression(value)
-  ) {
-    value = value.expression;
+const resolveVariable = (name: string, source: Source): Node | undefined => {
+  for (const statement of source.program.body) {
+    let declaration: Node = statement;
+    if (
+      statement.type === "ExportNamedDeclaration" &&
+      statement.declaration !== null
+    ) {
+      declaration = statement.declaration;
+    }
+    if (declaration.type !== "VariableDeclaration") {
+      continue;
+    }
+    const declarator = declaration.declarations.find(
+      (entry) => entry.id.type === "Identifier" && entry.id.name === name,
+    );
+    if (declarator !== undefined && declarator.init !== null) {
+      return declarator.init;
+    }
   }
-  if (ts.isObjectLiteralExpression(value)) {
+  return undefined;
+};
+
+const resolveObject = (
+  expression: Node,
+  source: Source,
+  visited = new Set<string>(),
+): ObjectExpression | undefined => {
+  const value = unwrap(expression, [
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+    "ParenthesizedExpression",
+  ]);
+  if (value.type === "ObjectExpression") {
     return value;
   }
   const device = resolveDevicePreset(value, source);
   if (device !== undefined) {
     return device;
   }
-  if (!ts.isIdentifier(value) || visited.has(value.text)) {
+  if (value.type !== "Identifier" || visited.has(value.name)) {
     return undefined;
   }
-  visited.add(value.text);
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    const declaration = statement.declarationList.declarations.find(
-      (entry) => ts.isIdentifier(entry.name) && entry.name.text === value.text,
-    );
-    if (declaration?.initializer !== undefined) {
-      return resolveObject(declaration.initializer, source, visited);
-    }
-  }
-  return undefined;
+  visited.add(value.name);
+  const initializer = resolveVariable(value.name, source);
+  return initializer === undefined
+    ? undefined
+    : resolveObject(initializer, source, visited);
 };
 
-const numericValue = (expression: ts.Expression): number | undefined => {
-  let value = expression;
-  while (ts.isParenthesizedExpression(value) || ts.isAsExpression(value)) {
-    value = value.expression;
-  }
-  return ts.isNumericLiteral(value) ? Number(value.text) : undefined;
-};
-
-const resolveVariable = (
-  name: string,
-  source: ts.SourceFile,
-): ts.Expression | undefined => {
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-    const declaration = statement.declarationList.declarations.find(
-      (entry) => ts.isIdentifier(entry.name) && entry.name.text === name,
-    );
-    if (declaration?.initializer !== undefined) {
-      return declaration.initializer;
-    }
-  }
-  return undefined;
+const numericValue = (expression: Node): number | undefined => {
+  const value = unwrap(expression, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+  ]);
+  return value.type === "Literal" && typeof value.value === "number"
+    ? value.value
+    : undefined;
 };
 
 const resolveArray = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
+  expression: Node,
+  source: Source,
   visited = new Set<string>(),
-): ts.ArrayLiteralExpression | undefined => {
-  let value = expression;
-  while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value)
-  ) {
-    value = value.expression;
-  }
-  if (ts.isArrayLiteralExpression(value)) {
+): ArrayExpression | undefined => {
+  const value = unwrap(expression, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type === "ArrayExpression") {
     return value;
   }
-  if (!ts.isIdentifier(value) || visited.has(value.text)) {
+  if (value.type !== "Identifier" || visited.has(value.name)) {
     return undefined;
   }
-  visited.add(value.text);
-  const initializer = resolveVariable(value.text, source);
+  visited.add(value.name);
+  const initializer = resolveVariable(value.name, source);
   return initializer === undefined
     ? undefined
     : resolveArray(initializer, source, visited);
 };
 
 const literalCommandPart = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
+  expression: Node,
+  source: Source,
   visited = new Set<string>(),
 ): string | undefined => {
-  let value = expression;
-  while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value)
-  ) {
-    value = value.expression;
+  const value = unwrap(expression, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type === "TemplateLiteral") {
+    return value.expressions.length === 0
+      ? (value.quasis.at(0)?.value.cooked ?? undefined)
+      : source.text.slice(value.start, value.end);
   }
-  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
-    return value.text;
+  const text = literalText(value);
+  if (text !== undefined) {
+    return text;
   }
-  if (ts.isNumericLiteral(value)) {
-    return value.text;
-  }
-  if (ts.isTemplateExpression(value)) {
-    return value.getText(source);
-  }
-  if (!ts.isIdentifier(value) || visited.has(value.text)) {
+  if (value.type !== "Identifier" || visited.has(value.name)) {
     return undefined;
   }
-  visited.add(value.text);
-  const initializer = resolveVariable(value.text, source);
+  visited.add(value.name);
+  const initializer = resolveVariable(value.name, source);
   return initializer === undefined
     ? undefined
     : literalCommandPart(initializer, source, visited);
 };
 
 const commandArray = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
+  expression: Node,
+  source: Source,
   visited = new Set<string>(),
 ): string[] | undefined => {
-  let value = expression;
-  while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isSatisfiesExpression(value)
-  ) {
-    value = value.expression;
-  }
-  if (ts.isIdentifier(value)) {
-    if (visited.has(value.text)) {
+  const value = unwrap(expression, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type === "Identifier") {
+    if (visited.has(value.name)) {
       return undefined;
     }
-    visited.add(value.text);
-    const initializer = resolveVariable(value.text, source);
+    visited.add(value.name);
+    const initializer = resolveVariable(value.name, source);
     return initializer === undefined
       ? undefined
       : commandArray(initializer, source, visited);
   }
-  if (!ts.isArrayLiteralExpression(value)) {
+  if (value.type !== "ArrayExpression") {
     return undefined;
   }
   const parts: string[] = [];
   for (const element of value.elements) {
-    if (ts.isSpreadElement(element)) {
-      const spread = commandArray(element.expression, source, visited);
+    if (element === null) {
+      continue;
+    }
+    if (element.type === "SpreadElement") {
+      const spread = commandArray(element.argument, source, visited);
       if (spread !== undefined) {
         parts.push(...spread);
       }
@@ -332,15 +344,19 @@ const commandArray = (
 };
 
 const processCommand = (
-  call: ts.CallExpression,
-  source: ts.SourceFile,
+  call: CallExpression,
+  source: Source,
 ): string | undefined => {
-  const expression = call.expression;
+  const callee = call.callee;
   let name: string | undefined;
-  if (ts.isPropertyAccessExpression(expression)) {
-    name = expression.name.text;
-  } else if (ts.isIdentifier(expression)) {
-    name = expression.text;
+  if (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
+  ) {
+    name = callee.property.name;
+  } else if (callee.type === "Identifier") {
+    name = callee.name;
   }
   if (name === undefined || !PROCESS_CALL_NAMES.has(name)) {
     return undefined;
@@ -349,17 +365,19 @@ const processCommand = (
   if (first === undefined) {
     return undefined;
   }
-  if (ts.isObjectLiteralExpression(first)) {
+  if (first.type === "ObjectExpression") {
     const command = first.properties.find(
-      (member) =>
-        ts.isPropertyAssignment(member) && propertyName(member.name) === "cmd",
+      (member): member is ObjectProperty =>
+        member.type === "Property" &&
+        isPropertyAssignment(member) &&
+        propertyName(member) === "cmd",
     );
-    if (command !== undefined && ts.isPropertyAssignment(command)) {
-      const parts = commandArray(command.initializer, source);
+    if (command !== undefined) {
+      const parts = commandArray(command.value, source);
       if (parts !== undefined) {
         return parts.join(" ");
       }
-      return literalCommandPart(command.initializer, source);
+      return literalCommandPart(command.value, source);
     }
   }
   const firstParts = commandArray(first, source);
@@ -376,8 +394,8 @@ const processCommand = (
 };
 
 const effectiveRetries = (
-  object: ts.ObjectLiteralExpression,
-  source: ts.SourceFile,
+  object: ObjectExpression,
+  source: Source,
 ): {
   explicit: boolean;
   value: number | undefined;
@@ -387,8 +405,8 @@ const effectiveRetries = (
   let value: number | undefined;
   let unknownOverride = false;
   for (const member of object.properties) {
-    if (ts.isSpreadAssignment(member)) {
-      const spreadObject = resolveObject(member.expression, source);
+    if (member.type === "SpreadElement") {
+      const spreadObject = resolveObject(member.argument, source);
       if (spreadObject === undefined) {
         unknownOverride = true;
         continue;
@@ -402,22 +420,16 @@ const effectiveRetries = (
     }
     // Shorthand values are not literal retry policies; reject them even when
     // a same-named binding happens to be zero today.
-    if (
-      ts.isShorthandPropertyAssignment(member) &&
-      member.name.text === "retries"
-    ) {
+    if (member.shorthand && propertyName(member) === "retries") {
       explicit = true;
       value = undefined;
       unknownOverride = false;
       continue;
     }
-    if (
-      !ts.isPropertyAssignment(member) ||
-      propertyName(member.name) !== "retries"
-    ) {
+    if (!isPropertyAssignment(member) || propertyName(member) !== "retries") {
       if (
-        ts.isPropertyAssignment(member) &&
-        propertyName(member.name) === undefined &&
+        isPropertyAssignment(member) &&
+        propertyName(member) === undefined &&
         (explicit || value !== undefined)
       ) {
         unknownOverride = true;
@@ -425,7 +437,7 @@ const effectiveRetries = (
       continue;
     }
     explicit = true;
-    value = numericValue(member.initializer);
+    value = numericValue(member.value);
     unknownOverride = false;
   }
   return { explicit, value, unknownOverride };
@@ -440,14 +452,14 @@ const hasRetryViolation = (
   (retries.value !== undefined && retries.value !== 0);
 
 const nestedObjectLiterals = (
-  expression: ts.Expression,
-  source: ts.SourceFile,
-): { objects: ts.ObjectLiteralExpression[]; unknownConfig: boolean } => {
-  const objects: ts.ObjectLiteralExpression[] = [];
-  const active = new Set<ts.Node>();
+  expression: ObjectExpression,
+  source: Source,
+): { objects: ObjectExpression[]; unknownConfig: boolean } => {
+  const objects: ObjectExpression[] = [];
+  const active = new Set<Node>();
   let unknownConfig = false;
   const visitExpression = (
-    value: ts.Expression,
+    value: Node,
     failClosed = false,
     collect = true,
     projectElements = false,
@@ -463,7 +475,7 @@ const nestedObjectLiterals = (
     }
   };
   const visit = (
-    node: ts.Node,
+    node: ObjectExpression | ArrayExpression,
     collect = true,
     projectElements = false,
   ): void => {
@@ -472,40 +484,39 @@ const nestedObjectLiterals = (
       return;
     }
     active.add(node);
-    if (ts.isObjectLiteralExpression(node)) {
+    if (node.type === "ObjectExpression") {
       if (collect) {
         objects.push(node);
       }
       for (const member of node.properties) {
-        if (ts.isSpreadAssignment(member)) {
+        if (member.type === "SpreadElement") {
           // The containing object's effectiveRetries already evaluates this
           // spread in order; inspect its children without judging overridden values.
-          visitExpression(member.expression, true, false);
+          visitExpression(member.argument, true, false);
           continue;
         }
         let name: string | undefined;
-        let initializer: ts.Expression | undefined;
-        if (ts.isShorthandPropertyAssignment(member)) {
-          name = member.name.text;
-          initializer = member.name;
-        } else if (ts.isPropertyAssignment(member)) {
-          name = propertyName(member.name);
-          initializer = member.initializer;
-        }
-        if (initializer === undefined) {
+        if (member.shorthand || isPropertyAssignment(member)) {
+          name = propertyName(member);
+        } else {
           continue;
         }
         visitExpression(
-          initializer,
+          member.value,
           name === "projects" || name === "use",
           true,
           name === "projects",
         );
       }
-    } else if (ts.isArrayLiteralExpression(node)) {
+    } else {
       for (const element of node.elements) {
-        if (ts.isSpreadElement(element)) {
-          visitExpression(element.expression, true, true, projectElements);
+        if (element === null) {
+          // A hole is an element no reader can resolve.
+          if (projectElements) {
+            unknownConfig = true;
+          }
+        } else if (element.type === "SpreadElement") {
+          visitExpression(element.argument, true, true, projectElements);
         } else {
           visitExpression(element, projectElements, true, projectElements);
         }
@@ -518,19 +529,19 @@ const nestedObjectLiterals = (
 };
 
 const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
-  const source = parseSource(file, sourceText);
-  const diagnostics = ts.transpileModule(sourceText, {
-    fileName: file,
-    reportDiagnostics: true,
-  }).diagnostics;
+  // Syntax errors are a finding here, so read them as data.
+  const parsed = parseSync(file, sourceText);
   if (
-    diagnostics?.some(
-      ({ category }) => category === ts.DiagnosticCategory.Error,
-    )
+    parsed.errors.some((error) => {
+      // oxc-parser declares Severity as an ambient const enum of strings.
+      const severity: string = error.severity;
+      return severity === "Error";
+    })
   ) {
     return [{ file, message: "Playwright config has TypeScript parse errors" }];
   }
-  const object = source.statements.map(configObject).find(Boolean);
+  const source: Source = { file, program: parsed.program, text: sourceText };
+  const object = source.program.body.map(configObject).find(Boolean);
   if (object === undefined) {
     return [
       {
@@ -571,41 +582,45 @@ const scanTestSource = (
   file: string,
   sourceText: string,
 ): TestRetryFinding[] => {
-  const source = parseSource(file, sourceText);
+  const source: Source = {
+    file,
+    program: parseSource(file, sourceText).program,
+    text: sourceText,
+  };
   const findings: TestRetryFinding[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const command = processCommand(node, source);
-      if (command !== undefined) {
-        findings.push(
-          ...scanCommand(file, command, "TS/JS process invocation"),
-        );
-      }
-      const expression = node.expression;
-      const isConfigure =
-        ts.isPropertyAccessExpression(expression) &&
-        expression.name.text === "configure" &&
-        (expression.expression.getText(source) === "describe" ||
-          expression.expression.getText(source) === "test.describe");
-      if (isConfigure) {
-        const [options] = node.arguments;
-        const resolvedOptions =
-          options === undefined ? undefined : resolveObject(options, source);
-        if (
-          resolvedOptions === undefined ||
-          hasRetryViolation(effectiveRetries(resolvedOptions, source))
-        ) {
-          findings.push({
-            file,
-            message:
-              "test.describe.configure has dynamic or nonzero retry settings",
-          });
-        }
+  walk(source.program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const command = processCommand(node, source);
+    if (command !== undefined) {
+      findings.push(...scanCommand(file, command, "TS/JS process invocation"));
+    }
+    const callee = node.callee;
+    const isConfigure =
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.property.type === "Identifier" &&
+      callee.property.name === "configure" &&
+      ["describe", "test.describe"].includes(
+        sourceText.slice(callee.object.start, callee.object.end),
+      );
+    if (isConfigure) {
+      const [options] = node.arguments;
+      const resolvedOptions =
+        options === undefined ? undefined : resolveObject(options, source);
+      if (
+        resolvedOptions === undefined ||
+        hasRetryViolation(effectiveRetries(resolvedOptions, source))
+      ) {
+        findings.push({
+          file,
+          message:
+            "test.describe.configure has dynamic or nonzero retry settings",
+        });
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return findings;
 };
 

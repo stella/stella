@@ -1,6 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -14,32 +23,31 @@ const requests: RecordedRequest[] = [];
 const unexpectedRequests: string[] = [];
 // An answer may be held open, to look at the UI while a request is in flight.
 const answers: (Response | Promise<Response>)[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      const text = await request.text();
-      requests.push({
-        method: request.method,
-        path: pathname,
-        body: text === "" ? null : JSON.parse(text),
-      });
-      const answer = answers.shift();
-      if (answer === undefined) {
-        unexpectedRequests.push(`${request.method} ${pathname}`);
-        return panic(
-          `Unexpected network request: ${request.method} ${pathname}`,
-        );
-      }
-      return answer;
-    },
-    { preconnect: () => undefined },
-  ),
+let fetchBoundary: Mock<typeof globalThis.fetch>;
+const originalFetch = globalThis.fetch;
+const fetchImplementation = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/api/auth/")) {
+      return Response.json(null);
+    }
+    const text = await request.text();
+    requests.push({
+      method: request.method,
+      path: pathname,
+      body: text === "" ? null : JSON.parse(text),
+    });
+    const answer = answers.shift();
+    if (answer === undefined) {
+      unexpectedRequests.push(`${request.method} ${pathname}`);
+      return panic(`Unexpected network request: ${request.method} ${pathname}`);
+    }
+    return answer;
+  },
+  { preconnect: () => undefined },
 );
+globalThis.fetch = fetchImplementation;
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -105,7 +113,15 @@ const page = (items: ReturnType<typeof comment>[]) =>
   Response.json({ items, limit: 100, nextCursor: null });
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  globalThis.fetch = fetchImplementation;
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    fetchImplementation,
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
@@ -119,6 +135,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
+  globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });
 
@@ -142,13 +159,15 @@ const mount = (seeded: ReturnType<typeof comment>[]) => {
   render(
     <IntlProvider locale="en" messages={messages}>
       <QueryClientProvider client={client}>
-        <AuthenticatedUserProvider user={me}>
-          <ClaimComments
-            claim={claim}
-            runId={runId}
-            workspaceId={workspaceId}
-          />
-        </AuthenticatedUserProvider>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider user={me}>
+            <ClaimComments
+              claim={claim}
+              runId={runId}
+              workspaceId={workspaceId}
+            />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
       </QueryClientProvider>
     </IntlProvider>,
   );
@@ -172,7 +191,9 @@ test("a colleague's shared comment reads without controls; the reviewer's own ca
   expect(screen.getByText("Check the minutes.")).toBeTruthy();
   // One comment is the reviewer's: one edit and one delete control.
   expect(
-    screen.getAllByRole("button", { name: messages.common.edit }),
+    screen.getAllByRole("button", {
+      name: messages.legalReader.annotations.editComment,
+    }),
   ).toHaveLength(1);
   expect(
     screen.getAllByRole("button", { name: messages.common.delete }),
@@ -215,7 +236,11 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
 
   answers.push(Response.json({ ok: true }));
   answers.push(page([{ ...added, body: "Ask for the signed minutes." }]));
-  fireEvent.click(screen.getByRole("button", { name: messages.common.edit }));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.legalReader.annotations.editComment,
+    }),
+  );
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
     { target: { value: "Ask for the signed minutes." } },
@@ -249,7 +274,11 @@ test("editing and sharing a private comment stores its words before sharing them
   const own = comment({ id: "comment-own", body: "Draft.", mine: true });
   mount([own]);
   const edit = () => {
-    fireEvent.click(screen.getByRole("button", { name: messages.common.edit }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: messages.legalReader.annotations.editComment,
+      }),
+    );
     fireEvent.change(
       screen.getByRole("textbox", { name: messages.folio.comment }),
       { target: { value: "Final." } },
@@ -309,9 +338,9 @@ test("a comment still being stored offers no controls until the server answers",
   // share it by: the server has not given it an id yet.
   expect(screen.getByText("Ask for the minutes.")).toBeTruthy();
   for (const name of [
-    messages.common.edit,
+    messages.legalReader.annotations.editComment,
     messages.common.delete,
-    messages.legalReader.annotations.visibilityShared,
+    messages.legalReader.annotations.visibilitySharedWithMatter,
   ]) {
     expect(screen.queryByRole("button", { name })).toBeNull();
   }
@@ -323,7 +352,9 @@ test("a comment still being stored offers no controls until the server answers",
   );
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: messages.common.edit }),
+      screen.getByRole("button", {
+        name: messages.legalReader.annotations.editComment,
+      }),
     ).toBeTruthy(),
   );
   expect(

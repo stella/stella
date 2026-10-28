@@ -65,6 +65,11 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
+});
+
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -324,7 +329,7 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });
@@ -757,8 +762,12 @@ describe("list verification access grants across MCP tools", () => {
       expect(hidden.isError).not.toBe(true);
     }
     expect(projectedLayouts).toBeGreaterThan(0);
-    const enabledResources = listMcpResources("default", granted);
-    const hiddenResources = listMcpResources("default", denied);
+    const enabledResources = await listMcpResources("default", {
+      context: granted,
+    });
+    const hiddenResources = await listMcpResources("default", {
+      context: denied,
+    });
     expect(enabledResources.length).toBeGreaterThan(0);
     // The production feature declares capability endpoints; its shared static
     // references remain available and contain no dedicated capability names.

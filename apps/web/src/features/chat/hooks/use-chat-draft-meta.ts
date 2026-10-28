@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { chatDraftMetaOptions } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type UseChatDraftMetaArgs = {
   activeOrganizationId: string;
@@ -23,7 +24,7 @@ export const useChatDraftMeta = ({
 }: UseChatDraftMetaArgs) => {
   const options = chatDraftMetaOptions({ activeOrganizationId, threadRef });
   const dataQuery = useQuery(options);
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useChatDraftMeta:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 

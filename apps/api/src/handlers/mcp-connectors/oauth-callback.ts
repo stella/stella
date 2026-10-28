@@ -190,6 +190,7 @@ const validatePendingOAuthMetadata = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message:
           "MCP authorization server metadata does not match the selected issuer",
       }),
