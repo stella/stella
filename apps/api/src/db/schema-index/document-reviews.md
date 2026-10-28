@@ -67,42 +67,42 @@ Immutable reviewer decisions.
 document_review_finding_decisions.id            pUuid            pk,not null       document-reviews.ts:380
 document_review_finding_decisions.workspace_id  safeWorkspaceId  not null          document-reviews.ts:381
 document_review_finding_decisions.finding_id    safeUuid         fk,not null       document-reviews.ts:382
-document_review_finding_decisions.decision      text             null              document-reviews.ts:385
-document_review_finding_decisions.reason        text             null              document-reviews.ts:386
-document_review_finding_decisions.actor_id      text             fk,null           document-reviews.ts:387
-document_review_finding_decisions.created_at    timestamptz      default,not null  document-reviews.ts:390
+document_review_finding_decisions.decision      text             null              document-reviews.ts:383
+document_review_finding_decisions.reason        text             null              document-reviews.ts:384
+document_review_finding_decisions.actor_id      text             fk,null           document-reviews.ts:385
+document_review_finding_decisions.created_at    timestamptz      default,not null  document-reviews.ts:388
 ```
 
-## document_review_parties · `documentReviewParties` · document-reviews.ts:440
+## document_review_parties · `documentReviewParties` · document-reviews.ts:446
 
 The target document's parties, detected once per document version so the review launcher can show "We act for" before any proposal pass runs.
 
 ```text
-document_review_parties.{...entityFeatureGateColumns()}           spread                                document-reviews.ts:443
-document_review_parties.{...entityFeatureWorkspaceGateColumns()}  spread                                document-reviews.ts:444
-document_review_parties.id                                        pUuid               pk,not null       document-reviews.ts:445
-document_review_parties.organization_id                           safeOrganizationId  fk,not null       document-reviews.ts:446
-document_review_parties.workspace_id                              safeWorkspaceId     fk,not null       document-reviews.ts:449
-document_review_parties.entity_id                                 safeUuid            fk,not null       document-reviews.ts:452
-document_review_parties.entity_version_id                         safeUuid            fk,not null       document-reviews.ts:453
-document_review_parties.prompt_version                            smallint            not null          document-reviews.ts:458  Bumped when the detection prompt changes shape, so a stale row is recomputed instead of read as today's answer.
-document_review_parties.parties                                   jsonb               not null          document-reviews.ts:459
-document_review_parties.created_at                                timestamptz         default,not null  document-reviews.ts:460
+document_review_parties.{...entityFeatureGateColumns()}           spread                                document-reviews.ts:449
+document_review_parties.{...entityFeatureWorkspaceGateColumns()}  spread                                document-reviews.ts:450
+document_review_parties.id                                        pUuid               pk,not null       document-reviews.ts:451
+document_review_parties.organization_id                           safeOrganizationId  fk,not null       document-reviews.ts:452
+document_review_parties.workspace_id                              safeWorkspaceId     fk,not null       document-reviews.ts:455
+document_review_parties.entity_id                                 safeUuid            fk,not null       document-reviews.ts:458
+document_review_parties.entity_version_id                         safeUuid            fk,not null       document-reviews.ts:459
+document_review_parties.prompt_version                            smallint            not null          document-reviews.ts:464  Bumped when the detection prompt changes shape, so a stale row is recomputed instead of read as today's answer.
+document_review_parties.parties                                   jsonb               not null          document-reviews.ts:465
+document_review_parties.created_at                                timestamptz         default,not null  document-reviews.ts:466
 ```
 
-## document_review_reference_passages · `documentReviewReferencePassages` · document-reviews.ts:508
+## document_review_reference_passages · `documentReviewReferencePassages` · document-reviews.ts:514
 
 The words a reference-derived position quotes: one row per block of a reference document version, owned by the matter that document belongs to.
 
 ```text
-document_review_reference_passages.{...entityFeatureGateColumns()}  spread                                document-reviews.ts:511
-document_review_reference_passages.id                               pUuid               pk,not null       document-reviews.ts:512
-document_review_reference_passages.organization_id                  safeOrganizationId  fk,not null       document-reviews.ts:515  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
-document_review_reference_passages.workspace_id                     safeWorkspaceId     fk,not null       document-reviews.ts:518  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
-document_review_reference_passages.entity_id                        safeUuid            fk,not null       document-reviews.ts:519
-document_review_reference_passages.file_field_id                    safeUuid            not null          document-reviews.ts:520
-document_review_reference_passages.entity_version_id                safeUuid            not null          document-reviews.ts:523  Provenance, not a foreign key: a passage outlives the pruning of the version it was read from as long as the document itself exists.
-document_review_reference_passages.block_id                         varchar             not null          document-reviews.ts:524
-document_review_reference_passages.text                             text                not null          document-reviews.ts:525
-document_review_reference_passages.created_at                       timestamptz         default,not null  document-reviews.ts:526
+document_review_reference_passages.{...entityFeatureGateColumns()}  spread                                document-reviews.ts:517
+document_review_reference_passages.id                               pUuid               pk,not null       document-reviews.ts:518
+document_review_reference_passages.organization_id                  safeOrganizationId  fk,not null       document-reviews.ts:521  Both scope FKs are named by hand: the generated names run past Postgres's 63-byte identifier limit and would be silently truncated.
+document_review_reference_passages.workspace_id                     safeWorkspaceId     fk,not null       document-reviews.ts:524  The matter the reference document lives in, not the matter of any run that quotes it: that is what row security scopes by.
+document_review_reference_passages.entity_id                        safeUuid            fk,not null       document-reviews.ts:525
+document_review_reference_passages.file_field_id                    safeUuid            not null          document-reviews.ts:526
+document_review_reference_passages.entity_version_id                safeUuid            not null          document-reviews.ts:529  Provenance, not a foreign key: a passage outlives the pruning of the version it was read from as long as the document itself exists.
+document_review_reference_passages.block_id                         varchar             not null          document-reviews.ts:530
+document_review_reference_passages.text                             text                not null          document-reviews.ts:531
+document_review_reference_passages.created_at                       timestamptz         default,not null  document-reviews.ts:532
 ```
