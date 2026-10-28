@@ -18,7 +18,6 @@ import { writeOrCheckArtifacts } from "./generated-artifacts";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const UI_THEME = path.join(REPO_ROOT, "packages/ui/src/styles/theme.css");
 const OUTPUT = path.join(REPO_ROOT, "apps/mobile/src/ui-theme.gen.ts");
-const CSS_OUTPUT = path.join(REPO_ROOT, "apps/mobile/ui-theme.gen.css");
 
 type Scope = ReadonlyMap<string, string>;
 
@@ -30,7 +29,7 @@ export const declarationsOf = (css: string, selector: string): Scope => {
       continue;
     }
     for (const [, name, value] of block.matchAll(
-      /(--[\w-]+)\s*:\s*([^;]+);/gu,
+      /(?<![\w-])(--[\w-]+)\s*:\s*([^\s;][^;]*);/gu,
     )) {
       if (name !== undefined && value !== undefined) {
         found.set(name, value.replaceAll(/\s+/gu, " ").trim());
@@ -67,20 +66,24 @@ export const substitute = (
   if (depth > 32) {
     return panic(`Theme variables reference each other: ${value}`);
   }
-  const mixed = value.replaceAll(
-    /--alpha\(\s*([^/]+?)\s*\/\s*([\d.]+%)\s*\)/gu,
-    (_alpha, color: string, amount: string) =>
-      `color-mix(in oklab, ${color} ${amount}, transparent)`,
+  const expanded = value.replaceAll(
+    /var\((--[\w-]+)\)/gu,
+    (_var, name: string) => {
+      const definition = scopes
+        .map((scope) => scope.get(name))
+        .find((candidate) => candidate !== undefined);
+      if (definition === undefined) {
+        return panic(`The theme uses ${name}, which nothing defines`);
+      }
+      return substitute(definition, scopes, depth + 1);
+    },
   );
-  return mixed.replaceAll(/var\((--[\w-]+)\)/gu, (_var, name: string) => {
-    const definition = scopes
-      .map((scope) => scope.get(name))
-      .find((candidate) => candidate !== undefined);
-    if (definition === undefined) {
-      return panic(`The theme uses ${name}, which nothing defines`);
-    }
-    return substitute(definition, scopes, depth + 1);
-  });
+  // Tailwind's `--alpha(color / n%)`, read once its colour is spelled out.
+  return expanded.replaceAll(
+    /(?<![\w-])--alpha\(((?:[^/()]|\([^()]*\))*)\/\s*([\d.]+%)\s*\)/gu,
+    (_alpha, color: string, amount: string) =>
+      `color-mix(in oklab, ${color.trim()} ${amount}, transparent)`,
+  );
 };
 
 /** A static CSS colour as sRGB hex, the form React Native reads. */
@@ -106,22 +109,20 @@ const camelCase = (name: string) =>
 export const mobileUiTheme = (uiCss: string, tailwindCss: string) => {
   // Tailwind declares its palette once, inside `@layer theme`.
   const palette = new Map(
-    [...tailwindCss.matchAll(/(--color-[\w-]+)\s*:\s*([^;]+);/gu)].flatMap(
-      ([, name, value]) =>
-        name === undefined || value === undefined ? [] : [[name, value.trim()]],
+    [
+      ...tailwindCss.matchAll(
+        /(?<![\w-])(--color-[\w-]+)\s*:\s*([^\s;][^;]*);/gu,
+      ),
+    ].flatMap(([, name, value]) =>
+      name === undefined || value === undefined ? [] : [[name, value.trim()]],
     ),
   );
   const light = declarationsOf(uiCss, ":root");
   const dark = new Map([...light, ...declarationsOf(uiCss, ".dark")]);
-  // The option palette (`--option-blue`, ...) paints a matter's colour and
-  // other user-chosen tints, so it comes along as `option-blue`, ...
-  const options = [...light.keys()]
-    .filter((name) => name.startsWith("--option-"))
-    .map((name): [string, string] => [name.slice(2), name]);
   const colorsFor = (scope: Scope) =>
     Object.fromEntries(
-      [...semanticColorsOf(uiCss), ...options].map(([name, source]) => [
-        name,
+      [...semanticColorsOf(uiCss)].map(([name, source]) => [
+        camelCase(name),
         toSrgb(substitute(`var(${source})`, [scope, palette])),
       ]),
     );
@@ -136,7 +137,7 @@ export const renderMobileUiTheme = (
     `  ${name}: {`,
     ...Object.keys(colors)
       .toSorted()
-      .map((key) => `    ${camelCase(key)}: ${JSON.stringify(colors[key])},`),
+      .map((key) => `    ${key}: ${JSON.stringify(colors[key])},`),
     "  },",
   ];
   return [
@@ -153,65 +154,16 @@ export const renderMobileUiTheme = (
   ].join("\n");
 };
 
-/** The type sizes the web adds to Tailwind's scale (`text-2xs`, ...). */
-export const extraTextSizesOf = (css: string): string[] => {
-  const start = css.indexOf("@theme inline {");
-  const block = css.slice(start, css.indexOf("\n}", start));
-  return [...block.matchAll(/(--text-[\w-]+)\s*:\s*([^;]+);/gu)].flatMap(
-    ([, name, value]) =>
-      name === undefined || value === undefined
-        ? []
-        : [`${name}: ${value.trim()};`],
-  );
-};
-
-/**
- * The same tokens for uniwind, the app's Tailwind: each web colour under its
- * web name (`bg-card`, `text-muted-foreground`), switched by colour scheme,
- * and the web's extra type sizes.
- */
-export const renderMobileUiThemeCss = (
-  theme: ReturnType<typeof mobileUiTheme>,
-  textSizes: readonly string[],
-): string => {
-  const scheme = (name: string, colors: Record<string, string>) => [
-    `    @variant ${name} {`,
-    ...Object.keys(colors)
-      .toSorted()
-      .map((key) => `      --color-${key}: ${colors[key] ?? ""};`),
-    "    }",
-  ];
-  return [
-    "/* Generated by scripts/generate-mobile-ui-theme.ts from",
-    "   packages/ui/src/styles/theme.css. Do not edit; run it with --write. */",
-    "@theme {",
-    ...textSizes.map((size) => `  ${size}`),
-    "}",
-    "",
-    "@layer theme {",
-    "  :root {",
-    ...scheme("light", theme.light),
-    ...scheme("dark", theme.dark),
-    "  }",
-    "}",
-    "",
-  ].join("\n");
-};
-
 export const generateMobileUiTheme = async (write: boolean) => {
   const tailwindTheme = createRequire(UI_THEME).resolve(
     "tailwindcss/theme.css",
   );
-  const uiCss = await readFile(UI_THEME, "utf-8");
-  const theme = mobileUiTheme(uiCss, await readFile(tailwindTheme, "utf-8"));
+  const theme = mobileUiTheme(
+    await readFile(UI_THEME, "utf-8"),
+    await readFile(tailwindTheme, "utf-8"),
+  );
   return await writeOrCheckArtifacts(
-    [
-      { path: OUTPUT, contents: renderMobileUiTheme(theme) },
-      {
-        path: CSS_OUTPUT,
-        contents: renderMobileUiThemeCss(theme, extraTextSizesOf(uiCss)),
-      },
-    ],
+    [{ path: OUTPUT, contents: renderMobileUiTheme(theme) }],
     { matched: "the web theme's colours", write },
   );
 };

@@ -48,7 +48,7 @@ export const TaskStatusControl = ({
   const [load] = useState(async () => {
     const result = await readTask({ fetch, matterId, source, taskId });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });
@@ -111,7 +111,7 @@ const LoadedTaskStatus = ({
         return;
       }
       if (saved.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(saved.error));

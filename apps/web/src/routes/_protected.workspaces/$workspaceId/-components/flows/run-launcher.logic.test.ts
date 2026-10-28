@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterEntitiesByName } from "./run-launcher.logic";
 
@@ -29,21 +30,22 @@ const searchText = fc
   )
   .map((characters) => characters.join(""));
 
-const containsPreviousScalarSearchKey = (content: string, query: string) => {
-  const contentScalars = Array.from(content.toWellFormed());
-  const queryScalars = Array.from(query.toWellFormed());
-  if (queryScalars.length === 0) {
-    return true;
-  }
-  return contentScalars.some((_, start) =>
-    queryScalars.every(
-      (scalar, offset) => contentScalars.at(start + offset) === scalar,
-    ),
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
   );
 };
 
 describe("flow run entity search", () => {
-  it("matches names case-insensitively, but keeps accent distinctions and source order", () => {
+  it("matches names regardless of case and accents, in source order", () => {
     const entities = [
       { id: "later", name: "CASE file" },
       { id: "accent", name: "Café" },
@@ -54,17 +56,23 @@ describe("flow run entity search", () => {
       "later",
       "first",
     ]);
-    expect(filterEntitiesByName(entities, "cafe")).toEqual([]);
+    expect(filterEntitiesByName(entities, "cafe").map(({ id }) => id)).toEqual([
+      "accent",
+    ]);
+    expect(
+      filterEntitiesByName([{ id: "pl", name: "Umowa Łódź" }], "lodz"),
+    ).toEqual([{ id: "pl", name: "Umowa Łódź" }]);
   });
 
-  it("includes unnamed entities for an empty query", () => {
+  it("includes unnamed entities only for a blank query", () => {
     const entities = [
       { id: "unnamed", name: null },
       { id: "named", name: "Record" },
     ];
 
     expect(filterEntitiesByName(entities, "")).toEqual(entities);
-    expect(filterEntitiesByName(entities, " ")).toEqual([]);
+    expect(filterEntitiesByName(entities, " ")).toEqual(entities);
+    expect(filterEntitiesByName(entities, "rec")).toEqual(entities.slice(1));
   });
 
   it("matches malformed entity names by replacement scalar without matching emoji", () => {
@@ -82,9 +90,9 @@ describe("flow run entity search", () => {
   });
 });
 
-it("flow entity filtering matches the previous name substring behavior", () => {
+it("flow entity filtering keeps exactly the entities whose name matches", () => {
   assertProperty(
-    "flow entity filtering matches the previous name substring behavior",
+    "flow entity filtering keeps exactly the entities whose name matches",
     fc.property(
       fc.array(
         fc.record({
@@ -96,10 +104,7 @@ it("flow entity filtering matches the previous name substring behavior", () => {
       searchText,
       (entities, query) => {
         const expected = entities.filter((entity) =>
-          containsPreviousScalarSearchKey(
-            (entity.name ?? "").toLowerCase(),
-            query.toLowerCase(),
-          ),
+          matchesFolded(entity.name, query),
         );
 
         expect(filterEntitiesByName(entities, query)).toEqual(expected);

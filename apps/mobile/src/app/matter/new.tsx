@@ -62,7 +62,7 @@ const NewMatterForm = ({ source }: { source: AccessTokenSource }) => {
         return;
       }
       if (created.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(created.error));

@@ -23,6 +23,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/contacts/:contactId": "crud",
   "DELETE /v1/document-types/:documentTypeId": "crud",
   "DELETE /v1/entities/:workspaceId": "crud",
+  "DELETE /v1/entities/:workspaceId/entity/:entityId/annotations/:annotationId":
+    "crud",
   "DELETE /v1/entities/:workspaceId/entity/:entityId/versions/:versionId":
     "crud",
   "DELETE /v1/entity-views/:viewId": "crud",
@@ -93,6 +95,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /api/auth/*": "crud",
   "GET /auth.md": "crud",
   "GET /dev-public/last-otp": "crud",
+  "GET /favicon.ico": "crud",
   "GET /health": "crud",
   "GET /live": "crud",
   "GET /mcp": "search",
@@ -165,6 +168,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/clauses/:clauseId/versions/:versionId/diff": "crud",
   "GET /v1/clauses/export": "crud",
   "GET /v1/clauses/template-slot-preview/:templateId": "crud",
+  "GET /v1/client-invoices/:clientId/prefill": "crud",
   "GET /v1/contacts": "crud",
   "GET /v1/contacts/:contactId": "crud",
   "GET /v1/contacts/:contactId/sanctions": "crud",
@@ -187,6 +191,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/entities/:workspaceId/desktop-edit-handoffs/:handoffId/status":
     "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId": "crud",
+  "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations":
+    "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/file": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions": "crud",
   "GET /v1/entities/:workspaceId/entity/:entityId/versions/:versionId": "crud",
@@ -352,6 +358,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/time-entries/:workspaceId/summary": "crud",
   "GET /v1/time-entries/approval-queue": "crud",
   "GET /v1/time-entries/me": "crud",
+  "GET /v1/time-entries/me/suggestions": "crud",
   "GET /v1/time-timers": "crud",
   "GET /v1/time-timers/admin": "crud",
   "GET /v1/usage/access": "crud",
@@ -427,6 +434,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/resolve":
     "crud",
   "PATCH /v1/docx-suggestions/:workspaceId/entity/:entityId/suggestion/:suggestionId/revert":
+    "crud",
+  "PATCH /v1/entities/:workspaceId/entity/:entityId/annotations/:annotationId":
     "crud",
   "PATCH /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/description":
     "crud",
@@ -513,6 +522,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/chat/template-thread": "crud",
   "POST /v1/chat/template-thread/rotate": "crud",
   "POST /v1/chat/threads/:threadId/export": "crud",
+  "POST /v1/chat/threads/:threadId/connectors/:toolCallId": "crud",
   "POST /v1/chat/threads/:threadId/fork": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions": "crud",
   "POST /v1/chat/threads/:threadId/messages/:messageId/revisions/:revision/revert":
@@ -572,6 +582,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/entities/:workspaceId/desktop-edit-sessions/request-takeover":
     "crud",
   "POST /v1/entities/:workspaceId/duplicate": "crud",
+  "POST /v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations":
+    "crud",
   "POST /v1/entities/:workspaceId/entity/:entityId/ocr": "crud",
   "POST /v1/entities/:workspaceId/entity/:entityId/versions/:versionId/restore":
     "crud",
@@ -801,6 +813,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/clauses": "crud",
   "PUT /v1/clauses/:clauseId/variants": "crud",
   "PUT /v1/clauses/import": "crud",
+  "PUT /v1/client-invoices/:clientId": "crud",
   "PUT /v1/contacts": "crud",
   "PUT /v1/contacts/import": "crud",
   "PUT /v1/desktop/time-entries/:workspaceId": "crud",
@@ -837,6 +850,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/templates/styles": "crud",
   "PUT /v1/time-entries/:workspaceId": "crud",
   "PUT /v1/time-entries/me/daily-target": "crud",
+  "POST /v1/time-entries/me/submissions": "crud",
   "PUT /v1/time-entries/members/:userId/daily-target": "crud",
   "PUT /v1/view-templates/:workspaceId": "crud",
   "PUT /v1/views/:workspaceId": "crud",

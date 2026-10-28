@@ -54,7 +54,7 @@ export const TimerCard = ({
         return;
       }
       if (changed.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(changed.error));

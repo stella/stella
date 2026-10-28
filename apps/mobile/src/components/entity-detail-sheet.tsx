@@ -40,7 +40,7 @@ export const EntityDetailSheet = ({
       entityId,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });

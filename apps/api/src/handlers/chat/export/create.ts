@@ -269,6 +269,7 @@ const createMessageExport = createSafeRootHandler(
         catch: (cause) =>
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "The exported document could not be stored.",
             cause,
           }),

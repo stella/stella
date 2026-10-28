@@ -29,7 +29,7 @@ const TasksLoader = ({ source }: { source: AccessTokenSource }) => {
   const loadTasks = async (): Promise<TasksLoad> => {
     const result = await listMyTasks({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return { loadedAt: epochMilliseconds(), result };
   };

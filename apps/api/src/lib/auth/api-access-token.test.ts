@@ -151,6 +151,24 @@ describe("which routes an API access token opens", () => {
     ).toEqual([]);
   });
 
+  test("a new document version needs the documents write scope", () => {
+    const route = "/v1/entities/:workspaceId/upload-version";
+    expect(
+      admitApiAccessTokenRoute({
+        method: "POST",
+        route,
+        scopes: ["stella:read", "stella:matters_write"],
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    expect(
+      admitApiAccessTokenRoute({
+        method: "POST",
+        route,
+        scopes: ["stella:documents_write"],
+      }),
+    ).toEqual({ admitted: true });
+  });
+
   test("a request no route matched is refused", () => {
     expect(
       admitApiAccessTokenRoute({
@@ -177,6 +195,9 @@ describe("which routes an API access token opens", () => {
             "/v1/tasks/:workspaceId/:taskId",
             "/v1/time-timers/admin",
             "/v1/time-timers/admin/:id/stop",
+            "/v1/entities/:workspaceId/upload",
+            "/v1/entities/:workspaceId/folio-collab-rooms/publish-version",
+            "/v1/files/:workspaceId/stamped/:fieldId",
             "/v1/me/oauth-connections/:consentId",
             "/v1/contacts",
           ),
@@ -186,6 +207,7 @@ describe("which routes an API access token opens", () => {
             "stella:read",
             "stella:matters_write",
             "stella:billing_write",
+            "stella:documents_write",
             "stella:admin_write",
             "openid",
           ),

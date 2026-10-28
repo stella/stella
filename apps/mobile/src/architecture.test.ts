@@ -24,7 +24,11 @@ const SOURCE_ROOT = import.meta.dir;
  * unchanged under Bun, which is what lets the API's end-to-end test sign the
  * real app code in against the real server.
  */
-const DEVICE_MODULES = new Set(["platform.ts", "session-provider.tsx"]);
+const DEVICE_MODULES = new Set([
+  "platform.ts",
+  "restored-session.ts",
+  "session-provider.tsx",
+]);
 
 const importsOf = (source: string): string[] =>
   [
@@ -231,15 +235,7 @@ describe("the app's dates", () => {
 
 describe("the app's colours", () => {
   /** Every bundled module but the generated theme, which is where colours live. */
-  const painted = readdirSync(SOURCE_ROOT, { recursive: true })
-    .map(String)
-    .filter(
-      (name) =>
-        /\.tsx?$/u.test(name) &&
-        !name.includes(".test.") &&
-        name !== "ui-theme.gen.ts",
-    )
-    .toSorted();
+  const painted = appModules.filter((name) => name !== "ui-theme.gen.ts");
 
   test("finds the theme that maps the web's colours", () => {
     expect(painted).toContain("theme.ts");

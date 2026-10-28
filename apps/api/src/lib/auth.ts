@@ -13,7 +13,7 @@ import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
-  getAuthoritativeSessionFromCtx,
+  getAuthoritativeSessionFromCtx as resolveAuthoritativeSessionFromCtx,
   getOAuthState,
   isAPIError,
 } from "better-auth/api";
@@ -241,6 +241,7 @@ import type {
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { instrumentQueryOrigins } from "@/api/lib/db-query-counter";
 import {
   findAccountIdByEmail,
   hasAccountForProvider,
@@ -374,6 +375,13 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
+
+const authoritativeSessionReader = {
+  getAuthoritativeSessionFromCtx: resolveAuthoritativeSessionFromCtx,
+};
+const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
+  ? instrumentQueryOrigins(authoritativeSessionReader)
+  : authoritativeSessionReader;
 
 /** Access token lifetime in seconds (15 minutes). */
 const syntheticSessionAuthorityReader =
@@ -1558,7 +1566,7 @@ export const createAuth = (
     if (model !== "oauthAccessToken" && model !== "oauthRefreshToken") {
       return undefined;
     }
-    const { userId, sessionId, authorizationCodeId } = data;
+    const { userId, sessionId, authorizationCodeId, referenceId } = data;
     if (typeof userId !== "string") {
       return undefined;
     }
@@ -1567,6 +1575,11 @@ export const createAuth = (
       sessionId: typeof sessionId === "string" ? sessionId : null,
       grantId:
         typeof authorizationCodeId === "string" ? authorizationCodeId : null,
+      // An organization-scoped grant names its organization as the reference.
+      organizationId:
+        typeof referenceId === "string"
+          ? brandPersistedOrganizationId(referenceId)
+          : null,
     };
   };
 
@@ -2766,7 +2779,7 @@ export const createAuth = (
       }),
     },
   });
-  return auth;
+  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;
@@ -3380,7 +3393,8 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
-const createAuthDatabases = (
+/** Membership-scoped handles for one credential member's request authority. */
+export const createAuthDatabases = (
   databaseIdentity: Parameters<
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
   >[1],

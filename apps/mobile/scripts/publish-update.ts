@@ -116,14 +116,24 @@ export const buildSignedUpdate = ({
     bytes: read(asset.path),
   }));
 
-  // Identical content republished is the same update.
+  const manifestBaseUrl = baseUrl.replace(/\/$/u, "");
+
+  // Derived from everything the manifest says, so one id never names two
+  // different manifests (and a manifest from one publish is never read with
+  // another's signature). A republish with a new time is a new update.
   const updateId = uuidFromHex(
     sha256Hex(
-      [
-        target.runtimeVersion,
-        sha256Hex(launch),
-        ...assets.map(({ bytes }) => sha256Hex(bytes)).toSorted(),
-      ].join("\n"),
+      JSON.stringify({
+        assets: assets.map(({ bytes, ext }) => ({
+          ext,
+          hash: sha256Hex(bytes),
+        })),
+        baseUrl: manifestBaseUrl,
+        createdAt,
+        expoConfig,
+        launch: sha256Hex(launch),
+        runtimeVersion: target.runtimeVersion,
+      }),
     ),
   );
 
@@ -141,7 +151,7 @@ export const buildSignedUpdate = ({
       key: hex,
       fileExtension: extension,
       contentType,
-      url: `${baseUrl.replace(/\/$/u, "")}/${key}`,
+      url: `${manifestBaseUrl}/${key}`,
     };
   };
 

@@ -700,6 +700,7 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
     // message rather than a 401 the caller cannot act on.
     return new HandlerError({
       status: 502,
+      code: "internal_error",
       message: `UK Companies House API key not configured: ${error.message}`,
     });
   }
@@ -842,6 +843,7 @@ const mapDenueError = (error: unknown): HandlerError | null => {
   if (error instanceof DenueAuthError) {
     return new HandlerError({
       status: 502,
+      code: "internal_error",
       message: `INEGI DENUE API token not configured or rejected: ${error.message}`,
     });
   }

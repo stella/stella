@@ -92,7 +92,7 @@ const ThreadTimeline = ({
       return;
     }
     if (next.error._tag === "SignedOutError") {
-      end();
+      end(source);
       return;
     }
     setMore("failed");
@@ -103,6 +103,8 @@ const ThreadTimeline = ({
       contentContainerStyle={screenStyles.content}
       // The header is the platform's translucent bar; the list scrolls under it.
       contentInsetAdjustmentBehavior="automatic"
+      // A chat found by a search opens on the first tap, the keyboard up.
+      keyboardShouldPersistTaps="handled"
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
         firstPage === undefined ? (

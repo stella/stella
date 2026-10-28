@@ -50,7 +50,7 @@ export const MatterEntities = ({
       cursor: previous.nextCursor,
     });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return applyEntityPage(previous, result, epochMilliseconds());
   };
@@ -181,7 +181,7 @@ const LoadedEntities = ({
           />
         )
       }
-      ListFooterComponent={footer}
+      ListFooterComponent={footer ?? undefined}
       refreshControl={
         <RefreshControl
           onRefresh={onReload}

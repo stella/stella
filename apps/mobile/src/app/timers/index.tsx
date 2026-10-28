@@ -73,7 +73,7 @@ const TimersLoader = ({ source }: { source: AccessTokenSource }) => {
       listMatters({ fetch, source }),
     ]);
     if (Result.isError(timers) && timers.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return {
       timers,

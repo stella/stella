@@ -132,6 +132,31 @@ describe("reading a thread", () => {
     ]);
   });
 
+  test("says whether the thread has sent anonymized text", async () => {
+    const pageFor =
+      (usedAnonymization?: boolean): Fetch =>
+      async () =>
+        Response.json({
+          messages: [],
+          olderCursor: null,
+          activeTurnId: null,
+          ...(usedAnonymization === undefined ? {} : { usedAnonymization }),
+        });
+    const read = async (fetch: Fetch) => {
+      const page = await readChatThread({
+        fetch,
+        matterId: undefined,
+        source: sourceFor(fetch),
+        threadId: "t1",
+      });
+      return page.isOk() ? page.value.usedAnonymization : page.error._tag;
+    };
+    expect(await read(pageFor(true))).toBe(true);
+    expect(await read(pageFor(false))).toBe(false);
+    // A server from before the field reads as a thread that never anonymized.
+    expect(await read(pageFor(undefined))).toBe(false);
+  });
+
   test("a global thread is read without a matter", () => {
     expect(messagesQuery({ matterId: undefined })).toBe("");
     expect(messagesQuery({ before: "c", matterId: undefined })).toBe(

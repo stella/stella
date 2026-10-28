@@ -43,7 +43,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });
@@ -63,7 +63,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         return;
       }
       if (started.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(started.error));

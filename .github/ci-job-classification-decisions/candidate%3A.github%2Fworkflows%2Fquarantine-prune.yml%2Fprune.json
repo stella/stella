@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "ad37a708ddb0f27f22a74cc9f3cb67f334498b04234bae4d6e6a3bf9423d828f"
+  "kind": "priority",
+  "qualifier": "Publishes pruned quarantine exclusions as a signed-commit pull request.",
+  "reviewedDigest": "9054393965cc459a282cecbef2fe20a1bacb1e0d26d99b5e9238749f18ae966e"
 }

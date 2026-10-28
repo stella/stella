@@ -1,5 +1,43 @@
 # @stll/ui
 
+## 0.54.0
+
+### Minor Changes
+
+- [#7176](https://github.com/stella/stella/pull/7176) [`dd1480b`](https://github.com/stella/stella/commit/dd1480bd335acd79fe88484b69416410c215786c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DialogPopup` (and `CommandDialogPopup`) replace the `bottomStickOnMobile` boolean with `mobileLayout`: `DIALOG_MOBILE_LAYOUT.bottomSheet` (the default, as before), `centered` (what `bottomStickOnMobile={false}` did) or the new `fullscreen`, which fills the viewport inside the safe areas below `sm`.
+
+- [#7132](https://github.com/stella/stella/pull/7132) [`58b429b`](https://github.com/stella/stella/commit/58b429b124f1a5ff110e20b31a0f8fc6143c8e65) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `PanelTrigger` is the toolbar toggle for a panel docked at either edge (`side="left" | "right"`). `SidebarTrigger` renders the left one, so a host's opposite-edge panel toggle draws the same button and icon size as a mirror image.
+
+### Patch Changes
+
+- [#7097](https://github.com/stella/stella/pull/7097) [`276fe8f`](https://github.com/stella/stella/commit/276fe8f46a263509a6e864505a9bdd75ffa75f56) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Button` turns `aria-label` or `title` into a tooltip only at an icon size; a text-size button gets one only from an explicit `tooltip`. Overlay triggers (`PopoverTrigger`, `MenuTrigger`, dialog, sheet and alert-dialog triggers and closes) no longer derive a tooltip from their own label; rendered as an icon `Button`, they hand it the label.
+
+- [#7144](https://github.com/stella/stella/pull/7144) [`051ed71`](https://github.com/stella/stella/commit/051ed716e83bcc8d822317735bef0b06cd7cd6a0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `LandingLayout` scrolls as one page in a single column: its sections take their rows' height instead of splitting the height left under the hero, which on a phone left each column a sliver shorter than one row under its scroll fade. Side by side, the columns still scroll on their own.
+
+- [#7122](https://github.com/stella/stella/pull/7122) [`85a8893`](https://github.com/stella/stella/commit/85a88937362ad495f74f167b557250608862b77d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ScrollArea` sizes its viewport with flex instead of a percentage height, so an area inside a column bounded only by a max-height scrolls within it instead of growing past it.
+
+- [#7172](https://github.com/stella/stella/pull/7172) [`106c7d6`](https://github.com/stella/stella/commit/106c7d6e21e240156f8d98305315cb5fe1ed1a84) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `TabsList` scrolls only along its own axis and clips the other, so a horizontal strip can no longer be dragged up and down on touch screens when a tab or action is slightly taller than the strip.
+
+- [#7094](https://github.com/stella/stella/pull/7094) [`0d610b6`](https://github.com/stella/stella/commit/0d610b62b0101f921a36b37439a0406a40db8797) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use `lucide-react` 1.59.0, the version the document editor depends on, so applications resolve one copy of the icon set.
+
+## 0.53.0
+
+### Minor Changes
+
+- [#6972](https://github.com/stella/stella/pull/6972) [`4dde81d`](https://github.com/stella/stella/commit/4dde81dd999d620a00b9000f0d8431b9e4d5ae98) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `KanbanCardShell` takes `selected` and `onSelectionClick`: a selected card draws the selection ring, and a Cmd/Ctrl- or Shift-click reports its modifiers instead of opening the card. `registerKanbanCardDrag` takes `getDragPreview` to draw a custom preview, such as a stack for several cards. Cards and column headers carry `data-kanban-card` and `data-kanban-column-header` markers.
+
+- [#7056](https://github.com/stella/stella/pull/7056) [`c89ddbb`](https://github.com/stella/stella/commit/c89ddbb42c973e447f05dcf0f30c124b7462824b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove `useComboboxFilter`. Its `Intl.Collator` match compares equal-length windows (`strasse` never finds `Straße`) and depends on the runtime locale; pass a `filter` built on `createSearchQueryMatcher` from `@stll/text-normalize/search-query-matcher` instead.
+
+- [#7071](https://github.com/stella/stella/pull/7071) [`7746519`](https://github.com/stella/stella/commit/774651920e9c2c16bdb352a117b2a51f21e35cc5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer re-exports `ClipboardPasteIcon`, `Loader2Icon`, `LoaderIcon`, `NetworkIcon` and `PresentationIcon`, which no source imports.
+
+### Patch Changes
+
+- [#6823](https://github.com/stella/stella/pull/6823) [`48c0025`](https://github.com/stella/stella/commit/48c002525572684e4c8e96ad50eec065313295b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DetailsGrid` keeps one column's width inside a popover or another box sized by its content.
+
+- [#7010](https://github.com/stella/stella/pull/7010) [`e4836e1`](https://github.com/stella/stella/commit/e4836e18472a659a03e9e7d80156685739ce3aed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `InlineRenameInput` sets `enterKeyHint="done"` by default, so touch keyboards label Enter as the commit key; callers can still override it.
+
+- [#7017](https://github.com/stella/stella/pull/7017) [`b942114`](https://github.com/stella/stella/commit/b9421146019be23569fb7f3cba3b8f094422d7a3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The outline rail renders only the rows whose entry, active state or hover state changed, keeps an unchanged entry's row when the items are rebuilt, and keeps a branch the reader closed closed across such a rebuild.
+
 ## 0.52.1
 
 ### Patch Changes

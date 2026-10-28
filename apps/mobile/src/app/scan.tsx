@@ -60,7 +60,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });
@@ -96,7 +96,7 @@ const ScanForm = ({ source }: { source: AccessTokenSource }) => {
         return;
       }
       if (uploaded.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(uploaded.error));

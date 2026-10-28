@@ -35,6 +35,7 @@ const EMPTY_PAGE: ChatMessagesPage = {
   entries: [],
   olderCursor: null,
   activeTurnId: null,
+  usedAnonymization: false,
 };
 
 /**
@@ -59,7 +60,7 @@ export const ChatThreadView = ({
   const loadThread = async (): Promise<Load<ChatMessagesPage>> => {
     const result = await readChatThread({ fetch, matterId, source, threadId });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return { loadedAt: epochMilliseconds(), result };
   };
@@ -162,8 +163,10 @@ const ThreadMessages = ({
   const [entries, setEntries] = useState(firstPage.entries);
   const [cursor, setCursor] = useState(firstPage.olderCursor);
   const [older, setOlder] = useState<PagingState>("idle");
+  const [anonymized, setAnonymized] = useState(firstPage.usedAnonymization);
   const turn = useChatTurn({
     activeTurnId: firstPage.activeTurnId,
+    anonymized,
     matterId,
     onSettled: async () => {
       const latest = await readChatThread({
@@ -174,10 +177,11 @@ const ThreadMessages = ({
       });
       if (Result.isOk(latest)) {
         setEntries((loaded) => prependOlderPage(latest.value.entries, loaded));
+        setAnonymized(latest.value.usedAnonymization);
         return true;
       }
       if (latest.error._tag === "SignedOutError") {
-        end();
+        end(source);
       }
       // Otherwise the answer stays as it streamed until the next refresh.
       return false;
@@ -210,7 +214,7 @@ const ThreadMessages = ({
       return;
     }
     if (page.error._tag === "SignedOutError") {
-      end();
+      end(source);
       return;
     }
     setOlder("failed");
@@ -231,7 +235,7 @@ const ThreadMessages = ({
               description={t("threadEmptyDescription")}
               title={t("threadTitle")}
             />
-          ) : null
+          ) : undefined
         }
         // Inverted, the footer sits above the oldest message.
         ListFooterComponent={
@@ -245,7 +249,7 @@ const ThreadMessages = ({
         }
         // And the header below the newest.
         ListHeaderComponent={
-          live === null ? null : <LiveTurnView turn={live} />
+          live === null ? undefined : <LiveTurnView turn={live} />
         }
         onEndReached={() => {
           void loadOlder();

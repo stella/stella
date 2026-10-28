@@ -29,7 +29,7 @@ const MattersLoader = ({ source }: { source: AccessTokenSource }) => {
   const loadMatters = async (): Promise<MattersLoad> => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return { loadedAt: epochMilliseconds(), result };
   };

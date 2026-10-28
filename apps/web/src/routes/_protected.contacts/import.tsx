@@ -54,7 +54,7 @@ import { cn } from "@stll/ui/utils";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -62,7 +62,7 @@ import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
@@ -190,7 +190,7 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
@@ -210,7 +210,7 @@ function ContactImportStudio() {
 
   const inspectFile = async (file: File) => {
     if (!isSupportedFile(file)) {
-      notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+      notifyUserProblem(t("contacts.importStudio.fileInvalid"));
       return;
     }
 
@@ -443,7 +443,7 @@ const UploadStep = ({
     onDrop: (files) => {
       const file = files.at(0);
       if (files.length !== 1 || !file) {
-        notifyUserError(undefined, t("contacts.importStudio.fileInvalid"));
+        notifyUserProblem(t("contacts.importStudio.fileInvalid"));
         return;
       }
       onFile(file);

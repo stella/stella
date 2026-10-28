@@ -108,6 +108,7 @@ const createRedemptionFixture = async (
         ? Result.err(
             new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Could not connect desktop account",
             }),
           )
@@ -273,6 +274,7 @@ describe("desktop link redemption over HTTP", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     expect(await response.json()).toEqual({
+      code: "internal_error",
       message: "Could not connect desktop account",
     });
     expect(fixture.mintIdentities).toEqual([fixture.identity]);

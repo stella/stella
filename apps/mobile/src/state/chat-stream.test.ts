@@ -184,6 +184,7 @@ describe("drawing an answer from its events", () => {
 describe("the send envelope", () => {
   test("names a matter's thread's matter in the forwarded input", () => {
     const body = chatSendBody({
+      anonymized: false,
       matterId: "matter-1",
       messageId: MESSAGE_ID,
       runId: "run-1",
@@ -198,6 +199,7 @@ describe("the send envelope", () => {
     expect(body).not.toHaveProperty("workspaceId");
     expect(
       chatSendBody({
+        anonymized: false,
         matterId: undefined,
         messageId: MESSAGE_ID,
         runId: "run-1",
@@ -209,6 +211,7 @@ describe("the send envelope", () => {
 
   test("repeats the forwarded input as data and names the message", () => {
     const body = chatSendBody({
+      anonymized: false,
       matterId: undefined,
       messageId: MESSAGE_ID,
       runId: "run-1",
@@ -229,6 +232,19 @@ describe("the send envelope", () => {
     expect(body.messages).toEqual([
       { id: MESSAGE_ID, role: "user", content: "Check the register" },
     ]);
+  });
+
+  test("keeps a thread that sent anonymized text anonymized", () => {
+    const body = chatSendBody({
+      anonymized: true,
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      runId: "run-1",
+      text: "Check the register",
+      threadId: THREAD_ID,
+    });
+    expect(body.forwardedProps.sendMode).toBe("anonymized");
+    expect(body.data.sendMode).toBe("anonymized");
   });
 });
 
@@ -270,6 +286,7 @@ describe("sending a message", () => {
         }),
     );
     const sent = await sendChatMessage({
+      anonymized: false,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -301,6 +318,7 @@ describe("sending a message", () => {
     expect(calls[0]?.headers["Authorization"]).toBe("Bearer access-0");
     expect(JSON.parse(calls[0]?.body ?? "")).toEqual(
       chatSendBody({
+        anonymized: false,
         matterId: undefined,
         messageId: MESSAGE_ID,
         runId: "run-1",
@@ -317,6 +335,7 @@ describe("sending a message", () => {
         : new Response(streamOf([sse(RUN_EVENTS)])),
     );
     const sent = await sendChatMessage({
+      anonymized: false,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -338,6 +357,7 @@ describe("sending a message", () => {
   test("reports the status of a refused send", async () => {
     const { fetch } = streamingFetch(() => new Response("{}", { status: 409 }));
     const sent = await sendChatMessage({
+      anonymized: false,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -350,8 +370,8 @@ describe("sending a message", () => {
       threadId: THREAD_ID,
     });
     expect(
-      Result.isError(sent) && sent.error._tag === "ApiRequestError"
-        ? sent.error.status
+      Result.isError(sent) && sent.error.error._tag === "ApiRequestError"
+        ? sent.error.error.status
         : undefined,
     ).toBe(409);
   });
@@ -372,6 +392,7 @@ describe("sending a message", () => {
         }),
       );
     const sent = await sendChatMessage({
+      anonymized: false,
       fetch,
       matterId: undefined,
       messageId: MESSAGE_ID,
@@ -394,6 +415,45 @@ describe("sending a message", () => {
 });
 
 describe("rejoining a turn", () => {
+  test("keeps the last event id it read when the stream breaks", async () => {
+    const encoder = new TextEncoder();
+    // The connection drops after the first text arrived, mid-turn.
+    const { fetch } = streamingFetch(() => {
+      let pulled = false;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(stream) {
+            if (pulled) {
+              stream.error(new TypeError("The network connection was lost."));
+              return;
+            }
+            pulled = true;
+            stream.enqueue(encoder.encode(sse(RUN_EVENTS.slice(0, 4))));
+          },
+        }),
+      );
+    });
+    const events: ChatEvent[] = [];
+    const joined = await joinChatTurn({
+      fetch,
+      lastEventId: undefined,
+      matterId: undefined,
+      onEvent: (event) => {
+        events.push(event);
+      },
+      signal: new AbortController().signal,
+      source: sourceFor(),
+      threadId: THREAD_ID,
+      turnId: TURN_ID,
+    });
+    expect(reduce(events).segments).toEqual(["Checking the "]);
+    expect(
+      Result.isError(joined)
+        ? [joined.error.error._tag, joined.error.lastEventId]
+        : joined.value,
+    ).toEqual(["ApiRequestError", "4"]);
+  });
+
   test("asks for the events after the last one read", async () => {
     const { calls, fetch } = streamingFetch(
       () => new Response(streamOf([sse(RUN_EVENTS.slice(4), 5)])),

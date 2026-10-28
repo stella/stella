@@ -38,7 +38,7 @@ import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  type ActionAdmissionError,
+  ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
@@ -56,6 +56,21 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
+
+beforeEach(() => {
+  compactMessagesForContextMock.mockClear();
+  loadExternalMcpToolsForUserMock.mockClear();
+  loadWebSearchProvidersForOrgMock.mockClear();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
+    rollbackUnpersistedChatSideEffectsDefault,
+  );
+  uploadMessageFilesWithRollbackMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockImplementation(
+    uploadMessageFilesWithRollbackDefault,
+  );
+  upsertChatThreadSearchDocumentMock.mockClear();
+});
 
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
@@ -87,24 +102,26 @@ const loadExternalMcpToolsForUserMock = mock(async () => {
 });
 const realRollbackUnpersistedChatSideEffects =
   chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
+const uploadMessageFilesWithRollbackDefault = async ({
+  message,
+}: {
+  message: PersistableChatMessage;
+}): Promise<
+  Result<
+    { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
+    never
+  >
+> => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
-  async ({
-    message,
-  }: {
-    message: PersistableChatMessage;
-  }): Promise<
-    Result<
-      { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-      never
-    >
-  > => Result.ok({ message, uploadedFiles: [] }),
+  uploadMessageFilesWithRollbackDefault,
 );
+const rollbackUnpersistedChatSideEffectsDefault = async (
+  options: Parameters<
+    typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
+  >[0],
+) => await realRollbackUnpersistedChatSideEffects(options);
 const rollbackUnpersistedChatSideEffectsMock = mock(
-  async (
-    options: Parameters<
-      typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
-    >[0],
-  ) => await realRollbackUnpersistedChatSideEffects(options),
+  rollbackUnpersistedChatSideEffectsDefault,
 );
 const compactMessagesForContextMock = mock(compactMessagesForContext);
 const sendMessage = createSendMessage({
@@ -1285,12 +1302,17 @@ describe("send message disconnect handling", () => {
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
-        const refusal = actionAdmissionRefusal(
-          actionAdmissionErrorFor(reason, "Admission refused"),
-        );
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Admission refused",
+                retryAfterMs: 1250,
+              })
+            : actionAdmissionErrorFor(reason, "Admission refused");
+        const refusal = actionAdmissionRefusal(refusalError);
         const admission = new AbortController();
-        const loseAdmission = () =>
-          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
+        const loseAdmission = () => admission.abort(refusalError);
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({
@@ -1365,6 +1387,7 @@ describe("send message disconnect handling", () => {
             tools: {},
           };
         });
+        const streamResponse = mock(streamChat);
         const refusedSend = createSendMessage({
           compactMessagesForContext: compactMessagesForContextMock,
           createRefRegistry: createChatRefRegistry,
@@ -1372,7 +1395,7 @@ describe("send message disconnect handling", () => {
           loadExternalMcpTools: loadTools,
           loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
           rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
-          streamResponse: streamChat,
+          streamResponse,
           uploadMessageFiles: uploadMessageFilesWithRollbackMock,
           startAdmission: async (options) => {
             expect(options.mode).toBe("concurrency-only");
@@ -1458,11 +1481,15 @@ describe("send message disconnect handling", () => {
             code: refusal.code,
             retryable: refusal.retryable,
             hint: refusal.hint,
+            ...(refusal.retryAfterMs === undefined
+              ? {}
+              : { retryAfterMs: refusal.retryAfterMs }),
             ...(refusal.contactUrl === undefined
               ? {}
               : { contactUrl: refusal.contactUrl }),
           },
         });
+        expect(streamResponse).not.toHaveBeenCalled();
         expect(acquisitions).toBe(1);
         expect(releases).toBe(1);
         expect(insertedMessages).toHaveLength(2);
@@ -1768,14 +1795,36 @@ describe("assistant turn settlement", () => {
   const startStreamingTurn = async ({
     failAssistantInsertOnce = false,
     onSafeDbTransaction,
+    connectableCount = 0,
   }: {
+    connectableCount?: number;
     failAssistantInsertOnce?: boolean;
     onSafeDbTransaction?: (() => void) | undefined;
   } = {}) => {
     let onFinish: StreamChatProps["onFinish"] | undefined;
+    let providerPrompt: unknown;
+    const connectorRows = Array.from(
+      { length: connectableCount },
+      (_, index) => ({
+        slug: `source-${String(index).padStart(2, "0")}`,
+        displayName: `Source ${index}`,
+      }),
+    );
+    const connectorQuery = {
+      from: () => connectorQuery,
+      leftJoin: () => connectorQuery,
+      where: () => connectorQuery,
+      orderBy: () => connectorQuery,
+      limit: async (limit: number) => connectorRows.slice(0, limit),
+    };
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
+      providerPrompt = props.systemUntrusted;
+      if (connectableCount > 0) {
+        expect(props.tools).toHaveProperty("connect_connector");
+        expect(props.tools).toHaveProperty("list_connectable_connectors");
+      }
       return {
         type: "streaming",
         response: new Response("", {
@@ -1845,6 +1894,7 @@ describe("assistant turn settlement", () => {
         contextMatterIds: [],
         onSafeDbTransaction,
         transaction: {
+          selectDistinctOn: () => connectorQuery,
           insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
@@ -1883,8 +1933,22 @@ describe("assistant turn settlement", () => {
         `the send did not reach streaming: ${JSON.stringify(result)}`,
       );
     }
-    return { onFinish, turnUpdates };
+    return { onFinish, turnUpdates, providerPrompt };
   };
+
+  test("an unrelated send proceeds with 21 connectable connectors and a bounded deterministic hint", async () => {
+    const first = await startStreamingTurn({ connectableCount: 21 });
+    const second = await startStreamingTurn({ connectableCount: 21 });
+    expect(first.providerPrompt).toEqual(second.providerPrompt);
+    const hint = JSON.stringify(first.providerPrompt);
+    expect(hint).toContain("source-00");
+    expect(hint).toContain("source-19");
+    expect(hint).not.toContain("source-20");
+    expect(hint).toContain("list_connectable_connectors");
+    expect(first.turnUpdates).not.toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (

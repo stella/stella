@@ -58,7 +58,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return result;
   });
@@ -87,7 +87,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         return;
       }
       if (created.error._tag === "SignedOutError") {
-        end();
+        end(source);
         return;
       }
       setFailure(writeFailure(created.error));

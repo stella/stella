@@ -576,9 +576,10 @@ jobs:
           persist-credentials: false
 
       - name: Resolve previous main state
+        timeout-minutes: 5
         id: base
         run: |
-          git fetch --no-tags origin refs/heads/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin refs/heads/main
           git checkout --detach FETCH_HEAD
           base=$(git rev-list -1 --first-parent --before="$(date -u -d '24 hours ago' +%FT%TZ)" HEAD)
           [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main commit exists before the nightly window"; exit 1; }

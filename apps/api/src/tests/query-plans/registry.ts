@@ -4,6 +4,10 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
+import {
+  DECISION_LIST_SORTS,
+  type DecisionListSort,
+} from "@stll/api-contract/search";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -45,6 +49,10 @@ import {
   statuteSitemapIndexQuery,
   statuteSitemapShardQuery,
 } from "@/api/handlers/legislation/sitemap";
+import {
+  DECISION_DATE_BANDS,
+  type DecisionDateBand,
+} from "@/api/lib/case-law/decision-date-order";
 import {
   decisionPageSql,
   ID_PAGE_SIZE,
@@ -120,6 +128,21 @@ const systemAuditPurgeCutoff = new Date(
   Temporal.Instant.from(QUERY_PLAN_SAMPLE.systemAudit.now).epochMilliseconds -
     SYSTEM_AUDIT_RETENTION_DAYS * DAY_IN_MS,
 );
+
+/**
+ * One browse walk per order and date band: each direction commits the access
+ * path of both ranges it reads.
+ */
+const DECISION_LIST_PLAN_IDS = {
+  newest: {
+    dated: "case-law.decisions-list",
+    undated: "case-law.decisions-list-undated",
+  },
+  oldest: {
+    dated: "case-law.decisions-list-oldest",
+    undated: "case-law.decisions-list-oldest-undated",
+  },
+} as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
@@ -297,20 +320,24 @@ export const QUERY_PLAN_REGISTRY = [
     },
     contract: planContracts["legislation.sitemap-index-read"],
   },
-  {
-    id: "case-law.decisions-list",
-    class: "page",
-    role: "public-law-reader",
-    build: (tx) =>
-      listDecisionsPageQuery({
-        cursor: undefined,
-        limit: LIMITS.caseLawSearchPageSizeDefault,
-        query: { country: sampleCountry },
-        tx,
-      }),
-    seed: "case-law",
-    contract: planContracts["case-law.decisions-list"],
-  },
+  ...DECISION_LIST_SORTS.flatMap((sort) =>
+    DECISION_DATE_BANDS.map((band) => ({
+      id: DECISION_LIST_PLAN_IDS[sort][band],
+      class: "page" as const,
+      role: "public-law-reader" as const,
+      build: (tx: Transaction) =>
+        listDecisionsPageQuery({
+          band,
+          position: undefined,
+          take: LIMITS.caseLawSearchPageSizeDefault + 1,
+          query: { country: sampleCountry },
+          sort,
+          tx,
+        }),
+      seed: "case-law" as const,
+      contract: planContracts[DECISION_LIST_PLAN_IDS[sort][band]],
+    })),
+  ),
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
     class: "point",
@@ -678,6 +705,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     type: "registered",
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
   },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary]: {
+    type: "excluded",
+    reason:
+      "SECURITY DEFINER hides the singleton lookup from EXPLAIN; coverage-summary.db.test.ts checks the one-statement budget at two corpus sizes and policy revocation.",
+  },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",
     reason: "Coverage mixes source metadata and decision counts.",
@@ -725,6 +757,10 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawSearchTotal]: {
     type: "excluded",
     reason: "Search total SQL varies by filter profile.",
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawSourceHealth]: {
+    type: "excluded",
+    reason: "Reads the small source registry.",
   },
   [PUBLIC_LAW_SHARED_QUERY.legislationNonRedistributableSources]: {
     type: "excluded",

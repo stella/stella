@@ -30,7 +30,7 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   ): Promise<Load<ChatThreadsPage>> => {
     const result = await listChatThreads({ fetch, search, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return { loadedAt: epochMilliseconds(), result };
   };

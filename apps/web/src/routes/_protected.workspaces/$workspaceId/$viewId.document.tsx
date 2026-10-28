@@ -20,6 +20,7 @@ import {
   createFileRoute,
   Navigate,
   stripSearchParams,
+  useRouter,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -66,6 +67,10 @@ import { getEntityFileDownloadRenditions } from "@/components/inspector/file-dow
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  PdfSignDialogs,
+  usePdfSignFlow,
+} from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import PdfViewer, { PDFSuspenseFallback } from "@/components/pdf/pdf-viewer";
@@ -116,6 +121,7 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
@@ -851,6 +857,9 @@ function RouteComponentInner({
   const activeFileLabel =
     activeFileContent?.fileName ?? resolvedVersionFile?.fileName ?? fieldId;
   const isDocxFile = activeMimeType === DOCX_MIME;
+  // Signing from the page editor outlives it: saving first replaces the
+  // version, which remounts the editor, and the stamp dialog must stay.
+  const editorPdfSignFlow = usePdfSignFlow();
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity,
     entityId,
@@ -979,9 +988,14 @@ function RouteComponentInner({
     );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
+  const editorPdfSignTarget = editorPdfSignFlow.preparedTarget ?? pdfSignTarget;
+
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100dvh-3rem)] flex-1 overflow-hidden">
       <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
+      {editorPdfSignTarget !== null && (
+        <PdfSignDialogs flow={editorPdfSignFlow} target={editorPdfSignTarget} />
+      )}
       {filePropertyId && activeMimeType !== undefined && (
         <InspectorFileOpenLifecycle
           entityId={entityId}
@@ -1230,6 +1244,14 @@ function RouteComponentInner({
                           fieldId={fieldId}
                           fileName={activeFileLabel}
                           onClose={() => setIsPDFPageOrganizerOpen(false)}
+                          pdfSign={
+                            pdfSignTarget === null
+                              ? null
+                              : {
+                                  flow: editorPdfSignFlow,
+                                  target: pdfSignTarget,
+                                }
+                          }
                           workspaceId={workspaceId}
                         />
                       </Suspense>
@@ -1274,6 +1296,7 @@ function RouteComponentInner({
 /** Recovers by opening the file where every format renders, the side panel. */
 const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
   const t = useTranslations();
+  const router = useRouter();
   const navigate = Route.useNavigate();
   const { viewId, workspaceId } = Route.useParams({
     select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
@@ -1293,7 +1316,14 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { viewId, workspaceId },
                 });
-                await openEntityInInspector(entityId, "", workspaceId);
+                await openEntityInInspector({
+                  documentOnScreen: getCurrentWorkspaceDocument(
+                    router.state.matches,
+                  ),
+                  entityId,
+                  label: "",
+                  workspaceId,
+                });
               } catch (openError) {
                 getAnalytics().captureError(openError, {
                   fingerprintKey: "DocumentDisplayUnavailable:openError",

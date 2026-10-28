@@ -24,6 +24,7 @@ import {
   clauseCategoriesRoute,
   clausesRoute,
 } from "@/api/handlers/clauses/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
@@ -233,6 +234,7 @@ export const apiRoutes = mount([
       ratesRoute,
       expensesRoute,
       invoicesRoute,
+      clientInvoicesRoute,
       sellerProfilesRoute,
       numberSeriesRoute,
       vatRateRoute,

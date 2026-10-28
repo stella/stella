@@ -146,21 +146,28 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/ui",
+      "@expo/vector-icons",
       "expo",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
       "expo-doctor",
+      "expo-font",
       "expo-linking",
+      "expo-notifications",
       "expo-router",
       "expo-secure-store",
       "expo-status-bar",
       "expo-system-ui",
       "expo-updates",
       "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
+      "react-native-svg",
     ],
     url: "https://docs.expo.dev/llms.txt",
   },
@@ -255,7 +262,7 @@ export const DOC_SOURCES = {
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
-    dependencies: ["lucide-react"],
+    dependencies: ["lucide-react", "lucide-react-native", "lucide-static"],
     url: "https://lucide.dev/llms.txt",
   },
   Tsdown: {
@@ -298,6 +305,10 @@ export const DOC_SOURCES = {
   AgentDevice: {
     dependencies: ["agent-device"],
     url: "https://agent-device.dev/llms.txt",
+  },
+  Uniwind: {
+    dependencies: ["uniwind"],
+    url: "https://docs.uniwind.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
@@ -543,6 +554,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   ["jszip", ["https://raw.githubusercontent.com/Stuk/jszip/HEAD/llms.txt"]],
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
+  [
+    "lightningcss",
+    [
+      "https://lightningcss.dev/llms.txt",
+      "https://raw.githubusercontent.com/parcel-bundler/lightningcss/HEAD/llms.txt",
+    ],
+  ],
   [
     "nodemailer",
     ["https://nodemailer.com/llms.txt", "https://nodemailer.com/docs/llms.txt"],
@@ -926,7 +944,7 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "cldr-misc-full",
     explanation:
-      "https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt returns no llms.txt. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
+      "https://cldr.unicode.org/llms.txt, https://www.unicode.org/llms.txt and the repository llms.txt at https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt return 404. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
@@ -934,7 +952,7 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "asn1js",
     explanation:
-      "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
+      "https://asn1js.org/llms.txt, https://asn1js.org/llms-full.txt, https://asn1js.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://asn1js.org/docs/api/, the README at https://github.com/PeculiarVentures/ASN1.js and the typed API in its package directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
@@ -942,7 +960,7 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "pkijs",
     explanation:
-      "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
+      "https://pkijs.org/llms.txt, https://pkijs.org/llms-full.txt, https://pkijs.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://pkijs.org/docs/installation and https://pkijs.org/docs/api/ and the typed API in its package directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },

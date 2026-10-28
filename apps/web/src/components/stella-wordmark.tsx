@@ -2,16 +2,13 @@ import type { SVGProps } from "react";
 
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 
 export const StellaWordmark = (props: SVGProps<SVGSVGElement>) => {
-  // Derive the base language from the active formatting locale. `useLocale()` is
-  // hydration-safe (the provider serves "en" pre-hydration to match SSR markup),
-  // and the resolved tag carries -u- formatting extensions
-  // (e.g. "ar-u-ca-gregory-nu-arab"), so parse out the language subtag rather
-  // than comparing the whole tag.
-  const locale = useLocale();
-  if (new Intl.Locale(locale).language === "ar") {
+  // The lockup follows the script the interface is written in, not the
+  // regional format.
+  const messageLocale = useMessageLocale();
+  if (messageLocale === "ar") {
     return <StellaWordmarkArabic {...props} />;
   }
   return <StellaWordmarkLatin {...props} />;
