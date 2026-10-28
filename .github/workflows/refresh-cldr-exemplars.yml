@@ -1,0 +1,51 @@
+name: Refresh CLDR exemplar input
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/refresh-cldr-exemplars.yml
+      - packages/mojibake/scripts/cldr49-input.json
+      - packages/mojibake/scripts/refresh-exemplar-input.*
+      - packages/mojibake/src/exemplar-input.test.ts
+      - packages/mojibake/src/exemplars.generated.ts
+      - packages/mojibake/src/unicode-set.ts
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-exemplars:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        with:
+          save: false
+
+      - name: Install refresh dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts --filter '@stll/mojibake...' --filter '!stella'
+
+      - name: Check input validation
+        run: bun test ./packages/mojibake/src/exemplar-input.test.ts
+
+      - name: Convert and verify pinned CLDR source
+        timeout-minutes: 10
+        run: |
+          export CLDR_JAVA="${JAVA_HOME_21_X64:?Java 21 is required}/bin/java"
+          bash packages/mojibake/scripts/refresh-exemplar-input.sh "$RUNNER_TEMP/cldr49-input"
+
+      - name: Upload verified exemplar input
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cldr49-exemplar-input
+          path: ${{ runner.temp }}/cldr49-input/artifact/
+          if-no-files-found: error
+          retention-days: 14
