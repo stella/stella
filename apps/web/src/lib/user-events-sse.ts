@@ -51,7 +51,10 @@ const reconnectDelayMs = (failures: number): number =>
  */
 export const useUserEventsSSE = (
   organizationId: string,
-  onEvent: (event: UserRealtimeEvent) => QueryKey[],
+  onEvent: (event: UserRealtimeEvent) => {
+    queryKey: QueryKey;
+    prepare?: () => void;
+  }[],
 ): void => {
   const queryClient = useQueryClient();
   const realtimeRefresh = getRealtimeRefreshScheduler(queryClient);
@@ -76,8 +79,8 @@ export const useUserEventsSSE = (
       stream.addEventListener("message", (event: MessageEvent) => {
         const parsed = parseUserRealtimeEvent(jsonOrNull(String(event.data)));
         if (parsed) {
-          for (const queryKey of handleEvent(parsed)) {
-            realtimeRefresh.refresh(queryKey);
+          for (const { queryKey, prepare } of handleEvent(parsed)) {
+            realtimeRefresh.refresh(queryKey, prepare);
           }
         }
       });

@@ -4,7 +4,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { detached } from "@/lib/detached";
 
 export type RealtimeRefreshScheduler = {
-  refresh: (queryKey: QueryKey) => void;
+  refresh: (queryKey: QueryKey, prepare?: () => void) => void;
   invalidateImmediately: (queryKey: QueryKey) => Promise<void>;
 };
 
@@ -15,7 +15,10 @@ export type RealtimeRefreshScheduler = {
 export const createRealtimeRefreshScheduler = (
   queryClient: QueryClient,
 ): RealtimeRefreshScheduler => {
-  const pending = new Map<string, QueryKey>();
+  const pending = new Map<
+    string,
+    { queryKey: QueryKey; prepare: (() => void) | undefined }
+  >();
   const queryCache = queryClient.getQueryCache();
 
   const isFetching = (queryKey: QueryKey) =>
@@ -23,7 +26,8 @@ export const createRealtimeRefreshScheduler = (
       .findAll({ queryKey })
       .some(({ state }) => state.fetchStatus === "fetching");
 
-  const invalidateWithoutCancellation = (queryKey: QueryKey) => {
+  const startRefresh = (queryKey: QueryKey, prepare?: () => void) => {
+    prepare?.();
     detached(
       queryClient.invalidateQueries({ queryKey }, { cancelRefetch: false }),
       "realtime-refresh.invalidate",
@@ -31,21 +35,22 @@ export const createRealtimeRefreshScheduler = (
   };
 
   queryCache.subscribe(() => {
-    for (const [keyHash, queryKey] of pending) {
+    for (const [keyHash, { queryKey, prepare }] of pending) {
       if (isFetching(queryKey)) {
         continue;
       }
       pending.delete(keyHash);
-      invalidateWithoutCancellation(queryKey);
+      startRefresh(queryKey, prepare);
     }
   });
 
   return {
-    refresh: (queryKey) => {
+    refresh: (queryKey, prepare) => {
       if (isFetching(queryKey)) {
-        pending.set(hashKey(queryKey), queryKey);
+        pending.set(hashKey(queryKey), { queryKey, prepare });
+        return;
       }
-      invalidateWithoutCancellation(queryKey);
+      startRefresh(queryKey, prepare);
     },
     invalidateImmediately: async (queryKey) =>
       await queryClient.invalidateQueries({ queryKey }),

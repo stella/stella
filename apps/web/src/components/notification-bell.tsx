@@ -36,8 +36,8 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
+  firstNotificationsPageRefresh,
   notificationsOptions,
-  prepareFirstNotificationsPageRefresh,
   refetchFirstNotificationsPage,
 } from "@/lib/notification-queries";
 import type { Notification } from "@/lib/notification-queries";
@@ -83,7 +83,7 @@ export const NotificationBell = () => {
     // second kind a compile error here instead of a silently ignored event.
     eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
     return [
-      prepareFirstNotificationsPageRefresh({
+      firstNotificationsPageRefresh({
         organizationId,
         queryClient,
         userId,
