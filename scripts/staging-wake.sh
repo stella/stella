@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Starts staging for a release-candidate deploy that found it off, then waits
-# until it answers /ready.
+# Requests a staging power lease and, for a wake, waits until staging answers
+# /ready.
 #
 # Staging starts through the infra repository's staging-power.yml with
 # action=on and a 2 h lease: the lease powers staging off again when it ends,
@@ -30,7 +30,7 @@
 set -euo pipefail
 
 readonly power_workflow="staging-power.yml"
-readonly lease_hours="2"
+readonly lease_hours="${STAGING_LEASE_HOURS:-2}"
 # Must match the run-name of staging-power.yml for action=on.
 readonly run_title="Staging power on (${lease_hours}h)"
 
@@ -45,6 +45,7 @@ health_url="${STAGING_HEALTH_URL:-https://api-staging.stll.app/ready}"
 : "${GH_RETRY_SCRIPT:?GH_RETRY_SCRIPT is required}"
 : "${GITHUB_OUTPUT:?GITHUB_OUTPUT is required}"
 : "${DEPLOY_SHA:?DEPLOY_SHA is required}"
+[[ "$lease_hours" =~ ^[1-9][0-9]*$ ]] || { echo '::error::STAGING_LEASE_HOURS must be a positive integer.' >&2; exit 2; }
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 deploy_run_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}/actions/runs/${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 
@@ -59,10 +60,7 @@ refuse() {
     echo "\`${DEPLOY_SHA}\` was not deployed. Dispatch this workflow again once staging answers."
   } >> "$summary"
   echo "::error::${message} Nothing was deployed: ${deploy_run_url}"
-  jq -n --arg url "$deploy_run_url" --arg description "$description" \
-    '{state: "error", context: "staging/verified", description: $description, target_url: $url}' |
-    bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
-      --method POST --input - >/dev/null
+  bash "${STAGING_STATUS_WRITER:-$(dirname "${BASH_SOURCE[0]}")/post-staging-verification.sh}" error "$description"
   exit 1
 }
 
@@ -164,6 +162,11 @@ while true; do
 done
 if [[ "$conclusion" != "success" ]]; then
   refuse "staging start failed" "The staging start run concluded '${conclusion}': ${power_run_url}"
+fi
+
+if [[ "${STAGING_LEASE_ONLY:-false}" == true ]]; then
+  echo "Staging power lease is active for ${lease_hours} h." | tee -a "$summary"
+  exit 0
 fi
 
 echo "Staging start run succeeded; waiting for ${health_url} (up to ${ready_minutes} minutes)..."

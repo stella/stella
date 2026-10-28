@@ -35,6 +35,10 @@ mod feature_gate;
 mod foreground_app;
 mod foreground_app_visual;
 mod handoff;
+mod harness_archive;
+mod harness_commands;
+mod harness_installation;
+mod harness_release;
 mod http_client;
 mod i18n;
 mod idle_time;
@@ -217,6 +221,9 @@ pub fn run() {
         clipboard_window::show_on_launch(&handle);
       }
 
+      if let Some(installation) = harness_installation::HarnessInstallation::open_default() {
+        app.manage(installation);
+      }
       activity::start(handle.clone(), Arc::clone(&activity_manager));
       {
         let manager = Arc::clone(&manager);
@@ -238,6 +245,9 @@ pub fn run() {
             feature_gate::DesktopFeature::TimeBilling => {
               use tauri::Emitter;
               let _ = app.emit(activity::CHANGED_EVENT, ());
+            }
+            feature_gate::DesktopFeature::LocalAgents => {
+              harness_commands::apply_feature_gate(app, enabled);
             }
           }),
         );

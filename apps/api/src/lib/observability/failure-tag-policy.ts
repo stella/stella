@@ -309,6 +309,7 @@ export const TAGGED_FAILURE_REASON = {
   OnlineIndexMonitoringError: "tagged_failure",
   OnlineLockRetryDeferred: "tagged_failure",
   OoxmlValidationError: "tagged_failure",
+  OperatorEndpointError: "upstream_unavailable",
   OrganizationStorageTeardownBoundError: "tagged_failure",
   OrganizationStorageTeardownStateError: "tagged_failure",
   OwnerAccessLostError: "tagged_failure",

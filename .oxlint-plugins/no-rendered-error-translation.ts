@@ -15,6 +15,7 @@ const OWNERS = [
   // Existing scoped status and validation surfaces. They own recovery in place;
   // listing exact modules keeps new raw renderers fail-closed.
   "apps/web/src/components/bilingual-run-panel.tsx",
+  "apps/web/src/components/chat/connect-connector-card.tsx",
   "apps/web/src/components/chat/request-secret-card.tsx",
   "apps/web/src/components/contact-read-error.tsx",
   "apps/web/src/components/docx/docx-suggestions-query-status.tsx",
