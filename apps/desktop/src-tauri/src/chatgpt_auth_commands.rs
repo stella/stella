@@ -173,7 +173,7 @@ pub fn manage(app: &AppHandle) {
     ChatGptAuthHooks {
       open_browser: Box::new(move |url| {
         use tauri_plugin_opener::OpenerExt;
-        // The URL can carry an ID token hint; it is never logged.
+        // The URL names the account's email; it is never logged.
         opener.opener().open_url(url, None::<&str>).is_ok()
       }),
       changed: Box::new(move || {

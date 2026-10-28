@@ -482,7 +482,8 @@ async fn first_sign_in_registers_verifies_and_stores_the_connection() {
   assert!(!again.contains_key("agent_name_hint"));
   assert_eq!(again["ext_agent_host_id"], host_id);
   assert_eq!(again["login_hint"], "person@example.com");
-  assert_eq!(again["id_token_hint"], session.id_token);
+  assert!(!again.contains_key("id_token_hint"));
+  assert!(!session.session_id.is_empty());
   assert_ne!(again["state"], params["state"]);
   assert_ne!(again["nonce"], params["nonce"]);
   assert_ne!(again["code_challenge"], params["code_challenge"]);
@@ -766,7 +767,7 @@ async fn a_profile_key_binds_tokens_to_one_sign_in() {
     harness.auth.access(Some(&"0".repeat(64))).await,
     Err(AccessError::ProfileChanged)
   );
-  // A new sign-in issues a new ID token, so the old key stops working.
+  // Every sign-in starts a new session, so the old key stops working.
   harness.sign_in(SignInIntent::SameAccount).await;
   harness.settled().await;
   assert_eq!(
@@ -797,7 +798,7 @@ async fn disconnect_revokes_and_wipes_the_tokens_but_keeps_the_registration() {
     Err(AccessError::NotConnected)
   );
 
-  // The next sign-in reuses the client and host, without an ID token hint.
+  // The next sign-in reuses the client and host.
   harness.auth.start(SignInIntent::SameAccount);
   let again = harness.authorization().await;
   assert_eq!(again["client_id"], ISSUED_CLIENT);
@@ -1191,7 +1192,7 @@ fn statuses_serialize_without_tokens() {
       client_rejected: false,
       session: Some(store::ChatGptSession {
         issuer: "https://issuer.test".into(),
-        id_token: "id-token-secret".into(),
+        session_id: "session-secret".into(),
         access_token: "access-secret".into(),
         refresh_token: Some("refresh-secret".into()),
         expires_at: 0,

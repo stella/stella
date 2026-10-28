@@ -42,8 +42,8 @@ pub(crate) struct ChatGptRegistration {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ChatGptSession {
   pub issuer: String,
-  /// Kept for `id_token_hint` on the next sign-in to this account.
-  pub id_token: String,
+  /// A random identifier of this sign-in, which binds the runs it starts.
+  pub session_id: String,
   pub access_token: String,
   pub refresh_token: Option<String>,
   /// Unix milliseconds.
@@ -326,7 +326,7 @@ mod tests {
   fn session(access_token: &str, refresh_token: &str) -> ChatGptSession {
     ChatGptSession {
       issuer: "https://issuer.invalid".into(),
-      id_token: "id-token-fixture".into(),
+      session_id: "session-fixture".into(),
       access_token: access_token.into(),
       refresh_token: Some(refresh_token.into()),
       expires_at: 1,
@@ -421,7 +421,7 @@ mod tests {
     for secret in [
       "access-secret",
       "refresh-secret",
-      "id-token-fixture",
+      "session-fixture",
       "person@example.com",
       "subject-1",
       "oaiapp_fixture",

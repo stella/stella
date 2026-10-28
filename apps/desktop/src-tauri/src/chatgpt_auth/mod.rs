@@ -184,7 +184,7 @@ pub enum AccessError {
 }
 
 pub(crate) struct ChatGptAuthHooks {
-  /// Opens the system browser. The URL can carry an ID token hint.
+  /// Opens the system browser. The URL names the account's email.
   pub open_browser: Box<dyn Fn(&str) -> bool + Send + Sync>,
   /// The status changed; windows pull it again.
   pub changed: Box<dyn Fn() + Send + Sync>,
@@ -303,7 +303,7 @@ fn profile_key(registration: &ChatGptRegistration, session: &ChatGptSession) -> 
   let material = serde_json::json!([
     registration.client_id,
     registration.subject,
-    session.id_token
+    session.session_id
   ]);
   hex::encode(Sha256::digest(material.to_string().as_bytes()))
 }
@@ -721,7 +721,8 @@ impl ChatGptAuth {
     let saved_at = now_ms();
     let session = ChatGptSession {
       issuer: pending.discovery.issuer.clone(),
-      id_token,
+      // The ID token is only verified; nothing keeps or resends it.
+      session_id: oauth::random_token(32),
       access_token: tokens.access_token.clone(),
       refresh_token: tokens.refresh_token.clone(),
       expires_at: saved_at + tokens.expires_in.saturating_mul(1000),
@@ -1185,10 +1186,6 @@ fn select_target(record: &ChatGptRecord, intent: &SignInIntent) -> Target {
       client: ClientSelection::Returning {
         client_id: registration.client_id.clone(),
         login_hint: registration.email.clone(),
-        id_token_hint: registration
-          .session
-          .as_ref()
-          .map(|session| session.id_token.clone()),
         request_consent: !registration.plan_usage_granted,
       },
       expected_subject: Some(registration.subject.clone()),
@@ -1206,7 +1203,6 @@ fn select_target(record: &ChatGptRecord, intent: &SignInIntent) -> Target {
       client: ClientSelection::Returning {
         client_id: pending.clone(),
         login_hint: None,
-        id_token_hint: None,
         request_consent: false,
       },
       expected_subject: None,

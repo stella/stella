@@ -82,7 +82,6 @@ pub(crate) enum ClientSelection {
   Returning {
     client_id: String,
     login_hint: Option<String>,
-    id_token_hint: Option<String>,
     /// The previous sign-in did not grant plan usage; ask again.
     request_consent: bool,
   },
@@ -99,7 +98,7 @@ pub(crate) struct AuthorizationRequest<'a> {
   pub code_challenge: &'a str,
 }
 
-/// The browser URL. It can carry an ID token hint, so it is never logged.
+/// The browser URL. It names the account's email, so it is never logged.
 pub(crate) fn authorization_url(
   request: &AuthorizationRequest<'_>,
 ) -> Option<reqwest::Url> {
@@ -115,15 +114,11 @@ pub(crate) fn authorization_url(
       ClientSelection::Returning {
         client_id,
         login_hint,
-        id_token_hint,
         request_consent,
       } => {
         query.append_pair("client_id", client_id);
         if let Some(hint) = login_hint {
           query.append_pair("login_hint", hint);
-        }
-        if let Some(hint) = id_token_hint {
-          query.append_pair("id_token_hint", hint);
         }
         if *request_consent {
           query.append_pair("prompt", "consent");
@@ -500,7 +495,6 @@ mod tests {
       client: &ClientSelection::Returning {
         client_id: "oaiapp_issued".into(),
         login_hint: Some("person@example.com".into()),
-        id_token_hint: Some("hint".into()),
         request_consent: true,
       },
       host_id: "urn:uuid:host",
@@ -521,7 +515,8 @@ mod tests {
     assert_eq!(get("client_id"), Some("oaiapp_issued"));
     assert_eq!(get("agent_name_hint"), None);
     assert_eq!(get("login_hint"), Some("person@example.com"));
-    assert_eq!(get("id_token_hint"), Some("hint"));
+    // No ID token is kept or sent back: the optional hint is not used.
+    assert_eq!(get("id_token_hint"), None);
     assert_eq!(get("prompt"), Some("consent"));
     assert_eq!(get("ext_agent_host_id"), Some("urn:uuid:host"));
   }
