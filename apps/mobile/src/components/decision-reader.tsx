@@ -69,7 +69,7 @@ export const DecisionReader = ({
           </View>
         }
         ListFooterComponent={
-          blocks.length === 0 || decision.sourceUrl === null ? null : (
+          blocks.length === 0 || decision.sourceUrl === null ? undefined : (
             <View className="border-border mt-6 border-t pt-3">
               <OpenSourceButton url={decision.sourceUrl} />
             </View>

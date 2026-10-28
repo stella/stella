@@ -54,7 +54,7 @@ type ApiRequest<TSchema extends v.GenericSchema> = {
   /** A JSON body makes the request a POST, unless `method` says otherwise. */
   readonly body?: unknown;
   /** Without one, a request with a body is a POST and one without a GET. */
-  readonly method?: "POST" | "PUT" | "PATCH" | "DELETE";
+  readonly method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 };
 
 const requestJson = async <TSchema extends v.GenericSchema>(

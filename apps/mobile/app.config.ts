@@ -91,11 +91,12 @@ const withReleaseSigning: ConfigPlugin<ReleaseSigning> = (
     // Registered before the plugins, this runs after expo-widgets has added
     // its target.
     if (widgetsProfileUuid !== undefined) {
-      const widgets = project.pbxTargetByName(WIDGETS_TARGET) as
-        { buildConfigurationList: string } | null | undefined;
-      if (widgets === null || widgets === undefined) {
-        panic(`The widgets profile has no ${WIDGETS_TARGET} target to sign`);
-      }
+      // Throws when the target is missing, which stops a release that would
+      // otherwise ship an unsigned extension.
+      const [, widgets] = IOSConfig.Target.findNativeTargetByName(
+        project,
+        WIDGETS_TARGET,
+      );
       sign(widgets.buildConfigurationList, widgetsProfileUuid);
     }
     return mod;
@@ -252,7 +253,7 @@ const appConfigBase = ({
           [
             "expo-notifications",
             { mode: variant === "development" ? "development" : "production" },
-          ] as const,
+          ] satisfies [string, unknown],
         ]
       : []),
     // A running timer on the Lock Screen and in the Dynamic Island
@@ -265,7 +266,7 @@ const appConfigBase = ({
               bundleIdentifier: `${VARIANT_CONFIG[variant].identifier}.widgets`,
               groupIdentifier: `group.${VARIANT_CONFIG[variant].identifier}`,
             },
-          ] as const,
+          ] satisfies [string, unknown],
         ]
       : []),
   ],

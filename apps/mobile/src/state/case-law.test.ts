@@ -11,8 +11,8 @@ import type { DecisionSummary } from "./case-law";
 
 describe("defaultCaseLawCountry", () => {
   test("starts a reader in their language's jurisdiction", () => {
-    expect(defaultCaseLawCountry("cs")).toBe("CZE");
-    expect(defaultCaseLawCountry("sk")).toBe("SVK");
+    expect<string>(defaultCaseLawCountry("cs")).toBe("CZE");
+    expect<string>(defaultCaseLawCountry("sk")).toBe("SVK");
   });
 
   test("falls back to the first public jurisdiction", () => {
