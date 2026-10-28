@@ -107,7 +107,7 @@ export const readOverviewHandler = async ({
     return {
       entityCount: totals.entityCount,
       documentCount: totals.documentCount,
-      taskCount: upcomingAgenda.count,
+      taskCount: upcomingAgenda.totalCount,
       recentEntities: recent,
       upcomingAgenda: upcomingAgenda.items,
     };

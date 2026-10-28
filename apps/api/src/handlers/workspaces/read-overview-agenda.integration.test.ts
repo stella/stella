@@ -197,5 +197,36 @@ test("a deadline stays in the agenda after the date rolls over", async () => {
     async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
   );
   expect(afterRollover.items.map(({ entityId: id }) => id)).toContain(taskId);
-  expect(afterRollover.count).toBe(beforeRollover.count);
+  expect(afterRollover.totalCount).toBe(beforeRollover.totalCount);
+});
+
+test("the capped agenda reports every open task and the earliest overdue deadline", async () => {
+  const existingAgenda = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
+  );
+  const taskCount = LIMITS.overviewUpcomingAgenda + 3;
+  const taskIds = Array.from({ length: taskCount }, entityId);
+
+  await testDb.insert(entities).values(
+    taskIds.map((id, index) => ({
+      id,
+      workspaceId: ids.wsA1,
+      kind: "task" as const,
+      name: `Overflow agenda task ${index + 1}`,
+      dueDate:
+        index === 0
+          ? "1900-01-01"
+          : `2999-01-${String(index + 1).padStart(2, "0")}`,
+      status: "open",
+    })),
+  );
+
+  const agenda = await scopedDb(
+    async (tx) => await readOverviewAgenda({ tx, workspaceId: ids.wsA1 }),
+  );
+
+  expect(agenda.items).toHaveLength(LIMITS.overviewUpcomingAgenda);
+  expect(agenda.totalCount).toBe(existingAgenda.totalCount + taskCount);
+  expect(agenda.items.at(0)?.entityId).toBe(taskIds.at(0));
+  expect(agenda.nextDeadline).toBe("1900-01-01");
 });

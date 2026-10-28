@@ -1,7 +1,8 @@
 import { panic } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { entities } from "@/api/db/schema";
+import { entities } from "@/api/db/schema";
 import { openAgendaTask } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -79,6 +80,20 @@ type ReadOverviewAgendaOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
+type ReadOverviewAgendaResult = {
+  items: {
+    entityId: AgendaTaskRow["id"];
+    name: AgendaTaskRow["name"];
+    status: AgendaTaskRow["status"];
+    dueDate: AgendaTaskRow["dueDate"];
+    assignedTo: string | null;
+    assignedToImage: string | null;
+    assignedToDeletedAt: string | null;
+  }[];
+  totalCount: number;
+  nextDeadline: AgendaTaskRow["dueDate"];
+};
+
 /**
  * The matter's upcoming agenda, read on its own rather than filtered from
  * recent activity, so an older open task is not pushed out by newer edits.
@@ -87,35 +102,44 @@ type ReadOverviewAgendaOptions = {
 export const readOverviewAgenda = async ({
   tx,
   workspaceId,
-}: ReadOverviewAgendaOptions) => {
-  const rows = await tx.query.entities.findMany({
-    where: {
-      workspaceId: { eq: workspaceId },
-      RAW: (table) =>
-        openAgendaTask(table) ?? panic("Agenda condition is never empty"),
-    },
-    columns: AGENDA_TASK_COLUMNS,
-    with: {
-      assignees: {
-        columns: {},
-        orderBy: { createdAt: "asc" },
-        limit: 1,
-        with: {
-          user: {
-            columns: {
-              name: true,
-              email: true,
-              image: true,
-              deletedAt: true,
+}: ReadOverviewAgendaOptions): Promise<ReadOverviewAgendaResult> => {
+  const [rows, countRows] = await Promise.all([
+    tx.query.entities.findMany({
+      where: {
+        workspaceId: { eq: workspaceId },
+        RAW: (table) =>
+          openAgendaTask(table) ?? panic("Agenda condition is never empty"),
+      },
+      columns: AGENDA_TASK_COLUMNS,
+      with: {
+        assignees: {
+          columns: {},
+          orderBy: { createdAt: "asc" },
+          limit: 1,
+          with: {
+            user: {
+              columns: {
+                name: true,
+                email: true,
+                image: true,
+                deletedAt: true,
+              },
             },
           },
         },
       },
-    },
-    // Ascending due dates put undated tasks last.
-    orderBy: { dueDate: "asc", id: "asc" },
-    limit: LIMITS.overviewUpcomingAgenda,
-  });
+      // Ascending due dates put undated tasks last.
+      orderBy: { dueDate: "asc", id: "asc" },
+      limit: LIMITS.overviewUpcomingAgenda,
+    }),
+    tx
+      .select({ totalCount: sql<number>`count(*)::int` })
+      .from(entities)
+      .where(
+        and(eq(entities.workspaceId, workspaceId), openAgendaTask(entities)) ??
+          panic("Agenda count condition is never empty"),
+      ),
+  ]);
   const items = rows.map((task) => {
     const assignee = task.assignees.at(0)?.user;
     return {
@@ -130,7 +154,9 @@ export const readOverviewAgenda = async ({
   });
   return {
     items,
-    count: items.length,
+    totalCount:
+      countRows.at(0)?.totalCount ??
+      panic("Aggregate agenda count query returned no rows"),
     nextDeadline:
       items.find(({ dueDate }) => dueDate !== null)?.dueDate ?? null,
   };
