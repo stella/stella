@@ -477,7 +477,7 @@ describe("my week", () => {
       TIME_TRACKING_ENTRIES_SELECTOR,
     );
     expect(capturedEntries).toHaveLength(1);
-    expect(capturedEntries.item(0)?.textContent).toContain(
+    expect(capturedEntries.item(0).textContent).toContain(
       "Review lease schedule",
     );
     const nextMonday = Temporal.PlainDate.from(MONDAY)
