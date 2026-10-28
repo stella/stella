@@ -4,9 +4,15 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
-import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  DESKTOP_BILLING_DRAFT_LIMITS,
+  desktopBillingDraftRequestSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopBillingDraft } from "@stll/api-contract/desktop-billing-drafts";
-import { desktopTimeEntryBatchSchema } from "@stll/api-contract/desktop-time-entries";
+import {
+  DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+  desktopTimeEntryBatchSchema,
+} from "@stll/api-contract/desktop-time-entries";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
@@ -183,6 +189,15 @@ describe("draft request", () => {
         v.safeParse(desktopBillingDraftRequestSchema, request).success,
       ).toBe(true);
     }
+  });
+
+  test("shares the contract limits the desktop shell enforces", () => {
+    expect(billingDraftRequest.limits).toEqual({
+      entries: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+      steerLength: DESKTOP_BILLING_DRAFT_LIMITS.steerLength,
+      matchedEarlierEntries: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
+      earlierEntryNarrativeLength: DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
+    });
   });
 
   test("names each failure the desktop shell reports", () => {

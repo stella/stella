@@ -30,6 +30,12 @@
       ]
     }
   ],
+  "limits": {
+    "entries": 20,
+    "steerLength": 2000,
+    "matchedEarlierEntries": 20,
+    "earlierEntryNarrativeLength": 10000
+  },
   "failures": [
     { "type": "refused" },
     { "type": "guidelinesRequired" },

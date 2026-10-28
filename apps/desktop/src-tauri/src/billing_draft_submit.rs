@@ -9,9 +9,22 @@ use crate::{
 };
 
 const FAILURE: &str = "billing draft request failed";
-const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+// Contract limits, kept equal to the shared contract by the fixture test.
 const MAX_ENTRIES: usize = 20;
 const MAX_STEER_CHARS: usize = 2000;
+const MAX_MATCHED_EARLIER_ENTRIES: usize = 20;
+const MAX_EARLIER_NARRATIVE_UNITS: usize = 10_000;
+// The cited earlier entries dominate a review: up to MAX_ENTRIES times
+// MAX_MATCHED_EARLIER_ENTRIES of them, each with a narrative of up to
+// MAX_EARLIER_NARRATIVE_UNITS UTF-16 units. JSON spends at most 6 bytes on a
+// unit (a `\u` escape), plus a bounded id, date and duration per entry. The
+// model's own result, a few short narratives per entry, gets a fixed 1 MiB.
+const EARLIER_ENTRY_OVERHEAD_BYTES: usize = 512;
+const RESULT_ALLOWANCE_BYTES: usize = 1024 * 1024;
+const MAX_RESPONSE_BYTES: usize = MAX_ENTRIES
+  * MAX_MATCHED_EARLIER_ENTRIES
+  * (MAX_EARLIER_NARRATIVE_UNITS * 6 + EARLIER_ENTRY_OVERHEAD_BYTES)
+  + RESULT_ALLOWANCE_BYTES;
 // The server bounds one generation at 60 seconds; waiting longer lets its own
 // bounded failure arrive instead of a client timeout.
 const DRAFT_TIMEOUT: Duration = Duration::from_secs(75);
@@ -354,6 +367,22 @@ mod tests {
       }))
       .validate()
       .is_ok()
+    );
+  }
+
+  #[test]
+  fn limits_match_the_contract() {
+    let fixture: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/billing-draft-request.json"))
+        .unwrap();
+    assert_eq!(
+      fixture["limits"],
+      serde_json::json!({
+        "entries": MAX_ENTRIES,
+        "steerLength": MAX_STEER_CHARS,
+        "matchedEarlierEntries": MAX_MATCHED_EARLIER_ENTRIES,
+        "earlierEntryNarrativeLength": MAX_EARLIER_NARRATIVE_UNITS,
+      })
     );
   }
 
