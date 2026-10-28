@@ -32,6 +32,13 @@ export type MemberCaller = {
      * browser session backs it (an app's access token).
      */
     readonly stream?: SseStreamBinding;
+    /**
+     * The OAuth scopes of an app's access token, for a handler whose consent
+     * depends on the request rather than its route (an upload's purpose).
+     * Absent for a browser session, and for MCP, which checks that consent
+     * before dispatch.
+     */
+    readonly grantedScopes?: readonly string[];
   };
   readonly featureAccessSnapshot?: FeatureAccessSnapshot;
   readonly scopedDb: ScopedDb;
