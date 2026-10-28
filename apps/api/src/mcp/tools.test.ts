@@ -1502,7 +1502,7 @@ describe("OpenAI-compatible MCP tools", () => {
         queries: {
           type: "array",
           description:
-            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with pagination; totals are not counted.",
+            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, paged without a total.",
           items: { type: "string", minLength: 1, maxLength: 500 },
           minItems: 1,
           maxItems: 5,
@@ -1563,7 +1563,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, with pagination and no exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "Article 6(1)(a) GDPR". EU provisions work for every decision country. A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, paged, no total.',
         },
         has_legal_sentence: {
           type: "boolean",
