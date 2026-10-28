@@ -11,10 +11,10 @@ Persisted AI DOCX review suggestions, so a review session survives a reload and 
 ```text
 docx_suggestions.{...entityFeatureGateColumns()}  spread                                   docx-suggestions.ts:93
 docx_suggestions.id                               pUuid            pk,not null             docx-suggestions.ts:94
-docx_suggestions.workspace_id                     safeWorkspaceId  not null                docx-suggestions.ts:100  No direct workspaces FK: the composite FK below binds (entity_id, workspace_id) to entities, and entities already cascade from a workspace delete — mirrors ent…
-docx_suggestions.entity_id                        safeUuid         not null                docx-suggestions.ts:101
+docx_suggestions.workspace_id                     safeWorkspaceId  fk,not null             docx-suggestions.ts:100  No direct workspaces FK: the composite FK below binds (entity_id, workspace_id) to entities, and entities already cascade from a workspace delete — mirrors ent…
+docx_suggestions.entity_id                        safeUuid         fk,not null             docx-suggestions.ts:101
 docx_suggestions.origin_thread_id                 safeUuid         fk,null                 docx-suggestions.ts:104  Nullable + set-null: the suggestion outlives the chat thread it came from, keeping the audit trail intact if the thread is later deleted.
-docx_suggestions.origin_review_finding_id         safeUuid         null                    docx-suggestions.ts:113  The review finding this suggestion carries the fix for, when a document review staged it.
+docx_suggestions.origin_review_finding_id         safeUuid         fk,null                 docx-suggestions.ts:113  The review finding this suggestion carries the fix for, when a document review staged it.
 docx_suggestions.source_data_workspace_ids        safeWorkspaceId  array,default,not null  docx-suggestions.ts:124  Matters whose content contributed to this suggestion, carried over from the originating thread's own data scope (or, for a review-staged fix, the run's referen…
 docx_suggestions.op_payload                       jsonb            not null                docx-suggestions.ts:129  Opaque durable JSON; validate at every read and write boundary.
 docx_suggestions.comment                          text             null                    docx-suggestions.ts:131  AI rationale / reviewer note, when the model supplied one.

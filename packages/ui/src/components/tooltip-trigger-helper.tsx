@@ -10,6 +10,11 @@ type TooltipTriggerOptions = {
   tooltip: React.ReactNode;
 };
 
+/**
+ * Overlay triggers pass only an explicit `tooltip`. They cannot tell whether
+ * their content is a label or a glyph; a trigger rendered as `Button` hands its
+ * `aria-label` to that Button, whose size decides (see `BUTTON_SIZE_CONTENT`).
+ */
 const renderTooltipTrigger = ({ trigger, tooltip }: TooltipTriggerOptions) => {
   if (!hasTooltipContent(tooltip)) {
     return trigger;

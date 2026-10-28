@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { getColumns } from "drizzle-orm";
+import { QueryPromise } from "drizzle-orm/query-promise";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -51,14 +52,26 @@ type ScopedDbMockOptions = {
   };
 };
 
+class FixtureQuery<TRow> extends QueryPromise<TRow[]> {
+  private readonly rows: TRow[];
+
+  constructor(rows: TRow[]) {
+    super();
+    this.rows = rows;
+  }
+
+  async execute() {
+    return await Promise.resolve(this.rows);
+  }
+}
+
 // Query fixtures provide the rows matching their select boundary. Keep the
 // awaitable builder shape intact for locking and bounded reads.
 export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   let rowOffset = 0;
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
   const limit = (count: number) => {
     const selected = rows.slice(rowOffset, rowOffset + count);
-    return Object.assign(Promise.resolve(selected), {
+    return Object.assign(new FixtureQuery(selected), {
       for: async () => await Promise.resolve(selected),
     });
   };
@@ -66,20 +79,24 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
     rowOffset = count;
     return { limit };
   };
-  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its query methods
   const where = () =>
-    Object.assign(Promise.resolve(rows), {
+    Object.assign(new FixtureQuery(rows), {
       limit,
       offset,
       for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  type JoinedQuery = {
+  type JoinedQuery = FixtureQuery<TRow> & {
     where: typeof where;
     innerJoin: () => JoinedQuery;
     leftJoin: () => JoinedQuery;
   };
-  const from = (): JoinedQuery => ({ where, innerJoin: from, leftJoin: from });
+  const from = (): JoinedQuery =>
+    Object.assign(new FixtureQuery(rows), {
+      where,
+      innerJoin: from,
+      leftJoin: from,
+    });
   return { from };
 };
 

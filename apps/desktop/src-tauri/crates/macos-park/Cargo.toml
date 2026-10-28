@@ -34,8 +34,10 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSApplication",
   "NSPanel",
   "NSResponder",
+  "NSRunningApplication",
   "NSView",
   "NSWindow",
+  "libc",
 ] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["CFBase", "CFNumber", "CFPreferences", "CFString", "std"] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
@@ -55,6 +57,10 @@ windows-sys = { version = "0.61", features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "NSEvent",
+  "NSWorkspace",
+] }
 objc2-foundation = "0.3"
 objc2-web-kit = { version = "0.3", default-features = false, features = [
   "WKWebView",

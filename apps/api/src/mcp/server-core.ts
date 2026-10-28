@@ -54,7 +54,10 @@ import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import type { SseStreamBinding } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
-import { revalidateMachineApiKeySession } from "@/api/mcp/api-key-auth";
+import {
+  resolveMachineApiKeySession,
+  revalidateMachineApiKeySession,
+} from "@/api/mcp/api-key-auth";
 import type { McpAuthenticationFailure, McpSession } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
@@ -210,7 +213,7 @@ type McpServerDependencies = {
     token: string,
     options: {
       mode: McpMode;
-      resolveApiKeySession?: typeof revalidateMachineApiKeySession;
+      resolveApiKeySession: typeof resolveMachineApiKeySession;
     },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: typeof captureApiError;
@@ -242,8 +245,8 @@ type McpServerDependencies = {
   ) => Promise<McpTool[]>;
   listMcpResources: (
     mode: McpMode,
-    context?: McpRequestResources,
-  ) => Resource[];
+    options?: { context?: McpRequestResources | undefined },
+  ) => Promise<Resource[]>;
   readMcpResource: (
     uri: string,
     mode: McpMode,
@@ -1098,7 +1101,7 @@ export const createMcpHttpRequestHandler = ({
     return retryableToolErrorResult(mode, context);
   };
 
-  const createMcpServer = ({
+  const createMcpServer = async ({
     context,
     mode,
     session,
@@ -1119,7 +1122,7 @@ export const createMcpHttpRequestHandler = ({
       },
       {
         capabilities: { prompts: {}, resources: {}, tools: {} },
-        instructions: getMcpInstructions(mode, context),
+        instructions: await getMcpInstructions(mode, context),
       },
     );
 
@@ -1145,8 +1148,8 @@ export const createMcpHttpRequestHandler = ({
     // Resources are static, public, tenant-independent documents (the template
     // marker grammar today); the same set is served in both modes without a
     // per-tool scope gate. Every request already carries a valid session token.
-    server.setRequestHandler("resources/list", () => ({
-      resources: listMcpResources(mode, context),
+    server.setRequestHandler("resources/list", async () => ({
+      resources: await listMcpResources(mode, { context }),
     }));
 
     server.setRequestHandler(
@@ -1229,7 +1232,7 @@ export const createMcpHttpRequestHandler = ({
     }
 
     const handler = createMcpHandler(
-      () => createMcpServer({ ...readFactoryState(), mode }),
+      async () => await createMcpServer({ ...readFactoryState(), mode }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1273,7 +1276,7 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = createMcpServer({ context, mode, session });
+    const server = await createMcpServer({ context, mode, session });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1589,7 +1592,11 @@ export const createMcpHttpRequestHandler = ({
             try {
               const authenticated = await measureMcpPhase(
                 "auth",
-                async () => await authenticateMcpRequest(token, { mode }),
+                async () =>
+                  await authenticateMcpRequest(token, {
+                    mode,
+                    resolveApiKeySession: resolveMachineApiKeySession,
+                  }),
               );
               if (Result.isError(authenticated)) {
                 return failureResponse({

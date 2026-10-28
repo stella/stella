@@ -1,0 +1,98 @@
+{
+  "tabs": {
+    "chat": "Vestlus",
+    "tasks": "Ülesanded",
+    "matters": "Toimikud",
+    "settings": "Seaded"
+  },
+  "chat": {
+    "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
+    "emptyTitle": "Vestlusi pole veel",
+    "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia.",
+    "loadFailed": "Teie vestlusi ei õnnestunud laadida.",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata vestlus",
+    "loadMoreFailed": "Laadi veel",
+    "loadOlderFailed": "Laadi varasemad sõnumid",
+    "toolUsed": "Kasutatud: {tool}",
+    "threadTitle": "Vestlus",
+    "threadLoadFailed": "Seda vestlust ei õnnestunud laadida.",
+    "threadEmptyDescription": "Selles vestluses pole veel sõnumeid.",
+    "sections": {
+      "today": "Täna",
+      "yesterday": "Eile",
+      "week": "Viimased 7 päeva",
+      "earlier": "Varem"
+    },
+    "newChat": "Uus vestlus",
+    "composerPlaceholder": "Küsi stellalt",
+    "send": "Saada",
+    "stop": "Peata",
+    "sendFailed": "Sõnumit ei õnnestunud saata. Proovige uuesti.",
+    "answerWorking": "Töötan…",
+    "answerStopped": "Peatatud.",
+    "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
+    "answerFailed": "Vastust ei õnnestunud lõpetada."
+  },
+  "tasks": {
+    "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",
+    "emptyTitle": "Avatud ülesandeid pole",
+    "emptyDescription": "Määratud ja eelseisvad ülesanded ilmuvad siia."
+  },
+  "matters": {
+    "description": "Leidke toimik ja saage kiiresti ülevaade olulisest kontekstist.",
+    "emptyTitle": "Toimikuid veel pole",
+    "emptyDescription": "Teie hiljutised toimikud ilmuvad siia.",
+    "loadFailed": "Teie toimikuid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti"
+  },
+  "matter": {
+    "documents": "Dokumendid",
+    "tasks": "Ülesanded",
+    "emptyTitle": "Siin pole veel midagi",
+    "emptyDescription": "Selle asja dokumendid ja ülesanded kuvatakse siin.",
+    "loadFailed": "Asja ei õnnestunud laadida.",
+    "loadMoreFailed": "Rohkem kirjeid ei õnnestunud laadida.",
+    "loadMore": "Laadi veel",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata",
+    "updated": "Muudetud {time}",
+    "kind": {
+      "folder": "Kaust",
+      "document": "Dokument",
+      "task": "Ülesanne"
+    },
+    "status": {
+      "open": "Avatud",
+      "in_progress": "Töös",
+      "in_review": "Ülevaatusel",
+      "done": "Tehtud",
+      "cancelled": "Tühistatud"
+    }
+  },
+  "entity": {
+    "type": "Tüüp",
+    "reference": "Viitenumber",
+    "currentVersion": "Praegune versioon",
+    "loadFailed": "Kirjet ei õnnestunud laadida."
+  },
+  "signIn": {
+    "title": "Logige sisse rakendusse stella",
+    "description": "Sisestage oma stella serveri aadress. Sisselogimise kinnitate brauseris.",
+    "serverLabel": "Serveri aadress",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Jätka",
+    "sessionEnded": "Teie seanss lõppes. Logige uuesti sisse.",
+    "errors": {
+      "address": "Sisestage https-aadress, näiteks stella.example.com.",
+      "unreachable": "Sellel aadressil ei vastanud ükski stella server.",
+      "denied": "Sisselogimist ei kinnitatud.",
+      "failed": "Sisselogimine jäi pooleli. Proovige uuesti."
+    }
+  },
+  "settings": {
+    "accountTitle": "Konto",
+    "server": "Server",
+    "signOut": "Logi välja"
+  }
+}
