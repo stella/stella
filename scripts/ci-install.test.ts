@@ -113,6 +113,55 @@ test("two stalled fake children produce a typed terminal stall", async () => {
   expect(result).toEqual({ exitCode: 137, stalled: true, retried: true });
 });
 
+test("initial recording failures clean up before install monitoring starts", async () => {
+  const root = mkdtempSync(
+    path.join(tmpdir(), "ci-install-initial-recording-"),
+  );
+  roots.push(root);
+  const recordingError = new Error("installer log cannot be initialized");
+  let attempts = 0;
+  let kills = 0;
+  let activeTimers = 0;
+  let exitCode: number | null = null;
+  const exit = Promise.withResolvers<number>();
+
+  const attempt = runLoggedInstall({
+    command: ["fake-install"],
+    logFile: path.join(root, "install.log"),
+    record: () => {
+      throw recordingError;
+    },
+    scheduleInterval: () => {
+      activeTimers += 1;
+      return () => {
+        activeTimers -= 1;
+      };
+    },
+    spawn: () => {
+      attempts += 1;
+      return {
+        stdout: new ReadableStream<Uint8Array>(),
+        stderr: new ReadableStream<Uint8Array>(),
+        exited: exit.promise,
+        get exitCode() {
+          return exitCode;
+        },
+        signalCode: null,
+        kill: () => {
+          kills += 1;
+          exitCode = 137;
+          exit.resolve(exitCode);
+        },
+      };
+    },
+  });
+
+  expect(await rejectionOf(attempt)).toBe(recordingError);
+  expect(attempts).toBe(1);
+  expect(kills).toBe(1);
+  expect(activeTimers).toBe(0);
+});
+
 test("recording failures clean up the active install attempt", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "ci-install-recording-"));
   roots.push(root);
