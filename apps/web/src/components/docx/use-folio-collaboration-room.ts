@@ -253,7 +253,7 @@ const loadCollaborationRuntimeModules =
 // rejoin and read-only recovery branch on the HTTP status of either.
 const httpFailureStatus = (error: unknown): number | null =>
   error instanceof FetchBoundaryError || APIError.is(error)
-    ? error.status
+    ? (error.status ?? null)
     : null;
 
 const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
