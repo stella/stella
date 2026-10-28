@@ -100,6 +100,8 @@ const ThreadTimeline = ({
   return (
     <SectionList
       contentContainerStyle={[screenStyles.content, styles.content]}
+      // A chat found by a search opens on the first tap, the keyboard up.
+      keyboardShouldPersistTaps="handled"
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
         firstPage === undefined ? (
