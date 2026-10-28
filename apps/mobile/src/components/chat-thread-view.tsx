@@ -42,7 +42,7 @@ export const ChatThreadView = ({
   const loadThread = async (): Promise<Load<ChatMessagesPage>> => {
     const result = await readChatThread({ fetch, matterId, source, threadId });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
-      end();
+      end(source);
     }
     return { loadedAt: epochMilliseconds(), result };
   };
@@ -159,7 +159,7 @@ const ThreadMessages = ({
       return;
     }
     if (page.error._tag === "SignedOutError") {
-      end();
+      end(source);
       return;
     }
     setOlder("failed");

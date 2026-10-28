@@ -90,7 +90,7 @@ const ThreadTimeline = ({
       return;
     }
     if (next.error._tag === "SignedOutError") {
-      end();
+      end(source);
       return;
     }
     setMore("failed");
