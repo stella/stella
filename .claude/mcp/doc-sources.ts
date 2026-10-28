@@ -914,14 +914,6 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   },
   {
     checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "fast-xml-parser",
-    explanation:
-      "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "cldr-misc-full",
     explanation:
       "https://cldr.unicode.org/llms.txt, https://www.unicode.org/llms.txt and the repository llms.txt at https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt return 404. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
