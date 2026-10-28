@@ -3,28 +3,33 @@ retain provider stop evidence. Upstream handles max_tokens usage.
 Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a42595e4507c 100644
+index fbcbce1cf58..ba4b7e954ff 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -519,9 +519,12 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -848,6 +848,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  		let hasEmittedRunFinished = false;
  		let currentBlockType = null;
  		let messageStartUsage;
 +		let reportedUsage;
  		try {
  			for await (const event of stream) {
+ 				if (event.type === "message_start") {
+@@ -855,6 +856,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 					model = event.message.model;
+ 				}
  				logger.provider(`provider=anthropic type=${event.type}`, { chunk: event });
 +				if (event.type === "message_start" && event.message.usage) reportedUsage = event.message.usage;
 +				if (event.type === "message_delta" && event.usage) reportedUsage = event.usage;
  				if (!hasEmittedRunStarted) {
  					hasEmittedRunStarted = true;
  					yield {
-@@ -852,14 +855,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1178,15 +1181,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  							timestamp: Date.now()
  						};
  					}
 -					if (!hasEmittedRunFinished) yield {
 -						type: EventType.RUN_FINISHED,
+-						...responseId !== void 0 && { responseId },
 -						runId,
 -						threadId,
 -						model,
@@ -34,7 +39,7 @@ index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a425
  				} else if (event.type === "message_delta") {
  					if (event.delta.stop_reason) {
  						hasEmittedRunFinished = true;
-@@ -888,7 +883,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1216,7 +1210,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  									model,
  									timestamp: Date.now(),
  									finishReason: "tool_calls",
@@ -44,7 +49,7 @@ index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a425
  								};
  								break;
  							case "max_tokens":
-@@ -910,7 +906,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1238,7 +1233,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  										message: "The response was cut off because the maximum token limit was reached.",
  										code: "max_tokens"
  									},
@@ -65,8 +70,8 @@ index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a425
 +									metadata: { providerStopReason: event.delta.stop_reason }
  								};
  								break;
- 							default: yield {
-@@ -920,12 +929,26 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 							case "model_context_window_exceeded": {
+@@ -1278,18 +1286,32 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  								model,
  								timestamp: Date.now(),
  								finishReason: "stop",
@@ -93,12 +98,11 @@ index d69ca4cea5412bbaf2d490963b5c022822696cf8..5b3fda96bea8b28e4bd23e3d6dd4a425
 +			};
  		} catch (error) {
  			const err = error;
+ 			const code = runErrorCode(err);
  			const rawEvent = toRunErrorRawEvent(error);
-@@ -940,6 +963,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
- 				message: err.message || "Unknown error occurred",
- 				code: err.code || String(err.status),
- 				...rawEvent !== void 0 && { rawEvent },
-+				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage, messageStartUsage) },
- 				error: {
- 					message: err.message || "Unknown error occurred",
- 					code: err.code || String(err.status)
+ 			const retryAfterMs = toRetryAfterMs(error);
+-			const usage = hasEmittedRunFinished ? void 0 : buildAnthropicUsage(messageStartUsage);
++			const usage = hasEmittedRunFinished ? void 0 : buildAnthropicUsage(reportedUsage ?? messageStartUsage, messageStartUsage);
+ 			logger.errors("anthropic.processAnthropicStream fatal", {
+ 				error,
+ 				source: "anthropic.processAnthropicStream"

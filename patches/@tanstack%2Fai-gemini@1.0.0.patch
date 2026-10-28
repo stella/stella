@@ -16,10 +16,10 @@
 
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e54574716 100644
+index 33a44492909..19dcc64af9b 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -115,13 +115,14 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -232,13 +232,14 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		}
  		const mappedOptions = this.mapCommonOptionsToGemini(options);
  		const { logger } = options;
@@ -33,17 +33,17 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
 -			yield* this.processStreamChunks(result, options, logger);
 +			yield* this.processStreamChunks(result, options, logger, reported);
  		} catch (error) {
+ 			const overflow = isGeminiContextOverflow(error);
  			const rawEvent = toRunErrorRawEvent(error);
- 			logger.errors("gemini.chatStream fatal", {
-@@ -134,6 +135,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
- 				timestamp: Date.now(),
+@@ -253,6 +254,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream.",
+ 				...overflow && { code: CONTEXT_OVERFLOW_CODE },
  				...rawEvent !== void 0 && { rawEvent },
 +				...reported.usageMetadata && { usage: buildGeminiUsage(reported.usageMetadata) },
- 				error: { message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream." }
- 			};
- 		}
-@@ -257,7 +259,8 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				error: {
+ 					message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream.",
+ 					...overflow && { code: CONTEXT_OVERFLOW_CODE }
+@@ -398,7 +400,8 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				error,
  				source: "gemini.structuredOutput"
  			});
@@ -53,7 +53,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  		}
  	}
  	/**
-@@ -349,8 +352,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -498,8 +501,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  		}
  		return textContent;
  	}
@@ -61,18 +61,18 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
 +	async *processStreamChunks(result, options, logger, reported = {}) {
  		const model = options.model;
 +		let hasEmittedTerminal = false;
+ 		let responseId;
+ 		let reportedModel;
  		let accumulatedContent = "";
- 		let accumulatedThinking = "";
- 		const toolCallMap = /* @__PURE__ */ new Map();
-@@ -401,6 +405,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
- 		};
- 		for await (const chunk of result) {
+@@ -549,6 +553,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 			if (chunk.responseId) responseId = chunk.responseId;
+ 			if (chunk.modelVersion) reportedModel = chunk.modelVersion;
  			logger.provider(`provider=gemini`, { chunk });
 +			if (chunk.usageMetadata) reported.usageMetadata = chunk.usageMetadata;
  			if (!hasEmittedRunStarted) {
  				hasEmittedRunStarted = true;
  				yield {
-@@ -412,6 +417,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -564,6 +569,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					parentRunId: options.parentRunId
  				};
  			}
@@ -93,7 +93,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  			if (chunk.candidates?.[0]?.groundingMetadata) groundingMetadata = chunk.candidates[0].groundingMetadata;
  			if (chunk.candidates?.[0]?.content?.parts) {
  				const parts = chunk.candidates[0].content.parts;
-@@ -574,6 +593,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -704,6 +723,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  				};
  			}
  			if (chunk.candidates?.[0]?.finishReason) {
@@ -101,7 +101,7 @@ index 5b1fc7328d746e64cb93ca16ccdefe526fb79f21..f4fad4aff81fe8bbee209c976710b55e
  				yield* emitGroundingToolCall();
  				const finishReason = chunk.candidates[0].finishReason;
  				for (const [toolCallId, toolCallData] of toolCallMap.entries()) {
-@@ -635,11 +655,26 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+@@ -767,11 +787,26 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
  					model,
  					timestamp: Date.now(),
  					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",

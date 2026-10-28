@@ -8,11 +8,62 @@ TOOL_CALL_START flushes before waiting for further provider output.
 Durable delivery respects consumer demand until cancellation detaches its producer.
 Remove each hunk when upstream preserves the same behavior.
 
+diff --git a/dist/esm/activities/chat/messages.js b/dist/esm/activities/chat/messages.js
+index 97126b736a3..cbb53d1ddfa 100644
+--- a/dist/esm/activities/chat/messages.js
++++ b/dist/esm/activities/chat/messages.js
+@@ -162,6 +162,7 @@ function convertOwnMessages(messages) {
+ 			if (content || signature !== void 0) pendingThinking.push({
+ 				content: typeof content === "string" ? content : "",
+ 				...signature !== void 0 ? { signature } : {},
++				...msg.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: msg.metadata.tanstack.reasoningProvenance },
+ 				...redactedFrom(msg)
+ 			});
+ 			continue;
+@@ -599,6 +600,7 @@ function buildAssistantMessages(uiMessage) {
+ 				pendingThinking.push({
+ 					content: part.content,
+ 					...part.signature && { signature: part.signature },
++					...part.provenance !== void 0 && { provenance: part.provenance },
+ 					...part.redacted && { redacted: true }
+ 				});
+ 				current.order.push({ type: "thinking" });
+@@ -675,6 +677,7 @@ function thinkingToPart(thinking) {
+ 	return {
+ 		type: "thinking",
+ 		content: thinking.content,
++		...thinking.provenance !== void 0 && { provenance: thinking.provenance },
+ 		...thinking.signature && { signature: thinking.signature },
+ 		...thinking.redacted && { redacted: true }
+ 	};
+@@ -851,6 +854,7 @@ function aguiSnapshotMessageToUIMessage(message) {
+ 					type: "thinking",
+ 					content,
+ 					...signature !== void 0 ? { signature } : {},
++					...message.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: message.metadata.tanstack.reasoningProvenance },
+ 					...redactedFrom(message)
+ 				}] : []
+ 			});
+diff --git a/dist/esm/activities/chat/stream/message-updaters.js b/dist/esm/activities/chat/stream/message-updaters.js
+index 0df92e656c2..927806a51ab 100644
+--- a/dist/esm/activities/chat/stream/message-updaters.js
++++ b/dist/esm/activities/chat/stream/message-updaters.js
+@@ -91,8 +91,9 @@ function updateToolResultPart(messages, messageId, toolCallId, content, state, e
+ function updateToolCallApproval(messages, messageId, toolCallId, approvalId) {
+ 	return messages.map((msg) => {
+ 		if (msg.id !== messageId) return msg;
++		const toolCallPart = msg.parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
++		if (!toolCallPart) return msg;
+ 		const parts = [...msg.parts];
+-		const toolCallPart = parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
+ 		if (toolCallPart) {
+ 			const index = parts.indexOf(toolCallPart);
+ 			parts[index] = {
 diff --git a/dist/esm/activities/chat/stream/processor.js b/dist/esm/activities/chat/stream/processor.js
-index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e5035f14d 100644
+index 5ef35de95b2..9840a59c977 100644
 --- a/dist/esm/activities/chat/stream/processor.js
 +++ b/dist/esm/activities/chat/stream/processor.js
-@@ -1235,7 +1235,7 @@ var StreamProcessor = class StreamProcessor {
+@@ -1304,7 +1304,7 @@ var StreamProcessor = class StreamProcessor {
  					...prev.approval !== void 0 ? { approval: prev.approval } : {},
  					...prev.metadata !== void 0 ? { metadata: prev.metadata } : {}
  				};
@@ -21,34 +72,37 @@ index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e
  					let output;
  					if (Array.isArray(result.content)) output = result.content;
  					else try {
-@@ -1405,18 +1405,22 @@ var StreamProcessor = class StreamProcessor {
+@@ -1495,10 +1495,25 @@ var StreamProcessor = class StreamProcessor {
+ 		const msgState = this.getMessageState(messageId);
  		if (!msgState) return;
- 		const input = chunk.input !== void 0 ? chunk.input : tanstackMetadata(chunk)?.input;
  		const existingToolCall = msgState.toolCalls.get(chunk.toolCallId);
 -		if (existingToolCall && existingToolCall.state !== "input-complete") {
-+		if (existingToolCall) {
- 			const serializedInput = serializeToolInput(input);
- 			if (serializedInput !== void 0) existingToolCall.arguments = serializedInput;
+-			existingToolCall.arguments = finishToolCallArguments(existingToolCall.arguments, chunk).args;
 -			const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
 -			this.completeToolCall(messageId, index, existingToolCall);
++		if (existingToolCall) {
++			const final = finishToolCallArguments(existingToolCall.arguments, chunk);
++			existingToolCall.arguments = final.args;
 +			const wasComplete = existingToolCall.state === "input-complete";
 +			if (!wasComplete) {
 +				const index = msgState.toolCallOrder.indexOf(chunk.toolCallId);
 +				this.completeToolCall(messageId, index, existingToolCall);
 +			}
- 			if (serializedInput !== void 0) {
- 				existingToolCall.parsedArguments = input;
-+				const currentPart = wasComplete ? this.messages.find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === existingToolCall.id) : void 0;
- 				this.messages = updateToolCallPart(this.messages, messageId, {
- 					id: existingToolCall.id,
- 					name: existingToolCall.name,
- 					arguments: existingToolCall.arguments,
--					state: "input-complete",
-+					state: currentPart?.state ?? "input-complete",
- 					input,
- 					...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
- 				});
-@@ -1538,7 +1542,7 @@
++			existingToolCall.parsedArguments = final.input;
++			const currentPart = wasComplete ? this.messages.find((m) => m.id === messageId)?.parts.find((p) => p.type === "tool-call" && p.id === existingToolCall.id) : void 0;
++			this.messages = updateToolCallPart(this.messages, messageId, {
++				id: existingToolCall.id,
++				name: existingToolCall.name,
++				arguments: existingToolCall.arguments,
++				state: currentPart?.state ?? "input-complete",
++				input: final.input,
++				...existingToolCall.metadata !== void 0 && { metadata: existingToolCall.metadata }
++			});
++			this.emitMessagesChange();
+ 		}
+ 	}
+ 	/**
+@@ -1631,7 +1646,7 @@ var StreamProcessor = class StreamProcessor {
  					});
  					continue;
  				}
@@ -58,29 +112,24 @@ index c21d483b5ed97eb9b4f64f4d6783ec3ba148a8f0..d8ae7d353e94e6634962124d15422d5e
  					this.messages = updateToolCallApproval(this.messages, resolvedMessageId, toolCallId, interrupt.id);
  					this.emitMessagesChange();
 diff --git a/dist/esm/activities/chat/tools/tool-calls.js b/dist/esm/activities/chat/tools/tool-calls.js
+index 61c8cf2f026..94298ef9902 100644
 --- a/dist/esm/activities/chat/tools/tool-calls.js
 +++ b/dist/esm/activities/chat/tools/tool-calls.js
-@@ -535,10 +535,12 @@
+@@ -578,7 +578,8 @@ async function* executeToolCalls(toolCalls, tools, threadId, approvals = /* @__P
  			});
  			continue;
  		}
 -		if (hasPendingApprovals) {
-+		// Sequential calls preceding the first approval may finish; later server
-+		// calls must wait so dependent reads and writes retain call order.
++		// Sequential server calls preceding the first approval preserve call order.
 +		if (hasPendingApprovals && (!runsInOrder || needsApproval.length > 0)) {
- 			const isPendingApproval = tool.needsApproval && approvalResolution(approvals, toolCall.id) === void 0;
--			const isPlainClientRequest = !tool.needsApproval && !tool.execute;
--			if (!isPendingApproval && !isPlainClientRequest) continue;
-+			const isNoApprovalCall = !tool.needsApproval && (!runsInOrder || !tool.execute);
-+			if (!isPendingApproval && !isNoApprovalCall) continue;
- 		}
- 		if (resumeState?.cancelledToolCallIds?.has(toolCall.id)) {
- 			results.push({
+ 			const resolution = approvalResolution(approvals, toolCall.id);
+ 			const isPendingApproval = tool.needsApproval && resolution === void 0;
+ 			const isClientRequest = !tool.execute && (!tool.needsApproval || resolution !== void 0 && isApproved(resolution));
 diff --git a/dist/esm/activities/error-payload.js b/dist/esm/activities/error-payload.js
-index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a3f55e56f 100644
+index 488644cf9a5..13683067c1a 100644
 --- a/dist/esm/activities/error-payload.js
 +++ b/dist/esm/activities/error-payload.js
-@@ -91,12 +91,52 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
+@@ -98,12 +98,52 @@ function toRunErrorPayload(error, fallbackMessage = "Unknown error occurred") {
  *   const rawEvent = toRunErrorRawEvent(error)
  *   yield { type: EventType.RUN_ERROR, ..., ...(rawEvent !== undefined && { rawEvent }) }
  */
@@ -134,12 +183,13 @@ index adf8a899dda16d289331cebfece36a6c80263d0c..c62fdcfe2421fea1e474165ebcdbbe5a
 +	if (e.metadata !== void 0 && e.metadata !== null) return withHttpStatus(e.metadata, e);
 +	return awsExceptionEvidence(e) ?? statusEvidence(e);
  }
- //#endregion
- export { isAbortShapedError, toRunErrorPayload, toRunErrorRawEvent };
+ /** Read one response header from the `headers` that an SDK error carries. */
+ function responseHeader(error, name) {
 diff --git a/dist/esm/stream-to-response.js b/dist/esm/stream-to-response.js
+index 4dd553a2b29..fa04fa8e320 100644
 --- a/dist/esm/stream-to-response.js
 +++ b/dist/esm/stream-to-response.js
-@@ -105,7 +105,7 @@
+@@ -152,7 +152,7 @@ function toEncodedStream(stream, abortController, encodeChunk, encodeError, deta
  				let iteratorDone = false;
  				try {
  					while (!isAborted(cancellation.signal)) {
@@ -148,7 +198,7 @@ diff --git a/dist/esm/stream-to-response.js b/dist/esm/stream-to-response.js
  							resumePump = resolve;
  						});
  						if (isAborted(cancellation.signal)) break;
-@@ -260,7 +260,7 @@
+@@ -387,7 +387,7 @@ function resolveBatchSize(batch) {
  * that same batch.
  */
  function isDurabilityFlushBoundary(chunk) {
@@ -157,45 +207,11 @@ diff --git a/dist/esm/stream-to-response.js b/dist/esm/stream-to-response.js
  }
  /**
  * Name of the synthetic `CUSTOM` chunk a fresh durable producer appends to its
-diff --git a/dist/esm/activities/chat/messages.js b/dist/esm/activities/chat/messages.js
---- a/dist/esm/activities/chat/messages.js
-+++ b/dist/esm/activities/chat/messages.js
-@@ -160,6 +160,7 @@
- 			if (content || signature !== void 0) pendingThinking.push({
- 				content: typeof content === "string" ? content : "",
- 				...signature !== void 0 ? { signature } : {},
-+				...msg.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: msg.metadata.tanstack.reasoningProvenance },
- 				...redactedFrom(msg)
- 			});
- 			continue;
-@@ -499,6 +500,7 @@
- 				pendingThinking.push({
- 					content: part.content,
- 					...part.signature && { signature: part.signature },
-+					...part.provenance !== void 0 && { provenance: part.provenance },
- 					...part.redacted && { redacted: true }
- 				});
- 			}
-@@ -583,6 +585,7 @@
- 			type: "thinking",
- 			content: thinking.content,
- 			...thinking.signature && { signature: thinking.signature },
-+			...thinking.provenance !== void 0 && { provenance: thinking.provenance },
- 			...thinking.redacted && { redacted: true }
- 		});
- 	}
-@@ -729,6 +732,7 @@
- 					type: "thinking",
- 					content,
- 					...signature !== void 0 ? { signature } : {},
-+					...message.metadata?.tanstack?.reasoningProvenance !== void 0 && { provenance: message.metadata.tanstack.reasoningProvenance },
- 					...redactedFrom(message)
- 				}] : []
- 			});
 diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
+index 48cdad8a1b2..4da1fd96b2e 100644
 --- a/dist/esm/utilities/ag-ui-wire.js
 +++ b/dist/esm/utilities/ag-ui-wire.js
-@@ -111,6 +111,7 @@
+@@ -166,6 +166,7 @@ function uiMessagesToWire(messages, options) {
  					content: part.content
  				};
  				if (part.signature) reasoning.encryptedValue = part.signature;
@@ -203,18 +219,3 @@ diff --git a/dist/esm/utilities/ag-ui-wire.js b/dist/esm/utilities/ag-ui-wire.js
  				wire.push(reasoning);
  			}
  			const text = collectText(segment.parts);
-diff --git a/dist/esm/activities/chat/stream/message-updaters.js b/dist/esm/activities/chat/stream/message-updaters.js
---- a/dist/esm/activities/chat/stream/message-updaters.js
-+++ b/dist/esm/activities/chat/stream/message-updaters.js
-@@ -91,8 +91,9 @@
- function updateToolCallApproval(messages, messageId, toolCallId, approvalId) {
- 	return messages.map((msg) => {
- 		if (msg.id !== messageId) return msg;
--		const parts = [...msg.parts];
--		const toolCallPart = parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
-+		const toolCallPart = msg.parts.find((p) => p.type === "tool-call" && p.id === toolCallId);
-+		if (!toolCallPart) return msg;
-+		const parts = [...msg.parts];
- 		if (toolCallPart) {
- 			const index = parts.indexOf(toolCallPart);
- 			parts[index] = {

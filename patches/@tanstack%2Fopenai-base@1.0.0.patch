@@ -1,0 +1,34 @@
+Response terminal events retain provider stop evidence, and incomplete
+responses retain reported usage. Missing-terminal handling is upstream.
+Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
+
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+index f8cf41478b8..bfc79b03f0c 100644
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -1117,11 +1117,12 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 					}) ? CONTEXT_OVERFLOW_CODE : providerCode;
+ 					yield {
+ 						type: EventType.RUN_ERROR,
+-						metadata: this.sourceMetadata(options.model),
++						metadata: { ...this.sourceMetadata(options.model), providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null },
+ 						model: chunk.response.model,
+ 						timestamp: Date.now(),
+ 						message: errorMessage,
+ 						...errorCode !== void 0 && { code: errorCode },
++						...chunk.response.usage && { usage: this.responsesTokenUsage(chunk.response.usage, chunk.response) },
+ 						error: {
+ 							message: errorMessage,
+ 							...errorCode !== void 0 && { code: errorCode }
+@@ -1515,7 +1516,10 @@ var OpenAIBaseResponsesTextAdapter = class extends BaseTextAdapter {
+ 					yield {
+ 						type: EventType.RUN_FINISHED,
+ 						...responseId ? { responseId } : {},
+-						...Object.keys(tanstack).length > 0 ? { metadata: { tanstack } } : {},
++						metadata: {
++							...Object.keys(tanstack).length > 0 ? { tanstack } : {},
++							providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null
++						},
+ 						runId: aguiState.runId,
+ 						threadId: aguiState.threadId,
+ 						model: model || options.model,

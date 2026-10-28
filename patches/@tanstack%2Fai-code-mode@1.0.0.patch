@@ -3,10 +3,10 @@ messages and stacks from completion events and console output.
 Regression: apps/api/src/handlers/chat/tools/execute/chat-code-mode.test.ts.
 
 diff --git a/dist/esm/create-code-mode-tool.js b/dist/esm/create-code-mode-tool.js
-index 2dbb70062c821d870bc676f95f34656819958dde..576502e2c7e99c39ec9ef788d275daf271d42f76 100644
+index f720cc4e402..43de46d11e8 100644
 --- a/dist/esm/create-code-mode-tool.js
 +++ b/dist/esm/create-code-mode-tool.js
-@@ -74,14 +74,11 @@ function createCodeModeTool(config) {
+@@ -77,14 +77,11 @@ function createCodeModeTool(config) {
  				logCount: result.logs?.length ?? 0,
  				error: result.error ? {
  					name: result.error.name,
@@ -16,8 +16,8 @@ index 2dbb70062c821d870bc676f95f34656819958dde..576502e2c7e99c39ec9ef788d275daf2
  				} : void 0
  			};
  			emitCustomEvent("code_mode:execution_finished", payload);
--			if (!result.success) console.error("[code-mode] execute_typescript failed", payload);
--			else if (typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
+-			if (!result.success) logger.errors("code-mode execute_typescript failed", payload);
+-			else logger.tools("code-mode execute_typescript ok", {
 +			if (result.success && typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
  				durationMs,
  				phase,

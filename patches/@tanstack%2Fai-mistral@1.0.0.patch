@@ -20,35 +20,35 @@
 
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570bcd9c2c2 100644
+index 5824469fa73..1bb73851cc5 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -4,6 +4,7 @@ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../uti
- import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
+@@ -5,6 +5,7 @@ import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
+ import { MISTRAL_MODEL_INPUT_MODALITIES, MISTRAL_MODEL_REASONING } from "../model-meta.js";
  import { isFileSource, unsupportedFileSourceError } from "@tanstack/ai";
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
 +import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
  import { undoNullWidening } from "@tanstack/ai-utils";
+ import { hashToolCallId, orderedAssistantBlocks, resolveReasoning, transformMessagesForReplay } from "@tanstack/ai/adapter-internals";
  //#region src/adapters/text.ts
- /** Cast an event object to StreamChunk. Adapters construct events with string
-@@ -49,7 +50,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
- 			hasEmittedRunStarted: false
- 		};
- 		try {
--			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig);
-+			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig, options.request?.signal ?? void 0);
- 			yield* this.processMistralStreamChunks(stream, options, aguiState);
- 		} catch (error) {
- 			const err = error;
-@@ -63,6 +64,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -132,7 +133,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 				...this.toWireBody(requestParams),
+ 				...cacheKey !== void 0 && { prompt_cache_key: cacheKey }
+ 			};
+-			const stream = this.fetchRawMistralStream(body, this.rawConfig, options.wrapFetch);
++			const stream = this.fetchRawMistralStream(body, this.rawConfig, options.wrapFetch, options.request?.signal ?? void 0);
+ 			for await (const chunk of this.processMistralStreamChunks(stream, options, aguiState)) yield chunk.type === "RUN_STARTED" || chunk.type === "RUN_ERROR" ? {
+ 				...chunk,
+ 				metadata: {
+@@ -164,6 +165,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					timestamp
  				});
  			}
 +			const rawEvent = toRunErrorRawEvent(err);
  			yield asChunk({
  				type: "RUN_ERROR",
- 				runId: aguiState.runId,
-@@ -70,6 +72,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 				metadata: { tanstack: { source: {
+@@ -176,6 +178,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  				timestamp,
  				message: err.message || "Unknown error",
  				code: err.code,
@@ -56,18 +56,18 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  				error: {
  					message: err.message || "Unknown error",
  					code: err.code
-@@ -95,7 +98,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -203,7 +206,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					strict
  				}
  			}
 -		});
 +		}, chatOptions.request?.signal ? { signal: chatOptions.request.signal } : void 0);
+ 		if (response.choices[0]?.finishReason === "length") throw new Error("mistral.structuredOutput: the response was cut off because the maximum token limit was reached (finish_reason=length); raise modelOptions.max_tokens");
  		const rawText = response.choices[0]?.message?.content;
  		const textContent = typeof rawText === "string" ? rawText : "";
- 		let parsed;
-@@ -311,7 +314,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
- 							completionTokens: usage.completion_tokens || 0,
- 							totalTokens: usage.total_tokens || 0
+@@ -426,7 +429,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 							totalTokens: usage.total_tokens || 0,
+ 							...mistralCachedTokens(usage)
  						} : void 0,
 -						finishReason: computedFinishReason
 +						finishReason: computedFinishReason,
@@ -75,7 +75,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  					});
  				}
  			}
-@@ -354,14 +358,18 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -470,15 +474,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					});
  				}
  				hasEmittedRunFinished = true;
@@ -83,6 +83,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  				yield asChunk({
 -					type: "RUN_FINISHED",
 +					type: "RUN_ERROR",
+ 					...responseId && { responseId },
  					runId: aguiState.runId,
 -					threadId: aguiState.threadId,
  					model: lastChunkModel,
@@ -98,17 +99,17 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  				});
  			}
  		} catch (error) {
-@@ -415,7 +423,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -532,7 +540,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
--	async *fetchRawMistralStream(params, config) {
-+	async *fetchRawMistralStream(params, config, signal) {
+-	async *fetchRawMistralStream(body, config, wrapFetch) {
++	async *fetchRawMistralStream(body, config, wrapFetch, signal) {
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
- 		const body = this.toWireBody(params);
-@@ -427,11 +435,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
- 		const response = await fetch(url, {
+ 		const headers = {
+@@ -543,11 +551,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 		const response = await (wrapFetch ? wrapFetch(fetch) : fetch)(url, {
  			method: "POST",
  			headers,
 -			body: JSON.stringify(body)
@@ -129,7 +130,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  		}
  		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
  		const reader = response.body.getReader();
-@@ -453,10 +469,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+@@ -569,10 +585,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
  					try {
  						parsed = JSON.parse(data);
  					} catch (e) {
@@ -143,7 +144,7 @@ index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..a6a9fc9bef57039f77daa911035b8570
  					}
  					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {
 diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
-index a674408..a69e6b1 100644
+index a6744083dd3..a69e6b13641 100644
 --- a/dist/esm/index.d.ts
 +++ b/dist/esm/index.d.ts
 @@ -4,6 +4,7 @@
@@ -155,7 +156,7 @@ index a674408..a69e6b1 100644
  export { MistralEmbeddingAdapter, createMistralEmbedding, mistralEmbedding, type MistralEmbeddingConfig, } from './adapters/embedding.js';
  export type { MistralEmbeddingProviderOptions, MistralEmbedProviderOptions, CodestralEmbedProviderOptions, } from './embedding/embedding-provider-options.js';
 diff --git a/src/index.ts b/src/index.ts
-index 1b993a1..d9a2672 100644
+index 1b993a1ab3c..d9a2672b71b 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -5,6 +5,8 @@
