@@ -406,7 +406,7 @@ describe("queued action admission", () => {
       send: async (_command: string, args: string[]) => {
         if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
           if (active === 1) {
-            return 0;
+            return [0, 1000];
           }
           active += 1;
           return 1;

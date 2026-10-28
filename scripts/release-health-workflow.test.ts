@@ -38,8 +38,10 @@ describe("release health workflows", () => {
     const { jobs } = workflow("release.yml");
     const gate = job(jobs, "release-health-gate");
 
-    expect(job(jobs, "promote")["needs"]).toContain("release-health-gate");
-    expect(gate["if"]).toBe(job(jobs, "promote")["if"]);
+    expect(job(jobs, "promote-production")["needs"]).toContain(
+      "release-health-gate",
+    );
+    expect(gate["if"]).toBe(job(jobs, "promote-production")["if"]);
     expect(runs(gate)).toContain("scripts/release-health.ts gate");
     expect(runs(gate)).toContain(`--pattern ${RELEASE_HEALTH_ASSET}`);
   });
@@ -49,7 +51,7 @@ describe("release health workflows", () => {
     const health = workflow("release-health.yml");
     const dispatch = job(release.jobs, "dispatch-release-health");
 
-    expect(dispatch["needs"]).toContain("promote");
+    expect(dispatch["needs"]).toContain("promote-production");
     expect(runs(dispatch)).toContain(
       "actions/workflows/release-health.yml/dispatches",
     );

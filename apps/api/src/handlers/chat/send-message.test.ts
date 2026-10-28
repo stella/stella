@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,9 +18,11 @@ import {
   chatToolGrants,
   chatTurns,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
-import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { ChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
   ChatSendLifecycle,
   createSendMessage,
@@ -32,22 +35,30 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { isMemberRole } from "@/api/lib/member-roles";
 import {
-  type ActionAdmissionError,
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
+import {
+  ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -56,6 +67,8 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 beforeEach(() => {
   compactMessagesForContextMock.mockClear();
@@ -149,6 +162,15 @@ afterEach(() => {
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 type SendMessageInput = SendMessageCtx["body"]["forwardedProps"];
+type ReadySendMessageCtx = Extract<
+  SendMessageCtx,
+  {
+    orgAIConfigStatus: Exclude<
+      SendMessageCtx["orgAIConfigStatus"],
+      "unreadable"
+    >;
+  }
+>;
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -294,7 +316,7 @@ const createContext = ({
   truncateAfterMessageId?: SendMessageInput["truncateAfterMessageId"];
   turnIntent?: SendMessageInput["turnIntent"];
   transaction?: unknown;
-}): SendMessageCtx => {
+}): ReadySendMessageCtx => {
   const { safeDb, scopedDb } = createScopedDbMock(
     withRegistryCredentialQuery(transaction),
     {
@@ -319,7 +341,7 @@ const createContext = ({
     ...(runMode === undefined ? {} : { runMode }),
   };
 
-  return asTestRaw<SendMessageCtx>({
+  return asTestRaw<ReadySendMessageCtx>({
     body: {
       threadId,
       runId: "run-test",
@@ -352,6 +374,48 @@ const createContext = ({
     user: { id: userId },
   });
 };
+
+test("unreadable settings reject a chat turn before provider work", async () => {
+  const streamResponse = mock(
+    async () =>
+      ({
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      }) as const,
+  );
+  const send = createSendMessage({
+    compactMessagesForContext: compactMessagesForContextMock,
+    createRefRegistry: createChatRefRegistry,
+    indexThread: upsertChatThreadSearchDocumentMock,
+    loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+    loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+    rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+    streamResponse,
+    uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+  });
+  let transactions = 0;
+  const context = createContext({
+    contextMatterIds: [],
+    onSafeDbTransaction: () => {
+      transactions += 1;
+    },
+  });
+  const result = await send.handler({
+    ...context,
+    orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+    promptCachingEnabled: null,
+    managedAIResidency: null,
+  });
+  expect(result).toMatchObject({
+    code: 503,
+    response: { code: AI_CONFIG_UNREADABLE_ERROR_CODE },
+  });
+  expect(streamResponse).not.toHaveBeenCalled();
+  expect(transactions).toBe(0);
+});
 
 describe("send message context-matter authorization", () => {
   test("rejects a requested matter outside the caller's accessible set", async () => {
@@ -462,6 +526,17 @@ describe("agent connector isolation", () => {
 describe("send message disconnect handling", () => {
   test("tracks a preflight claim until settlement and rollback finish", async () => {
     for (const settlementFails of [false, true]) {
+      const ownership = new ChatTurnOwnership();
+      const releaseClaim = mock(() => undefined);
+      const holdClaim = ownership.holdClaim.bind(ownership);
+      ownership.holdClaim = (claim) => {
+        const release = holdClaim(claim);
+        return () => {
+          releaseClaim();
+          release();
+        };
+      };
+      const leaseShortened = Promise.withResolvers<undefined>();
       const settlementStarted = Promise.withResolvers<undefined>();
       const finishSettlement =
         Promise.withResolvers<Result<boolean, DatabaseError>>();
@@ -474,9 +549,11 @@ describe("send message disconnect handling", () => {
           settlementStarted.resolve(undefined);
           return await finishSettlement.promise;
         }
+        leaseShortened.resolve(undefined);
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
         externalMcpToolsLoader:
@@ -504,25 +581,24 @@ describe("send message disconnect handling", () => {
       );
       const cleanup = lifecycle.cleanup();
       await settlementStarted.promise;
-      const relinquishing = processChatTurnOwnership.relinquish();
-      const finishedEarly = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedEarly).toBe(false);
+      const relinquishing = ownership.relinquish();
+      expect(
+        await Promise.race([
+          leaseShortened.promise.then(() => true),
+          relinquishing.then(() => false),
+        ]),
+      ).toBe(true);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishSettlement.resolve(
         settlementFails
           ? Result.err(new DatabaseError({ message: "settlement failed" }))
           : Result.ok(true),
       );
       await rollbackStarted.promise;
-      const finishedDuringRollback = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedDuringRollback).toBe(false);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishRollback.resolve(undefined);
       await cleanup;
+      expect(releaseClaim).toHaveBeenCalledTimes(1);
       expect(await relinquishing).toBe("stored");
     }
   });
@@ -1305,12 +1381,17 @@ describe("send message disconnect handling", () => {
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
-        const refusal = actionAdmissionRefusal(
-          actionAdmissionErrorFor(reason, "Admission refused"),
-        );
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Admission refused",
+                retryAfterMs: 1250,
+              })
+            : actionAdmissionErrorFor(reason, "Admission refused");
+        const refusal = actionAdmissionRefusal(refusalError);
         const admission = new AbortController();
-        const loseAdmission = () =>
-          admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
+        const loseAdmission = () => admission.abort(refusalError);
         const turnUpdates: unknown[] = [];
         const selectWithThreadLock = () => ({
           from: () => ({
@@ -1385,6 +1466,7 @@ describe("send message disconnect handling", () => {
             tools: {},
           };
         });
+        const streamResponse = mock(streamChat);
         const refusedSend = createSendMessage({
           compactMessagesForContext: compactMessagesForContextMock,
           createRefRegistry: createChatRefRegistry,
@@ -1392,7 +1474,7 @@ describe("send message disconnect handling", () => {
           loadExternalMcpTools: loadTools,
           loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
           rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
-          streamResponse: streamChat,
+          streamResponse,
           uploadMessageFiles: uploadMessageFilesWithRollbackMock,
           startAdmission: async (options) => {
             expect(options.mode).toBe("concurrency-only");
@@ -1478,11 +1560,15 @@ describe("send message disconnect handling", () => {
             code: refusal.code,
             retryable: refusal.retryable,
             hint: refusal.hint,
+            ...(refusal.retryAfterMs === undefined
+              ? {}
+              : { retryAfterMs: refusal.retryAfterMs }),
             ...(refusal.contactUrl === undefined
               ? {}
               : { contactUrl: refusal.contactUrl }),
           },
         });
+        expect(streamResponse).not.toHaveBeenCalled();
         expect(acquisitions).toBe(1);
         expect(releases).toBe(1);
         expect(insertedMessages).toHaveLength(2);
@@ -1788,14 +1874,40 @@ describe("assistant turn settlement", () => {
   const startStreamingTurn = async ({
     failAssistantInsertOnce = false,
     onSafeDbTransaction,
+    connectableCount = 0,
+    memberRole = sessionMemberRole("owner"),
+    providerConfig = orgAIConfig,
   }: {
+    connectableCount?: number;
+    memberRole?: SendMessageCtx["memberRole"];
+    providerConfig?: OrgAIConfig | null;
     failAssistantInsertOnce?: boolean;
     onSafeDbTransaction?: (() => void) | undefined;
   } = {}) => {
     let onFinish: StreamChatProps["onFinish"] | undefined;
+    let providerPrompt: unknown;
+    const connectorRows = Array.from(
+      { length: connectableCount },
+      (_, index) => ({
+        slug: `source-${String(index).padStart(2, "0")}`,
+        displayName: `Source ${index}`,
+      }),
+    );
+    const connectorQuery = {
+      from: () => connectorQuery,
+      leftJoin: () => connectorQuery,
+      where: () => connectorQuery,
+      orderBy: () => connectorQuery,
+      limit: async (limit: number) => connectorRows.slice(0, limit),
+    };
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
+      providerPrompt = props.systemUntrusted;
+      if (connectableCount > 0) {
+        expect(props.tools).toHaveProperty("connect_connector");
+        expect(props.tools).toHaveProperty("list_connectable_connectors");
+      }
       return {
         type: "streaming",
         response: new Response("", {
@@ -1860,51 +1972,120 @@ describe("assistant turn settlement", () => {
       },
     });
 
-    const result = await send.handler(
-      createContext({
-        contextMatterIds: [],
-        onSafeDbTransaction,
-        transaction: {
-          insert: withRunLogInsert(insert),
-          query: {
-            chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: {
-              findFirst: async () => ({
-                chatModel: null,
-                contextMatterIds: [],
-                dataWorkspaceIds: [],
-                id: threadId,
-                messages: [],
-                rollbackToken: null,
-                title: "Existing thread",
-                webSearchEnabled: false,
-                workspaceId: null,
-              }),
-            },
-            chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
-            },
-            organizationSettings: { findFirst: async () => null },
+    const context = createContext({
+      contextMatterIds: [],
+      onSafeDbTransaction,
+      transaction: {
+        selectDistinctOn: () => connectorQuery,
+        insert: withRunLogInsert(insert),
+        query: {
+          chatMessages: { findFirst: async () => null },
+          chatThreadCompactions: { findFirst: async () => null },
+          chatThreads: {
+            findFirst: async () => ({
+              chatModel: null,
+              contextMatterIds: [],
+              dataWorkspaceIds: [],
+              id: threadId,
+              messages: [],
+              rollbackToken: null,
+              title: "Existing thread",
+              webSearchEnabled: false,
+              workspaceId: null,
+            }),
           },
-          select: withThreadNameReads(selectWithThreadLock),
-          update: withRunLogUpdate(update),
+          chatTurns: {
+            findFirst: async ({
+              where,
+            }: {
+              where?: { status?: { eq?: string } };
+            }) =>
+              where?.status?.eq === "running" ? undefined : { id: turnId },
+          },
+          organizationSettings: { findFirst: async () => null },
         },
-      }),
-    );
+        select: withThreadNameReads(selectWithThreadLock),
+        update: withRunLogUpdate(update),
+      },
+    });
+    const result = await send.handler({
+      ...context,
+      memberRole,
+      orgAIConfig: providerConfig,
+    });
     expect(streamResponse).toHaveBeenCalledTimes(1);
     if (onFinish === undefined) {
       throw new Error(
         `the send did not reach streaming: ${JSON.stringify(result)}`,
       );
     }
-    return { onFinish, turnUpdates };
+    return { onFinish, turnUpdates, providerPrompt, streamResponse };
   };
+
+  test("an unrelated send proceeds with 21 connectable connectors and a bounded deterministic hint", async () => {
+    const first = await startStreamingTurn({ connectableCount: 21 });
+    const second = await startStreamingTurn({ connectableCount: 21 });
+    expect(first.providerPrompt).toEqual(second.providerPrompt);
+    const hint = JSON.stringify(first.providerPrompt);
+    expect(hint).toContain("source-00");
+    expect(hint).toContain("source-19");
+    expect(hint).not.toContain("source-20");
+    expect(hint).toContain("list_connectable_connectors");
+    expect(first.turnUpdates).not.toContainEqual(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  test.each(
+    Object.keys(roles)
+      .filter(isMemberRole)
+      .filter(
+        (role) =>
+          hasMemberPermission(sessionMemberRole(role), CHAT_TURN_PERMISSIONS) &&
+          !hasMemberPermission(sessionMemberRole(role), {
+            organizationSettings: ["update"],
+          }),
+      ),
+  )(
+    "a %s chat turn uses the default provider without settings access",
+    async (role) => {
+      testState.patchConfig({
+        AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "test-instance-key",
+        REQUIRE_PERSONAL_AI_KEY: false,
+      });
+      const memberRole = sessionMemberRole(role);
+      expect(
+        hasMemberPermission(memberRole, { organizationSettings: ["update"] }),
+      ).toBe(false);
+      const { onFinish, turnUpdates, streamResponse } =
+        await startStreamingTurn({
+          memberRole,
+          providerConfig: null,
+        });
+      const dispatched = streamResponse.mock.calls.at(0)?.at(0);
+      if (dispatched === undefined) {
+        throw new Error("The chat turn did not dispatch a provider request");
+      }
+      expect(dispatched.orgAIConfig).toBeNull();
+      expect(
+        getTanStackTextModelInfoForTask("chat", dispatched.orgAIConfig, {
+          dataClass: "customer",
+          organizationId,
+          modelTier: MANAGED_MODEL_TIER.standard,
+        }),
+      ).toMatchObject({ provider: "openrouter", keySource: "instance" });
+      await onFinish({
+        outcome: { type: "completed" },
+        responseMessage: completedMessage([
+          { type: "text", content: "Completed response" },
+        ]),
+      });
+      expect(turnUpdates).toContainEqual(
+        expect.objectContaining({ status: "completed" }),
+      );
+    },
+  );
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (

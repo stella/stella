@@ -841,6 +841,7 @@ const boundMcpToolResult = async ({
       hint: refusal.hint,
       contactUrl: refusal.contactUrl,
       retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+      retryAfterMs: refusal.retryAfterMs,
     });
   }
   recordActionResponseOversize({
@@ -1065,6 +1066,7 @@ export const createMcpHttpRequestHandler = ({
         hint: refusal.hint,
         contactUrl: refusal.contactUrl,
         retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+        retryAfterMs: refusal.retryAfterMs,
       });
     }
     captureError(

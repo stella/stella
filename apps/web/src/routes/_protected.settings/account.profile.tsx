@@ -65,7 +65,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -455,10 +455,7 @@ function ProfilePageBody() {
               // identity surface renders. Stop the empty submit here rather
               // than letting the server silently keep the previous value.
               if (displayName.trim().length === 0) {
-                notifyUserError(
-                  undefined,
-                  t("settings.account.displayNameRequired"),
-                );
+                notifyUserProblem(t("settings.account.displayNameRequired"));
                 return;
               }
               // Awaited, not detached: `ProfileSubmitButton` disables itself

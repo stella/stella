@@ -50,7 +50,7 @@ import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -262,8 +262,7 @@ export const useReaderAnnotations = (
     create: async (input: CreateAnnotationInput) => {
       const before = currentGuestStore();
       if (before.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
-        notifyUserError(
-          undefined,
+        notifyUserProblem(
           t("legalReader.annotations.guestLimitReached", {
             count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
           }),
@@ -403,7 +402,7 @@ function persistGuestAnnotationStore({
   unavailableMessage,
 }: PersistGuestAnnotationStoreOptions): Result<void, Error> {
   if (storage === null) {
-    notifyUserError(undefined, unavailableMessage);
+    notifyUserProblem(unavailableMessage);
     return Result.err(
       new ClientOperationError({
         action: `${action}-guest-reader-annotation`,

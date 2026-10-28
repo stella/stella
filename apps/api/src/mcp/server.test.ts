@@ -444,10 +444,17 @@ describe("handleMcpHttpRequest", () => {
         "lease_lost",
       ] as const) {
         captureErrorMock.mockClear();
-        const refusalError = new ActionAdmissionError({
-          reason,
-          message: "Private internal detail",
-        });
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+                retryAfterMs: 1250,
+              })
+            : new ActionAdmissionError({
+                reason,
+                message: "Private internal detail",
+              });
         authenticateMcpRequestMock.mockResolvedValue(
           Result.ok({
             organizationId: "org_1",
@@ -496,6 +503,7 @@ describe("handleMcpHttpRequest", () => {
           code: refusalError.code,
           message: refusal.message,
           retryable: refusal.retryable,
+          ...(reason === "busy" ? { retryAfterMs: 1250 } : {}),
           ...(contact ? { contactUrl: "https://example.invalid/contact" } : {}),
           hint: contact
             ? `${refusal.hint} Contact: https://example.invalid/contact`

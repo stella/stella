@@ -160,7 +160,7 @@ test("every fail-closed counter is owned by the shared unavailable outcome", asy
   const existingOwner = "lib/rate-limit/public-corpus-rate-limits.ts";
   duplicated.set(
     existingOwner,
-    `${sources.get(existingOwner)}\nfailurePolicy: "fail_closed"`,
+    `${String(sources.get(existingOwner))}\nfailurePolicy: "fail_closed"`,
   );
   expect(closedOwners(duplicated)).not.toEqual(FAIL_CLOSED_OWNERS);
   expect(
@@ -174,12 +174,37 @@ test("every fail-closed counter is owned by the shared unavailable outcome", asy
       .toSorted(),
   ).toEqual([
     "handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
-    "lib/rate-limit/action-admission.ts",
+    "lib/rate-limit/concurrency-lease.ts",
     "lib/rate-limit/mcp-read-fence.ts",
   ]);
   expect(sources.get("lib/non-evicting-redis.ts")).toContain(
     'reason: "store_unavailable"',
   );
+  expect(
+    [...sources]
+      .filter(
+        ([path, source]) =>
+          path !== "lib/rate-limit/concurrency-lease.ts" &&
+          /\b(executeAdmissionCommand|withAcquiredConcurrencyLease)\b/u.test(
+            source,
+          ),
+      )
+      .map(([path]) => path)
+      .toSorted(),
+  ).toEqual([
+    "lib/rate-limit/action-admission.ts",
+    "lib/rate-limit/mcp-public-read-admission.ts",
+  ]);
+  expect(
+    [...sources]
+      .filter(
+        ([path, source]) =>
+          path !== "lib/rate-limit/mcp-public-read-admission.ts" &&
+          /\bwithMcpPublicReadAdmission\b/u.test(source),
+      )
+      .map(([path]) => path)
+      .toSorted(),
+  ).toEqual(["mcp/context.ts", "mcp/tools.ts"]);
   const owner = sources.get("lib/rate-limit/redis-context.ts");
   expect(owner).toContain("LimiterStoreUnavailableError");
   expect(owner).not.toContain("FAIL_CLOSED_COUNT");
