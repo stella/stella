@@ -7,22 +7,35 @@
  * The pinned headers declare the publisher records independently of their
  * disposition maps. Admitting a new column requires a map entry at compile
  * time; removing an entry cannot silently narrow the accepted row. A column
- * excluded here is still kept in the stored raw; exclusion says only that the
- * decision row does not carry it.
+ * retained only in raw is qualified with its exact envelope part and path by
+ * the source inventory; it is never classified as an exclusion.
  */
 
 import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
 import type { OpinionRow } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/opinion-row";
-import {
-  legacyExcludedSourceField,
-  type SourceFieldDisposition,
-} from "@/api/lib/legal-search/ingestion-types";
+import type { SourceFieldDisposition } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 export {
   compareBytewise,
   compareCanonicalIds,
 } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
+
+type StoredSourceField = Extract<
+  SourceFieldDisposition,
+  { disposition: "stored" }
+>;
+
+/** Raw-only columns receive their envelope address when their table is qualified. */
+export type SnapshotColumnDisposition =
+  | StoredSourceField
+  | { readonly disposition: "retained_raw"; readonly reason: string };
+
+const retainedRawColumn = (reason: string) =>
+  ({
+    disposition: "retained_raw",
+    reason,
+  }) as const;
 
 type ResultKey =
   | "identifiers"
@@ -32,53 +45,51 @@ type ResultKey =
   | "documentUrl"
   | "judges";
 
-const meta = (key: string): SourceFieldDisposition => ({
+const meta = (key: string): StoredSourceField => ({
   disposition: "stored",
   target: { type: "metadata", key },
 });
-const result = (key: ResultKey): SourceFieldDisposition => ({
+const result = (key: ResultKey): StoredSourceField => ({
   disposition: "stored",
   target: { type: "result", key },
 });
-const text = (
-  key: "abstract" | "headnote" | "summary",
-): SourceFieldDisposition => ({
+const text = (key: "abstract" | "headnote" | "summary"): StoredSourceField => ({
   disposition: "stored",
   target: { type: "textField", key },
 });
-const DOCUMENT: SourceFieldDisposition = {
+const DOCUMENT: StoredSourceField = {
   disposition: "stored",
   target: { type: "document" },
 };
 
-const TIMESTAMP = legacyExcludedSourceField(
+const TIMESTAMP = retainedRawColumn(
   "publisher record-keeping timestamp, not a date the decision states",
 );
-const JOIN_KEY = legacyExcludedSourceField(
+const JOIN_KEY = retainedRawColumn(
   "join key to a parent row, verified equal on admission",
 );
-const FILE_PATH = legacyExcludedSourceField(
+const FILE_PATH = retainedRawColumn(
   "storage or archive path of a file this record does not fetch",
 );
-const TRIAL = legacyExcludedSourceField(
+const TRIAL = retainedRawColumn(
   "trial-docket administration data the decision does not state",
 );
-const ASSIGNED = legacyExcludedSourceField(
+const ASSIGNED = retainedRawColumn(
   "trial-level judge assignment; judges come from opinion attribution",
 );
-const DIRECTORY = legacyExcludedSourceField(
+const DIRECTORY = retainedRawColumn(
   "court directory attribute; the generated directory owns court identity",
 );
-const BIO = legacyExcludedSourceField(
+const BIO = retainedRawColumn(
   "biographical data; the decision states only who wrote or joined",
 );
-const RESTATED = legacyExcludedSourceField(
+const RESTATED = retainedRawColumn(
   "restates the cluster's case name or slug, which are stored",
 );
-const BINARY = legacyExcludedSourceField(
+const BINARY = retainedRawColumn(
   "attribute of the binary rendition, which this record does not fetch",
 );
-const DOCKET_BLOCK = legacyExcludedSourceField(
+const DOCKET_BLOCK = retainedRawColumn(
   "the cluster's blocking state is stored; the docket's serves admission",
 );
 
@@ -152,7 +163,7 @@ export const CLUSTER_FIELDS = {
   other_dates: meta("otherDates"),
   cross_reference: meta("crossReference"),
   correction: meta("correction"),
-  citation_count: legacyExcludedSourceField(
+  citation_count: retainedRawColumn(
     "count of citing decisions at export time, not read as treatment",
   ),
   precedential_status: meta("precedentialStatus"),
@@ -165,7 +176,7 @@ export const CLUSTER_FIELDS = {
   headmatter: DOCUMENT,
 } as const satisfies Record<
   keyof ClusterPublisherRecord,
-  SourceFieldDisposition
+  SnapshotColumnDisposition
 >;
 
 /** `dockets-2026-06-30.csv` */
@@ -232,9 +243,7 @@ export const DOCKET_FIELDS = {
   id: meta("courtListener"),
   date_created: TIMESTAMP,
   date_modified: TIMESTAMP,
-  source: legacyExcludedSourceField(
-    "publisher code for how it acquired the docket",
-  ),
+  source: retainedRawColumn("publisher code for how it acquired the docket"),
   appeal_from_str: meta("appealFrom"),
   assigned_to_str: ASSIGNED,
   referred_to_str: ASSIGNED,
@@ -268,12 +277,10 @@ export const DOCKET_FIELDS = {
   ia_upload_failure_count: TIMESTAMP,
   ia_needs_upload: TIMESTAMP,
   ia_date_first_change: TIMESTAMP,
-  view_count: legacyExcludedSourceField(
-    "page-view counter of the publisher's site",
-  ),
+  view_count: retainedRawColumn("page-view counter of the publisher's site"),
   date_blocked: DOCKET_BLOCK,
   blocked: DOCKET_BLOCK,
-  appeal_from_id: legacyExcludedSourceField(
+  appeal_from_id: retainedRawColumn(
     "directory ID of the court below; appealFrom keeps its printed name",
   ),
   assigned_to_id: ASSIGNED,
@@ -291,7 +298,7 @@ export const DOCKET_FIELDS = {
   docket_number_source: TRIAL,
 } as const satisfies Record<
   keyof DocketPublisherRecord,
-  SourceFieldDisposition
+  SnapshotColumnDisposition
 >;
 
 /** `courts-2026-06-30.csv` */
@@ -341,7 +348,10 @@ export const COURT_FIELDS = {
   jurisdiction: DIRECTORY,
   notes: DIRECTORY,
   parent_court_id: DIRECTORY,
-} as const satisfies Record<keyof CourtPublisherRecord, SourceFieldDisposition>;
+} as const satisfies Record<
+  keyof CourtPublisherRecord,
+  SnapshotColumnDisposition
+>;
 
 /** `opinions-2026-06-30.csv` */
 export const OPINION_COLUMNS = [
@@ -390,7 +400,7 @@ export const OPINION_FIELDS = {
   html_columbia: DOCUMENT,
   html_anon_2020: DOCUMENT,
   xml_harvard: DOCUMENT,
-  xml_scan: legacyExcludedSourceField(
+  xml_scan: retainedRawColumn(
     "scan-layout XML needing page images; a record with only it is held",
   ),
   html_with_citations: DOCUMENT,
@@ -399,7 +409,7 @@ export const OPINION_FIELDS = {
   cluster_id: JOIN_KEY,
 } as const satisfies Record<
   keyof OpinionPublisherRecord,
-  SourceFieldDisposition
+  SnapshotColumnDisposition
 >;
 
 /** `citations-2026-06-30.csv` */
@@ -417,7 +427,7 @@ export const CITATION_COLUMNS = [
 type CitationPublisherRecord = CsvRow<(typeof CITATION_COLUMNS)[number]>;
 
 export const CITATION_FIELDS = {
-  id: legacyExcludedSourceField("row key; it orders tuples that tie"),
+  id: retainedRawColumn("row key; it orders tuples that tie"),
   volume: result("identifiers"),
   reporter: result("identifiers"),
   page: result("identifiers"),
@@ -427,7 +437,7 @@ export const CITATION_FIELDS = {
   date_modified: TIMESTAMP,
 } as const satisfies Record<
   keyof CitationPublisherRecord,
-  SourceFieldDisposition
+  SnapshotColumnDisposition
 >;
 
 /** `people-db-people-2026-06-30.csv`, where judge relations are supplied. */
@@ -491,7 +501,7 @@ export const PERSON_FIELDS = {
   is_alias_of_id: BIO,
 } as const satisfies Record<
   keyof PersonPublisherRecord,
-  SourceFieldDisposition
+  SnapshotColumnDisposition
 >;
 
 /** One CSV row: every pinned column, as the decoder produced its text. */

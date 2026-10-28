@@ -25,6 +25,7 @@ import {
   DOCKET_FIELDS,
   OPINION_FIELDS,
   PERSON_FIELDS,
+  type SnapshotColumnDisposition,
 } from "./snapshot-columns";
 
 const JUDGES: SourceFieldDisposition = {
@@ -47,7 +48,7 @@ type PrefixedFieldsOptions = {
   prefix: string;
   part: string;
   rowPath: readonly string[];
-  fields: Readonly<Record<string, SourceFieldDisposition>>;
+  fields: Readonly<Record<string, SnapshotColumnDisposition>>;
 };
 
 const prefixed = ({ prefix, part, rowPath, fields }: PrefixedFieldsOptions) =>
@@ -55,7 +56,7 @@ const prefixed = ({ prefix, part, rowPath, fields }: PrefixedFieldsOptions) =>
     ([name, disposition]) =>
       [
         `${prefix}${name}`,
-        disposition.disposition === "excluded" ||
+        disposition.disposition === "retained_raw" ||
         (disposition.target.type === "document" && name !== "headmatter")
           ? ({
               disposition: "stored",
@@ -64,7 +65,7 @@ const prefixed = ({ prefix, part, rowPath, fields }: PrefixedFieldsOptions) =>
                 part,
                 path: [...rowPath, name],
                 reason:
-                  disposition.disposition === "excluded"
+                  disposition.disposition === "retained_raw"
                     ? disposition.reason
                     : "Alternate source text is retained verbatim; the selected rendition forms the document",
               },
