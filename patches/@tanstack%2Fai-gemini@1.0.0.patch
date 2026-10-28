@@ -15,8 +15,11 @@
    upstream preserves the exception.
 
 
+Expose native thinkingConfig, which the adapter already forwards, for models
+and capability-checked thinking levels outside its static reasoning catalog.
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 33a44492909..19dcc64af9b 100644
+index 33a4449290..19dcc64af9 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -232,13 +232,14 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
@@ -129,3 +132,99 @@ index 33a44492909..19dcc64af9b 100644
  	}
  	convertContentPartToGemini(part) {
  		switch (part.type) {
+diff --git a/dist/esm/text/text-provider-options.d.ts b/dist/esm/text/text-provider-options.d.ts
+index 1375c692da..d9489ebd80 100644
+--- a/dist/esm/text/text-provider-options.d.ts
++++ b/dist/esm/text/text-provider-options.d.ts
+@@ -1,4 +1,4 @@
+-import { MediaResolution, SafetySetting, Schema, ToolConfig } from '@google/genai';
++import { MediaResolution, ThinkingLevel, SafetySetting, Schema, ToolConfig } from '@google/genai';
+ export interface GeminiToolConfigOptions {
+     /**
+      * Tool configuration for any Tool specified in the request.
+@@ -166,4 +166,31 @@ export interface GeminiStructuredOutputOptions {
+      */
+     responseJsonSchema?: Schema;
+ }
+-export type ExternalTextProviderOptions = GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
++export interface GeminiThinkingOptions<TThinkingLevel extends keyof typeof ThinkingLevel = keyof typeof ThinkingLevel> {
++    /**
++     * Config for thinking features. An error will be returned if this field is
++     * set for models that don't support thinking.
++     *
++     * All fields are optional so the same shape can be used for both budget-based
++     * thinking (Gemini 2.x: `includeThoughts` + `thinkingBudget`) and the newer
++     * level-based thinking (Gemini 3.x: `thinkingLevel`). The adapter reads
++     * whichever fields are present at runtime.
++     */
++    thinkingConfig?: {
++        /**
++         * Indicates whether to include thoughts in the response. If true, thoughts
++         * are returned only when available.
++         */
++        includeThoughts?: boolean;
++        /**
++         * The number of thoughts tokens that the model should generate.
++         */
++        thinkingBudget?: number;
++        /**
++         * The level of thoughts tokens that the model should generate
++         * (Gemini 3.x and later).
++         */
++        thinkingLevel?: TThinkingLevel;
++    };
++}
++export type ExternalTextProviderOptions = GeminiThinkingOptions & GeminiToolConfigOptions & GeminiSafetyOptions & GeminiCommonConfigOptions & GeminiCachedContentOptions & GeminiStructuredOutputOptions;
+diff --git a/src/text/text-provider-options.ts b/src/text/text-provider-options.ts
+index a84a07ea26..27d6f4e5d1 100644
+--- a/src/text/text-provider-options.ts
++++ b/src/text/text-provider-options.ts
+@@ -1,5 +1,5 @@
+ import type {
+-  MediaResolution,
++  MediaResolution, ThinkingLevel,
+   SafetySetting,
+   Schema,
+   ToolConfig,
+@@ -221,7 +221,40 @@ Cyclic references are unrolled to a limited degree and, as such, may only be use
+   responseJsonSchema?: Schema
+ }
+ 
+-export type ExternalTextProviderOptions = GeminiToolConfigOptions &
++export interface GeminiThinkingOptions<
++  TThinkingLevel extends keyof typeof ThinkingLevel =
++    keyof typeof ThinkingLevel,
++> {
++  /**
++   * Config for thinking features. An error will be returned if this field is
++   * set for models that don't support thinking.
++   *
++   * All fields are optional so the same shape can be used for both budget-based
++   * thinking (Gemini 2.x: `includeThoughts` + `thinkingBudget`) and the newer
++   * level-based thinking (Gemini 3.x: `thinkingLevel`). The adapter reads
++   * whichever fields are present at runtime.
++   */
++  thinkingConfig?: {
++    /**
++     * Indicates whether to include thoughts in the response. If true, thoughts
++     * are returned only when available.
++     */
++    includeThoughts?: boolean
++
++    /**
++     * The number of thoughts tokens that the model should generate.
++     */
++    thinkingBudget?: number
++
++    /**
++     * The level of thoughts tokens that the model should generate
++     * (Gemini 3.x and later).
++     */
++    thinkingLevel?: TThinkingLevel
++  }
++}
++
++export type ExternalTextProviderOptions = GeminiThinkingOptions & GeminiToolConfigOptions &
+   GeminiSafetyOptions &
+   GeminiCommonConfigOptions &
+   GeminiCachedContentOptions &

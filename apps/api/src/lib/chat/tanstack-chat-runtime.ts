@@ -203,8 +203,13 @@ export const toolCallNameOf = (
 // No middleware in this repository declares one, and the pair that has to
 // travel together (the sandbox adapter and its capability) is returned as a
 // pair by its owner rather than assembled at the call site.
-type ChatOptions = Omit<Parameters<typeof chat>[0], "middleware"> & {
+type ChatOptions = Omit<
+  Parameters<typeof chat>[0],
+  "middleware" | "threadId"
+> & {
   middleware?: ChatMiddleware[];
+  /** Durable conversations supply their id; one-off runs get an ephemeral id. */
+  threadId?: string;
 };
 
 /** The streaming text form. Output shape and tool ordering belong to the owner. */
@@ -285,6 +290,7 @@ export const streamChatChunks = async function* (
   });
   for await (const chunk of chat({
     ...options,
+    threadId: options.threadId ?? Bun.randomUUIDv7(),
     messages,
     toolExecution: "sequential",
     middleware,
@@ -363,7 +369,8 @@ export type ChatObjectOptions = StreamChatChunksOptions & {
  */
 export const generateChatObject = async (
   options: ChatObjectOptions,
-): Promise<unknown> => await chat(options);
+): Promise<unknown> =>
+  await chat({ ...options, threadId: options.threadId ?? Bun.randomUUIDv7() });
 
 type StructuredOutputStreamChunk =
   StructuredOutputStream extends AsyncIterable<infer TChunk> ? TChunk : never;
@@ -378,4 +385,8 @@ export type PublicStructuredOutputChunk =
 export const streamChatObject = (
   options: ChatObjectOptions,
 ): AsyncIterable<PublicStructuredOutputChunk> =>
-  chat({ ...options, stream: true });
+  chat({
+    ...options,
+    threadId: options.threadId ?? Bun.randomUUIDv7(),
+    stream: true,
+  });

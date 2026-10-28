@@ -3,6 +3,8 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { env } from "@/api/env";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
@@ -153,3 +155,128 @@ describe("Anthropic request configuration", () => {
     });
   }
 });
+
+const nativeReasoningCases = [
+  {
+    name: "catalog-only adaptive thinking keeps the provider's default effort",
+    effort: undefined,
+    model: "claude-catalog-fixture",
+    thinking: { type: "adaptive" },
+    reasoning: undefined,
+    mode: "stream",
+    expectedThinking: { type: "adaptive" },
+    expectedMaxTokens: 1024,
+  },
+  {
+    name: "native thinking budgets raise the output ceiling",
+    effort: undefined,
+    model: "claude-sonnet-4-5",
+    thinking: { type: "enabled", budget_tokens: 4096 },
+    reasoning: undefined,
+    mode: "stream",
+    expectedThinking: { type: "enabled", budget_tokens: 4096 },
+    expectedMaxTokens: 4097,
+  },
+  {
+    name: "portable off takes precedence over native thinking",
+    effort: "high",
+    model: "claude-sonnet-4-5",
+    thinking: { type: "enabled", budget_tokens: 4096 },
+    reasoning: { level: "off", summary: false },
+    mode: "stream",
+    expectedThinking: { type: "disabled" },
+    expectedMaxTokens: 1024,
+  },
+  {
+    name: "forced structured-output tools omit native thinking",
+    effort: "high",
+    model: "claude-sonnet-4-5",
+    thinking: { type: "enabled", budget_tokens: 4096 },
+    reasoning: undefined,
+    mode: "structured",
+    expectedThinking: undefined,
+    expectedMaxTokens: 1024,
+  },
+] as const;
+
+for (const scenario of nativeReasoningCases) {
+  test(scenario.name, async () => {
+    const requests: unknown[] = [];
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (
+          _url: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ) => {
+          if (typeof init?.body !== "string") {
+            throw new TypeError("Expected the SDK's JSON request body");
+          }
+          requests.push(JSON.parse(init.body));
+          return new Response(
+            JSON.stringify({
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                message: "Recorded transport stop",
+              },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    testState.setConfig("USE_MOCK_AI", false);
+    try {
+      const adapter = createTanStackTextAdapterFactory({
+        provider: "anthropic",
+        dataClass: "customer",
+        apiKey: "sk-ant-usr-fixture",
+      })(scenario.model);
+      const chatOptions = {
+        logger: resolveDebugOption(false),
+        messages: [{ role: "user" as const, content: "Fixture" }],
+        model: adapter.model,
+        modelOptions: {
+          thinking: scenario.thinking,
+          max_tokens: 1024,
+          ...(scenario.effort === undefined
+            ? {}
+            : { output_config: { effort: scenario.effort } }),
+        },
+        ...(scenario.reasoning === undefined
+          ? {}
+          : { reasoning: scenario.reasoning }),
+      };
+      if (scenario.mode === "structured") {
+        await rejectionOf(
+          adapter.structuredOutput({
+            chatOptions,
+            outputSchema: {
+              type: "object",
+              properties: { answer: { type: "string" } },
+            },
+          }),
+        );
+      } else {
+        for await (const _chunk of adapter.chatStream(chatOptions)) {
+          // The recorded request stops before generation.
+        }
+      }
+      expect(requests).toHaveLength(1);
+      expect(requests.at(0)).toMatchObject({
+        max_tokens: scenario.expectedMaxTokens,
+      });
+      if (scenario.expectedThinking === undefined) {
+        expect(requests.at(0)).not.toHaveProperty("thinking");
+      } else {
+        expect(requests.at(0)).toMatchObject({
+          thinking: scenario.expectedThinking,
+        });
+      }
+      expect(requests.at(0)).not.toHaveProperty("output_config");
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+}

@@ -34,9 +34,13 @@ export const TANSTACK_CHAT_MIDDLEWARE_SEAM = {
   onConfig: "nonterminal",
   onError: "terminal",
   onFinish: "terminal",
+  // Guards can reject one tool call without ending the surrounding run.
+  onGuardToolCall: "nonterminal",
   onInterruptBoundary: "nonterminal",
   onInterruptResolution: "nonterminal",
   onIteration: "nonterminal",
+  // A pre-output model error can be retried; onError owns terminal failure.
+  onModelError: "nonterminal",
   onShouldContinue: "nonterminal",
   onStart: "nonterminal",
   onStructuredOutputConfig: "nonterminal",

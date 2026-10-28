@@ -2,11 +2,49 @@ Incomplete and failed streams retain reported usage; terminal events
 retain provider stop evidence. Upstream handles max_tokens usage.
 Regression: apps/api/src/lib/tanstack-ai-provider-wire.test.ts.
 
+Retain native thinking controls for catalog models and adaptive thinking without
+forced effort. Portable reasoning takes precedence; forced-tool finalization
+strips both paths. Remove this extension when upstream can express these native
+request shapes through its public API.
+
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index fbcbce1cf58..ba4b7e954ff 100644
+index fbcbce1cf5..ca29dbfdfe 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -848,6 +848,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -350,8 +350,9 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 			tools: options.chatOptions.tools?.map((tool) => resolveComputerUseTool(tool, this.model))
+ 		};
+ 		const { logger } = chatOptions;
+-		const { reasoning: _reasoning, ...requestOptions } = chatOptions;
+-		const requestParams = this.mapCommonOptionsToAnthropic(requestOptions, { stream: false });
++		const { reasoning: _reasoning, modelOptions: nativeOptions, ...requestOptions } = chatOptions;
++    const { thinking: _thinking, output_config: _outputConfig, ...modelOptions } = nativeOptions ?? {};
++		const requestParams = this.mapCommonOptionsToAnthropic({ ...requestOptions, modelOptions }, { stream: false });
+ 		const structuredOutputTool = {
+ 			name: "structured_output",
+ 			description: "Use this tool to provide your response in the required structured format.",
+@@ -447,7 +448,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 				"temperature",
+ 				"top_p"
+ 			];
+-			const droppedKeyExemptSet = /* @__PURE__ */ new Set([...validKeys, "max_tokens"]);
++			const droppedKeyExemptSet = /* @__PURE__ */ new Set([...validKeys, "max_tokens", "thinking", "output_config"]);
+ 			const droppedKeys = Object.keys(modelOptions).filter((key) => !droppedKeyExemptSet.has(key));
+ 			if (droppedKeys.length > 0) options.logger.errors(`anthropic.mapCommonOptionsToAnthropic dropped unknown modelOptions key(s): ${droppedKeys.join(", ")}`, {
+ 				source: "anthropic.mapCommonOptionsToAnthropic",
+@@ -464,7 +465,10 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+ 			modelsWarnedWithoutReasoning.add(this.model);
+ 			console.warn(`[ai-anthropic] chat({ reasoning }) is ignored for model "${this.model}": the model is not in the reasoning table, so no thinking fields are sent.`);
+ 		}
+-		const { output_config: reasoningOutputConfig, ...thinkingFields } = anthropicThinking(this.model, options.reasoning, ANTHROPIC_MODEL_REASONING[this.model]);
++		const { output_config: reasoningOutputConfig, ...thinkingFields } = options.reasoning === void 0 ? {
++      ...modelOptions?.thinking !== void 0 && { thinking: modelOptions.thinking },
++      ...modelOptions?.output_config !== void 0 && { output_config: modelOptions.output_config }
++    } : anthropicThinking(this.model, options.reasoning, ANTHROPIC_MODEL_REASONING[this.model]);
+ 		const thinkingBudget = thinkingFields.thinking?.type === "enabled" ? thinkingFields.thinking.budget_tokens : void 0;
+ 		const defaultMaxTokens = modelOptions?.max_tokens ?? getAnthropicDefaultMaxTokens(this.model, { stream });
+ 		const maxTokens = thinkingBudget && thinkingBudget >= defaultMaxTokens ? thinkingBudget + 1 : defaultMaxTokens;
+@@ -848,6 +852,7 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  		let hasEmittedRunFinished = false;
  		let currentBlockType = null;
  		let messageStartUsage;
@@ -14,7 +52,7 @@ index fbcbce1cf58..ba4b7e954ff 100644
  		try {
  			for await (const event of stream) {
  				if (event.type === "message_start") {
-@@ -855,6 +856,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -855,6 +860,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  					model = event.message.model;
  				}
  				logger.provider(`provider=anthropic type=${event.type}`, { chunk: event });
@@ -23,7 +61,7 @@ index fbcbce1cf58..ba4b7e954ff 100644
  				if (!hasEmittedRunStarted) {
  					hasEmittedRunStarted = true;
  					yield {
-@@ -1178,15 +1181,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1178,15 +1185,6 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  							timestamp: Date.now()
  						};
  					}
@@ -39,7 +77,7 @@ index fbcbce1cf58..ba4b7e954ff 100644
  				} else if (event.type === "message_delta") {
  					if (event.delta.stop_reason) {
  						hasEmittedRunFinished = true;
-@@ -1216,7 +1210,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1216,7 +1214,8 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  									model,
  									timestamp: Date.now(),
  									finishReason: "tool_calls",
@@ -49,7 +87,7 @@ index fbcbce1cf58..ba4b7e954ff 100644
  								};
  								break;
  							case "max_tokens":
-@@ -1238,7 +1233,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1238,7 +1237,20 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  										message: "The response was cut off because the maximum token limit was reached.",
  										code: "max_tokens"
  									},
@@ -71,7 +109,7 @@ index fbcbce1cf58..ba4b7e954ff 100644
  								};
  								break;
  							case "model_context_window_exceeded": {
-@@ -1278,18 +1286,32 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
+@@ -1278,18 +1290,32 @@ var AnthropicTextAdapter = class extends BaseTextAdapter {
  								model,
  								timestamp: Date.now(),
  								finishReason: "stop",
@@ -106,3 +144,111 @@ index fbcbce1cf58..ba4b7e954ff 100644
  			logger.errors("anthropic.processAnthropicStream fatal", {
  				error,
  				source: "anthropic.processAnthropicStream"
+diff --git a/dist/esm/text/text-provider-options.d.ts b/dist/esm/text/text-provider-options.d.ts
+index 3a626ea231..4d9962272a 100644
+--- a/dist/esm/text/text-provider-options.d.ts
++++ b/dist/esm/text/text-provider-options.d.ts
+@@ -1,5 +1,4 @@
+-import { AnthropicThinkingFields } from './reasoning.js';
+-import { BetaContextManagementConfig, BetaFallbacksParam, BetaMessageParam, BetaTool, BetaToolChoiceAny, BetaToolChoiceAuto, BetaToolChoiceTool } from '@anthropic-ai/sdk/resources/beta/messages/messages';
++import { BetaThinkingConfigParam, BetaOutputConfig, BetaContextManagementConfig, BetaFallbacksParam, BetaMessageParam, BetaTool, BetaToolChoiceAny, BetaToolChoiceAuto, BetaToolChoiceTool } from '@anthropic-ai/sdk/resources/beta/messages/messages';
+ import { CacheControlEphemeral } from '@anthropic-ai/sdk/resources';
+ import { AnthropicContainerSkill, AnthropicTool } from '../tools/index.js';
+ import { TextBlockParam } from '@anthropic-ai/sdk/resources/messages';
+@@ -142,8 +141,11 @@ export interface AnthropicSamplingOptions {
+      */
+     max_tokens?: number;
+ }
+-export type ExternalTextProviderOptions = AnthropicCacheControlOptions & AnthropicContainerOptions & AnthropicContextManagementOptions & AnthropicFallbackOptions & AnthropicMCPOptions & AnthropicServiceTierOptions & AnthropicStopSequencesOptions & AnthropicToolChoiceOptions & AnthropicSamplingOptions;
+-export interface InternalTextProviderOptions extends ExternalTextProviderOptions, Omit<AnthropicThinkingFields, 'output_config'> {
++export type ExternalTextProviderOptions = {
++  thinking?: BetaThinkingConfigParam;
++  output_config?: Pick<BetaOutputConfig, 'effort'>;
++} & AnthropicCacheControlOptions & AnthropicContainerOptions & AnthropicContextManagementOptions & AnthropicFallbackOptions & AnthropicMCPOptions & AnthropicServiceTierOptions & AnthropicStopSequencesOptions & AnthropicToolChoiceOptions & AnthropicSamplingOptions;
++export interface InternalTextProviderOptions extends ExternalTextProviderOptions {
+     model: string;
+     messages: Array<BetaMessageParam>;
+     /**
+diff --git a/src/adapters/text.ts b/src/adapters/text.ts
+index 1b019fddd6..8199021363 100644
+--- a/src/adapters/text.ts
++++ b/src/adapters/text.ts
+@@ -800,8 +800,9 @@ export class AnthropicTextAdapter<
+     // non-streaming 10-minute guard (issue #849) — pass `stream: false`.
+     // The API rejects a forced tool while thinking is on, so the forced
+     // structured-output tool goes without `chat({ reasoning })`.
+-    const { reasoning: _reasoning, ...requestOptions } = chatOptions
+-    const requestParams = this.mapCommonOptionsToAnthropic(requestOptions, {
++    const { reasoning: _reasoning, modelOptions: nativeOptions, ...requestOptions } = chatOptions
++    const { thinking: _thinking, output_config: _outputConfig, ...modelOptions } = nativeOptions ?? {}
++    const requestParams = this.mapCommonOptionsToAnthropic({ ...requestOptions, modelOptions }, {
+       stream: false,
+     })
+ 
+@@ -956,7 +957,7 @@ export class AnthropicTextAdapter<
+       // validProviderOptions. Exempt it from the dropped-key warning here so a
+       // correct `modelOptions: { max_tokens }` call doesn't log a spurious
+       // "dropped unknown key" error, while keeping it out of the copy loop.
+-      const droppedKeyExemptSet = new Set<string>([...validKeys, 'max_tokens'])
++      const droppedKeyExemptSet = new Set<string>([...validKeys, 'max_tokens', 'thinking', 'output_config'])
+       const droppedKeys = Object.keys(modelOptions).filter(
+         (key) => !droppedKeyExemptSet.has(key),
+       )
+@@ -1004,11 +1005,16 @@ export class AnthropicTextAdapter<
+       )
+     }
+     const { output_config: reasoningOutputConfig, ...thinkingFields } =
+-      anthropicThinking(
+-        this.model,
+-        options.reasoning,
+-        ANTHROPIC_MODEL_REASONING[this.model],
+-      )
++      options.reasoning === undefined
++        ? {
++            ...(modelOptions?.thinking !== undefined && { thinking: modelOptions.thinking }),
++            ...(modelOptions?.output_config !== undefined && { output_config: modelOptions.output_config }),
++          }
++        : anthropicThinking(
++            this.model,
++            options.reasoning,
++            ANTHROPIC_MODEL_REASONING[this.model],
++          )
+     const thinkingBudget =
+       thinkingFields.thinking?.type === 'enabled'
+         ? thinkingFields.thinking.budget_tokens
+diff --git a/src/text/text-provider-options.ts b/src/text/text-provider-options.ts
+index 6baf3850c1..beeedaf851 100644
+--- a/src/text/text-provider-options.ts
++++ b/src/text/text-provider-options.ts
+@@ -1,6 +1,5 @@
+-import type { AnthropicThinkingFields } from './reasoning'
+ import type {
+-  BetaContextManagementConfig,
++  BetaThinkingConfigParam, BetaOutputConfig, BetaContextManagementConfig,
+   BetaFallbacksParam,
+   BetaMessageParam,
+   BetaTool,
+@@ -162,7 +161,10 @@ Required range: x >= 0
+   max_tokens?: number
+ }
+ 
+-export type ExternalTextProviderOptions = AnthropicCacheControlOptions &
++export type ExternalTextProviderOptions = {
++  thinking?: BetaThinkingConfigParam;
++  output_config?: Pick<BetaOutputConfig, 'effort'>;
++} & AnthropicCacheControlOptions &
+   AnthropicContainerOptions &
+   AnthropicContextManagementOptions &
+   AnthropicFallbackOptions &
+@@ -172,10 +174,7 @@ export type ExternalTextProviderOptions = AnthropicCacheControlOptions &
+   AnthropicToolChoiceOptions &
+   AnthropicSamplingOptions
+ 
+-export interface InternalTextProviderOptions
+-  extends
+-    ExternalTextProviderOptions,
+-    Omit<AnthropicThinkingFields, 'output_config'> {
++export interface InternalTextProviderOptions extends ExternalTextProviderOptions {
+   model: string
+ 
+   messages: Array<BetaMessageParam>

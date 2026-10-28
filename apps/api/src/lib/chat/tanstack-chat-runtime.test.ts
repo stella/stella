@@ -960,3 +960,37 @@ test("engine-emitted chunks reject a top-level read of a moved key", () => {
     rejectedToolCallStartName,
   ]).toHaveLength(4);
 });
+
+test("durable runs preserve thread identity and one-off runs allocate distinct threads", async () => {
+  const threads: string[] = [];
+  const adapter: AnyTextAdapter = {
+    ...scriptedAdapterBase,
+    async *chatStream({ model, runId, threadId }) {
+      if (threadId === undefined) {
+        return panic(
+          "The runtime must assign a thread before invoking the adapter",
+        );
+      }
+      threads.push(threadId);
+      yield* scriptedTurnChunks(
+        { type: "step", text: "Done", toolCalls: [] },
+        { index: 0, model, runId: runId ?? "run", threadId },
+      );
+    },
+    structuredOutput: () => panic("No structured output in this test"),
+  };
+  for (const threadId of [undefined, undefined, "durable-thread"]) {
+    for await (const _chunk of streamChatChunks({
+      adapter,
+      messages: [{ role: "user", content: "Fixture" }],
+      ...(threadId === undefined ? {} : { threadId }),
+    })) {
+      // Drain the run so its adapter invocation completes.
+    }
+  }
+  expect(threads).toHaveLength(3);
+  expect(threads.at(0)).toBeTruthy();
+  expect(threads.at(1)).toBeTruthy();
+  expect(threads.at(0)).not.toBe(threads.at(1));
+  expect(threads.at(2)).toBe("durable-thread");
+});
