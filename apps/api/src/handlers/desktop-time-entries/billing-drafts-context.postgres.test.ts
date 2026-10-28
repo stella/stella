@@ -1,5 +1,13 @@
 import { panic } from "better-result";
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
@@ -29,7 +37,14 @@ import { loadBillingDraftContext } from "./billing-drafts-context";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const today = Temporal.PlainDate.from("2026-10-09");
-const clock = spyOn(Temporal.Now, "plainDateISO").mockReturnValue(today);
+
+beforeEach(() => {
+  spyOn(Temporal.Now, "plainDateISO").mockReturnValue(today);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 if (!databaseUrl || !runPostgres) {
   describe.skip("billing draft context (postgres)", () => {
@@ -524,5 +539,3 @@ if (!databaseUrl || !runPostgres) {
     });
   });
 }
-
-afterAll(() => clock.mockRestore());
