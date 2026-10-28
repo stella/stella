@@ -1,3 +1,5 @@
+import type { UiLocale } from "@stll/locales";
+
 export type GlossaryEntry = {
   banned: RegExp;
   preferred: string;
@@ -33,4 +35,4 @@ export const glossary = {
   pl: sharedEntries,
   "pt-BR": sharedEntries,
   sk: sharedEntries,
-} as const satisfies Record<string, readonly GlossaryEntry[]>;
+} as const satisfies Record<UiLocale, readonly GlossaryEntry[]>;
