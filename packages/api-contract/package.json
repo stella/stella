@@ -84,6 +84,7 @@
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
+    "./mobile-updates": "./src/mobile-updates.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-time-entries": "./src/desktop-time-entries.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",

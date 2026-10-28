@@ -7,8 +7,14 @@ import {
   MOBILE_REDIRECT_SCHEMES,
   mobileRedirectUri,
 } from "@stll/api-contract/mobile-client";
+import {
+  MOBILE_UPDATE_SIGNING_KEY_ID,
+  MOBILE_UPDATES_PATH,
+} from "@stll/api-contract/mobile-updates";
 
-import { appConfigFor } from "../app.config";
+import { appConfigFor, UPDATE_SIGNING_CERTIFICATE } from "../app.config";
+
+const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
 const SOURCE_ROOT = import.meta.dir;
 
@@ -98,7 +104,12 @@ describe("the app's dates", () => {
 describe("the app's builds", () => {
   const configs = MOBILE_APP_VARIANTS.map((variant) => ({
     variant,
-    config: appConfigFor({ buildNumber: 7, variant }),
+    config: appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signingCertificatePresent: true,
+      variant,
+    }),
   }));
 
   test.each(configs)(
@@ -122,6 +133,35 @@ describe("the app's builds", () => {
       ({ config }: (typeof configs)[number]) => config.name,
     ]) {
       expect(new Set(configs.map(read)).size).toBe(configs.length);
+    }
+  });
+
+  test("only preview and production take updates, each from its own route, signed", () => {
+    for (const { config, variant } of configs) {
+      expect(config.runtimeVersion).toBe(RUNTIME_VERSION);
+      if (variant === "development") {
+        expect(config.updates).toEqual({ enabled: false });
+        continue;
+      }
+      expect(config.updates).toMatchObject({
+        enabled: true,
+        url: `https://api.stll.app${MOBILE_UPDATES_PATH}/${variant}`,
+        codeSigningCertificate: UPDATE_SIGNING_CERTIFICATE,
+        codeSigningMetadata: { keyid: MOBILE_UPDATE_SIGNING_KEY_ID },
+      });
+    }
+  });
+
+  test("a build without the signing certificate takes no updates at all", () => {
+    for (const variant of MOBILE_APP_VARIANTS) {
+      expect(
+        appConfigFor({
+          buildNumber: 1,
+          runtimeVersion: RUNTIME_VERSION,
+          signingCertificatePresent: false,
+          variant,
+        }).updates,
+      ).toEqual({ enabled: false });
     }
   });
 });
