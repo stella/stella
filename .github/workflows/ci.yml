@@ -5019,7 +5019,7 @@ jobs:
       )
       )
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -5089,6 +5089,27 @@ jobs:
         if: failure() && steps.network-baseline.outcome == 'failure'
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
+
+      # Same stack and route table, on the narrowest current iPhone in WebKit.
+      - name: Check phone layouts
+        if: >-
+          !cancelled()
+          && steps.e2e-stack.outcome == 'success'
+        timeout-minutes: 8
+        id: phone-layout
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-phone-layouts.json
+          E2E_EXPECT_DEV_ROUTES: "false"
+          E2E_OUTPUT_DIR: test-results/phone-layout
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- phone-layout.spec.ts --project=phone-layout
+
+      - name: Upload phone layout report
+        if: always() && steps.phone-layout.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: phone-layout-pr-blob
+          path: apps/web/e2e/test-results/phone-layout/blob-report/
+          retention-days: 7
 
       - name: Upload route smoke report
         if: always()

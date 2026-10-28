@@ -19,6 +19,7 @@ const executionProfile = resolveE2eExecutionProfile(
 const ROUTE_SMOKE_SPEC = /route-smoke\.spec\.ts$/u;
 const DOCKED_CHAT_GEOMETRY_SPEC = /docked-chat-geometry\.spec\.ts$/u;
 const HEAP_GROWTH_CANARY_SPEC = /heap-growth-canary\.spec\.ts$/u;
+const PHONE_LAYOUT_SPEC = /phone-layout\.spec\.ts$/u;
 
 export default defineConfig({
   testDir: "./specs",
@@ -70,6 +71,7 @@ export default defineConfig({
         ROUTE_SMOKE_SPEC,
         HEAP_GROWTH_CANARY_SPEC,
         DOCKED_CHAT_GEOMETRY_SPEC,
+        PHONE_LAYOUT_SPEC,
       ],
       use: { ...devices["Desktop Chrome"] },
     },
@@ -99,6 +101,15 @@ export default defineConfig({
       testMatch: ROUTE_SMOKE_SPEC,
       workers: 1,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // The narrowest iPhone on a current iOS, in WebKit like Safari: a page
+      // that fits 375px fits every newer, wider iPhone. CI runs it next to
+      // route smoke, since both cover every route.
+      name: "phone-layout",
+      testMatch: PHONE_LAYOUT_SPEC,
+      workers: 1,
+      use: { ...devices["iPhone SE (3rd gen)"] },
     },
   ],
 
