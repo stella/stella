@@ -207,7 +207,7 @@
     "mdast-util-from-markdown": "2.1.0",
     "mdast-util-gfm": "3.1.0",
     "micromark-extension-gfm": "3.0.0",
-    "nodemailer": "^10.0.15",
+    "nodemailer": "^10.2.1",
     "onnxruntime-node": "1.30.0",
     "parse5": "catalog:",
     "parse5-htmlparser2-tree-adapter": "catalog:",
