@@ -509,19 +509,35 @@
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
     "approval": {
+      "approveAll": "{count, plural, one {# bejegyzés jóváhagyása} other {Mind a(z) # bejegyzés jóváhagyása}}",
       "approveSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} jóváhagyása",
+      "billedTotal": "Számlázva: {duration}",
       "empty": "Ebben az ügyben semmi nem vár jóváhagyásra.",
+      "emptyWeek": "Ezen a héten semmi sem vár jóváhagyásra. A beküldött idő itt jelenik meg.",
+      "everyone": "Mindenki",
       "failed": "A módosítás nem lett mentve. Próbálja újra.",
       "myTime": "Saját idő",
+      "pending": "{count, plural, one {# jóváhagyandó bejegyzés} other {# jóváhagyandó bejegyzés}}",
       "refusals": {
         "invalidEntry": "Adjon meg leírást, ellenőrizze a munkavégzés dátumát, majd hagyja jóvá a bejegyzést.",
         "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda hagyhatja jóvá.",
         "notFound": "Ez a bejegyzés már nem létezik. Frissítse a listát.",
+        "notSubmitted": "Ezt a bejegyzést még nem küldték be. Először a rögzítőjének kell beküldenie.",
         "runningTimer": "A jóváhagyás előtt állítsa le a futó időmérőt.",
         "unpriced": "Ehhez a bejegyzéshez nincs díjszabás. Állítson be díjszabást az ügyhöz, majd hagyja jóvá a bejegyzést.",
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
       },
       "returnComment": "Visszaküldés oka",
+      "returnRefusals": {
+        "invalidEntry": "Ellenőrizze a bejegyzés munkavégzési dátumát, majd küldje vissza.",
+        "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda küldheti vissza.",
+        "notFound": "Ez a bejegyzés már nem létezik, ezért nem küldhető vissza. Frissítse a listát.",
+        "notSubmitted": "Ezt a piszkozatot sosem küldték be, így nincs mit visszaküldeni.",
+        "runningTimer": "A visszaküldés előtt állítsa le a futó időmérőt.",
+        "timePeriodLocked": "Ez a hónap zárolva van, ezért a bejegyzés nem küldhető vissza. Kérje meg a rendszergazdát a feloldására.",
+        "wrongStatus": "A számlázott vagy leírt idő nem küldhető vissza a rögzítőjének."
+      },
+      "returnSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} visszaküldése",
       "selectEntry": "Bejegyzés kijelölése",
       "timeEntries": "Időbejegyzések",
       "title": "Jóváhagyások"
@@ -531,6 +547,17 @@
     "batchActions": "Tömeges műveletek",
     "billable": "Számlázható",
     "billedAmount": "Számlázott összeg",
+    "clientComposer": {
+      "flatFeeNote": "Az átalánydíjas ügyeket az ügy számlázási oldalán számlázza.",
+      "includeMatter": "{matterName} hozzáadása",
+      "invalidPeriod": "A záró dátum nem lehet korábbi a kezdő dátumnál.",
+      "loadFailed": "A még nem számlázott munka betöltése sikertelen. Próbálja újra.",
+      "matterSubtotal": "Ügy összege áfával: {amount} · a számla {share} része",
+      "periodEnd": "Időszak vége",
+      "periodStart": "Időszak kezdete",
+      "title": "Ügyfél számlázása",
+      "visibility": "Ezt a számlát csak az összes érintett ügyhöz hozzáférő személyek és a számlázási rendszergazdák láthatják."
+    },
     "codes": {
       "activity": "Tevékenység",
       "activityCode": "Tevékenységkód",
@@ -674,6 +701,11 @@
       "invoiceDate": "Számla kelte",
       "invoiceDetail": "Számla részletei",
       "invoiceNumber": "Számlaszám",
+      "lineOverrides": {
+        "editedRecorded": "Módosítva · rögzítve: {description}, {quantity} × {rate}",
+        "quantity": "Mennyiség",
+        "resetRecorded": "Rögzített értékek visszaállítása"
+      },
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
       "markPaid": "Fizetettnek jelöl",
@@ -698,6 +730,7 @@
     "markNonBillableSelected": "Nem számlázhatónak jelöl",
     "matterRequired": "Kérjük, válasszon ügyet",
     "minutes": "Perc",
+    "moveEntryHint": "Mentéskor a bejegyzés ebbe az ügybe kerül, és ennek díjtételei szerint árazódik.",
     "narrative": "Szöveges leírás",
     "narrativePlaceholder": "Írja le az elvégzett munkát...",
     "noActiveTimer": "Nincs aktív időmérő",
@@ -812,13 +845,16 @@
       "approved": "Jóváhagyva",
       "billed": "Számlázva",
       "draft": "Piszkozat",
+      "submitted": "Beküldve",
       "written_off": "Leírva"
     },
     "stopTimer": "Leállítás",
     "suggestions": {
       "actionCount": "{count, plural, one {# művelet} other {# művelet}}",
       "activeVsLogged": "Tevékenység: {active} · Rögzítve: {logged}",
+      "alreadyCovered": "Már lefedi a rögzített idő",
       "chatEvidence": "{count, plural, one {# üzenet} other {# üzenet}} a(z) „{title}” beszélgetésben",
+      "engagedTime": "{duration} aktív idő",
       "keyboardHint": "Az Enter elfogadja, az E elfogadás előtt szerkeszti, a Delete elveti",
       "privacyNote": "Ezeket csak Ön látja. Semmit nem rögzítünk, amíg el nem fogadja.",
       "title": "Javaslatok a tevékenysége alapján",
@@ -964,7 +1000,6 @@
     "coverage": {
       "completeness": "Teljesség",
       "courtsHeading": "Bíróságonként",
-      "courtsUnavailable": "A bíróságonkénti bontás jelenleg nem érhető el.",
       "decisionYears": "Határozatok évei",
       "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
       "generatedAt": "Adatok: {date}",
@@ -975,20 +1010,16 @@
       "healthStalled": "Elakadt",
       "healthUnknown": "Még nem futott",
       "inPreparation": "Előkészületben",
-      "knownGaps": "Ismert hiányok",
       "lastSync": "Utolsó szinkronizálás",
-      "noGapsRecorded": "Nincs rögzített hiány",
       "notCountedYet": "Még nincs megszámolva",
       "notMeasuredYet": "Még nincs megmérve",
-      "pendingTexts": "Függőben lévő szövegek",
       "reportedByListing": "A közzétevő jegyzékéből megszámolva",
       "reportedByOperator": "Kézzel rögzítve",
       "reportedByPublisher": "A közzétevő saját adata",
       "searchable": "Kereshető",
       "title": "Az ítélkezési gyakorlat lefedettsége",
       "totalFrom": "Összesítés {date} szerint",
-      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el.",
-      "unreadListingPeriods": "A jegyzék be nem olvasott időszakai"
+      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
     },
     "decisionNotFound": "A határozat nem található",
     "decisionTypes": {
@@ -1028,6 +1059,12 @@
       "matchedIn": "Találat {language} nyelven"
     },
     "loadingMore": "Betöltés folyamatban...",
+    "marginFilter": {
+      "label": "Hivatkozott rendelkezések szűrője",
+      "paragraph": "{count, plural, =0 {Nincs hivatkozott rendelkezés itt: ¶{paragraph}} one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {A kijelölésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
+      "unnumberedParagraph": "{count, plural, =0 {Ebben a bekezdésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# határozat már el volt mentve ide} other {# határozat már el volt mentve ide}}",
       "empty": "Ebben az ügyben még nincs mentett ítélkezési gyakorlat.",
@@ -1727,21 +1764,8 @@
       "describe-stella-function": "Adatlekérés előkészítése",
       "describe_template": "Sablonmezők olvasása",
       "discover_tools": "Adatlekérés előkészítése",
-      "docxCommentSummary": "Megjegyzés hozzáadása ehhez: {blockId}",
-      "docxDeleteSummary": "Törlés: {blockId}",
-      "docxDeleteTableColumnSummary": "Táblázatoszlop törlése itt: {blockId}",
-      "docxDeleteTableRowSummary": "Táblázatsor törlése itt: {blockId}",
       "docxEditMore": "{count, plural, one {# további módosítás} other {# további módosítás}}",
       "docxEditSummary": "{count, plural, one {# javasolt módosítás} other {# javasolt módosítás}}",
-      "docxInsertAfterSummary": "Szöveg beszúrása ez után: {blockId}",
-      "docxInsertBeforeSummary": "Szöveg beszúrása ez elé: {blockId}",
-      "docxInsertTableColumnSummary": "Táblázatoszlop beszúrása ide: {blockId}",
-      "docxInsertTableRowSummary": "Táblázatsor beszúrása ide: {blockId}",
-      "docxMergeTableCellsSummary": "Táblázatcellák egyesítése itt: {blockId}",
-      "docxReplaceBlockSummary": "Csere: {blockId}",
-      "docxReplaceSummary": "A(z) „{find}” cseréje erre: „{replace}”",
-      "docxSignatureTableSummary": "Aláírási táblázat beszúrása ide: {blockId}",
-      "docxSplitTableCellSummary": "Táblázatcella felosztása itt: {blockId}",
       "execute-typescript": "Ügyadatok olvasása",
       "execute_typescript": "Ügyadatok olvasása",
       "expand-chat-history": "Csevegési előzmények olvasása",
@@ -2085,7 +2109,6 @@
       "orLetUsKnowAt": "vagy írjon nekünk ide:",
       "viewDocumentation": "Dokumentáció megtekintése"
     },
-    "error": "Hiba",
     "expenses": "Kiadások",
     "export": {
       "citations": "Hivatkozások",
@@ -2159,6 +2182,7 @@
     "lastUpdated": "Utoljára frissítve",
     "layoutResetAfterProblem": "Egy probléma miatt visszaállítottuk az alapértelmezett elrendezést.",
     "legalDatabase": "Jogi adatbázis",
+    "loadFailed": "Nem sikerült betölteni.",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
@@ -2247,7 +2271,7 @@
     "showMore": "Több megjelenítése",
     "showSecretValue": "Titkos érték megjelenítése",
     "signOut": "Kijelentkezés",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "sort": "Rendezés",
     "source": "Forrás",
     "stale": "Elavult",
@@ -2724,7 +2748,7 @@
       "notEnabled": "Ez a művelet nincs engedélyezve az Ön szervezete számára.",
       "periodExhausted": "Ez a művelet szünetel az Ön szervezete számára."
     },
-    "actionFailed": "A művelet sikertelen",
+    "actionFailed": "Ez nem sikerült. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "api": {
       "badRequest": "A kérést nem sikerült teljesíteni.",
       "caseLawCountryUnavailable": "Az ország ítélkezési gyakorlata nem érhető el. Válasszon másik országot.",
@@ -3275,7 +3299,7 @@
     "saveSerializeFailedTitle": "A DOCX létrehozása nem sikerült",
     "savingDocument": "Mentés...",
     "showDetails": "Részletek megjelenítése",
-    "somethingWentWrong": "Hiba történt",
+    "somethingWentWrong": "Hiba történt. Próbálja újra, vagy ha ismét előfordul, töltse be újra az oldalt.",
     "synced": "Szinkronizálva",
     "syncing": "Szinkronizálás",
     "tableBordersAll": "Minden szegély",
@@ -4314,7 +4338,12 @@
       "styleHighlight": "Kiemelés",
       "styleSquiggly": "Hullámos vonal",
       "styleStrikethrough": "Áthúzás",
-      "visibilityShared": "Megosztva a szervezettel"
+      "visibilityShared": "Megosztva a szervezettel",
+      "visibilitySharedWithMatter": "Megosztva az üggyel"
+    },
+    "contents": {
+      "aiSection": "{section} (AI által generált szakasz)",
+      "headingWithAiSection": "{heading} (AI által generált szakasz: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -4791,10 +4820,8 @@
   },
   "readerAnswers": {
     "budgetError": "A válaszokra szánt keret kimerült.",
-    "citation": "¶{paragraph}",
     "expand": "Válasz kibontása",
     "explain": "Magyarázat",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Kiegészítő kérdés feltevése",
     "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
     "loading": "Válasz generálása…",
@@ -5881,6 +5908,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Belső munka"
+    },
+    "week": {
+      "allLogged": "Minden rögzítve van. Az új tevékenység munka közben itt jelenik meg.",
+      "days": "A hét napjai",
+      "entriesTitle": "Rögzített idő",
+      "nextWeek": "Következő hét",
+      "noActivity": "Még nincs mit rögzíteni. Dolgozzon egy ügyben, és a tevékenysége itt jelenik meg elfogadásra.",
+      "pendingCount": "{count, plural, one {# javaslat} other {# javaslat}}",
+      "previousWeek": "Előző hét",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Ellenőrizze a munkavégzés dátumát, majd küldje be ezt a bejegyzést.",
+        "narrativeRequired": "Adjon meg leírást, majd küldje be ezt a bejegyzést.",
+        "runningTimer": "Állítsa le a futó időmérőt, majd küldje be ezt a bejegyzést.",
+        "unpriced": "Ennek a bejegyzésnek nincs díjtétele. Kérjen díjtételt az ügyhöz, majd küldje be."
+      },
+      "returned": "Visszaküldve: {comment}",
+      "submitAndApprove": "Beküldés és jóváhagyás",
+      "submitResult": "Beküldve: {submitted} · jóváhagyva: {approved} · javítandó: {refused}",
+      "submitWeek": "Hét beküldése",
+      "title": "A hetem",
+      "totals": "Rögzítve: {logged} · számlázható: {billable}"
     }
   },
   "translate": {
@@ -6486,6 +6535,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
+      "annotations": {
+        "commentedBy": "Megjegyzés: {name}",
+        "detachedHeading": "Nem ebben a verzióban",
+        "detachedOtherVersion": "A(z) {version}. verzióban készült; az oldal szövege azóta megváltozott.",
+        "detachedTextChanged": "Ezek a szavak már nincsenek a(z) {page}. oldalon.",
+        "empty": "Jelöljön ki szavakat a dokumentumban, majd válassza a Megjegyzés lehetőséget.",
+        "highlightedBy": "Kiemelte: {name}",
+        "refusedNoText": "Ezen az oldalon nincs megjelölhető szöveg. Először futtassa a szövegfelismerést a dokumentumon.",
+        "refusedNotFound": "Ezek a szavak nem találhatók az oldal szövegében. Jelölje ki őket újra.",
+        "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet."
+      },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
       "evidence": "Bizonyíték",
@@ -6494,6 +6554,36 @@
       "pageEditor": {
         "addPDF": "PDF hozzáadása",
         "applyCrop": "Vágás alkalmazása",
+        "cleanScan": {
+          "applied": "Tisztított változat alkalmazva",
+          "apply": "Alkalmazás",
+          "applyAll": "Összes alkalmazása",
+          "applyPage": "A(z) {number}. tisztított oldal alkalmazása",
+          "cleaned": "Tisztítva",
+          "cleaning": "Oldal tisztítása",
+          "contentCrop": "Vágás a tartalomra",
+          "description": "{count, plural, one {Használat előtt ellenőrizze a tisztított oldalt. A dokumentum csak ekkor változik meg.} other {Használat előtt ellenőrizze mind a(z) # tisztított oldalt. A dokumentum csak ekkor változik meg.}}",
+          "deskew": "Kiegyenesítés",
+          "failedEngine": "A tisztítás nem sikerült. Az oldal változatlan marad.",
+          "failedRender": "Az oldalt nem sikerült előkészíteni a tisztításra. Változatlan marad.",
+          "failedTimeout": "A tisztítás túl sokáig tartott. Az oldal változatlan marad.",
+          "heading": "Szkennelés tisztítása",
+          "output": "Színmód",
+          "outputBinary": "Fekete-fehér",
+          "outputGrayscale": "Szürkeárnyalatos",
+          "pageLimit": "Egyszerre legfeljebb {max} oldal tisztítható. Jelöljön ki kevesebb oldalt.",
+          "preview": "{number}. tisztított oldal",
+          "progress": "{total} oldalból {done} feldolgozva",
+          "reject": "Eredeti megtartása",
+          "rejectPage": "A(z) {number}. eredeti oldal megtartása",
+          "rejected": "Eredeti megtartva",
+          "scope": "{count, plural, =0 {Az összes oldal kiegyenesítése és tisztítása} one {A kijelölt oldal kiegyenesítése és tisztítása} other {A(z) # kijelölt oldal kiegyenesítése és tisztítása}}",
+          "unrecognized": "Az oldal nem lett szkennelt oldalként felismerve. Változatlan marad.",
+          "unrecognizedNoContent": "Ezen az oldalon nem található tartalom. Változatlan marad.",
+          "unrecognizedNoPage": "Az oldal széleit nem sikerült megtalálni. Az oldal változatlan marad.",
+          "unrecognizedTooLarge": "Az oldal túl nagy a tisztításhoz. Változatlan marad.",
+          "use": "{count, plural, =0 {Tisztított oldalak használata} one {# tisztított oldal használata} other {# tisztított oldal használata}}"
+        },
         "crop": "Vágás",
         "cropAdvanced": "Speciális beállítások",
         "cropBottom": "Alul (mm)",
@@ -6541,7 +6631,10 @@
         "saveVersion": "Verzió mentése",
         "selectAll": "Összes kijelölése",
         "selectPage": "A(z) {number}. oldal kijelölése",
+        "signAfterSave": "Új verzióként menti az oldalmódosításokat, majd aláírja azt",
+        "signSavedVersionMissing": "Az új verzió mentése megtörtént, de nem sikerült megnyitni aláírásra. Írja alá a dokumentummegjelenítőből.",
         "signatureWarning": "A PDF szerkesztése érvényteleníti a digitális aláírásokat.",
+        "signatureWarningWithSign": "A szerkesztés érvényteleníti a meglévő digitális aláírásokat. Az innen indított aláírás először menti a módosításokat, majd az új verziót írja alá.",
         "sourceLimit": "A PDF-fájlok együttes mérete nem haladhatja meg a 100 MB-ot.",
         "title": "Oldalak szerkesztése",
         "undo": "Oldalszerkesztés visszavonása",

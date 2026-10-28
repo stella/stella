@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -106,6 +107,8 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
+import createClientInvoice from "@/api/handlers/client-invoices/create";
+import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
 import readContactById from "@/api/handlers/contacts/get";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
@@ -201,6 +204,7 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -222,6 +226,10 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -354,6 +362,9 @@ const sellerProfileB = toSafeId<"sellerProfile">(
 );
 const invoiceLineB = toSafeId<"invoiceLine">(
   "22222222-2222-4222-8222-222222222259",
+);
+const clientInvoiceEntryB = toSafeId<"timeEntry">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const manualInvoiceLineBody = {
   source: {
@@ -946,11 +957,13 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     runAAgainstB: async ({ desktopA, ids: testIds }) => {
       await grantDraftConsent(desktopA);
       const response = await desktopA(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
       return { status: response.status, body: await response.json() };
     },
     runBPositive: async ({ desktopB, ids: testIds }) => {
       await grantDraftConsent(desktopB);
       const response = await desktopB(desktopDraftRequest(testIds.wsB1));
+      expect(response.status).not.toBe(422);
       return { status: response.status, body: await response.json() };
     },
     expectDenied: (result) => {
@@ -1328,6 +1341,66 @@ const isolationCases: IsolationCase[] = [
       expect(getStatusCode(result)).toBeNull();
       expect(result).toMatchObject({ id: expect.any(String) });
     },
+  },
+  {
+    name: "client invoice prefill",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(prefillClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(prefillClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        clientId: testIds.contactB,
+        matters: [expect.objectContaining({ workspaceId: testIds.wsB1 })],
+      }),
+  },
+  {
+    name: "client invoice create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createClientInvoice, workspaceA, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createClientInvoice, workspaceB, {
+        params: { clientId: testIds.contactB },
+        body: {
+          invoiceDate: "2026-10-15",
+          currency: "USD",
+          matters: [
+            {
+              workspaceId: testIds.wsB1,
+              timeEntryIds: [clientInvoiceEntryB],
+              expenseIds: [],
+            },
+          ],
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        workspaceId: testIds.wsB1,
+        entryCount: 1,
+        totalAmount: 200,
+      }),
   },
   {
     name: "invoice read by id",
@@ -2874,6 +2947,21 @@ testState.beforeAll(async () => {
     mode: "hourly",
     currency: "USD",
   });
+  await testDb.insert(timeEntries).values({
+    id: clientInvoiceEntryB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    userId: ids.userB1,
+    dateWorked: "2026-10-14",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(200),
+    currency: "USD",
+    narrative: "Client invoice isolation work",
+    billable: true,
+    status: "approved",
+  });
   await testDb.insert(invoices).values({
     id: creditOriginalB,
     organizationId: ids.orgB,
@@ -3782,17 +3870,16 @@ const desktopDraftRequest = (matterId: string) =>
   new Request("http://localhost/drafts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      entries: [
-        {
-          matterId,
+    body: JSON.stringify(
+      createDesktopBillingDraftRequest({
+        matterId,
+        entry: {
           date: DESKTOP_ENTRY.dateWorked,
           timezone: DESKTOP_ENTRY.timezoneId,
           durationMinutes: DESKTOP_ENTRY.durationMinutes,
-          appNames: ["Editor"],
         },
-      ],
-    }),
+      }),
+    ),
   });
 
 /** A request as the desktop app sends it: its HTTP client names itself on

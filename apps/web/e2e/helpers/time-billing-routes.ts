@@ -20,40 +20,29 @@ const MIXED_ROUTE_REASONS = new Map([
     "The overview conditionally prefetches billing alongside unrelated matter data.",
   ],
 ]);
+const FUNCTION_TYPES = new Set([
+  "ArrowFunctionExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+]);
 
-const hasGateCall = (node: Node, gateNames: ReadonlySet<string>): boolean => {
-  let found = false;
-  walk(node, (child) => {
-    if (
-      child.type === "CallExpression" &&
-      child.callee.type === "Identifier" &&
-      gateNames.has(child.callee.name)
-    ) {
-      found = true;
-    }
-    return undefined;
-  });
-  return found;
-};
-const hasDirectGateCall = (
-  node: Node,
+/** A gate call anywhere under `root`; `direct` stops at nested functions. */
+const hasGateCall = (
+  root: Node,
   gateNames: ReadonlySet<string>,
+  { direct }: { direct: boolean },
 ): boolean => {
   let found = false;
-  walk(node, (child) => {
-    if (
-      [
-        "FunctionDeclaration",
-        "FunctionExpression",
-        "ArrowFunctionExpression",
-      ].includes(child.type)
-    ) {
+  walk(root, (node) => {
+    if (found || (direct && FUNCTION_TYPES.has(node.type))) {
       return "skip-children";
     }
     if (
-      child.type === "CallExpression" &&
-      child.callee.type === "Identifier" &&
-      gateNames.has(child.callee.name)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      gateNames.has(node.callee.name)
     ) {
       found = true;
     }
@@ -61,33 +50,31 @@ const hasDirectGateCall = (
   });
   return found;
 };
+
 const readRoute = (filePath: string) => {
   const source = parseSource(filePath, readFileSync(filePath, "utf-8"));
   const gateNames = new Set<string>();
-  for (const statement of source.program.body) {
-    if (
-      statement.type !== "ImportDeclaration" ||
-      statement.source.value !== TIME_BILLING_HOOK
-    ) {
+  for (const statement of source.module.staticImports) {
+    if (statement.moduleRequest.value !== TIME_BILLING_HOOK) {
       continue;
     }
-    for (const element of statement.specifiers) {
-      if (element.type !== "ImportSpecifier") {
-        continue;
-      }
-      const exportedName =
-        element.imported.type === "Identifier"
-          ? element.imported.name
-          : element.imported.value;
-      if (exportedName.startsWith("isTimeBilling")) {
-        gateNames.add(element.local.name);
+    for (const entry of statement.entries) {
+      // oxc-parser declares ImportNameKind as an ambient const enum of strings.
+      const kind: string = entry.importName.kind;
+      if (
+        kind === "Name" &&
+        entry.importName.name?.startsWith("isTimeBilling")
+      ) {
+        gateNames.add(entry.localName.value);
       }
     }
   }
   let declaration: CallExpression | undefined;
   walk(source.program, (node) => {
+    if (declaration !== undefined) {
+      return "skip-children";
+    }
     if (
-      declaration === undefined &&
       node.type === "CallExpression" &&
       node.callee.type === "CallExpression" &&
       node.callee.callee.type === "Identifier" &&
@@ -95,6 +82,7 @@ const readRoute = (filePath: string) => {
     ) {
       declaration = node;
     }
+    return undefined;
   });
   if (declaration?.callee.type !== "CallExpression") {
     return null;
@@ -113,18 +101,21 @@ const readRoute = (filePath: string) => {
     options.properties.some(
       (property) =>
         property.type === "Property" &&
+        property.kind === "init" &&
+        !property.shorthand &&
+        !property.computed &&
         source.sourceText.slice(property.key.start, property.key.end) ===
           "beforeLoad" &&
         (property.value.type === "ArrowFunctionExpression" ||
           property.value.type === "FunctionExpression") &&
         property.value.body !== null &&
-        hasDirectGateCall(property.value.body, gateNames),
+        hasGateCall(property.value.body, gateNames, { direct: true }),
     );
   if (
     gateNames.size > 0 &&
     !dedicated &&
     (!MIXED_ROUTE_REASONS.has(routePath) ||
-      !hasGateCall(source.program, gateNames))
+      !hasGateCall(source.program, gateNames, { direct: false }))
   ) {
     throw new Error(`Time-billing route lost its beforeLoad gate: ${filePath}`);
   }
@@ -132,14 +123,14 @@ const readRoute = (filePath: string) => {
 };
 
 /** Real dedicated guards plus descendants that inherit their beforeLoad. */
-export const listTimeBillingRoutes = () => {
-  const routes = readdirSync(ROUTES_DIRECTORY, {
+export const listTimeBillingRoutes = (routesDirectory = ROUTES_DIRECTORY) => {
+  const routes = readdirSync(routesDirectory, {
     recursive: true,
     encoding: "utf-8",
   })
     .filter((file) => file.endsWith(".tsx"))
     .flatMap((file) => {
-      const route = readRoute(path.join(ROUTES_DIRECTORY, file));
+      const route = readRoute(path.join(routesDirectory, file));
       return route === null ? [] : [route];
     });
   const guarded = routes.filter((route) => route.dedicated);

@@ -49,7 +49,7 @@ export type EntryEdit = {
   draft: DraftEntryState | null;
 };
 export type ReviewState = ReadonlyMap<string, EntryEdit>;
-export type ReviewTarget = { groupId: string; initial: EntryEdit };
+type ReviewTarget = { groupId: string; initial: EntryEdit };
 export type ReviewAction =
   | (ReviewTarget & {
       type: "set-narrative";

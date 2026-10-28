@@ -141,11 +141,35 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
       }),
   });
 
+// A job that writes the repository publishes; only `priority` says so. Checked
+// on the head alone: the base keeps whatever it reviewed before this rule. A
+// decision whose digest is stale goes through review first, which shows the
+// sensitive change; the kind is judged once the reviewed digest is current.
+const misclassifiedWriters = (
+  jobs: ReadonlyMap<string, DerivedJob>,
+  decisions: ClassificationInputs["decisions"],
+) =>
+  [...jobs].flatMap(([key, job]) => {
+    const decision = decisions[key];
+    return job.writesRepository &&
+      decision !== undefined &&
+      decision.reviewedDigest === job.digest &&
+      decision.kind !== "priority"
+      ? [key]
+      : [];
+  });
+
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
       const headInputs = readClassificationInputs(root);
       const head = generateWithJobs(headInputs);
+      const writers = misclassifiedWriters(head.jobs, headInputs.decisions);
+      if (writers.length > 0) {
+        throw new AdmissionError({
+          message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${writers.map(decisionPathForKey).join("\n")}`,
+        });
+      }
       const privilegedJobs = base
         ? (() => {
             const baseRevision = generateBase(root, base);

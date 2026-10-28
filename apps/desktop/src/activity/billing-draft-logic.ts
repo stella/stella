@@ -28,7 +28,7 @@ export type DraftableGroup = DayReviewGroup & {
   matter: DesktopTimeEntryMatterCandidate;
 };
 
-/** The server numbers drafts by position in the request, starting at 1. */
+/** Request and review rows share positional entry identifiers, starting at 1. */
 const draftEntryId = (index: number) => `entry_${index + 1}`;
 
 const unique = (values: readonly string[]) => [...new Set(values)];
@@ -76,8 +76,9 @@ export const draftRequestEntries = ({
   timezone,
   captureDetails,
 }: DraftRequestEntriesOptions): DesktopBillingDraftRequest["entries"] =>
-  groups.map((group) => {
+  groups.map((group, index) => {
     const entry = {
+      entryId: draftEntryId(index),
       matterId: group.matter.id,
       date,
       timezone,

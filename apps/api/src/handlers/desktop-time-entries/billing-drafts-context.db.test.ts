@@ -279,6 +279,7 @@ const load = async (
     {
       entries: [
         {
+          entryId: "selected-entry",
           matterId,
           date: today.toString(),
           timezone: "Europe/Prague",
@@ -308,6 +309,7 @@ test("mixed-case duplicate matter UUIDs normalize before the scoped context quer
   const result = await loadBody({
     entries: [
       {
+        entryId: "selected-entry-1",
         matterId: uppercaseMatterId,
         date: today.toString(),
         timezone: "Europe/Prague",
@@ -315,6 +317,7 @@ test("mixed-case duplicate matter UUIDs normalize before the scoped context quer
         appNames: ["Editor"],
       },
       {
+        entryId: "selected-entry-2",
         matterId: ids.wsA1.toLowerCase(),
         date: today.toString(),
         timezone: "Europe/Prague",

@@ -39,7 +39,8 @@ import { organizationListOptions } from "@/lib/organization/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { ConsentSuccess } from "@/routes/-consent-success";
@@ -88,7 +89,7 @@ function ConsentPage() {
   });
   // The session query follows an organization switch on this page; the route
   // context only knows the organization the page loaded with.
-  const sessionView = useQueryView(useQuery(sessionOptions));
+  const sessionView = queryView(useQuery(sessionOptions));
   useQueryViewError(sessionView, "ConsentPage:query");
   const activeOrganizationId =
     (sessionView.type === "items"
@@ -103,13 +104,13 @@ function ConsentPage() {
   });
   const isPending = submission.status === "pending";
   const hasError = submission.status === "error";
-  const organizationsView = useQueryView(
+  const organizationsView = queryView(
     useQuery(organizationListOptions(userId)),
   );
   useQueryViewError(organizationsView, "ConsentPage:query-2");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
-  const roleView = useQueryView(
+  const roleView = queryView(
     useQuery({
       ...roleOptions,
       enabled: activeOrganizationId !== null,
@@ -143,7 +144,7 @@ function ConsentPage() {
     },
   });
 
-  const jurisdictionsView = useQueryView(
+  const jurisdictionsView = queryView(
     useQuery({
       ...optionalOrganizationSettingsOptions({
         organizationId: activeOrganizationId,

@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftModelResponseSchema,
+  desktopBillingDraftReviewSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
@@ -20,6 +22,7 @@ import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
@@ -63,18 +66,12 @@ beforeEach(() => {
     ],
   });
 });
-const body: DesktopBillingDraftRequest = {
-  entries: [
-    {
-      matterId: MATTER_ID,
-      date: "2026-10-09",
-      timezone: "Europe/Prague",
-      durationMinutes: 30,
-      appNames: ["Editor"],
-      evidence: { documentNames: ["Agreement"], windowTitles: [] },
-    },
-  ],
-};
+const body = createDesktopBillingDraftRequest({
+  matterId: MATTER_ID,
+  entry: {
+    evidence: { documentNames: ["Agreement"], windowTitles: [] },
+  },
+});
 const context = {
   matters: [
     {
@@ -180,9 +177,9 @@ const exercise = async ({
         options.dataClass === "customer" ? options.managedAIResidency : null,
     });
     const refs = createBillingDraftReferenceMap([
-      ...(receivedBodies
-        .at(0)
-        ?.entries.map((_, index) => `entry_${index + 1}`) ?? ["entry_1"]),
+      ...(receivedBodies.at(0)?.entries.map(({ entryId }) => entryId) ?? [
+        "entry_1",
+      ]),
       ...draftContext.matters.map(({ matterId }) => matterId),
       EARLIER_ID,
       GUIDELINE_ID,
@@ -309,7 +306,11 @@ test("mixed-case duplicate matters reach context loading with one canonical iden
   const input = {
     entries: [
       { ...body.entries[0], matterId: upperMatterId },
-      { ...body.entries[0], matterId: lowerMatterId },
+      {
+        ...body.entries[0],
+        entryId: "entry_2",
+        matterId: lowerMatterId,
+      },
     ],
   };
   const output: DesktopBillingDraftResponse = {
@@ -372,6 +373,73 @@ test("steering round-trips only selected previous suggestions in one call", asyn
   expect(calls).toHaveLength(1);
   expect(calls.at(0)?.prompt).toContain('"steer":"Shorter"');
   expect(calls.at(0)?.prompt).toContain('"previousResult"');
+});
+
+test("refining the second of two drafts preserves both stable entry identities", async () => {
+  const baseDraft = fixture.drafts.at(0);
+  if (!baseDraft) {
+    throw new HandlerError({ status: 500, message: "Fixture has no draft" });
+  }
+  const secondEntry = {
+    ...body.entries[0],
+    entryId: "time-entry-b",
+    durationMinutes: 45,
+  };
+  const firstDraft = { ...baseDraft, entryId: "time-entry-a" };
+  const secondDraft = {
+    ...baseDraft,
+    entryId: secondEntry.entryId,
+    narrative: "Second original draft",
+  };
+  const initial = await exercise({
+    input: {
+      entries: [
+        { ...body.entries[0], entryId: firstDraft.entryId },
+        secondEntry,
+      ],
+    },
+    output: { ...fixture, drafts: [firstDraft, secondDraft] },
+  });
+  expect(initial.response.status).toBe(200);
+  const initialReview = v.parse(
+    desktopBillingDraftReviewSchema,
+    await initial.response.json(),
+  );
+
+  const refinedSecond = {
+    ...secondDraft,
+    narrative: "Second refined draft",
+  };
+  const refinement = await exercise({
+    input: {
+      entries: [secondEntry],
+      steer: "Make the second narrative shorter",
+      previousResult: { ...fixture, drafts: [secondDraft] },
+    },
+    output: { ...fixture, drafts: [refinedSecond] },
+  });
+  expect(refinement.response.status).toBe(200);
+  const refinedReview = v.parse(
+    desktopBillingDraftReviewSchema,
+    await refinement.response.json(),
+  );
+  const draftsByEntryId = new Map(
+    initialReview.result.drafts.map((draft) => [draft.entryId, draft]),
+  );
+  for (const draft of refinedReview.result.drafts) {
+    draftsByEntryId.set(draft.entryId, draft);
+  }
+
+  expect(draftsByEntryId.get(firstDraft.entryId)?.narrative).toBe(
+    firstDraft.narrative,
+  );
+  expect(draftsByEntryId.get(secondEntry.entryId)?.narrative).toBe(
+    refinedSecond.narrative,
+  );
+  expect([...draftsByEntryId.keys()]).toEqual([
+    firstDraft.entryId,
+    secondEntry.entryId,
+  ]);
 });
 
 test("a previous result may cite fewer guideline files, never unknown ones", async () => {

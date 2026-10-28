@@ -71,6 +71,7 @@ export const MCP_ERROR_CODES = [
   "conflict",
   "rate_limited",
   "upstream_unavailable",
+  "public_read_timeout",
   "search_index_unavailable",
   "unknown_tool",
   "internal_error",

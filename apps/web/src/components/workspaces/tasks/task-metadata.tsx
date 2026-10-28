@@ -34,8 +34,9 @@ import {
   TASK_STATUSES,
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
-import { useLocale } from "@/i18n/formatting-context";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useFormattingLocale } from "@/i18n/formatting-context";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useAddTaskAssignee,
   useRemoveTaskAssignee,
@@ -221,7 +222,7 @@ const hasDeletedAccount = (deletedAt: string | null | undefined): boolean =>
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   return (
     <DatePickerPopoverBase
@@ -264,7 +265,7 @@ export const OwnerPicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
+  const membersView = queryView(membersQuery);
   useQueryViewError(membersView, "OwnerPicker:query");
   const members = workspaceMemberOptionsFromView(membersView);
   // A handover needs its reason first; a task without an owner takes one
@@ -327,7 +328,7 @@ export const AssigneePicker = ({
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
+  const membersView = queryView(membersQuery);
   useQueryViewError(membersView, "AssigneePicker:query");
   const [addOpen, setAddOpen] = useState(false);
 

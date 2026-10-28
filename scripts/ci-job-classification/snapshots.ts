@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import {
+  copyFileSync,
   existsSync,
   readFileSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -81,7 +81,11 @@ type ReconcileDecisionsOptions = {
   root: string;
   previous: Snapshots;
   retained: Snapshots;
+  /** Removed supplier to its successor: decisions move. */
   replacements: ReadonlyMap<string, string>;
+  /** Supplier still in use to the suppliers some of its pins moved to:
+   * decisions are copied and the originals stay. */
+  copies: ReadonlyMap<string, readonly string[]>;
 };
 
 const decisionKind = (file: string): unknown => {
@@ -96,58 +100,119 @@ const reconcileDecisions = ({
   previous,
   retained,
   replacements,
+  copies,
 }: ReconcileDecisionsOptions) => {
   const decisionDirectory = path.resolve(
     root,
     ".github/ci-job-classification-decisions",
   );
   const conflicted = new Set<string>();
+  // Places one decision under a new supplier. A job the new revision no
+  // longer has gets none. Two decisions converging on one job keep the one
+  // in place when they agree on the kind; when they disagree both are
+  // dropped, so the job is reviewed afresh.
+  const place = (key: string, oldFile: string, target: string) => {
+    const separator = key.indexOf(":");
+    const remainder = key.slice(separator + 1);
+    const targetDocuments = retained[target]?.documents ?? {};
+    if (
+      !Object.keys(targetDocuments).some((file) =>
+        remainder.startsWith(`${file}/`),
+      )
+    ) {
+      return;
+    }
+    const renamedKey = `${target}${key.slice(separator)}`;
+    const newFile = path.resolve(root, decisionPathForKey(renamedKey));
+    if (conflicted.has(renamedKey)) {
+      return;
+    }
+    if (existsSync(newFile)) {
+      if (decisionKind(newFile) !== decisionKind(path.resolve(root, oldFile))) {
+        rmSync(newFile);
+        conflicted.add(renamedKey);
+      }
+      return;
+    }
+    copyFileSync(path.resolve(root, oldFile), newFile);
+  };
   for (const name of new Bun.Glob("*.json").scanSync({
     cwd: decisionDirectory,
   })) {
     const oldFile = `.github/ci-job-classification-decisions/${name}`;
     const key = decisionKeyFromPath(oldFile);
-    const separator = key.indexOf(":");
-    const oldSupplier = key.slice(0, separator);
+    const oldSupplier = key.slice(0, key.indexOf(":"));
     const replacement = replacements.get(oldSupplier);
-    if (!replacement) {
-      if (
-        previous[oldSupplier] !== undefined &&
-        retained[oldSupplier] === undefined
-      ) {
-        rmSync(path.resolve(root, oldFile));
-      }
-      continue;
+    for (const target of copies.get(oldSupplier) ?? []) {
+      place(key, oldFile, target);
     }
-    const remainder = key.slice(separator + 1);
-    const replacementDocuments = retained[replacement]?.documents ?? {};
-    if (
-      !Object.keys(replacementDocuments).some((file) =>
+    const kept = retained[oldSupplier];
+    const remainder = key.slice(key.indexOf(":") + 1);
+    if (replacement) {
+      place(key, oldFile, replacement);
+      rmSync(path.resolve(root, oldFile));
+    } else if (previous[oldSupplier] !== undefined && kept === undefined) {
+      rmSync(path.resolve(root, oldFile));
+    } else if (
+      kept !== undefined &&
+      !Object.keys(kept.documents).some((file) =>
         remainder.startsWith(`${file}/`),
       )
     ) {
+      // A supplier still in use no longer carries this job's document: its
+      // callers moved to another revision (copied above) or dropped it.
       rmSync(path.resolve(root, oldFile));
-      continue;
     }
-    const renamedKey = `${replacement}${key.slice(separator)}`;
-    const newFile = path.resolve(root, decisionPathForKey(renamedKey));
-    if (conflicted.has(renamedKey)) {
-      rmSync(path.resolve(root, oldFile));
-      continue;
-    }
-    if (existsSync(newFile)) {
-      // Two old revisions converged on one new revision. Decisions that
-      // agree on the kind keep the one already in place; decisions that
-      // disagree are both dropped, so the job is reviewed afresh.
-      if (decisionKind(newFile) !== decisionKind(path.resolve(root, oldFile))) {
-        rmSync(newFile);
-        conflicted.add(renamedKey);
-      }
-      rmSync(path.resolve(root, oldFile));
-      continue;
-    }
-    renameSync(path.resolve(root, oldFile), newFile);
   }
+};
+
+// Pairs each previous supplier with the new ones its callers moved to:
+// a removed supplier's decisions move to its successor, and a supplier
+// still in use has them copied to the revisions some of its pins moved to.
+const pairSuppliers = ({
+  previous,
+  retained,
+  moves,
+}: {
+  previous: Snapshots;
+  retained: Snapshots;
+  moves: ReadonlyMap<string, ReadonlySet<string>>;
+}) => {
+  const replacements = new Map<string, string>();
+  const copies = new Map<string, string[]>();
+  for (const [oldSupplier, snapshot] of Object.entries(previous)) {
+    const { owner, repo } = snapshot.origin;
+    const added = Object.entries(retained).filter(
+      ([supplier, candidate]) =>
+        previous[supplier] === undefined &&
+        candidate.origin.owner === owner &&
+        candidate.origin.repo === repo,
+    );
+    const moved = moves.get(sourceIdentity(snapshot.origin));
+    if (retained[oldSupplier] !== undefined) {
+      // Still pinned elsewhere: only sites that moved off this revision
+      // pair it with a new one, whose jobs start from copies of its
+      // decisions. Each copy still has to match its job's digest.
+      const targets = added
+        .filter(([, candidate]) => moved?.has(candidate.origin.sha) === true)
+        .map(([supplier]) => supplier);
+      if (targets.length > 0) {
+        copies.set(oldSupplier, targets);
+      }
+      continue;
+    }
+    // Without a caller site that pairs up, only an unambiguous successor
+    // inherits the old supplier's decisions.
+    const fallback = added.length === 1 ? added[0] : undefined;
+    const target =
+      moved === undefined
+        ? fallback
+        : added.find(([, candidate]) => moved.has(candidate.origin.sha));
+    if (target !== undefined) {
+      replacements.set(oldSupplier, target[0]);
+    }
+  }
+  return { replacements, copies };
 };
 
 export const writeSnapshots = ({
@@ -297,7 +362,6 @@ export const writeSnapshots = ({
       documents.has(sourceIdentity(snapshot.origin)),
     ),
   );
-  const replacements = new Map<string, string>();
   for (const identity of [...documents.keys()].toSorted(compareCodeUnit)) {
     const origin = origins.get(identity);
     if (!origin) {
@@ -319,31 +383,8 @@ export const writeSnapshots = ({
   }
   const refreshBase = base ?? gitBase(root);
   const moves = pinMoves(root, refreshBase);
-  for (const [oldSupplier, snapshot] of Object.entries(previous)) {
-    if (retained[oldSupplier] !== undefined) {
-      continue;
-    }
-    const { owner, repo } = snapshot.origin;
-    const added = Object.entries(retained).filter(
-      ([supplier, candidate]) =>
-        previous[supplier] === undefined &&
-        candidate.origin.owner === owner &&
-        candidate.origin.repo === repo,
-    );
-    const moved = moves.get(sourceIdentity(snapshot.origin));
-    // Without a caller site that pairs up, only an unambiguous successor
-    // inherits the old supplier's decisions.
-    const fallback = added.length === 1 ? added[0] : undefined;
-    const target =
-      moved === undefined
-        ? fallback
-        : added.find(([, candidate]) => moved.has(candidate.origin.sha));
-    if (target !== undefined) {
-      replacements.set(oldSupplier, target[0]);
-    }
-  }
-
-  reconcileDecisions({ root, previous, retained, replacements });
+  const { replacements, copies } = pairSuppliers({ previous, retained, moves });
+  reconcileDecisions({ root, previous, retained, replacements, copies });
   writeFileSync(snapshotFile, `${JSON.stringify(retained, null, 2)}\n`);
 
   const refreshed = refreshJobClassificationDigests(root, refreshBase);

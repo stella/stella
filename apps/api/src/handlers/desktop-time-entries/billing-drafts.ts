@@ -91,6 +91,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Billing draft response is invalid",
             }),
             "response_invalid",
@@ -131,6 +132,7 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Billing draft contains an unknown reference",
             }),
             "response_invalid",
@@ -326,14 +328,10 @@ export const createDesktopBillingDraftEndpoint = ({
             }),
           );
         }
-        const selectedEntries = body.entries.map((entry, index) => ({
-          ...entry,
-          entryId: `entry_${index + 1}`,
-        }));
         yield* validateEntryDates(body.entries);
         const context = yield* Result.await(loadContext({ ...account, body }));
         const validationContext = {
-          entries: selectedEntries,
+          entries: body.entries,
           matters: context.matters,
           earlierEntries: context.earlierEntries,
           guidelines: context.guidelines,
@@ -363,7 +361,7 @@ export const createDesktopBillingDraftEndpoint = ({
         }
         const { refs, prompt } = prepareBillingDraftPrompt({
           body,
-          selectedEntries,
+          selectedEntries: body.entries,
           context,
         });
         if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {
@@ -469,6 +467,7 @@ export const createDesktopBillingDraftEndpoint = ({
                       classifyFailure(
                         new HandlerError({
                           status: 502,
+                          code: "internal_error",
                           message: "Billing draft proposals failed validation",
                         }),
                         "response_invalid",

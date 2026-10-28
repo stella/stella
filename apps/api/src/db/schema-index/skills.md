@@ -24,8 +24,8 @@ agent_skills.content_hash        varchar             not null          skills.ts
 agent_skills.body                text                not null          skills.ts:52
 agent_skills.enabled             boolean             default,not null  skills.ts:53
 agent_skills.invocation          text                default,not null  skills.ts:54
-agent_skills.bound_workspace_id  safeWorkspaceId     null              skills.ts:62  A skill bound to one matter, or to one client (every matter whose `client_id` it is), is readable and usable only there; at most one is set.
-agent_skills.bound_client_id     safeUuid            null              skills.ts:63
+agent_skills.bound_workspace_id  safeWorkspaceId     fk,null           skills.ts:62  A skill bound to one matter, or to one client (every matter whose `client_id` it is), is readable and usable only there; at most one is set.
+agent_skills.bound_client_id     safeUuid            fk,null           skills.ts:63
 agent_skills.command             varchar             null              skills.ts:69  Optional slash-command handle.
 agent_skills.created_at          timestamptz         default,not null  skills.ts:70
 agent_skills.updated_at          timestamptz         default,not null  skills.ts:71
@@ -67,14 +67,14 @@ A proposed body for a skill, branched from a base revision.
 agent_skill_proposals.id                  pUuid               pk,not null       skills.ts:247
 agent_skill_proposals.organization_id     safeOrganizationId  fk,not null       skills.ts:248
 agent_skill_proposals.skill_id            safeUuid            fk,not null       skills.ts:251
-agent_skill_proposals.base_revision_id    safeUuid            not null          skills.ts:254
+agent_skill_proposals.base_revision_id    safeUuid            fk,not null       skills.ts:254
 agent_skill_proposals.body                text                not null          skills.ts:256
 agent_skill_proposals.summary             text                default,not null  skills.ts:257
 agent_skill_proposals.status              text                default,not null  skills.ts:258
 agent_skill_proposals.author_id           text                fk,null           skills.ts:262
 agent_skill_proposals.reviewer_id         text                fk,null           skills.ts:265
 agent_skill_proposals.decided_at          timestamptz         null              skills.ts:268
-agent_skill_proposals.result_revision_id  safeUuid            null              skills.ts:269
+agent_skill_proposals.result_revision_id  safeUuid            fk,null           skills.ts:269
 agent_skill_proposals.created_at          timestamptz         default,not null  skills.ts:270
 agent_skill_proposals.updated_at          timestamptz         default,not null  skills.ts:271
 ```

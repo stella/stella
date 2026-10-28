@@ -57,8 +57,10 @@ const fixture = () => {
   return { context, result };
 };
 
-const draftAt = (result: DesktopBillingDraftResponse, index: number) => {
-  const draft = result.drafts.at(index);
+const draftFor = (result: DesktopBillingDraftResponse, entryId: string) => {
+  const draft = result.drafts.find(
+    (candidate) => candidate.entryId === entryId,
+  );
   if (!draft) {
     return panic("Missing fixture draft");
   }
@@ -79,7 +81,7 @@ describe("Billing draft authorization and operation invariants", () => {
   test("accepts contextual references and an exactly conserved split", () => {
     const { context, result } = fixture();
     for (const first of [1, 17, 30, 59]) {
-      draftAt(result, 0).operations = [split([first, 60 - first])];
+      draftFor(result, "one").operations = [split([first, 60 - first])];
       expect(validateBillingDraftResult(result, context).isOk()).toBe(true);
     }
   });
@@ -87,7 +89,7 @@ describe("Billing draft authorization and operation invariants", () => {
   test("refuses all split duration deviations from the original", () => {
     const { context, result } = fixture();
     for (const delta of [-2, -1, 1, 2]) {
-      draftAt(result, 0).operations = [split([30, 30 + delta])];
+      draftFor(result, "one").operations = [split([30, 30 + delta])];
       expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
     }
   });
@@ -95,7 +97,7 @@ describe("Billing draft authorization and operation invariants", () => {
   test("requires exact selected entry coverage without duplicate identifiers", () => {
     for (const ids of [["one"], ["one", "one"], ["one", "unselected"]]) {
       const { context, result } = fixture();
-      const draft = draftAt(result, 0);
+      const draft = draftFor(result, "one");
       result.drafts = ids.map((entryId) => ({ ...draft, entryId }));
       expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
     }
@@ -104,7 +106,7 @@ describe("Billing draft authorization and operation invariants", () => {
   test("refuses earlier entries outside authorized caller matter context", () => {
     for (const id of ["unselected-history", "other-matter"]) {
       const { context, result } = fixture();
-      draftAt(result, 0).matchedEarlierEntryIds = [id];
+      draftFor(result, "one").matchedEarlierEntryIds = [id];
       expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
     }
   });
@@ -137,7 +139,7 @@ describe("Billing draft authorization and operation invariants", () => {
       },
     ]) {
       const { context, result } = fixture();
-      draftAt(result, 0).flags = [{ text: "Flag", ruleRef }];
+      draftFor(result, "one").flags = [{ text: "Flag", ruleRef }];
       expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
     }
     const { context, result } = fixture();
@@ -170,17 +172,17 @@ describe("Billing draft authorization and operation invariants", () => {
       taskCode: "L110",
       activityCode: "A101",
     } as const;
-    draftAt(result, 0).classification = ledes;
+    draftFor(result, "one").classification = ledes;
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
-    draftAt(result, 0).classification = {
+    draftFor(result, "one").classification = {
       type: "activity_group",
       activityGroup: "client",
     };
-    draftAt(result, 0).operations = [
+    draftFor(result, "one").operations = [
       { type: "change_classification", classification: ledes },
     ];
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
-    draftAt(result, 0).operations = [
+    draftFor(result, "one").operations = [
       {
         type: "split",
         parts: [30, 30].map((durationMinutes) => ({
@@ -208,7 +210,7 @@ describe("Billing draft authorization and operation invariants", () => {
       billable: true,
     };
     const valid = fixture();
-    draftAt(valid.result, 0).operations = [merge];
+    draftFor(valid.result, "one").operations = [merge];
     expect(validateBillingDraftResult(valid.result, valid.context).isOk()).toBe(
       true,
     );
@@ -220,7 +222,7 @@ describe("Billing draft authorization and operation invariants", () => {
       "owner",
     ] as const) {
       const { context, result } = fixture();
-      draftAt(result, 0).operations = [merge];
+      draftFor(result, "one").operations = [merge];
       switch (variation) {
         case "matter":
           context.entries = context.entries.map((entry) =>
@@ -239,17 +241,17 @@ describe("Billing draft authorization and operation invariants", () => {
           );
           break;
         case "unselected":
-          draftAt(result, 0).operations = [
+          draftFor(result, "one").operations = [
             { ...merge, entryIds: ["one", "unknown"] },
           ];
           break;
         case "duplicate":
-          draftAt(result, 0).operations = [
+          draftFor(result, "one").operations = [
             { ...merge, entryIds: ["one", "one"] },
           ];
           break;
         case "owner":
-          draftAt(result, 0).operations = [
+          draftFor(result, "one").operations = [
             { ...merge, entryIds: ["two", "unknown"] },
           ];
           break;
@@ -262,7 +264,7 @@ describe("Billing draft authorization and operation invariants", () => {
 
   test("consumed merge sources cannot carry other operations in either draft order", () => {
     const { context, result } = fixture();
-    draftAt(result, 0).operations = [
+    draftFor(result, "one").operations = [
       {
         type: "merge",
         entryIds: ["one", "two"],
@@ -271,7 +273,9 @@ describe("Billing draft authorization and operation invariants", () => {
         billable: true,
       },
     ];
-    draftAt(result, 1).operations = [{ type: "set_billable", billable: false }];
+    draftFor(result, "two").operations = [
+      { type: "set_billable", billable: false },
+    ];
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
     result.drafts.reverse();
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
@@ -285,7 +289,7 @@ describe("Billing draft authorization and operation invariants", () => {
       ["matter", 30, false],
     ] as const) {
       const { context, result } = fixture();
-      draftAt(result, 0).operations = [
+      draftFor(result, "one").operations = [
         {
           type: "move",
           targetMatterId,
@@ -306,7 +310,7 @@ describe("Billing draft authorization and operation invariants", () => {
 
   test("structural and duplicate proposals cannot overlap", () => {
     const { context, result } = fixture();
-    draftAt(result, 0).operations = [
+    draftFor(result, "one").operations = [
       split([30, 30]),
       {
         type: "move",
@@ -323,7 +327,7 @@ describe("Billing draft authorization and operation invariants", () => {
       },
     ];
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
-    draftAt(result, 0).operations = [
+    draftFor(result, "one").operations = [
       { type: "set_billable", billable: true },
       { type: "set_billable", billable: false },
     ];
@@ -333,7 +337,7 @@ describe("Billing draft authorization and operation invariants", () => {
 
 test("moves use the destination matter's billing classification", () => {
   const { context, result } = fixture();
-  draftAt(result, 0).operations = [
+  draftFor(result, "one").operations = [
     {
       type: "move",
       targetMatterId: "candidate",
@@ -371,7 +375,7 @@ test("split guideline fixes include an executable split proposal rather than an 
     { operations: [split([30, 30])], accepted: true },
   ]) {
     const { context, result } = fixture();
-    const draft = draftAt(result, 0);
+    const draft = draftFor(result, "one");
     draft.flags = [
       {
         text: "Separate activities",
@@ -449,8 +453,8 @@ test("matter-backed drafts reject internal categories in every classification-be
       ...matter,
       ledesEnabled: false,
     }));
-    draftAt(result, 0).classification = proposal.classification;
-    draftAt(result, 0).operations = proposal.operations;
+    draftFor(result, "one").classification = proposal.classification;
+    draftFor(result, "one").operations = proposal.operations;
     expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
   }
 });
@@ -486,7 +490,7 @@ test("structural proposals stand alone regardless of scalar operation kind or or
   for (const structural of structuralOperations) {
     for (const scalar of scalarOperations) {
       const { context, result } = fixture();
-      const draft = draftAt(result, 0);
+      const draft = draftFor(result, "one");
       draft.operations = [structural];
       expect(validateBillingDraftResult(result, context).isOk()).toBe(true);
       draft.operations = [scalar];

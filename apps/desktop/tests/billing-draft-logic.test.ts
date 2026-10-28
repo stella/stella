@@ -121,6 +121,7 @@ describe("draft request", () => {
     });
     expect(withTitles).toEqual([
       {
+        entryId: "entry_1",
         matterId: RIVERSIDE.id,
         date: "2026-10-24",
         timezone: "Europe/Prague",

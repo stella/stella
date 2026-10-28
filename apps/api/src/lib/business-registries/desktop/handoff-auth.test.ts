@@ -175,6 +175,7 @@ test("supported protocols retain the authenticated account identity without a fa
 test("authorization availability errors preserve the pending handoff", async () => {
   const unavailable = new HandlerError({
     status: 503,
+    code: "internal_error",
     message: "Registry authorization is unavailable",
   });
   const result = await authorizeDesktopHandoff(
@@ -208,6 +209,7 @@ test("a failed status write surfaces a retryable service error", async () => {
       recordFailure: async () => {
         throw new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Status storage unavailable",
         });
       },

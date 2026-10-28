@@ -28,7 +28,7 @@ import {
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { CitationOccurrences } from "@/components/legal-reader/citation-occurrences.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
@@ -45,7 +45,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
 import { isPublicLawMissError } from "@/lib/public-law-api";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 /** Where the citing text names the decision, when a passage can be quoted. */
 type CitedDecisionPassage =
@@ -239,7 +239,8 @@ export const CitedDecisionChip = ({
   };
 
   return (
-    <DecisionCitationChip
+    <CitationChip
+      kind="decision"
       decision={{
         decisionId: decision.id,
         court: decision.court,
@@ -281,7 +282,7 @@ export const CitedDecisionCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const read = useQuery(decisionCardSummaryOptions(knownDecision.id));
-  const view = useQueryView(read);
+  const view = queryView(read);
 
   if (view.type === "pending") {
     return (

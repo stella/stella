@@ -419,6 +419,7 @@ const fetchPreviewUrl = async (
           if (redirects === MAX_PREVIEW_REDIRECTS) {
             throw new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Source redirected too many times",
             });
           }
@@ -427,6 +428,7 @@ const fetchPreviewUrl = async (
           if (!location) {
             throw new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Source redirected without a location",
             });
           }
@@ -445,6 +447,7 @@ const fetchPreviewUrl = async (
         if (!response.value.ok) {
           throw new HandlerError({
             status: 502,
+            code: "internal_error",
             message: `Source returned HTTP ${response.value.status}`,
           });
         }
@@ -466,6 +469,7 @@ const fetchPreviewUrl = async (
 
       throw new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Source redirected too many times",
       });
     },
@@ -474,6 +478,7 @@ const fetchPreviewUrl = async (
         ? cause
         : new HandlerError({
             status: 502,
+            code: "internal_error",
             message: "Source could not be fetched",
             cause,
           }),

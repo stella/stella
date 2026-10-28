@@ -26,6 +26,7 @@ import { keepUnicodePatternSource } from "./json-schema-regex";
 import { UUID_RUNTIME_ONLY_ACTIONS } from "./uuid";
 
 const entry = {
+  entryId: "entry_1",
   matterId: "12345678-1234-4123-8123-123456789abc",
   date: "2026-10-09",
   timezone: "Europe/Prague",
@@ -82,6 +83,7 @@ test("billing draft request keys remain limited to selected evidence and steerin
     "appNames",
     "date",
     "durationMinutes",
+    "entryId",
     "evidence",
     "matterId",
     "timezone",
@@ -104,7 +106,6 @@ test("billing draft request keys remain limited to selected evidence and steerin
     "candidateMatterIds",
     "windowTitles",
     "narrative",
-    "entryId",
   ]) {
     expect(
       v.safeParse(desktopBillingDraftRequestSchema, {

@@ -7,7 +7,7 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 ## business_registry_credentials · `businessRegistryCredentials` · workspace-admin.ts:39 · rls
 
 ```text
-business_registry_credentials.organization_id  safeOrganizationId  not null          workspace-admin.ts:42
+business_registry_credentials.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:42
 business_registry_credentials.registry         text                not null          workspace-admin.ts:43
 business_registry_credentials.ciphertext       bytea               not null          workspace-admin.ts:46
 business_registry_credentials.iv               bytea               not null          workspace-admin.ts:47
@@ -37,9 +37,9 @@ Every matter reference documents have been numbered under, with the matter that 
 
 ```text
 document_reference_counters.id               pUuid               pk,not null       workspace-admin.ts:154
-document_reference_counters.organization_id  safeOrganizationId  not null          workspace-admin.ts:155
+document_reference_counters.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:155
 document_reference_counters.reference        varchar             not null          workspace-admin.ts:156
-document_reference_counters.workspace_id     safeWorkspaceId     null              workspace-admin.ts:162  The matter that first numbered documents under this reference.
+document_reference_counters.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:162  The matter that first numbered documents under this reference.
 document_reference_counters.last_value       integer             default,not null  workspace-admin.ts:163
 ```
 
@@ -91,7 +91,7 @@ Anonymization allowlist — entries that the detection pipeline should NOT mask.
 anonymization_allowlist_entries.{...entityFeatureGateColumns()}           spread                                workspace-admin.ts:442
 anonymization_allowlist_entries.{...entityFeatureWorkspaceGateColumns()}  spread                                workspace-admin.ts:443
 anonymization_allowlist_entries.id                                        pUuid               pk,not null       workspace-admin.ts:444
-anonymization_allowlist_entries.organization_id                           safeOrganizationId  not null          workspace-admin.ts:445
+anonymization_allowlist_entries.organization_id                           safeOrganizationId  fk,not null       workspace-admin.ts:445
 anonymization_allowlist_entries.workspace_id                              safeWorkspaceId     fk,null           workspace-admin.ts:446
 anonymization_allowlist_entries.entity_id                                 safeUuid            fk,null           workspace-admin.ts:450
 anonymization_allowlist_entries.label                                     varchar             not null          workspace-admin.ts:453
@@ -104,7 +104,7 @@ anonymization_allowlist_entries.created_at                                timest
 
 ```text
 anonymization_blacklist_entries.id               pUuid               pk,not null       workspace-admin.ts:517
-anonymization_blacklist_entries.organization_id  safeOrganizationId  not null          workspace-admin.ts:518
+anonymization_blacklist_entries.organization_id  safeOrganizationId  fk,not null       workspace-admin.ts:518
 anonymization_blacklist_entries.workspace_id     safeWorkspaceId     fk,null           workspace-admin.ts:525  When set, the entry is scoped to a single workspace and is only consulted by detection runs for that workspace.
 anonymization_blacklist_entries.label            varchar             not null          workspace-admin.ts:529
 anonymization_blacklist_entries.canonical        varchar             not null          workspace-admin.ts:530

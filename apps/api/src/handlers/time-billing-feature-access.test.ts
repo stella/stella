@@ -11,6 +11,7 @@ import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
+import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import {
   createDesktopBillingDraftSettingsReadEndpoint,
   createDesktopBillingDraftSettingsUpdateEndpoint,
@@ -67,6 +68,7 @@ import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
@@ -132,6 +134,7 @@ const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   expensesRoute,
   internalTimeEntriesRoute,
   invoicesRoute,
+  clientInvoicesRoute,
   memberTimeTargetsRoute,
   myTimeEntriesRoute,
   numberSeriesRoute,
@@ -164,17 +167,7 @@ const NATIVE_TIME_BILLING_ROUTES = [
     method: "POST",
     path: "/v1/desktop/billing-drafts",
     definition: billingDrafts,
-    body: {
-      entries: [
-        {
-          matterId: PATH_ID,
-          date: "2026-10-09",
-          timezone: "Europe/Prague",
-          durationMinutes: 30,
-          appNames: ["Editor"],
-        },
-      ],
-    },
+    body: createDesktopBillingDraftRequest({ matterId: PATH_ID }),
   },
 ] as const;
 
@@ -465,6 +458,7 @@ describe("native time billing admission", () => {
                   }),
             }),
           );
+          expect(response.status).not.toBe(422);
           expect({
             method: entry.method,
             path: entry.path,
@@ -574,6 +568,7 @@ describe("native time billing admission", () => {
                   }),
             }),
           );
+          expect(response.status).not.toBe(422);
           expect({
             missing,
             path: entry.path,
@@ -627,6 +622,8 @@ describe("time billing on agent surfaces", () => {
     );
     expect(expectedCapabilities).toContain("time-entries.create");
     expect(expectedCapabilities).toContain("invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.create");
+    expect(expectedCapabilities).toContain("client-invoices.prefill");
 
     await withTimeBilling(false, async () => {
       for (const mode of MCP_MODES) {
