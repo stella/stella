@@ -170,14 +170,8 @@ export const createDesktopRunnerGateway = (
   };
 
   const sweep = async () => {
-    const expired = await Result.tryPromise(
-      async () =>
-        await expireRunLeases(options.db, { now: now(), limit: EXPIRY_BATCH }),
-    );
-    if (expired.isErr()) {
-      // The next sweep expires them; a late expiry only delays the state.
-      observeFailure(expired.error, { sink: LEASE_SWEEP_SINK });
-    }
+    // Abandoned runs end first: a lapsed lease moves a run to waiting and
+    // restarts the clock the abandon window reads.
     const abandoned = await Result.tryPromise(
       async () =>
         await expireAbandonedRuns(options.db, {
@@ -188,6 +182,14 @@ export const createDesktopRunnerGateway = (
     );
     if (abandoned.isErr()) {
       observeFailure(abandoned.error, { sink: LEASE_SWEEP_SINK });
+    }
+    const expired = await Result.tryPromise(
+      async () =>
+        await expireRunLeases(options.db, { now: now(), limit: EXPIRY_BATCH }),
+    );
+    if (expired.isErr()) {
+      // The next sweep expires them; a late expiry only delays the state.
+      observeFailure(expired.error, { sink: LEASE_SWEEP_SINK });
     }
     const pruned = await Result.tryPromise(
       async () =>
