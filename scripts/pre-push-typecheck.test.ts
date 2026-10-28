@@ -8,6 +8,7 @@ import {
   selectTouchedPackages,
   TYPECHECK_BUDGET_EXCLUSIONS,
   validateTypecheckBudgetExclusions,
+  workspacePackageNames,
 } from "./pre-push-typecheck";
 
 const manifests: Record<
@@ -200,7 +201,7 @@ test("an over-budget package is skipped while an unlisted package runs", async (
   ]);
 });
 
-test("every budget exclusion names a workspace package", () => {
+test("a stale budget exclusion is rejected", () => {
   expect(() =>
     validateTypecheckBudgetExclusions(
       [
@@ -214,6 +215,15 @@ test("every budget exclusion names a workspace package", () => {
       new Set(["@stll/web", "@stll/small"]),
     ),
   ).toThrow("budget exclusion names unknown package @stll/unknown");
+});
+
+test("every real budget exclusion names a real workspace package", () => {
+  expect(() =>
+    validateTypecheckBudgetExclusions(
+      TYPECHECK_BUDGET_EXCLUSIONS,
+      workspacePackageNames(path.resolve(import.meta.dirname, "..")),
+    ),
+  ).not.toThrow();
 });
 
 test("the command defaults to the repository root when the option is absent", () => {
@@ -292,6 +302,23 @@ test("a package selection error reports the failure and leaves checking to CI", 
     /^pre-push-typecheck: package selection failed \(.+\); CI checks the packages\n$/u,
   );
   expect(result.stderr.toString()).toBe("");
+});
+
+test("a stale budget exclusion reports its distinct fail-open message", () => {
+  const repository = mkdtempSync(path.join(os.tmpdir(), "pre-push-typecheck-"));
+  try {
+    mkdirSync(path.join(repository, "apps"));
+    mkdirSync(path.join(repository, "packages"));
+
+    const result = runCommand(repository, "HEAD");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe(
+      "pre-push-typecheck: budget exclusion list is stale (budget exclusion names unknown package @stll/web); CI checks the packages\n",
+    );
+    expect(result.stderr.toString()).toBe("");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
 });
 
 test("a typecheck that runs and fails blocks the command", () => {

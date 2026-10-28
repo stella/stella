@@ -31,18 +31,49 @@ export const TYPECHECK_BUDGET_EXCLUSIONS = [
   },
 ] as const satisfies readonly TypecheckBudgetExclusion[];
 
+class StaleTypecheckBudgetExclusionError extends TaggedError(
+  "StaleTypecheckBudgetExclusionError",
+)<{
+  message: string;
+}> {}
+
 export const validateTypecheckBudgetExclusions = (
   exclusions: readonly TypecheckBudgetExclusion[],
   workspaceNames: ReadonlySet<string>,
 ): void => {
   for (const exclusion of exclusions) {
     if (!workspaceNames.has(exclusion.name)) {
-      panic(
-        `pre-push-typecheck: budget exclusion names unknown package ${exclusion.name}`,
-      );
+      throw new StaleTypecheckBudgetExclusionError({
+        message: `budget exclusion names unknown package ${exclusion.name}`,
+      });
     }
   }
 };
+
+export const workspacePackageNames = (repoRoot: string): ReadonlySet<string> =>
+  new Set(
+    ["apps", "packages"].flatMap((workspaceDirectory) =>
+      readdirSync(path.join(repoRoot, workspaceDirectory), {
+        withFileTypes: true,
+      })
+        .filter((entry) => entry.isDirectory())
+        .flatMap((entry) => {
+          const manifestPath = path.join(
+            repoRoot,
+            workspaceDirectory,
+            entry.name,
+            "package.json",
+          );
+          if (!existsSync(manifestPath)) {
+            return [];
+          }
+          const manifest: PackageManifest = JSON.parse(
+            readFileSync(manifestPath, "utf-8"),
+          );
+          return typeof manifest.name === "string" ? [manifest.name] : [];
+        }),
+    ),
+  );
 
 export const runSelectedPackages = async (
   packages: readonly PackageSelection[],
@@ -173,32 +204,9 @@ const main = async () => {
   }
   let packages: PackageSelection[];
   try {
-    const workspaceNames = new Set(
-      ["apps", "packages"].flatMap((workspaceDirectory) =>
-        readdirSync(path.join(repoRoot, workspaceDirectory), {
-          withFileTypes: true,
-        })
-          .filter((entry) => entry.isDirectory())
-          .flatMap((entry) => {
-            const manifestPath = path.join(
-              repoRoot,
-              workspaceDirectory,
-              entry.name,
-              "package.json",
-            );
-            if (!existsSync(manifestPath)) {
-              return [];
-            }
-            const manifest: PackageManifest = JSON.parse(
-              readFileSync(manifestPath, "utf-8"),
-            );
-            return typeof manifest.name === "string" ? [manifest.name] : [];
-          }),
-      ),
-    );
     validateTypecheckBudgetExclusions(
       TYPECHECK_BUDGET_EXCLUSIONS,
-      workspaceNames,
+      workspacePackageNames(repoRoot),
     );
     packages = selectTouchedPackages(
       changedFilesAgainst(base, repoRoot),
@@ -210,6 +218,12 @@ const main = async () => {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof StaleTypecheckBudgetExclusionError) {
+      console.log(
+        `pre-push-typecheck: budget exclusion list is stale (${message}); CI checks the packages`,
+      );
+      return 0;
+    }
     console.log(
       `pre-push-typecheck: package selection failed (${message}); CI checks the packages`,
     );
