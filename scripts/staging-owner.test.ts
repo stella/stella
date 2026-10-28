@@ -207,7 +207,7 @@ describe("staging promotion ownership", () => {
     expect(dispatches).toHaveLength(1);
     const matchedStep = /readonly applying_step="([^"]+)"/u.exec(source)?.[1];
     expect(matchedStep).toBeDefined();
-    expect(matchedStep).toBe(field(dispatches.at(0), "name"));
+    expect(field(dispatches.at(0), "name")).toBe(matchedStep);
   });
 
   for (const mode of ["candidate", "ordinary"] as const) {
