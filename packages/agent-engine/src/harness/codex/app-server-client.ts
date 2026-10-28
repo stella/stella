@@ -185,16 +185,14 @@ export const startAppServer = ({
   })();
 
   return {
-    request: (method, params) => {
+    request: async (method, params) => {
       if (state.closed) {
-        return Promise.resolve(
-          Result.err(
-            new AppServerRequestError({
-              reason: "closed",
-              code: null,
-              message: "The harness is not running.",
-            }),
-          ),
+        return Result.err(
+          new AppServerRequestError({
+            reason: "closed",
+            code: null,
+            message: "The harness is not running.",
+          }),
         );
       }
       const id = state.nextId;
@@ -203,7 +201,7 @@ export const startAppServer = ({
         Promise.withResolvers<Result<unknown, AppServerRequestError>>();
       pending.set(id, resolve);
       write({ id, method, params });
-      return promise;
+      return await promise;
     },
     notify: (method, params) => {
       write(params === undefined ? { method } : { method, params });
