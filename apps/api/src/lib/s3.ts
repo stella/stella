@@ -15,13 +15,13 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { classifyFailure } from "@stll/errors";
-import { fetchWithTimeout } from "@stll/fetch";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   createS3CredentialGuard,
@@ -41,6 +41,13 @@ type S3Credentials = {
   secretAccessKey: string;
   sessionToken: string;
 };
+
+class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
+  message: string;
+  cause?: unknown;
+  status?: number;
+  code?: string;
+}> {}
 
 type CredentialRuntimeEnv = Record<string, string | undefined>;
 type Fetcher = (
@@ -67,6 +74,56 @@ const isCredentialsShape = (
   typeof value.SecretAccessKey === "string" &&
   typeof value.Token === "string";
 
+type CredentialResponseOptions<T> = {
+  url: string;
+  fetchImpl: Fetcher;
+  consume: (response: Response) => Promise<T>;
+  signal?: AbortSignal | undefined;
+  headers?: Record<string, string> | undefined;
+  method?: string;
+};
+
+const readCredentialResponse = async <T>({
+  url,
+  fetchImpl,
+  consume,
+  signal,
+  headers,
+  method,
+}: CredentialResponseOptions<T>): Promise<Result<T, unknown>> => {
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await withPublicReadIo(
+        "object-storage",
+        async (io) =>
+          await io.fetch(
+            // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- url comes only from this module's AWS metadata endpoints or the operator's AWS_CONTAINER_CREDENTIALS_FULL_URI, never request input
+            url,
+            {
+              ...(headers === undefined ? {} : { headers }),
+              ...(method === undefined ? {} : { method }),
+              signal,
+              timeoutMs: 2000,
+            },
+            async (response) => {
+              if (!response.ok) {
+                return Result.err(
+                  new S3ObjectReadError({
+                    message: "Credential endpoint did not answer successfully",
+                    status: response.status,
+                  }),
+                );
+              }
+              return Result.ok(await consume(response));
+            },
+            fetchImpl,
+          ),
+      ),
+    catch: (error: unknown) => error,
+  });
+  return Result.isError(fetched) ? fetched : fetched.value;
+};
+
 const fetchCredentialJson = async (
   url: string,
   {
@@ -82,31 +139,23 @@ const fetchCredentialJson = async (
   // An unreachable or malformed endpoint means this credential source is not
   // available here; the caller falls through to the next one.
   signal?.throwIfAborted();
-  const fetched = await Result.tryPromise(
-    async (): Promise<S3Credentials | null> => {
-      const response = await fetchImpl(url, {
-        ...(headers ? { headers } : {}),
-        signal:
-          signal === undefined
-            ? AbortSignal.timeout(2000)
-            : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
-      });
-      if (!response.ok) {
-        return null;
-      }
-
+  const fetched = await readCredentialResponse({
+    url,
+    fetchImpl,
+    headers,
+    signal,
+    consume: async (response) => {
       const creds: unknown = await response.json();
       if (!isCredentialsShape(creds)) {
         return null;
       }
-
       return {
         accessKeyId: creds.AccessKeyId,
         secretAccessKey: creds.SecretAccessKey,
         sessionToken: creds.Token,
       };
     },
-  );
+  });
   signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
@@ -220,64 +269,42 @@ const fetchImdsCredentials = async ({
   // Off EC2 the metadata endpoint does not answer; that is the local-dev case,
   // not a failure.
   signal?.throwIfAborted();
-  const fetched = await Result.tryPromise(
-    async (): Promise<S3Credentials | null> => {
-      const tokenResponse = await fetchImpl(
-        "http://169.254.169.254/latest/api/token",
-        {
-          method: "PUT",
-          headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
-          signal:
-            signal === undefined
-              ? AbortSignal.timeout(2000)
-              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
-        },
-      );
-      if (!tokenResponse.ok) {
-        return null;
-      }
-      const imdsToken = await tokenResponse.text();
-
-      const roleResponse = await fetchImpl(
-        "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
-        {
-          headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal:
-            signal === undefined
-              ? AbortSignal.timeout(2000)
-              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
-        },
-      );
-      if (!roleResponse.ok) {
-        return null;
-      }
-      const roleName = (await roleResponse.text()).trim();
-
-      const credsResponse = await fetchImpl(
-        `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
-        {
-          headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal:
-            signal === undefined
-              ? AbortSignal.timeout(2000)
-              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
-        },
-      );
-      if (!credsResponse.ok) {
-        return null;
-      }
-      const creds: unknown = await credsResponse.json();
-      if (!isCredentialsShape(creds)) {
-        return null;
-      }
-
-      return {
-        accessKeyId: creds.AccessKeyId,
-        secretAccessKey: creds.SecretAccessKey,
-        sessionToken: creds.Token,
-      };
-    },
-  );
+  const token = await readCredentialResponse({
+    url: "http://169.254.169.254/latest/api/token",
+    fetchImpl,
+    method: "PUT",
+    headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
+    signal,
+    consume: async (response) => await response.text(),
+  });
+  const fetched = await token.andThenAsync(async (imdsToken) => {
+    const role = await readCredentialResponse({
+      url: "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+      fetchImpl,
+      headers: { "X-aws-ec2-metadata-token": imdsToken },
+      signal,
+      consume: async (response) => (await response.text()).trim(),
+    });
+    return await role.andThenAsync(async (roleName) => {
+      const credentials = await readCredentialResponse({
+        url: `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
+        fetchImpl,
+        headers: { "X-aws-ec2-metadata-token": imdsToken },
+        signal,
+        consume: async (response) => await response.json(),
+      });
+      return credentials.map((creds) => {
+        if (!isCredentialsShape(creds)) {
+          return null;
+        }
+        return {
+          accessKeyId: creds.AccessKeyId,
+          secretAccessKey: creds.SecretAccessKey,
+          sessionToken: creds.Token,
+        };
+      });
+    });
+  });
   signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
@@ -896,13 +923,6 @@ export const createS3ObjectIfAbsent = async (
   );
 };
 
-class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
-  message: string;
-  cause?: unknown;
-  status?: number;
-  code?: string;
-}> {}
-
 export class S3ObjectBudgetError extends TaggedError("S3ObjectBudgetError")<{
   message: string;
   key: string;
@@ -1514,36 +1534,58 @@ const throwCorpusObjectResponseError = async ({
  * The signed URL carries the caller's credentials in its query string. Pass
  * it straight to `fetch`; never log or store it.
  */
-const fetchObject = async (
-  store: ObjectStore,
-  key: string,
-  signal?: AbortSignal,
-  s3Policy?: S3CredentialRefreshOptions,
-): Promise<Response> =>
-  await store.run(async () => {
-    const response = await fetchWithTimeout(
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- store is one of this module's ObjectStore records, whose client() is getS3 or getCorpusS3
-      store.client().presign(key, {
-        expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
-      }),
-      { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
-    );
-    if (!response.ok) {
-      return await throwCorpusObjectResponseError({
-        response,
-        key,
-        message: `Object read for ${key} failed with ${response.status}`,
-      });
-    }
-    return response;
-  }, s3Policy);
+type FetchObjectOptions<T> = {
+  store: ObjectStore;
+  key: string;
+  consume: (response: Response) => Promise<T>;
+  signal?: AbortSignal | undefined;
+  s3Policy?: S3CredentialRefreshOptions | undefined;
+};
+
+const fetchObject = async <T>({
+  store,
+  key,
+  consume,
+  signal,
+  s3Policy,
+}: FetchObjectOptions<T>): Promise<T> =>
+  await withPublicReadIo(
+    "object-storage",
+    async (io) =>
+      await store.run(
+        async () =>
+          await io.fetch(
+            // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- store is one of this module's ObjectStore records, whose client() is getS3 or getCorpusS3
+            store.client().presign(key, {
+              expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
+            }),
+            { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
+            async (response) => {
+              if (!response.ok) {
+                return await throwCorpusObjectResponseError({
+                  response,
+                  key,
+                  message: `Object read for ${key} failed with ${response.status}`,
+                });
+              }
+              return await consume(response);
+            },
+          ),
+        s3Policy,
+      ),
+  );
 
 /** Read a legal-corpus object's bytes. See `fetchObject`. */
 export const readCorpusS3Bytes = async (
   key: string,
   signal: AbortSignal,
 ): Promise<Uint8Array> =>
-  await (await fetchObject(corpusStore, key, signal)).bytes();
+  await fetchObject({
+    store: corpusStore,
+    key,
+    signal,
+    consume: async (response) => await response.bytes(),
+  });
 
 type BoundedCorpusReadOptions = {
   s3Policy?: S3CredentialRefreshOptions;
@@ -1566,40 +1608,45 @@ type BoundedCorpusReadOptions = {
  * response starts; a response that omits it is refused rather than read, so
  * the ceiling cannot be bypassed by withholding the header.
  */
-const boundedCorpusResponse = async ({
-  key,
-  maxBytes,
-  signal,
-  s3Policy,
-}: BoundedCorpusReadOptions): Promise<Response> => {
-  const response = await fetchObject(corpusStore, key, signal, s3Policy);
-  // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
-  // is 0, so converting first would turn a missing or empty `Content-Length`
-  // into a length of zero that passes every ceiling — making the refusal below
-  // unreachable in exactly the case it exists for.
-  const header = response.headers.get("content-length");
-  const declared =
-    header !== null && /^\d+$/u.test(header.trim()) ? Number(header) : null;
-  if (declared === null) {
-    throw new S3ObjectReadError({
-      message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
-    });
-  }
-  if (declared > maxBytes) {
-    throw new S3ObjectBudgetError({
-      message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
-      key,
-      declaredBytes: declared,
-      maxBytes,
-    });
-  }
-  return response;
-};
+const boundedCorpusResponse = async <T>(
+  { key, maxBytes, signal, s3Policy }: BoundedCorpusReadOptions,
+  consume: (response: Response) => Promise<T>,
+): Promise<T> =>
+  await fetchObject({
+    store: corpusStore,
+    key,
+    signal,
+    s3Policy,
+    consume: async (response) => {
+      // A missing Content-Length cannot establish a bounded object read.
+      const header = response.headers.get("content-length");
+      const declared =
+        header !== null && /^\d+$/u.test(header.trim()) ? Number(header) : null;
+      if (declared === null) {
+        throw new S3ObjectReadError({
+          message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
+        });
+      }
+      if (declared > maxBytes) {
+        throw new S3ObjectBudgetError({
+          message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+          key,
+          declaredBytes: declared,
+          maxBytes,
+        });
+      }
+      return await consume(response);
+    },
+  });
 
 /** A bounded corpus read, as bytes. See {@link boundedCorpusResponse}. */
 export const readCorpusS3BytesBounded = async (
   options: BoundedCorpusReadOptions,
-): Promise<Uint8Array> => await (await boundedCorpusResponse(options)).bytes();
+): Promise<Uint8Array> =>
+  await boundedCorpusResponse(
+    options,
+    async (response) => await response.bytes(),
+  );
 
 /** A bounded corpus read together with the store's own validator. */
 export type BoundedCorpusObject = {
@@ -1614,13 +1661,11 @@ export type BoundedCorpusObject = {
 
 export const readCorpusS3ObjectBounded = async (
   options: BoundedCorpusReadOptions,
-): Promise<BoundedCorpusObject> => {
-  const response = await boundedCorpusResponse(options);
-  return {
+): Promise<BoundedCorpusObject> =>
+  await boundedCorpusResponse(options, async (response) => ({
     bytes: new Uint8Array(await response.arrayBuffer()),
     etag: response.headers.get("etag"),
-  };
-};
+  }));
 
 type CorpusRangeReadOptions = {
   s3Policy?: S3CredentialRefreshOptions;
@@ -1669,55 +1714,64 @@ export const readCorpusS3Range = async ({
   // The status check runs inside the guard: a refused credential arrives as a
   // response, not as a thrown request failure, so the retry only sees it once
   // the response has been turned into an error.
-  const response = await corpusCredentials.run(async () => {
-    const served = await fetchWithTimeout(
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- presigned by this module's own corpus store client, built from validated corpus bucket config
-      getCorpusS3().presign(key, {
-        expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
-      }),
-      {
-        headers: { Range: `bytes=${offset}-${last}` },
-        signal,
-        timeoutMs: OBJECT_READ_TIMEOUT_MS,
-      },
-    );
-    if (served.status !== 206) {
-      return await throwCorpusObjectResponseError({
-        response: served,
-        key,
-        message: `Range read for ${key} answered ${served.status}, not 206`,
-      });
-    }
-    return served;
-  }, s3Policy);
-  const contentRange = CONTENT_RANGE_PATTERN.exec(
-    response.headers.get("content-range") ?? "",
+  return await withPublicReadIo(
+    "object-storage",
+    async (io) =>
+      await corpusCredentials.run(
+        async () =>
+          await io.fetch(
+            getCorpusS3().presign(key, {
+              expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
+            }),
+            {
+              headers: { Range: `bytes=${offset}-${last}` },
+              signal,
+              timeoutMs: OBJECT_READ_TIMEOUT_MS,
+            },
+            async (served) => {
+              if (served.status !== 206) {
+                return await throwCorpusObjectResponseError({
+                  response: served,
+                  key,
+                  message: `Range read for ${key} answered ${served.status}, not 206`,
+                });
+              }
+              const contentRange = CONTENT_RANGE_PATTERN.exec(
+                served.headers.get("content-range") ?? "",
+              );
+              const first = contentRange?.groups?.["first"];
+              const servedLast = contentRange?.groups?.["last"];
+              if (
+                first === undefined ||
+                servedLast === undefined ||
+                Number(first) !== offset ||
+                Number(servedLast) !== last
+              ) {
+                throw new S3ObjectReadError({
+                  message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
+                });
+              }
+              const contentLength = served.headers.get("content-length");
+              if (
+                contentLength === null ||
+                Number(contentLength.trim()) !== length
+              ) {
+                throw new S3ObjectReadError({
+                  message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
+                });
+              }
+              const bytes = await served.bytes();
+              if (bytes.byteLength !== length) {
+                throw new S3ObjectReadError({
+                  message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
+                });
+              }
+              return bytes;
+            },
+          ),
+        s3Policy,
+      ),
   );
-  const first = contentRange?.groups?.["first"];
-  const servedLast = contentRange?.groups?.["last"];
-  if (
-    first === undefined ||
-    servedLast === undefined ||
-    Number(first) !== offset ||
-    Number(servedLast) !== last
-  ) {
-    throw new S3ObjectReadError({
-      message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
-    });
-  }
-  const contentLength = response.headers.get("content-length");
-  if (contentLength === null || Number(contentLength.trim()) !== length) {
-    throw new S3ObjectReadError({
-      message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
-    });
-  }
-  const bytes = await response.bytes();
-  if (bytes.byteLength !== length) {
-    throw new S3ObjectReadError({
-      message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
-    });
-  }
-  return bytes;
 };
 
 /**
@@ -1731,7 +1785,12 @@ export const readS3ArrayBuffer = async (
   key: string,
   signal?: AbortSignal,
 ): Promise<ArrayBuffer> =>
-  await (await fetchObject(documentsStore, key, signal)).arrayBuffer();
+  await fetchObject({
+    store: documentsStore,
+    key,
+    signal,
+    consume: async (response) => await response.arrayBuffer(),
+  });
 
 /**
  * Whether the legal-corpus bucket holds `key`.

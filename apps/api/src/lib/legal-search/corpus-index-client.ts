@@ -4,7 +4,7 @@ import {
   observeRegistryRequest,
   type RegistryRequestObservation,
 } from "@stll/business-registries/shared/request-observer";
-import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -13,7 +13,7 @@ import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
-import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -601,32 +601,53 @@ const searchBaseUrl = (cluster: QuickwitCluster): string => {
  * The client's one outbound boundary: every request is a Stella-built path
  * on one of the configured corpus index cluster URLs.
  */
-const fetchCorpusIndex = async (
-  baseUrl: string,
-  path: string,
-  init: FetchWithTimeoutInit,
-  observer: RegistryRequestObservation,
-): Promise<Response> => {
-  init.signal?.throwIfAborted();
-  observeRegistryRequest(observer);
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
-  return await fetchWithTimeout(`${baseUrl}${path}`, init);
+type CorpusFetchOptions<T> = {
+  baseUrl: string;
+  path: string;
+  init: FetchWithTimeoutInit;
+  observer: RegistryRequestObservation;
+  consume: (response: Response) => T | Promise<T>;
 };
 
-/** Liveness of the cluster's search endpoint; resolves with the raw response. */
+const fetchCorpusIndex = async <T>({
+  baseUrl,
+  path,
+  init,
+  observer,
+  consume,
+}: CorpusFetchOptions<T>): Promise<T> =>
+  await withPublicReadIo("corpus-index", async (io) => {
+    init.signal?.throwIfAborted();
+    observeRegistryRequest(observer);
+    return await io.fetch(
+      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
+      `${baseUrl}${path}`,
+      init,
+      consume,
+    );
+  });
+
+/** Liveness response after its network body has settled. */
 export const probeCorpusIndexSearchLiveness = async (
   cluster: QuickwitCluster,
   timeoutMs: number,
   observer: RegistryRequestObservation,
 ): Promise<Response> =>
-  await fetchCorpusIndex(
-    searchBaseUrl(cluster),
-    "/health/livez",
-    {
-      timeoutMs,
-    },
+  await fetchCorpusIndex({
+    baseUrl: searchBaseUrl(cluster),
+    path: "/health/livez",
+    init: { timeoutMs },
     observer,
-  );
+    consume: async (response) =>
+      new Response(
+        response.body === null ? null : await response.arrayBuffer(),
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        },
+      ),
+  });
 
 const toCorpusIndexError = (error: unknown): CorpusIndexError =>
   error instanceof CorpusIndexError
@@ -715,27 +736,24 @@ const requestFailure = ({
 const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
   error instanceof SyntaxError ? "answered" : "unreachable";
 
-const sendRequest = async (request: CorpusIndexRequest): Promise<Response> => {
-  const publicReadSignal = getPublicReadSignal();
-  let signal = request.signal;
-  if (publicReadSignal !== undefined) {
-    signal =
-      signal === undefined
-        ? publicReadSignal
-        : AbortSignal.any([signal, publicReadSignal]);
-  }
-  return await fetchCorpusIndex(
-    request.baseUrl,
-    request.path,
-    {
+const sendRequest = async <T>(
+  request: CorpusIndexRequest,
+  consume: (response: Response) => T | Promise<T>,
+): Promise<T> =>
+  await fetchCorpusIndex({
+    baseUrl: request.baseUrl,
+    path: request.path,
+    init: {
       ...request.init,
       timeoutMs: request.timeoutMs,
-      signal,
+      signal: request.signal,
     },
-    request.observer,
-  ).catch((error: unknown) => {
-    // `fetch` rejects only when no response arrived: refused or reset
-    // connection, failed DNS lookup, expired budget.
+    observer: request.observer,
+    consume,
+  }).catch((error: unknown) => {
+    if (error instanceof CorpusIndexError) {
+      throw error;
+    }
     throw requestFailure({
       request,
       error,
@@ -743,28 +761,27 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> => {
       reach: "unreachable",
     });
   });
-};
 
-const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
-  const response = await sendRequest(request);
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new CorpusIndexError({
-      message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
-      status: response.status,
-      rejection: rejectionForHttpStatus(response.status),
-      reach: reachForHttpStatus(response.status),
-    });
-  }
-  return await response.json().catch((error: unknown) => {
-    throw requestFailure({
-      request,
-      error,
-      unaborted: "returned an unreadable body",
-      reach: bodyReadReach(error),
+const requestJson = async (request: CorpusIndexRequest): Promise<unknown> =>
+  await sendRequest(request, async (response) => {
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new CorpusIndexError({
+        message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
+        status: response.status,
+        rejection: rejectionForHttpStatus(response.status),
+        reach: reachForHttpStatus(response.status),
+      });
+    }
+    return await response.json().catch((error: unknown) => {
+      throw requestFailure({
+        request,
+        error,
+        unaborted: "returned an unreadable body",
+        reach: bodyReadReach(error),
+      });
     });
   });
-};
 
 type SettlementSplit = {
   evidence: CorpusIndexSettlementSplit;
@@ -1293,25 +1310,28 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
 
   indexExists: async (indexId, observer) =>
     await Result.tryPromise({
-      try: async () => {
-        const response = await sendRequest({
-          observer,
-          baseUrl: mutationBaseUrl(cluster),
-          path: `/api/v1/indexes/${indexId}`,
-          init: { method: "GET" },
-          timeoutMs: ADMIN_TIMEOUT_MS,
-        });
-        if (response.status === 404) {
-          return false;
-        }
-        if (!response.ok) {
-          throw new CorpusIndexError({
-            message: `corpus index GET /api/v1/indexes/${indexId} -> ${response.status}`,
-            status: response.status,
-          });
-        }
-        return true;
-      },
+      try: async () =>
+        await sendRequest(
+          {
+            observer,
+            baseUrl: mutationBaseUrl(cluster),
+            path: `/api/v1/indexes/${indexId}`,
+            init: { method: "GET" },
+            timeoutMs: ADMIN_TIMEOUT_MS,
+          },
+          (response) => {
+            if (response.status === 404) {
+              return false;
+            }
+            if (!response.ok) {
+              throw new CorpusIndexError({
+                message: `corpus index GET /api/v1/indexes/${indexId} -> ${response.status}`,
+                status: response.status,
+              });
+            }
+            return true;
+          },
+        ),
       catch: toCorpusIndexError,
     }),
 
@@ -1325,43 +1345,44 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           init: { method: "GET" },
           timeoutMs: ADMIN_TIMEOUT_MS,
         } satisfies CorpusIndexRequest;
-        const response = await sendRequest(request);
-        if (response.status === 404) {
-          return { status: "missing" } as const;
-        }
-        if (!response.ok) {
-          throw new CorpusIndexError({
-            message: `corpus index ${requestLabel(request)} -> ${response.status}`,
-            status: response.status,
+        return await sendRequest(request, async (response) => {
+          if (response.status === 404) {
+            return { status: "missing" } as const;
+          }
+          if (!response.ok) {
+            throw new CorpusIndexError({
+              message: `corpus index ${requestLabel(request)} -> ${response.status}`,
+              status: response.status,
+            });
+          }
+          const metadata = await response.json().catch((error: unknown) => {
+            throw requestFailure({
+              request,
+              error,
+              unaborted: "returned an unreadable body",
+              reach: bodyReadReach(error),
+            });
           });
-        }
-        const metadata = await response.json().catch((error: unknown) => {
-          throw requestFailure({
-            request,
-            error,
-            unaborted: "returned an unreadable body",
-            reach: bodyReadReach(error),
-          });
+          if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
+            throw new CorpusIndexError({
+              message: "corpus index metadata omitted its index config",
+            });
+          }
+          const observedConfig = metadata["index_config"];
+          const difference = configDifference(config, observedConfig);
+          if (difference !== null) {
+            throw new CorpusIndexError({
+              message: `corpus index ${config.index_id} configuration drift at ${difference}`,
+            });
+          }
+          const indexUri = observedConfig["index_uri"];
+          if (typeof indexUri !== "string" || indexUri.length === 0) {
+            throw new CorpusIndexError({
+              message: `corpus index ${config.index_id} metadata omitted its index URI`,
+            });
+          }
+          return { status: "matching", indexUri } as const;
         });
-        if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
-          throw new CorpusIndexError({
-            message: "corpus index metadata omitted its index config",
-          });
-        }
-        const observedConfig = metadata["index_config"];
-        const difference = configDifference(config, observedConfig);
-        if (difference !== null) {
-          throw new CorpusIndexError({
-            message: `corpus index ${config.index_id} configuration drift at ${difference}`,
-          });
-        }
-        const indexUri = observedConfig["index_uri"];
-        if (typeof indexUri !== "string" || indexUri.length === 0) {
-          throw new CorpusIndexError({
-            message: `corpus index ${config.index_id} metadata omitted its index URI`,
-          });
-        }
-        return { status: "matching", indexUri } as const;
       },
       catch: toCorpusIndexError,
     }),

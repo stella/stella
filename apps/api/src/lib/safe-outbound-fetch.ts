@@ -7,6 +7,8 @@ import { isIP } from "node:net";
 import type { LookupFunction, TcpSocketConnectOpts } from "node:net";
 import * as v from "valibot";
 
+import { createFetchWithTimeout, fetchWithTimeout } from "@stll/fetch";
+import type { Fetcher, FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import {
@@ -14,6 +16,7 @@ import {
   type ThirdPartyOutboundPermit,
 } from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import type { PublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export class SafeOutboundFetchError extends TaggedError(
@@ -1221,4 +1224,28 @@ const isPrivateResolvedAddress = (address: string): boolean => {
   }
 
   return isBlockedIPv4(ipv4);
+};
+
+type PublicReadTransportRequestOptions = {
+  capability: PublicReadIo;
+  input: string | URL | Request;
+  init: FetchWithTimeoutInit;
+  fetcher?: Fetcher | undefined;
+};
+
+/** Registered public-read transports prove the origin before issuing this capability. */
+export const fetchPublicReadRequest = async ({
+  capability,
+  input,
+  init,
+  fetcher,
+}: PublicReadTransportRequestOptions): Promise<Response> => {
+  const signals = [capability.signal, init.signal].filter(
+    (candidate): candidate is AbortSignal => candidate !== undefined,
+  );
+  const signal = signals.length === 0 ? undefined : AbortSignal.any(signals);
+  const request =
+    fetcher === undefined ? fetchWithTimeout : createFetchWithTimeout(fetcher);
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- only the scoped owner calls this forwarder; registered capability issuers prove their destinations, enforced by public-read transport ownership
+  return await request(input, { ...init, signal });
 };

@@ -18,7 +18,7 @@ import { panic, Result } from "better-result";
 
 // parser-output-unchanged: retry delays use the shared arithmetic owner; parsed content is unchanged.
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
-import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import type { FetchWithTimeoutInit } from "@stll/fetch";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
@@ -34,6 +34,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { withPublicReadIo } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
@@ -226,8 +227,12 @@ const fetchPublisherRequest = async (
   ) => {
     // Each request, including a redirect or backoff attempt, is observed.
     const sendRequest = async () =>
-      // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
-      await fetchWithTimeout(target, requestOptions);
+      await withPublicReadIo(
+        "publisher",
+        async (io) =>
+          // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+          await io.fetchStream(target, requestOptions),
+      );
     if (fetchStage === "listing") {
       return await sendRequest();
     }
@@ -285,6 +290,12 @@ const fetchPublisherRequest = async (
           }),
         );
         controls.onRefusal?.(refusalNow + delay);
+        yield* Result.await(
+          Result.tryPromise({
+            try: async () => await response.body?.cancel(),
+            catch: (error) => error,
+          }),
+        );
         const cooldownUntilEpochMs = yield* Result.await(
           Result.tryPromise({
             try: async () =>
@@ -293,12 +304,6 @@ const fetchPublisherRequest = async (
                 Math.min(delay, RETRY_AFTER_MAX_MS),
                 requestInit.signal,
               ),
-            catch: (error) => error,
-          }),
-        );
-        yield* Result.await(
-          Result.tryPromise({
-            try: async () => await response.body?.cancel(),
             catch: (error) => error,
           }),
         );
@@ -463,7 +468,8 @@ export const fetchWithRetry = async (
         return response;
       }
 
-      // Retryable status: back off and retry
+      // Settle the discarded body before the next attempt.
+      await response.body?.cancel();
       const delay = backoffDelay(attempt, {
         baseMs: baseDelayMs,
         maxMs: maxDelayMs,
@@ -616,11 +622,11 @@ export const retryPublisherRequest = async (
         }),
       );
       controls?.onRefusal?.(runtime.now() + delay);
+      await fetched.value.body?.cancel();
       const cooldownUntilEpochMs = await runtime.defer(
         Math.min(delay, RETRY_AFTER_MAX_MS),
         init.signal,
       );
-      await fetched.value.body?.cancel();
       throw new PublisherRateLimitRefusalError({
         cursor: null,
         publisherKey: gateId,
@@ -663,10 +669,10 @@ export const retryPublisherRequest = async (
     );
     // Publish the cooldown before sleeping. The Redis gate checks it before
     // every ECJ request, including slots reserved before this backoff began.
-    await runtime.defer(delay, init.signal);
     if (Result.isOk(fetched)) {
       await fetched.value.body?.cancel();
     }
+    await runtime.defer(delay, init.signal);
     await runtime.sleep(delay, init.signal);
   }
   return panic("retryPublisherRequest: unreachable");

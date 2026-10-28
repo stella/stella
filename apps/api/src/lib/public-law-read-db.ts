@@ -21,9 +21,9 @@ import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-contex
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
-  beginPublicRead,
   getPublicReadSignal,
   getPublicReadStatementTimeoutMs,
+  withPublicReadIo,
 } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -603,14 +603,21 @@ const publicLawReadGuards = (): readonly PublicLawReadGuard[] =>
 const startRoleValidation = async (
   external: ExternalPublicLawDatabase,
 ): Promise<void> => {
-  const validation = external.database.transaction(async (tx) => {
-    const observedTransaction = observePublicLawReadTransaction(tx);
-    await configureReadTransaction(
-      observedTransaction,
-      "read-committed",
-      EXTERNAL_PUBLIC_LAW_READ_GUARDS,
-    );
-    await validateExternalPublicLawDatabase(observedTransaction);
+  const validation = withPublicReadIo("database", async (io) => {
+    const resource = await openPublicReadDatabase(external.database, io.signal);
+    try {
+      await io.readTransaction(resource.database, async (tx) => {
+        const observedTransaction = observePublicLawReadTransaction(tx);
+        await configureReadTransaction(
+          observedTransaction,
+          "read-committed",
+          EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+        );
+        await validateExternalPublicLawDatabase(observedTransaction);
+      });
+    } finally {
+      await resource.close();
+    }
   });
   const promise = validation.then(
     () => {
@@ -685,6 +692,28 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
   return externalPublicLawDatabase.database;
 };
 
+const openPublicReadDatabase = async (
+  pool: typeof rootDb,
+  signal: AbortSignal | undefined,
+) => {
+  if (signal === undefined) {
+    return { database: pool, close: async () => await Promise.resolve() };
+  }
+  const reservation = await openCancellableReservedSession({
+    reserve: async () =>
+      instrumentDedicatedSqlCounts(await pool.$client.reserve({ signal })),
+    cancelBackend: cancelPublicLawBackend,
+    signal,
+  });
+  return {
+    database: createDatabase({
+      client: runTransactionsInCallerContext(reservation.session),
+      relations: databaseRelations,
+    }),
+    close: reservation.close,
+  };
+};
+
 /**
  * Shared read-only transaction boundary for public legal data.
  *
@@ -695,45 +724,30 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
 export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
   options?: PublicLawReadOptions,
-): Promise<T> => {
-  const finish = beginPublicRead();
-  try {
-    const signal = getPublicReadSignal();
+): Promise<T> =>
+  await withPublicReadIo("database", async (io) => {
+    const signal = io.signal;
     signal?.throwIfAborted();
     const isolation = options?.isolation ?? "read-committed";
     const pool = await getPublicLawDatabase();
-    const reservation =
-      signal === undefined
-        ? undefined
-        : await openCancellableReservedSession({
-            reserve: async () =>
-              instrumentDedicatedSqlCounts(
-                await pool.$client.reserve({ signal }),
-              ),
-            cancelBackend: cancelPublicLawBackend,
-            signal,
-          });
+    const resource = await openPublicReadDatabase(pool, signal);
     let outcome: Result<T, unknown>;
     try {
-      const database =
-        reservation === undefined
-          ? pool
-          : createDatabase({
-              client: runTransactionsInCallerContext(reservation.session),
-              relations: databaseRelations,
-            });
-      const read = database.transaction(async (transaction) => {
-        const tx = observePublicLawReadTransaction(transaction);
-        await configureReadTransaction(tx, isolation, publicLawReadGuards());
+      const read = io.readTransaction(
+        resource.database,
+        async (transaction) => {
+          const tx = observePublicLawReadTransaction(transaction);
+          await configureReadTransaction(tx, isolation, publicLawReadGuards());
 
-        return await fn(tx);
-      });
+          return await fn(tx);
+        },
+      );
       outcome = await read.then(
         (value) => Result.ok(value),
         (error: unknown) => Result.err(error),
       );
     } finally {
-      await reservation?.close();
+      await resource.close();
     }
     // Cancellation and the transaction have both settled before admission releases.
     // A driver cancellation is the caller's abort, not a statement timeout.
@@ -742,7 +756,4 @@ export const publicLawReadDb = async <T>(
       return abortTransaction(outcome.error);
     }
     return outcome.value;
-  } finally {
-    finish();
-  }
-};
+  });

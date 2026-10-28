@@ -15,17 +15,32 @@
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
+import { PUBLIC_READ_TRANSPORTS } from "../apps/api/src/lib/legal-search/public-read-transports.ts";
 import {
+  PUBLIC_READ_SERVING_ROOTS,
+  publicReadIoCallMethod,
+  publicReadIoMethod,
+  publicReadIoMethodKind,
+  publicReadIoWrapper,
+} from "./public-read-io-provenance.ts";
+import {
+  canonicalModuleId,
   getPropertyName,
+  invokedCallee,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isImportedFrom,
   isSingleAssignment,
+  isStringLiteral,
+  memberPropertyName,
+  repoRelativeFilename,
+  resolveImport,
   resolveVariable,
+  stableInitializer,
   unwrapExpression,
 } from "./utils.ts";
-import type { AstNode, resolveImport, ScopeContext } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
 
 const ALTERNATE_READERS = new Set([
   "readPublicDecisionLanguageAlternatesByGroup",
@@ -145,7 +160,7 @@ const directAwaitedCall = (statement: unknown): AstNode | undefined => {
 };
 
 const transactionsAreConfigured = (
-  context: ScopeContext,
+  context: ImportResolutionContext,
   functionNode: AstNode,
 ): boolean => {
   const sharedParameter = Array.isArray(functionNode.params)
@@ -182,15 +197,39 @@ const transactionsAreConfigured = (
     return false;
   }
   const transactions: AstNode[] = [];
-  walkOwnFunctionBody(functionNode, (node) => {
-    if (isMemberCall(node, "transaction")) {
-      transactions.push(node);
-    }
-  });
+  const collectTransactions = (ownerFunction: AstNode) => {
+    walkOwnFunctionBody(ownerFunction, (node) => {
+      if (
+        isMemberCall(node, "transaction") ||
+        publicReadIoMethodKind(
+          publicReadIoMethod(context, node.callee)?.method ?? null,
+        ) === "database"
+      ) {
+        transactions.push(node);
+      }
+      if (node.type !== "CallExpression" || !Array.isArray(node.arguments)) {
+        return;
+      }
+      const callback = unwrapExpression(node.arguments.at(1));
+      if (
+        publicReadIoWrapper(context, node)?.transport === "database" &&
+        callback !== null
+      ) {
+        collectTransactions(callback);
+      }
+    });
+  };
+  collectTransactions(functionNode);
   return (
     transactions.length > 0 &&
     transactions.every((transaction) => {
-      const callback = unwrapExpression(firstArgument(transaction));
+      const scoped = publicReadIoMethod(context, transaction.callee);
+      const callback = unwrapExpression(
+        publicReadIoMethodKind(scoped?.method ?? null) === "database" &&
+          Array.isArray(transaction.arguments)
+          ? transaction.arguments.at(1)
+          : firstArgument(transaction),
+      );
       if (!isFunctionLike(callback)) {
         return false;
       }
@@ -297,9 +336,226 @@ const transactionsAreConfigured = (
   );
 };
 
+const PUBLIC_READ_CONTEXT_OWNER =
+  "apps/api/src/lib/legal-search/public-read-timeout-context";
+const PUBLIC_READ_OWNER_KINDS = new Map(
+  Object.entries(PUBLIC_READ_TRANSPORTS).flatMap(([kind, paths]) =>
+    paths.map((path) => [path, kind] as const),
+  ),
+);
+const RAW_FETCH_MODULES = new Map([
+  ["@stll/fetch", new Set(["fetchWithTimeout", "createFetchWithTimeout"])],
+  [
+    "packages/fetch/src",
+    new Set(["fetchWithTimeout", "createFetchWithTimeout"]),
+  ],
+  ["undici", new Set(["fetch", "request", "stream"])],
+  ["node:http", new Set(["request", "get"])],
+  ["node:https", new Set(["request", "get"])],
+]);
+
+const isRawPublicReadFetch = (
+  context: ImportResolutionContext,
+  node: unknown,
+  seen = new Set<unknown>(),
+): boolean => {
+  const callee = unwrapExpression(node);
+  if (callee === null || seen.has(callee)) {
+    return false;
+  }
+  seen.add(callee);
+  if (callee.type === "CallExpression") {
+    const bound = unwrapExpression(callee.callee);
+    return bound?.type === "MemberExpression" &&
+      memberPropertyName(bound) === "bind"
+      ? isRawPublicReadFetch(context, bound.object, seen)
+      : false;
+  }
+  const binding = resolveImport(context, callee);
+  if (
+    binding !== null &&
+    RAW_FETCH_MODULES.get(binding.moduleId)?.has(binding.imported)
+  ) {
+    return true;
+  }
+  if (isIdentifierReference(callee)) {
+    const variable = resolveVariable(context, callee);
+    if (callee.name === "fetch" && (variable?.defs.length ?? 0) === 0) {
+      return true;
+    }
+    return (
+      variable !== null &&
+      isRawPublicReadFetch(context, stableInitializer(variable), seen)
+    );
+  }
+  if (callee.type !== "MemberExpression") {
+    return false;
+  }
+  const method = memberPropertyName(callee);
+  if (method === "call" || method === "apply" || method === "bind") {
+    return isRawPublicReadFetch(context, callee.object, seen);
+  }
+  if (method !== "fetch") {
+    return false;
+  }
+  const receiver = unwrapExpression(callee.object);
+  return (
+    isIdentifierReference(receiver) &&
+    receiver.name === "globalThis" &&
+    (resolveVariable(context, receiver)?.defs.length ?? 0) === 0
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "public-law-read-boundary" },
   rules: {
+    "require-owned-public-read-transport": {
+      meta: {
+        type: "problem",
+        messages: {
+          unownedTransport:
+            "Public-read I/O must use a handle issued by withPublicReadIo() for this transport; raw fetch and transaction calls cannot own transport settlement.",
+          missingOwner:
+            "The registered {{transport}} transport must invoke its canonical withPublicReadIo() scope.",
+          confinedRequest:
+            "The public-read request forwarder may only be imported or invoked by the canonical public-read scope owner.",
+          wrongOwner:
+            "This transport owner must use its registered {{transport}} kind.",
+        },
+      },
+      createOnce(context) {
+        let expected: string | undefined;
+        let checksTransport = false;
+        let isContextOwner = false;
+        const observed = new Set<string>();
+        const checkForwarder = (node: AstNode): void => {
+          if (isContextOwner) {
+            return;
+          }
+          const imported = resolveImport(context, node);
+          if (
+            imported?.moduleId === "apps/api/src/lib/safe-outbound-fetch" &&
+            imported.imported === "fetchPublicReadRequest"
+          ) {
+            context.report({ node, messageId: "confinedRequest" });
+          }
+        };
+        return {
+          before() {
+            observed.clear();
+            const filename = repoRelativeFilename(context);
+            expected = PUBLIC_READ_OWNER_KINDS.get(filename);
+            isContextOwner = filename === `${PUBLIC_READ_CONTEXT_OWNER}.ts`;
+            checksTransport =
+              !isContextOwner &&
+              (expected !== undefined ||
+                filename.endsWith("public-law-read-boundary.fixture.ts") ||
+                PUBLIC_READ_SERVING_ROOTS.some((root) =>
+                  filename.startsWith(root),
+                ));
+            return (
+              checksTransport ||
+              (!isContextOwner &&
+                /fetchPublicReadRequest|safe-outbound-fetch/u.test(
+                  context.sourceCode.text,
+                ))
+            );
+          },
+          "ExportNamedDeclaration, ExportAllDeclaration"(node) {
+            if (
+              isContextOwner ||
+              !isAstNode(node) ||
+              !isStringLiteral(node.source) ||
+              canonicalModuleId(
+                node.source.value,
+                repoRelativeFilename(context),
+              ) !== "apps/api/src/lib/safe-outbound-fetch"
+            ) {
+              return;
+            }
+            if (
+              node.type === "ExportAllDeclaration" ||
+              (Array.isArray(node.specifiers) &&
+                node.specifiers.some(
+                  (specifier) =>
+                    isAstNode(specifier) &&
+                    getPropertyName(specifier.local) ===
+                      "fetchPublicReadRequest",
+                ))
+            ) {
+              context.report({ node, messageId: "confinedRequest" });
+            }
+          },
+          ImportSpecifier(node) {
+            if (isAstNode(node) && isAstNode(node.local)) {
+              checkForwarder(node.local);
+            }
+          },
+          Identifier(node) {
+            if (
+              isAstNode(node) &&
+              (!isAstNode(node.parent) ||
+                (node.parent.type !== "ImportSpecifier" &&
+                  !(
+                    node.parent.type === "VariableDeclarator" &&
+                    node.parent.id === node
+                  )))
+            ) {
+              checkForwarder(node);
+            }
+          },
+          MemberExpression(node) {
+            if (isAstNode(node)) {
+              checkForwarder(node);
+            }
+          },
+          CallExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            if (!checksTransport) {
+              return;
+            }
+            const wrapper = publicReadIoWrapper(context, node);
+            if (wrapper !== null) {
+              observed.add(wrapper.transport);
+              if (expected !== undefined && wrapper.transport !== expected) {
+                context.report({
+                  node,
+                  messageId: "wrongOwner",
+                  data: { transport: expected },
+                });
+              }
+              return;
+            }
+            const callee = invokedCallee(node);
+            const method = publicReadIoCallMethod(context, callee);
+            const owned = publicReadIoMethod(context, callee);
+            if (owned !== null) {
+              return;
+            }
+            if (
+              isRawPublicReadFetch(context, callee) ||
+              publicReadIoMethodKind(method) === "http" ||
+              (expected !== undefined &&
+                (method === "transaction" ||
+                  publicReadIoMethodKind(method) === "database"))
+            ) {
+              context.report({ node, messageId: "unownedTransport" });
+            }
+          },
+          "Program:exit"(node) {
+            if (expected !== undefined && !observed.has(expected)) {
+              context.report({
+                node,
+                messageId: "missingOwner",
+                data: { transport: expected },
+              });
+            }
+          },
+        };
+      },
+    },
     "require-language-alternate-counts": {
       meta: {
         type: "problem",
