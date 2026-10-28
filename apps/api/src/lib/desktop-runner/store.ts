@@ -65,6 +65,8 @@ export type RunnerBinding = {
   readonly organizationId: SafeId<"organization">;
   readonly desktopId: string;
   readonly deviceJkt: string;
+  /** The credential that opened the socket; every heartbeat re-checks it. */
+  readonly keyId: string;
 };
 
 const runner = desktopRunners;
@@ -362,6 +364,47 @@ export const claimRunnerSession = async (
   });
 
 type SessionOptions = { binding: RunnerBinding; sessionId: string };
+
+/** The update shape both the owner transaction and the auth cleanup steps offer. */
+type RunnerReleaseTransaction = {
+  update: (table: typeof desktopRunners) => {
+    set: (values: { connection: "disconnected" }) => {
+      where: (condition: SQL | undefined) => PromiseLike<unknown>;
+    };
+  };
+};
+
+type RevokedRunnerScope = {
+  readonly userId: SafeId<"user">;
+  /** Absent: every organization the account belongs to. */
+  readonly organizationId?: SafeId<"organization">;
+  /** Absent: every device key of the account. */
+  readonly deviceJkt?: string;
+};
+
+/**
+ * A credential was revoked: its runners stop taking runs at once, and each
+ * open socket closes at its next heartbeat, which re-checks the credential.
+ * Runs stay bound to the runner and end through their leases and expiry.
+ */
+export const releaseRevokedRunners = async (
+  tx: RunnerReleaseTransaction,
+  { userId, organizationId, deviceJkt }: RevokedRunnerScope,
+) => {
+  // audit: skip - the revocation that calls this records its own audit event
+  await tx
+    .update(desktopRunners)
+    .set({ connection: "disconnected" })
+    .where(
+      and(
+        eq(runner.userId, userId),
+        organizationId === undefined
+          ? undefined
+          : eq(runner.organizationId, organizationId),
+        deviceJkt === undefined ? undefined : eq(runner.deviceJkt, deviceJkt),
+      ),
+    );
+};
 
 /** Record that a socket closed, unless a newer one already took over. */
 export const releaseRunnerSession = async (
