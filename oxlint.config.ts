@@ -386,6 +386,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-rendered-error-translation.fixture.tsx", [
     "no-rendered-error-translation/no-rendered-error-translation",
   ]),
+  fixtureRuleOverride("require-valibot-message.fixture.ts", [
+    "require-valibot-message/require-valibot-message",
+  ]),
   fixtureRuleOverride("no-raw-child-exit-status.fixture.ts", [
     "no-raw-child-exit-status/no-raw-child-exit-status",
   ]),
@@ -1851,6 +1854,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-rendered-error-translation.ts",
+    "./.oxlint-plugins/require-valibot-message.ts",
     "./.oxlint-plugins/no-raw-child-exit-status.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
@@ -6662,6 +6666,19 @@ const config = defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "apps/api/src/mcp/**/*.{ts,tsx}"],
       rules: { "require-contract-domains/require-contract-domains": "error" },
+    },
+    {
+      files: [
+        "apps/web/src/lib/schema.ts",
+        "apps/web/src/lib/organization/role-assignment.logic.ts",
+        "apps/web/src/components/auth/password-sign-in-form.tsx",
+        "apps/web/src/components/auth/sign-in-panel.tsx",
+        "apps/web/src/components/organization/invite-member-dialog.tsx",
+        "apps/web/src/routes/auth/-components/social-recovery-panel.tsx",
+      ],
+      rules: {
+        "require-valibot-message/require-valibot-message": "error",
+      },
     },
     ...fixtureRuleOverrides,
     // Last: oxlint resolves overrides by replacement, so a scope that enables
