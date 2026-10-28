@@ -13,6 +13,7 @@ import {
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { isRecord } from "@/api/lib/type-guards";
 
 const CALL_ID = "call_property_continuation";
@@ -168,6 +169,7 @@ const continuationOutcome = async ({
       },
     ],
     safeDb: noDbReads,
+    refRegistry: createChatRefRegistry(),
     threadId: toSafeId<"chatThread">("thread_property_continuation"),
     tools,
     userId: toSafeId<"user">("user_property_continuation"),

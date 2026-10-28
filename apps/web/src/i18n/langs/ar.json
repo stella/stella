@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "الآن",
       "currentSession": "الحالية",
       "device": "الجهاز",
       "deviceOnOs": "{browser} على {os}",
@@ -998,12 +999,15 @@
       "supreme": "المحاكم العليا"
     },
     "coverage": {
+      "allCurrent": "جميع المصادر محدّثة",
       "completeness": "الاكتمال",
+      "completenessHelp": "عدد القرارات المحفوظة مقارنةً بالعدد الذي تعلنه الجهة الناشرة أو قائمتها أو بإجمالي مسجّل.",
+      "countryNavigation": "الانتقال إلى بلد",
       "courtsHeading": "حسب المحكمة",
       "decisionYears": "سنوات الأحكام",
+      "decisionsAcross": "قرارات من {count, plural, zero {لا نطاقات قضائية} one {نطاق قضائي واحد} two {نطاقين قضائيين} few {# نطاقات قضائية} many {# نطاقًا قضائيًا} other {# نطاق قضائي}}",
       "description": "حجم الاجتهاد القضائي في قاعدة البيانات حسب الدولة والمحكمة، ومدى حداثة كل مصدر.",
       "generatedAt": "أرقام بتاريخ {date}",
-      "globeLabel": "الدول التي يحتوي المخزن على سوابقها القضائية، على كرة أرضية",
       "healthCurrent": "محدّثة",
       "healthDelayed": "متأخّر",
       "healthDisabled": "مُعطَّل",
@@ -1013,10 +1017,10 @@
       "lastSync": "آخر مزامنة",
       "notCountedYet": "لم يُحصَ بعد",
       "notMeasuredYet": "لم يُقَس بعد",
-      "reportedByListing": "محسوب من قائمة الجهة الناشرة",
-      "reportedByOperator": "مُدخَل يدويًا",
-      "reportedByPublisher": "إحصاء الجهة الناشرة نفسها",
       "searchable": "قابلة للبحث",
+      "sourceExceptions": "{count, plural, zero {لا مصادر تحتاج إلى متابعة} one {مصدر واحد يحتاج إلى متابعة} two {مصدران يحتاجان إلى متابعة} few {# مصادر تحتاج إلى متابعة} many {# مصدرًا يحتاج إلى متابعة} other {# مصدر يحتاج إلى متابعة}}",
+      "sourcesCurrent": "المصادر المحدّثة",
+      "syncedAt": "آخر مزامنة: {time}",
       "title": "تغطية الاجتهاد القضائي",
       "totalFrom": "الإجمالي بتاريخ {date}",
       "unavailable": "أرقام التغطية غير متاحة حاليًا."
@@ -1207,6 +1211,7 @@
       "appliedVersionStatedAmendmentCompact": "المذكور: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {الصيغة السارية في {date}} until {الصيغة السارية حتى {date}} from {الصيغة السارية اعتبارًا من {date}} other {الصيغة السارية في {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {المذكور: {date}} until {المذكور: حتى {date}} from {المذكور: ابتداءً من {date}} other {المذكور: {date}}}",
+      "caseFileDocuments": "مستندات ملف هذه القضية",
       "caseFileMayHoldOthers": "قد يتضمّن ملف هذه الدعوى قرارات أخرى أيضًا.",
       "citedBy": "مستشهَد به في",
       "citedDecisionPassage": "مقطع من القرار",
@@ -1433,6 +1438,17 @@
         "webSearch": "شغّل البحث على الويب لاستخدام هذه المهارة"
       }
     },
+    "connectConnector": {
+      "checkAction": "التحقق من الاتصال",
+      "description": "يطلب المساعد ربط {connector} لاستخدام أدواته في هذه المحادثة.",
+      "error": "تعذر بدء الربط. حاول مرة أخرى.",
+      "notConnected": "لم يتم الربط بعد. أكمل تسجيل الدخول، ثم تحقق مرة أخرى.",
+      "openTools": "فتح الأدوات",
+      "scopes": "الصلاحيات المطلوبة: {scopes}",
+      "title": "ربط موصل",
+      "tokenRequired": "يحتاج {connector} إلى رمز وصول. أضفه في صفحة الأدوات، ثم تحقق من الاتصال.",
+      "waiting": "أكمل تسجيل الدخول في النافذة التي فُتحت."
+    },
     "contextMeter": {
       "attachments": "المستندات المرفقة",
       "autoCompact": "عند 100% تلخّص stella الرسائل الأقدم تلقائيًا لإتاحة مساحة.",
@@ -1507,7 +1523,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, zero {ولا شيء آخر} one {وعنصر واحد آخر} two {وعنصران آخران} few {و# عناصر أخرى} many {و# عنصرًا آخر} other {و# عنصر آخر}}"
+      "unnamed": "{count, plural, zero {لا شيء آخر} one {عنصر واحد آخر} two {عنصران آخران} few {# عناصر أخرى} many {# عنصرًا آخر} other {# عنصر آخر}}"
     },
     "historyTrimmed": "تعذّر تلخيص الرسائل السابقة، لذا تراعي هذه الإجابة الجزء الأحدث من المحادثة فقط.",
     "improvePrompt": "تحسين الطلب",
@@ -1748,6 +1764,7 @@
       "business_registry_lookup": "البحث في السجل التجاري",
       "compare_versions": "مقارنة الإصدارات",
       "configure_template_fields": "ضبط حقول القالب",
+      "connect_connector": "طلب ربط موصل",
       "counterparty_check": "التحقق من الطرف المقابل",
       "create-document": "جارٍ تجهيز المستند",
       "create_matter_document": "جارٍ إنشاء المستند",
@@ -2035,6 +2052,7 @@
     "confirm": "تأكيد",
     "confirmAction": "هل أنت متأكد؟",
     "connect": "ربط",
+    "connected": "متصل",
     "connectionLost": "انقطع الاتصال",
     "connectionLostDescription": "فقدنا الاتصال بالخادم. جارٍ إعادة المحاولة تلقائيًا.",
     "convertTo": "تحويل إلى",
@@ -2203,6 +2221,8 @@
     "noResults": "لا توجد نتائج",
     "noVersions": "لا يوجد سجل إصدارات",
     "none": "لا شيء",
+    "notConnected": "غير متصل",
+    "notNow": "ليس الآن",
     "notStated": "غير مذكور",
     "notes": "الملاحظات",
     "open": "فتح",
@@ -2451,10 +2471,10 @@
       "value": "قيمة الحقل"
     },
     "datePrecision": "دقة التاريخ",
-    "deleteContact": "حذف العميل",
+    "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
-    "editContact": "تعديل العميل",
+    "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",
       "personal": "شخصي",
@@ -4611,7 +4631,6 @@
       "selectAtLeastOneRole": "اختر دورًا واحدًا على الأقل لهذا المفتاح.",
       "selectModelForEachRole": "أضف مزوّدًا واختر نموذجًا لكل فئة.",
       "selectedProvider": "{provider}",
-      "title": "إعدادات الذكاء الاصطناعي",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
     "invitations": {
@@ -5039,7 +5058,7 @@
         "title": "المصادقة الثنائية"
       },
       "wordEditIdentitySaved": "تم تحديث هوية تحرير Word",
-      "wordEditShortcut": "اختصار تحرير Word",
+      "wordEditShortcut": "الأحرف الأولى لتعديلات Word",
       "wordEditShortcutDescription": "وسم قصير للأحرف الأولى من اسمك في تحريرات Word.",
       "wordEditShortcutPlaceholder": "مثل: ج.ك"
     },
@@ -5050,7 +5069,6 @@
       "cliInstallLabel": "التثبيت",
       "cliLoginLabel": "تسجيل الدخول",
       "cliTitle": "واجهة سطر الأوامر",
-      "connected": "متصل",
       "connectedAgo": "متصل {time}",
       "connectedAppsDescription": "تطبيقات سجّلت الدخول إليها بحساب stella. افصل ما لم تعد تستخدمه.",
       "connectedAppsEmpty": "لا شيء بعد. أعدّ Claude أو ChatGPT أعلاه وسيظهر هنا.",
@@ -5073,7 +5091,6 @@
       "mcpTitle": "خادم MCP",
       "mcpUrlLabel": "عنوان URL للخادم",
       "noMatches": "لا يوجد اتصال يطابق «{query}»",
-      "notConnected": "غير متصل",
       "permissionCount": "{count, plural, zero {لا أذونات} one {إذن واحد} two {إذنان} few {# أذونات} many {# إذنًا} other {# إذن}}",
       "privateCredentialOnly": "بيانات اعتماد خاصة فقط",
       "searchPlaceholder": "ابحث في الاتصالات",
@@ -5194,7 +5211,6 @@
       "usageLimitDescriptionNoEntitlement": "تتطلب ميزات الذكاء الاصطناعي استحقاق استخدام نشطًا لهذه المؤسسة.",
       "usageLimitDescriptionUsageLimitExceeded": "لا يمكن تشغيل هذا الإجراء مع حالة الاستخدام الحالية للمؤسسة.",
       "usageLimitNeeded": "مطلوب",
-      "usageLimitNotNow": "ليس الآن",
       "usageLimitTitleEntitlementInactive": "استحقاق الاستخدام غير نشط",
       "usageLimitTitleNoEntitlement": "استحقاق الاستخدام مطلوب",
       "usageLimitTitleUsageLimitExceeded": "تم بلوغ حد استخدام الذكاء الاصطناعي",
@@ -5435,16 +5451,16 @@
     "savedDescription": "مجموعة أنماط محفوظة",
     "sourceDocument": "ملف DOCX المصدر",
     "stellaDescription": "تنسيق stella القانوني الكامل والمحايد للمستندات",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "مجموعات الأنماط",
     "untitledDocument": "مستند بلا عنوان"
   },
   "success": {
     "aiConfigDeleted": "تمت إزالة إعدادات الذكاء الاصطناعي",
     "aiConfigUpdated": "تم تحديث إعدادات الذكاء الاصطناعي",
-    "clientUpdated": "تم تحديث العميل",
-    "contactCreated": "تم إنشاء العميل",
-    "contactDeleted": "تم حذف العميل",
+    "clientUpdated": "تم تحديث جهة الاتصال",
+    "contactCreated": "تم إنشاء جهة الاتصال",
+    "contactDeleted": "تم حذف جهة الاتصال",
     "documentCreated": "تم إنشاء المستند",
     "folderCreated": "تم إنشاء المجلد",
     "invitationCanceled": "تم إلغاء الدعوة",
@@ -5981,6 +5997,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "أدخل عنوان بريد إلكتروني صالحًا.",
     "organizationNameRequired": "اسم المؤسسة مطلوب",
     "slugFormat": "يجب أن يتكوّن المعرّف من أحرف صغيرة وأرقام وشُرَط",
     "slugRequired": "المعرّف مطلوب"

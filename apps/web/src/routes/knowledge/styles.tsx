@@ -49,7 +49,7 @@ import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -93,7 +93,7 @@ const StyleSetsPage = () => {
 
   const replace = async (target: StyleSetItem, file: File) => {
     if (!isDocxFile(file)) {
-      notifyUserError(undefined, t("templates.invalidFileType"));
+      notifyUserProblem(t("templates.invalidFileType"));
       return;
     }
     setBusy(true);

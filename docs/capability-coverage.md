@@ -726,9 +726,9 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 40 |
+| auth_plumbing | 41 |
 | billing_ui | 1 |
-| chat_thread_ui | 17 |
+| chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 26 |
