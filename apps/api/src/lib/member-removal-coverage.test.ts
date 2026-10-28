@@ -123,6 +123,9 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "eu_completion_receipts.provenance",
   "feedback_reports.context",
   "feedback_reports.deliveries",
+  // Terminal AI outcomes contain a run id and timestamp, not a member id; the
+  // refusal reason is a closed literal and cannot carry user-provided text.
+  "fields.ai_settlement",
   "flow_definitions.steps",
   "flow_definitions.trigger",
   "flow_runs.definition_snapshot",

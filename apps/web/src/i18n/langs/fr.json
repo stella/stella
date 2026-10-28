@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses}}. Les réponses consomment le budget.",
+    "modelRefused": "Le modèle a refusé de répondre",
+    "nothingFound": "Aucun résultat",
     "refusedBudget": "Non exécuté : budget de réponses indisponible",
     "rerunAllPage": "Tout relancer (cette page)",
     "rerunColumnPage": "Relancer la colonne (cette page)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Descendre",
     "moveUp": "Monter",
     "name": "Nom",
+    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "newMatter": "Nouveau dossier",
     "newRow": "Nouvelle ligne",
     "next": "Suivant",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Client n° {index}",
       "skippedDuplicateContactId": "Ignoré : identifiant de contact en double",
       "skippedDuplicateTaxId": "Ignoré : numéro fiscal en double",
+      "skippedInFileDuplicate": "Ignoré : reprend une ligne précédente du fichier",
       "skippedInvalidRow": "Ignoré : la ligne ne respecte pas les règles d'import",
       "skippedInvalidTaxId": "Ignoré : numéro fiscal invalide",
       "skippedLimitReached": "Ignoré : limite de contacts atteinte"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "La ligne d’adresse 1 est obligatoire lorsqu’une adresse est renseignée.",
         "display_name_required": "Impossible de créer un nom affiché.",
+        "in_file_duplicate": "Doublon d’une ligne précédente de ce fichier",
         "invalid_email": "L’adresse e-mail n’est pas valide.",
         "invalid_phone": "Le numéro de téléphone n’est pas valide.",
         "invalid_tags": "Les étiquettes doivent être des valeurs textuelles.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
-      "validateFailed": "Impossible de vérifier ces contacts."
+      "validateFailed": "Impossible de vérifier ces contacts.",
+      "warning": {
+        "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",
+        "possible_in_file_duplicate": "Doublon possible de la ligne {row} ; seul le nom correspond."
+      }
     },
     "invalidDateOfBirth": "Saisissez une date de naissance valide.",
     "invalidNationalityCodes": "Saisissez des codes de nationalité valides.",
@@ -3297,7 +3306,6 @@
       "simple": "Marques simples"
     },
     "moreFormatting": "Plus de mise en forme",
-    "networkError": "Erreur réseau. Vérifiez votre connexion Internet et réessayez.",
     "nextChange": "Modification suivante",
     "numberedList": "Liste numérotée",
     "parseError": "Le document n’a pas pu être analysé. Il est peut-être corrompu ou dans un format non pris en charge.",
@@ -5989,6 +5997,9 @@
       "title": "Traduction prête"
     }
   },
+  "transportErrors": {
+    "timeout": "La requête a pris trop de temps. Réessayez."
+  },
   "validation": {
     "invalidEmail": "Saisissez une adresse e-mail valide.",
     "organizationNameRequired": "Le nom de l'organisation est requis",
@@ -6186,20 +6197,18 @@
         "notOpeningConnect": "Rien ne s’ouvre ? Connectez stella desktop",
         "notPickedUpDescription": "stella desktop n’est peut-être pas lancé ou pas connecté à ce compte. Connectez-le, puis réessayez.",
         "notPickedUpTitle": "stella desktop n’a pas ouvert le PDF",
+        "placementAttachmentsOnly": "Cette vue affiche les pièces jointes du PDF, le cachet ne peut donc pas être placé ici. Signez plutôt sans cachet.",
         "placementBox": "Position du cachet",
-        "placementConfirm": "Ouvrir stella desktop",
-        "placementDescription": "Choisissez comment la signature apparaît dans le PDF.",
+        "placementDrawTooLarge": "Trop grand pour un cachet. Relâchez pour utiliser la taille maximale.",
+        "placementDrawTooSmall": "Trop petit pour un cachet. Relâchez pour utiliser la taille minimale.",
         "placementHint": "Faites glisser le cachet pour le déplacer, ou son coin pour le redimensionner. Lorsque le cachet est sélectionné, les flèches le déplacent et Maj avec une flèche le redimensionne.",
-        "placementInvisible": "Signature invisible",
-        "placementInvisibleDescription": "La signature est enregistrée dans le fichier sans aucune marque sur les pages.",
-        "placementPageLabel": "Page du cachet",
-        "placementPageOption": "Page {page, number} sur {count, number}",
-        "placementPreview": "Aperçu de la page {page, number}",
-        "placementPreviewFailed": "L’aperçu de la page n’a pas pu être chargé.",
+        "placementModeHint": "Faites glisser sur une page pour dessiner le cachet, ou cliquez pour le placer.",
+        "placementPlaceOnLastPage": "Placer sur la dernière page",
+        "placementRedrawHint": "Faites glisser le cachet pour l'ajuster, ou dessinez-en un nouveau sur n'importe quelle page.",
+        "placementSignInvisible": "Signer sans cachet",
+        "placementSignVisible": "Signer avec cachet",
         "placementTitle": "Signer le PDF",
         "placementTooSmall": "Cette page est trop petite pour un cachet. Choisissez une autre page.",
-        "placementVisible": "Cachet visible",
-        "placementVisibleDescription": "Un cadre sur la page indique qui a signé et quand.",
         "preparingDescription": "Préparation du PDF pour stella desktop.",
         "readOnlyDescription": "Ce document est en lecture seule.",
         "signedDescription": "La signature a été enregistrée comme version {versionNumber, number}.",

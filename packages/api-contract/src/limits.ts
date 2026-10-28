@@ -175,3 +175,15 @@ export const READER_PROVISION_ANCHOR_MAX_CHARS = 256;
  * where the user sees that refusal for the file alone.
  */
 export const UPLOAD_FILE_MIN_BYTES = 1;
+
+/**
+ * Size bounds, in PDF points, of a visible signature stamp: legible, and never
+ * a page-covering box. The browser keeps a drawn stamp inside them and the
+ * API refuses a stamp outside them.
+ */
+export const PDF_SIGNING_STAMP_SIZE_LIMITS_PT = {
+  maxHeight: 200,
+  maxWidth: 400,
+  minHeight: 24,
+  minWidth: 72,
+} as const;

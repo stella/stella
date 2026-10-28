@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "modelRefused": "A modell megtagadta a választ",
+    "nothingFound": "Nincs találat",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Ügyfél {index}",
       "skippedDuplicateContactId": "Kihagyva: ismétlődő névjegyazonosító",
       "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
+      "skippedInFileDuplicate": "Kihagyva: a fájl egy korábbi sorát ismétli",
       "skippedInvalidRow": "Kihagyva: a sor nem felel meg az importálási szabályoknak",
       "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Ha van cím, a cím 1. sora kötelező.",
         "display_name_required": "Nem sikerült létrehozni a megjelenítési nevet.",
+        "in_file_duplicate": "A fájl egy korábbi sorának másolata",
         "invalid_email": "Az e-mail-cím érvénytelen.",
         "invalid_phone": "A telefonszám érvénytelen.",
         "invalid_tags": "A címkéknek szöveges értékeknek kell lenniük.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
-      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
+      "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
+      "warning": {
+        "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
+        "possible_in_file_duplicate": "A(z) {row}. sor lehetséges másolata; csak a név egyezik."
+      }
     },
     "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
     "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",
@@ -3297,7 +3306,6 @@
       "simple": "Az egyszerű korrektúra"
     },
     "moreFormatting": "További formázás",
-    "networkError": "Hálózati hiba. Ellenőrizze az internetkapcsolatát, és próbálja újra.",
     "nextChange": "Következő módosítás",
     "numberedList": "Számozott lista",
     "parseError": "A dokumentumot nem sikerült feldolgozni. Lehet, hogy sérült, vagy nem támogatott formátumú.",
@@ -5989,6 +5997,9 @@
       "title": "A fordítás elkészült"
     }
   },
+  "transportErrors": {
+    "timeout": "A kérés túl sokáig tartott. Próbálja újra."
+  },
   "validation": {
     "invalidEmail": "Adjon meg egy érvényes e-mail-címet.",
     "organizationNameRequired": "A szervezet neve kötelező",
@@ -6186,20 +6197,18 @@
         "notOpeningConnect": "Nem nyílik meg? Csatlakoztassa a stella desktopot",
         "notPickedUpDescription": "Lehet, hogy a stella desktop nem fut, vagy nincs ehhez a fiókhoz csatlakoztatva. Csatlakoztassa, majd próbálja újra.",
         "notPickedUpTitle": "A stella desktop nem nyitotta meg a PDF-et",
+        "placementAttachmentsOnly": "Ez a nézet a PDF mellékleteit mutatja, ezért ide nem helyezhető bélyegző. Írd alá bélyegző nélkül.",
         "placementBox": "A bélyegző helye",
-        "placementConfirm": "stella desktop megnyitása",
-        "placementDescription": "Válaszd ki, hogyan jelenjen meg az aláírás a PDF-ben.",
+        "placementDrawTooLarge": "Túl nagy a bélyegzőhöz. Elengedéskor a legnagyobb méretet kapja.",
+        "placementDrawTooSmall": "Túl kicsi a bélyegzőhöz. Elengedéskor a legkisebb méretet kapja.",
         "placementHint": "Húzd a bélyegzőt az áthelyezéshez, vagy a sarkát az átméretezéshez. Ha a bélyegző ki van jelölve, a nyílbillentyűk mozgatják, a Shift és egy nyílbillentyű pedig átméretezi.",
-        "placementInvisible": "Láthatatlan aláírás",
-        "placementInvisibleDescription": "Az aláírás jelölés nélkül kerül a fájlba, egyik oldalon sem látszik.",
-        "placementPageLabel": "A bélyegző oldala",
-        "placementPageOption": "{page, number}. oldal / {count, number}",
-        "placementPreview": "{page, number}. oldal előnézete",
-        "placementPreviewFailed": "Az oldal előnézetét nem sikerült betölteni.",
+        "placementModeHint": "Húzással rajzold meg a bélyegzőt az oldalon, vagy kattintással helyezd el.",
+        "placementPlaceOnLastPage": "Elhelyezés az utolsó oldalon",
+        "placementRedrawHint": "Húzd a bélyegzőt az igazításhoz, vagy rajzolj újat bármelyik oldalon.",
+        "placementSignInvisible": "Aláírás bélyegző nélkül",
+        "placementSignVisible": "Aláírás bélyegzővel",
         "placementTitle": "PDF aláírása",
         "placementTooSmall": "Ez az oldal túl kicsi a bélyegzőhöz. Válassz másik oldalt.",
-        "placementVisible": "Látható bélyegző",
-        "placementVisibleDescription": "Egy keret az oldalon mutatja, ki és mikor írta alá.",
         "preparingDescription": "A PDF előkészítése a stella desktop számára.",
         "readOnlyDescription": "Ez a dokumentum csak olvasható.",
         "signedDescription": "Az aláírás a(z) {versionNumber, number}. verzióként lett mentve.",

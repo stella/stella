@@ -1,9 +1,9 @@
-import { and, eq, isNull, notInArray, or } from "drizzle-orm";
+import { and, isNull, notInArray, or } from "drizzle-orm";
 
 import { TASK_STATUS } from "@stll/api-contract";
-import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { entities } from "@/api/db/schema";
+import { workTask } from "@/api/lib/tasks/work-task";
 
 /**
  * The entities table as a query sees it: the table itself in a builder query,
@@ -18,8 +18,7 @@ type EntitiesTable = typeof entities;
  */
 export const openAgendaTask = (table: EntitiesTable) =>
   and(
-    eq(table.kind, "task"),
-    or(isNull(table.listItemType), eq(table.listItemType, LIST_ITEM_TYPE.TASK)),
+    workTask(table),
     or(
       isNull(table.status),
       notInArray(table.status, [TASK_STATUS.DONE, TASK_STATUS.CANCELLED]),

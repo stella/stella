@@ -82,6 +82,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "modelRefused": "Mudel keeldus vastamast",
+    "nothingFound": "Midagi ei leitud",
     "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
     "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
     "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",
@@ -2212,6 +2214,7 @@
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
     "name": "Nimi",
+    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
@@ -2531,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
+      "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
@@ -2572,6 +2576,7 @@
       "issue": {
         "address_line_required": "Kui aadress on lisatud, on aadressirida 1 kohustuslik.",
         "display_name_required": "Kuvatavat nime ei õnnestunud koostada.",
+        "in_file_duplicate": "Selle faili varasema rea duplikaat",
         "invalid_email": "E-posti aadress on vigane.",
         "invalid_phone": "Telefoninumber on vigane.",
         "invalid_tags": "Sildid peavad olema tekstiväärtused.",
@@ -2600,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
-      "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
+      "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
+      "warning": {
+        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
+        "possible_in_file_duplicate": "Rea {row} võimalik duplikaat; kattub ainult nimi."
+      }
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
     "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
@@ -3297,7 +3306,6 @@
       "simple": "Lihtmärgistus"
     },
     "moreFormatting": "Veel vormindust",
-    "networkError": "Võrguviga. Kontrolli internetiühendust ja proovi uuesti.",
     "nextChange": "Järgmine muudatus",
     "numberedList": "Nummerdatud loend",
     "parseError": "Dokumenti ei õnnestunud sõeluda. See võib olla rikutud või toetamata vormingus.",
@@ -5989,6 +5997,9 @@
       "title": "Tõlge on valmis"
     }
   },
+  "transportErrors": {
+    "timeout": "Päring võttis liiga kaua aega. Proovi uuesti."
+  },
   "validation": {
     "invalidEmail": "Sisestage kehtiv e-posti aadress.",
     "organizationNameRequired": "Organisatsiooni nimi on kohustuslik",
@@ -6186,20 +6197,18 @@
         "notOpeningConnect": "Ei avane? Ühenda stella desktop",
         "notPickedUpDescription": "stella desktop ei pruugi töötada või pole selle kontoga ühendatud. Ühenda see ja proovi uuesti.",
         "notPickedUpTitle": "stella desktop ei avanud PDF-i",
+        "placementAttachmentsOnly": "See vaade näitab PDF-i manuseid, seega ei saa templit siia paigutada. Allkirjasta selle asemel ilma templita.",
         "placementBox": "Templi asukoht",
-        "placementConfirm": "Ava stella desktop",
-        "placementDescription": "Vali, kuidas allkiri PDF-is paistab.",
+        "placementDrawTooLarge": "Templi jaoks liiga suur. Lahti lastes kasutatakse suurimat suurust.",
+        "placementDrawTooSmall": "Templi jaoks liiga väike. Lahti lastes kasutatakse väikseimat suurust.",
         "placementHint": "Lohista templit selle liigutamiseks või selle nurka suuruse muutmiseks. Kui tempel on valitud, liigutavad nooleklahvid seda ja Shift koos nooleklahviga muudab selle suurust.",
-        "placementInvisible": "Nähtamatu allkiri",
-        "placementInvisibleDescription": "Allkiri salvestatakse faili ilma ühelegi leheküljele märki lisamata.",
-        "placementPageLabel": "Templi lehekülg",
-        "placementPageOption": "Lehekülg {page, number}/{count, number}",
-        "placementPreview": "Lehekülje {page, number} eelvaade",
-        "placementPreviewFailed": "Lehekülje eelvaadet ei õnnestunud laadida.",
+        "placementModeHint": "Lohista leheküljel templi joonistamiseks või klõpsa selle paigutamiseks.",
+        "placementPlaceOnLastPage": "Paiguta viimasele leheküljele",
+        "placementRedrawHint": "Lohista templit selle kohandamiseks või joonista uus mis tahes leheküljele.",
+        "placementSignInvisible": "Allkirjasta ilma templita",
+        "placementSignVisible": "Allkirjasta templiga",
         "placementTitle": "Allkirjasta PDF",
         "placementTooSmall": "See lehekülg on templi jaoks liiga väike. Vali mõni teine lehekülg.",
-        "placementVisible": "Nähtav tempel",
-        "placementVisibleDescription": "Leheküljel olev kast näitab, kes ja millal allkirjastas.",
         "preparingDescription": "PDF-i ettevalmistamine stella desktopi jaoks.",
         "readOnlyDescription": "See dokument on kirjutuskaitstud.",
         "signedDescription": "Allkiri salvestati versioonina {versionNumber, number}.",

@@ -22,7 +22,14 @@ container="$(docker run -d -p 127.0.0.1::3002 "$image")"
 trap 'docker rm -f "$container" >/dev/null' EXIT
 port="$(docker port "$container" 3002/tcp | cut -d: -f2)"
 trap 'docker rm -f "$container" >/dev/null; rm -rf "$work"' EXIT
-curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 2 "http://127.0.0.1:$port/" > "$work/index.html"
+# Until the server listens, the published port accepts and then resets the
+# connection, which --retry-connrefused does not cover: retry every error, and
+# show why the image never answered if it does not.
+if ! curl --fail --silent --show-error --max-time 10 --retry 30 --retry-all-errors --retry-delay 2 "http://127.0.0.1:$port/" > "$work/index.html"; then
+  docker inspect "$container" --format 'container status={{.State.Status}} exit={{.State.ExitCode}}' >&2
+  docker logs --tail 100 "$container" >&2
+  exit 1
+fi
 # Read the image's build inventory rather than assuming HTML links all lazy chunks.
 docker cp "$container:/app/apps/web/dist/.stella-client-assets" "$work/assets"
 awk '/\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]+\.(js|css)$/ { print; count++; if (count == 3) exit }' "$work/assets" > "$work/probes"

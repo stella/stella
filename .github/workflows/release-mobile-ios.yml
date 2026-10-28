@@ -38,11 +38,12 @@ jobs:
   testflight:
     name: TestFlight ${{ inputs.variant }}
     if: github.ref == 'refs/heads/main'
-    # The signing secrets live only in this environment, which needs a
-    # reviewer's approval and deploys from main alone, so a dispatch of an
-    # edited workflow on another branch cannot read them.
+    # The signing secrets live only in this environment, which deploys from
+    # main alone, so a dispatch of an edited workflow on another branch
+    # cannot read them. It needs no reviewer: a release runs on dispatch.
     environment: mobile-release
-    runs-on: macos-15
+    # Expo SDK 58 builds with Swift 6.2, which only Xcode 26 and later ship.
+    runs-on: macos-26
     timeout-minutes: 60
     permissions:
       contents: read
@@ -54,6 +55,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The image carries several Xcodes; the default may lag the newest.
+      - name: Select the newest Xcode
+        run: |
+          set -euo pipefail
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_*.app' ! -iname '*beta*' | sort -V | tail -n 1)"
+          if [ -z "$xcode" ]; then
+            echo "no Xcode on this image" >&2
+            exit 1
+          fi
+          sudo xcode-select --switch "$xcode"
+          xcodebuild -version
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
