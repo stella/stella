@@ -38,6 +38,7 @@ type SelectorCase = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  armed?: boolean;
 };
 const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
   cases.map((item) => {
@@ -50,6 +51,7 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
         suiteDepth: item.suiteDepth ?? "fast",
         heavyOnly: false,
         prTitle: item.title ?? "",
+        armed: item.armed ?? false,
       },
       {
         ...DEFAULT_DETECTORS,
@@ -141,6 +143,21 @@ test("documentation and landing detector failures widen their workflow scopes", 
     expect(deploy.e2e_landing_required).toBe("true");
     expect(deploy.landing_build_required).toBe("false");
   }
+});
+
+test("an armed pull request builds the landing at merge-group scope", () => {
+  const scope = (armed: boolean) =>
+    computeChangedFileScope(
+      {
+        ...detectorInput("pull_request"),
+        // A landing input outside e2e-landing, which builds the landing itself.
+        changedFiles: ["docs/changelog/v1.md"],
+        armed,
+      },
+      detectors({ landingBuild: () => false, landingDeploy: () => false }),
+    ).landing_build_required;
+  expect(scope(false)).toBe("false");
+  expect(scope(true)).toBe("true");
 });
 
 // The path list covers the landing's own tree; the deploy scope adds every
@@ -447,6 +464,9 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
 test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
   const dependencyInputs = [
     "scripts/dependency-audit.ts",
+    "scripts/dependency-audit-baseline.json",
+    "scripts/dependency-audit-assessment.ts",
+    "scripts/dependency-audit-acceptance.ts",
     "scripts/check-trusted-dependencies.ts",
     "scripts/retry.sh",
     "bun.lock",
@@ -689,7 +709,7 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
 
 const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
-test("a pull request builds the API image for arm64 unless it releases", () => {
+test("a pull request builds the API image for arm64 unless it releases or is armed", () => {
   const outputs = ["api_image_platforms"] as const;
   const expectations = drawPropertySamples(apiSourceSiblings, {
     numRuns: 10,
@@ -708,6 +728,15 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
         files,
         outputs,
         suiteDepth: "full",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+      // An armed pull request proves the image at merge-group scope.
+      {
+        files,
+        outputs,
+        suiteDepth: "fast",
+        armed: true,
         platforms: ["linux/amd64", "linux/arm64"],
         label,
       },

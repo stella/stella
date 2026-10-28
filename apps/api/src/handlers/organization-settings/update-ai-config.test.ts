@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   BYOK_DEFAULT_MODELS,
@@ -19,8 +19,8 @@ import type {
   OrgAIModelSelection,
 } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
+import * as outbound from "@/api/lib/auth/authorized-outbound-fetch";
 import { toSafeId } from "@/api/lib/branded-types";
-import * as outbound from "@/api/lib/safe-outbound-fetch";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -68,14 +68,12 @@ const createSettingsDb = (
       }),
     }),
   });
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operations += 1;
-    return operations === 1
-      ? Result.ok(asTestRaw<T>(row))
-      : Result.ok(await operation(tx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operations += 1;
+      return operations === 1 ? Result.ok(row) : Result.ok(await operation(tx));
+    },
+  );
   return { safeDb, written: () => written, operations: () => operations };
 };
 
@@ -434,7 +432,7 @@ describe("Anthropic workspace settings", () => {
   test("workspace update schema rejects unsafe header text and allows explicit clearing", () => {
     for (const anthropicWorkspaceId of ["wrk_safe-ID_01", ""]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),
@@ -448,7 +446,7 @@ describe("Anthropic workspace settings", () => {
       "wrk/path",
     ]) {
       expect(
-        Value.Check(updateAIConfig.config.body, {
+        v.is(updateAIConfig.config.body, {
           providers: [{ provider: "anthropic", anthropicWorkspaceId }],
           overrideModels: anthropicOverrides,
         }),

@@ -30,9 +30,9 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
@@ -69,15 +69,17 @@ type SignInPanelProps = {
   }) => void;
 };
 
-const formSchema = v.strictObject({
-  email: emailSchema(),
-});
+const formSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+  });
 
-const bootstrapFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-  bootstrapToken: v.pipe(v.string(), v.trim()),
-});
+const bootstrapFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+    bootstrapToken: v.pipe(v.string(), v.trim()),
+  });
 
 const authErrorResponseSchema = v.object({
   message: v.optional(v.string()),
@@ -169,7 +171,13 @@ const SignInOptionsPanel = ({
       return;
     }
 
-    analytics.captureError(toAuthClientError(error));
+    analytics.captureError(toAuthClientError(error), {
+      fingerprintKey: "SignInOptionsPanel.handleSocialSignIn:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SignInOptionsPanel.handleSocialSignIn:failure",
+      },
+    });
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
@@ -178,7 +186,7 @@ const SignInOptionsPanel = ({
 
   const form = useForm(
     schemaFormOptions({
-      schema: formSchema,
+      schema: formSchema(t("validation.invalidEmail")),
       defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -188,7 +196,13 @@ const SignInOptionsPanel = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "SignInOptionsPanel.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SignInOptionsPanel.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -235,6 +249,13 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure",
+                      },
+                    },
                   );
                 });
               }}
@@ -253,6 +274,13 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure-2",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure-2",
+                      },
+                    },
                   );
                 });
               }}
@@ -362,7 +390,7 @@ const BootstrapSignUpForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: bootstrapFormSchema,
+      schema: bootstrapFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "", bootstrapToken: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -378,7 +406,13 @@ const BootstrapSignUpForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "BootstrapSignUpForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "BootstrapSignUpForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -633,7 +667,7 @@ const MicrosoftIcon = () => (
 
 export const SignInPanel = (props: SignInPanelProps) => {
   const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
@@ -23,12 +23,12 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "assistant_chat" },
-  body: t.Object({
-    prompt: t.String({ minLength: 1, maxLength: 12_000 }),
-    strategy: t.UnionEnum(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
-    sendMode: t.Union([
-      t.Literal(CHAT_SEND_MODE.anonymized),
-      t.Literal(CHAT_SEND_MODE.rawOverride),
+  body: v.object({
+    prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(12_000)),
+    strategy: v.picklist(CHAT_PROMPT_IMPROVEMENT_STRATEGIES),
+    sendMode: v.union([
+      v.literal(CHAT_SEND_MODE.anonymized),
+      v.literal(CHAT_SEND_MODE.rawOverride),
     ]),
   }),
   requiresUsage: { actionType: "chat", modelTask: "short-text" },
@@ -135,7 +135,11 @@ const improvePrompt = createSafeRootHandler(
     )).trim();
     if (improvedPrompt.length === 0) {
       return Result.err(
-        new HandlerError({ status: 502, message: "Empty improved prompt" }),
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Empty improved prompt",
+        }),
       );
     }
 

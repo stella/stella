@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
   AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
 } from "@/api/agent-auth/constants";
+import { PRAGMA_NO_CACHE } from "@/api/http/cache";
 import {
   exchangeAuthorizationCode,
   pollClaimGrant,
@@ -24,7 +25,6 @@ import {
 } from "@/api/lib/api-handlers";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
 
 /**
  * Profile-specific token exchange hosting two grants better-auth's closed
@@ -34,14 +34,14 @@ import { PRAGMA_NO_CACHE } from "@/api/lib/security-headers";
  */
 const config = {
   contract: "patch",
-  body: t.Union([
-    t.Object({
-      grant_type: t.Literal(AGENT_AUTH_CLAIM_GRANT_TYPE),
-      claim_token: t.String({ minLength: 1, maxLength: 256 }),
+  body: v.union([
+    v.object({
+      grant_type: v.literal(AGENT_AUTH_CLAIM_GRANT_TYPE),
+      claim_token: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
     }),
-    t.Object({
-      grant_type: t.Literal(AGENT_AUTH_JWT_BEARER_GRANT_TYPE),
-      assertion: t.String({ minLength: 1, maxLength: 8192 }),
+    v.object({
+      grant_type: v.literal(AGENT_AUTH_JWT_BEARER_GRANT_TYPE),
+      assertion: v.pipe(v.string(), v.minLength(1), v.maxLength(8192)),
     }),
   ]),
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -119,7 +119,7 @@ const exchangeJwtBearer = async (
 const agentTokenHandler = createSafePublicHandler(
   config,
   async function* ({ body, set }) {
-    set.headers.pragma = PRAGMA_NO_CACHE;
+    set.headers["pragma"] = PRAGMA_NO_CACHE;
 
     const result =
       body.grant_type === AGENT_AUTH_JWT_BEARER_GRANT_TYPE

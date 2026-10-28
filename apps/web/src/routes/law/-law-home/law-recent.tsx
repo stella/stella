@@ -26,7 +26,10 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import {
+  type LawHistoryCountry,
+  useLawHistory,
+} from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -62,9 +65,13 @@ type LawRecentProps = {
   onSearch: (query: string) => void;
 };
 
-export const LawRecent = ({ onSearch }: LawRecentProps) => {
+/** The selected jurisdiction's history: what was searched and opened there. */
+export const LawRecent = ({
+  country,
+  onSearch,
+}: LawRecentProps & { country: LawHistoryCountry }) => {
   const [filter, setFilter] = useState<LawRecentFilter>("all");
-  const history = useLawHistory(filter);
+  const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
       onSearch={onSearch}
@@ -212,13 +219,26 @@ const ScopedLawRecentList = ({
         ) : (
           entries.map((entry) => {
             const title = entry.kind === "search" ? entry.query : entry.title;
-            const text = (
-              <LandingItemText
-                icon={recentEntryIcon(entry)}
-                meta={relativeTime(entry.lastUsedAt)}
-                title={title}
-              />
-            );
+            const text =
+              entry.kind === "statute" ? (
+                <span className="flex min-w-0 items-start gap-2">
+                  {recentEntryIcon(entry)}
+                  <span className="min-w-0 flex-1">
+                    <span className="text-foreground block text-sm font-medium wrap-anywhere whitespace-normal">
+                      {title}
+                    </span>
+                    <span className="text-muted-foreground block truncate text-xs">
+                      {relativeTime(entry.lastUsedAt)}
+                    </span>
+                  </span>
+                </span>
+              ) : (
+                <LandingItemText
+                  icon={recentEntryIcon(entry)}
+                  meta={relativeTime(entry.lastUsedAt)}
+                  title={title}
+                />
+              );
             return (
               <div
                 className="group flex min-w-0 items-center gap-1"

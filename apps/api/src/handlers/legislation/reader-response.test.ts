@@ -1,7 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
-import Elysia, { t } from "elysia";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
   isEligibleLegislationExpression,
@@ -25,11 +24,20 @@ import {
   statuteReaderSuccessResponseSchema,
   statuteVersionsSuccessResponseSchema,
 } from "@/api/handlers/legislation/reader-response";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { createSafeId } from "@/api/lib/branded-types";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { effectOpensVersion } from "@/api/lib/legal-search/legislation-validity-window";
 import { LIMITS } from "@/api/lib/limits";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+/** The serialized bound the response schema's JSON Schema rendering implies. */
+const byteBound = (schema: v.GenericSchema) =>
+  responseSchemaByteBound(toRouteJsonSchema(schema));
 
 const id = brandPersistedLegislationDocumentId(
   "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -87,9 +95,7 @@ test("reader metadata is byte bounded while complete official text survives", ()
         fulltext: text,
       };
       const result = projectStatuteReader(body);
-      expect(Value.Check(statuteReaderSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(statuteReaderSuccessResponseSchema, result)).toBe(true);
       expect(result.fulltext).toBe(text);
       expect(result.documentAst).toBe(body.documentAst);
       expect(result.sections?.at(0)?.text).toBe(text);
@@ -99,20 +105,18 @@ test("reader metadata is byte bounded while complete official text survives", ()
         documentAst: null,
         sections: result.sections?.map((section) => ({ ...section, text: "" })),
       };
-      const metadataSchema = t.Omit(statuteReaderSuccessResponseSchema, [
+      const metadataSchema = v.omit(statuteReaderSuccessResponseSchema, [
         "fulltext",
         "documentAst",
         "sections",
       ]);
       const sectionSchema =
-        statuteReaderSuccessResponseSchema.properties.sections.anyOf[0].items;
-      const projectedSectionSchema = t.Omit(sectionSchema, ["text"]);
+        statuteReaderSuccessResponseSchema.entries.sections.options[0].item;
+      const projectedSectionSchema = v.omit(sectionSchema, ["text"]);
       const metadataEnvelope = { ...envelope, sections: undefined };
       const metadataBytes = Buffer.byteLength(JSON.stringify(metadataEnvelope));
       const section = result.sections?.at(0);
-      expect(metadataBytes).toBeLessThanOrEqual(
-        responseSchemaByteBound(metadataSchema),
-      );
+      expect(metadataBytes).toBeLessThanOrEqual(byteBound(metadataSchema));
       expect(
         Buffer.byteLength(
           JSON.stringify({
@@ -121,7 +125,7 @@ test("reader metadata is byte bounded while complete official text survives", ()
             title: section?.title,
           }),
         ),
-      ).toBeLessThanOrEqual(responseSchemaByteBound(projectedSectionSchema));
+      ).toBeLessThanOrEqual(byteBound(projectedSectionSchema));
     }),
   );
 });
@@ -138,11 +142,9 @@ test("version pages serialize within the bound derived from every metadata field
         limit: count,
         nextCursor: "x".repeat(readerTextBytes.cursor),
       };
-      expect(Value.Check(statuteVersionsSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(statuteVersionsSuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(statuteVersionsSuccessResponseSchema),
+        byteBound(statuteVersionsSuccessResponseSchema),
       );
     }),
   );
@@ -175,11 +177,9 @@ test("provision history pages keep each preview wording inside its byte budget",
         limit: count,
         nextCursor: "x".repeat(readerTextBytes.cursor),
       };
-      expect(Value.Check(provisionHistorySuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(provisionHistorySuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(provisionHistorySuccessResponseSchema),
+        byteBound(provisionHistorySuccessResponseSchema),
       );
     }),
   );
@@ -192,6 +192,8 @@ test("citation previews cap block count and serialize within their derived byte 
       const text = fragment.repeat(8000);
       const heading = { id: text, anchorId: text, level: 1 as const, text };
       const result = projectProvisionPreview({
+        country: text,
+        url: text,
         documentId: id,
         language: text,
         anchorId: text,
@@ -207,14 +209,49 @@ test("citation previews cap block count and serialize within their derived byte 
           text,
         })),
       });
-      expect(Value.Check(provisionPreviewSuccessResponseSchema, result)).toBe(
-        true,
-      );
+      expect(v.is(provisionPreviewSuccessResponseSchema, result)).toBe(true);
       expect(Buffer.byteLength(JSON.stringify(result))).toBeLessThanOrEqual(
-        responseSchemaByteBound(provisionPreviewSuccessResponseSchema),
+        byteBound(provisionPreviewSuccessResponseSchema),
       );
     }),
   );
+});
+
+test("citation previews preserve their metadata through response encoding", async () => {
+  const preview = {
+    documentId: id,
+    country: "CZE",
+    url: "https://example.test/statutes/fixture#par_1",
+    language: "cs",
+    anchorId: "par_1",
+    citedAnchorId: null,
+    headings: [],
+    heading: null,
+    blocks: [
+      { id: "paragraph-1", anchorId: "par_1", text: "Text ustanovení." },
+    ],
+  };
+  const projected = projectProvisionPreview(preview);
+  const encoded = projectProvisionPreview(projected);
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/preview": {
+          GET: {
+            access: "public",
+            config: {
+              response: { 200: provisionPreviewSuccessResponseSchema },
+            },
+            run: async () => await Promise.resolve(encoded),
+          },
+        },
+      }),
+      middleware: [errorBoundary],
+    }),
+  );
+  const response = await server.fetch(new Request("http://localhost/preview"));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(preview);
 });
 
 test("reader plain text keeps literal markup and entities as text", () => {
@@ -229,6 +266,8 @@ test("reader plain text keeps literal markup and entities as text", () => {
       (tokens, repeat) => {
         const text = tokens.join("").repeat(repeat);
         const preview = projectProvisionPreview({
+          country: "CZE",
+          url: null,
           documentId: id,
           language: "cs",
           anchorId: "par_1",
@@ -318,10 +357,21 @@ test("reader response serialization preserves the complete official AST and text
   expect(
     Buffer.byteLength(projected.sections?.at(0)?.title ?? ""),
   ).toBeLessThanOrEqual(readerTextBytes.sectionTitle);
-  const app = new Elysia().get("/statute", () => projected, {
-    response: { 200: statuteReaderSuccessResponseSchema },
-  });
-  const response = await app.handle(new Request("http://localhost/statute"));
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({
+        "/statute": {
+          GET: {
+            access: "public",
+            config: { response: { 200: statuteReaderSuccessResponseSchema } },
+            run: async () => await Promise.resolve(projected),
+          },
+        },
+      }),
+      middleware: [errorBoundary],
+    }),
+  );
+  const response = await server.fetch(new Request("http://localhost/statute"));
   expect(response.status).toBe(200);
   // Compare the actual wire object, including all inline text, to the complete
   // source fixture: schema encoding must not clean or narrow the AST payload.

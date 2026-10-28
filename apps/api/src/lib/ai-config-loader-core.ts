@@ -2,6 +2,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type OrgAIConfigRow = {
   aiConfigEncrypted: string | null | undefined;
@@ -82,10 +83,13 @@ export const decryptOrgAIConfigRow = async ({
     const error = new Error(
       "organization AI config row has ciphertext or IV but not both",
     );
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
+    captureError(
+      error,
+      handlerErrorContext("aiConfig.validateEncryptionFields", {
+        organizationId,
+        source: "loadOrgAIConfig",
+      }),
+    );
     return { status: "corrupt", error };
   }
 
@@ -93,10 +97,13 @@ export const decryptOrgAIConfigRow = async ({
     const config = await decrypt(organizationId, ciphertext, iv);
     return { status: "ok", config };
   } catch (error) {
-    captureError(error, {
-      organizationId,
-      source: "loadOrgAIConfig",
-    });
+    captureError(
+      error,
+      handlerErrorContext("aiConfig.decrypt", {
+        organizationId,
+        source: "loadOrgAIConfig",
+      }),
+    );
     return { status: "corrupt", error };
   }
 };

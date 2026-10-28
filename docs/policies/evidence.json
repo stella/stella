@@ -8,8 +8,8 @@
         {
           "path": "apps/api/src/lib/auth.ts",
           "contains": [
-            "export const authMacro",
-            "export const workspaceAccessMacro"
+            "export const authenticateSession",
+            "export const authorizeWorkspace"
           ]
         },
         {
@@ -79,8 +79,8 @@
             "name: CI Checks",
             "name: Code quality",
             "name: Test",
-            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-policy",
-            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-rest",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" exec bun scripts/ci-check-pool.ts run ci-checks-policy",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" exec bun scripts/ci-check-pool.ts run ci-checks-rest",
             "bun run code-check:affected -- --leg",
             "bun run test -- --concurrency=2 --output-logs=full"
           ]

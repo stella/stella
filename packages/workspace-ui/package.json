@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.13.0",
+  "version": "0.14.1",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -33,10 +33,12 @@
     "./calculation-format": "./src/calculation-format.ts",
     "./calculation-selection": "./src/calculation-selection.ts",
     "./colors": "./src/colors.ts",
+    "./column-sort": "./src/column-sort.ts",
     "./conditions": "./src/conditions/index.ts",
     "./feature-previews": "./src/feature-previews/index.ts",
     "./field-value": "./src/field-value.tsx",
     "./field-value-logic": "./src/field-value-logic.ts",
+    "./formatting": "./src/formatting.tsx",
     "./kanban-grouping-picker": "./src/kanban-grouping-picker.tsx",
     "./kanban-view": "./src/kanban-view.ts",
     "./property-icon": "./src/property-icon.tsx",
@@ -85,7 +87,8 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",

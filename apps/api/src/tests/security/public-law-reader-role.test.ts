@@ -23,7 +23,10 @@ import {
   unredactedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import {
+  readCaseLawCoverageSourcesQuery,
+  readCaseLawCoverageSummaryQuery,
+} from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
   readDecisionHandler,
@@ -40,7 +43,10 @@ import {
   listSitemapShardsHandler,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
+import {
+  readCaseLawCorpusStatusQuery,
+  readCaseLawSourceHealthQuery,
+} from "@/api/handlers/case-law/decisions/status";
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
@@ -1185,6 +1191,14 @@ describe("public-law reader role", () => {
 
         await readCaseLawCoverageSourcesQuery(tx);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
+
+        expect(await readCaseLawCoverageSummaryQuery(tx)).toEqual({
+          message: "Coverage is unavailable",
+        });
+        exercised.add(readCaseLawCoverageSummaryQuery.publicLawSharedQuery);
+
+        await readCaseLawSourceHealthQuery(tx);
+        exercised.add(readCaseLawSourceHealthQuery.publicLawSharedQuery);
 
         await readCaseLawArrivalsQuery(tx, {
           sourceIds: [sourceId],

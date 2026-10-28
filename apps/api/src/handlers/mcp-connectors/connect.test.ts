@@ -7,8 +7,10 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const connectorUrl = "https://mcp.example.com/rpc";
@@ -57,6 +59,8 @@ const setup = (
   });
   type Context = Parameters<typeof handler.handler>[0];
   const chain = {
+    execute: async (statement: Parameters<typeof aggregateExecutionRows>[0]) =>
+      aggregateExecutionRows(statement),
     select: () => chain,
     from: () => chain,
     leftJoin: () => chain,
@@ -73,8 +77,11 @@ const setup = (
     insert: (table: unknown) =>
       table === mcpOAuthState
         ? {
-            values: async (value: unknown) => {
+            values: (value: unknown) => {
               states.push(value);
+              return {
+                onConflictDoUpdate: async () => await Promise.resolve(),
+              };
             },
           }
         : {
@@ -84,6 +91,13 @@ const setup = (
               },
             }),
           },
+    delete: (table: unknown) => ({
+      where: async () => {
+        if (table === mcpOAuthState) {
+          states.length = 0;
+        }
+      },
+    }),
     query: {
       mcpOAuthClients: {
         findFirst: async () => {
@@ -110,7 +124,7 @@ const setup = (
     request: new Request(
       "https://api.example.com/v1/mcp/connectors/example/connect",
     ),
-    route: "/v1/mcp/connectors/:slug/connect",
+    route: "/v1/mcp/connectors/:slug/connect" satisfies ApiRoutePath,
   });
   return {
     context,
@@ -172,6 +186,19 @@ test("connects using configured connector metadata", async () => {
   }
 });
 
+test("a repeated connect leaves one pending authorization", async () => {
+  const fixture = setup(issuer);
+
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+
+  expect(fixture.states).toHaveLength(1);
+});
+
 test("curated approval for another issuer requires administrator approval", async () => {
   const fixture = setup(null, undefined, {
     issuer: "https://as.example.net",
@@ -189,8 +216,11 @@ test("members connect with organization-approved authorization", async () => {
     approvedIssuer: issuer,
     status: "approved",
   });
-  fixture.context.memberRole = sessionMemberRole("member");
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+  const context = {
+    ...fixture.context,
+    memberRole: sessionMemberRole("member"),
+  };
+  expect(await fixture.handler.handler(context)).toMatchObject({
     type: "oauth2",
   });
   expect(fixture.states).toHaveLength(1);
@@ -209,8 +239,11 @@ test("pending authorization requires administrator approval", async () => {
 
 test("a connector without an approved issuer awaits administrator review", async () => {
   const fixture = setup(null);
-  fixture.context.memberRole = sessionMemberRole("member");
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+  const context = {
+    ...fixture.context,
+    memberRole: sessionMemberRole("member"),
+  };
+  expect(await fixture.handler.handler(context)).toMatchObject({
     code: 409,
     response: { code: "mcp_authorization_approval_required" },
   });

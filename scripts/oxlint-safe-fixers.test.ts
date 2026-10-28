@@ -2,6 +2,9 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { API } from "tsrs/unstable/async";
+
+import { safeAutofixRuleArgs } from "./autofix-safe-rules";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
 const temporaryDirectories: string[] = [];
@@ -10,7 +13,6 @@ setDefaultTimeout(20_000);
 
 const PLUGINS = [
   "no-awaited-builder-union",
-  "no-coerced-optional-union-enum",
   "no-layout-motion-classes",
   "no-physical-properties",
 ] as const;
@@ -32,7 +34,17 @@ type FixCase = {
   source: string;
 };
 
-const runOxlint = async (configPath: string, sourcePath: string) => {
+type RunOxlintOptions = {
+  configPath: string;
+  sourcePath: string;
+  ruleArgs?: readonly string[];
+};
+
+const runOxlint = async ({
+  configPath,
+  sourcePath,
+  ruleArgs = [],
+}: RunOxlintOptions) => {
   const spawned = Bun.spawn(
     [
       process.execPath,
@@ -41,6 +53,7 @@ const runOxlint = async (configPath: string, sourcePath: string) => {
       "-c",
       configPath,
       "--fix",
+      ...ruleArgs,
       sourcePath,
     ],
     {
@@ -79,14 +92,14 @@ const expectFixedPoint = async ({ expected, fileName, source }: FixCase) => {
   const sourcePath = path.join(directory, fileName ?? "subject.ts");
   await Bun.write(sourcePath, source);
 
-  const firstRun = await runOxlint(configPath, sourcePath);
+  const firstRun = await runOxlint({ configPath, sourcePath });
   expect(firstRun.exitCode).toBe(0);
   for (const plugin of PLUGINS) {
     expect(firstRun.output).not.toContain(`${plugin}/${plugin}`);
   }
   expect(await Bun.file(sourcePath).text()).toBe(expected);
 
-  const secondRun = await runOxlint(configPath, sourcePath);
+  const secondRun = await runOxlint({ configPath, sourcePath });
   expect(secondRun.exitCode).toBe(0);
   for (const plugin of PLUGINS) {
     expect(secondRun.output).not.toContain(`${plugin}/${plugin}`);
@@ -124,15 +137,6 @@ describe.serial("custom oxlint safe fixers", () => {
     });
   });
 
-  test("expands a static namespaced optional UnionEnum", async () => {
-    await expectFixedPoint({
-      source:
-        'const schema = t.Optional(t.UnionEnum(["person", /* keep */ "organization"]));\n',
-      expected:
-        'const schema = t.Optional(t.Union([t.Literal("person"), /* keep */ t.Literal("organization")]));\n',
-    });
-  });
-
   test("leaves context-dependent violations for the agent", async () => {
     const { configPath, directory } = await writeHarness();
     const sourcePath = path.join(directory, "subject.tsx");
@@ -150,7 +154,6 @@ describe.serial("custom oxlint safe fixers", () => {
       "async function loadWithNestedBranchWrapper() {",
       "  return await (lock ? ((paged ? query : query.limit(1)) satisfies Builder) : query.offset(2));",
       "}",
-      "const schema = t.Optional(t.UnionEnum(VALUES));",
       'const guidance = "Use right-click to open the menu";',
       `const arbitraryContent = <span className="before:content-['right-click']" />;`,
       `const quotedBracketContent = <span className="before:content-['a] right-click']" />;`,
@@ -161,11 +164,52 @@ describe.serial("custom oxlint safe fixers", () => {
     ].join("\n");
     await Bun.write(sourcePath, source);
 
-    const result = await runOxlint(configPath, sourcePath);
+    const result = await runOxlint({ configPath, sourcePath });
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain("no-awaited-builder-union");
-    expect(result.output).toContain("no-coerced-optional-union-enum");
     expect(result.output).toContain("no-physical-properties");
     expect(await Bun.file(sourcePath).text()).toBe(source);
   });
+});
+
+test("automatic source fixes preserve exported declaration types", async () => {
+  await using api = new API();
+  const { configPath, directory } = await writeHarness();
+  await Bun.write(
+    configPath,
+    'export default { plugins: ["typescript"], categories: { correctness: "off" } };\n',
+  );
+  const sourcePath = path.join(directory, "exports.ts");
+  const source = [
+    'export const mode: string = "default";',
+    "export const attempts: number = 3;",
+    "export const enabled: boolean = true;",
+    'export let currentMode = "default";',
+    'export class Configuration { readonly mode: string = "default"; }',
+    "",
+  ].join("\n");
+  await Bun.write(sourcePath, source);
+  const before = (
+    await api.transpileDeclaration(source, {
+      fileName: sourcePath,
+    })
+  ).outputText;
+  expect(before).toContain("mode: string;");
+  expect(before).toContain("attempts: number;");
+  expect(before).toContain("enabled: boolean;");
+  expect(before).toContain("currentMode: string;");
+
+  const fixed = await runOxlint({
+    configPath,
+    sourcePath,
+    ruleArgs: safeAutofixRuleArgs(),
+  });
+  expect(fixed.exitCode, fixed.output).toBe(0);
+  expect(
+    (
+      await api.transpileDeclaration(await Bun.file(sourcePath).text(), {
+        fileName: sourcePath,
+      })
+    ).outputText,
+  ).toBe(before);
 });

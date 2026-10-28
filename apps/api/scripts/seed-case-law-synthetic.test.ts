@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { DECISION_TEXT_FIELD } from "@stll/api-contract/case-law-text-field";
 import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
+import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   SYNTHETIC_CASE_LAW_QUERY,
@@ -70,6 +71,32 @@ describe("the synthetic case-law fixture", () => {
       true,
     );
     expect(headnotes.some((headnote) => headnote === undefined)).toBe(true);
+  });
+
+  test("carries a Czech decision with adjacent anonymized placeholders", () => {
+    const paragraphs = decisionsOf("CZE").flatMap(({ document_ast }) =>
+      isDocumentAst(document_ast) ? document_ast.blocks : [],
+    );
+    const runs = paragraphs.flatMap((block) =>
+      block.type === "paragraph" ? [block.inlines] : [],
+    );
+    // Two placeholders one space apart, as a court prints a title and a name.
+    const adjacent = runs.some((inlines) =>
+      inlines.some((inline, index) => {
+        const space = inlines[index + 1];
+        const next = inlines[index + 2];
+        return (
+          inline.type === "text" &&
+          inline.anonymized === true &&
+          space?.type === "text" &&
+          space.text === " " &&
+          space.anonymized === undefined &&
+          next?.type === "text" &&
+          next.anonymized === true
+        );
+      }),
+    );
+    expect(adjacent).toBe(true);
   });
 
   test("invents its identifiers and links nowhere", () => {

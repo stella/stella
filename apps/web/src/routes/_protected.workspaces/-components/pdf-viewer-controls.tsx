@@ -40,7 +40,7 @@ import {
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 
 const routeApi = getRouteApi(
@@ -82,7 +82,7 @@ export const PdfViewerControls = ({
     ...fileMetadataOptions({ workspaceId, fieldId }),
     enabled: fieldId.length > 0,
   });
-  const fileMetadataView = useQueryView(fileMetadataQuery);
+  const fileMetadataView = queryView(fileMetadataQuery);
   const fileMetadata =
     fileMetadataView.type === "items" ? fileMetadataView.items : undefined;
 
@@ -152,7 +152,13 @@ export const PdfViewerControls = ({
       const data = await fetchPrintPdf({ workspaceId, fieldId });
       printPdfBuffer(data);
     } catch (error: unknown) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PdfViewerControls.handlePrint:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PdfViewerControls.handlePrint:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsPrinting(false);

@@ -1,69 +1,76 @@
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
+import { READER_ANSWER_QUESTION_MAX_LENGTH } from "@stll/api-contract/reader-answers";
 
 import {
-  READER_ANSWER_QUESTION_MAX_LENGTH,
-  READER_ANSWER_QUOTE_MAX_LENGTH,
-} from "@stll/api-contract/reader-answers";
-
-import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 
 const modelOptions = {
-  modelId: t.Optional(t.String({ minLength: 1, maxLength: 200 })),
+  modelId: v.exactOptional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+  ),
 };
-const locale = t.String({
-  minLength: 2,
-  maxLength: 35,
-  pattern: "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$",
-});
-const question = t.String({
-  minLength: 1,
-  maxLength: READER_ANSWER_QUESTION_MAX_LENGTH,
-});
+const locale = v.pipe(
+  v.string(),
+  v.minLength(2),
+  v.maxLength(35),
+  v.regex(/^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$/u),
+);
+const question = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(READER_ANSWER_QUESTION_MAX_LENGTH),
+);
 const createFields = {
   ...modelOptions,
-  decisionId: tSafeId("caseLawDecision"),
+  decisionId: resourceIdSchema("caseLawDecision"),
   locale,
-  anchor: t.Object({
-    paragraphId: t.String({ minLength: 1, maxLength: 64 }),
-    quote: t.String({
-      minLength: 1,
-      maxLength: READER_ANSWER_QUOTE_MAX_LENGTH,
-    }),
-    startOffset: t.Integer({ minimum: 0 }),
-    endOffset: t.Integer({ minimum: 1 }),
+  // Each quote code unit and span consumes at least one JSON wire byte, so
+  // these transport-derived bounds admit every selection the server can read.
+  // Every span must also match its paragraph before anything is stored.
+  anchor: v.strictObject({
+    spans: v.pipe(
+      v.array(
+        v.strictObject({
+          paragraphId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+          quote: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(HTTP_REQUEST_BODY_MAX_BYTES),
+          ),
+          startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
+          endOffset: v.pipe(v.number(), v.integer(), v.minValue(1)),
+        }),
+      ),
+      v.minLength(1),
+      v.maxLength(HTTP_REQUEST_BODY_MAX_BYTES),
+    ),
   }),
 };
 
-export const createAnswerBodySchema = t.Union([
-  t.Object(
-    { ...createFields, kind: t.Literal("ask"), question },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    { ...createFields, kind: t.Literal("explain") },
-    { additionalProperties: false },
-  ),
+export const createAnswerBodySchema = v.union([
+  v.strictObject({ ...createFields, kind: v.literal("ask"), question }),
+  v.strictObject({ ...createFields, kind: v.literal("explain") }),
 ]);
-export const followUpBodySchema = t.Object(
-  { ...modelOptions, locale, question },
-  { additionalProperties: false },
-);
-export const regenerateBodySchema = t.Object(
-  { ...modelOptions, locale },
-  { additionalProperties: false },
-);
-export const answerParamsSchema = t.Object({
-  answerId: tSafeId("legalReaderAnswer"),
+export const followUpBodySchema = v.strictObject({
+  ...modelOptions,
+  locale,
+  question,
 });
-export const answerVisibilityBodySchema = t.Object({
-  visibility: t.Union([t.Literal("private"), t.Literal("shared")]),
+export const regenerateBodySchema = v.strictObject({ ...modelOptions, locale });
+export const answerParamsSchema = v.object({
+  answerId: resourceIdSchema("legalReaderAnswer"),
 });
-export const listAnswersQuerySchema = t.Object({
-  decisionId: tSafeId("caseLawDecision"),
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(tPaginationLimit(50)),
+export const answerVisibilityBodySchema = v.object({
+  visibility: v.picklist(["private", "shared"]),
+});
+export const listAnswersQuerySchema = v.object({
+  decisionId: resourceIdSchema("caseLawDecision"),
+  cursor: v.exactOptional(paginationCursorSchema()),
+  limit: v.exactOptional(numberFromString(paginationLimitSchema(50))),
 });

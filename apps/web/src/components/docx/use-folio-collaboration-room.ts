@@ -33,7 +33,7 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { createUuid } from "@/lib/uuid";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
@@ -368,7 +368,7 @@ export const useFolioCollaborationRoom = ({
           return;
         }
         if (data.snapshotRecovery === "unsaved-changes-discarded") {
-          notifyUserError(undefined, getSnapshotRecoveryMessage());
+          notifyUserProblem(getSnapshotRecoveryMessage());
         }
 
         seedReceipt = data.shouldSeed ? "pending" : "acknowledged";
@@ -477,7 +477,15 @@ export const useFolioCollaborationRoom = ({
                       : null;
                   if (!reportedFailure) {
                     reportedFailure = true;
-                    getAnalytics().captureError(rejoinResult.error);
+                    getAnalytics().captureError(rejoinResult.error, {
+                      fingerprintKey:
+                        "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId:
+                          "useFolioCollaborationRoom.startGenerationRejoin.runAttempt:failure",
+                      },
+                    });
                   }
                   if (status === 403) {
                     setConnectedState("readOnly");
@@ -564,7 +572,15 @@ export const useFolioCollaborationRoom = ({
               if (disposed) {
                 return;
               }
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                scope: {
+                  type: "handler",
+                  handlerId:
+                    "useFolioCollaborationRoom.startGenerationRejoin:failure",
+                },
+              });
               setConnectedState("reconnecting");
             })
             .finally(() => {
@@ -692,7 +708,14 @@ export const useFolioCollaborationRoom = ({
               return;
             }
             reportedFailure = true;
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              scope: {
+                type: "handler",
+                handlerId: "useFolioCollaborationRoom.acknowledgeSeed:failure",
+              },
+            });
             notifyUserError(error, getEditOpenFailedMessage());
           };
           detached(

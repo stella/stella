@@ -22,6 +22,7 @@ import {
   FetchBoundaryError,
 } from "@stll/errors";
 
+import { HTTP_FAILURE, HttpFailureError } from "@/api/http/errors";
 import {
   aiHandlerError,
   classifyAIBoundaryFailure,
@@ -30,8 +31,8 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
-import { elysiaFailureReason } from "@/api/lib/errors/elysia-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { httpFailureAnswer } from "@/api/lib/errors/http-failure-answer";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -42,6 +43,7 @@ import {
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint, errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type {
   ExpectedReason,
   FailureExpectation,
@@ -68,7 +70,8 @@ import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   getRequestFailure,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import {
   resetMetricLineSinkForTesting,
@@ -89,6 +92,8 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+
+import { exceptionFingerprint } from "./exception-fingerprint";
 
 const SENTINEL = "PRIVILEGED-SENTINEL";
 
@@ -153,6 +158,10 @@ const awsException = (name: string, httpStatusCode: number): Error => {
 };
 
 type Boundary = "ai" | "none";
+
+/** What the error boundary files a pipeline failure under. */
+const frameworkFailureOf = (error: HttpFailureError) =>
+  httpFailureAnswer(error).framework;
 
 type GradingRow = {
   readonly name: string;
@@ -471,6 +480,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       aiHandlerError(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
@@ -485,6 +495,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a cancellation deeper than the immediate wrapper stays visible",
     error: () =>
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new WorkflowIntegrationError({
@@ -500,6 +511,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       classifyFailure(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new ChatEmptyCompletionError({ message: SENTINEL }),
@@ -585,10 +597,15 @@ const GRADING_ROWS: readonly GradingRow[] = [
   },
   {
     name: "a request validation failure the framework answered",
-    error: () => ({ type: "body" }),
+    error: () =>
+      new HttpFailureError(HTTP_FAILURE.invalidRequest, {
+        issues: [{ field: "name", constraint: "invalid" }],
+      }),
     request: {
       answeredStatus: 422,
-      framework: elysiaFailureReason("VALIDATION", { type: "body" }),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.invalidRequest),
+      ),
     },
     reason: "request_validation",
     grade: "client",
@@ -596,30 +613,49 @@ const GRADING_ROWS: readonly GradingRow[] = [
   },
   {
     name: "a route the framework did not find",
-    error: () => new Error("NOT_FOUND"),
+    error: () => new HttpFailureError(HTTP_FAILURE.notFound),
     request: {
       answeredStatus: 404,
-      framework: elysiaFailureReason("NOT_FOUND", undefined),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.notFound),
+      ),
     },
     reason: "route_not_found",
     grade: "client",
   },
   {
+    name: "a method the matched path does not serve",
+    error: () =>
+      new HttpFailureError(HTTP_FAILURE.methodNotAllowed, { allow: ["GET"] }),
+    request: {
+      answeredStatus: 405,
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.methodNotAllowed),
+      ),
+    },
+    reason: "method_not_allowed",
+    grade: "client",
+  },
+  {
     name: "a body the framework could not parse",
-    error: () => new Error("PARSE"),
+    error: () => new HttpFailureError(HTTP_FAILURE.malformed),
     request: {
       answeredStatus: 400,
-      framework: elysiaFailureReason("PARSE", undefined),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.malformed),
+      ),
     },
     reason: "request_malformed",
     grade: "client",
   },
   {
     name: "a handler output that broke its own response schema",
-    error: () => ({ type: "response" }),
+    error: () => new HttpFailureError(HTTP_FAILURE.invalidResponse),
     request: {
       answeredStatus: 500,
-      framework: elysiaFailureReason("VALIDATION", { type: "response" }),
+      framework: frameworkFailureOf(
+        new HttpFailureError(HTTP_FAILURE.invalidResponse),
+      ),
     },
     reason: "response_invalid",
     grade: "defect",
@@ -798,6 +834,7 @@ describe("wrapper properties", () => {
 
   test("a brand deep in the chain does not rescue an outer defect", () => {
     const deep = new HandlerError({
+      code: "internal_error",
       status: 502,
       message: "wrapped",
       cause: new ChatEmptyCompletionError({ message: "x" }),
@@ -977,6 +1014,7 @@ describe("the observation reads the boundary's decision, not the classifier", ()
   test("a cancelled generation keeps the caller's fallback", () => {
     const answered = aiHandlerError(
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new AIGenerationCancelledError({ message: SENTINEL }),
@@ -1063,7 +1101,12 @@ const LEGACY_ROWS: readonly LegacyRow[] = [
   {
     name: "a RUN_ERROR numeric-string code",
     error: () =>
-      new HandlerError({ status: 502, message: "run", cause: { code: "503" } }),
+      new HandlerError({
+        status: 502,
+        code: "provider_error",
+        message: "run",
+        cause: { code: "503" },
+      }),
   },
   {
     name: "a numeric errno and a syscall",
@@ -1245,11 +1288,8 @@ const OUTPUT_BY_GRADE = {
   { severity: string; captures: number }
 >;
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/v1/contract");
-  initRequestContext(request);
-  return request;
-};
+const scopedRequest = (): Request =>
+  new Request("https://api.test/v1/contract");
 
 describe("observeFailure channels", () => {
   let analytics: RecordingAnalytics;
@@ -1281,7 +1321,15 @@ describe("observeFailure channels", () => {
       const expected = OUTPUT_BY_GRADE[row.grade];
       const request = scopedRequest();
 
-      observeFailure(materialize(row), { sink: SINK, request });
+      const failure = runWithRequestIdScope(() => {
+        openRequestContext();
+        observeFailure(materialize(row), {
+          sink: SINK,
+          request,
+          scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        });
+        return getRequestFailure();
+      });
 
       expect(logs.records.map(({ severityText }) => severityText)).toEqual([
         expected.severity,
@@ -1293,7 +1341,7 @@ describe("observeFailure channels", () => {
       });
       expect(analytics.exceptions()).toHaveLength(expected.captures);
       expect(metricLines).toHaveLength(row.grade === "transient" ? 1 : 0);
-      expect(getRequestFailure(request)).toEqual({
+      expect(failure).toEqual({
         grade: row.grade,
         reason: row.reason,
         sink: "contract.sink",
@@ -1345,6 +1393,7 @@ describe("observeFailure channels", () => {
     observeFailure(codedError("ECONNRESET"), {
       sink: SINK,
       request: scopedRequest(),
+      scope: { type: "request", method: "GET", routeTemplate: "/contract" },
     });
 
     const [line] = metricLines;
@@ -1393,7 +1442,10 @@ describe("observeFailure channels", () => {
     });
     const [exception] = analytics.exceptions();
     expect(exception?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "observe.contract.sink",
+        scope: { type: "handler", handlerId: "contract.sink" },
+      }),
     );
     // Suppression keys on that same identity: the second capture is throttled.
     expect(analytics.exceptions()).toHaveLength(1);
@@ -1462,6 +1514,7 @@ describe("privileged content never leaves the process", () => {
       () =>
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message: SENTINEL,
           cause: {
             error: {
@@ -1505,8 +1558,13 @@ describe("privileged content never leaves the process", () => {
       const error = make();
       const request = scopedRequest();
       const defect = failureSink({ event: "sentinel.defect", expected: [] });
-      observeFailure(error, { sink: defect, request, ctx: hostileContext });
-      captureError(error);
+      observeFailure(error, {
+        sink: defect,
+        request,
+        scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        ctx: hostileContext,
+      });
+      captureError(error, handlerErrorContext("observability.capture"));
       logger.warn("helper.record", {
         ...errorSystemFields(error),
         ...pgErrorFields(error),

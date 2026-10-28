@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import {
   DESKTOP_FEATURE_ACCESS_PATH,
@@ -8,13 +7,18 @@ import {
 } from "@stll/api-contract/desktop-feature-access";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -26,6 +30,9 @@ const GRANTED_EMAIL = "granted@example.test";
 
 type Caller = { email: string; emailVerified: boolean } | null;
 const testState = createTestState({ file: import.meta.path, config: env });
+
+const serve = (table: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
 
 const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
   const { scopedDb } = createScopedDbMock(
@@ -52,9 +59,9 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
         scopedDb,
       }),
   });
-  const app = new Elysia().get(DESKTOP_FEATURE_ACCESS_PATH, endpoint.handler, {
-    response: endpoint.config.response,
-  });
+  await using server = serve(
+    routes({ [DESKTOP_FEATURE_ACCESS_PATH]: { GET: endpoint } }),
+  );
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {
@@ -64,7 +71,7 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
       },
     ],
   });
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`),
   );
   expect(response.status).toBe(200);
@@ -72,13 +79,13 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
 };
 
 test("feature access requires the desktop account credential", async () => {
-  const app = new Elysia().use(desktopFeatureAccessRoute);
+  await using server = serve(desktopFeatureAccessRoute);
   for (const authorization of [
     undefined,
     "Bearer unrelated-credential",
     "Basic stella_dr_key",
   ]) {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`, {
         headers: authorization ? { authorization } : {},
       }),
@@ -96,6 +103,7 @@ test("a granted member sees the feature enabled", async () => {
     features: {
       "activity-timeline": { status: "enabled" },
       "time-billing": { status: "hidden" },
+      "local-agents": { status: "hidden" },
     },
   });
 });
@@ -120,6 +128,7 @@ test("callers outside the grant see the feature hidden", async () => {
       features: {
         "activity-timeline": { status: "hidden" },
         "time-billing": { status: "hidden" },
+        "local-agents": { status: "hidden" },
       },
     });
   }

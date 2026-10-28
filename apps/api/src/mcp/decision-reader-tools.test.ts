@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { status } from "elysia";
 import * as v from "valibot";
 
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { blockSchema } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { status } from "@/api/http/status";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedLegislationDocumentId,
@@ -577,6 +577,7 @@ describe("decision reader tool contracts", () => {
         expect(anchor).toBe("par_1");
         expect(citedAnchor).toBe("par_1-odst_1");
         return {
+          country: "CZE",
           url: "https://example.test/law/cze/statutes/fixture/v/2026-01-01#par_1-odst_1",
           documentId,
           language: "cs",

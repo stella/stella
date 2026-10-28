@@ -399,11 +399,6 @@
     "owner": "guards",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },
-  "apps/api/src/lib/oauth-cli-client-document.db.test.ts": {
-    "count": 1,
-    "owner": "security",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/api/src/lib/rate-limit/action-background-admission.test.ts": {
     "count": 2,
     "owner": "pricing",
@@ -476,11 +471,6 @@
   },
   "apps/api/src/lib/usage/member-capacity.db.test.ts": {
     "count": 5,
-    "owner": "pricing",
-    "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
-  },
-  "apps/api/src/lib/usage/organization-access-state.db.test.ts": {
-    "count": 6,
     "owner": "pricing",
     "reason": "Existing validated configuration setup and restoration; migrate through createTestState."
   },

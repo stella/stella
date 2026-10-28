@@ -24,6 +24,7 @@ import {
   WRITE_TOOL_REF_FIELD_MAP,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import { HttpStatusResponse } from "@/api/http/status";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -64,6 +65,11 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
+});
+
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -92,13 +98,12 @@ const { featureOmittedCapabilityIds, mapHandlerResult } =
   await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
-const { synthesizeCapabilityContext } =
+const { capabilityHandlerContext } =
   await import("@/api/mcp/capability-context");
 const { listStaticMcpToolDefinitions } =
   await import("@/api/mcp/static-tool-definitions");
 const { listMcpResources, readMcpResource } =
   await import("@/api/mcp/resources");
-const { ElysiaCustomStatusResponse } = await import("elysia");
 const { readCapabilityCatalog } =
   await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
@@ -119,26 +124,26 @@ type ToolCallResult = Awaited<ReturnType<typeof handleMcpToolCall>>;
  * envelope is unwrapped, as the CLI and the MCP apps do.
  */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the parsed shape per assertion
-const parseToolPayload = <T = unknown>(result: ToolCallResult): T => {
-  const item = result.content.at(0);
-  if (!item || item.type !== "text") {
-    throw new Error("Expected a text MCP response");
-  }
-  const parsed: unknown = JSON.parse(item.text);
-  const envelope = result.structuredContent;
-  const isCapabilityEnvelope =
-    isRecord(envelope) &&
-    Object.keys(envelope).length === 1 &&
-    Object.hasOwn(envelope, "result");
-  return asTestRaw<T>(
-    isCapabilityEnvelope &&
+const parseToolPayload = asTestRaw<<T = unknown>(result: ToolCallResult) => T>(
+  (result: ToolCallResult) => {
+    const item = result.content.at(0);
+    if (!item || item.type !== "text") {
+      throw new Error("Expected a text MCP response");
+    }
+    const parsed: unknown = JSON.parse(item.text);
+    const envelope = result.structuredContent;
+    const isCapabilityEnvelope =
+      isRecord(envelope) &&
+      Object.keys(envelope).length === 1 &&
+      Object.hasOwn(envelope, "result");
+    return isCapabilityEnvelope &&
       typeof parsed === "object" &&
       parsed !== null &&
       "result" in parsed
       ? parsed.result
-      : parsed,
-  );
-};
+      : parsed;
+  },
+);
 
 type ErrorEnvelope = {
   code: string;
@@ -324,7 +329,7 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });
@@ -757,8 +762,12 @@ describe("list verification access grants across MCP tools", () => {
       expect(hidden.isError).not.toBe(true);
     }
     expect(projectedLayouts).toBeGreaterThan(0);
-    const enabledResources = listMcpResources("default", granted);
-    const hiddenResources = listMcpResources("default", denied);
+    const enabledResources = await listMcpResources("default", {
+      context: granted,
+    });
+    const hiddenResources = await listMcpResources("default", {
+      context: denied,
+    });
     expect(enabledResources.length).toBeGreaterThan(0);
     // The production feature declares capability endpoints; its shared static
     // references remain available and contain no dedicated capability names.
@@ -1138,7 +1147,7 @@ describe("capability handler refusal metadata", () => {
           mappedError(
             mapHandlerResult({
               id: "properties.update",
-              result: new ElysiaCustomStatusResponse(status, {
+              result: new HttpStatusResponse(status, {
                 code: "handler_specific_code",
                 message: "A corrective action is required",
                 hint: "Correct the matter and invoke the capability again.",
@@ -1177,7 +1186,7 @@ describe("capability handler refusal metadata", () => {
     const error = mappedError(
       mapHandlerResult({
         id: "properties.update",
-        result: new ElysiaCustomStatusResponse(422, {
+        result: new HttpStatusResponse(422, {
           message: "Invalid input",
           hint: { raw: "private details" },
           retryable: "false",
@@ -1329,6 +1338,41 @@ describe("documents.compare capability contract", () => {
         parseToolPayload<{ valid: boolean; capability: string }>(result),
       ).toEqual({ valid: true, capability: "documents.compare" });
     }
+  });
+
+  test("a credential without the config grant is refused before any reference read", async () => {
+    const database = visibleReferenceDatabase([
+      DOCUMENT_ID,
+      "55555555-5555-4555-8555-555555555555",
+      TARGET_VERSION_ID,
+    ]);
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "documents.compare",
+        input: {
+          params: { matterId: MATTER_ID, documentId: DOCUMENT_ID },
+          body: {
+            filePropertyId: "55555555-5555-4555-8555-555555555555",
+            selection: { type: "previous", targetVersionId: TARGET_VERSION_ID },
+            mode: "strict",
+            granularity: "word",
+            baseTrackedChanges: "keep",
+            targetTrackedChanges: "accept",
+            output: { type: "version" },
+          },
+        },
+        validate_only: true,
+      },
+      context: createContext({
+        credentialPermissions: { searchHistory: ["read"] },
+        grantedScopes: ["stella:documents_write"],
+        scopedDb: database.scopedDb,
+        workspaceIds: [MATTER_ID],
+      }),
+    });
+
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    expect(database.getCallCount()).toBe(0);
   });
 
   test("rejects a one-to-many selection above the advertised target bound", async () => {
@@ -2110,7 +2154,7 @@ describe("capability executor workspace resolution", () => {
   });
 });
 
-describe("synthesized capability authorization lifetime", () => {
+describe("handlerCtx capability authorization lifetime", () => {
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
     let inserted: Record<string, unknown>[] = [];
     const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });
@@ -2122,7 +2166,7 @@ describe("synthesized capability authorization lifetime", () => {
         type: "credential",
       },
     };
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2137,7 +2181,7 @@ describe("synthesized capability authorization lifetime", () => {
       }),
     });
 
-    await synthesized.createAuditRecorder({
+    await handlerCtx.createAuditRecorder({
       workspaceId: toSafeId<"workspace">("ws_2"),
     })(tx, {
       action: "create",
@@ -2169,7 +2213,7 @@ describe("synthesized capability authorization lifetime", () => {
         scopedDb: emptyScopedDb,
       }),
     });
-    const synthesized = await synthesizeCapabilityContext({
+    const handlerCtx = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2178,12 +2222,12 @@ describe("synthesized capability authorization lifetime", () => {
     });
 
     expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
-    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await handlerCtx.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
     expect(pinnedWorkspaceIds).toEqual(["ws_1", "ws_2"]);
 
     expect(
-      await synthesized.getWorkspaceAccess(
+      await handlerCtx.getWorkspaceAccess(
         toSafeId<"workspace">("ws_inaccessible"),
       ),
     ).toBeNull();
@@ -2196,7 +2240,7 @@ describe("synthesized capability authorization lifetime", () => {
 
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
-    const rejection = await synthesizeCapabilityContext({
+    const rejection = await capabilityHandlerContext({
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2619,7 +2663,7 @@ describe("capability executor credential permission set", () => {
 
 describe("case-law ingestion status admin gate (fix-2)", () => {
   test("a non-admin member -> permission_denied (gate now in the handler)", async () => {
-    // The admin/owner gate moved from a route onBeforeHandle into the handler
+    // The admin/owner gate moved from a route-level hook into the handler
     // config (auditLog: ["read"], held only by owner/admin), so the generic
     // invoke path enforces it too.
     const result = await handleCapabilityCall({
@@ -2949,7 +2993,7 @@ describe("capability executor file-response gate (fix-6)", () => {
         const result = runWithRequestId("req_refusal", () =>
           mapHandlerResult({
             id: "documents.verifications.start",
-            result: new ElysiaCustomStatusResponse(429, refusal),
+            result: new HttpStatusResponse(429, refusal),
           }),
         );
         expect(mappedError(result)).toMatchObject({
@@ -2966,10 +3010,13 @@ describe("capability executor file-response gate (fix-6)", () => {
       const result = runWithRequestId("req_refusal", () =>
         mapHandlerResult({
           id: "x.y",
-          result: new ElysiaCustomStatusResponse(refusal.status, {
+          result: new HttpStatusResponse(refusal.status, {
             code,
             message: refusal.message,
             hint,
+            ...(code === "action_concurrency_busy"
+              ? { retryAfterMs: 1250 }
+              : {}),
           }),
         }),
       );
@@ -2979,6 +3026,7 @@ describe("capability executor file-response gate (fix-6)", () => {
           message: refusal.message,
           hint,
           retryable: refusal.retryable,
+          ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
           requestId: "req_refusal",
         }),
       );
@@ -2988,13 +3036,13 @@ describe("capability executor file-response gate (fix-6)", () => {
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
+      result: new HttpStatusResponse(404, { message: "Gone" }),
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
 });
 
-// --- file-input capabilities refused (t.File over JSON) ----------------------
+// --- file-input capabilities refused (file fields over JSON) -----------------
 
 describe("capability executor file-input gate", () => {
   test("template upload recovery names the dedicated MCP tool instead of the rejected capability", async () => {
@@ -3012,7 +3060,7 @@ describe("capability executor file-input gate", () => {
   });
 
   test("a required-file capability is refused pre-execution, naming its alternative", async () => {
-    // entities.upload's body carries a required t.File(); JSON cannot deliver a
+    // entities.upload's body carries a required file field; JSON cannot deliver a
     // File, so the gate refuses before validation/dispatch — and the hint
     // carries the presigned flow's real capability ids from the catalog, so the
     // agent gets a next call instead of a dead end.
@@ -3144,7 +3192,7 @@ describe("capability executor file-input gate", () => {
         )
         .map((e) => e.id),
     );
-    // The snapshot is compact JSON, so a `t.File()` field is literally
+    // The snapshot is compact JSON, so a file field is literally
     // `"format":"binary"`. Entries whose schema exceeded the byte cap carry no
     // schema here; the exporter checks those against the LIVE schema, which is
     // why that check cannot live only in this test.
@@ -3331,9 +3379,10 @@ describe("capability executor enforces the advertised input schema", () => {
     return asTestRaw<Record<string, unknown>>(limit);
   };
 
-  test("describe renders a bounded integer, not a coercion union", async () => {
-    // Elysia's t.Integer compiles to a string|integer union with the bounds
-    // hoisted above it; that shape is unreadable and unenforceable.
+  test("describe renders the bounded integer a query string carries", async () => {
+    // The route reads the limit from a query string (`numberFromString`); an
+    // agent is shown the number that string carries, with its bounds, never the
+    // decimal-string pattern the wire schema checks.
     expect(await advertisedLimit()).toEqual({
       type: "integer",
       minimum: 1,
@@ -3359,8 +3408,8 @@ describe("capability executor enforces the advertised input schema", () => {
 
   test("the advertised maximum itself validates, string form included", async () => {
     const maximum = Number((await advertisedLimit())["maximum"]);
-    // The string form is what a REST caller sends; flattening the coercion
-    // union must not cost the conversion the union was there for.
+    // The string form is what a REST caller sends; a number an agent sends is
+    // written as that same string before the route's own schema reads it.
     const results = await Promise.all(
       [maximum, String(maximum)].map(
         async (limit) =>
@@ -3385,7 +3434,7 @@ describe("capability executor enforces the advertised input schema", () => {
 // --- Shared agent-boundary input normalization --------------------------------
 
 describe("capability executor input normalization", () => {
-  test("unknown keys removed by the REST cleaner are rejected for agents", async () => {
+  test("unknown keys the route schema drops are rejected for agents", async () => {
     const result = await handleCapabilityCall({
       args: {
         capability: "templates.lookup-formats.create",
@@ -3394,7 +3443,7 @@ describe("capability executor input normalization", () => {
             registry: "ares",
             name: "Company number",
             format: "{value}",
-            unknownExtra: "would fail additionalProperties:false without Clean",
+            unknownExtra: "dropped by the route schema at REST",
           },
         },
         validate_only: true,
@@ -3451,8 +3500,9 @@ describe("capability executor input normalization", () => {
   });
 
   test("workspaceId still resolves when the config params schema omits it", async () => {
-    // The route macro owns workspaceId at REST; Clean must not break the
-    // resolution for configs that do not declare it (raw-params read).
+    // A workspace route reads workspaceId from its path before its params
+    // schema runs; reporting undeclared params must not break the resolution
+    // for configs that do not declare it (raw-params read).
     const result = await handleCapabilityCall({
       args: {
         capability: "time-entries.csv.export",
@@ -3587,7 +3637,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 409 maps to conflict, preserving the handler's message", () => {
     const mapped = mapHandlerResult({
       id: "case-law.matter-links.create",
-      result: new ElysiaCustomStatusResponse(409, {
+      result: new HttpStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
     });
@@ -3599,7 +3649,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 422 maps to validation_error, preserving the message", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(422, {
+      result: new HttpStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
     });
@@ -3611,7 +3661,7 @@ describe("status-to-envelope mapping", () => {
   test("a handler 401 maps to permission_denied", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
+      result: new HttpStatusResponse(401, { message: "Unauthorized" }),
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -3619,7 +3669,7 @@ describe("status-to-envelope mapping", () => {
   test("a 5xx stays internal_error with a generic message (no leak)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
-      result: new ElysiaCustomStatusResponse(502, {
+      result: new HttpStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
     });

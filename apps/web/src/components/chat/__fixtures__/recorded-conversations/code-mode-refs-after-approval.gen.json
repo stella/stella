@@ -22,397 +22,48 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Which documents do we hold?"
               }
             ],
-            "tools": [
-              {
-                "name": "use-browser",
-                "description": "Execute an approved command in the stella Chrome extension.",
-                "parameters": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "open"
-                        },
-                        "url": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4096
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "url"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "snapshot"
-                        },
-                        "textOffset": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 400000
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "click"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "fill"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 10000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "select"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 2000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "press-key"
-                        },
-                        "key": {
-                          "enum": [
-                            "ArrowDown",
-                            "ArrowLeft",
-                            "ArrowRight",
-                            "ArrowUp",
-                            "Backspace",
-                            "Enter",
-                            "Escape",
-                            "Space",
-                            "Tab"
-                          ],
-                          "type": "string"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "key",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "go-back"
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            ],
+            "tools": [],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Which documents do we hold?"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Which documents do we hold?"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -682,20 +333,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-2",
-            "parentRunId": "run-recorded-1",
-            "resume": [
-              {
-                "interruptId": "approval_call-2",
-                "payload": {
-                  "approved": true
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000003",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:19.000Z",
@@ -715,7 +357,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "content": "One draft is stale",
                 "toolCalls": [
                   {
@@ -737,8 +378,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-1",
+                "role": "tool",
                 "toolCallId": "call-1",
                 "content": "{\"success\":true,\"result\":[{\"id\":\"ent_1\",\"matter\":\"mat_2\",\"name\":\"entityA2\"},{\"id\":\"ent_2\",\"matter\":\"mat_1\",\"name\":\"entityA1\"}],\"logs\":[]}",
                 "metadata": {
@@ -748,8 +389,8 @@
                 }
               },
               {
-                "role": "tool",
                 "id": "tool-call-2",
+                "role": "tool",
                 "toolCallId": "call-2",
                 "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
                 "metadata": {
@@ -759,358 +400,12 @@
                 }
               }
             ],
-            "tools": [
-              {
-                "name": "use-browser",
-                "description": "Execute an approved command in the stella Chrome extension.",
-                "parameters": {
-                  "oneOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "open"
-                        },
-                        "url": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 4096
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "url"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "snapshot"
-                        },
-                        "textOffset": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 400000
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "click"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "fill"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 10000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "select"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "value": {
-                          "type": "string",
-                          "maxLength": 2000
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "page",
-                        "target",
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "press-key"
-                        },
-                        "key": {
-                          "enum": [
-                            "ArrowDown",
-                            "ArrowLeft",
-                            "ArrowRight",
-                            "ArrowUp",
-                            "Backspace",
-                            "Enter",
-                            "Escape",
-                            "Space",
-                            "Tab"
-                          ],
-                          "type": "string"
-                        },
-                        "page": {
-                          "type": "object",
-                          "properties": {
-                            "revision": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 128
-                            },
-                            "url": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            }
-                          },
-                          "required": [
-                            "revision",
-                            "url"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "target": {
-                          "type": "object",
-                          "properties": {
-                            "context": {
-                              "type": "string",
-                              "maxLength": 200
-                            },
-                            "href": {
-                              "type": "string",
-                              "minLength": 1,
-                              "maxLength": 4096
-                            },
-                            "name": {
-                              "type": "string",
-                              "maxLength": 500
-                            },
-                            "ref": {
-                              "type": "string",
-                              "maxLength": 256,
-                              "pattern": "^e:(\\d+):(\\d+(?:\\.(?:s\\.)?\\d+)*)$"
-                            },
-                            "role": {
-                              "type": "string",
-                              "maxLength": 100
-                            }
-                          },
-                          "required": [
-                            "name",
-                            "ref",
-                            "role"
-                          ],
-                          "additionalProperties": false
-                        }
-                      },
-                      "required": [
-                        "action",
-                        "key",
-                        "page",
-                        "target"
-                      ],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "action": {
-                          "const": "go-back"
-                        }
-                      },
-                      "required": [
-                        "action"
-                      ],
-                      "additionalProperties": false
-                    }
-                  ]
-                }
-              }
-            ],
+            "tools": [],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1132,26 +427,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "One draft is stale",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "execute_typescript",
-                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1213,23 +488,43 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "content": "One draft is stale",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "execute_typescript",
+                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:21.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -1251,26 +546,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "content": "One draft is stale",
-                "toolCalls": [
-                  {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                      "name": "execute_typescript",
-                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
-                    }
-                  },
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1332,22 +607,49 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "content": "One draft is stale",
+                "toolCalls": [
+                  {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                      "name": "execute_typescript",
+                      "arguments": "{\"typescriptCode\":\"const { matters } = await external_list_matters({});\\nconst found = [];\\nfor (const matter of matters) {\\n  const { documents } = await external_list_documents({ matter_id: matter.id });\\n  for (const document of documents) {\\n    found.push({ id: document.id, matter: matter.id, name: document.name });\\n  }\\n}\\nreturn found;\"}"
+                    }
+                  },
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:23.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-1",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-1",
+            "resume": [
+              {
+                "interruptId": "approval_call-2",
+                "status": "resolved",
+                "payload": {
+                  "approved": true
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {

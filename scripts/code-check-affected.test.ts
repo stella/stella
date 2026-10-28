@@ -62,8 +62,12 @@ const WORKSPACES = new Set([
   "apps/api",
   "apps/landing",
   "apps/web",
+  "packages/api-contract",
+  "packages/auth-model",
   "packages/errors",
+  "packages/portable-path",
   "packages/scripts",
+  "packages/sha256",
   "packages/typescript-config",
   "packages/ui",
 ]);
@@ -512,6 +516,21 @@ describe("affected code-check planning", () => {
     expect(planned.rootChecks).toContain("plugin-fixtures");
   });
 
+  // Lint plugins load the shared syntax reader, so editing it changes what
+  // every workspace lint reports.
+  test("a syntax reader change relints every workspace", () => {
+    const changedPath = "packages/scripts/src/syntax-tree.ts";
+    const planned = plan([changedPath], ["packages/scripts"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      `$TURBO_ROOT$/${changedPath}`,
+    );
+  });
+
   test.each([
     "scripts/design-lint-baseline.json",
     "scripts/ownership/status-transition.ts",
@@ -533,7 +552,6 @@ describe("affected code-check planning", () => {
     ["scripts/check-oxlint-plugin-registry.ts", "plugin-registry"],
     ["scripts/lint-oxlint-fixtures.sh", "plugin-fixtures"],
     ["scripts/oxlint-safe-fixers.test.ts", "plugin-fixtures"],
-    ["scripts/oxlint-typebox-unsafe.test.ts", "plugin-fixtures"],
     ["scripts/oxlint-additional-guards.test.ts", "plugin-fixtures"],
     ["scripts/check-oxlint-fixture-counts.ts", "plugin-fixtures"],
     ["scripts/lint-root-scripts.sh", "root-script-lint"],

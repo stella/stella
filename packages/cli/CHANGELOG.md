@@ -1,5 +1,111 @@
 # @stll/cli
 
+## 6.1.0
+
+### Minor Changes
+
+- [#6189](https://github.com/stella/stella/pull/6189) [`34faed5`](https://github.com/stella/stella/commit/34faed5563266a9b413f4e8ca2cc6fe9f57bd179) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Prepare a matter's next invoice with `invoices prefill`, and create prefilled drafts that bill expenses and billed-time changes in one `invoices create` call. Seller profiles record whether the issuer is a VAT payer (`vatPayer`).
+
+### Patch Changes
+
+- [#7183](https://github.com/stella/stella/pull/7183) [`7b30990`](https://github.com/stella/stella/commit/7b3099091efa5a049d157b586adac10fff6c0089) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose pending and unprobeable case-law removal reconciliation counts.
+
+- [#7159](https://github.com/stella/stella/pull/7159) [`0f6787d`](https://github.com/stella/stella/commit/0f6787d847630e67782f3a188a4f31d02e2554ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `matters delete` refuses a matter that has time entries, expenses or invoices; archive it instead to keep its billing records.
+
+- [#7009](https://github.com/stella/stella/pull/7009) [`d2d46a7`](https://github.com/stella/stella/commit/d2d46a7f6d7e16a64822cd955694a010a6c19dc3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the public read timeout error code in the generated MCP contract and map it to the server exit class.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Serve shipped skill guidance in the CLI resource catalog.
+
+- [#5603](https://github.com/stella/stella/pull/5603) [`72d2f00`](https://github.com/stella/stella/commit/72d2f00484a189e4b069bf77fc0bd86f4588ecfd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose shipped skill guidance through CLI reference resources.
+
+- [#7160](https://github.com/stella/stella/pull/7160) [`61c786f`](https://github.com/stella/stella/commit/61c786fedac65aee81af9f2c210d2edbedd4b981) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `tasks list` lists your open tasks across every matter you can open, soonest due first, each naming its matter.
+
+- [#7171](https://github.com/stella/stella/pull/7171) [`6ead297`](https://github.com/stella/stella/commit/6ead2978e0c1fdeaf42977b4c64c25e90d2f5eb8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries approval-queue return` returns up to 200 entries with one comment and answers per entry, and `time-entries update` moves a draft to another matter with `moveToWorkspaceId`.
+
+- [#7107](https://github.com/stella/stella/pull/7107) [`a640880`](https://github.com/stella/stella/commit/a6408801b667a761f77f46db628184ebec586be9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me suggestions list` lists your pending suggested time entries across matters for up to a week, and `time-entries me list` takes an `endDate` to cover up to seven work dates with per-day totals.
+
+- [#7127](https://github.com/stella/stella/pull/7127) [`3131d0d`](https://github.com/stella/stella/commit/3131d0dde83bd987c1176a951917083e6df38a06) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `time-entries me submissions create` submits your draft time for up to a week to your approvers, and the approval queue now lists submitted entries only.
+- Updated dependencies []:
+  - @stll/agent-input@0.2.2
+
+## 6.0.2
+
+### Patch Changes
+
+- [#7041](https://github.com/stella/stella/pull/7041) [`38a1dc9`](https://github.com/stella/stella/commit/38a1dc9c439f037dee25d10112da9f26d6cfa2d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose explicit case-law facet selection; searches omit facets unless requested.
+
+## 6.0.1
+
+### Patch Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `sort` option's description now says that `newest` lists undated decisions last instead of leaving them out.
+
+## 6.0.0
+
+### Major Changes
+
+- [#6947](https://github.com/stella/stella/pull/6947) [`e67e5f9`](https://github.com/stella/stella/commit/e67e5f9173316aa577c7a7a4a32c0c7b954b1091) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `organization-settings document-ocr-availability get` reports `type` (`live`, `batched` or `unconfigured`) in place of `available`, and a queued `entities ocr create` response carries the `availability` it was accepted under.
+
+### Patch Changes
+
+- [#6908](https://github.com/stella/stella/pull/6908) [`4255127`](https://github.com/stella/stella/commit/4255127c504a9fd486a41ca18b7aa37729eea29a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law coverage` for a listed country that holds no case law yet (Austria, the United Kingdom, the United States) reports it as unavailable with the reason, instead of failing with "Case-law country not found".
+
+- [#6829](https://github.com/stella/stella/pull/6829) [`f2ce46f`](https://github.com/stella/stella/commit/f2ce46f514d410a50203e6dfafca0e4c30424b8f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella search-history list` accepts a country to list one jurisdiction's entries, and each entry names its jurisdiction.
+
+## 5.8.0
+
+### Minor Changes
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills update` accept `invocation` (`auto` or `manual`), and `skills get` and `skills list` report it: a `manual` skill runs only when the user invokes it.
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills from-blueprint create` accept `boundWorkspaceId` or `boundClientId` to make a skill available only in one matter or for one client, and `skills get` and `skills list` report the binding.
+
+### Patch Changes
+
+- [#6838](https://github.com/stella/stella/pull/6838) [`b817801`](https://github.com/stella/stella/commit/b8178018739a464c0933f209992226505c06dc60) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Cursor can connect to the stella MCP server: a public client that registers a private-use callback without stating an application type registers as a native app, and scopes stella does not offer are left out of registrations and authorizations instead of failing them. The consent screen shows the app callback a code returns to.
+
+## 5.7.1
+
+### Patch Changes
+
+- [#6710](https://github.com/stella/stella/pull/6710) [`212eb0a`](https://github.com/stella/stella/commit/212eb0a8bbccd3e3405ee69e2bc1d3051786672b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read capability input schemas in their standard JSON Schema form: string literal unions stay enum flags whether or not each value states its type, file inputs state their size cap as `x-maxBytes`, and inputs list only the defaults the API applies.
+
+## 5.7.0
+
+### Minor Changes
+
+- [#6035](https://github.com/stella/stella/pull/6035) [`6f99564`](https://github.com/stella/stella/commit/6f99564f57fdcda47a4a52cfeead821ec1858533) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella capability list` takes `--query <text>` to search capabilities by id, title and description.
+
+## 5.6.0
+
+### Minor Changes
+
+- [#6834](https://github.com/stella/stella/pull/6834) [`dd7e7eb`](https://github.com/stella/stella/commit/dd7e7eb5379b3f95f2806cb6fcd1ebaeedb87da0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice export offers a Peppol BIS Billing 3.0 format for Slovak sellers.
+
+## 5.5.0
+
+### Minor Changes
+
+- [#6809](https://github.com/stella/stella/pull/6809) [`0b3bcae`](https://github.com/stella/stella/commit/0b3bcae5f2ab01d64b9182f76b587bc973a2f168) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Finalizing a VAT invoice in a currency other than the seller country's VAT currency records the official exchange rate for its tax point and states the VAT in that currency.
+
+## 5.4.0
+
+### Minor Changes
+
+- [#6559](https://github.com/stella/stella/pull/6559) [`23d1bd0`](https://github.com/stella/stella/commit/23d1bd032baa9c0c75623d0cc2c09710d6c3b312) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the folder-from-selection capability: create a folder and move a selection into it atomically.
+
+- [#6780](https://github.com/stella/stella/pull/6780) [`6e05ee0`](https://github.com/stella/stella/commit/6e05ee01231be81f8ce70f702898166e7c97249c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice line commands accept an exemption basis, the legal provision printed for an exempt or non-VAT-payer line, and the VAT rate preset command accepts Poland.
+
+### Patch Changes
+
+- [#6701](https://github.com/stella/stella/pull/6701) [`9191b62`](https://github.com/stella/stella/commit/9191b623f5f18a4759ac376faeae82cc18877569) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search` accepts Slovakia, Hungary and the EU, and `stella legislation search` accepts Slovakia.
+
+- [#6332](https://github.com/stella/stella/pull/6332) [`fb05250`](https://github.com/stella/stella/commit/fb05250ee7cab1ceeafde842797a76c7424eebdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the generated company-registry lookup contract for verified KRS name searches.
+
+- [#5894](https://github.com/stella/stella/pull/5894) [`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add strict whole-token numeric parsers for machine input. Reject malformed CLI pagination tokens while preserving localized tool-value normalization.
+- Updated dependencies [[`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9)]:
+  - @stll/agent-input@0.2.0
+
 ## 5.3.1
 
 ### Patch Changes

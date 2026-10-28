@@ -857,6 +857,7 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
     if (!response.stream) {
       throw new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Bedrock Converse returned no stream.",
       });
     }

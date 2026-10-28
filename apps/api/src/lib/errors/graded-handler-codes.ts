@@ -8,5 +8,6 @@
 import type { FailureReason } from "@stll/errors";
 
 export const GRADED_HANDLER_CODE_REASON = {
+  PUBLIC_READ_TIMEOUT: "public_read_timeout",
   upstream_unavailable: "upstream_unavailable",
 } as const satisfies Record<string, FailureReason>;

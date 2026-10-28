@@ -799,7 +799,7 @@ describe("TanStack text model resolution", () => {
                     bytes:
                       size === "oversized"
                         ? expect.any(String)
-                        : Buffer.from(png).toString("base64"),
+                        : Buffer.from(png).toBase64(),
                   },
                 },
               },

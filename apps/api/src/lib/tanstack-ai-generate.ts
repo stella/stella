@@ -276,6 +276,7 @@ const cancelledGenerationError = (): HandlerError =>
   classifyFailure(
     new HandlerError({
       status: 502,
+      code: "internal_error",
       message: CANCELLED_GENERATION_MESSAGE,
       cause: new AIGenerationCancelledError({
         message: CANCELLED_GENERATION_MESSAGE,
@@ -1863,6 +1864,7 @@ const streamTanStackStructuredOutput = async function* <
   if (!completed) {
     throw new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "TanStack AI structured output stream ended before completion.",
     });
   }

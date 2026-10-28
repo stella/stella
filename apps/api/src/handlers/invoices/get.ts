@@ -1,12 +1,15 @@
 import { Result } from "better-result";
 
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { readInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const readInvoiceById = createSafeHandler(
   {
@@ -32,7 +35,7 @@ const readInvoiceById = createSafeHandler(
         tx.query.invoices.findFirst({
           where: {
             id: { eq: params.invoiceId },
-            workspaceId: { eq: workspaceId },
+            RAW: (table) => invoiceInMatter(table, workspaceId),
           },
           with: INVOICE_DETAIL_RELATIONS,
         }),
@@ -49,19 +52,16 @@ const readInvoiceById = createSafeHandler(
     // for its attached entries until its first line edit materialises them
     // (`lockDraftInvoiceForLines`), and its totals count them in memory.
     const totals = readInvoiceTotals(invoice);
-    if (totals.isErr()) {
-      return Result.err(totals.error);
-    }
 
     return Result.ok({
       ...invoice,
-      netAmount: totals.value.netAmountMinor,
-      vatAmount: totals.value.vatAmountMinor,
+      netAmount: totals.netAmountMinor,
+      vatAmount: totals.vatAmountMinor,
       lines: invoice.lines.map((line) => ({
         ...line,
         releasedAt: line.releasedAt?.toISOString() ?? null,
       })),
-      totals: totals.value,
+      totals,
       paidAt: invoice.paidAt?.toISOString() ?? null,
       finalizedAt: invoice.finalizedAt?.toISOString() ?? null,
       createdAt: invoice.createdAt.toISOString(),

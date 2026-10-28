@@ -151,7 +151,7 @@ const fixture = () => {
     });
     write({
       directory,
-      file: "apps/api/src/eden-contract.ts",
+      file: "apps/api/src/web-contract.ts",
       source:
         'import type { Routes } from "./routes";\nexport type WebApiContract = { routes: Routes };\n',
     });

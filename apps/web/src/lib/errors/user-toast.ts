@@ -14,6 +14,7 @@ import { telemetryErrorType } from "@/lib/analytics/error-diagnostics";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { resetReportedErrorsForTests } from "@/lib/analytics/reported-error";
 import { BoundedSet } from "@/lib/bounded-set";
+import type { DetachedOperationId } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -29,6 +30,19 @@ type UserErrorToastOptions = Omit<
   routeTemplate?: string | undefined;
   toastId?: string | undefined;
 };
+
+type ProblemToastOptions = Omit<
+  UserErrorToastOptions,
+  "feature" | "occurrence" | "routeTemplate"
+>;
+
+/**
+ * A user-facing error names its cause. A cause that is always `undefined` or
+ * `null` is a cause-free message, which goes through
+ * {@link notifyUserProblem}; a cause that may be missing is reported only when
+ * it is there (see {@link notifyUserError}).
+ */
+type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
 
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;
@@ -60,13 +74,17 @@ export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
   currentRouteTemplate = routeTemplate;
 };
 
+/** Report a user-visible failure by its cause; without one there is nothing to report. */
 export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
   { notice, occurrence }: UserVisibleErrorReportOptions = {},
 ): void => {
-  const reportable = error ?? new Error("UserVisibleError");
+  if (error === undefined || error === null) {
+    return;
+  }
+  const reportable = error;
   const template =
     (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
   const isApiError = APIError.is(error);
@@ -108,14 +126,35 @@ export const reportUserVisibleError = (
     reportedApiErrorsWithoutNotice.add(apiOccurrence);
   }
   getAnalytics().captureError(reportable, {
-    type: "user-visible",
-    routeTemplate: template,
-    feature: feature ?? featureFromRoute(template),
+    fingerprintKey: "reportUserVisibleError:failure",
+    scope: { type: "request", method: "GET", routeTemplate: template },
+    context: {
+      type: "user-visible",
+      routeTemplate: template,
+      feature: feature ?? featureFromRoute(template),
+    },
   });
 };
 
-export const notifyUserError = (
-  error: unknown,
+/**
+ * Tell the user about a problem that has no error behind it: input a form
+ * refuses, a limit, a precondition. Nothing is reported, because there is no
+ * cause to report; a failure with one goes through {@link notifyUserError}.
+ */
+export const notifyUserProblem = (
+  title: string,
+  { toastId, ...options }: ProblemToastOptions = {},
+): void => {
+  const toast = { ...options, title, type: "error" } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return;
+  }
+  stellaToast.add(toast);
+};
+
+export const notifyUserError = <Cause>(
+  error: Cause & NamedCause<Cause>,
   fallback: string,
   {
     feature,
@@ -125,11 +164,16 @@ export const notifyUserError = (
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
+  // An optional cause that is missing leaves a message with nothing behind it.
+  if (error === undefined || error === null) {
+    notifyUserProblem(fallback, { ...options, toastId });
+    return true;
+  }
   if (notifyStepUp(error)) {
     return false;
   }
-  // The stable refusal id coalesces Eden's observer and local error handlers;
-  // raw fetch and SDK errors also need to emit the same notice here.
+  // The stable refusal id coalesces the API client's observer and local error
+  // handlers; raw fetch and SDK errors also need to emit the same notice here.
   const refusal = actionAdmissionOutcome(error);
   const title = userErrorFromThrown(error, fallback);
   reportUserVisibleError(error, feature, routeTemplate, {
@@ -209,7 +253,7 @@ export const notifyAuthClientError = (
 
 type DetachedUserActionOptions = {
   /** A fixed label for telemetry, as `detached` takes. */
-  context: string;
+  context: DetachedOperationId;
   /** What the person is told when the action fails. */
   failureMessage: string;
 };

@@ -39,6 +39,8 @@ export type ChangedFileScopeInput = {
   suiteDepth: string;
   heavyOnly: boolean;
   prTitle: string;
+  /** An armed pull request proves the queue-only suites at merge-group scope. */
+  armed?: boolean;
   versionChangedInHead?: boolean;
   root?: string | undefined;
 };
@@ -122,7 +124,13 @@ const failClosedServiceSuites = (
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
 };
 
@@ -180,12 +188,17 @@ export const MODEL_CATALOG_DRIFT_INPUTS = [
   "packages/ai-catalog/src/capabilities.gen.ts",
   "packages/ai-catalog/src/document-input-overrides.ts",
   "packages/ai-catalog/src/index.ts",
+  "packages/ai-catalog/src/model-defaults-ledger.ts",
   "packages/ai-catalog/src/model-rate-policy.ts",
   "packages/ai-catalog/src/model-rate.ts",
   "packages/ai-catalog/src/model-rates.gen.ts",
+  "packages/ai-catalog/src/reasoning-capabilities.ts",
+  "packages/fetch/src/connection-failure.ts",
+  "packages/fetch/src/index.ts",
   "packages/scripts/src/model-catalog-capabilities-gen.ts",
   "packages/scripts/src/model-catalog-capabilities.ts",
   "packages/scripts/src/model-catalog-rates-gen.ts",
+  "packages/scripts/src/model-catalog-snapshot.ts",
 ] as const;
 
 export const ROUTE_TREE_INPUTS = [
@@ -348,6 +361,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     api_image_platforms: BOTH_PLATFORMS,
     api_image_smoke_required: TRUE,
     postgres_suites_required: TRUE,
+    dev_seed_required: TRUE,
     corpus_suites_required: TRUE,
     valkey_suites_required: TRUE,
     collaboration_suite_required: TRUE,
@@ -437,6 +451,7 @@ const deriveScopeFacts = (
         api_image_platforms: "[]",
         api_image_smoke_required: FALSE,
         postgres_suites_required: api,
+        dev_seed_required: api,
         corpus_suites_required: api,
         valkey_suites_required: api,
         collaboration_suite_required: FALSE,
@@ -525,6 +540,9 @@ const deriveNormalScopeFacts = (
     desktopBrowser = false;
   }
   const full = input.suiteDepth === "full";
+  // An armed pull request proves the queue-only suites at merge-group scope.
+  const heavyScope =
+    full || (input.eventName === "pull_request" && input.armed === true);
   const version = files.includes("VERSION");
   const imageInputs = anyMatches(files, [
     "*/Dockerfile",
@@ -580,21 +598,24 @@ const deriveNormalScopeFacts = (
   if (e2eCore || routeSmoke) {
     webBuild = true;
   }
+  const landingPaths = () =>
+    p([
+      "apps/landing/*",
+      "docs/changelog/*",
+      "VERSION",
+      "packages/*",
+      "patches/*",
+      "bun.lock",
+      "package.json",
+      ".github/workflows/ci.yml",
+    ]);
   let landing =
     input.eventName === "pull_request"
       ? failClosedDetector("landing build", () =>
           detectors.landingBuild({ changed: scopeFiles, root }),
-        )
-      : p([
-          "apps/landing/*",
-          "docs/changelog/*",
-          "VERSION",
-          "packages/*",
-          "patches/*",
-          "bun.lock",
-          "package.json",
-          ".github/workflows/ci.yml",
-        ]);
+        ) ||
+        (heavyScope && landingPaths())
+      : landingPaths();
   // e2e-landing runs the same landing build before it tests the preview.
   if (e2eLanding) {
     landing = false;
@@ -624,10 +645,21 @@ const deriveNormalScopeFacts = (
     "scripts/retry.sh",
   ]);
   const legal = legalAtlasImageSelected(files);
-  const postgres = full ? packageChecks : services.postgres;
-  const corpus = full ? packageChecks : services.corpus;
-  const valkey = full ? packageChecks : services.valkey;
-  const collaboration = full ? collab : services.collab;
+  const {
+    postgres,
+    devSeed,
+    corpus,
+    valkey,
+    collab: collaboration,
+  } = full
+    ? {
+        postgres: packageChecks,
+        devSeed: packageChecks,
+        corpus: packageChecks,
+        valkey: packageChecks,
+        collab,
+      }
+    : services;
   const servicePr =
     services.postgres || services.corpus || services.valkey || services.collab;
   const fixTest =
@@ -651,6 +683,7 @@ const deriveNormalScopeFacts = (
     services,
     desktopBrowser,
     full,
+    heavyScope,
     version,
     imageInputs,
     p,
@@ -664,6 +697,7 @@ const deriveNormalScopeFacts = (
     sandbox,
     legal,
     postgres,
+    devSeed,
     corpus,
     valkey,
     collaboration,
@@ -683,6 +717,7 @@ export const OUTPUT_ORDER = [
   "api_image_platforms",
   "api_image_smoke_required",
   "postgres_suites_required",
+  "dev_seed_required",
   "corpus_suites_required",
   "valkey_suites_required",
   "collaboration_suite_required",
@@ -757,8 +792,9 @@ export const OUTPUT_RULES = {
         bool((sandbox || apiDeps) && imageInputs),
     ),
   api_image_platforms: (facts) =>
-    scopeRule(facts, "api_image_platforms", ({ full, version }) =>
-      full || version ? BOTH_PLATFORMS : ARM_PLATFORM,
+    // Full depth, arming and a version change build every architecture.
+    scopeRule(facts, "api_image_platforms", ({ heavyScope, version }) =>
+      heavyScope || version ? BOTH_PLATFORMS : ARM_PLATFORM,
     ),
   api_image_smoke_required: (facts) =>
     scopeRule(facts, "api_image_smoke_required", ({ p }) =>
@@ -797,6 +833,8 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "postgres_suites_required", ({ postgres }) =>
       bool(postgres),
     ),
+  dev_seed_required: (facts) =>
+    scopeRule(facts, "dev_seed_required", ({ devSeed }) => bool(devSeed)),
   corpus_suites_required: (facts) =>
     scopeRule(facts, "corpus_suites_required", ({ corpus }) => bool(corpus)),
   valkey_suites_required: (facts) =>
@@ -865,7 +903,7 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "dependency_changes_required", ({ p }) =>
       bool(
         p([
-          "scripts/dependency-audit.ts",
+          "scripts/dependency-audit*",
           "scripts/check-trusted-dependencies.ts",
           "scripts/retry.sh",
           "bun.lock",
@@ -1200,6 +1238,7 @@ if (import.meta.main) {
     suiteDepth: Bun.env["SUITE_DEPTH"] ?? "",
     heavyOnly,
     prTitle: Bun.env["PR_TITLE"] ?? "",
+    armed: Bun.env["ARMED"] === TRUE,
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;

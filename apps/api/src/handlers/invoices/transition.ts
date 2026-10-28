@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   INVOICE_COUNTRY_PROFILES,
@@ -17,25 +17,24 @@ import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
-  INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
   invoices,
   sellerProfiles,
-  timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
-import {
-  lockDraftInvoiceForLines,
-  recalculateInvoiceTotals,
-} from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
+import { hasActiveInvoiceCredit } from "@/api/lib/billing/invoice-document-type";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
+import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -49,10 +48,17 @@ import {
   type VatRateRequest,
 } from "@/api/lib/billing/vat-exchange-rates";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
+import type {
+  AcquiredInvoiceMatterLocks,
+  InvoiceMatterLocks,
+} from "@/api/lib/db/aggregate-lock";
+import { releaseInvoiceTimeEntries } from "@/api/lib/db/transitions";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
 type TransitionAction =
   "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
@@ -83,8 +89,8 @@ const TRANSITIONS = {
   { from: InvoiceStatus[]; to: InvoiceStatus }
 >;
 
-const transitionInvoiceBodySchema = t.Object({
-  action: t.UnionEnum([
+const transitionInvoiceBodySchema = v.object({
+  action: v.picklist([
     "finalize",
     "send",
     "mark_paid",
@@ -93,7 +99,9 @@ const transitionInvoiceBodySchema = t.Object({
   ]),
 });
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 const validateReverseChargeBuyer = async (
   tx: Transaction,
@@ -107,7 +115,9 @@ const validateReverseChargeBuyer = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
+        // Scoped through the joined invoice: a client invoice spans matters,
+        // so its lines belong to the invoice's matters, not only this one.
+        invoiceInMatter(invoices, workspaceId),
         eq(invoiceLines.vatTreatment, "reverse_charge"),
       ),
     )
@@ -153,10 +163,11 @@ const validatePolishExemptionBases = async ({
   const missing = await tx
     .select({ treatment: invoiceLines.vatTreatment })
     .from(invoiceLines)
+    .innerJoin(invoices, eq(invoices.id, invoiceLines.invoiceId))
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
+        invoiceInMatter(invoices, workspaceId),
         inArray(invoiceLines.vatTreatment, ["exempt", "not_vat_payer"]),
         // The line schemas refuse blank bases (tExemptionReason).
         isNull(invoiceLines.exemptionReason),
@@ -184,35 +195,9 @@ const validateFinalizeTaxRequirements = async (
     options.workspaceId,
   )) ?? (await validatePolishExemptionBases(options));
 
-const linkedCreditError = async (
-  tx: Transaction,
-  invoiceId: SafeId<"invoice">,
-  workspaceId: SafeId<"workspace">,
-) => {
-  const credit = await tx
-    .select({ id: invoices.id })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.workspaceId, workspaceId),
-        eq(invoices.originalInvoiceId, invoiceId),
-        ne(invoices.status, INVOICE_STATUS.VOID),
-      ),
-    )
-    .limit(1);
-  return credit.at(0)
-    ? new HandlerError({
-        status: 409,
-        message:
-          "Void linked credit notes before changing their original invoice",
-      })
-    : null;
-};
-
 const buildVoidEvents = (params: {
   invoiceId: SafeId<"invoice">;
   previousStatus: InvoiceStatus;
-  revertedTimeEntries: { id: SafeId<"timeEntry"> }[];
   revertedExpenses: { id: SafeId<"expense"> }[];
 }): AuditEvent[] => {
   const events: AuditEvent[] = [
@@ -225,20 +210,6 @@ const buildVoidEvents = (params: {
       },
     },
   ];
-  for (const row of params.revertedTimeEntries) {
-    events.push({
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-      resourceId: row.id,
-      changes: {
-        status: {
-          old: BILLING_STATUS.BILLED,
-          new: BILLING_STATUS.APPROVED,
-        },
-        invoiceId: { old: params.invoiceId, new: null },
-      },
-    });
-  }
   for (const row of params.revertedExpenses) {
     events.push({
       action: AUDIT_ACTION.UPDATE,
@@ -257,9 +228,7 @@ const buildVoidEvents = (params: {
 };
 
 type ReleaseInvoiceEntriesOptions = {
-  actorUserId: SafeId<"user">;
-  invoiceId: SafeId<"invoice">;
-  workspaceId: SafeId<"workspace">;
+  matterLocks: AcquiredInvoiceMatterLocks;
   previousStatus: InvoiceStatus;
   now: Date;
   recordAuditEvent: AuditRecorder;
@@ -267,39 +236,20 @@ type ReleaseInvoiceEntriesOptions = {
 const releaseInvoiceEntries = async (
   tx: Transaction,
   {
-    invoiceId,
-    workspaceId,
+    matterLocks,
     previousStatus,
     now,
     recordAuditEvent,
-    actorUserId,
   }: ReleaseInvoiceEntriesOptions,
 ) => {
-  // The caller acquires these locks before the invoice; guard the release too.
-  const runningError = await guardRunningTimeEntries({
-    tx,
-    workspaceId,
-    actorUserId,
-    selection: { type: "invoice", invoiceId },
+  const { invoiceId } = matterLocks;
+  // The caller retains the successful guard's timer-owner, complete matter
+  // and source-row locks; reacquiring them after the invoice would invert order.
+  await releaseInvoiceTimeEntries(tx, {
+    matterLocks,
+    now,
+    recordAuditEvent,
   });
-  if (runningError) {
-    return Result.err(runningError);
-  }
-  const revertedTimeEntries = await tx
-    .update(timeEntries)
-    .set({
-      status: BILLING_STATUS.APPROVED,
-      invoiceId: null,
-      invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(timeEntries.invoiceId, invoiceId),
-        eq(timeEntries.workspaceId, workspaceId),
-      ),
-    )
-    .returning({ id: timeEntries.id });
 
   const revertedExpenses = await tx
     .update(expenses)
@@ -308,12 +258,7 @@ const releaseInvoiceEntries = async (
       invoiceId: null,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(expenses.invoiceId, invoiceId),
-        eq(expenses.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(expenses.invoiceId, invoiceId)))
     .returning({ id: expenses.id });
 
   // The voided document keeps its lines; releasing them lets the
@@ -324,7 +269,6 @@ const releaseInvoiceEntries = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
         isNull(invoiceLines.releasedAt),
       ),
     );
@@ -334,11 +278,9 @@ const releaseInvoiceEntries = async (
     buildVoidEvents({
       invoiceId,
       previousStatus,
-      revertedTimeEntries,
       revertedExpenses,
     }),
   );
-  return Result.ok(undefined);
 };
 
 /** A finalize that reuses an issued number surfaces as a conflict. */
@@ -351,6 +293,75 @@ const duplicateInvoiceNumberError = (
         message: "An invoice with this number already exists",
       })
     : null;
+
+type RefreshDraftInvoiceAmountsOptions = {
+  scope: Parameters<typeof lockDraftInvoiceForLines>[1];
+  sellerProfileId: SafeId<"sellerProfile"> | null;
+  now: Date;
+  recordAuditEvent: AuditRecorder;
+};
+
+const refreshDraftInvoiceAmounts = async (
+  tx: Transaction,
+  {
+    scope,
+    sellerProfileId,
+    now,
+    recordAuditEvent,
+  }: RefreshDraftInvoiceAmountsOptions,
+) => {
+  const draft = await lockDraftInvoiceForLines(tx, scope, recordAuditEvent);
+  if (draft.isErr()) {
+    return Result.err(draft.error);
+  }
+  const taxRequirementsError = await validateFinalizeTaxRequirements({
+    tx,
+    invoiceId: scope.invoiceId,
+    workspaceId: scope.workspaceId,
+    organizationId: scope.organizationId,
+    sellerProfileId,
+  });
+  if (taxRequirementsError !== null) {
+    return Result.err(taxRequirementsError);
+  }
+  return await recalculateInvoiceTotals(tx, scope, now, recordAuditEvent);
+};
+
+type AllocateDefaultInvoiceNumberOptions = Pick<
+  typeof invoices.$inferSelect,
+  "documentType" | "sellerProfileId" | "invoiceDate"
+>;
+
+const allocateDefaultInvoiceNumber = async (
+  tx: Transaction,
+  {
+    documentType,
+    sellerProfileId,
+    invoiceDate,
+  }: AllocateDefaultInvoiceNumberOptions,
+) => {
+  const series = await findDefaultNumberSeries(
+    tx,
+    documentType,
+    sellerProfileId,
+  );
+  if (!series) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "No default number series configured for this document type",
+        hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
+      }),
+    );
+  }
+  return await allocateNumber(
+    tx,
+    series.id,
+    new Date(`${invoiceDate}T00:00:00Z`),
+  );
+};
+
+type InvoiceTransitionProjection = Pick<typeof invoices.$inferSelect, "id">;
 
 type VatRateSource = (
   request: Omit<VatRateRequest, "transport" | "today">,
@@ -423,13 +434,15 @@ type VatRatePreflight = {
   taxableSupplyDate: string | null;
   statesVat: boolean;
   vatId: string | null;
+  finalizedAt: Date | null;
 };
 
 const resolveVatRate = async (
   invoice: VatRatePreflight | undefined,
   rateSource: VatRateSource,
 ): Promise<Result<ResolvedVatRate | null, HandlerError>> => {
-  if (!invoice?.country || !invoice.statesVat) {
+  // An issued invoice keeps the rate it was first issued with.
+  if (!invoice?.country || !invoice.statesVat || invoice.finalizedAt !== null) {
     return Result.ok(null);
   }
   const country = invoiceCountryOf(invoice);
@@ -548,6 +561,8 @@ const storeResolvedVatRate = async (
 };
 
 type UnconvertedVatOptions = {
+  /** Whether the invoice was issued before: its content cannot change. */
+  issued: boolean;
   sellerProfileId: SafeId<"sellerProfile"> | null;
   organizationId: SafeId<"organization">;
   currency: string;
@@ -559,7 +574,7 @@ type UnconvertedVatOptions = {
  */
 const unconvertedVatError = async (
   tx: Transaction,
-  { sellerProfileId, organizationId, currency }: UnconvertedVatOptions,
+  { issued, sellerProfileId, organizationId, currency }: UnconvertedVatOptions,
 ): Promise<HandlerError | null> => {
   if (sellerProfileId === null) {
     return null;
@@ -578,11 +593,17 @@ const unconvertedVatError = async (
   if (vatCurrency === null || vatCurrency === currency) {
     return null;
   }
-  return new HandlerError({
-    status: 409,
-    message: "The invoice's VAT changed while it was being finalized",
-    hint: "Finalize again; the official exchange rate is resolved before the invoice is issued.",
-  });
+  return issued
+    ? new HandlerError({
+        status: 409,
+        message: `This issued invoice states VAT in ${currency} without the official exchange rate to ${vatCurrency}`,
+        hint: "Its issued content cannot change: issue a credit note for it and a corrected invoice.",
+      })
+    : new HandlerError({
+        status: 409,
+        message: "The invoice's VAT changed while it was being finalized",
+        hint: "Finalize again; the official exchange rate is resolved before the invoice is issued.",
+      });
 };
 
 type ApplyTransitionOptions = {
@@ -601,21 +622,25 @@ const applyTransition = async (
   tx: Transaction,
   options: ApplyTransitionOptions,
 ): Promise<Result<{ id: SafeId<"invoice"> }, HandlerError>> => {
+  let matterLocks: InvoiceMatterLocks = { type: "acquire" };
   if (options.action === "void" || options.action === "finalize") {
-    const runningError = await guardRunningTimeEntries({
+    const running = await guardRunningTimeEntries({
       tx,
+      organizationId: options.organizationId,
       workspaceId: options.workspaceId,
       actorUserId: options.actorUserId,
       selection: { type: "invoice", invoiceId: options.invoiceId },
     });
-    if (runningError) {
-      return Result.err(runningError);
+    if (running.isErr()) {
+      return Result.err(running.error);
     }
+    matterLocks = running.value;
   }
   const existing = await lockInvoiceInStatus(tx, {
     invoiceId: options.invoiceId,
     workspaceId: options.workspaceId,
     status: options.transition.from,
+    matterLocks,
   });
   if (!existing) {
     return Result.err(
@@ -626,13 +651,18 @@ const applyTransition = async (
     );
   }
   if (options.action === "void" || options.action === "revert_to_draft") {
-    const creditError = await linkedCreditError(
-      tx,
-      existing.id,
-      options.workspaceId,
-    );
-    if (creditError !== null) {
-      return Result.err(creditError);
+    const hasCredit = await hasActiveInvoiceCredit(tx, {
+      invoiceId: existing.id,
+      workspaceId: options.workspaceId,
+    });
+    if (hasCredit) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "Void linked credit notes before changing their original invoice",
+        }),
+      );
     }
   }
   const set: Partial<typeof invoices.$inferInsert> = {
@@ -646,64 +676,60 @@ const applyTransition = async (
     set.paidAt = null;
   }
   if (options.action === "revert_to_draft") {
+    // An issued invoice keeps its content, the stored exchange rate included,
+    // so finalizing it again restores the same document.
     set.finalizedAt = existing.finalizedAt ?? options.now;
-    set.vatExchangeRate = null;
-    set.vatExchangeRateSource = null;
-    set.vatExchangeRateDate = null;
-    set.vatExchangeRateReference = null;
-    set.vatExchangeRateTaxPoint = null;
   }
   if (options.action === "finalize") {
-    if (options.resolvedVatRate !== null) {
-      const changedError = await storeResolvedVatRate(
-        tx,
-        existing.id,
-        options.resolvedVatRate,
-        set,
-      );
-      if (changedError !== null) {
-        return Result.err(changedError);
-      }
-    }
     const scope = {
       invoiceId: existing.id,
       workspaceId: options.workspaceId,
       organizationId: options.organizationId,
     };
-    const draft = await lockDraftInvoiceForLines(
-      tx,
-      scope,
-      options.recordAuditEvent,
-    );
-    if (draft.isErr()) {
-      return Result.err(draft.error);
-    }
-    const taxRequirementsError = await validateFinalizeTaxRequirements({
-      tx,
-      invoiceId: existing.id,
-      workspaceId: options.workspaceId,
-      sellerProfileId: existing.sellerProfileId,
-      organizationId: options.organizationId,
-    });
-    if (taxRequirementsError !== null) {
-      return Result.err(taxRequirementsError);
-    }
-    const totals = await recalculateInvoiceTotals(
-      tx,
-      scope,
-      options.now,
-      options.recordAuditEvent,
-    );
-    if (totals.isErr()) {
-      return Result.err(totals.error);
+    // Re-finalizing changes status, never the previously issued content.
+    if (existing.finalizedAt === null) {
+      if (options.resolvedVatRate !== null) {
+        const changedError = await storeResolvedVatRate(
+          tx,
+          existing.id,
+          options.resolvedVatRate,
+          set,
+        );
+        if (changedError !== null) {
+          return Result.err(changedError);
+        }
+      }
+      const totals = await refreshDraftInvoiceAmounts(tx, {
+        scope: { ...scope, matterLocks },
+        sellerProfileId: existing.sellerProfileId,
+        now: options.now,
+        recordAuditEvent: options.recordAuditEvent,
+      });
+      if (totals.isErr()) {
+        return Result.err(totals.error);
+      }
+    } else {
+      const taxRequirementsError = await validateFinalizeTaxRequirements({
+        tx,
+        invoiceId: existing.id,
+        workspaceId: options.workspaceId,
+        organizationId: options.organizationId,
+        sellerProfileId: existing.sellerProfileId,
+      });
+      if (taxRequirementsError !== null) {
+        return Result.err(taxRequirementsError);
+      }
     }
     // The same predicate as the preflight: any VAT-bearing line, so buckets
-    // whose VAT offsets to a zero total still need the rate.
+    // whose VAT offsets to a zero total still need the rate. An issued
+    // invoice keeps the rate it was first issued with.
     if (
       options.resolvedVatRate === null &&
+      existing.vatExchangeRate === null &&
       (await invoiceStatesVat(tx, existing.id))
     ) {
       const unconverted = await unconvertedVatError(tx, {
+        issued: existing.finalizedAt !== null,
         sellerProfileId: existing.sellerProfileId,
         organizationId: options.organizationId,
         currency: existing.currency,
@@ -714,26 +740,7 @@ const applyTransition = async (
     }
     set.finalizedAt = existing.finalizedAt ?? options.now;
     if (existing.invoiceNumber === null) {
-      const series = await findDefaultNumberSeries(
-        tx,
-        existing.documentType,
-        existing.sellerProfileId,
-      );
-      if (!series) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message:
-              "No default number series configured for this document type",
-            hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
-          }),
-        );
-      }
-      const number = await allocateNumber(
-        tx,
-        series.id,
-        new Date(`${existing.invoiceDate}T00:00:00Z`),
-      );
+      const number = await allocateDefaultInvoiceNumber(tx, existing);
       if (number.isErr()) {
         return Result.err(number.error);
       }
@@ -746,7 +753,7 @@ const applyTransition = async (
     .where(
       and(
         eq(invoices.id, options.invoiceId),
-        eq(invoices.workspaceId, options.workspaceId),
+        invoiceInMatter(invoices, options.workspaceId),
         inArray(invoices.status, options.transition.from),
       ),
     )
@@ -761,17 +768,17 @@ const applyTransition = async (
     );
   }
   if (options.action === "void") {
-    const release = await releaseInvoiceEntries(tx, {
-      actorUserId: options.actorUserId,
-      invoiceId: row.id,
-      workspaceId: options.workspaceId,
+    if (matterLocks.type !== "acquired") {
+      return panic(
+        "Invoice release requires the running guard's acquired locks",
+      );
+    }
+    await releaseInvoiceEntries(tx, {
+      matterLocks,
       previousStatus: existing.status,
       now: options.now,
       recordAuditEvent: options.recordAuditEvent,
     });
-    if (release.isErr()) {
-      return Result.err(release.error);
-    }
     await recordBillingCapCrossings(tx, {
       workspaceId: options.workspaceId,
       recordAuditEvent: options.recordAuditEvent,
@@ -849,6 +856,7 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
                   taxableSupplyDate: invoices.taxableSupplyDate,
                   country: sellerProfiles.country,
                   vatId: sellerProfiles.vatId,
+                  finalizedAt: invoices.finalizedAt,
                 })
                 .from(invoices)
                 .leftJoin(
@@ -858,7 +866,7 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
                 .where(
                   and(
                     eq(invoices.id, params.invoiceId),
-                    eq(invoices.workspaceId, workspaceId),
+                    invoiceInMatter(invoices, workspaceId),
                   ),
                 )
                 .limit(1)
@@ -897,7 +905,12 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
         return Result.err(conflict);
       }
       const transitioned = yield* result;
-      return Result.ok(transitioned);
+      return Result.ok(
+        transitioned satisfies AssertNoExtraFields<
+          typeof transitioned,
+          InvoiceTransitionProjection
+        >,
+      );
     },
   );
 
