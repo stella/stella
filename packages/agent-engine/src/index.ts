@@ -32,10 +32,14 @@ export {
   HarnessStartError,
 } from "./harness/adapter";
 export type {
+  HarnessApprovalOption,
   HarnessContinuation,
   HarnessEvent,
   HarnessFailure,
+  HarnessQuestion,
   HarnessSessionId,
+  HarnessToolCall,
+  HarnessToolResult,
 } from "./harness/events";
 export { HARNESS_FAILURE_OUTCOME, harnessSessionId } from "./harness/events";
 export {

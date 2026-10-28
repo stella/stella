@@ -154,8 +154,6 @@ export type HarnessEvent =
   | { type: "turn.interrupted" }
   | { type: "turn.failed"; failure: HarnessFailure };
 
-export type HarnessEventType = HarnessEvent["type"];
-
 /**
  * The runner protocol's outcome for each failure. Interrupted turns report
  * `interrupted`; the runner reports `cancelled` when the stop was a cancel.

@@ -16,7 +16,7 @@ import bundledManifestJson from "./harness-compatibility.json" with { type: "jso
  * and the `compatibility` key of its model manifest.
  */
 
-export const HARNESS_COMPATIBILITY_STATUSES = [
+const HARNESS_COMPATIBILITY_STATUSES = [
   "supported",
   "graceful",
   "unsupported",

@@ -31,7 +31,11 @@ const truncateBytes = (text: string, maxBytes: number): string => {
     encoder.encode(text).slice(0, maxBytes),
   );
   // A cut inside a multi-byte character decodes to U+FFFD; drop it.
-  return `${kept.replace(/�+$/u, "")} [truncated]`;
+  let end = kept.length;
+  while (end > 0 && kept[end - 1] === "\uFFFD") {
+    end -= 1;
+  }
+  return `${kept.slice(0, end)} [truncated]`;
 };
 
 /** Attachments are named but not transferred; the prompt is text only. */
@@ -119,7 +123,7 @@ const renderHistory = (history: readonly ModelMessage[]): string | null => {
  * `resumed`: the native session already holds the history, so only the new
  * user message is sent. `standalone`: the history travels in the prompt.
  */
-export type TurnPromptMode = "resumed" | "standalone";
+type TurnPromptMode = "resumed" | "standalone";
 
 type BuildTurnPromptOptions = {
   transcript: readonly ModelMessage[];
