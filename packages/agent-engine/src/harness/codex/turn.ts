@@ -304,7 +304,8 @@ export class CodexTurnSession {
   turn(): HarnessTurn {
     return {
       events: this.queue.items,
-      respond: async (response) => this.respond(response),
+      respond: async (response) =>
+        await Promise.resolve(this.respond(response)),
       interrupt: async () => this.interrupt(),
       dispose: async () => this.dispose(),
     };
