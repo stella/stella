@@ -27,6 +27,73 @@ const constitutionalPair = {
 };
 
 describe("Czech appeal history", () => {
+  test.each([false, true])(
+    "binds opposite dispositions to their own targets in one holding item (reverse order: %s)",
+    (reverseOrder) => {
+      // Adversarial arrangement of the public III. ÚS 2429/24 identities.
+      const annulled =
+        "Usnesení Nejvyššího soudu ze dne 6. srpna 2024 č. j. 27 Cdo 541/2024-681 se ruší";
+      const rejected =
+        "ústavní stížnost proti usnesení Krajského soudu v Ústí nad Labem - pobočky v Liberci ze dne 20. září 2023 č. j. 35 Co 56/2022-652 se odmítá";
+      const reviews = extractCzechAppealReviews({
+        header:
+          "proti usnesení Nejvyššího soudu ze dne 6. srpna 2024 č. j. 27 Cdo 541/2024-681, usnesení Krajského soudu v Ústí nad Labem - pobočky v Liberci ze dne 20. září 2023 č. j. 35 Co 56/2022-652",
+        holding: reverseOrder
+          ? `${rejected} a ${annulled}.`
+          : `${annulled} a ${rejected}.`,
+      });
+      expect(reviews.map(({ outcome }) => outcome)).toEqual([
+        "overturned",
+        "upheld",
+      ]);
+    },
+  );
+
+  test.each([
+    "Ústavní stížnosti se odmítají.",
+    "Kasační stížnosti se zamítají.",
+    "Kasační stížnosti se odmítají.",
+  ])("recognizes plural complaint dispositions: %s", (holding) => {
+    expect(
+      extractCzechAppealReviews({ ...nssPair, holding }).at(0)?.outcome,
+    ).toBe("upheld");
+  });
+
+  test.each([
+    {
+      // II. ÚS 191/13: https://nalus.usoud.cz/Search/GetText.aspx?sz=2-191-13_2
+      header:
+        "proti usnesení Nejvyššího soudu České republiky ze dne 13. 11. 2012, č. j. 28 Cdo 3614/2011-103, a proti rozsudku Nejvyššího soudu České republiky ze dne 12. 9. 2012, č. j. 28 Cdo 599/2012-69",
+      holding: "Ústavní stížnosti se odmítají.",
+      dockets: ["28 Cdo 3614/2011-103", "28 Cdo 599/2012-69"],
+    },
+    {
+      // NSS 10 As 204/2024-97: https://vyhledavac.nssoud.cz/DokumentOriginal/Index/743717
+      header:
+        "proti rozsudku Městského soudu v Praze ze dne 27. 9. 2024, č. j. 14 A 48/2023-110",
+      holding: "I. Kasační stížnosti se zamítají.",
+      dockets: ["14 A 48/2023-110"],
+    },
+    {
+      // NSS 8 Azs 20/2026-81: https://vyhledavac.nssoud.cz/DokumentOriginal/Text/783003
+      header:
+        "proti rozsudku Městského soudu v Praze ze dne 15. 1. 2026, č. j. 19 A 59/2025-62",
+      holding: "I. Kasační stížnosti se odmítají pro nepřijatelnost.",
+      dockets: ["19 A 59/2025-62"],
+    },
+  ])(
+    "reads real plural dispositions: $holding",
+    ({ header, holding, dockets }) => {
+      const reviews = extractCzechAppealReviews({ header, holding });
+      expect(
+        reviews.map(({ reviewedCaseNumber }) => reviewedCaseNumber),
+      ).toEqual([...dockets]);
+      expect(reviews.map(({ outcome }) => outcome)).toEqual(
+        dockets.map(() => "upheld"),
+      );
+    },
+  );
+
   test("retains district and appellate judgments with independent constitutional review outcomes", () => {
     const reviews = extractCzechAppealReviews({
       header:
@@ -266,6 +333,11 @@ describe("Czech appeal history", () => {
       "partly",
     ],
     ["Rozsudek se ve výroku o nákladech řízení zrušuje.", "partly"],
+    ["Rozsudek se zrušuje ve výroku II.", "partly"],
+    [
+      "Rozsudek se zrušuje v části a ve zbytku se kasační stížnost zamítá.",
+      "partly",
+    ],
     [
       "I. Kasační stížnost se zamítá. II. Ustanovený advokát se zprošťuje zastupování. III. Usnesení o ustanovení advokáta se zrušuje.",
       "upheld",

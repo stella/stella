@@ -97,8 +97,27 @@ const dateOf = (printed: string): string | null => {
 };
 
 const remedyRejected =
-  /(?:kasační\s+stížnost|ústavní\s+stížnost|dovolání|odvolání)(?!\p{L})[^.!?]{0,180}(?:zamítá|odmítá|zamítají|odmítají)(?!\p{L})/iu;
+  /(?:kasační\s+stížnosti?|ústavní\s+stížnosti?|dovolání|odvolání)(?!\p{L})[\s\S]*?(?:zamítá|odmítá|zamítají|odmítají)(?!\p{L})/iu;
 const reversal = /(?<!\p{L})(?:zrušuje|zrušují|ruší|mění)(?!\p{L})/iu;
+const dispositionVerb =
+  /(?<!\p{L})(?:zrušuje|zrušují|ruší|mění|zamítá|odmítá|zamítají|odmítají|přerušuje)(?!\p{L})/giu;
+const dispositionScopeSuffix =
+  /^\s+(?:zčásti|částečně|v\s+části|v\s+celém\s+rozsahu|ve\s+všech\s+výrocích|ve?\s+výrok(?:u|y|ů|ích)?\s+(?:[IVX]+|\d+|o\s))/iu;
+
+const holdingDispositions = (item: string): string[] => {
+  const dispositions: string[] = [];
+  let start = 0;
+  for (const match of item.matchAll(dispositionVerb)) {
+    const verbEnd = match.index + match[0].length;
+    const scope = dispositionScopeSuffix.exec(item.slice(verbEnd));
+    const end = verbEnd + (scope?.[0].length ?? 0);
+    // A coordinated subject can name several judgments before one verb.
+    // A later verb starts a new disposition, even inside one numbered item.
+    dispositions.push(item.slice(start, end));
+    start = end;
+  }
+  return dispositions;
+};
 const appealProceedingInterrupted =
   /řízení\s+o\s+(?:kasační\s+stížnosti|ústavní\s+stížnosti|dovolání|odvolání)[^.!?]{0,120}se\s+přerušuje(?!\p{L})/iu;
 const partial =
@@ -127,10 +146,7 @@ const reviewOutcome = ({
   sameFileTargetCount,
 }: ReviewOutcomeOptions): CzechAppealReview["outcome"] => {
   const key = docketKey(target.reviewedCaseNumber);
-  const dispositionItems = items.filter((item) => {
-    if (!reversal.test(item)) {
-      return false;
-    }
+  const namesTarget = (item: string): boolean | null => {
     const dockets = [...item.matchAll(new RegExp(DOCKET_SOURCE, "gu"))];
     if (dockets.length > 0) {
       return dockets.some((match) => {
@@ -148,6 +164,16 @@ const reviewOutcome = ({
               reviewedDate === target.reviewedDecisionDate;
       });
     }
+    return null;
+  };
+  const dispositionItems = items.filter((item) => {
+    if (!reversal.test(item)) {
+      return false;
+    }
+    const named = namesTarget(item);
+    if (named !== null) {
+      return named;
+    }
     // Without an identity in the holding, only a sole reviewed judgment can
     // inherit the generic disposition. Orders about counsel are separate.
     if (targetCount !== 1 || ancillaryOrder.test(item)) {
@@ -160,7 +186,9 @@ const reviewOutcome = ({
       "iu",
     ).test(item.trim());
   });
-  const rejection = items.some((item) => remedyRejected.test(item));
+  const rejection = items.some(
+    (item) => remedyRejected.test(item) && namesTarget(item) !== false,
+  );
   if (dispositionItems.length === 0) {
     if (rejection) {
       return "upheld";
@@ -241,7 +269,9 @@ export const extractCzechAppealReviews = ({
     foldDecisionIdentifierInput(collapseSpacedLetters(holding))
       .split(/odůvodnění\s*:/iu)
       .at(0) ?? "";
-  const items = normalizedHolding.split(/(?:^|\s)[IVX]+\.\s+/u);
+  const items = normalizedHolding
+    .split(/(?:^|\s)[IVX]+\.\s+/u)
+    .flatMap(holdingDispositions);
   return targets.map((target) => ({
     reviewedCaseNumber: target.reviewedCaseNumber,
     reviewedCourt: target.reviewedCourt,

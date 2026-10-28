@@ -7,6 +7,7 @@ import {
   CASE_LAW_BROWSER_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -34,6 +35,7 @@ type DecisionBySlug = Awaited<
 >;
 
 const UNPUBLISHED_DECISION = {
+  appealReviews: noDecisionReviewFound(),
   citationCount: 0,
   caseNumber: "SYN 1/2026",
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
