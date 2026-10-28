@@ -126,9 +126,8 @@ const colourExemptions = [
     files: [
       // The hidden-text style the court's published HTML uses.
       "apps/api/src/handlers/case-law/ingestion/parsers/sk-us.ts",
-      // A user's email file rendered as a standalone light document; the
-      // restored classes are the sender's own styles.
-      "apps/api/src/lib/files/email-to-html.ts",
+      // Class styles restored for the sender's own email markup.
+      "apps/api/src/lib/files/email-sender-styles.ts",
       // Seeded sample emails.
       "apps/api/scripts/seed-dev.ts",
       // The XLSX comment shape's fill is Excel's own comment default.
@@ -142,10 +141,12 @@ const colourExemptions = [
   {
     reason:
       "Surfaces no stylesheet reaches name their palette once: mail clients " +
-      "drop CSS custom properties, the OG card is rasterised SVG, and the " +
-      "CLI's sign-in page is served by the CLI itself.",
+      "drop CSS custom properties, the email preview is a standalone " +
+      "document, the OG card is rasterised SVG, and the CLI's sign-in page " +
+      "is served by the CLI itself.",
     files: [
       "packages/transactional/emails/_shared.ts",
+      "apps/api/src/lib/files/email-preview-palette.ts",
       "apps/landing/src/lib/og-card.ts",
       "packages/cli/src/auth/callback-page-theme.ts",
     ],
