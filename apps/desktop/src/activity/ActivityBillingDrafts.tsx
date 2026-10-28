@@ -214,12 +214,12 @@ export const BillingDraftConsentDialog = ({
         }
       }}
     >
-      <DialogPopup className="sm:max-w-xl">
+      <DialogPopup className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("aiConsentTitle")}</DialogTitle>
           <DialogDescription>{t("aiConsentBody")}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3 px-6 sm:grid-cols-2">
+        <div className="grid gap-3 px-6 min-[40rem]:grid-cols-2">
           <ConsentColumn
             icon={<LaptopIcon aria-hidden="true" className="size-3.5" />}
             title={t("aiConsentSentTitle")}
