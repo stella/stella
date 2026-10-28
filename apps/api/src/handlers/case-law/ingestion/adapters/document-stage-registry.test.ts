@@ -35,7 +35,7 @@ defineSourceAdapter({
 test("publisher drift is retained and counted through live page and reconciliation entrypoints", async () => {
   const decision = await plKioFixture().buildDecision();
   const parts = decodeSourceRawEnvelope(decision.sourceRaw ?? "");
-  if (parts === null || parts["detail"] === undefined) {
+  if (parts?.["detail"] === undefined) {
     throw new TypeError("PL KIO fixture must retain its publisher detail page");
   }
   const sourceRaw = encodeSourceRawEnvelope({

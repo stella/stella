@@ -302,6 +302,14 @@ const lossyProjection = (
     return null;
   }
   seen.add(node);
+  // Archive writes are checked at their own sinks; replay reads must not
+  // inherit projections from unrelated fields or normalization callbacks.
+  if (
+    node.type === "MemberExpression" &&
+    getPropertyName(node.property) === "sourceRaw"
+  ) {
+    return null;
+  }
   if (directLossyCall(context, node)) {
     return node;
   }

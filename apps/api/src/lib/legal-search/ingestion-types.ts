@@ -61,7 +61,6 @@ import {
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { ObservationDetail } from "@/api/lib/legal-search/partial-observation-sql";
-import { inspectPublisherFieldCoverage } from "@/api/lib/legal-search/publisher-field-coverage";
 import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import {
   decodeSourceRawEnvelope,
@@ -1754,12 +1753,15 @@ export const defineSourceAdapter = <
     function (this: unknown, ...args: TArgs) {
       return withExceptionScope(scope, () => operation.apply(this, args));
     };
-  const inspectRecord = async (result: IngestionResult) =>
+  const inspectRecord = async (result: IngestionResult) => {
+    const { inspectPublisherFieldCoverage } =
+      await import("@/api/lib/legal-search/publisher-field-coverage");
     await inspectPublisherFieldCoverage({
       adapterKey: adapter.key,
       inventory: adapter.sourceFields,
       result,
     });
+  };
   const inspectBuild = <
     TArgs extends unknown[],
     TOutcome extends ReconciliationBuildOutcome,

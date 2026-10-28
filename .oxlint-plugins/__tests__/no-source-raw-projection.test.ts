@@ -53,6 +53,17 @@ describe.serial("publisher raw archive projections", () => {
     ).toEqual([1]);
   });
 
+  test("replay sourceRaw reads do not inherit projections from sibling normalization callbacks", async () => {
+    expect(
+      await lint(
+        [
+          "const read = readStoredListing({ stored, identityOf: (listing) => listing.references.filter((reference) => reference.active) });",
+          "const replay = { sourceRaw: read.sourceRaw };",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
   test("whole publisher payloads and filters on derived projections remain valid", async () => {
     expect(
       await lint(
