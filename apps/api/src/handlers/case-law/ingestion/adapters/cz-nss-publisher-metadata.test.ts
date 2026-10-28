@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -39,7 +40,7 @@ const REVIEW_FIELDS = [
 ] as const;
 
 const tableOf = (rows: readonly (readonly string[])[]) =>
-  `<table><thead><tr>${REVIEW_FIELDS.map((field) => `<th data-field-id="${field}">Label ${field}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((value, index) => `<td class="det-textval" data-field-id="${REVIEW_FIELDS.at(index)}">${value}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  `<table><thead><tr>${REVIEW_FIELDS.map((field) => `<th data-field-id="${field}">Label ${field}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((value, index) => `<td class="det-textval" data-field-id="${REVIEW_FIELDS.at(index) ?? panic("NSS fixture has more values than review columns")}">${value}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 
 test("the recorded NSS review keeps the challenged court, docket, date and outcome in one tuple", async () => {
   const { publisherFields, publisherTables } = extractNssPublisherMetadata(
