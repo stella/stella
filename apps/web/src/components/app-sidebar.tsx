@@ -1123,7 +1123,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
   return result;
 };
 
-const MatterItem = ({
+export const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
   isActive,
