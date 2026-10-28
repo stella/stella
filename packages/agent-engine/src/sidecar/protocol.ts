@@ -119,7 +119,13 @@ const modelMessageSchema = v.looseObject({
 });
 
 /** A TanStack `StreamChunk`; only its type is checked, as on the socket. */
-const chunkSchema = v.looseObject({ type: v.enum(EventType) });
+const EVENT_TYPES: ReadonlySet<string> = new Set(Object.values(EventType));
+const chunkSchema = v.looseObject({
+  type: v.pipe(
+    v.string(),
+    v.check((type) => EVENT_TYPES.has(type), "A TanStack event type"),
+  ),
+});
 
 const harnessLaunchEntries = {
   harness: harnessSchema,

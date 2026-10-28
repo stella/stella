@@ -12,6 +12,7 @@ type Seen = { path: string; authorization: string | null; headers: Headers };
 /** A stand-in for the stella API that records what reached it. */
 const upstream = () => {
   const seen: Seen[] = [];
+  const listener = { origin: "" };
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -23,10 +24,7 @@ const upstream = () => {
         headers: request.headers,
       });
       if (pathname === "/redirect") {
-        return Response.redirect(
-          `http://127.0.0.1:${server.port}/elsewhere`,
-          307,
-        );
+        return Response.redirect(`${listener.origin}/elsewhere`, 307);
       }
       return new Response(JSON.stringify({ echoed: await request.text() }), {
         headers: {
@@ -38,7 +36,8 @@ const upstream = () => {
       });
     },
   });
-  return { seen, server, origin: `http://127.0.0.1:${server.port}` };
+  listener.origin = `http://127.0.0.1:${server.port}`;
+  return { seen, server, origin: listener.origin };
 };
 
 const stops: (() => Promise<void>)[] = [];

@@ -57,14 +57,16 @@ describe("sidecar protocol fixtures", () => {
         type: "message",
         message: v.parse(sidecarHostMessageSchema, message),
       });
-      expect(v.parse(sidecarHostMessageSchema, message)).toEqual(message);
+      const reparsed: unknown = v.parse(sidecarHostMessageSchema, message);
+      expect(reparsed).toEqual(message);
     }
   });
 
   test("encode every valid sidecar message unchanged", () => {
     for (const message of fixtures.valid.sidecar) {
       const parsed = v.parse(sidecarMessageSchema, message);
-      expect(parsed).toEqual(message);
+      const plain: unknown = parsed;
+      expect(plain).toEqual(message);
       expect(encodeSidecarMessage(parsed)).toBe(`${JSON.stringify(message)}\n`);
     }
   });
@@ -72,11 +74,12 @@ describe("sidecar protocol fixtures", () => {
   test("reject each refused host line for its own reason", () => {
     for (const { name, line, reason } of fixtures.rejected.host) {
       const parsed = parseSidecarHostLine(line);
-      expect({
+      const outcome: unknown = {
         name,
         parsed: parsed.type,
         reason: "reason" in parsed ? parsed.reason : null,
-      }).toEqual({
+      };
+      expect(outcome).toEqual({
         name,
         parsed: "rejected",
         reason,

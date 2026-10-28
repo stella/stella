@@ -554,7 +554,9 @@ export class SidecarHost {
       now: () => Temporal.Now.instant().epochMilliseconds,
     });
     for await (const chunk of chunks) {
-      send({ type: "run.event", runId, chunk });
+      // A plain copy: TanStack declares chunks as interfaces, which carry
+      // no index signature.
+      send({ type: "run.event", runId, chunk: { ...chunk } });
     }
     await run.turn?.dispose();
     send({
