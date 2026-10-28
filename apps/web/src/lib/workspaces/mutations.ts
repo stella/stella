@@ -6,6 +6,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
@@ -15,6 +16,7 @@ import {
   toAPIError,
   unwrapApiResponse,
 } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -68,6 +70,7 @@ export const useCreateWorkspace = () => {
         fingerprintKey: "useCreateWorkspace:failure",
         scope: { type: "handler", handlerId: "useCreateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -183,6 +186,7 @@ export const useUpdateWorkspace = () => {
         fingerprintKey: "useUpdateWorkspace:failure",
         scope: { type: "handler", handlerId: "useUpdateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -243,6 +247,7 @@ export const useUnarchiveWorkspace = () => {
         fingerprintKey: "useUnarchiveWorkspace:failure",
         scope: { type: "handler", handlerId: "useUnarchiveWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -273,6 +278,7 @@ export const useDeleteWorkspace = () => {
         fingerprintKey: "useDeleteWorkspace:failure",
         scope: { type: "handler", handlerId: "useDeleteWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
@@ -310,6 +316,7 @@ export const useDuplicateWorkspace = () => {
         fingerprintKey: "useDuplicateWorkspace:failure",
         scope: { type: "handler", handlerId: "useDuplicateWorkspace:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
   });
 };
