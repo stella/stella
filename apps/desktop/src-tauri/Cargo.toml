@@ -121,6 +121,12 @@ reqwest = { version = "0.13", features = [
   "query",
   "stream",
 ] }
+rustls = { version = "0.23", default-features = false, features = [
+  "aws_lc_rs",
+  "std",
+  "tls12",
+] }
+rustls-platform-verifier = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"
@@ -128,6 +134,12 @@ sha2 = "0.11"
 tar = { version = "0.4", default-features = false }
 stella-desktop-signing-core = { path = "crates/signing-core", version = "0.0.1" }
 tokio = { version = "1", features = ["full"] }
+# `__rustls-tls` takes the client configuration the runner builds with the
+# platform verifier, instead of a second root store.
+tokio-tungstenite = { version = "0.30", default-features = false, features = [
+  "connect",
+  "__rustls-tls",
+] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }

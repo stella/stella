@@ -3,6 +3,7 @@
 use std::future::Future;
 use std::io::Write;
 use std::path::Path;
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -12,6 +13,17 @@ use uuid::Uuid;
 use crate::http_client::{DesktopHttpClient, HttpClientOptions};
 
 const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
+
+/// Counts the wakes this loop has seen. Other owners that act on a wake (the
+/// runner socket reconnects) subscribe here instead of detecting one again.
+fn wake_sender() -> &'static tokio::sync::watch::Sender<u64> {
+  static WAKES: OnceLock<tokio::sync::watch::Sender<u64>> = OnceLock::new();
+  WAKES.get_or_init(|| tokio::sync::watch::channel(0).0)
+}
+
+pub(crate) fn subscribe_wakes() -> tokio::sync::watch::Receiver<u64> {
+  wake_sender().subscribe()
+}
 
 pub(crate) fn start(handle: AppHandle) {
   tauri::async_runtime::spawn(run_loop(
@@ -24,6 +36,7 @@ pub(crate) fn start(handle: AppHandle) {
       tokio::time::sleep(WAKE_CHECK_TICK).await;
       unix_seconds()
     },
+    || wake_sender().send_modify(|wakes| *wakes = wakes.wrapping_add(1)),
   ));
 }
 
@@ -34,19 +47,26 @@ fn unix_seconds() -> u64 {
     .as_secs()
 }
 
-pub(super) async fn run_loop<Report, ReportFuture, Tick, TickFuture>(
+/// `woke` runs on every wake the loop sees, before that tick's report.
+pub(super) async fn run_loop<Report, ReportFuture, Tick, TickFuture, Woke>(
   mut now: u64,
   mut report: Report,
   mut tick: Tick,
+  mut woke: Woke,
 ) where
   Report: FnMut() -> ReportFuture,
   ReportFuture: Future<Output = ()>,
   Tick: FnMut() -> TickFuture,
   TickFuture: Future<Output = u64>,
+  Woke: FnMut(),
 {
   let mut schedule = Schedule::default();
   loop {
-    if schedule.take_due(now, WAKE_CHECK_TICK) {
+    let observed = schedule.observe(now, WAKE_CHECK_TICK);
+    if observed.woke {
+      woke();
+    }
+    if observed.due {
       report().await;
     }
     now = tick().await;
@@ -73,8 +93,16 @@ struct Schedule {
   last_tick: Option<u64>,
 }
 
+struct Observed {
+  /// The wall clock moved more than two ticks since the last one: the
+  /// computer slept in between.
+  woke: bool,
+  /// A presence report is due.
+  due: bool,
+}
+
 impl Schedule {
-  fn take_due(&mut self, now: u64, tick: Duration) -> bool {
+  fn observe(&mut self, now: u64, tick: Duration) -> Observed {
     let woke = self
       .last_tick
       .is_some_and(|last| now >= last && now - last > tick.as_secs() * 2);
@@ -84,12 +112,17 @@ impl Schedule {
         .last_attempt
         .is_some_and(|last| now >= last && now - last < interval_seconds())
     {
-      return false;
+      return Observed { woke, due: false };
     }
     // Pace attempts rather than successes so an unavailable server cannot
     // turn every wake tick into a retry.
     self.last_attempt = Some(now);
-    true
+    Observed { woke, due: true }
+  }
+
+  #[cfg(test)]
+  fn take_due(&mut self, now: u64, tick: Duration) -> bool {
+    self.observe(now, tick).due
   }
 }
 
@@ -107,6 +140,20 @@ fn read_desktop_id(path: &Path) -> std::io::Result<Option<Uuid>> {
 
 fn load_desktop_id(path: &Path) -> std::io::Result<Uuid> {
   load_desktop_id_with(path, |_| {})
+}
+
+/// The installation id presence reports; the runner socket names it too.
+pub(crate) fn desktop_id() -> std::io::Result<Uuid> {
+  let root = dirs::data_dir().ok_or_else(|| {
+    std::io::Error::new(std::io::ErrorKind::NotFound, "no data directory")
+  })?;
+  load_desktop_id(&desktop_id_path(&root))
+}
+
+fn desktop_id_path(root: &Path) -> std::path::PathBuf {
+  root
+    .join(crate::config::APP_DATA_DIR_NAME)
+    .join("desktop-presence-id")
 }
 
 fn load_desktop_id_with(
@@ -196,11 +243,7 @@ async fn report(handle: &AppHandle) {
     tracing::warn!("desktop presence has no data directory");
     return;
   };
-  let Ok(id) = load_desktop_id(
-    &root
-      .join(crate::config::APP_DATA_DIR_NAME)
-      .join("desktop-presence-id"),
-  ) else {
+  let Ok(id) = load_desktop_id(&desktop_id_path(&root)) else {
     tracing::warn!("desktop presence identity unavailable");
     return;
   };
@@ -254,6 +297,62 @@ mod tests {
     assert!(!schedule.take_due(930, tick));
     assert!(schedule.take_due(1_020, tick));
     assert!(!schedule.take_due(1_050, tick));
+  }
+
+  #[test]
+  fn only_a_clock_jump_over_two_ticks_is_a_wake() {
+    let mut schedule = Schedule::default();
+    let tick = Duration::from_secs(30);
+    assert!(!schedule.observe(1_000, tick).woke);
+    assert!(!schedule.observe(1_030, tick).woke);
+    assert!(!schedule.observe(1_090, tick).woke);
+    assert!(schedule.observe(1_151, tick).woke);
+    // A clock set backwards is not a wake.
+    assert!(!schedule.observe(900, tick).woke);
+  }
+
+  #[tokio::test]
+  async fn the_loop_reports_each_wake_it_sees_and_no_steady_tick() {
+    let (woke, mut wakes) = tokio::sync::mpsc::unbounded_channel::<u64>();
+    let (ticks, ticked) = tokio::sync::mpsc::unbounded_channel::<u64>();
+    let ticked = std::sync::Arc::new(tokio::sync::Mutex::new(ticked));
+    let (reports, mut reported) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let now = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1_000));
+    let seen = std::sync::Arc::clone(&now);
+    let presence = tokio::spawn(run_loop(
+      1_000,
+      move || {
+        reports.send(()).unwrap();
+        std::future::ready(())
+      },
+      move || {
+        let ticked = std::sync::Arc::clone(&ticked);
+        let now = std::sync::Arc::clone(&now);
+        async move {
+          let tick = ticked.lock().await.recv().await.unwrap();
+          now.store(tick, std::sync::atomic::Ordering::SeqCst);
+          tick
+        }
+      },
+      move || {
+        woke
+          .send(seen.load(std::sync::atomic::Ordering::SeqCst))
+          .unwrap();
+      },
+    ));
+    // The startup report comes first; every report is a point the loop passed.
+    reported.recv().await.unwrap();
+    for tick in [1_030, 1_060] {
+      ticks.send(tick).unwrap();
+    }
+    ticks.send(1_060 + 121).unwrap();
+    let wake = tokio::time::timeout(Duration::from_secs(5), wakes.recv())
+      .await
+      .expect("the wake is reported")
+      .unwrap();
+    assert_eq!(wake, 1_060 + 121);
+    assert!(wakes.try_recv().is_err(), "a steady tick is not a wake");
+    presence.abort();
   }
 
   #[test]

@@ -2,8 +2,12 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  DESKTOP_RUNNER_CLOSE,
+  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
   DESKTOP_RUNNER_LIMITS,
+  DESKTOP_RUNNER_TIMING,
   type DesktopRunnerLimits,
+  type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 
 import type { HttpServer } from "@/api/http/context";
@@ -13,12 +17,6 @@ import type { authorizeDesktopAccount } from "@/api/lib/business-registries/desk
 import type { DesktopKeyLiveness } from "@/api/lib/business-registries/desktop/liveness";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
 import type { RunnerFeatureAccess } from "@/api/lib/desktop-runner/feature-access";
-import {
-  DESKTOP_RUNNER_CLOSE,
-  DESKTOP_RUNNER_DESKTOP_ID_HEADER,
-  DESKTOP_RUNNER_TIMING,
-  type DesktopRunnerTiming,
-} from "@/api/lib/desktop-runner/protocol";
 import {
   createRunnerSession,
   type MintRunToken,

@@ -504,6 +504,7 @@ mod tests {
         let ticked = std::sync::Arc::clone(&ticked);
         async move { ticked.lock().await.recv().await.unwrap() }
       },
+      || {},
     ));
 
     // The updater remains suspended throughout every observed report.

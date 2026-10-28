@@ -5,6 +5,45 @@
       "minimum": 1
     },
     "maxFrameBytes": 4194304,
+    "path": "/v1/desktop/runner",
+    "desktopIdHeader": "stella-desktop-id",
+    "close": {
+      "goingAway": { "code": 1001, "reason": "going_away" },
+      "unsupportedData": { "code": 1003, "reason": "binary_frame" },
+      "tooLarge": { "code": 1009, "reason": "too_large" },
+      "internalError": { "code": 1011, "reason": "internal_error" },
+      "overloaded": { "code": 1013, "reason": "overloaded" },
+      "upgradeRequired": { "code": 4001, "reason": "upgrade_required" },
+      "superseded": { "code": 4002, "reason": "superseded" },
+      "heartbeatTimeout": { "code": 4003, "reason": "heartbeat_timeout" },
+      "sequenceGap": { "code": 4004, "reason": "sequence_gap" },
+      "helloTimeout": { "code": 4005, "reason": "hello_timeout" },
+      "unknownRun": { "code": 4006, "reason": "unknown_run" },
+      "tooManyRunners": { "code": 4007, "reason": "too_many_runners" },
+      "credentialRevoked": { "code": 4008, "reason": "credential_revoked" },
+      "featureDisabled": { "code": 4009, "reason": "feature_disabled" }
+    },
+    "policyViolationCode": 1008,
+    "policyReasons": [
+      "not_json",
+      "unknown_type",
+      "invalid",
+      "hello_required",
+      "hello_repeated",
+      "run_state",
+      "unfoldable_chunk",
+      "run_limit"
+    ],
+    "timing": {
+      "pingIntervalMs": 20000,
+      "maxSocketLifeMs": 3600000,
+      "helloTimeoutMs": 10000,
+      "leaseMs": 90000,
+      "runnerFreshnessMs": 60000,
+      "sweepIntervalMs": 15000,
+      "drainSpreadMs": 30000,
+      "tokenRefreshMarginMs": 300000
+    },
     "harnesses": ["codex", "claude-code", "opencode"],
     "harnessStates": [
       "ready",

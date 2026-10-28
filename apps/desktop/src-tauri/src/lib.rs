@@ -27,6 +27,7 @@ mod config;
 mod deep_link;
 mod desktop_crash;
 mod desktop_crash_native;
+mod desktop_runner;
 mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
@@ -57,7 +58,6 @@ mod permissions;
 mod presence;
 mod registry;
 mod relaunch;
-#[cfg(test)]
 mod runner_protocol;
 mod session_manager;
 mod session_store;
@@ -170,6 +170,7 @@ pub fn run() {
       managed_policy::current().blocked_features(),
     ))
     .manage::<activity::ActivityAppState>(Arc::clone(&activity_manager))
+    .manage(desktop_runner::DesktopRunnerControl::default())
     .manage(crash_monitor)
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
@@ -258,6 +259,7 @@ pub fn run() {
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
               chatgpt_auth_commands::apply_feature_gate(app, enabled);
+              desktop_runner::apply_feature_gate(app, enabled);
             }
           }),
         );
@@ -455,6 +457,7 @@ pub fn run() {
       }
 
       presence::start(handle.clone());
+      desktop_runner::watch_state(&handle);
 
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
