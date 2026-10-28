@@ -331,16 +331,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  // The API reads the agenda on its own: open tasks due today or later,
-  // nearest first, undated last. The local date also applies here, so a
-  // cached response drops yesterday's deadlines once the day rolls over.
-  const tasks = useMemo(
-    () =>
-      data.upcomingAgenda.filter(
-        (task) => task.dueDate === null || task.dueDate >= today,
-      ),
-    [data.upcomingAgenda, today],
-  );
+  const tasks = data.upcomingAgenda;
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
@@ -439,11 +430,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // The agenda is already ordered by nearest deadline.
-  const tasksWithDue = useMemo(
-    () => tasks.filter((task) => task.dueDate !== null),
-    [tasks],
-  );
+  // The agenda is already ordered with dated tasks before undated tasks.
+  const nextDeadlineTask = tasks.find((task) => task.dueDate !== null);
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
@@ -455,7 +443,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
         <StatCard
           icon={<FolderTreeIcon className="size-4" />}
-          label={t("workspaces.overview.totalDocuments")}
+          label="workspaces.overview.totalDocuments"
           onClick={() => {
             const view = findViewByType("filesystem");
             if (view) {
@@ -472,7 +460,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
         <StatCard
           icon={<SquareCheckIcon className="size-4" />}
-          label={t("workspaces.tasksCount", { count: data.taskCount })}
+          label="workspaces.overview.openTasks"
           onClick={() => {
             const view = findViewByType("kanban");
             if (view) {
@@ -489,9 +477,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
         <StatCard
           icon={<CalendarClockIcon className="size-4" />}
-          label={t("workspaces.overview.nextDeadline")}
+          label="workspaces.overview.nextDeadline"
           onClick={() => {
-            const task = tasksWithDue.at(0);
+            const task = nextDeadlineTask;
             if (task) {
               useInspectorTabsStore.getState().openTask({
                 taskId: task.entityId,
@@ -500,9 +488,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          sublabel={tasksWithDue.at(0)?.name}
+          sublabel={nextDeadlineTask?.name}
           value={(() => {
-            const date = tasksWithDue.at(0)?.dueDate;
+            const date = nextDeadlineTask?.dueDate;
             if (!date) {
               return "—";
             }
@@ -515,7 +503,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         {timeBillingEnabled && (
           <StatCard
             icon={<ClockIcon className="size-4" />}
-            label={t("workspaces.overview.timeThisWeek")}
+            label="workspaces.overview.timeThisWeek"
             {...(currentTimeView.type === "items" &&
             currentTimeView.refetchError === undefined
               ? {
@@ -546,7 +534,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         {workflowsEnabled && (
           <StatCard
             icon={<WorkflowIcon className="size-4" />}
-            label={t("common.workflows")}
+            label="common.workflows"
             onClick={() => {
               detached(
                 navigate({
@@ -641,6 +629,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                   toDateTimeEpoch(task.dueDate),
                                   { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
                                 )}
+                                {task.dueDate < today
+                                  ? ` · ${t("tasks.overdue")}`
+                                  : ""}
                               </>
                             )}
                           </span>
@@ -1054,18 +1045,24 @@ const OverviewSectionHeader = ({
 
 type StatCardProps = {
   icon: React.ReactNode;
-  label: string;
+  label:
+    | "common.workflows"
+    | "workspaces.overview.nextDeadline"
+    | "workspaces.overview.openTasks"
+    | "workspaces.overview.timeThisWeek"
+    | "workspaces.overview.totalDocuments";
   value: React.ReactNode;
   sublabel?: string | undefined;
   onClick?: () => void;
 };
 
 const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
+  const t = useTranslations();
   const content = (
     <>
       <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
         {icon}
-        {label}
+        {t(label)}
       </div>
       <div className="text-xl font-semibold tabular-nums">{value}</div>
       {sublabel && (

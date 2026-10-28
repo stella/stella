@@ -1,12 +1,8 @@
 import { panic } from "better-result";
-import { and, isNull, or } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { entities } from "@/api/db/schema";
-import {
-  dueFromReaderDate,
-  openAgendaTask,
-} from "@/api/handlers/workspaces/agenda-conditions";
+import { openAgendaTask } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -81,29 +77,22 @@ true satisfies UnexpectedAgendaColumn extends never ? true : never;
 type ReadOverviewAgendaOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  /** The reader's local date (ISO); the database's today when absent. */
-  agendaFrom: string | undefined;
 };
 
 /**
  * The matter's upcoming agenda, read on its own rather than filtered from
  * recent activity, so an older open task is not pushed out by newer edits.
- * Nearest due date first; undated open tasks follow. The reader's own date
- * bounds the deadlines before the limit applies.
+ * Overdue deadlines lead, followed by later deadlines and undated open tasks.
  */
 export const readOverviewAgenda = async ({
   tx,
   workspaceId,
-  agendaFrom,
 }: ReadOverviewAgendaOptions) => {
   const rows = await tx.query.entities.findMany({
     where: {
       workspaceId: { eq: workspaceId },
       RAW: (table) =>
-        and(
-          openAgendaTask(table),
-          or(isNull(table.dueDate), dueFromReaderDate(table, agendaFrom)),
-        ) ?? panic("Agenda condition is never empty"),
+        openAgendaTask(table) ?? panic("Agenda condition is never empty"),
     },
     columns: AGENDA_TASK_COLUMNS,
     with: {
@@ -127,7 +116,7 @@ export const readOverviewAgenda = async ({
     orderBy: { dueDate: "asc", id: "asc" },
     limit: LIMITS.overviewUpcomingAgenda,
   });
-  return rows.map((task) => {
+  const items = rows.map((task) => {
     const assignee = task.assignees.at(0)?.user;
     return {
       entityId: task.id,
@@ -139,4 +128,10 @@ export const readOverviewAgenda = async ({
       assignedToDeletedAt: assignee?.deletedAt?.toISOString() ?? null,
     };
   });
+  return {
+    items,
+    count: items.length,
+    nextDeadline:
+      items.find(({ dueDate }) => dueDate !== null)?.dueDate ?? null,
+  };
 };
