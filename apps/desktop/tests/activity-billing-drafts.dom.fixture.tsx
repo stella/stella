@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftResponse,
   DesktopBillingDraftReview,
@@ -10,6 +11,7 @@ import type {
   DesktopTimeEntryClassification,
   DesktopTimeEntryMatterCandidate,
 } from "@stll/api-contract/desktop-time-entries";
+import { Temporal } from "@stll/time";
 
 import type { ActivityDaySnapshot } from "../src/activity/activity-types";
 
@@ -120,7 +122,7 @@ type DeferredReview = {
   deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
 };
 
-const installNativeBoundary = () => {
+const installNativeBoundary = (matterCandidates = candidates) => {
   const draftRequests: DeferredReview[] = [];
   const submissions: unknown[] = [];
   mockWindows("activity");
@@ -128,7 +130,7 @@ const installNativeBoundary = () => {
     async (command, args) => {
       switch (command) {
         case "time_entry_candidates":
-          return candidates;
+          return matterCandidates;
         case "billing_draft_create_confirmed": {
           const deferred = Promise.withResolvers<unknown>();
           const request =
@@ -235,8 +237,11 @@ const startDrafting = async (
   return firstDraftRequest(requests);
 };
 
-afterEach(() => {
-  cleanup();
+afterEach(async () => {
+  await act(async () => {
+    cleanup();
+    await Promise.resolve();
+  });
   clearMocks();
 });
 
@@ -533,3 +538,209 @@ test("deferred draft becomes a proposal and undo restores the text edited while 
     view.getByRole("textbox", { name: messages.activity.entryNarrative }),
   ).toHaveProperty("value", "Edited before applying");
 });
+
+test("steering combined drafted subsets above the entry limit asks for a smaller selection without invoking", async () => {
+  const firstCandidate = candidates.at(0) ?? panic("Expected a matter");
+  const matterCandidates = Array.from(
+    { length: DESKTOP_BILLING_DRAFT_LIMITS.entries + 1 },
+    (_, index) => ({
+      ...firstCandidate,
+      id: `00000000-0000-4000-8000-${(index + 1).toString().padStart(12, "0")}`,
+      name: `Matter ${index + 1}`,
+    }),
+  );
+  const boundary = installNativeBoundary(matterCandidates);
+  const firstSegment = segments.at(0) ?? panic("Expected activity");
+  const view = mountReview(
+    snapshot(
+      matterCandidates.map(({ id }, index) => ({
+        ...firstSegment,
+        matterId: id,
+        start: Temporal.Instant.from(firstSegment.start)
+          .add({ minutes: index * 6 })
+          .toString(),
+        end: Temporal.Instant.from(firstSegment.start)
+          .add({ minutes: (index + 1) * 6 })
+          .toString(),
+      })),
+    ),
+  );
+  const includeMatter = (name: string) =>
+    view.getByRole("checkbox", {
+      name: messages.activity.includeMatter.replace("{matter}", () => name),
+    });
+  await waitFor(() => expect(includeMatter("Matter 1")).toBeTruthy());
+  const finalMatter = matterCandidates.at(-1) ?? panic("Expected final matter");
+  fireEvent.click(includeMatter(finalMatter.name));
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiDraft }),
+  );
+  await waitFor(() => expect(boundary.draftRequests).toHaveLength(1));
+  await resolveDraft(
+    firstDraftRequest(boundary.draftRequests),
+    review(
+      matterCandidates
+        .slice(0, DESKTOP_BILLING_DRAFT_LIMITS.entries)
+        .map((_, index) => draft(`entry_${index + 1}`, "Drafted work")),
+    ),
+  );
+  for (const matter of matterCandidates.slice(0, -1)) {
+    fireEvent.click(includeMatter(matter.name));
+  }
+  fireEvent.click(includeMatter(finalMatter.name));
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiDraft }),
+  );
+  await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+  await resolveDraft(
+    boundary.draftRequests.at(1) ?? panic("Expected second subset request"),
+    review([draft("entry_1", "Last drafted work")]),
+  );
+  for (const matter of matterCandidates.slice(0, -1)) {
+    fireEvent.click(includeMatter(matter.name));
+  }
+  const input = view.getByPlaceholderText(
+    messages.activity.aiSteerAllPlaceholder,
+  );
+  expect(input).toHaveProperty("disabled", true);
+  expect(
+    view.getByText(
+      messages.activity.aiSteerSelectionLimit.replace("{count}", () =>
+        DESKTOP_BILLING_DRAFT_LIMITS.entries.toString(),
+      ),
+    ),
+  ).toBeTruthy();
+  expect(
+    view.getByRole("button", { name: messages.activity.aiSteerApply }),
+  ).toHaveProperty("disabled", true);
+  const form = input.closest("form") ?? panic("Expected steering form");
+  fireEvent.change(input, { target: { value: "Shorter" } });
+  fireEvent.submit(form);
+  expect(boundary.draftRequests).toHaveLength(2);
+});
+
+for (const change of ["added", "reassigned", "moved-all"] as const) {
+  test(`${change} activity invalidates an accepted split before submission`, async () => {
+    const boundary = installNativeBoundary();
+    const view = mountReview();
+    const request = await startDrafting(view, boundary.draftRequests);
+    await resolveDraft(
+      request,
+      review([
+        draft("entry_1", "Reviewed work", [
+          {
+            type: "split",
+            parts: [
+              {
+                durationMinutes: 30,
+                narrative: "First half",
+                classification: CLIENT_CLASSIFICATION,
+                billable: true,
+              },
+              {
+                durationMinutes: 30,
+                narrative: "Second half",
+                classification: CLIENT_CLASSIFICATION,
+                billable: true,
+              },
+            ],
+          },
+        ]),
+      ]),
+    );
+    fireEvent.click(
+      view.getByRole("button", { name: messages.activity.aiApply }),
+    );
+    expect(
+      view.getAllByRole("textbox", { name: messages.activity.entryNarrative }),
+    ).toHaveLength(2);
+    const currentSegments = {
+      added: [
+        ...segments,
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: FIRST_MATTER_ID,
+          start: "2026-10-07T10:00:00Z",
+          end: "2026-10-07T10:06:00Z",
+        },
+      ],
+      "moved-all": segments.map((segment) => ({
+        ...segment,
+        matterId: SECOND_MATTER_ID,
+      })),
+      reassigned: [
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: FIRST_MATTER_ID,
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T09:30:00Z",
+        },
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: SECOND_MATTER_ID,
+          start: "2026-10-07T09:30:00Z",
+          end: "2026-10-07T10:00:00Z",
+        },
+      ],
+    }[change];
+    view.rerender(
+      <DesktopIntlProvider language="en" messages={messages}>
+        <ActivityDayReview
+          snapshot={snapshot(currentSegments)}
+          header={<span>Review</span>}
+          billingDrafts={billingDrafts}
+          onCopy={(_text, onSettled) => onSettled(true)}
+          onReviewStatusChange={() => undefined}
+        />
+      </DesktopIntlProvider>,
+    );
+    expect(view.getByText(messages.activity.aiStructureChanged)).toBeTruthy();
+    expect(
+      view.queryByRole("button", { name: messages.activity.aiUndo }),
+    ).toBeNull();
+    if (change === "added") {
+      fireEvent.click(
+        view.getByRole("button", { name: messages.activity.aiDraft }),
+      );
+      await waitFor(() => expect(boundary.draftRequests).toHaveLength(2));
+      await resolveDraft(
+        boundary.draftRequests.at(1) ??
+          panic("Expected current activity request"),
+        review([draft("entry_1", "Updated work")]),
+      );
+    }
+    await act(async () => {
+      fireEvent.click(
+        view.getByRole("button", {
+          name: change === "reassigned" ? "Create 2 drafts" : "Create 1 draft",
+        }),
+      );
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+    expect(boundary.submissions.at(0)).toMatchObject({
+      items:
+        change === "added"
+          ? [
+              {
+                entry: { matterId: FIRST_MATTER_ID, durationMinutes: 66 },
+                ranges: currentSegments.map(({ start, end }) => ({
+                  start,
+                  end,
+                })),
+              },
+            ]
+          : currentSegments.map(({ matterId, start, end }) => ({
+              entry: {
+                matterId,
+                durationMinutes: change === "moved-all" ? 60 : 30,
+              },
+              ranges: [{ start, end }],
+            })),
+    });
+    expect(boundary.draftRequests).toHaveLength(change === "added" ? 2 : 1);
+  });
+}

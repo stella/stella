@@ -2,7 +2,11 @@ import { panic } from "better-result";
 
 import type { DesktopTimeEntryClassification } from "@stll/api-contract/desktop-time-entries";
 
-import { draftScalars, materializeStructure } from "./billing-draft-logic";
+import {
+  currentReviewContent,
+  draftScalars,
+  materializeStructure,
+} from "./billing-draft-logic";
 import type {
   DraftableGroup,
   DraftResult,
@@ -16,11 +20,12 @@ export type SingleReviewContent = {
   narrative: string;
   billable: boolean;
   classification: DesktopTimeEntryClassification | null;
+  notice?: "sourceChanged";
 };
 export type AcceptedReviewContent = {
   type: "accepted";
   summary: StructureSummary;
-  sourceGroupIds: readonly string[];
+  sources: readonly Pick<DraftableGroup, "id" | "ranges" | "roundedTenths">[];
   items: readonly ReviewItem[];
   undoContent: SingleReviewContent;
 };
@@ -106,12 +111,12 @@ const changedEntry = (
   }: EntryChange,
 ): EntryEdit => ({ selected, revision: entry.revision + 1, content, draft });
 const unitIds = (groupId: string, content: ReviewContent) =>
-  content.type === "accepted" ? content.sourceGroupIds : [groupId];
+  content.type === "accepted" ? content.sources.map(({ id }) => id) : [groupId];
 const ownerOf = (state: ReviewState, groupId: string) => {
   for (const [id, edit] of state) {
     if (
       edit.content.type === "accepted" &&
-      edit.content.sourceGroupIds.includes(groupId)
+      edit.content.sources.some((source) => source.id === groupId)
     ) {
       return id;
     }
@@ -300,7 +305,7 @@ const editItem = (
       content: {
         type: "accepted",
         summary: current.content.summary,
-        sourceGroupIds: current.content.sourceGroupIds,
+        sources: current.content.sources,
         undoContent: current.content.undoContent,
         items: current.content.items.map((value) =>
           value.key === action.itemKey ? { ...value, ...patch } : value,
@@ -352,6 +357,18 @@ const prepareStructure = (
   if (!group) {
     return null;
   }
+  const minutes = group.roundedTenths * 6;
+  if (
+    (action.proposal.type === "split" &&
+      action.proposal.parts.reduce(
+        (sum, part) => sum + part.durationMinutes,
+        0,
+      ) !== minutes) ||
+    (action.proposal.type === "move" &&
+      action.proposal.durationMinutes > minutes)
+  ) {
+    return null;
+  }
   return { own, content: own.content, initialized, group, ids };
 };
 export const canAcceptStructure = (
@@ -382,12 +399,39 @@ const acceptStructure = (
       content: {
         type: "accepted",
         summary: action.proposal.summary,
-        sourceGroupIds: ids,
+        sources: action.groups
+          .filter(({ group: source }) => ids.includes(source.id))
+          .map(({ group: source }) => ({
+            id: source.id,
+            roundedTenths: source.roundedTenths,
+            ranges: source.ranges.map(({ start, end }) => ({ start, end })),
+          })),
         items,
         undoContent: content,
       },
     },
   });
+};
+
+/** Invalidations persist even if later recording restores the old geometry. */
+export const reviewStateForGroups = (
+  state: ReviewState,
+  groups: ReadonlyMap<string, DraftableGroup>,
+): ReviewState => {
+  let next = state;
+  for (const [groupId, edit] of state) {
+    const content = currentReviewContent(edit.content, groups);
+    if (content === edit.content) {
+      continue;
+    }
+    next = commitChange({
+      state: next,
+      groupId,
+      current: edit,
+      change: { content },
+    });
+  }
+  return next;
 };
 
 /** Every offer and user action observes the state React supplies to this reducer. */

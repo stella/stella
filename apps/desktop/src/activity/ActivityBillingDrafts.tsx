@@ -386,6 +386,7 @@ const BillingDraftSteerInput = ({
 
 type SteerBarProps = {
   disabled: boolean;
+  limitMessage: string | null;
   preference: string | null;
   onSteer: (steer: string, remember: boolean) => void;
   onForgetPreference: () => void;
@@ -393,6 +394,7 @@ type SteerBarProps = {
 
 export const BillingDraftSteerBar = ({
   disabled,
+  limitMessage,
   preference,
   onSteer,
   onForgetPreference,
@@ -402,12 +404,17 @@ export const BillingDraftSteerBar = ({
     <section className="bg-card flex flex-col gap-2 rounded-xl border px-4 py-3">
       <BillingDraftSteerInput
         id="billing-draft-steer"
-        disabled={disabled}
+        disabled={disabled || limitMessage !== null}
         placeholder={t("aiSteerAllPlaceholder")}
         remember="offered"
         submitLabel={t("aiSteerApply")}
         onSteer={onSteer}
       />
+      {limitMessage === null ? null : (
+        <p role="status" className="text-muted-foreground ps-6 text-xs">
+          {limitMessage}
+        </p>
+      )}
       {preference ? (
         <p className="text-muted-foreground flex items-center gap-1.5 ps-6 text-xs">
           {t("aiPreferenceRemembered")}

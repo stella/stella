@@ -339,7 +339,7 @@ export const absorbedGroupIds = (rows: readonly ReviewRow[]) =>
   new Set(
     rows.flatMap(({ group, content }) =>
       content.type === "accepted"
-        ? content.sourceGroupIds.filter((id) => id !== group.id)
+        ? content.sources.flatMap(({ id }) => (id === group.id ? [] : [id]))
         : [],
     ),
   );
@@ -360,10 +360,51 @@ const singleItem = ({
   ranges: group.ranges,
 });
 
-/** The same materialized items are displayed, edited, and submitted. */
-export const reviewItems = (rows: readonly ReviewRow[]): ReviewItem[] => {
-  const absorbed = absorbedGroupIds(rows);
-  return rows.flatMap(({ group, content }) => {
+/** A structure is accepted only for the exact source geometry it was reviewed on. */
+export const currentReviewContent = (
+  content: ReviewContent,
+  groups: ReadonlyMap<string, DraftableGroup>,
+): ReviewContent => {
+  if (content.type !== "accepted") {
+    return content;
+  }
+  const unchanged = content.sources.every((source) => {
+    const current = groups.get(source.id);
+    return (
+      current !== undefined &&
+      current.roundedTenths === source.roundedTenths &&
+      current.ranges.length === source.ranges.length &&
+      current.ranges.every((range, index) => {
+        const previous = source.ranges.at(index);
+        return previous?.start === range.start && previous.end === range.end;
+      })
+    );
+  });
+  if (unchanged) {
+    return content;
+  }
+  return {
+    type: "single",
+    narrative: content.undoContent.narrative,
+    classification: content.undoContent.classification,
+    billable: content.undoContent.billable,
+    notice: "sourceChanged",
+  };
+};
+
+/** Display and submission cannot consume an acceptance for stale source ranges. */
+export const reviewItems = (
+  rows: readonly ReviewRow[],
+  groups: ReadonlyMap<string, DraftableGroup>,
+): ReviewItem[] => {
+  const current = rows.flatMap(({ group, content }) => {
+    const live = groups.get(group.id);
+    return live
+      ? [{ group: live, content: currentReviewContent(content, groups) }]
+      : [];
+  });
+  const absorbed = absorbedGroupIds(current);
+  return current.flatMap(({ group, content }) => {
     if (absorbed.has(group.id)) {
       return [];
     }

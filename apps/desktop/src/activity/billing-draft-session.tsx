@@ -99,6 +99,51 @@ const draftOffers = ({ groups, sentEdits, review }: DraftOffersOptions) => {
   });
 };
 
+const useDraftReviewResults = (dispatch: (action: ReviewAction) => void) => {
+  const [earlierEntries, setEarlierEntries] = useState<
+    ReadonlyMap<string, EarlierEntry>
+  >(new Map());
+  const [guidelines, setGuidelines] = useState<readonly CheckedGuideline[]>([]);
+  const applyReview = ({
+    review,
+    groups,
+    steer,
+    sentEdits,
+  }: {
+    review: DesktopBillingDraftReview;
+    sentEdits: ReadonlyMap<string, EntryEdit>;
+    groups: readonly DraftableGroup[];
+    steer: string | null;
+  }) => {
+    setEarlierEntries((current) => {
+      const next = new Map(current);
+      for (const entry of review.earlierEntries) {
+        next.set(entry.id, entry);
+      }
+      return next;
+    });
+    setGuidelines((current) => {
+      const next = new Map(current.map((file) => [file.fileId, file]));
+      for (const file of review.result.checkedGuidelines) {
+        next.set(file.fileId, file);
+      }
+      return [...next.values()];
+    });
+    dispatch({
+      type: "offer-results",
+      mode: steer === null ? "initial" : "steer",
+      offers: draftOffers({ groups, sentEdits, review }),
+    });
+  };
+
+  return {
+    earlierEntries,
+    guidelines,
+    applyReview,
+    clearGuidelines: () => setGuidelines([]),
+  };
+};
+
 type BillingDraftSessionOptions = {
   snapshot: ActivityDaySnapshot;
   billingDrafts: BillingDraftSettingsControl;
@@ -131,10 +176,8 @@ export const useBillingDraftSession = ({
   const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
   const [consentPrompt, setConsentPrompt] = useState<ConsentPrompt>("closed");
   const [refining, setRefining] = useState<string | null>(null);
-  const [earlierEntries, setEarlierEntries] = useState<
-    ReadonlyMap<string, EarlierEntry>
-  >(new Map());
-  const [guidelines, setGuidelines] = useState<readonly CheckedGuideline[]>([]);
+  const { earlierEntries, guidelines, applyReview, clearGuidelines } =
+    useDraftReviewResults(dispatch);
   const draftRequest = useRef(0);
   const busy = drafting.type === "drafting";
   const drafts = new Map(
@@ -148,42 +191,23 @@ export const useBillingDraftSession = ({
   );
   const canDraft = (group: DraftableGroup) =>
     editFor(group).content.type === "single" && !absorbed.has(group.id);
-  const undrafted = selected.filter(
-    (group) => canDraft(group) && !drafts.has(group.id),
+  const undrafted = selected.filter((group) => {
+    const content = editFor(group).content;
+    return (
+      canDraft(group) &&
+      (!drafts.has(group.id) ||
+        (content.type === "single" && content.notice === "sourceChanged"))
+    );
+  });
+  const steerable = selected.filter(
+    (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
   );
-
-  const applyReview = ({
-    review,
-    groups,
-    steer,
-    sentEdits,
-  }: {
-    review: DesktopBillingDraftReview;
-    sentEdits: ReadonlyMap<string, EntryEdit>;
-    groups: readonly DraftableGroup[];
-    steer: string | null;
-  }) => {
-    setEarlierEntries((current) => {
-      const next = new Map(current);
-      for (const entry of review.earlierEntries) {
-        next.set(entry.id, entry);
-      }
-      return next;
-    });
-    setGuidelines((current) => {
-      const next = new Map(current.map((file) => [file.fileId, file]));
-      for (const file of review.result.checkedGuidelines) {
-        next.set(file.fileId, file);
-      }
-      return [...next.values()];
-    });
-    dispatch({
-      type: "offer-results",
-      mode: steer === null ? "initial" : "steer",
-      offers: draftOffers({ groups, sentEdits, review }),
-    });
-    setRefining(null);
-  };
+  const steeringLimitMessage =
+    steerable.length > DESKTOP_BILLING_DRAFT_LIMITS.entries
+      ? t("aiSteerSelectionLimit", {
+          count: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+        })
+      : null;
 
   const requestDrafts = ({
     groups: requestedGroups,
@@ -194,6 +218,16 @@ export const useBillingDraftSession = ({
   }) => {
     const groups = requestedGroups.filter(canDraft);
     if (groups.length === 0 || busy) {
+      return;
+    }
+    if (groups.length > DESKTOP_BILLING_DRAFT_LIMITS.entries) {
+      onError(
+        steer === null
+          ? t("aiDraftLimit", { limit: DESKTOP_BILLING_DRAFT_LIMITS.entries })
+          : t("aiSteerSelectionLimit", {
+              count: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+            }),
+      );
       return;
     }
     const previous = groups.map((group) => drafts.get(group.id));
@@ -258,6 +292,7 @@ export const useBillingDraftSession = ({
         return undefined;
       }
       applyReview({ review: parsed.value, groups, steer, sentEdits });
+      setRefining(null);
       return undefined;
     });
   };
@@ -293,13 +328,15 @@ export const useBillingDraftSession = ({
   };
 
   const steerAll = (steer: string, remember: boolean) => {
+    if (steeringLimitMessage !== null) {
+      onError(steeringLimitMessage);
+      return;
+    }
     if (remember) {
       void billingDrafts.setPreference(steer).then(settingsFailed);
     }
     requestDrafts({
-      groups: selected.filter(
-        (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
-      ),
+      groups: steerable,
       steer,
     });
   };
@@ -309,7 +346,7 @@ export const useBillingDraftSession = ({
     setDrafting({ type: "idle" });
     dispatch({ type: "undo-all" });
     setRefining(null);
-    setGuidelines([]);
+    clearGuidelines();
   };
 
   const draftReview = (group: DraftableGroup): ReactNode => {
@@ -406,6 +443,7 @@ export const useBillingDraftSession = ({
     steerBar: steering ? (
       <BillingDraftSteerBar
         disabled={!editable || busy}
+        limitMessage={steeringLimitMessage}
         preference={preference}
         onSteer={steerAll}
         onForgetPreference={() => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -47,11 +47,23 @@ import {
   confirmedBatchItem,
   reviewItems,
 } from "./billing-draft-logic";
-import type { ConfirmedBatchItem, ReviewItem } from "./billing-draft-logic";
+import type {
+  ConfirmedBatchItem,
+  DraftableGroup,
+  ReviewItem,
+} from "./billing-draft-logic";
 import { useBillingDraftSession } from "./billing-draft-session";
 import type { DraftStatus, ReviewBarDrafts } from "./billing-draft-session";
-import { initialReviewEdit, reviewReducer } from "./billing-review-state";
-import type { EntryEdit, ReviewAction } from "./billing-review-state";
+import {
+  initialReviewEdit,
+  reviewReducer,
+  reviewStateForGroups,
+} from "./billing-review-state";
+import type {
+  EntryEdit,
+  ReviewAction,
+  ReviewState,
+} from "./billing-review-state";
 import "./day-review.css";
 import { canAssign, matchDay } from "./day-review-logic";
 import type {
@@ -107,13 +119,16 @@ const canDiscardPending = (
   snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
 
 /** Each group's edits, defaulting to a narrative from what was recorded. */
-const useReviewEdits = () => {
+const useReviewEdits = (groups: ReadonlyMap<string, DraftableGroup>) => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const [edits, dispatch] = useReducer(
-    reviewReducer,
-    new Map<string, EntryEdit>(),
-  );
+  const [stored, setEdits] = useState<ReviewState>(new Map());
+  const edits = reviewStateForGroups(stored, groups);
+  if (edits !== stored) {
+    setEdits(edits);
+  }
+  const dispatch = (action: ReviewAction) =>
+    setEdits((current) => reviewReducer(current, action));
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
       ? t("narrativeEvidence", {
@@ -135,6 +150,12 @@ const useReviewEdits = () => {
   return {
     editFor: (group: DayReviewGroup) => edits.get(group.id) ?? initial(group),
     dispatch,
+    notice: [...edits.values()].some(
+      ({ content }) =>
+        content.type === "single" && content.notice === "sourceChanged",
+    )
+      ? "sourceChanged"
+      : null,
   };
 };
 
@@ -259,7 +280,6 @@ export const ActivityDayReview = ({
     manualAssignments: snapshot.manualAssignments,
     draftedEntries: [...snapshot.draftedEntries, ...localDrafts],
   });
-  const { editFor, dispatch } = useReviewEdits();
   const editable = submission.type === "editing" || submission.type === "saved";
   const eligible = day.groups.filter(
     (
@@ -267,12 +287,14 @@ export const ActivityDayReview = ({
     ): group is DayReviewGroup & { matter: DesktopTimeEntryMatterCandidate } =>
       group.matter !== null,
   );
+  const currentGroups = new Map(eligible.map((group) => [group.id, group]));
+  const { editFor, dispatch, notice } = useReviewEdits(currentGroups);
   const selected = eligible.filter((group) => editFor(group).selected);
   const rows = selected.map((group) => ({
     group,
     content: editFor(group).content,
   }));
-  const items = reviewItems(rows);
+  const items = reviewItems(rows, currentGroups);
   const absorbed = absorbedGroupIds(
     eligible.map((group) => ({ group, content: editFor(group).content })),
   );
@@ -458,9 +480,15 @@ export const ActivityDayReview = ({
           </Button>
         </div>
       ) : null}
+      {notice === null ? null : (
+        <p role="status" className="text-muted-foreground text-xs">
+          {t("aiStructureChanged")}
+        </p>
+      )}
       {session.steerBar}
       <ReviewEntries
         groups={day.groups}
+        currentGroups={currentGroups}
         editFor={editFor}
         dispatch={dispatch}
         matters={matters}
@@ -865,6 +893,7 @@ const ReviewItemFields = ({
 
 const ReviewEntries = ({
   groups,
+  currentGroups,
   editFor,
   dispatch,
   matters,
@@ -878,6 +907,7 @@ const ReviewEntries = ({
   draftReview,
 }: {
   groups: readonly DayReviewGroup[];
+  currentGroups: ReadonlyMap<string, DraftableGroup>;
   editFor: (group: DayReviewGroup) => EntryEdit;
   dispatch: (action: ReviewAction) => void;
   matters: readonly DesktopTimeEntryMatterCandidate[];
@@ -1035,9 +1065,10 @@ const ReviewEntries = ({
                   </p>
                 ) : (
                   <>
-                    {reviewItems([
-                      { group: { ...group, matter }, content: edit.content },
-                    ]).map((item) => (
+                    {reviewItems(
+                      [{ group: { ...group, matter }, content: edit.content }],
+                      currentGroups,
+                    ).map((item) => (
                       <ReviewItemFields
                         key={item.key}
                         item={item}

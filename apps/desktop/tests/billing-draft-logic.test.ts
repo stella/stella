@@ -392,6 +392,9 @@ describe("accepted proposals become batch items", () => {
     minutes: 30,
     ranges: [[100, 130]],
   });
+  const currentGroups = new Map(
+    [riverside, meridian].map((source) => [source.id, source]),
+  );
   const row = (
     target: DraftableGroup,
     structure: ResolvedStructureProposal | null = null,
@@ -410,8 +413,11 @@ describe("accepted proposals become batch items", () => {
           : {
               type: "accepted",
               summary: structure.summary,
-              sourceGroupIds:
-                structure.type === "merge" ? structure.groupIds : [target.id],
+              sources: [riverside, meridian].filter((source) =>
+                structure.type === "merge"
+                  ? structure.groupIds.includes(source.id)
+                  : source.id === target.id,
+              ),
               items: materializeStructure({
                 group: target,
                 content,
@@ -430,13 +436,16 @@ describe("accepted proposals become batch items", () => {
   });
 
   test("split keeps the duration and divides the recorded time", () => {
-    const items = reviewItems([
-      row(riverside, {
-        type: "split",
-        summary: { type: "split", parts: 3 },
-        parts: [part(18, "Call"), part(24, "Drafting"), part(18, "Email")],
-      }),
-    ]);
+    const items = reviewItems(
+      [
+        row(riverside, {
+          type: "split",
+          summary: { type: "split", parts: 3 },
+          parts: [part(18, "Call"), part(24, "Drafting"), part(18, "Email")],
+        }),
+      ],
+      currentGroups,
+    );
     expect(items.map(({ durationMinutes }) => durationMinutes)).toEqual([
       18, 24, 18,
     ]);
@@ -462,7 +471,7 @@ describe("accepted proposals become batch items", () => {
       groupIds: [riverside.id],
       candidates: [RIVERSIDE, MERIDIAN],
     });
-    const items = reviewItems([row(riverside, structure)]);
+    const items = reviewItems([row(riverside, structure)], currentGroups);
     expect(
       items.map(({ matter, durationMinutes }) => [
         matter.name,
@@ -486,7 +495,10 @@ describe("accepted proposals become batch items", () => {
       groupIds: [riverside.id, meridian.id],
       candidates: [RIVERSIDE, MERIDIAN],
     });
-    const items = reviewItems([row(riverside, structure), row(meridian)]);
+    const items = reviewItems(
+      [row(riverside, structure), row(meridian)],
+      currentGroups,
+    );
     expect(items).toHaveLength(1);
     expect(items.at(0)?.durationMinutes).toBe(90);
     expect(items.at(0)?.ranges).toHaveLength(3);

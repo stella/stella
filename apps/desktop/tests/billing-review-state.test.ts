@@ -16,6 +16,7 @@ import type {
 import {
   initialReviewEdit,
   reviewReducer,
+  reviewStateForGroups,
 } from "../src/activity/billing-review-state";
 import type { ReviewState } from "../src/activity/billing-review-state";
 
@@ -53,6 +54,7 @@ const makeGroup = (id: string): DraftableGroup => ({
   ],
 });
 const groups = [makeGroup("first"), makeGroup("second")];
+const currentGroups = new Map(groups.map((group) => [group.id, group]));
 const initial = initialReviewEdit({
   type: "single",
   narrative: "My original",
@@ -138,7 +140,7 @@ test("billing-review.materialized-item-edits", () => {
       (narrative, billable) => {
         for (const proposal of [split, merge, move]) {
           let state = accept(proposal);
-          const before = reviewItems(rows(state));
+          const before = reviewItems(rows(state), currentGroups);
           for (const item of before) {
             state = reviewReducer(state, {
               type: "set-narrative",
@@ -157,7 +159,7 @@ test("billing-review.materialized-item-edits", () => {
           if (content.type !== "accepted") {
             panic("Structure disappeared");
           }
-          const submitted = reviewItems(rows(state));
+          const submitted = reviewItems(rows(state), currentGroups);
           expect([...content.items]).toEqual(submitted);
           for (const [index, item] of submitted.entries()) {
             const stored =
@@ -196,7 +198,7 @@ test("merge selection is atomic and preserves edited canonical items for reselec
     false,
     false,
   ]);
-  expect(reviewItems(rows(state))).toEqual([]);
+  expect(reviewItems(rows(state), currentGroups)).toEqual([]);
   expect(entry(state).content).toBe(edited);
   state = reviewReducer(state, {
     type: "set-selected",
@@ -207,16 +209,16 @@ test("merge selection is atomic and preserves edited canonical items for reselec
     true,
     true,
   ]);
-  expect(reviewItems(rows(state)).map((item) => item.narrative)).toEqual([
-    "Edited merge",
-  ]);
+  expect(
+    reviewItems(rows(state), currentGroups).map((item) => item.narrative),
+  ).toEqual(["Edited merge"]);
   expect(entry(state).revision).toBe(beforeRevision + 2);
   expect(entry(state, "second").revision).toBe(entry(state).revision);
   expect([...absorbedGroupIds(rows(state))]).toEqual(["second"]);
   state = reviewReducer(state, { type: "undo-structure", ...target });
   expect(entry(state).content).toEqual(initial.content);
   expect(entry(state, "second").content).toEqual(initial.content);
-  expect(reviewItems(rows(state))).toHaveLength(2);
+  expect(reviewItems(rows(state), currentGroups)).toHaveLength(2);
 });
 
 test("partial and overlapping structural acceptance is rejected", () => {
@@ -458,3 +460,95 @@ test.each(["use-original", "undo-all"] as const)(
     });
   },
 );
+
+test("billing-review.changed-source-invalidates-acceptance", () => {
+  assertProperty(
+    "billing-review.changed-source-invalidates-acceptance",
+    fc.property(
+      fc.constantFrom("added", "reassigned", "shifted"),
+      fc.integer({ min: 1, max: 5 }),
+      (change, tenths) => {
+        for (const proposal of [split, move, merge]) {
+          const state = accept(proposal);
+          const source = groups.at(0) ?? panic("Missing source group");
+          const minutes = tenths * 6;
+          const minute = minutes.toString().padStart(2, "0");
+          const changed = {
+            ...source,
+            roundedTenths:
+              source.roundedTenths +
+              { added: tenths, reassigned: -tenths, shifted: 0 }[change],
+            ranges: {
+              added: [
+                ...source.ranges,
+                {
+                  start: "2026-10-24T08:00:00Z",
+                  end: `2026-10-24T08:${minute}:00Z`,
+                },
+              ],
+              reassigned: [
+                {
+                  start: "2026-10-24T07:00:00.000Z",
+                  end: `2026-10-24T07:${(60 - minutes).toString().padStart(2, "0")}:00Z`,
+                },
+              ],
+              shifted: [
+                {
+                  start: `2026-10-24T07:${minute}:00Z`,
+                  end: `2026-10-24T08:${minute}:00Z`,
+                },
+              ],
+            }[change],
+          };
+          const live = new Map(currentGroups);
+          live.set(source.id, changed);
+          const liveRows = rows(state).map(({ group, content }) => ({
+            group: live.get(group.id) ?? panic("Missing live source"),
+            content,
+          }));
+          // Even a caller holding the old accepted state cannot submit stale ranges.
+          expect(
+            reviewItems(rows(state), live).flatMap((item) => item.ranges),
+          ).toEqual(liveRows.flatMap(({ group }) => group.ranges));
+          const refreshed = reviewStateForGroups(state, live);
+          expect(entry(refreshed).content).toEqual({
+            type: "single",
+            narrative: "My original",
+            billable: true,
+            classification: null,
+            notice: "sourceChanged",
+          });
+          expect(entry(refreshed).revision).toBeGreaterThan(
+            entry(state).revision,
+          );
+          expect([...absorbedGroupIds(rows(refreshed))]).toEqual([]);
+          expect(reviewStateForGroups(refreshed, live)).toBe(refreshed);
+          expect(reviewStateForGroups(refreshed, currentGroups)).toBe(
+            refreshed,
+          );
+        }
+      },
+    ),
+  );
+});
+
+test("a changed merge participant releases the owner and an old split cannot omit new duration", () => {
+  const changed = new Map(currentGroups);
+  const second = groups.at(1) ?? panic("Missing merge participant");
+  changed.set(second.id, {
+    ...second,
+    ranges: [{ start: "2026-10-24T08:00:00Z", end: "2026-10-24T09:00:00Z" }],
+  });
+  expect(entry(reviewStateForGroups(accept(merge), changed)).content.type).toBe(
+    "single",
+  );
+  const first = groups.at(0) ?? panic("Missing split source");
+  const extended = { ...first, roundedTenths: first.roundedTenths + 1 };
+  const state = reviewReducer(new Map(), {
+    type: "accept-structure",
+    ...target,
+    proposal: split,
+    groups: [{ group: extended, initial }],
+  });
+  expect(state.size).toBe(0);
+});
