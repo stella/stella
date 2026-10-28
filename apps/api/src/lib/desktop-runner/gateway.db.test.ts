@@ -401,7 +401,10 @@ const insertRunner = async (
   });
 };
 
-const runnerRows = async (userId: string, organizationId: string) =>
+const runnerRows = async (
+  userId: (typeof desktopRunners.$inferSelect)["userId"],
+  organizationId: (typeof desktopRunners.$inferSelect)["organizationId"],
+) =>
   await db
     .select({
       desktopId: desktopRunners.desktopId,
