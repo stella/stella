@@ -59,18 +59,19 @@ export const invoiceLinkExpiresAt = (from: Date): Date =>
 export type InvoiceLinkScope = {
   sendId: SafeId<"invoiceSend">;
   organizationId: SafeId<"organization">;
-  /** The member who sent the link; reads run on their organization access. */
-  userId: SafeId<"user">;
+  /** The sending member, retained only as nullable history. */
+  userId: SafeId<"user"> | null;
+  tokenHash: string;
   invoiceId: SafeId<"invoice">;
   workspaceIds: SafeId<"workspace">[];
 };
 
-const scopeOf = (row: unknown): InvoiceLinkScope | null => {
+const scopeOf = (row: unknown, tokenHash: string): InvoiceLinkScope | null => {
   if (
     !isRecord(row) ||
     typeof row["send_id"] !== "string" ||
     typeof row["organization_id"] !== "string" ||
-    typeof row["user_id"] !== "string" ||
+    (row["user_id"] !== null && typeof row["user_id"] !== "string") ||
     typeof row["invoice_id"] !== "string" ||
     !isUnknownArray(row["workspace_ids"])
   ) {
@@ -86,7 +87,9 @@ const scopeOf = (row: unknown): InvoiceLinkScope | null => {
   return {
     sendId: brandPersistedInvoiceSendId(row["send_id"]),
     organizationId: brandPersistedOrganizationId(row["organization_id"]),
-    userId: brandPersistedUserId(row["user_id"]),
+    userId:
+      row["user_id"] === null ? null : brandPersistedUserId(row["user_id"]),
+    tokenHash,
     invoiceId: brandPersistedInvoiceId(row["invoice_id"]),
     workspaceIds: workspaceIds.map(brandPersistedWorkspaceId),
   };
@@ -110,5 +113,5 @@ export const resolveInvoiceLink = async (
         sql`SELECT * FROM invoice_link_scope(${hashInvoiceLinkToken(token)})`,
       ),
   );
-  return scopeOf(executedRows(result).at(0));
+  return scopeOf(executedRows(result).at(0), hashInvoiceLinkToken(token));
 };

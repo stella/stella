@@ -4,7 +4,11 @@ import { classifyFailure } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import {
+  INVOICE_DETAIL_RELATIONS,
+  INVOICE_DOCUMENT_COLUMNS,
+  INVOICE_SELLER_COLUMNS,
+} from "@/api/handlers/invoices/invoice-detail";
 import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
 import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
 import { openTypstSession } from "@/api/handlers/invoices/pdf/typst/session";
@@ -41,6 +45,7 @@ export const loadInvoiceDocument = async (
       RAW: (table) => invoiceInMatter(table, workspaceId),
       organizationId: { eq: organizationId },
     },
+    columns: INVOICE_DOCUMENT_COLUMNS,
     with: INVOICE_DETAIL_RELATIONS,
   });
   if (!invoice) {
@@ -54,6 +59,7 @@ export const loadInvoiceDocument = async (
             id: { eq: invoice.sellerProfileId },
             organizationId: { eq: organizationId },
           },
+          columns: INVOICE_SELLER_COLUMNS,
         });
   const original =
     invoice.originalInvoiceId === null

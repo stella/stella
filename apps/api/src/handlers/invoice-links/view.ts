@@ -1,14 +1,14 @@
 import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { INVOICE_STATUS, invoiceSends } from "@/api/db/schema";
+import { INVOICE_STATUS } from "@/api/db/schema";
+import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
 import {
   anchorMatter,
-  invoiceLinkAuditBindings,
+  createInvoiceLinkAuditRecorder,
   linkUnavailable,
-  loadLinkedDocument,
   verifyInvoiceLinkCaller,
 } from "@/api/handlers/invoice-links/link-access";
 import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access";
@@ -20,11 +20,7 @@ import {
 import { buildInvoiceTemplateData } from "@/api/handlers/invoices/pdf/typst/data";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditRecorder,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -75,11 +71,9 @@ export const createViewInvoiceLink = ({
     config,
     verifyInvoiceLinkCaller({ db, isAvailable }),
     async function* ({ caller, request, server }) {
-      const now = new Date();
       const opened = yield* Result.await(
         Result.tryPromise({
-          try: async () =>
-            await openLinkedInvoice(caller, now, { request, server }),
+          try: async () => await openLinkedInvoice(caller, { request, server }),
           catch: readFailed,
         }),
       );
@@ -90,19 +84,20 @@ export const createViewInvoiceLink = ({
     },
   );
 
-type OpenRequest = Parameters<typeof invoiceLinkAuditBindings>[2];
+type OpenRequest = Parameters<
+  typeof createInvoiceLinkAuditRecorder
+>[0]["context"];
 
 const openLinkedInvoice = async (
   caller: InvoiceLinkCaller,
-  now: Date,
   request: OpenRequest,
 ) =>
   await caller.db.scoped({
     organizationId: caller.organizationId,
-    userId: caller.userId,
+    userId: null,
     workspaceIds: caller.workspaceIds,
   })(async (tx) => {
-    const linked = await loadLinkedDocument(tx, caller);
+    const linked = await loadLinkedInvoiceData(tx, caller);
     if (linked === null) {
       return null;
     }
@@ -119,23 +114,15 @@ const openLinkedInvoice = async (
         new HandlerError({ status: 409, message: data.error.message }),
       );
     }
-    const eInvoice = await buildLinkedEInvoice(tx, {
-      organizationId: caller.organizationId,
-      workspaceId: anchorMatter(caller),
-      document,
-    });
-    await tx
-      .update(invoiceSends)
-      .set({ firstViewedAt: now })
-      .where(
-        and(
-          eq(invoiceSends.id, caller.sendId),
-          isNull(invoiceSends.firstViewedAt),
-        ),
-      );
-    const recordAuditEvent = createAuditRecorder(
-      invoiceLinkAuditBindings(caller, document.invoice.workspaceId, request),
+    const eInvoice = await buildLinkedEInvoice(linked);
+    await tx.execute(
+      sql`SELECT public.invoice_link_mark_viewed(${caller.tokenHash})`,
     );
+    const recordAuditEvent = createInvoiceLinkAuditRecorder({
+      caller,
+      workspaceId: document.invoice.workspaceId,
+      context: request,
+    });
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.ACCESS,
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,

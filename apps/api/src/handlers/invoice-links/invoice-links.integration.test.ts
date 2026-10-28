@@ -7,12 +7,12 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { user as authUser } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import {
   auditLogs,
   featureEnrolments,
@@ -52,6 +52,10 @@ import {
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -277,6 +281,7 @@ const memberContext = ({
   body = {},
   extraParams = {},
   auditEvents = [],
+  senderId,
 }: {
   tenant: Tenant;
   invoiceId: SafeId<"invoice">;
@@ -284,8 +289,10 @@ const memberContext = ({
   body?: unknown;
   extraParams?: Record<string, string>;
   auditEvents?: AuditEvent[];
+  senderId?: SafeId<"user">;
 }) => {
-  const { organizationId, workspaceId, userId } = tenantOf(tenant);
+  const { organizationId, workspaceId } = tenantOf(tenant);
+  const userId = senderId ?? tenantOf(tenant).userId;
   const recordAuditEvent = async (
     _tx: unknown,
     events: AuditEvent | AuditEvent[],
@@ -325,7 +332,12 @@ const send = async (
   {
     tenant = "A",
     auditEvents = [],
-  }: { tenant?: Tenant; auditEvents?: AuditEvent[] } = {},
+    senderId,
+  }: {
+    tenant?: Tenant;
+    auditEvents?: AuditEvent[];
+    senderId?: SafeId<"user">;
+  } = {},
 ) =>
   await sendInvoice.handler(
     asTestRaw<Parameters<typeof sendInvoice.handler>[0]>(
@@ -335,6 +347,7 @@ const send = async (
         route: "/v1/invoices/:workspaceId/:invoiceId/sends",
         body: { recipients, message: "For October." },
         auditEvents,
+        senderId,
       }),
     ),
   );
@@ -397,7 +410,9 @@ describe("sending an invoice by link", () => {
     const result = await send(
       invoiceId,
       ["client@example.test", "accounts@example.test"],
-      { auditEvents },
+      {
+        auditEvents,
+      },
     );
 
     expect(result).toMatchObject({
@@ -521,7 +536,10 @@ describe("sending an invoice by link", () => {
     });
     expect(
       await send(next, ["client-b@example.test"], { tenant: "B" }),
-    ).toMatchObject({ code: 429, response: { code: "invoice_send_limit" } });
+    ).toMatchObject({
+      code: 429,
+      response: { code: "invoice_send_limit" },
+    });
     expect(await sendRows(next)).toEqual([]);
     // The other suites send for this organization too.
     await testDb.delete(invoiceSends).where(eq(invoiceSends.invoiceId, busy));
@@ -697,6 +715,9 @@ describe("opening an invoice link", () => {
       expect(
         (await post(server, "download", { token, file: "pdf" })).status,
       ).toBe(404);
+      expect(
+        (await post(server, "download", { token, file: "e_invoice" })).status,
+      ).toBe(404);
     }
   });
 
@@ -709,6 +730,9 @@ describe("opening an invoice link", () => {
     expect((await post(server, "view", { token })).status).toBe(404);
     expect(
       (await post(server, "download", { token, file: "pdf" })).status,
+    ).toBe(404);
+    expect(
+      (await post(server, "download", { token, file: "e_invoice" })).status,
     ).toBe(404);
   });
 
@@ -723,9 +747,12 @@ describe("opening an invoice link", () => {
     expect(
       (await post(server, "download", { token, file: "pdf" })).status,
     ).toBe(404);
+    expect(
+      (await post(server, "download", { token, file: "e_invoice" })).status,
+    ).toBe(404);
   });
 
-  test("a voided invoice and a deleted sender close the link", async () => {
+  test("a voided invoice closes the link", async () => {
     const voided = await sentInvoice("voided@example.test");
     await testDb
       .update(invoices)
@@ -734,18 +761,81 @@ describe("opening an invoice link", () => {
     expect((await post(server, "view", { token: voided.token })).status).toBe(
       404,
     );
-    const orphaned = await sentInvoice("orphaned@example.test");
-    await testDb
-      .update(invoiceSends)
-      .set({ sentByUserId: null })
-      .where(eq(invoiceSends.invoiceId, orphaned.invoiceId));
-    expect((await post(server, "view", { token: orphaned.token })).status).toBe(
-      404,
-    );
+    expect(
+      (await post(server, "download", { token: voided.token, file: "pdf" }))
+        .status,
+    ).toBe(404);
+    expect(
+      (
+        await post(server, "download", {
+          token: voided.token,
+          file: "e_invoice",
+        })
+      ).status,
+    ).toBe(404);
   });
 
-  test("a link reaches only its own invoice, never another tenant's", async () => {
+  test("a live link keeps opening and downloading after its sender leaves and deletes their account", async () => {
+    const senderId = mintAuthProviderId<"user">();
+    const memberId = mintAuthProviderIdValue();
+    await testDb.insert(authUser).values({
+      id: senderId,
+      name: "Invoice sender",
+      email: `${senderId}@example.test`,
+      emailVerified: true,
+    });
+    await testDb.insert(member).values({
+      id: memberId,
+      organizationId: ids.orgA,
+      userId: senderId,
+      role: "owner",
+      createdAt: new Date(),
+    });
+    try {
+      const invoiceId = await seedInvoice({ status: INVOICE_STATUS.FINALIZED });
+      const result = await send(invoiceId, ["departed@example.test"], {
+        senderId,
+      });
+      expect(result).toMatchObject({
+        deliveryStatus: "delivered",
+        invoiceStatus: INVOICE_STATUS.SENT,
+      });
+      const token = tokenSentTo("departed@example.test");
+      expect((await sendRows(invoiceId)).at(0)?.sentByUserId).toBe(senderId);
+      await testDb.delete(member).where(eq(member.id, memberId));
+      expect(
+        await testDb
+          .select({ id: member.id })
+          .from(member)
+          .where(eq(member.userId, senderId)),
+      ).toEqual([]);
+      for (const state of ["removed", "deleted"]) {
+        if (state === "deleted") {
+          await testDb.delete(authUser).where(eq(authUser.id, senderId));
+          expect((await sendRows(invoiceId)).at(0)?.sentByUserId).toBeNull();
+        }
+        const opened = await post(server, "view", { token });
+        expect(opened.status).toBe(200);
+        expect(await opened.json()).toMatchObject({ buyer: "Example Client" });
+        for (const file of ["pdf", "e_invoice"]) {
+          const downloaded = await post(server, "download", { token, file });
+          expect(downloaded.status).toBe(200);
+          expect((await downloaded.arrayBuffer()).byteLength).toBeGreaterThan(
+            0,
+          );
+        }
+      }
+      expect((await sendRows(invoiceId)).at(0)?.firstViewedAt).toBeInstanceOf(
+        Date,
+      );
+    } finally {
+      await testDb.delete(authUser).where(eq(authUser.id, senderId));
+    }
+  });
+
+  test("a link reaches only its own invoice, never another invoice or tenant", async () => {
     const own = await sentInvoice("tenant-a@example.test");
+    const sibling = await sentInvoice("same-tenant@example.test");
     const other = await seedInvoice({
       tenant: "B",
       status: INVOICE_STATUS.FINALIZED,
@@ -761,6 +851,16 @@ describe("opening an invoice link", () => {
     ).json();
     expect(JSON.stringify(ownView)).toContain(numberOf(own.invoiceId));
     expect(JSON.stringify(ownView)).not.toContain(numberOf(other));
+    expect(JSON.stringify(ownView)).not.toContain(numberOf(sibling.invoiceId));
+    const projected = await tokenDb().tenantless(
+      async (tx) =>
+        await tx
+          .select({ id: invoices.id })
+          .from(
+            sql`public.invoice_link_invoice(${sha256Hex(own.token)}) AS invoices`,
+          ),
+    );
+    expect(projected).toEqual([{ id: own.invoiceId }]);
     expect(JSON.stringify(otherView)).toContain(numberOf(other));
     expect(JSON.stringify(otherView)).not.toContain("Example Law Office");
 

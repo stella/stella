@@ -13,7 +13,11 @@ import { Temporal, todayFor } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
-import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import {
+  INVOICE_DETAIL_RELATIONS,
+  INVOICE_DOCUMENT_COLUMNS,
+  INVOICE_SELLER_COLUMNS,
+} from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/lib/billing/invoice-lines";
 import {
   invoiceInMatter,
@@ -125,6 +129,7 @@ export const loadInvoiceExport = async (
     orderBy: { invoiceDate: "asc", invoiceNumber: "asc" },
     // One more than the cap, so an oversized matter is refused, not cut off.
     limit: MAX_EXPORT_INVOICES + 1,
+    columns: INVOICE_DOCUMENT_COLUMNS,
     with: EXPORT_RELATIONS,
   });
   const matterIds = [
@@ -162,6 +167,7 @@ export const loadInvoiceExport = async (
             id: { in: sellerIds },
             organizationId: { eq: organizationId },
           },
+          columns: INVOICE_SELLER_COLUMNS,
           limit: sellerIds.length,
         });
   const originalIds = [

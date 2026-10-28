@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { invoiceSends } from "@/api/db/schema";
-import { loadInvoiceDocument } from "@/api/handlers/invoices/pdf/document";
 import type { RequestContext } from "@/api/http/context";
 import type { VerifyCaller } from "@/api/lib/api-handlers";
+import { recordAuditGroups } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveInvoiceLink } from "@/api/lib/billing/invoice-links";
 import type { InvoiceLinkScope } from "@/api/lib/billing/invoice-links";
+import { resolveClientIp } from "@/api/lib/client-ip";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
@@ -64,18 +64,15 @@ export const verifyInvoiceLinkCaller =
 
 /**
  * Who an invoice link's audit rows name: the invoice, performed by the link
- * and owned by the member who sent it. Pass to `createAuditRecorder`.
+ * with its sending member retained as history when available.
  */
-export const invoiceLinkAuditBindings = (
+const invoiceLinkAuditBindings = (
   caller: InvoiceLinkCaller,
   workspaceId: InvoiceLinkScope["workspaceIds"][number] | null,
-  { request, server }: Pick<RequestContext, "request" | "server">,
 ) => ({
   organizationId: caller.organizationId,
   workspaceId,
-  userId: caller.userId,
-  request,
-  server,
+  userId: caller.userId ?? "invoice_link",
   execution: {
     performer: {
       type: "service" as const,
@@ -83,47 +80,38 @@ export const invoiceLinkAuditBindings = (
       name: "Invoice link",
     },
     trigger: {
-      type: "credential" as const,
-      ownerUserId: caller.userId,
+      type: "system" as const,
       source: "invoice_link",
       sourceId: caller.sendId,
     },
   },
 });
 
+type InvoiceLinkAuditOptions = {
+  caller: InvoiceLinkCaller;
+  workspaceId: InvoiceLinkScope["workspaceIds"][number] | null;
+  context: Pick<RequestContext, "request" | "server">;
+};
+
+/** Service provenance survives deletion of the sending account. */
+export const createInvoiceLinkAuditRecorder =
+  ({ caller, workspaceId, context }: InvoiceLinkAuditOptions) =>
+  async (tx: Transaction, event: AuditEvent) => {
+    await recordAuditGroups({
+      tx,
+      groups: [
+        {
+          bindings: invoiceLinkAuditBindings(caller, workspaceId),
+          events: [event],
+        },
+      ],
+      requestMetadata: {
+        ipAddress: resolveClientIp(context.request, context.server),
+        userAgent: context.request.headers.get("user-agent"),
+      },
+    });
+  };
+
 /** A matter the invoice bills; every document read is scoped through it. */
 export const anchorMatter = (caller: InvoiceLinkCaller) =>
-  caller.workspaceIds[0] ?? panic("A live invoice link bills a matter");
-
-/**
- * Inside the link's tenant scope: the send, re-read under row security and
- * still live, and the invoice document it delivers. Null refuses the link
- * (the sender lost access, or the send changed since the lookup).
- */
-export const loadLinkedDocument = async (
-  tx: Transaction,
-  caller: InvoiceLinkCaller,
-) => {
-  const [send] = await tx
-    .select({ id: invoiceSends.id, expiresAt: invoiceSends.expiresAt })
-    .from(invoiceSends)
-    .where(
-      and(
-        eq(invoiceSends.id, caller.sendId),
-        eq(invoiceSends.invoiceId, caller.invoiceId),
-        isNull(invoiceSends.revokedAt),
-        // The database clock, the same one the lookup judged expiry by.
-        gt(invoiceSends.expiresAt, sql`now()`),
-      ),
-    )
-    .limit(1);
-  if (!send) {
-    return null;
-  }
-  const document = await loadInvoiceDocument(tx, {
-    organizationId: caller.organizationId,
-    workspaceId: anchorMatter(caller),
-    invoiceId: caller.invoiceId,
-  });
-  return document === null ? null : { send, document };
-};
+  caller.workspaceIds.at(0) ?? panic("A live invoice link bills a matter");

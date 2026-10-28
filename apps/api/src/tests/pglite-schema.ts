@@ -777,6 +777,10 @@ const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
 );
 
 const INVOICE_LINK_STATEMENT_PREFIXES = [
+  'CREATE POLICY "invoice_sends_owner_viewed"',
+  'CREATE FUNCTION "invoice_link_mark_viewed"',
+  'REVOKE ALL ON FUNCTION "invoice_link_mark_viewed"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_mark_viewed"',
   'ALTER TABLE "invoice_sends" FORCE ROW LEVEL SECURITY',
   'CREATE FUNCTION "invoice_link_scope"',
   'REVOKE ALL ON FUNCTION "invoice_link_scope"',
@@ -784,6 +788,27 @@ const INVOICE_LINK_STATEMENT_PREFIXES = [
   'CREATE FUNCTION "invoice_sends_organization_count"',
   'REVOKE ALL ON FUNCTION "invoice_sends_organization_count"',
   'GRANT EXECUTE ON FUNCTION "invoice_sends_organization_count"',
+  'CREATE FUNCTION "invoice_link_invoice"',
+  'REVOKE ALL ON FUNCTION "invoice_link_invoice"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_invoice"',
+  'CREATE FUNCTION "invoice_link_lines"',
+  'REVOKE ALL ON FUNCTION "invoice_link_lines"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_lines"',
+  'CREATE FUNCTION "invoice_link_time"',
+  'REVOKE ALL ON FUNCTION "invoice_link_time"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_time"',
+  'CREATE FUNCTION "invoice_link_expenses"',
+  'REVOKE ALL ON FUNCTION "invoice_link_expenses"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_expenses"',
+  'CREATE FUNCTION "invoice_link_seller"',
+  'REVOKE ALL ON FUNCTION "invoice_link_seller"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_seller"',
+  'CREATE FUNCTION "invoice_link_matters"',
+  'REVOKE ALL ON FUNCTION "invoice_link_matters"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_matters"',
+  'CREATE FUNCTION "invoice_link_original"',
+  'REVOKE ALL ON FUNCTION "invoice_link_original"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_original"',
 ] as const;
 
 /**

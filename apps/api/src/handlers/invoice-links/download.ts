@@ -1,15 +1,14 @@
 import { Result } from "better-result";
 import type { InferOk } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { invoiceSends } from "@/api/db/schema";
+import { loadLinkedInvoiceData } from "@/api/handlers/invoice-links/document";
 import { buildLinkedEInvoice } from "@/api/handlers/invoice-links/e-invoice";
 import {
   anchorMatter,
-  invoiceLinkAuditBindings,
+  createInvoiceLinkAuditRecorder,
   linkUnavailable,
-  loadLinkedDocument,
   verifyInvoiceLinkCaller,
 } from "@/api/handlers/invoice-links/link-access";
 import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access";
@@ -22,11 +21,7 @@ import type { InvoicePdfRenderer } from "@/api/handlers/invoices/pdf/document";
 import { renderInvoiceWithTypst } from "@/api/handlers/invoices/pdf/typst/render-typst";
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
-import {
-  AUDIT_ACTION,
-  AUDIT_RESOURCE_TYPE,
-  createAuditRecorder,
-} from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -60,7 +55,9 @@ const readFailed = (cause: unknown) =>
   });
 
 type LinkFile = (typeof INVOICE_LINK_FILES)[number];
-type DownloadRequest = Parameters<typeof invoiceLinkAuditBindings>[2];
+type DownloadRequest = Parameters<
+  typeof createInvoiceLinkAuditRecorder
+>[0]["context"];
 
 type PreparedFile = {
   body: Uint8Array;
@@ -76,7 +73,7 @@ type LinkScope = Pick<
 const inLinkScope = (caller: LinkScope) =>
   caller.db.scoped({
     organizationId: caller.organizationId,
-    userId: caller.userId,
+    userId: null,
     workspaceIds: caller.workspaceIds,
   });
 
@@ -87,7 +84,7 @@ const inLinkScope = (caller: LinkScope) =>
  */
 const loadLinkedFile = async (caller: InvoiceLinkCaller, file: LinkFile) =>
   await inLinkScope(caller)(async (tx) => {
-    const linked = await loadLinkedDocument(tx, caller);
+    const linked = await loadLinkedInvoiceData(tx, caller);
     if (linked === null) {
       return null;
     }
@@ -99,11 +96,7 @@ const loadLinkedFile = async (caller: InvoiceLinkCaller, file: LinkFile) =>
     if (file === "pdf") {
       return Result.ok({ document, eInvoice: null });
     }
-    const eInvoice = await buildLinkedEInvoice(tx, {
-      organizationId: caller.organizationId,
-      workspaceId: anchorMatter(caller),
-      document,
-    });
+    const eInvoice = await buildLinkedEInvoice(linked);
     if (eInvoice.isErr()) {
       return Result.err(eInvoice.error);
     }
@@ -147,7 +140,6 @@ type RecordDownloadOptions = {
     id: string;
     workspaceId: InvoiceLinkCaller["workspaceIds"][number] | null;
   };
-  now: Date;
   request: DownloadRequest;
 };
 
@@ -157,22 +149,17 @@ const recordDownload = async ({
   file,
   fileName,
   invoice,
-  now,
   request,
 }: RecordDownloadOptions) =>
   await inLinkScope(caller)(async (tx) => {
-    await tx
-      .update(invoiceSends)
-      .set({ firstViewedAt: now })
-      .where(
-        and(
-          eq(invoiceSends.id, caller.sendId),
-          isNull(invoiceSends.firstViewedAt),
-        ),
-      );
-    const recordAuditEvent = createAuditRecorder(
-      invoiceLinkAuditBindings(caller, invoice.workspaceId, request),
+    await tx.execute(
+      sql`SELECT public.invoice_link_mark_viewed(${caller.tokenHash})`,
     );
+    const recordAuditEvent = createInvoiceLinkAuditRecorder({
+      caller,
+      workspaceId: invoice.workspaceId,
+      context: request,
+    });
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DOWNLOAD,
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
@@ -205,7 +192,6 @@ export const createDownloadInvoiceLinkFile = ({
     config,
     verifyInvoiceLinkCaller({ db, isAvailable }),
     async function* ({ caller, body, request, server }) {
-      const now = new Date();
       const loaded = yield* Result.await(
         Result.tryPromise({
           try: async () => await loadLinkedFile(caller, body.file),
@@ -226,7 +212,6 @@ export const createDownloadInvoiceLinkFile = ({
               file: body.file,
               fileName,
               invoice: linked.document.invoice,
-              now,
               request: { request, server },
             }),
           catch: readFailed,
