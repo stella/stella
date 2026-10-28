@@ -268,6 +268,22 @@ test("production already serving the exact API and web SHA never dispatches agai
   ).toHaveLength(0);
 });
 
+test("an active promotion is watched to completion even when production already serves the SHA", async () => {
+  const result = await promotionScenario({
+    failurePhase: "none",
+    failureKind: "unknown",
+    targetEnvironment: "production",
+    priorRun: "active",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
+  });
+  expect(result.exit, result.stderr).toBe(0);
+  expect(result.stdout + result.stderr).not.toContain(
+    "Production already serves",
+  );
+  expect(result.calls.some((call) => call.startsWith("poll "))).toBe(true);
+});
+
 test("a successful promotion on the second page prevents another dispatch", async () => {
   const result = await promotionScenario({
     failurePhase: "none",
