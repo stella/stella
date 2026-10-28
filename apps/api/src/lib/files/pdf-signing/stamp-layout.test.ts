@@ -6,6 +6,7 @@ import {
   layoutStampColumns,
   layoutStampRow,
   POP_DIRECTIONAL_ISOLATE,
+  type PositionedStampRow,
   STAMP_UNITS_PER_EM,
   type StampRow,
 } from "@/api/lib/files/pdf-signing/stamp-layout";
@@ -120,19 +121,49 @@ describe("the stamp's two columns", () => {
     });
   };
 
-  test("fills the left half with one name word per line and top-aligns the details", async () => {
+  /** Vertical extent and right edge of a positioned row, in points. */
+  const extent = ({ row, fontSize, x, y }: PositionedStampRow) => {
+    const faces = row.runs.map(({ face }) => face.font);
+    const ascent = Math.max(
+      1,
+      ...faces.map((font) => font.ascender / font.unitsPerEm),
+    );
+    const descent = Math.max(
+      0,
+      ...faces.map((font) => -font.descender / font.unitsPerEm),
+    );
+    return {
+      top: y + ascent * fontSize,
+      bottom: y - descent * fontSize,
+      right: x + (row.width * fontSize) / STAMP_UNITS_PER_EM,
+    };
+  };
+  const texts = (rows: readonly PositionedStampRow[]) =>
+    rows.map(({ row }) => runTexts(row).join(""));
+  /** Both columns, the name rows first, as the layout returns them. */
+  const columns = (rows: readonly PositionedStampRow[], nameWords: number) => ({
+    name: rows.slice(0, nameWords),
+    details: rows.slice(nameWords),
+  });
+  /** Top of the first row of a column and bottom of its last. */
+  const span = (column: readonly PositionedStampRow[]) => {
+    const [first] = column;
+    const last = column.at(-1);
+    if (first === undefined || last === undefined) {
+      throw new Error("empty column");
+    }
+    return { top: extent(first).top, bottom: extent(last).bottom };
+  };
+
+  test("fills the box: one name word per line in the left half, details beside it, both centred", async () => {
     const rows = await fit("Jan Kubica");
     expect(rows).not.toBeNull();
     if (rows === null) {
       return;
     }
-    const name = rows.filter(({ x }) => x < 120);
-    const details = rows.filter(({ x }) => x > 120);
-    expect(name.map(({ row }) => runTexts(row).join(""))).toEqual([
-      "Jan",
-      "Kubica",
-    ]);
-    expect(details.map(({ row }) => runTexts(row).join(""))).toEqual([
+    const { name, details } = columns(rows, 2);
+    expect(texts(name)).toEqual(["Jan", "Kubica"]);
+    expect(texts(details)).toEqual([
       "Digitally signed by",
       "Jan Kubica",
       "Date: 2026.10.08",
@@ -140,44 +171,66 @@ describe("the stamp's two columns", () => {
     ]);
     const size = name.at(0)?.fontSize ?? 0;
     expect(size).toBeGreaterThan(details.at(0)?.fontSize ?? Infinity);
-    for (const { row, fontSize, x, y } of rows) {
-      const faces = row.runs.map(({ face }) => face.font);
-      const ascent = Math.max(
-        1,
-        ...faces.map((font) => font.ascender / font.unitsPerEm),
-      );
-      const descent = Math.max(
-        0,
-        ...faces.map((font) => -font.descender / font.unitsPerEm),
-      );
-      expect(
-        x + (row.width * fontSize) / STAMP_UNITS_PER_EM,
-      ).toBeLessThanOrEqual(x < 120 ? 114.001 : 234.001);
-      expect(y - descent * fontSize).toBeGreaterThanOrEqual(5.999);
-      expect(y + ascent * fontSize).toBeLessThanOrEqual(74.001);
+    for (const row of rows) {
+      const { top, bottom, right } = extent(row);
+      expect(right).toBeLessThanOrEqual(234.001);
+      expect(bottom).toBeGreaterThanOrEqual(5.999);
+      expect(top).toBeLessThanOrEqual(74.001);
+    }
+    for (const row of name) {
+      expect(row.x).toBeCloseTo(6);
+      expect(extent(row).right).toBeLessThanOrEqual(114.001);
     }
     // At least one dimension binds: increasing the name size would overflow.
-    const widest =
-      Math.max(...name.map(({ row }) => row.width / STAMP_UNITS_PER_EM)) * size;
-    const fonts = name.flatMap(({ row }) =>
-      row.runs.map(({ face }) => face.font),
-    );
-    const ascent = Math.max(
-      1,
-      ...fonts.map((font) => font.ascender / font.unitsPerEm),
-    );
-    const descent = Math.max(
-      0,
-      ...fonts.map((font) => -font.descender / font.unitsPerEm),
-    );
-    const usedHeight =
-      size * (ascent + descent + Math.max(1.25, ascent + descent));
+    const nameRight = Math.max(...name.map((row) => extent(row).right));
+    const nameSpan = span(name);
     expect(
-      Math.min(Math.abs(widest - 108), Math.abs(usedHeight - 68)),
+      Math.min(
+        Math.abs(nameRight - 114),
+        Math.abs(nameSpan.top - nameSpan.bottom - 68),
+      ),
     ).toBeLessThan(0.001);
-    expect(
-      (details.at(0)?.y ?? 0) + (details.at(0)?.fontSize ?? 0),
-    ).toBeCloseTo(74);
+    // The details start one padding right of the widest name row.
+    for (const row of details) {
+      expect(row.x).toBeCloseTo(nameRight + 6);
+    }
+    // Each column is centred vertically in the box.
+    for (const column of [name, details]) {
+      const { top, bottom } = span(column);
+      expect((top + bottom) / 2).toBeCloseTo(40);
+    }
+  });
+
+  test("sizes the details to fill the box, with no fixed cap", async () => {
+    const rows = await fit("Jan Kubica", { width: 380, height: 100 });
+    expect(rows).not.toBeNull();
+    if (rows === null) {
+      return;
+    }
+    const { name, details } = columns(rows, 2);
+    expect(details).toHaveLength(4);
+    const fontSize = details.at(0)?.fontSize ?? 0;
+    expect(fontSize).toBeGreaterThan(10);
+    expect(details.every((row) => row.fontSize === fontSize)).toBe(true);
+    expect((fontSize * 2) % 1).toBe(0);
+    // With four unwrapped rows chosen, the same rows one half point larger
+    // must overflow the width or the height, or that size would have won.
+    const nameRight = Math.max(...name.map((row) => extent(row).right));
+    const detailsWidth = 380 - 6 - (nameRight + 6);
+    const next = fontSize + 0.5;
+    const widest = Math.max(
+      ...details.map(({ row }) => (row.width * next) / STAMP_UNITS_PER_EM),
+    );
+    const { top, bottom } = span(details);
+    const nextHeight = ((top - bottom) * next) / fontSize;
+    expect(widest > detailsWidth || nextHeight > 88).toBe(true);
+    for (const row of rows) {
+      const edges = extent(row);
+      expect(edges.right).toBeLessThanOrEqual(374.001);
+      expect(edges.bottom).toBeGreaterThanOrEqual(5.999);
+      expect(edges.top).toBeLessThanOrEqual(94.001);
+    }
+    expect((top + bottom) / 2).toBeCloseTo(50);
   });
 
   test("shrinks a long name and refuses an unbreakable word below the readable size", async () => {
@@ -218,12 +271,13 @@ describe("the stamp's two columns", () => {
     if (rows === null) {
       return;
     }
-    expect(
-      rows.filter(({ x }) => x < 200).map(({ row }) => runTexts(row).join("")),
-    ).toEqual(ARABIC_NAME.split(" "));
-    expect(
-      rows.filter(({ x }) => x > 200).map(({ row }) => runTexts(row).join("")),
-    ).toContain(ARABIC_NAME);
+    const words = ARABIC_NAME.split(" ");
+    const { name, details } = columns(rows, words.length);
+    expect(texts(name)).toEqual(words);
+    expect(texts(details)).toContain(ARABIC_NAME);
+    expect(Math.min(...details.map(({ x }) => x))).toBeGreaterThan(
+      Math.max(...name.map((row) => extent(row).right)),
+    );
     expect(
       rows.every(({ row }) =>
         row.runs.every(({ glyphs }) =>

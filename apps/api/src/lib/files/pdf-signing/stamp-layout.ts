@@ -256,9 +256,10 @@ const wrapLine = (
 
 /** Smaller text would not be readable on paper. Sizes are physical points. */
 const MIN_FONT_SIZE = 6;
-const MAX_DETAIL_FONT_SIZE = 10;
 const FONT_SIZE_STEP = 0.5;
 const LINE_HEIGHT = 1.25;
+/** Absorbs float error, so a fit never depends on the page's UserUnit. */
+const FIT_TOLERANCE = 1e-6;
 
 export type PositionedStampRow = {
   row: StampRow;
@@ -268,7 +269,11 @@ export type PositionedStampRow = {
   y: number;
 };
 
-/** Fit both columns without clipping; a name word stays on its own line. */
+/**
+ * Fit both columns without clipping, each as large as the box allows and
+ * centred vertically: the name, one word per line, in at most the left half;
+ * the details just right of the name's widest line.
+ */
 export const layoutStampColumns = ({
   height,
   layoutRow,
@@ -284,7 +289,6 @@ export const layoutStampColumns = ({
   width: number;
 }): PositionedStampRow[] | null => {
   const padding = Math.min(6 * unit, height * 0.1, width * 0.05);
-  const columnWidth = width / 2 - 2 * padding;
   const innerHeight = height - 2 * padding;
   const unitWidth = (text: string) =>
     layoutRow(text).width / STAMP_UNITS_PER_EM;
@@ -304,58 +308,72 @@ export const layoutStampColumns = ({
       leading: Math.max(LINE_HEIGHT, ascent + descent),
     };
   };
+  /** Height, in ems, from the first row's ascent to the last row's descent. */
+  const blockEms = (rows: readonly StampRow[]) => {
+    const { ascent, descent, leading } = metrics(rows);
+    return ascent + descent + Math.max(0, rows.length - 1) * leading;
+  };
+  const widestEms = (rows: readonly StampRow[]) =>
+    Math.max(0, ...rows.map((row) => row.width / STAMP_UNITS_PER_EM));
   const position = (rows: readonly StampRow[], fontSize: number, x: number) => {
     const { ascent, leading } = metrics(rows);
+    const top =
+      height - padding - (innerHeight - fontSize * blockEms(rows)) / 2;
     return rows.map((row, index) => ({
       row,
       fontSize,
       x,
-      y: height - padding - fontSize * (ascent + index * leading),
+      y: top - fontSize * (ascent + index * leading),
     }));
   };
+
   const nameRows = lines.name
     .split(/\s+/u)
     .filter((word) => word !== "")
     .map((word) =>
       layoutRow(`${FIRST_STRONG_ISOLATE}${word}${POP_DIRECTIONAL_ISOLATE}`),
     );
-  const nameMetrics = metrics(nameRows);
-  const nameSize = Math.min(
-    columnWidth /
-      Math.max(
-        ...nameRows.map(({ width: rowWidth }) => rowWidth / STAMP_UNITS_PER_EM),
-      ),
-    innerHeight /
-      (nameMetrics.ascent +
-        nameMetrics.descent +
-        Math.max(0, nameRows.length - 1) * nameMetrics.leading),
-  );
+  const nameSize =
+    nameRows.length === 0
+      ? 0
+      : Math.min(
+          (width / 2 - 2 * padding) / widestEms(nameRows),
+          innerHeight / blockEms(nameRows),
+        );
   if (nameRows.length > 0 && nameSize < MIN_FONT_SIZE * unit) {
     return null;
   }
+  const detailsX =
+    nameRows.length === 0
+      ? padding
+      : 2 * padding + widestEms(nameRows) * nameSize;
+  const detailsWidth = width - padding - detailsX;
+
+  // Every non-blank line takes at least one row of at least 1 em, spaced at
+  // least LINE_HEIGHT apart; no size above this bound can fit the height.
+  const detailLines = lines.details.filter((line) =>
+    line.split(/\s+/u).some((word) => word !== ""),
+  ).length;
+  const largest =
+    innerHeight / unit / (1 + Math.max(0, detailLines - 1) * LINE_HEIGHT);
   for (
-    let points = MAX_DETAIL_FONT_SIZE;
-    points >= MIN_FONT_SIZE;
-    points -= FONT_SIZE_STEP
+    let steps = Math.floor(largest / FONT_SIZE_STEP + FIT_TOLERANCE);
+    steps >= MIN_FONT_SIZE / FONT_SIZE_STEP;
+    steps -= 1
   ) {
-    const fontSize = points * unit;
+    const fontSize = steps * FONT_SIZE_STEP * unit;
     const rows = lines.details
-      .flatMap((line) => wrapLine(line, columnWidth / fontSize, unitWidth))
+      .flatMap((line) => wrapLine(line, detailsWidth / fontSize, unitWidth))
       .map(layoutRow);
-    const { ascent, descent, leading } = metrics(rows);
-    const usedHeight =
-      fontSize * (ascent + descent + Math.max(0, rows.length - 1) * leading);
     if (
-      usedHeight > innerHeight ||
-      rows.some(
-        (row) => (row.width * fontSize) / STAMP_UNITS_PER_EM > columnWidth,
-      )
+      fontSize * blockEms(rows) > innerHeight * (1 + FIT_TOLERANCE) ||
+      fontSize * widestEms(rows) > detailsWidth * (1 + FIT_TOLERANCE)
     ) {
       continue;
     }
     return [
       ...position(nameRows, nameSize, padding),
-      ...position(rows, fontSize, width / 2 + padding),
+      ...position(rows, fontSize, detailsX),
     ];
   }
   return null;
