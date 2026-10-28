@@ -794,7 +794,7 @@ export const chatRunLogs = p.pgTable(
 export const chatRunTextStartSql = (chunk: SQL) =>
   sql`(${chunk}->>'type' = 'TEXT_MESSAGE_START' OR (${chunk}->>'type' = 'TEXT_MESSAGE_CHUNK' AND ${chunk} ? 'role'))`;
 
-export const UNINDEXED_TEXT_MESSAGE_END_SEQ = -1n;
+export const CHAT_RUN_TEXT_BOUNDARY_INITIALIZATIONS = ["recorded"] as const;
 
 /** Ordered chunks; deleting a log header removes its whole transient prefix. */
 export const chatRunLogEntries = p.pgTable(
@@ -806,10 +806,12 @@ export const chatRunLogEntries = p.pgTable(
     batchId: p.uuid("batch_id").notNull(),
     batchIndex: p.integer("batch_index").notNull(),
     chunk: jsonb("chunk").$type<StreamChunk>().notNull(),
-    /** Exclusive message end; NULL is open and -1 awaits online initialization. */
-    textMessageEndSeq: p
-      .bigint("text_message_end_seq", { mode: "bigint" })
-      .default(UNINDEXED_TEXT_MESSAGE_END_SEQ),
+    /** Exclusive message end; NULL means no end has been recorded. */
+    textMessageEndSeq: p.bigint("text_message_end_seq", { mode: "bigint" }),
+    /** Recorded boundary initialization; NULL awaits the online repair for text starts. */
+    textBoundaryInitialization: p.text("text_boundary_initialization", {
+      enum: CHAT_RUN_TEXT_BOUNDARY_INITIALIZATIONS,
+    }),
   },
   (table) => [
     p.primaryKey({
@@ -832,7 +834,13 @@ export const chatRunLogEntries = p.pgTable(
       .where(chatRunTextStartSql(sql`${table.chunk}`)),
     p
       .index("chat_run_log_entries_text_open_idx")
-      .on(table.organizationId, table.runId, table.textMessageEndSeq, table.seq)
+      .on(
+        table.organizationId,
+        table.runId,
+        table.textBoundaryInitialization,
+        table.textMessageEndSeq,
+        table.seq,
+      )
       .where(chatRunTextStartSql(sql`${table.chunk}`)),
     p
       .index("chat_run_log_entries_text_boundary_id_idx")
@@ -847,7 +855,7 @@ export const chatRunLogEntries = p.pgTable(
       ),
     p.check(
       "chat_run_log_entries_text_end_check",
-      sql`${table.textMessageEndSeq} IS NULL OR ${table.textMessageEndSeq} = ${UNINDEXED_TEXT_MESSAGE_END_SEQ} OR ${table.textMessageEndSeq} > ${table.seq}`,
+      sql`(${table.textBoundaryInitialization} IS NULL AND ${table.textMessageEndSeq} IS NULL) OR (${table.textBoundaryInitialization} IS NOT NULL AND ${table.textBoundaryInitialization} = 'recorded' AND (${table.textMessageEndSeq} IS NULL OR ${table.textMessageEndSeq} > ${table.seq}))`,
     ),
     p.check("chat_run_log_entries_seq_check", sql`${table.seq} > 0`),
     p.check(

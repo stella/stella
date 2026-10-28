@@ -234,7 +234,7 @@ const readRunLogHeaderOnTx = async ({
           )) FROM chat_run_log_entries started
           WHERE started.organization_id = ${chatRunLogs.organizationId} AND started.run_id = ${chatRunLogs.runId}
             AND started.seq <= ${restoreRolesAfter} AND ${chatRunTextStartSql(sql`started.chunk`)}
-            AND (started.text_message_end_seq IS NULL OR started.text_message_end_seq > ${restoreRolesAfter}) ORDER BY started.seq LIMIT ${MAX_RUN_BYTES}
+            AND started.text_boundary_initialization = 'recorded' AND (started.text_message_end_seq IS NULL OR started.text_message_end_seq > ${restoreRolesAfter}) ORDER BY started.seq LIMIT ${MAX_RUN_BYTES}
         ))`,
         closedAt: chatRunLogs.closedAt,
         nextSeq: chatRunLogs.nextSeq,

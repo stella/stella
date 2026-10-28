@@ -1,12 +1,15 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { CHAT_RUN_TEXT_BOUNDARIES } from "./chat-run-text-boundaries";
+import { withDedicatedStatementTimeout } from "./long-running-connection";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 test("retained text boundaries converge across batches and new inserts keep them current", async () => {
   const database = new PGlite();
-  await database.exec(`CREATE TABLE chat_run_log_entries (
+  await database.exec(`CREATE ROLE stella; CREATE TABLE chat_run_log_entries (
     organization_id text, run_id text, seq bigint, chunk jsonb,
     PRIMARY KEY (organization_id, run_id, seq));
     INSERT INTO chat_run_log_entries
@@ -35,6 +38,7 @@ test("retained text boundaries converge across batches and new inserts keep them
   expect((await CHAT_RUN_TEXT_BOUNDARIES.readCompletion(connection)).type).toBe(
     "incomplete",
   );
+  await database.exec("SET statement_timeout = '7s'");
   await CHAT_RUN_TEXT_BOUNDARIES.repair(connection);
   expect((await CHAT_RUN_TEXT_BOUNDARIES.readCompletion(connection)).type).toBe(
     "complete",
@@ -53,6 +57,32 @@ test("retained text boundaries converge across batches and new inserts keep them
       )
     ).rows,
   ).toEqual([{ ending: "1005" }]);
+  expect((await database.query("SHOW statement_timeout")).rows).toEqual([
+    { statement_timeout: "7s" },
+  ]);
+  expect(
+    (
+      await database.query(
+        "SELECT text_boundary_initialization AS state, text_message_end_seq AS ending FROM chat_run_log_entries WHERE seq = 1003",
+      )
+    ).rows,
+  ).toEqual([{ state: "recorded", ending: null }]);
+  const failed = await rejectionOf(
+    withDedicatedStatementTimeout({
+      query: connection.query,
+      statementTimeoutMs: 30_000,
+      work: async () => {
+        expect((await database.query("SHOW statement_timeout")).rows).toEqual([
+          { statement_timeout: "30s" },
+        ]);
+        throw new TypeError("Maintenance work failed");
+      },
+    }),
+  );
+  expect(failed).toEqual(new TypeError("Maintenance work failed"));
+  expect((await database.query("SHOW statement_timeout")).rows).toEqual([
+    { statement_timeout: "7s" },
+  ]);
   const before = (
     await database.query("SELECT * FROM chat_run_log_entries ORDER BY seq")
   ).rows;
@@ -62,8 +92,8 @@ test("retained text boundaries converge across batches and new inserts keep them
       .rows,
   ).toEqual(before);
   await database.exec(`INSERT INTO chat_run_log_entries VALUES
-    ('org','run',1006,'{"type":"TEXT_MESSAGE_START","messageId":"assistant","role":"assistant"}', DEFAULT),
-    ('org','run',1007,'{"type":"TEXT_MESSAGE_END","messageId":"user"}', DEFAULT);`);
+    ('org','run',1006,'{"type":"TEXT_MESSAGE_START","messageId":"assistant","role":"assistant"}', DEFAULT, DEFAULT),
+    ('org','run',1007,'{"type":"TEXT_MESSAGE_END","messageId":"user"}', DEFAULT, DEFAULT);`);
   expect(
     (
       await database.query(

@@ -336,6 +336,7 @@ const WITHDRAWN_COPY_REGISTRY = {
       "batchId",
       "batchIndex",
       "textMessageEndSeq",
+      "textBoundaryInitialization",
     ],
     decision: "chunk;runId->chatTurns.threadId->chatThreads.subjectDecisionId",
     fields: { chunk: { kind: "snapshot", projection: "marker" } },
