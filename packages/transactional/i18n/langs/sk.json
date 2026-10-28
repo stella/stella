@@ -31,6 +31,15 @@
     "subject": "Váš overovací kód stella",
     "twoFactorManage": "Použite tento kód na potvrdenie zmien v nastaveniach dvojfaktorového overenia."
   },
+  "pushAlert": {
+    "announcement": "Vaša organizácia zverejnila oznámenie",
+    "flowRunAwaitingApproval": "Pracovný postup čaká na vaše schválenie",
+    "flowRunCompleted": "Pracovný postup bol dokončený",
+    "flowRunFailed": "Pracovný postup zlyhal",
+    "mention": "Niekto vás spomenul v komentári",
+    "reportExportFailed": "Export vášho reportu sa nepodarilo dokončiť",
+    "reportExportSucceeded": "Export vášho reportu je pripravený"
+  },
   "reportExportStatus": {
     "action": "Otvoriť stella",
     "completedBody": "Export vášho reportu je pripravený. Otvorte stella a zobrazte alebo stiahnite ho.",

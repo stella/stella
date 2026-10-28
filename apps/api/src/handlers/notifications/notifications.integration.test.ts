@@ -31,8 +31,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  createNotificationsInTransaction,
   fanOutNotifications,
   NOTIFICATION_INSERT_BATCH_SIZE,
+  pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -664,5 +666,85 @@ describe("notifications follow matter access", () => {
     expect(readAtById.get(visible)).not.toBeNull();
     // Marking everything read does not reach a row the recipient cannot see.
     expect(readAtById.get(hidden)).toBeNull();
+  });
+});
+
+describe("push alerts for committed notifications", () => {
+  const exportReady = (idempotencyKey: string): NewNotification => ({
+    kind: NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED,
+    metadata: {},
+    entityType: "report_export",
+    entityId: createSafeId<"reportExport">(),
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    idempotencyKey,
+  });
+
+  const fileAsRecipient = async (rows: readonly NewNotification[]) =>
+    await createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await createNotificationsInTransaction(
+          rows,
+          asTestRaw<Parameters<typeof createNotificationsInTransaction>[1]>(tx),
+        ),
+    );
+
+  test("the write hands back the ids it filed, and after commit each is queued for the recipient's devices", async () => {
+    const pings = await fileAsRecipient([
+      exportReady("test:push-a"),
+      exportReady("test:push-b"),
+    ]);
+    const filed = pings.flatMap(({ notificationIds }) => notificationIds);
+    seeded.push(...filed);
+
+    expect(pings).toEqual([
+      {
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+        notificationIds: filed,
+      },
+    ]);
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(inArray(notifications.id, filed));
+    expect(stored).toHaveLength(2);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(pings, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([filed]);
+  });
+
+  test("a replayed write files nothing new, so nothing is queued twice", async () => {
+    const first = await fileAsRecipient([exportReady("test:push-replay")]);
+    seeded.push(...first.flatMap(({ notificationIds }) => notificationIds));
+
+    const replay = await fileAsRecipient([exportReady("test:push-replay")]);
+    expect(replay).toEqual([]);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(replay, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([[]]);
+  });
+
+  test("filing does not depend on push: unconfigured, the write and its ping still go through", async () => {
+    const row = exportReady("test:push-unconfigured");
+    await fanOutNotifications([row], fanOutDb());
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, row.idempotencyKey));
+    seeded.push(...stored.map(({ id }) => id));
+    expect(stored).toHaveLength(1);
   });
 });

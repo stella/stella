@@ -31,6 +31,15 @@
     "subject": "Twój kod weryfikacyjny stella",
     "twoFactorManage": "Użyj tego kodu, aby potwierdzić zmiany w ustawieniach uwierzytelniania dwuskładnikowego."
   },
+  "pushAlert": {
+    "announcement": "Twoja organizacja opublikowała ogłoszenie",
+    "flowRunAwaitingApproval": "Przepływ pracy czeka na Twoje zatwierdzenie",
+    "flowRunCompleted": "Przepływ pracy został zakończony",
+    "flowRunFailed": "Przepływ pracy nie powiódł się",
+    "mention": "Wspomniano o Tobie w komentarzu",
+    "reportExportFailed": "Nie udało się ukończyć eksportu raportu",
+    "reportExportSucceeded": "Eksport raportu jest gotowy"
+  },
   "reportExportStatus": {
     "action": "Otwórz stella",
     "completedBody": "Eksport raportu jest gotowy. Otwórz stella, aby go wyświetlić lub pobrać.",

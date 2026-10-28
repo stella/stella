@@ -34,6 +34,15 @@ type Messages = {
     "subject": "Your stella verification code";
     "twoFactorManage": "Use this code to confirm changes to your two-factor authentication settings.";
   };
+  "pushAlert": {
+    "announcement": "Your organization posted an announcement";
+    "flowRunAwaitingApproval": "A workflow is waiting for your approval";
+    "flowRunCompleted": "A workflow finished";
+    "flowRunFailed": "A workflow failed";
+    "mention": "You were mentioned in a comment";
+    "reportExportFailed": "Your report export could not be completed";
+    "reportExportSucceeded": "Your report export is ready";
+  };
   "reportExportStatus": {
     "action": "Open stella";
     "completedBody": "Your report export is ready. Open stella to view or download it.";
