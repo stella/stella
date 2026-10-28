@@ -135,6 +135,11 @@ type AppConfigInputs = {
    * extension out until the release signs that too.
    */
   liveActivities: boolean;
+  /**
+   * Whether the build carries the push entitlement, which a release profile
+   * must grant; releases take it with the profiles that grant both.
+   */
+  pushNotifications: boolean;
   /** The native fingerprint (`scripts/fingerprint.ts`); updates target it. */
   runtimeVersion: string;
   signingCertificatePresent: boolean;
@@ -144,6 +149,7 @@ type AppConfigInputs = {
 const appConfigBase = ({
   buildNumber,
   liveActivities,
+  pushNotifications,
   runtimeVersion,
   signingCertificatePresent,
   variant,
@@ -239,6 +245,16 @@ const appConfigBase = ({
         ],
       },
     ],
+    // Notifications from the server: mentions, approvals, finished exports
+    // (src/components/push-registration.tsx).
+    ...(pushNotifications
+      ? [
+          [
+            "expo-notifications",
+            { mode: variant === "development" ? "development" : "production" },
+          ] as const,
+        ]
+      : []),
     // A running timer on the Lock Screen and in the Dynamic Island
     // (src/widgets/timer-activity.ios.tsx).
     ...(liveActivities
@@ -257,19 +273,23 @@ const appConfigBase = ({
     typedRoutes: true,
     reactCompiler: true,
   },
-  extra: { liveActivities, variant },
+  extra: { liveActivities, pushNotifications, variant },
 });
 
 export const appConfigFor = ({
   signing,
   ...inputs
-}: Omit<AppConfigInputs, "liveActivities"> & {
+}: Omit<AppConfigInputs, "liveActivities" | "pushNotifications"> & {
   signing?: ReleaseSigning | undefined;
 }): ExpoConfig => {
+  // The widgets profile comes with the profiles regenerated for the App
+  // Group and push capabilities, so it stands for both.
+  const storeCapabilities =
+    signing === undefined || signing.widgetsProfileUuid !== undefined;
   const config = appConfigBase({
     ...inputs,
-    liveActivities:
-      signing === undefined || signing.widgetsProfileUuid !== undefined,
+    liveActivities: storeCapabilities,
+    pushNotifications: storeCapabilities,
   });
   return signing === undefined ? config : withReleaseSigning(config, signing);
 };

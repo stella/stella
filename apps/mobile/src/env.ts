@@ -30,6 +30,7 @@ export const DEFAULT_SERVER_URL: string =
 const extra = v.parse(
   v.object({
     liveActivities: v.optional(v.boolean(), false),
+    pushNotifications: v.optional(v.boolean(), false),
     variant: v.picklist(MOBILE_APP_VARIANTS),
   }),
   Constants.expoConfig?.extra,
@@ -42,3 +43,9 @@ export const APP_VARIANT: MobileAppVariant = extra.variant;
  * Activities (`app.config.ts`); a release leaves it out until it signs it.
  */
 export const LIVE_ACTIVITIES: boolean = extra.liveActivities;
+
+/**
+ * Whether the build may take push notifications (`app.config.ts`); a
+ * release does once its profile carries the push capability.
+ */
+export const PUSH_NOTIFICATIONS: boolean = extra.pushNotifications;
