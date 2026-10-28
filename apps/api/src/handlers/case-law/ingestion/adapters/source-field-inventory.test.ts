@@ -351,6 +351,9 @@ describe("every adapter accounts for the fields its source states", () => {
       ).toBeGreaterThan(0);
 
       const audit = publisherFieldRetentionAudit(sourceFields, stated);
+      expect(audit.status, `${key}: publisher fields must be auditable`).toBe(
+        "audited",
+      );
       switch (audit.status) {
         case "audited":
           expect(
@@ -359,12 +362,10 @@ describe("every adapter accounts for the fields its source states", () => {
           ).toEqual([]);
           break;
         case "unavailable":
-          return panic(
-            `${key}: source fields cannot be audited: ${audit.reason}`,
-          );
+          break;
         default:
           audit satisfies never;
-          return panic("Unhandled publisher field retention observation");
+          panic("Unhandled publisher field retention observation");
       }
 
       // Validate policies that reach the inventory through a dynamic boundary.

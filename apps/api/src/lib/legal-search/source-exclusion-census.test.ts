@@ -53,9 +53,9 @@ test("an empty publisher observation is unavailable rather than audited clean", 
   });
 });
 
-test("publisher-field-retention: prototype names count only when explicitly mapped", async () => {
+test("publisher-field-retention: prototype names count only when explicitly mapped", () => {
   const prototypeNames = Object.getOwnPropertyNames(Object.prototype);
-  await assertProperty(
+  assertProperty(
     "publisher-field-retention: prototype names count only when explicitly mapped",
     fc.property(
       fc.subarray(prototypeNames),

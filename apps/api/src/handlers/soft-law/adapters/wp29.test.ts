@@ -464,7 +464,7 @@ test.each([
   "WP29 captured $field is accounted for by its actual retained $part",
   async ({ file, field, part }) => {
     const html = await fixture(file);
-    const observed = await wp29Adapter.sourceFields.listSourceFields({
+    const observed = wp29Adapter.sourceFields.listSourceFields({
       [part]: html,
     });
     expect(observed).toContain(field);
