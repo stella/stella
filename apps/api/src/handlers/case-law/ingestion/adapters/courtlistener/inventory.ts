@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-courtlistener: Snapshot column retention declarations leave imported decision projections unchanged.
 /**
  * Every field and surface of a CourtListener record, and its fate. Field
  * dispositions are declared per column beside the pinned headers; this module

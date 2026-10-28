@@ -1,3 +1,4 @@
+// parser-output-unchanged: source-fields-courtlistener: Snapshot column retention declarations leave imported decision projections unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: [us-courtlistener] canonical ID helpers and OpinionRow moved to parser modules; output is identical.
 /**
