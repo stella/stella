@@ -4,8 +4,8 @@ import * as v from "valibot";
  * The part of the `codex app-server` protocol (JSON-RPC over stdio, one JSON
  * object per line, no `jsonrpc` member) this adapter consumes. Unknown fields
  * are dropped; a known message with the wrong shape is a protocol violation.
- * `protocol-drift.test.ts` binds the method and item lists below to the
- * schema the pinned CLI generates, so an upstream change fails a test.
+ * `real-codex.test.ts` binds the method and item lists below to the schema
+ * an installed CLI generates, so an upstream change fails a test.
  */
 
 const RequestId = v.union([v.string(), v.number()]);
@@ -82,34 +82,38 @@ const TurnSchema = v.object({
 
 export const TurnStartResponseSchema = v.object({ turn: TurnSchema });
 
-/** Every thread item kind the protocol defines, and what Stella does with it. */
-export const CODEX_ITEM_POLICY = {
-  agentMessage: "text",
-  reasoning: "reasoning",
-  commandExecution: "tool",
-  fileChange: "tool",
-  mcpToolCall: "tool",
-  webSearch: "tool",
-  // Stella registers no dynamic tools, so none can run.
-  dynamicToolCall: "ignore",
-  // The user's own message and harness bookkeeping are not assistant output.
-  userMessage: "ignore",
-  hookPrompt: "ignore",
-  functionCallOutput: "ignore",
-  plan: "ignore",
-  collabAgentToolCall: "ignore",
-  subAgentActivity: "ignore",
-  imageView: "ignore",
-  sleep: "ignore",
-  imageGeneration: "ignore",
-  enteredReviewMode: "ignore",
-  exitedReviewMode: "ignore",
-  contextCompaction: "ignore",
-} as const satisfies Record<string, "text" | "reasoning" | "tool" | "ignore">;
-export type CodexItemType = keyof typeof CODEX_ITEM_POLICY;
+/**
+ * Every thread item kind the pinned protocol defines. `real-codex.test.ts`
+ * binds this list to the schema the installed CLI generates; what Stella does
+ * with each kind is decided in `items.ts`.
+ */
+export const CODEX_ITEM_TYPES = [
+  "userMessage",
+  "hookPrompt",
+  "agentMessage",
+  "functionCallOutput",
+  "plan",
+  "reasoning",
+  "commandExecution",
+  "fileChange",
+  "mcpToolCall",
+  "dynamicToolCall",
+  "collabAgentToolCall",
+  "subAgentActivity",
+  "webSearch",
+  "imageView",
+  "sleep",
+  "imageGeneration",
+  "enteredReviewMode",
+  "exitedReviewMode",
+  "contextCompaction",
+] as const;
+export type CodexItemType = (typeof CODEX_ITEM_TYPES)[number];
+
+const CODEX_ITEM_TYPE_SET: ReadonlySet<string> = new Set(CODEX_ITEM_TYPES);
 
 export const isCodexItemType = (type: string): type is CodexItemType =>
-  Object.hasOwn(CODEX_ITEM_POLICY, type);
+  CODEX_ITEM_TYPE_SET.has(type);
 
 const McpContentBlock = v.object({
   type: v.string(),
@@ -142,8 +146,8 @@ export const CodexItemSchema = v.variant("type", [
     id: v.string(),
     command: v.string(),
     status: v.picklist(["inProgress", "completed", "failed", "declined"]),
-    aggregatedOutput: v.nullable(v.string()),
-    exitCode: v.nullable(v.number()),
+    aggregatedOutput: v.nullish(v.string()),
+    exitCode: v.nullish(v.number()),
   }),
   v.object({
     type: v.literal("fileChange"),
@@ -163,13 +167,14 @@ export const CodexItemSchema = v.variant("type", [
     tool: v.string(),
     status: v.picklist(["inProgress", "completed", "failed"]),
     arguments: v.unknown(),
-    result: v.nullable(
+    // Optional in the pinned schema: an item may omit what it does not have.
+    result: v.nullish(
       v.object({
         content: v.array(v.unknown()),
-        structuredContent: v.nullable(v.unknown()),
+        structuredContent: v.nullish(v.unknown()),
       }),
     ),
-    error: v.nullable(v.object({ message: v.string() })),
+    error: v.nullish(v.object({ message: v.string() })),
   }),
   v.object({ type: v.literal("webSearch"), id: v.string(), query: v.string() }),
 ]);
@@ -184,7 +189,7 @@ export const isMcpTextBlock = (
 export const ItemEnvelopeSchema = v.object({
   threadId: v.string(),
   turnId: v.string(),
-  item: v.object({ type: v.string() }),
+  item: v.object({ type: v.string(), id: v.optional(v.string()) }),
 });
 
 /** Notifications this adapter consumes; every other method is ignored. */

@@ -314,6 +314,7 @@ const startTurn = async (
   const session = new CodexTurnSession({
     gracePeriodMs: options.gracePeriodMs,
     detached: createDetached(options.onBackgroundError),
+    stellaServer: input.mcp.serverName,
   });
   const connected = await connect({
     options,

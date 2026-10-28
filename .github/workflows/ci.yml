@@ -2173,7 +2173,8 @@ jobs:
             packages/cli/src/generated/resource-tree.ts \
             packages/cli/src/generated/resources-snapshot.json \
             packages/cli/skills \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
+            packages/api-contract/src/mcp-tool-names.gen.ts
           bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP app derived outputs guard

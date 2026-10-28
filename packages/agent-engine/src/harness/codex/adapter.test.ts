@@ -1,14 +1,18 @@
 import {
+  type AnyTextAdapter,
+  chat,
+  EventType,
   type ModelMessage,
   normalizeStreamChunk,
   type StreamChunk,
   StreamProcessor,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   type CodexThreadEvent,
   translateThreadEvents,
 } from "@tanstack/ai-codex";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -23,6 +27,9 @@ import path from "node:path";
 import {
   FAKE_MCP_CALL,
   FAKE_RESUMED_THREAD_ID,
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_CALLS,
+  FAKE_STELLA_SERVER,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
@@ -232,8 +239,8 @@ describe("Codex adapter over a stdio app-server", () => {
         item: {
           id: FAKE_MCP_CALL.id,
           type: "mcp_tool_call",
-          server: "stella",
-          tool: "search",
+          server: FAKE_MCP_CALL.server,
+          tool: FAKE_MCP_CALL.tool,
           arguments: FAKE_MCP_CALL.arguments,
           status: "in_progress",
         },
@@ -243,8 +250,8 @@ describe("Codex adapter over a stdio app-server", () => {
         item: {
           id: FAKE_MCP_CALL.id,
           type: "mcp_tool_call",
-          server: "stella",
-          tool: "search",
+          server: FAKE_MCP_CALL.server,
+          tool: FAKE_MCP_CALL.tool,
           arguments: FAKE_MCP_CALL.arguments,
           result: { content: [{ type: "text", text: "2 results" }] },
           status: "completed",
@@ -632,5 +639,242 @@ describe("Codex adapter over a stdio app-server", () => {
         onBackgroundError: () => undefined,
       }),
     ).toThrow("CODEX_HOME must be stella's");
+  });
+});
+
+/** Fold chunks the way persistence does and return what would be stored. */
+const storedMessages = (chunks: readonly StreamChunk[]) => {
+  const processor = new StreamProcessor({ initialMessages: [] });
+  for (const chunk of chunks) {
+    processor.processChunk(chunk);
+  }
+  return processor.getMessages().map(({ role, parts }) => ({ role, parts }));
+};
+
+const localChunks = async (events: readonly HarnessEvent[]) => {
+  let next = 0;
+  const chunks: StreamChunk[] = [];
+  async function* from() {
+    yield* events;
+  }
+  for await (const chunk of harnessEventsToChunks(from(), {
+    harness: "codex",
+    model: "gpt-test",
+    runId: "run-1",
+    threadId: "stella-thread-1",
+    generateId: () => `result-${(next += 1)}`,
+    now: () => 0,
+  })) {
+    chunks.push(chunk);
+  }
+  return chunks;
+};
+
+/**
+ * The cloud engine running the same stella tool calls: TanStack's `chat()`
+ * loop with a model that calls the tools and then answers, and server tools
+ * that return what the stella MCP server returned for each call.
+ */
+const cloudChatChunks = async () => {
+  const model = "gpt-test";
+  const timestamp = 0;
+  let iteration = 0;
+  const adapter: AnyTextAdapter = {
+    kind: "text",
+    name: "scripted",
+    model,
+    "~types": {
+      providerOptions: {},
+      inputModalities: ["text"],
+      messageMetadataByModality: {},
+      toolCapabilities: [],
+      toolCallMetadata: {},
+      systemPromptMetadata: undefined,
+    },
+    async *chatStream({ runId, threadId }) {
+      iteration += 1;
+      const ids = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
+      yield { type: EventType.RUN_STARTED, ...ids, model, timestamp };
+      if (iteration === 1) {
+        for (const call of FAKE_STELLA_CALLS) {
+          const args = JSON.stringify(call.arguments);
+          yield {
+            type: EventType.TOOL_CALL_START,
+            toolCallId: call.id,
+            toolCallName: call.tool,
+            toolName: call.tool,
+            model,
+            timestamp,
+          };
+          yield {
+            type: EventType.TOOL_CALL_ARGS,
+            toolCallId: call.id,
+            delta: args,
+            model,
+            timestamp,
+          };
+          yield {
+            type: EventType.TOOL_CALL_END,
+            toolCallId: call.id,
+            toolCallName: call.tool,
+            toolName: call.tool,
+            input: call.arguments,
+            model,
+            timestamp,
+          };
+        }
+        yield {
+          type: EventType.RUN_FINISHED,
+          ...ids,
+          finishReason: "tool_calls",
+          model,
+          timestamp,
+        };
+        return;
+      }
+      const messageId = "answer";
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      };
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: FAKE_STELLA_ANSWER,
+        model,
+        timestamp,
+      };
+      yield { type: EventType.TEXT_MESSAGE_END, messageId, model, timestamp };
+      yield {
+        type: EventType.RUN_FINISHED,
+        ...ids,
+        finishReason: "stop",
+        model,
+        timestamp,
+      };
+    },
+    structuredOutput: () => panic("not used"),
+  };
+  const tools = FAKE_STELLA_CALLS.map((call) =>
+    toolDefinition({
+      name: call.tool,
+      description: call.tool,
+      inputSchema: { type: "object" },
+    }).server(async () => call.output),
+  );
+  const chunks: StreamChunk[] = [];
+  for await (const chunk of chat({
+    adapter,
+    messages: [{ role: "user", content: "Search both." }],
+    tools,
+    runId: "run-1",
+    threadId: "stella-thread-1",
+  })) {
+    chunks.push(chunk);
+  }
+  return chunks;
+};
+
+describe("Codex items as chat parts", () => {
+  test("stella tool calls persist the same parts as a cloud chat turn making the same calls", async () => {
+    const { events } = await run("stella_tools");
+    const local = storedMessages(await localChunks(events));
+    const cloud = storedMessages(await cloudChatChunks());
+    // The cloud turn reached the tools: one call and one result per call.
+    const cloudParts = cloud.flatMap(({ parts }) => parts);
+    expect(
+      cloudParts.flatMap((part) =>
+        part.type === "tool-call" ? [part.name] : [],
+      ),
+    ).toEqual(FAKE_STELLA_CALLS.map(({ tool }) => tool));
+    expect(
+      cloudParts.filter(({ type }) => type === "tool-result"),
+    ).toHaveLength(FAKE_STELLA_CALLS.length);
+    expect(local).toEqual(cloud);
+  });
+
+  test("the answer's markdown reaches the stored text unchanged", async () => {
+    const { events } = await run("stella_tools");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    expect(
+      parts.flatMap((part) => (part.type === "text" ? [part.content] : [])),
+    ).toEqual([FAKE_STELLA_ANSWER]);
+  });
+
+  test("harness-native items become generic activity and never carry the native payload", async () => {
+    const { events } = await run("harness_items");
+    const tools = events.flatMap((event) =>
+      event.type === "tool.completed" ? [event] : [],
+    );
+    expect(
+      tools.map(({ toolCall, result }) => ({
+        name: toolCall.name,
+        input: toolCall.input,
+        status: result.status,
+      })),
+    ).toEqual([
+      {
+        name: "command_execution",
+        input: { command: "rg lease" },
+        status: "succeeded",
+      },
+      {
+        name: "file_change",
+        input: { changes: [{ path: "notes.md", kind: "update" }] },
+        status: "succeeded",
+      },
+      {
+        name: "harness_web_search",
+        input: { query: "civil code lease" },
+        status: "succeeded",
+      },
+      {
+        name: "harness_unsupported_item",
+        input: { itemType: "holographicCall" },
+        status: "failed",
+      },
+      // `read_document` is a different tool in chat, so it keeps its server.
+      {
+        name: `mcp__${FAKE_STELLA_SERVER}__read_document`,
+        input: { id: "doc-1" },
+        status: "succeeded",
+      },
+      {
+        name: "search_case_law",
+        input: { query: "" },
+        status: "failed",
+      },
+    ]);
+    const stored = JSON.stringify(storedMessages(await localChunks(events)));
+    // Dropped kinds and native-only fields stay out of what is stored.
+    for (const native of ["never forwarded", "+x", "1. Search", "compact-1"]) {
+      expect(stored).not.toContain(native);
+    }
+    expect(terminal(events)).toEqual({ type: "turn.completed", usage: null });
+  });
+
+  test("a failed stella call stores its error envelope as a failed result", async () => {
+    const { events } = await run("harness_items");
+    const parts = storedMessages(await localChunks(events)).flatMap(
+      ({ parts: stored }) => stored,
+    );
+    const failed = parts.find(
+      (part) => part.type === "tool-call" && part.id === "call-failed",
+    );
+    expect(failed).toMatchObject({
+      name: "search_case_law",
+      output: { error: { code: "invalid_input", message: "Query is empty." } },
+    });
+    expect(
+      parts.find(
+        (part) =>
+          part.type === "tool-result" && part.toolCallId === "call-failed",
+      ),
+    ).toMatchObject({ state: "error" });
   });
 });

@@ -16,7 +16,7 @@ import {
   type HarnessToolCall,
   type HarnessUsage,
 } from "../events";
-import { HARNESS_QUESTION_TOOL } from "../stream-chunks";
+import { HARNESS_TOOL_NAMES, unsupportedItem } from "../tool-parts";
 import type {
   AppServerClient,
   AppServerExit,
@@ -25,13 +25,13 @@ import type {
 } from "./app-server-client";
 import { classifyTurnFailure, mergeRateLimits } from "./errors";
 import {
+  codexItemHandling,
   isToolItem,
   reasoningText,
   toolCallForItem,
   toolResultForItem,
 } from "./items";
 import {
-  CODEX_ITEM_POLICY,
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
   CodexItemSchema,
@@ -191,6 +191,8 @@ const interactionResult = (
 type CodexTurnSessionOptions = {
   gracePeriodMs: number;
   detached: Detached;
+  /** The server name the turn registered the stella MCP binding under. */
+  stellaServer: string;
 };
 
 export class CodexTurnSession {
@@ -211,12 +213,19 @@ export class CodexTurnSession {
   private readonly pending = new Map<string, PendingInteraction>();
   private readonly resolved = new Set<string>();
   private readonly answeredByMessage = new Set<string>();
+  private unsupportedItems = 0;
 
   private readonly detached: Detached;
+  private readonly stellaServer: string;
 
-  constructor({ gracePeriodMs, detached }: CodexTurnSessionOptions) {
+  constructor({
+    gracePeriodMs,
+    detached,
+    stellaServer,
+  }: CodexTurnSessionOptions) {
     this.gracePeriodMs = gracePeriodMs;
     this.detached = detached;
+    this.stellaServer = stellaServer;
   }
 
   /** Handlers for the process; messages before `begin` are held. */
@@ -492,10 +501,21 @@ export class CodexTurnSession {
     if (envelope === null || envelope.turnId !== this.turnId) {
       return;
     }
-    const { type } = envelope.item;
-    // A kind this release does not know is left out; the compatibility
-    // policy keeps such versions from running in the first place.
-    if (!isCodexItemType(type) || CODEX_ITEM_POLICY[type] === "ignore") {
+    const { type, id } = envelope.item;
+    if (!isCodexItemType(type)) {
+      // A kind newer than the pinned protocol: shown as a failed activity
+      // once it completes, so the turn visibly did something Stella skipped.
+      if (method === "item/completed") {
+        this.unsupportedItems += 1;
+        const unknown = unsupportedItem(
+          id ?? `codex-unsupported-${String(this.unsupportedItems)}`,
+          type,
+        );
+        this.emit({ type: "tool.completed", ...unknown });
+      }
+      return;
+    }
+    if (codexItemHandling(type) === "ignore") {
       return;
     }
     const item = this.parse(
@@ -508,7 +528,7 @@ export class CodexTurnSession {
     }
     if (method === "item/started") {
       if (isToolItem(item)) {
-        const toolCall = toolCallForItem(item);
+        const toolCall = toolCallForItem(item, this.stellaServer);
         this.toolCalls.set(toolCall.id, toolCall);
         this.emit({ type: "tool.started", toolCall });
       }
@@ -536,7 +556,7 @@ export class CodexTurnSession {
       case "fileChange":
       case "mcpToolCall":
       case "webSearch": {
-        const toolCall = toolCallForItem(item);
+        const toolCall = toolCallForItem(item, this.stellaServer);
         this.toolCalls.set(toolCall.id, toolCall);
         this.emit({
           type: "tool.completed",
@@ -577,7 +597,7 @@ export class CodexTurnSession {
         questions: asked,
         toolCall: {
           id: `${itemId}:questions`,
-          name: HARNESS_QUESTION_TOOL,
+          name: HARNESS_TOOL_NAMES.question,
           input: { questions: asked },
         },
       },
@@ -672,8 +692,16 @@ export class CodexTurnSession {
     const isFileChange = method === "item/fileChange/requestApproval";
     const command = "command" in parsed ? (parsed.command ?? "") : "";
     const fallback: HarnessToolCall = isFileChange
-      ? { id: parsed.itemId, name: "file_change", input: { changes: [] } }
-      : { id: parsed.itemId, name: "command_execution", input: { command } };
+      ? {
+          id: parsed.itemId,
+          name: HARNESS_TOOL_NAMES.fileChange,
+          input: { changes: [] },
+        }
+      : {
+          id: parsed.itemId,
+          name: HARNESS_TOOL_NAMES.commandExecution,
+          input: { command },
+        };
     this.pending.set(requestId, { type: "approval", jsonRpcId: id });
     this.emit({
       type: "approval.requested",
@@ -706,7 +734,7 @@ export class CodexTurnSession {
     const requestId = requestIdFor(id);
     const toolCall = {
       id: `${parsed.itemId}:permissions`,
-      name: "request_permissions",
+      name: HARNESS_TOOL_NAMES.permissions,
       input: requested,
     };
     this.pending.set(requestId, {
@@ -741,7 +769,7 @@ export class CodexTurnSession {
     const questions = questionsFromParams(parsed.questions);
     const toolCall = {
       id: parsed.itemId,
-      name: HARNESS_QUESTION_TOOL,
+      name: HARNESS_TOOL_NAMES.question,
       input: { questions },
     };
     this.pending.set(requestId, {

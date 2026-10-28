@@ -1,6 +1,8 @@
 import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
+import type { StellaMcpToolName } from "@stll/api-contract/mcp-tool-names";
+
 /**
  * A stand-in for `codex app-server` that replays a handwritten transcript
  * over real stdio, so the adapter's process, framing and protocol handling
@@ -93,13 +95,81 @@ const command = (id: string, status: string, extra: object = {}) => ({
   ...extra,
 });
 
+/** A connector tool: any MCP server other than the stella binding. */
 export const FAKE_MCP_CALL = {
   type: "mcpToolCall",
   id: "call-mcp",
-  server: "stella",
+  server: "docs",
   tool: "search",
   arguments: { query: "lease" },
 };
+
+/** The server name tests register the stella MCP binding under. */
+export const FAKE_STELLA_SERVER = "stella";
+
+/**
+ * Stella tool calls and the output the stella MCP server returns for each:
+ * the tool's validated output as `structuredContent`, and its JSON as the
+ * one text block (`serializeToolResult`).
+ */
+export const FAKE_STELLA_CALLS = [
+  {
+    id: "call-case-law",
+    tool: "search_case_law",
+    arguments: { query: "lease termination", jurisdiction: "CZ" },
+    output: {
+      results: [
+        {
+          title: "Lease termination for unpaid rent",
+          url: "https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024",
+          caseLaw: { decisionId: "dec-1", decisionDate: "2024-03-01" },
+        },
+      ],
+      nextCursor: null,
+    },
+  },
+  {
+    id: "call-save-matter",
+    tool: "save_matter",
+    arguments: { name: "Lease dispute" },
+    output: {
+      applied: true,
+      matter: { ref: "matter-1", name: "Lease dispute" },
+    },
+  },
+] as const satisfies readonly {
+  id: string;
+  tool: StellaMcpToolName;
+  arguments: object;
+  output: object;
+}[];
+
+/** Markdown with a link, as the agent writes its answer. */
+export const FAKE_STELLA_ANSWER = [
+  "One decision matches: [26 Cdo 1/2024](https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024).",
+  "",
+  "- Matter **Lease dispute** saved.",
+].join("\n");
+
+const stellaCall = (
+  call: (typeof FAKE_STELLA_CALLS)[number],
+  phase: "started" | "completed",
+) => ({
+  type: "mcpToolCall",
+  id: call.id,
+  server: FAKE_STELLA_SERVER,
+  tool: call.tool,
+  arguments: call.arguments,
+  status: phase === "started" ? "inProgress" : "completed",
+  result:
+    phase === "started"
+      ? null
+      : {
+          content: [{ type: "text", text: JSON.stringify(call.output) }],
+          structuredContent: call.output,
+        },
+  error: null,
+});
 
 const agentMessage = (id: string, text: string, extra: object = {}) => ({
   type: "agentMessage",
@@ -113,6 +183,84 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
 });
 
 export const FAKE_SCENARIOS = {
+  /** Stella tool calls through the stella MCP binding, then an answer. */
+  stella_tools: [
+    ...freshTurn(),
+    ...FAKE_STELLA_CALLS.flatMap((call) => [
+      item("started", stellaCall(call, "started")),
+      item("completed", stellaCall(call, "completed")),
+    ]),
+    item("completed", agentMessage("m-stella", FAKE_STELLA_ANSWER)),
+    completed(),
+  ],
+  /**
+   * Harness-native items, kinds Stella drops, a kind newer than the pinned
+   * protocol, a registry name that names a different chat tool, and a failed
+   * stella call.
+   */
+  harness_items: [
+    ...freshTurn(),
+    item("completed", { type: "plan", id: "plan-1", text: "1. Search" }),
+    item(
+      "completed",
+      command("call-grep", "completed", {
+        command: "rg lease",
+        aggregatedOutput: "notes.md: lease\n",
+        exitCode: 0,
+      }),
+    ),
+    item("completed", {
+      type: "fileChange",
+      id: "call-edit",
+      changes: [{ path: "notes.md", kind: { type: "update" }, diff: "+x" }],
+      status: "completed",
+    }),
+    item("completed", {
+      type: "webSearch",
+      id: "call-web",
+      query: "civil code lease",
+      action: null,
+    }),
+    item("completed", { type: "contextCompaction", id: "compact-1" }),
+    item("completed", {
+      type: "holographicCall",
+      id: "future-1",
+      payload: "never forwarded",
+    }),
+    item("completed", {
+      type: "mcpToolCall",
+      id: "call-read-document",
+      server: FAKE_STELLA_SERVER,
+      tool: "read_document",
+      arguments: { id: "doc-1" },
+      status: "completed",
+      result: {
+        content: [{ type: "text", text: JSON.stringify({ text: "Lease" }) }],
+        structuredContent: { text: "Lease" },
+      },
+      error: null,
+    }),
+    item("completed", {
+      type: "mcpToolCall",
+      id: "call-failed",
+      server: FAKE_STELLA_SERVER,
+      tool: "search_case_law",
+      arguments: { query: "" },
+      status: "failed",
+      result: {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: { code: "invalid_input", message: "Query is empty." },
+            }),
+          },
+        ],
+      },
+      error: null,
+    }),
+    completed(),
+  ],
   /** Reasoning, an MCP tool call, a command and a streamed answer. */
   tool_calls: [
     ...freshTurn(),

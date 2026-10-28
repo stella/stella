@@ -9,7 +9,7 @@ import { createDetached } from "@stll/errors";
 
 import { startAppServer } from "./app-server-client";
 import {
-  CODEX_ITEM_POLICY,
+  CODEX_ITEM_TYPES,
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
   InitializeResponseSchema,
@@ -161,7 +161,7 @@ describe.skipIf(codex === null)("the installed codex CLI", () => {
       .definitions.ThreadItem.oneOf.map(
         ({ properties }) => properties.type.enum[0],
       );
-    expect(new Set(itemTypes)).toEqual(new Set(Object.keys(CODEX_ITEM_POLICY)));
+    expect(new Set(itemTypes)).toEqual(new Set(CODEX_ITEM_TYPES));
 
     const commandDecisions = await decisionsIn(
       out,
