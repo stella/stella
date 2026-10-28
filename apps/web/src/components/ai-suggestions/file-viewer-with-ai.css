@@ -25,6 +25,16 @@
 [data-file-viewer-ai]
   :is([data-folio-scroll], [data-docked-composer-clearance]) {
   padding-block-end: 10rem;
+}
+
+/* scroll-padding only acts on the scrolling element. Folio's viewport scrolls
+ * itself; marked content scrolls inside a ScrollArea viewport, which takes the
+ * inset instead. Search centring reads it back (`readScrollPaddingBlockEnd`). */
+[data-file-viewer-ai]
+  :is(
+    [data-folio-scroll],
+    [data-slot="scroll-area-viewport"]:has(> [data-docked-composer-clearance])
+  ) {
   scroll-padding-block-end: 10rem;
 }
 

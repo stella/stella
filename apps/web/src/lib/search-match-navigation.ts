@@ -54,19 +54,40 @@ type GetCenteredSearchMatchScrollTopOptions = {
   currentScrollTop: number;
   matchHeight: number;
   matchTop: number;
+  /**
+   * Height covered at the container's bottom edge (a floating composer), read
+   * with `readScrollPaddingBlockEnd`. Required so no caller can centre a match
+   * under an overlay by forgetting it.
+   */
+  obscuredBlockEnd: number;
 };
 
+/** Centres the match in the part of the container that is not covered. */
 export const getCenteredSearchMatchScrollTop = ({
   containerHeight,
   containerTop,
   currentScrollTop,
   matchHeight,
   matchTop,
+  obscuredBlockEnd,
 }: GetCenteredSearchMatchScrollTopOptions): number =>
   Math.max(
     0,
     currentScrollTop +
       matchTop -
       containerTop -
-      (containerHeight - matchHeight) / 2,
+      (Math.max(containerHeight - obscuredBlockEnd, matchHeight) -
+        matchHeight) /
+        2,
   );
+
+/**
+ * The scroll container's `scroll-padding-block-end` in pixels: the safe inset a
+ * floating overlay reserves at its bottom edge. `auto` and unset read as 0.
+ */
+export const readScrollPaddingBlockEnd = (scrollContainer: Element): number => {
+  const inset = Number.parseFloat(
+    getComputedStyle(scrollContainer).scrollPaddingBlockEnd,
+  );
+  return Number.isFinite(inset) ? inset : 0;
+};
