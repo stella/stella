@@ -183,10 +183,10 @@ export function clean_scan_rgba(
 function __wbg_get_imports() {
   const import0 = {
     __proto__: null,
-    __wbg___wbindgen_throw_344f42d3211c4765: function (arg0, arg1) {
+    __wbg___wbindgen_throw_41e9ee4f547fc59a: function (arg0, arg1) {
       throw new Error(getStringFromWasm0(arg0, arg1));
     },
-    __wbindgen_cast_0000000000000001: function (arg0, arg1) {
+    __wbindgen_generic_0000000000000001: function (arg0, arg1) {
       // Cast intrinsic for `Ref(String) -> Externref`.
       const ret = getStringFromWasm0(arg0, arg1);
       return addHeapObject(ret);
@@ -395,11 +395,17 @@ function __wbg_finalize_init(instance, module) {
 
 async function __wbg_load(module, imports) {
   if (typeof Response === "function" && module instanceof Response) {
+    if (!module.ok) {
+      throw new Error(
+        `failed to fetch Wasm: ${module.status} ${module.statusText} fetching '${module.url}'`,
+      );
+    }
+
     if (typeof WebAssembly.instantiateStreaming === "function") {
       try {
         return await WebAssembly.instantiateStreaming(module, imports);
       } catch (e) {
-        const validResponse = module.ok && expectedResponseType(module.type);
+        const validResponse = expectedResponseType(module.type);
 
         if (
           validResponse &&

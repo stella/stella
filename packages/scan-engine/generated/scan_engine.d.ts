@@ -44,11 +44,11 @@ export interface InitOutput {
   ) => void;
   readonly wasmscanresult_applied_quad: (a: number, b: number) => void;
   readonly wasmscanresult_content_box: (a: number, b: number) => void;
+  readonly wasmscanresult_height: (a: number) => number;
   readonly wasmscanresult_pixels: (a: number, b: number) => void;
   readonly wasmscanresult_reason: (a: number, b: number) => void;
-  readonly wasmscanresult_status: (a: number, b: number) => void;
-  readonly wasmscanresult_height: (a: number) => number;
   readonly wasmscanresult_skew_degrees: (a: number) => number;
+  readonly wasmscanresult_status: (a: number, b: number) => void;
   readonly wasmscanresult_width: (a: number) => number;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;
