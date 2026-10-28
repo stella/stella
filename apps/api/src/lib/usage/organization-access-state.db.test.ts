@@ -6,14 +6,7 @@
  */
 
 import { Result } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -106,15 +99,20 @@ const requestScope = (organizationId: SafeId<"organization">): ScopedDb =>
     }),
   );
 
-const envBefore = {
-  enforced: env.FEATURE_ORG_ACCESS_STATE,
-  periodDays: env.ORG_EVALUATION_PERIOD_DAYS,
-};
-
+/** Enforces access states for `run` only; the previous flags return after it. */
 const withAccessStateEnforced = async (run: () => Promise<void>) => {
-  env.FEATURE_ORG_ACCESS_STATE = true;
-  env.ORG_EVALUATION_PERIOD_DAYS = PERIOD_DAYS;
-  await run();
+  const before = {
+    enforced: env.FEATURE_ORG_ACCESS_STATE,
+    periodDays: env.ORG_EVALUATION_PERIOD_DAYS,
+  };
+  testState.setConfig("FEATURE_ORG_ACCESS_STATE", true);
+  testState.setConfig("ORG_EVALUATION_PERIOD_DAYS", PERIOD_DAYS);
+  try {
+    await run();
+  } finally {
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", before.enforced);
+    testState.setConfig("ORG_EVALUATION_PERIOD_DAYS", before.periodDays);
+  }
 };
 
 const authStatus = async (organizationId: SafeId<"organization">) =>
@@ -509,11 +507,6 @@ testState.beforeAll(async () => {
   ]);
 });
 
-afterEach(() => {
-  env.FEATURE_ORG_ACCESS_STATE = envBefore.enforced;
-  env.ORG_EVALUATION_PERIOD_DAYS = envBefore.periodDays;
-});
-
 afterAll(async () => {
   await testDb
     .delete(organizationAccessStates)
@@ -529,7 +522,7 @@ afterAll(async () => {
 
 describe("with FEATURE_ORG_ACCESS_STATE off", () => {
   beforeEach(() => {
-    env.FEATURE_ORG_ACCESS_STATE = false;
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", false);
   });
 
   test("every organization without its own config resolves as today", async () => {
@@ -874,7 +867,7 @@ describe("recording missing states", () => {
     });
     expect(await readState(unrecordedOrgId)).toBeUndefined();
 
-    env.FEATURE_ORG_ACCESS_STATE = false;
+    testState.setConfig("FEATURE_ORG_ACCESS_STATE", false);
     await recordMissingOrganizationAccessStatesWhileUnenforced(ownerDb());
     await recordMissingOrganizationAccessStatesWhileUnenforced(ownerDb());
 
