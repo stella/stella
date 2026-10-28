@@ -8,10 +8,13 @@ import {
   inArray,
   isNull,
   lte,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+
+import { TASK_CLOSED_STATUSES } from "@stll/api-contract/entity-options";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
@@ -150,6 +153,8 @@ true satisfies UnexpectedProjectedTaskListColumn extends never ? true : never;
 
 type ListTasksPageQuery = {
   status?: string | undefined;
+  /** Keep only tasks not yet done or cancelled; a task with no status is open. */
+  openOnly?: boolean | undefined;
   assignee?: TaskAssigneeFilter | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
@@ -171,7 +176,8 @@ type ListTasksPageOptions = {
 };
 
 /**
- * The MCP `list_tasks` query, for one matter or all of them. Access sits in the SQL itself: the workspace
+ * The task-list query behind MCP `list_tasks` and `GET /v1/tasks`, for one
+ * matter or all of them. Access sits in the SQL itself: the workspace
  * allowlist, the organization predicate on the joined matter, and the RLS
  * policies `safeDb` runs under, so a matter outside the caller's membership
  * or organization cannot contribute a row even if it reached the allowlist.
@@ -217,6 +223,12 @@ export const listTasksPage = async ({
           query.status === undefined
             ? undefined
             : eq(entities.status, query.status),
+          query.openOnly === true
+            ? or(
+                isNull(entities.status),
+                notInArray(entities.status, [...TASK_CLOSED_STATUSES]),
+              )
+            : undefined,
           query.dateFrom === undefined
             ? undefined
             : gte(entities.dueDate, query.dateFrom),
