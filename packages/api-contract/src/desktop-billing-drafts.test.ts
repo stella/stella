@@ -243,9 +243,19 @@ test("selected entry inputs and guideline citations have finite validated bounds
   ).toBe(false);
   expect(
     v.safeParse(desktopBillingDraftRequestSchema, {
+      entries: [entry, { ...entry, matterId: entry.matterId.toUpperCase() }],
+    }).success,
+  ).toBe(false);
+  expect(
+    v.safeParse(desktopBillingDraftRequestSchema, {
+      entries: [entry, { ...entry, entryId: "entry_2" }],
+    }).success,
+  ).toBe(true);
+  expect(
+    v.safeParse(desktopBillingDraftRequestSchema, {
       entries: Array.from(
         { length: DESKTOP_BILLING_DRAFT_LIMITS.entries + 1 },
-        () => entry,
+        (_, index) => ({ ...entry, entryId: `entry_${index + 1}` }),
       ),
     }).success,
   ).toBe(false);

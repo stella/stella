@@ -243,6 +243,14 @@ export const desktopBillingDraftRequestSchema = v.pipe(
       v.array(desktopBillingDraftEntrySchema),
       v.minLength(1),
       v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.entries),
+      // Drafts refer back to entries by identifier, so a repeated one is
+      // refused before any model runs.
+      v.check(
+        (entries) =>
+          new Set(entries.map(({ entryId }) => entryId)).size ===
+          entries.length,
+        "Entry identifiers must be unique",
+      ),
     ),
     steer: v.optional(steeringTextSchema),
     previousResult: v.optional(desktopBillingDraftResponseSchema),
