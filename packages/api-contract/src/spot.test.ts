@@ -72,14 +72,14 @@ describe("Spot", () => {
     target: {
       type: "pdf-page" as const,
       pageNumber: 3,
-      startOffset: 7,
-      endOffset: 12,
+      start: 7,
+      end: 12,
       pageTextSha256: digest,
     },
     quote: "words",
   };
 
-  test("accepts a PDF mark represented without changing its stored values", () => {
+  test("accepts a PDF mark with its page offsets and digest", () => {
     expect(parseSpot(spot).success).toBe(true);
   });
 
@@ -98,5 +98,30 @@ describe("Spot", () => {
       }).success,
     ).toBe(false);
     expect(parseSpot({ ...spot, extra: true }).success).toBe(false);
+  });
+
+  test("refuses empty entity and field ids", () => {
+    expect(parseSpot({ ...spot, entityId: "" }).success).toBe(false);
+    expect(parseSpot({ ...spot, fieldId: "" }).success).toBe(false);
+  });
+
+  test("refuses a quote whose length differs from its span", () => {
+    expect(parseSpot({ ...spot, quote: "word" }).success).toBe(false);
+    expect(parseSpot({ ...spot, quote: "wordss" }).success).toBe(false);
+  });
+
+  test("refuses the second offset spelling", () => {
+    expect(
+      parseSpot({
+        ...spot,
+        target: {
+          type: "pdf-page",
+          pageNumber: 3,
+          startOffset: 7,
+          endOffset: 12,
+          pageTextSha256: digest,
+        },
+      }).success,
+    ).toBe(false);
   });
 });

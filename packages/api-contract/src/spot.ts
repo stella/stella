@@ -62,17 +62,6 @@ export const pdfPageSpotTargetSchema = v.union([
       "The start offset must be before the end offset",
     ),
   ),
-  v.pipe(
-    v.strictObject({
-      ...pdfPageIdentityEntries,
-      startOffset: offsetSchema,
-      endOffset: offsetSchema,
-    }),
-    v.check(
-      ({ startOffset, endOffset }) => startOffset < endOffset,
-      "The start offset must be before the end offset",
-    ),
-  ),
 ]);
 
 export const spotTargetSchema = v.union([
@@ -83,14 +72,25 @@ export const spotTargetSchema = v.union([
 
 export type SpotTarget = v.InferOutput<typeof spotTargetSchema>;
 
-export const spotSchema = v.strictObject({
-  entityId: v.string(),
-  fieldId: v.string(),
-  target: spotTargetSchema,
-  quote: v.nullable(
-    v.pipe(v.string(), v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH)),
+export const spotSchema = v.pipe(
+  v.strictObject({
+    entityId: v.pipe(v.string(), v.minLength(1)),
+    fieldId: v.pipe(v.string(), v.minLength(1)),
+    target: spotTargetSchema,
+    quote: v.nullable(
+      v.pipe(v.string(), v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH)),
+    ),
+  }),
+  // Offsets and a quote must name the same words: the quote is the text
+  // the offsets span, so a different length means one of them is wrong.
+  v.check(
+    ({ target, quote }) =>
+      quote === null ||
+      !("start" in target) ||
+      quote.length === target.end - target.start,
+    "The quote must be as long as the span its offsets name",
   ),
-});
+);
 
 export type Spot = v.InferOutput<typeof spotSchema>;
 

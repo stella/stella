@@ -1,38 +1,8 @@
+import { foldQuoteText } from "./quote-fold";
+
 type SpotPlacement =
   | { type: "placed"; start: number; end: number }
   | { type: "detached"; reason: "other-version" | "text-changed" };
-
-const EQUIVALENT_CHARACTERS: Readonly<Record<string, string>> = {
-  "‘": "'",
-  "’": "'",
-  "‚": "'",
-  "‛": "'",
-  "“": '"',
-  "”": '"',
-  "„": '"',
-  "‟": '"',
-  "«": '"',
-  "»": '"',
-  "‹": "'",
-  "›": "'",
-  "–": "-",
-  "—": "-",
-  "−": "-",
-};
-
-const foldWithoutWhitespace = (text: string) => {
-  let folded = "";
-  const offsets: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    const unit = text.charAt(index);
-    if (/\s/u.test(unit)) {
-      continue;
-    }
-    folded += EQUIVALENT_CHARACTERS[unit] ?? unit;
-    offsets.push(index);
-  }
-  return { folded, offsets };
-};
 
 type PlaceSpotTextOptions = {
   start: number;
@@ -65,8 +35,8 @@ export const placeSpotText = ({
     return { type: "detached", reason: "other-version" };
   }
 
-  const needle = foldWithoutWhitespace(quote).folded;
-  const haystack = foldWithoutWhitespace(text);
+  const needle = foldQuoteText(quote, "drop").folded;
+  const haystack = foldQuoteText(text, "drop");
   if (needle.length === 0) {
     return { type: "detached", reason: "text-changed" };
   }
@@ -77,8 +47,8 @@ export const placeSpotText = ({
     found !== -1;
     found = haystack.folded.indexOf(needle, found + 1)
   ) {
-    const candidateStart = haystack.offsets.at(found);
-    const last = haystack.offsets.at(found + needle.length - 1);
+    const candidateStart = haystack.origin.at(found);
+    const last = haystack.origin.at(found + needle.length - 1);
     if (candidateStart === undefined || last === undefined) {
       continue;
     }
