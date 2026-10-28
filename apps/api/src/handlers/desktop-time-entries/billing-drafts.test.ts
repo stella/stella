@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -167,29 +167,29 @@ const exercise = async ({
       },
     },
   );
-  const generate = async (
-    options: Parameters<typeof generateTanStackObjectForTask>[0],
-  ) => {
-    calls.push({
-      prompt: options.prompt ?? "",
-      schema: options.outputSchema,
-      region:
-        options.dataClass === "customer" ? options.managedAIResidency : null,
-    });
-    const refs = createBillingDraftReferenceMap([
-      ...(receivedBodies.at(0)?.entries.map(({ entryId }) => entryId) ?? [
-        "entry_1",
-      ]),
-      ...draftContext.matters.map(({ matterId }) => matterId),
-      EARLIER_ID,
-      GUIDELINE_ID,
-    ]);
-    const result: unknown = JSON.parse(refs.serialize(output));
-    if (malformedResult) {
-      return { drafts: [], checkedGuidelines: [] };
-    }
-    return result;
-  };
+  const generate = mock(
+    async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
+      calls.push({
+        prompt: options.prompt ?? "",
+        schema: options.outputSchema,
+        region:
+          options.dataClass === "customer" ? options.managedAIResidency : null,
+      });
+      const refs = createBillingDraftReferenceMap([
+        ...(receivedBodies.at(0)?.entries.map(({ entryId }) => entryId) ?? [
+          "entry_1",
+        ]),
+        ...draftContext.matters.map(({ matterId }) => matterId),
+        EARLIER_ID,
+        GUIDELINE_ID,
+      ]);
+      const result: unknown = JSON.parse(refs.serialize(output));
+      if (malformedResult) {
+        return { drafts: [], checkedGuidelines: [] };
+      }
+      return result;
+    },
+  );
   const endpoint = createDesktopBillingDraftEndpoint({
     authorizeAccount: async (request) => {
       const device = await createDesktopDeviceSigner();
@@ -259,7 +259,7 @@ const exercise = async ({
       body: JSON.stringify(input),
     }),
   );
-  return { response, calls, receivedBodies };
+  return { response, calls, receivedBodies, generate };
 };
 
 test("one structured request uses selected evidence, region and opaque references", async () => {
@@ -343,6 +343,24 @@ test("strict body rejects privacy extras even under parent normalization", async
   });
   expect(response.status).toBe(422);
   expect(calls).toHaveLength(0);
+});
+
+test("duplicate selected entry identifiers refuse before context loading and generation", async () => {
+  for (const entryCount of [2, DESKTOP_BILLING_DRAFT_LIMITS.entries]) {
+    const { response, receivedBodies, generate } = await exercise({
+      input: {
+        entries: Array.from({ length: entryCount }, () => body.entries).flat(),
+      },
+    });
+
+    expect(generate).toHaveBeenCalledTimes(0);
+    expect(receivedBodies).toHaveLength(0);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      code: "validation",
+      issues: [{ field: "entries", constraint: "invalid" }],
+    });
+  }
 });
 
 test("invalid timezone and previous references refuse before generation", async () => {
