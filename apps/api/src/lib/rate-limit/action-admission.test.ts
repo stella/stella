@@ -159,7 +159,7 @@ const sharedRedis = ({
           organization.size >= Number(orgMax) ||
           user.size >= Number(userMax)
         ) {
-          return 0;
+          return [0, 1000];
         }
         organization.set(leaseId, currentTime + Number(leaseMs));
         user.set(leaseId, currentTime + Number(leaseMs));

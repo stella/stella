@@ -316,6 +316,11 @@ export const authorizedMcpContextForTest = <
 ): AuthorizedMcpRequestContext & TContext => ({
   ...context,
   [authorizedMcpRequestContextBrand]: true,
+  testDependencies: {
+    admitPublicRead: async ({ run }) =>
+      Result.ok(await run(new AbortController().signal)),
+    ...context.testDependencies,
+  },
 });
 
 /**

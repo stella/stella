@@ -796,6 +796,12 @@ const mapStatusResponse = (
           ? responseBody["hint"]
           : refusal.hint,
       retryable: refusal.retryable,
+      retryAfterMs:
+        typeof responseBody["retryAfterMs"] === "number" &&
+        Number.isFinite(responseBody["retryAfterMs"]) &&
+        responseBody["retryAfterMs"] >= 0
+          ? responseBody["retryAfterMs"]
+          : undefined,
       contactUrl:
         typeof responseBody["contactUrl"] === "string"
           ? responseBody["contactUrl"]

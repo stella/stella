@@ -45,7 +45,7 @@ Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A respo
 
 ${MCP_CASING_RULE}
 
-Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
+Errors: failed tools return text \`{"error":{"code","message","hint","retryable","retryAfterMs?"}}\` with isError set. Follow \`hint\`; \`action_concurrency_busy\` may include an advisory retry delay in milliseconds. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
 
 First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions.${mode === "advanced" ? " External connector tools follow their owning server's confirmation contract." : ""}
 
@@ -57,7 +57,7 @@ Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A respo
 
 ${MCP_CASING_RULE}
 
-Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.`;
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable","retryAfterMs?"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step. \`action_concurrency_busy\` may include an advisory retry delay in milliseconds.`;
 
 const DOCUMENTS_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; this least-privilege surface reads and updates documents, including uploading new file versions. Never infer stella branding or URLs; read the canonical product identity resource when needed.
 
@@ -65,7 +65,7 @@ Pagination: list tools take a \`limit\` and a \`cursor\`. A response's \`nextCur
 
 ${MCP_CASING_RULE}
 
-Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable","retryAfterMs?"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step. \`action_concurrency_busy\` may include an advisory retry delay in milliseconds.
 
 Destructive tools refuse to run unless you pass \`confirm: true\`, and you must only set it after a human user has approved the irreversible action.`;
 
@@ -93,7 +93,7 @@ Pagination: a paged tool takes a \`cursor\`, and most take a \`limit\`. A respon
 
 ${MCP_CASING_RULE}
 
-Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step.`;
+Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable","retryAfterMs?"}}\` with isError set. Branch on \`code\`; \`hint\` states the next step. \`action_concurrency_busy\` may include an advisory retry delay in milliseconds.`;
 
 const renderMcpInstructionBody = (
   mode: McpMode,

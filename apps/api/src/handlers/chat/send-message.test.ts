@@ -38,7 +38,7 @@ import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
-  type ActionAdmissionError,
+  ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
@@ -1302,9 +1302,15 @@ describe("send message disconnect handling", () => {
   for (const reason of Object.values(refusalReasons)) {
     for (const phase of ["period", "context", "dispatch"] as const) {
       test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
-        const refusal = actionAdmissionRefusal(
-          actionAdmissionErrorFor(reason, "Admission refused"),
-        );
+        const refusalError =
+          reason === "busy"
+            ? new ActionAdmissionError({
+                reason,
+                message: "Admission refused",
+                retryAfterMs: 1250,
+              })
+            : actionAdmissionErrorFor(reason, "Admission refused");
+        const refusal = actionAdmissionRefusal(refusalError);
         const admission = new AbortController();
         const loseAdmission = () =>
           admission.abort(actionAdmissionErrorFor(reason, "Admission refused"));
@@ -1475,6 +1481,9 @@ describe("send message disconnect handling", () => {
             code: refusal.code,
             retryable: refusal.retryable,
             hint: refusal.hint,
+            ...(refusal.retryAfterMs === undefined
+              ? {}
+              : { retryAfterMs: refusal.retryAfterMs }),
             ...(refusal.contactUrl === undefined
               ? {}
               : { contactUrl: refusal.contactUrl }),

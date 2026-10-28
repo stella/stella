@@ -2979,6 +2979,9 @@ describe("capability executor file-response gate (fix-6)", () => {
             code,
             message: refusal.message,
             hint,
+            ...(code === "action_concurrency_busy"
+              ? { retryAfterMs: 1250 }
+              : {}),
           }),
         }),
       );
@@ -2988,6 +2991,7 @@ describe("capability executor file-response gate (fix-6)", () => {
           message: refusal.message,
           hint,
           retryable: refusal.retryable,
+          ...(code === "action_concurrency_busy" ? { retryAfterMs: 1250 } : {}),
           requestId: "req_refusal",
         }),
       );

@@ -11,6 +11,10 @@ import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts"
 import { captureError } from "@/api/lib/analytics/capture";
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
@@ -21,6 +25,7 @@ import {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import type { McpMode } from "@/api/mcp/constants";
 import {
   bindApprovedMcpAuditContext,
@@ -337,7 +342,10 @@ type McpToolCallArgs = {
   context: McpRequestResources;
   mode?: McpMode;
   toolName: string;
-  dependencies?: { dispatchGatewayToolCall: typeof dispatchGatewayToolCall };
+  dependencies?: {
+    dispatchGatewayToolCall: typeof dispatchGatewayToolCall;
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
+  };
 };
 const unknownToolResult = (toolName: string) =>
   structuredErrorResult({
@@ -754,7 +762,34 @@ export const handleMcpToolCall = async ({
         }),
     });
   const budgetMs = corpusBudgetByTool.get(toolName);
-  return await (budgetMs === undefined
-    ? run()
-    : runWithPublicReadStatementTimeout(budgetMs, run));
+  if (budgetMs === undefined) {
+    return await run();
+  }
+  const admitted = await (
+    dependencies?.admitPublicRead ??
+    context.testDependencies?.admitPublicRead ??
+    withMcpPublicReadAdmission
+  )({
+    caller: context,
+    signal: context.request?.signal,
+    run: async (signal) =>
+      await runWithPublicReadStatementTimeout({ budgetMs, signal }, run),
+  });
+  if (Result.isOk(admitted)) {
+    return admitted.value;
+  }
+  if (ActionAdmissionError.is(admitted.error)) {
+    return serializeToolResult(
+      scopeToolResultToSurface(
+        structuredErrorResult(actionAdmissionRefusal(admitted.error)),
+        { mode, context },
+      ),
+    );
+  }
+  return internalErrorResult({
+    mode,
+    context,
+    toolName,
+    error: admitted.error,
+  });
 };

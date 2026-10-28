@@ -13,6 +13,7 @@ import {
   CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
+import { getPublicReadSignal } from "@/api/lib/legal-search/public-read-timeout-context";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -714,14 +715,22 @@ const requestFailure = ({
 const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
   error instanceof SyntaxError ? "answered" : "unreachable";
 
-const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
-  await fetchCorpusIndex(
+const sendRequest = async (request: CorpusIndexRequest): Promise<Response> => {
+  const publicReadSignal = getPublicReadSignal();
+  let signal = request.signal;
+  if (publicReadSignal !== undefined) {
+    signal =
+      signal === undefined
+        ? publicReadSignal
+        : AbortSignal.any([signal, publicReadSignal]);
+  }
+  return await fetchCorpusIndex(
     request.baseUrl,
     request.path,
     {
       ...request.init,
       timeoutMs: request.timeoutMs,
-      signal: request.signal,
+      signal,
     },
     request.observer,
   ).catch((error: unknown) => {
@@ -734,6 +743,7 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
       reach: "unreachable",
     });
   });
+};
 
 const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
   const response = await sendRequest(request);

@@ -96,6 +96,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { withMcpPublicReadAdmission } from "@/api/lib/rate-limit/mcp-public-read-admission";
 import {
   brandActorSessionIdentity,
   brandPersistedWorkspaceId,
@@ -165,6 +166,7 @@ export type McpRequestContext = {
   /** Explicit seams used by focused MCP tests; production contexts leave these unset. */
   featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   testDependencies?: {
+    admitPublicRead?: typeof withMcpPublicReadAdmission;
     featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
     featureAccessBindings?: McpFeatureAccessBindings | undefined;
     /** Replaces the scoped `organization_settings` read, transaction included. */

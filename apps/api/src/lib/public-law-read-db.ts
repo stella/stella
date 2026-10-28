@@ -18,7 +18,10 @@ import {
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
-import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
+import {
+  getPublicReadSignal,
+  getPublicReadStatementTimeoutMs,
+} from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
@@ -88,7 +91,10 @@ const observePublicLawStatement = async <T>(
 ): Promise<Result<T, PublicLawStatementError>> => {
   const startedAt = performance.now();
   const outcome = await Result.tryPromise({
-    try: operation,
+    try: async () => {
+      getPublicReadSignal()?.throwIfAborted();
+      return await operation();
+    },
     catch: (cause: unknown) =>
       new PublicLawStatementError({
         message: "Public-law statement failed",
@@ -671,6 +677,7 @@ export const publicLawReadDb = async <T>(
   fn: (tx: PublicLawSharedReadTransaction) => Promise<T>,
   options?: PublicLawReadOptions,
 ): Promise<T> => {
+  getPublicReadSignal()?.throwIfAborted();
   const isolation = options?.isolation ?? "read-committed";
   const database = await getPublicLawDatabase();
   return await database.transaction(async (transaction) => {

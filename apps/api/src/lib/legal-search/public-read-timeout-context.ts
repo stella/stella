@@ -1,12 +1,22 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // Workers share this state; request classification and HTTP errors live elsewhere.
-const publicReadTimeout = new AsyncLocalStorage<number>();
+const publicReadTimeout = new AsyncLocalStorage<{
+  budgetMs: number;
+  signal?: AbortSignal | undefined;
+}>();
 
 export const getPublicReadStatementTimeoutMs = () =>
-  publicReadTimeout.getStore();
+  publicReadTimeout.getStore()?.budgetMs;
+
+export const getPublicReadSignal = () => publicReadTimeout.getStore()?.signal;
+
+type PublicReadTimeoutOptions = {
+  budgetMs: number;
+  signal?: AbortSignal | undefined;
+};
 
 export const runWithPublicReadStatementTimeout = <T>(
-  budgetMs: number,
+  { budgetMs, signal = getPublicReadSignal() }: PublicReadTimeoutOptions,
   fn: () => T,
-): T => publicReadTimeout.run(budgetMs, fn);
+): T => publicReadTimeout.run({ budgetMs, signal }, fn);
