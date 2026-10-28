@@ -176,19 +176,16 @@ const inspectAppSizing = ({ node, ancestors, file }: AppSizingOptions) => {
   }
   const options = node.arguments.at(2);
   const disablesAutoResize =
-    options !== undefined &&
-    options.type === "ObjectExpression" &&
+    options?.type === "ObjectExpression" &&
     options.properties.every((property) => property.type !== "SpreadElement") &&
     options.properties.filter(
       (property) =>
-        property.type === "Property" &&
         !property.computed &&
         property.key.type === "Identifier" &&
         property.key.name === "autoResize",
     ).length === 1 &&
     options.properties.some(
       (property) =>
-        property.type === "Property" &&
         !property.computed &&
         property.key.type === "Identifier" &&
         property.key.name === "autoResize" &&
