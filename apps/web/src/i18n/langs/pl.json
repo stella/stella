@@ -2534,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Pominięto: zduplikowany identyfikator kontaktu",
       "skippedDuplicateTaxId": "Pominięto: zduplikowany CPF/CNPJ",
+      "skippedInFileDuplicate": "Pominięto: powtarza wcześniejszy wiersz pliku",
       "skippedInvalidRow": "Pominięto: wiersz nie spełnia reguł importu",
       "skippedInvalidTaxId": "Pominięto: nieprawidłowy CPF/CNPJ",
       "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
@@ -2575,6 +2576,7 @@
       "issue": {
         "address_line_required": "Jeśli podano adres, jego pierwszy wiersz jest wymagany.",
         "display_name_required": "Nie udało się utworzyć nazwy wyświetlanej.",
+        "in_file_duplicate": "Duplikat wcześniejszego wiersza w tym pliku",
         "invalid_email": "Adres e-mail jest nieprawidłowy.",
         "invalid_phone": "Numer telefonu jest nieprawidłowy.",
         "invalid_tags": "Tagi muszą być wartościami tekstowymi.",
@@ -2603,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazylijski CPF/CNPJ (suma kontrolna)",
       "taxIdSchemeNone": "Bez weryfikacji numeru podatkowego",
       "title": "Import kontaktów",
-      "validateFailed": "Nie udało się sprawdzić tych kontaktów."
+      "validateFailed": "Nie udało się sprawdzić tych kontaktów.",
+      "warning": {
+        "ignored_populated_column": "Kolumna „{column}” zawiera dane, ale jest ignorowana.",
+        "possible_in_file_duplicate": "Możliwy duplikat wiersza {row}; zgadza się tylko nazwa."
+      }
     },
     "invalidDateOfBirth": "Wprowadź prawidłową datę urodzenia.",
     "invalidNationalityCodes": "Wprowadź prawidłowe kody narodowości.",

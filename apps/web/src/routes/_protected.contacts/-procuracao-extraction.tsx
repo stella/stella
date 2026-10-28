@@ -353,13 +353,12 @@ export const ProcuracaoReview = ({ extraction }: ProcuracaoReviewProps) => {
           valid: review.validCount,
         })}
       </p>
-      {review.rows.map((row, index) => (
+      {review.rows.map((row) => (
         <ImportCandidateCard
           fields={PROCURACAO_REVIEW_FIELDS}
           key={row.id}
           onChange={(candidate) => review.updateRow(row.id, candidate)}
           onRemove={() => review.removeRow(row.id)}
-          ordinal={index + 1}
           row={row}
         />
       ))}

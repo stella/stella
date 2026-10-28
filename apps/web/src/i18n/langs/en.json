@@ -2534,6 +2534,7 @@
       "rowLabel": "Client {index}",
       "skippedDuplicateContactId": "Skipped: duplicate contact ID",
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID",
+      "skippedInFileDuplicate": "Skipped: repeats an earlier row in the file",
       "skippedInvalidRow": "Skipped: the row failed the import rules",
       "skippedInvalidTaxId": "Skipped: invalid tax ID",
       "skippedLimitReached": "Skipped: contacts limit reached"
@@ -2575,6 +2576,7 @@
       "issue": {
         "address_line_required": "Address line 1 is required when an address is present.",
         "display_name_required": "A display name could not be created.",
+        "in_file_duplicate": "Duplicate of an earlier row in this file",
         "invalid_email": "The e-mail address is invalid.",
         "invalid_phone": "The phone number is invalid.",
         "invalid_tags": "Tags must be text values.",
@@ -2603,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brazilian CPF/CNPJ (checksum)",
       "taxIdSchemeNone": "No tax-ID validation",
       "title": "Import contacts",
-      "validateFailed": "Couldn't check these contacts."
+      "validateFailed": "Couldn't check these contacts.",
+      "warning": {
+        "ignored_populated_column": "Column “{column}” contains data but is ignored.",
+        "possible_in_file_duplicate": "Possible duplicate of row {row}; matching name only."
+      }
     },
     "invalidDateOfBirth": "Enter a valid date of birth.",
     "invalidNationalityCodes": "Enter valid nationality codes.",

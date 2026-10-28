@@ -2534,6 +2534,7 @@
       "rowLabel": "Client n° {index}",
       "skippedDuplicateContactId": "Ignoré : identifiant de contact en double",
       "skippedDuplicateTaxId": "Ignoré : numéro fiscal en double",
+      "skippedInFileDuplicate": "Ignoré : reprend une ligne précédente du fichier",
       "skippedInvalidRow": "Ignoré : la ligne ne respecte pas les règles d'import",
       "skippedInvalidTaxId": "Ignoré : numéro fiscal invalide",
       "skippedLimitReached": "Ignoré : limite de contacts atteinte"
@@ -2575,6 +2576,7 @@
       "issue": {
         "address_line_required": "La ligne d’adresse 1 est obligatoire lorsqu’une adresse est renseignée.",
         "display_name_required": "Impossible de créer un nom affiché.",
+        "in_file_duplicate": "Doublon d’une ligne précédente de ce fichier",
         "invalid_email": "L’adresse e-mail n’est pas valide.",
         "invalid_phone": "Le numéro de téléphone n’est pas valide.",
         "invalid_tags": "Les étiquettes doivent être des valeurs textuelles.",
@@ -2603,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "CPF/CNPJ brésilien (somme de contrôle)",
       "taxIdSchemeNone": "Aucune validation du numéro fiscal",
       "title": "Importer des contacts",
-      "validateFailed": "Impossible de vérifier ces contacts."
+      "validateFailed": "Impossible de vérifier ces contacts.",
+      "warning": {
+        "ignored_populated_column": "La colonne « {column} » contient des données, mais elle est ignorée.",
+        "possible_in_file_duplicate": "Doublon possible de la ligne {row} ; seul le nom correspond."
+      }
     },
     "invalidDateOfBirth": "Saisissez une date de naissance valide.",
     "invalidNationalityCodes": "Saisissez des codes de nationalité valides.",

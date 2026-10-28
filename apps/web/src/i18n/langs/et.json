@@ -2534,6 +2534,7 @@
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
+      "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
@@ -2575,6 +2576,7 @@
       "issue": {
         "address_line_required": "Kui aadress on lisatud, on aadressirida 1 kohustuslik.",
         "display_name_required": "Kuvatavat nime ei õnnestunud koostada.",
+        "in_file_duplicate": "Selle faili varasema rea duplikaat",
         "invalid_email": "E-posti aadress on vigane.",
         "invalid_phone": "Telefoninumber on vigane.",
         "invalid_tags": "Sildid peavad olema tekstiväärtused.",
@@ -2603,7 +2605,11 @@
       "taxIdSchemeBrCpfCnpj": "Brasiilia CPF/CNPJ (kontrollsumma)",
       "taxIdSchemeNone": "Maksunumbrit ei kontrollita",
       "title": "Kontaktide importimine",
-      "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
+      "validateFailed": "Neid kontakte ei õnnestunud kontrollida.",
+      "warning": {
+        "ignored_populated_column": "Veerg „{column}” sisaldab andmeid, kuid seda eiratakse.",
+        "possible_in_file_duplicate": "Rea {row} võimalik duplikaat; kattub ainult nimi."
+      }
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
     "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
