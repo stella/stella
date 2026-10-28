@@ -234,7 +234,21 @@ struct Browser {
   opened: mpsc::UnboundedReceiver<String>,
 }
 
+/// Waits, without polling a clock, until the attempt in progress settles.
+async fn settle(auth: &ChatGptAuth, changed: &tokio::sync::Notify) -> ChatGptStatus {
+  loop {
+    let status = auth.status().await;
+    if status != ChatGptStatus::SigningIn {
+      return status;
+    }
+    tokio::time::timeout(Duration::from_secs(10), changed.notified())
+      .await
+      .expect("the sign-in settles");
+  }
+}
+
 struct Harness {
+  changed: Arc<tokio::sync::Notify>,
   fake: FakeOpenAi,
   auth: ChatGptAuth,
   vault: Arc<MemoryVault>,
@@ -260,17 +274,20 @@ impl Harness {
     let (open, opened) = mpsc::unbounded_channel();
     let cleared_harness = Arc::new(Mutex::new(0));
     let cleared = Arc::clone(&cleared_harness);
+    let changed = Arc::new(tokio::sync::Notify::new());
+    let notify = Arc::clone(&changed);
     let auth = ChatGptAuth::new(
       fake.config(sign_in_timeout),
       Arc::clone(&vault) as Arc<dyn store::ChatGptVault>,
       http(),
       ChatGptAuthHooks {
         open_browser: Box::new(move |url| open.send(url.to_owned()).is_ok()),
-        changed: Box::new(|| {}),
+        changed: Box::new(move || notify.notify_one()),
         clear_harness_sign_in: Box::new(move || *cleared.lock().unwrap() += 1),
       },
     );
     Self {
+      changed,
       fake,
       auth,
       vault,
@@ -321,14 +338,15 @@ impl Harness {
   }
 
   async fn settled(&self) -> ChatGptStatus {
-    for _ in 0..200 {
-      let status = self.auth.status().await;
-      if status != ChatGptStatus::SigningIn {
-        return status;
-      }
-      tokio::time::sleep(Duration::from_millis(10)).await;
+    settle(&self.auth, &self.changed).await
+  }
+
+  /// A callback after the attempt ended is never accepted: its listener is
+  /// closed, or still closing and answering that the sign-in is over.
+  async fn assert_refused(&self, url: String) {
+    if let Ok(response) = self.http.get(url).send().await {
+      assert_eq!(response.status(), StatusCode::GONE);
     }
-    panic!("the sign-in did not settle");
   }
 
   async fn sign_in(&mut self, intent: SignInIntent) -> HashMap<String, String> {
@@ -389,15 +407,10 @@ async fn first_sign_in_registers_verifies_and_stores_the_connection() {
   assert_eq!(session.refresh_token.as_deref(), Some("refresh-1"));
   assert!(session.grants(oauth::PLAN_USAGE_SCOPE));
 
-  // The listener served its one callback and is gone.
-  assert!(
-    harness
-      .http
-      .get(Harness::callback_url(&params, &params["state"], true))
-      .send()
-      .await
-      .is_err()
-  );
+  // The listener served its one callback.
+  harness
+    .assert_refused(Harness::callback_url(&params, &params["state"], true))
+    .await;
 
   // A returning sign-in reuses the issued client and this host's ID.
   let again = harness.sign_in(SignInIntent::SameAccount).await;
@@ -476,7 +489,7 @@ async fn a_callback_with_another_state_is_refused_without_an_exchange() {
   assert!(harness.fake.with(|fake| fake.token_requests.is_empty()));
   // The attempt is over: the genuine callback is no longer served.
   let genuine = Harness::callback_url(&params, &params["state"], true);
-  assert!(harness.http.get(genuine).send().await.is_err());
+  harness.assert_refused(genuine).await;
 }
 
 #[tokio::test]
@@ -491,7 +504,7 @@ async fn an_unanswered_sign_in_times_out_and_closes_its_listener() {
     }
   );
   let late = Harness::callback_url(&params, &params["state"], true);
-  assert!(harness.http.get(late).send().await.is_err());
+  harness.assert_refused(late).await;
   assert_eq!(
     harness.auth.complete_from_url(&params["redirect_uri"]),
     Err(CallbackUrlError::NoSignIn)
@@ -579,9 +592,8 @@ async fn cancelling_returns_to_the_saved_state_and_closes_the_listener() {
   let params = harness.authorization().await;
   harness.auth.cancel();
   assert_eq!(harness.settled().await, ChatGptStatus::SignedOut);
-  tokio::time::sleep(Duration::from_millis(50)).await;
   let late = Harness::callback_url(&params, &params["state"], true);
-  assert!(harness.http.get(late).send().await.is_err());
+  harness.assert_refused(late).await;
 }
 
 fn expire(harness: &Harness) {
@@ -755,6 +767,8 @@ async fn a_new_account_registers_a_new_client() {
 #[tokio::test]
 async fn discovery_naming_another_origin_is_not_trusted() {
   let fake = FakeOpenAi::start().await;
+  let changed = Arc::new(tokio::sync::Notify::new());
+  let notify = Arc::clone(&changed);
   let auth = ChatGptAuth::new(
     ChatGptAuthConfig {
       issuer: "https://auth.openai.com".into(),
@@ -764,19 +778,13 @@ async fn discovery_naming_another_origin_is_not_trusted() {
     http(),
     ChatGptAuthHooks {
       open_browser: Box::new(|_| panic!("no browser for an untrusted issuer")),
-      changed: Box::new(|| {}),
+      changed: Box::new(move || notify.notify_one()),
       clear_harness_sign_in: Box::new(|| {}),
     },
   );
   auth.start(SignInIntent::SameAccount);
-  for _ in 0..200 {
-    if auth.status().await != ChatGptStatus::SigningIn {
-      break;
-    }
-    tokio::time::sleep(Duration::from_millis(10)).await;
-  }
   assert_eq!(
-    auth.status().await,
+    settle(&auth, &changed).await,
     ChatGptStatus::Failed {
       reason: ChatGptFailure::Verification
     }

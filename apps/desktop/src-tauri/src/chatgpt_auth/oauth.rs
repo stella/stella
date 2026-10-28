@@ -257,6 +257,10 @@ pub(crate) type CallbackSlot = Arc<Mutex<Option<oneshot::Sender<DeliveredCallbac
 pub(crate) struct CallbackListener {
   port: u16,
   stop: Option<oneshot::Sender<()>>,
+  /// Tests wait on it; otherwise the server finishes its last response and
+  /// exits on its own.
+  #[cfg(test)]
+  served: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl CallbackListener {
@@ -276,7 +280,11 @@ impl CallbackListener {
       .fallback(|| async { StatusCode::NOT_FOUND })
       .with_state(state);
     let (stop, stopped) = oneshot::channel::<()>();
-    tokio::spawn(async move {
+    #[cfg_attr(
+      not(test),
+      allow(unused_variables, reason = "only tests await the server")
+    )]
+    let served = tokio::spawn(async move {
       let served = axum::serve(listener, router)
         .with_graceful_shutdown(async move {
           let _ = stopped.await;
@@ -289,11 +297,24 @@ impl CallbackListener {
     Ok(Self {
       port,
       stop: Some(stop),
+      #[cfg(test)]
+      served: Some(served),
     })
   }
 
   pub(crate) fn port(&self) -> u16 {
     self.port
+  }
+
+  /// Stops listening and waits until the socket is closed.
+  #[cfg(test)]
+  pub(crate) async fn close(mut self) {
+    if let Some(stop) = self.stop.take() {
+      let _ = stop.send(());
+    }
+    if let Some(served) = self.served.take() {
+      served.await.unwrap();
+    }
   }
 }
 
@@ -649,8 +670,7 @@ mod tests {
       .unwrap();
     assert_eq!(replay.status(), StatusCode::GONE);
 
-    drop(listener);
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    listener.close().await;
     assert!(
       tokio::net::TcpStream::connect(("127.0.0.1", port))
         .await

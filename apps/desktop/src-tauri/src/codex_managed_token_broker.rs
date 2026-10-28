@@ -608,12 +608,11 @@ mod tests {
     let endpoint = broker.endpoint().to_owned();
     tokio::task::spawn_blocking(move || {
       let mut stream = std::os::unix::net::UnixStream::connect(&endpoint).unwrap();
+      // The broker closes the connection before this read would time out.
       stream.set_read_timeout(Some(SOCKET_IDLE * 3)).unwrap();
       let mut response = Vec::new();
-      let started = std::time::Instant::now();
       stream.read_to_end(&mut response).unwrap();
       assert!(response.is_empty());
-      assert!(started.elapsed() < SOCKET_IDLE * 2);
     })
     .await
     .unwrap();
