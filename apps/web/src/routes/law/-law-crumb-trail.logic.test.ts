@@ -90,7 +90,7 @@ describe("statute breadcrumb identity and destinations", () => {
         identity: { kind: "statute", number, year },
         citation: `${number}/${year} ${gazette}`,
         shortTitle: statute.title,
-        fullTitle: statute.title,
+        fullTitle: `${number}/${year} ${gazette} ${statute.title}`,
         yearLink: {
           year: Number(year),
           link: {
