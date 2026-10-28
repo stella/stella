@@ -219,7 +219,7 @@ describe("RecoverableViewerBoundary", () => {
 
   test("a stale build that already reloaded once fails instead of looping", async () => {
     spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ commit: "new-build" })),
+      new Response(JSON.stringify({ commit: "confirmed-other-build" })),
     );
     sessionArea().setItem(
       RELOAD_GUARD_KEY,
@@ -234,6 +234,10 @@ describe("RecoverableViewerBoundary", () => {
     });
 
     await settleAttempts(1);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.getByRole("alert").textContent).toContain(
       messages.fileDetail.displayFailed,
     );

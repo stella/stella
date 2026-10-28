@@ -140,7 +140,10 @@ class ViewerErrorBoundary extends Component<
       error,
       this.remount,
     );
-    if (classification?.type === "build-skew") {
+    if (
+      classification?.recovery.type === "reload" &&
+      classification.recovery.outcome.type === "started"
+    ) {
       this.setState({ type: "reloading", generation });
       return;
     }

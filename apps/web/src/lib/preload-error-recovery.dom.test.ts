@@ -10,6 +10,8 @@ import {
   test,
 } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { browserStorage } from "@/lib/account/browser-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -25,6 +27,7 @@ beforeAll(() => {
 const {
   classifyFailedChunkLoad,
   installPreloadErrorRecovery,
+  loadInitialRuntimeWithRecovery,
   recoverFromStaleDeploymentLoad,
 } = await import("./preload-error-recovery");
 
@@ -59,7 +62,8 @@ describe("failed chunk recovery", () => {
     const retry = mock(() => undefined);
 
     expect(await recoverFromStaleDeploymentLoad(CHUNK_ERROR, retry)).toEqual({
-      type: "offline",
+      classification: { type: "offline" },
+      recovery: { type: "retry-when-online" },
     });
     expect(reload).not.toHaveBeenCalled();
     window.dispatchEvent(new Event("online"));
@@ -77,13 +81,79 @@ describe("failed chunk recovery", () => {
       () => undefined,
     );
 
-    expect(await recoverFromStaleDeploymentLoad(CHUNK_ERROR)).toEqual({
-      type: "build-skew",
+    expect(
+      await recoverFromStaleDeploymentLoad(CHUNK_ERROR, () => undefined),
+    ).toEqual({
+      classification: { type: "build-skew" },
+      recovery: { type: "reload", outcome: { type: "started" } },
     });
-    expect(await recoverFromStaleDeploymentLoad(CHUNK_ERROR)).toEqual({
-      type: "build-skew",
+    expect(
+      await recoverFromStaleDeploymentLoad(CHUNK_ERROR, () => undefined),
+    ).toEqual({
+      classification: { type: "build-skew" },
+      recovery: {
+        type: "reload",
+        outcome: { type: "refused-cooldown" },
+      },
     });
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("an online same-build failure retries immediately without waiting for an online event", async () => {
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ commit: "running-build" })),
+    );
+    const retry = mock(() => undefined);
+
+    expect(await recoverFromStaleDeploymentLoad(CHUNK_ERROR, retry)).toEqual({
+      classification: { type: "network-error" },
+      recovery: { type: "retry-now" },
+    });
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  test("online same-build startup failure exhausts bounded retries", async () => {
+    spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ commit: "running-build" })),
+    );
+    const load = mock(async () => {
+      throw CHUNK_ERROR;
+    });
+
+    expect(
+      await rejectionOf(
+        loadInitialRuntimeWithRecovery({
+          load,
+          retryDelaysMs: [0, 0],
+          wait: async () => undefined,
+        }),
+      ),
+    ).toBe(CHUNK_ERROR);
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  test("offline startup retries once after the browser comes online", async () => {
+    setOnline(false);
+    const load = mock(async () => {
+      if (load.mock.calls.length === 1) {
+        throw CHUNK_ERROR;
+      }
+    });
+    const online = Promise.withResolvers<undefined>();
+    const waiting = Promise.withResolvers<undefined>();
+    const outcome = loadInitialRuntimeWithRecovery({
+      load,
+      waitUntilOnline: async () => {
+        waiting.resolve(undefined);
+        return online.promise;
+      },
+    });
+    await waiting.promise;
+    setOnline(true);
+    online.resolve(undefined);
+
+    expect(await outcome).toEqual({ type: "loaded" });
+    expect(load).toHaveBeenCalledTimes(2);
   });
 
   test("probe failure is network failure, not build skew", async () => {

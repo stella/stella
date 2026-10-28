@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { fetchWithTimeout } from "@stll/fetch";
 import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
 import { Temporal } from "@stll/time";
@@ -21,6 +22,7 @@ import { detached } from "@/lib/detached";
 const RELOAD_COOLDOWN_MS = 10_000;
 const STORAGE_KEY = "stella:preload-reload-at";
 const VERSION_MANIFEST_PATH = "/version.json";
+const INITIAL_RUNTIME_RETRY_DELAYS_MS = [250, 1000] as const;
 
 // Keep this aligned with TanStack Router's cross-browser dynamic-import
 // classifier. A rejected lazy import is cached inside lazyRouteComponent, so
@@ -62,6 +64,11 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
 
 export type FailedChunkLoadClassification =
   { type: "offline" } | { type: "network-error" } | { type: "build-skew" };
+
+export type StaleDeploymentReloadOutcome =
+  | { type: "started" }
+  | { type: "refused-cooldown" }
+  | { type: "refused-storage" };
 
 type VersionManifest = { commit: string };
 
@@ -124,49 +131,141 @@ const recordReloadAt = (timestamp: number): boolean =>
 
 /**
  * Reload the page for a fresh build unless one was attempted within the
- * cooldown or the guard cannot be recorded. Returns whether a reload started;
- * `false` means the caller shows its own failure state.
+ * cooldown or the guard cannot be recorded. Refusal outcomes tell callers to
+ * render their actionable failure state instead of waiting for navigation.
  */
-export const reloadForStaleDeployment = (): boolean => {
+export const reloadForStaleDeployment = (): StaleDeploymentReloadOutcome => {
   const last = readReloadAt();
   if (last === null) {
-    return false;
+    return { type: "refused-storage" };
   }
   const now = Temporal.Now.instant().epochMilliseconds;
   if (now - last < RELOAD_COOLDOWN_MS) {
     // Already reloaded recently; the chunk is genuinely failing.
-    return false;
+    return { type: "refused-cooldown" };
   }
   if (!recordReloadAt(now)) {
     // Could not record the reload, so the guard would never trip.
-    return false;
+    return { type: "refused-storage" };
   }
   window.location.reload();
-  return true;
+  return { type: "started" };
+};
+
+export type FailedChunkRecovery =
+  | { type: "reload"; outcome: StaleDeploymentReloadOutcome }
+  | { type: "retry-when-online" }
+  | { type: "retry-now" };
+
+export type FailedChunkRecoveryDecision = {
+  classification: FailedChunkLoadClassification;
+  recovery: FailedChunkRecovery;
+};
+
+type InitialRuntimeLoadOutcome = { type: "loaded" } | { type: "reloading" };
+
+type InitialRuntimeLoadOptions = {
+  load: () => Promise<unknown>;
+  retryDelaysMs?: readonly number[] | undefined;
+  wait?: ((delayMs: number) => Promise<void>) | undefined;
+  waitUntilOnline?: (() => Promise<void>) | undefined;
+};
+
+const waitForOnline = async (): Promise<void> =>
+  new Promise((resolve) => {
+    window.addEventListener("online", () => resolve(), { once: true });
+  });
+
+/**
+ * Load the entry runtime through a finite recovery state machine. Offline
+ * startup waits for the one signal that can make progress; online transport
+ * failures retry with bounded backoff and then reject to the startup error UI.
+ */
+export const loadInitialRuntimeWithRecovery = async ({
+  load,
+  retryDelaysMs = INITIAL_RUNTIME_RETRY_DELAYS_MS,
+  wait = sleep,
+  waitUntilOnline = waitForOnline,
+}: InitialRuntimeLoadOptions): Promise<InitialRuntimeLoadOutcome> => {
+  let retryAttempt = 0;
+  let retriedAfterOffline = false;
+  for (;;) {
+    const result = await Result.tryPromise(load);
+    if (result.isOk()) {
+      return { type: "loaded" };
+    }
+    const loadError = result.error.cause;
+    if (!isStaleDeploymentLoadError(loadError)) {
+      throw loadError;
+    }
+
+    const classification = await classifyFailedChunkLoad();
+    switch (classification.type) {
+      case "build-skew": {
+        const reload = reloadForStaleDeployment();
+        switch (reload.type) {
+          case "started":
+            return { type: "reloading" };
+          case "refused-cooldown":
+          case "refused-storage":
+            throw loadError;
+          default:
+            reload satisfies never;
+            return panic(`Unhandled reload outcome: ${String(reload)}`);
+        }
+      }
+      case "offline":
+        if (retriedAfterOffline) {
+          throw loadError;
+        }
+        retriedAfterOffline = true;
+        await waitUntilOnline();
+        break;
+      case "network-error": {
+        const delayMs = retryDelaysMs.at(retryAttempt);
+        if (delayMs === undefined) {
+          throw loadError;
+        }
+        retryAttempt += 1;
+        await wait(delayMs);
+        break;
+      }
+      default:
+        classification satisfies never;
+        return panic(
+          `Unhandled failed chunk classification: ${String(classification)}`,
+        );
+    }
+  }
 };
 
 /** Route lazy imports and Vite preload failures share this recovery owner. */
 export const recoverFromStaleDeploymentLoad = async (
   error: unknown,
-  retry: () => void = () => window.location.reload(),
-): Promise<FailedChunkLoadClassification | null> => {
+  retry: () => void,
+): Promise<FailedChunkRecoveryDecision | null> => {
   if (!isStaleDeploymentLoadError(error)) {
     return null;
   }
   const classification = await classifyFailedChunkLoad();
   switch (classification.type) {
     case "build-skew":
-      reloadForStaleDeployment();
-      break;
+      return {
+        classification,
+        recovery: { type: "reload", outcome: reloadForStaleDeployment() },
+      };
     case "offline":
-    case "network-error":
       window.addEventListener("online", retry, { once: true });
-      break;
+      return { classification, recovery: { type: "retry-when-online" } };
+    case "network-error":
+      retry();
+      return { classification, recovery: { type: "retry-now" } };
     default:
       classification satisfies never;
-      panic(`Unhandled failed chunk classification: ${String(classification)}`);
+      return panic(
+        `Unhandled failed chunk classification: ${String(classification)}`,
+      );
   }
-  return classification;
 };
 
 // Typed as Event: the WindowEventMap augmentation for "vite:preloadError" is
@@ -179,7 +278,7 @@ export const installPreloadErrorRecovery = (): void => {
       // this is transport failure or confirmed build skew.
       event.preventDefault();
       detached(
-        recoverFromStaleDeploymentLoad(error),
+        recoverFromStaleDeploymentLoad(error, () => undefined),
         "preload-error-recovery.classify",
       );
     }
