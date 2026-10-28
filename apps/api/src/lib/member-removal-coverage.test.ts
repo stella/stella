@@ -30,6 +30,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "chat_messages.content",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
+  "chat_run_logs.reference_summary",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
   "flow_run_steps.output",
@@ -457,6 +458,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
+  "chat_run_logs.reference_summary":
+    "Derived run log history; retained SDK tool arguments and activity payloads can name members, grant no membership, and expire with the run log.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",

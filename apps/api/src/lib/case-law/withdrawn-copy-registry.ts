@@ -53,11 +53,14 @@ type HasDecisionReference<
           : Value extends readonly (infer Item)[]
             ? HasDecisionReference<Item, [...Seen, Value]>
             : Value extends object
-              ? {
-                  [Key in keyof Value]: IsDecisionReferenceKey<Key> extends true
-                    ? true
-                    : HasDecisionReference<Value[Key], [...Seen, Value]>;
-                }[keyof Value]
+              ? true extends IsDecisionReferenceKey<keyof Value>
+                ? true
+                : {
+                    [Key in keyof Value]: HasDecisionReference<
+                      Value[Key],
+                      [...Seen, Value]
+                    >;
+                  }[keyof Value]
               : false;
 
 type DecisionKey<Row> = {
@@ -81,7 +84,11 @@ export type DecisionCopyTableNames<Definitions> = {
     : never;
 }[keyof Definitions];
 
-type TenantDecisionTable = DecisionCopyTableNames<Schema>;
+// Explicit payload owners already require exhaustive column classifications.
+// Discover additional stores without re-walking their SDK and transcript types.
+type TenantDecisionTable = DecisionCopyTableNames<
+  Omit<Schema, DecisionPayloadTable>
+>;
 
 /** JSON and child stores whose decision association is carried by their parent or payload. */
 type DecisionPayloadTable =
@@ -90,6 +97,7 @@ type DecisionPayloadTable =
   | "chatThreadCompactions"
   | "chatMessages"
   | "chatMessageRevisions"
+  | "chatRunLogs"
   | "chatRunLogEntries"
   | "chatMessageSearchDocuments"
   | "chatThreadSearchDocuments"

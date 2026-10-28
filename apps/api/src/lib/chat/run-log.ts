@@ -37,6 +37,7 @@ import type {
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { messageTurnTiming } from "@/api/lib/chat/turn-timing";
 import { projectWithdrawnRunChunk } from "@/api/lib/chat/withdrawn-run-chunks";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { emitChatRunLogMetric } from "@/api/lib/observability/request-metrics";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
@@ -486,20 +487,24 @@ const readLegacyRunReferencesOnTx = async ({
   let after = 0n;
   let bytes = 0;
   for (;;) {
-    // db-await-in-loop: legacy-only ordered reconstruction; each query is capped at READ_PAGE_SIZE and cumulative decoded chunks cannot exceed MAX_RUN_BYTES
-    const page = await tx
-      .select({ seq: chatRunLogEntries.seq, chunk: chatRunLogEntries.chunk })
-      .from(chatRunLogEntries)
-      .where(
-        and(
-          entryKey(organizationId, runId),
-          gt(chatRunLogEntries.seq, after),
-          lt(chatRunLogEntries.seq, nextSeq),
-        ),
-      )
-      .orderBy(asc(chatRunLogEntries.seq))
-      .limit(READ_PAGE_SIZE);
-    for (const { seq, chunk } of page) {
+    const page = await readCursorPage(
+      tx
+        .select({ seq: chatRunLogEntries.seq, chunk: chatRunLogEntries.chunk })
+        .from(chatRunLogEntries)
+        .where(
+          and(
+            entryKey(organizationId, runId),
+            gt(chatRunLogEntries.seq, after),
+            lt(chatRunLogEntries.seq, nextSeq),
+          ),
+        )
+        .orderBy(asc(chatRunLogEntries.seq)),
+      {
+        limit: READ_PAGE_SIZE - 1,
+        cursorForItem: ({ seq }) => seq.toString(),
+      },
+    );
+    for (const { seq, chunk } of page.items) {
       if (seq !== after + 1n) {
         throw new ChatRunLogError({
           message: "Chat run log changed during snapshot",
@@ -535,7 +540,7 @@ const readLegacyRunReferencesOnTx = async ({
       }
       after = seq;
     }
-    if (page.length < READ_PAGE_SIZE) {
+    if (page.nextCursor === null) {
       if (after !== nextSeq - 1n) {
         throw new ChatRunLogError({
           message: "Chat run log changed during snapshot",
@@ -954,8 +959,8 @@ const createRunLogReader = ({
   };
 };
 
-// A full replay can fold into a canonical SDK snapshot, bounded by MAX_RUN_BYTES.
-// A cursor or live reconnect reads only its indexed suffix, one page at a time.
+// Gaps above either catch-up bound fold into a canonical SDK snapshot.
+// Smaller cursor gaps read only their indexed suffix; now tails live delivery.
 export const MAX_CATCHUP_CHUNKS = 256n;
 export const MAX_CATCHUP_BYTES = 1024n * 1024n;
 
@@ -969,6 +974,15 @@ export const createChatRunLogReplay = async ({
   waitForStart?: boolean;
   resumeOffset: string;
 }): Promise<StreamDurability | null> => {
+  const cursor = (() => {
+    if (resumeOffset === "now") {
+      return null;
+    }
+    if (resumeOffset === "-1") {
+      return 0n;
+    }
+    return offsetSequence(resumeOffset);
+  })();
   const header = await db(async (tx) =>
     (
       await tx
@@ -976,6 +990,23 @@ export const createChatRunLogReplay = async ({
           closedAt: chatRunLogs.closedAt,
           nextSeq: chatRunLogs.nextSeq,
           bytesUsed: chatRunLogs.bytesUsed,
+          suffixBytes:
+            cursor === null || cursor === 0n
+              ? sql<string>`'0'`
+              : sql<string>`CASE
+                  WHEN ${chatRunLogs.bytesUsed} > ${MAX_CATCHUP_BYTES}::bigint
+                    AND ${chatRunLogs.nextSeq} - 1 - ${cursor}::bigint <= ${MAX_CATCHUP_CHUNKS}::bigint
+                  THEN (SELECT coalesce(sum(gap.bytes), 0)::text FROM (
+                    SELECT octet_length(${chatRunLogEntries.chunk}::text) AS bytes
+                    FROM ${chatRunLogEntries}
+                    WHERE ${entryKey(organizationId, runId)}
+                      AND ${chatRunLogEntries.seq} > ${cursor}::bigint
+                      AND ${chatRunLogEntries.seq} < ${chatRunLogs.nextSeq}
+                    ORDER BY ${chatRunLogEntries.seq}
+                    LIMIT ${MAX_CATCHUP_CHUNKS + 1n}
+                  ) gap)
+                  ELSE '0'
+                END`,
         })
         .from(chatRunLogs)
         .where(logKey(organizationId, runId))
@@ -1003,24 +1034,18 @@ export const createChatRunLogReplay = async ({
   if (header.closedAt !== null) {
     return null;
   }
-  const after = (() => {
-    if (resumeOffset === "-1") {
-      return 0n;
-    }
-    if (resumeOffset === "now") {
-      return header.nextSeq - 1n;
-    }
-    return offsetSequence(resumeOffset);
-  })();
+  const after = cursor ?? header.nextSeq - 1n;
   if (after >= header.nextSeq) {
     throw new ChatRunLogOffsetBeyondTailError({
       message: "Chat run log offset is beyond the stored tail",
     });
   }
+  // Only small gaps need a byte probe, bounded to one catch-up page in the
+  // header statement so recent reconnects keep a constant query count.
   const compact =
-    after === 0n &&
-    (header.nextSeq - 1n > MAX_CATCHUP_CHUNKS ||
-      header.bytesUsed > MAX_CATCHUP_BYTES);
+    header.nextSeq - 1n - after > MAX_CATCHUP_CHUNKS ||
+    (cursor === 0n ? header.bytesUsed : BigInt(header.suffixBytes)) >
+      MAX_CATCHUP_BYTES;
   return {
     ...reader,
     resumeFrom: () => resumeOffset,
@@ -1029,7 +1054,7 @@ export const createChatRunLogReplay = async ({
       // A viewer closes delivery without closing the producer log.
     },
     async *read(offset, signal) {
-      if (!compact || offset !== "-1") {
+      if (!compact || offset === "now") {
         yield* reader.read(offset, signal);
         return;
       }
