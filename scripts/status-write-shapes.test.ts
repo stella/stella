@@ -162,6 +162,23 @@ describe("lifecycle write shapes", () => {
       unmanagedTransitionTables('export { TRANSITIONS } from "./elsewhere";'),
     ).toThrow("statically readable TRANSITIONS");
   });
+  test("transition declarations read literal computed names and reject dynamic keys", () => {
+    expect(
+      unmanagedTransitionTables(
+        'export const TRANSITIONS = { ["jobs"]: { [`unmanaged`]: "reason" } };',
+      ),
+    ).toEqual(["jobs"]);
+    expect(() =>
+      unmanagedTransitionTables(
+        'const table = "jobs"; export const TRANSITIONS = { [table]: { unmanaged: "reason" } };',
+      ),
+    ).toThrow("Transition spec table keys must be static");
+    expect(() =>
+      unmanagedTransitionTables(
+        'const unmanaged = "other"; export const TRANSITIONS = { jobs: { [unmanaged]: "reason" } };',
+      ),
+    ).toThrow("Transition spec option keys must be static");
+  });
   test("scoped transition state columns enter direct-write enforcement from the canonical registry", () => {
     expect(columns["contacts"]).toContain("sanctionsMonitoringMode");
     expect(columns["organizationSettings"]).toContain(
