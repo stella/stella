@@ -5,6 +5,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import {
+  HEAVY_TYPECHECK_LOCK_WAIT_SECONDS,
+  runHeavyTypecheckWithLock,
+} from "../packages/scripts/src/heavy-typecheck-lock";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -191,6 +195,19 @@ export const changedFilesAgainst = (
 };
 
 const main = async () => {
+  const mode = process.env["STELLA_PREPUSH_TYPECHECK"];
+  if (mode === "ci") {
+    console.log(
+      "pre-push-typecheck: typecheck runs in CI for this push (STELLA_PREPUSH_TYPECHECK=ci)",
+    );
+    return 0;
+  }
+  if (mode !== undefined) {
+    console.error(
+      `pre-push-typecheck: unsupported STELLA_PREPUSH_TYPECHECK=${mode}; expected "ci" or unset`,
+    );
+    return 1;
+  }
   const baseIndex = process.argv.indexOf("--base");
   const base = baseIndex === -1 ? DEFAULT_BASE : process.argv[baseIndex + 1];
   if (base === undefined || base.startsWith("--")) {
@@ -233,13 +250,17 @@ const main = async () => {
   return runSelectedPackages(
     packages,
     async (workspace) => {
-      const child = Bun.spawn(["bun", "run", "typecheck"], {
+      const result = await runHeavyTypecheckWithLock({
+        command: ["bun", "run", "typecheck"],
         cwd: path.join(repoRoot, workspace.directory),
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
       });
-      return childExitStatus(await child.exited);
+      if (result.type === "wait-timeout") {
+        console.log(
+          `pre-push-typecheck: ${workspace.name} waited ${String(HEAVY_TYPECHECK_LOCK_WAIT_SECONDS)} s for the host typecheck lock; CI checks it`,
+        );
+        return 0;
+      }
+      return result.exitCode;
     },
     console.log,
   );

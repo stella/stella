@@ -86,13 +86,18 @@ const createRepository = (
   return repository;
 };
 
-const runCommand = (repository: string, base = "HEAD~1") =>
+const runCommand = (
+  repository: string,
+  base = "HEAD~1",
+  env: Record<string, string> = {},
+) =>
   Bun.spawnSync(
     ["bun", commandPath, "--base", base, "--repo-root", repository],
     {
       cwd: repository,
       stdout: "pipe",
       stderr: "pipe",
+      env: { ...process.env, ...env },
     },
   );
 
@@ -334,6 +339,59 @@ test("a typecheck that runs and fails blocks the command", () => {
     const result = runCommand(repository);
     expect(result.exitCode).toBe(7);
     expect(result.stdout.toString()).toContain("checking @test/failing");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("CI mode selects and runs nothing", () => {
+  const result = Bun.spawnSync(
+    ["bun", commandPath, "--base", "definitely-missing"],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, STELLA_PREPUSH_TYPECHECK: "ci" },
+    },
+  );
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(
+    "pre-push-typecheck: typecheck runs in CI for this push (STELLA_PREPUSH_TYPECHECK=ci)\n",
+  );
+  expect(result.stderr.toString()).toBe("");
+});
+
+test("an unknown pre-push mode refuses instead of silently skipping", () => {
+  const result = Bun.spawnSync(["bun", commandPath], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, STELLA_PREPUSH_TYPECHECK: "skip" },
+  });
+  expect(result.exitCode).toBe(1);
+  expect(result.stdout.toString()).toBe("");
+  expect(result.stderr.toString()).toBe(
+    'pre-push-typecheck: unsupported STELLA_PREPUSH_TYPECHECK=skip; expected "ci" or unset\n',
+  );
+});
+
+test("a selected package typecheck runs while holding the host lock", () => {
+  const repository = createRepository({
+    guarded: {
+      typecheck: 'test "$STELLA_HEAVY_TYPECHECK_LOCK_HELD" = 1',
+    },
+  });
+  try {
+    writeFileSync(
+      path.join(repository, "packages", "guarded", "src", "index.ts"),
+      "export const changed = true;\n",
+    );
+    git(repository, "add", "--all");
+    git(repository, "commit", "--quiet", "-m", "change package");
+
+    const result = runCommand(repository);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain(
+      "heavy-typecheck-lock: acquired host lock",
+    );
   } finally {
     rmSync(repository, { recursive: true, force: true });
   }

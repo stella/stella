@@ -26,6 +26,7 @@ import {
   requireApiTypecheckGeneratedSources,
   uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
+import { runHeavyTypecheckWithLock } from "./heavy-typecheck-lock";
 import { parseSource, walk } from "./syntax-tree";
 import {
   readTurboTypecheckInputs,
@@ -719,6 +720,19 @@ export const regenerateApiDeclarationSurface = async (
 };
 
 if (import.meta.main) {
+  if (process.env["STELLA_HEAVY_TYPECHECK_LOCK_HELD"] !== "1") {
+    const result = await runHeavyTypecheckWithLock({
+      command: [process.execPath, import.meta.path, ...process.argv.slice(2)],
+      cwd: process.cwd(),
+    });
+    if (result.type === "wait-timeout") {
+      process.stderr.write(
+        `api-typecheck-declarations: waited ${String(result.waitSeconds)} s for the host typecheck lock\n`,
+      );
+      process.exit(1);
+    }
+    process.exit(result.exitCode);
+  }
   const project = process.argv[2];
   if (!project) {
     panic("Expected API declaration project path");
