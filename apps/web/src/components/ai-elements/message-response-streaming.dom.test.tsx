@@ -253,6 +253,15 @@ const mountAnswer = async (source: string, options: RenderOptions = {}) => {
   };
 };
 
+// DOM equality preserves node order, text and every attribute name/value while
+// ignoring attribute insertion order, which React updates need not reproduce.
+const renderedTree = async (source: string, options: RenderOptions = {}) => {
+  const view = await mountAnswer(source, options);
+  const tree = view.root.cloneNode(true);
+  await view.unmount();
+  return tree;
+};
+
 const renderedHtml = async (source: string, options: RenderOptions = {}) => {
   const view = await mountAnswer(source, options);
   const html = view.root.innerHTML;
@@ -392,16 +401,16 @@ describe("streamed chat answers", () => {
                 });
               }
               // Re-rendering a growing prefix in place leaves no stale nodes behind.
-              expect(view.root.innerHTML).toBe(
-                await renderedHtml(answer, streaming),
-              );
+              expect(
+                view.root.isEqualNode(await renderedTree(answer, streaming)),
+              ).toBe(true);
               // The chat settles a finished turn by switching to source offsets;
               // the settled frame is the one a reload of the thread shows.
               const settled = { ...config.options, sourceOffsets: true };
               await view.update(answer, settled);
-              expect(view.root.innerHTML).toBe(
-                await renderedHtml(answer, settled),
-              );
+              expect(
+                view.root.isEqualNode(await renderedTree(answer, settled)),
+              ).toBe(true);
               expect(activeContent(view.root)).toEqual([]);
               expect(unscopedNames(view.root)).toEqual([]);
               expect(brokenFragments(view.root)).toEqual([]);
@@ -409,15 +418,17 @@ describe("streamed chat answers", () => {
               // mounted answer must pick up the new plugin set, not keep the old.
               const restored = { ...settled, rehypePlugins: LATE_RESTORATION };
               await view.update(answer, restored);
-              expect(view.root.innerHTML).toBe(
-                await renderedHtml(answer, restored),
-              );
+              expect(
+                view.root.isEqualNode(await renderedTree(answer, restored)),
+              ).toBe(true);
               await view.unmount();
             }
             // Plugins a surface adds must never change what the base chain renders.
             expect(
-              await renderedHtml(answer, { rehypePlugins: ANON_PLUGINS }),
-            ).toBe(await renderedHtml(answer));
+              (
+                await renderedTree(answer, { rehypePlugins: ANON_PLUGINS })
+              ).isEqualNode(await renderedTree(answer)),
+            ).toBe(true);
           },
         ),
         { numRuns: 30 },

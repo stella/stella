@@ -276,7 +276,7 @@ export const DOC_SOURCES = {
   },
   OpenTelemetry: {
     dependencies: [
-      "@opentelemetry/api-logs",
+      "@opentelemetry/api",
       "@opentelemetry/exporter-logs-otlp-http",
       "@opentelemetry/resources",
       "@opentelemetry/sdk-logs",

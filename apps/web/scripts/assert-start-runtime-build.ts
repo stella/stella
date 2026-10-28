@@ -67,6 +67,13 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 2,
+    // @silurus/ooxml dynamically imports separate PPTX and XLSX inline-worker
+    // constructors alongside its external render-worker hosts.
+    label: "Office inline parser worker constructors",
+    pattern: "dist/client/assets/worker-source-????????-????????.js",
+  },
+  {
+    expectedCount: 2,
     label: "Office render workers",
     pattern: "dist/client/assets/render-worker-????????-????????.js",
   },
