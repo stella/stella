@@ -43,8 +43,7 @@ export const desktopKeyLiveness =
       .limit(1);
     const metadata = parseDesktopRegistryMetadata(key?.metadata);
     return (
-      key !== undefined &&
-      key.expiresAt === null &&
+      key?.expiresAt === null &&
       metadata.success &&
       metadata.output.deviceJkt === deviceJkt &&
       metadata.output.organizationId === organizationId &&
