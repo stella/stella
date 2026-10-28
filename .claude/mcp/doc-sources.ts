@@ -539,6 +539,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   ["katex", ["https://katex.org/llms.txt", "https://katex.org/docs/llms.txt"]],
   ["knip", ["https://knip.dev/llms.txt", "https://knip.dev/docs/llms.txt"]],
   [
+    "lightningcss",
+    [
+      "https://lightningcss.dev/llms.txt",
+      "https://raw.githubusercontent.com/parcel-bundler/lightningcss/HEAD/llms.txt",
+    ],
+  ],
+  [
     "nodemailer",
     ["https://nodemailer.com/llms.txt", "https://nodemailer.com/docs/llms.txt"],
   ],

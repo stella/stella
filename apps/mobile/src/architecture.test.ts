@@ -141,3 +141,22 @@ describe("the app's JavaScript engine", () => {
     },
   );
 });
+
+describe("the app's colours", () => {
+  /** Every bundled module but the generated theme, which is where colours live. */
+  const painted = appModules.filter((name) => name !== "ui-theme.gen.ts");
+
+  test("finds the theme that maps the web's colours", () => {
+    expect(painted).toContain("theme.ts");
+  });
+
+  // A colour written into the app would drift from @stll/ui; every colour
+  // comes from the web theme through ui-theme.gen.ts.
+  test.each(painted)("%s writes no colour of its own", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(
+      source.match(/["'`]#[\da-f]{3,8}["'`]|\b(?:rgba?|hsla?|oklch)\(/giu) ??
+        [],
+    ).toEqual([]);
+  });
+});
