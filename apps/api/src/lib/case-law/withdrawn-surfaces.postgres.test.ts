@@ -18,6 +18,7 @@ import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
   caseLawSources,
+  CHAT_RUN_REFERENCE_STATE_MAX_BYTES,
   chatMessageRevisions,
   chatMessages,
   chatMessageSearchDocuments,
@@ -62,7 +63,6 @@ import {
   MAX_RUN_BYTES,
   READ_PAGE_SIZE,
 } from "@/api/lib/chat/run-log";
-import { CHAT_RUN_REFERENCE_STATE_MAX_BYTES } from "@/api/lib/chat/run-log-reference-state";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
