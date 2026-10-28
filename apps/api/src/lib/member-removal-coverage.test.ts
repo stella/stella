@@ -30,6 +30,8 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "chat_messages.content",
   "chat_message_revisions.content",
   "chat_run_log_entries.chunk",
+  "desktop_runner_commands.payload",
+  "desktop_runner_events.message",
   "entity_versions.collaboration_contributor_user_ids",
   "fields.content",
   "flow_run_steps.output",
@@ -101,6 +103,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "correspondence_filers.filed_by_display",
   "database_backfill_states.batch",
   "desktop_edit_handoffs.linked_account",
+  // Harness reports: ids, states, versions and models.
+  "desktop_runners.harnesses",
   "desktop_time_entry_batches.result",
   "desktop_edit_sessions.checkpoint_scan_warnings",
   "document_review_findings.payload",
@@ -457,6 +461,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Conversation history; tool payloads name members as they were.",
   "chat_run_log_entries.chunk":
     "Run log history; tool payloads name members as they were.",
+  "desktop_runner_commands.payload":
+    "Commands of the member's own runs, deleted with their runner on organization removal; transcripts name members as they were.",
+  "desktop_runner_events.message":
+    "Messages of the member's own runs, deleted with their runner on organization removal; tool payloads name members as they were.",
   "fields.content":
     "A person property value; it names someone and grants nothing.",
   "flow_run_steps.output": "Review gate decision attribution history.",
@@ -495,6 +503,10 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":
     "Organization-scoped presence; the person stays an organization member.",
+  "desktop_runners.user_id":
+    "Organization-scoped runner; the person stays an organization member.",
+  "desktop_runner_runs.user_id":
+    "Runs of an organization-scoped runner; each MCP call intersects the run's matters with current matter access.",
   "search_history_entries.user_id":
     "The person's own organization-scoped search history; they stay an organization member.",
   "search_history_owners.user_id":

@@ -26,6 +26,8 @@ import {
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopRunnerRuns,
+  desktopRunners,
   entities,
   flowDefinitions,
   flowRuns,
@@ -1419,13 +1421,37 @@ type ClearMemberPresenceOptions = Pick<
   "tx" | "organizationId" | "userId" | "memberId"
 > & { recordAuditEvent: AuditRecorder };
 
-const clearMemberPresence = async ({
+/**
+ * The member's desktop runners, on the owner connection the runner tables
+ * admit; their runs, queued commands and events cascade, and an open runner
+ * socket closes on its next heartbeat.
+ */
+const clearMemberDesktopRunners = async ({
   tx,
   organizationId,
   userId,
   memberId,
   recordAuditEvent,
 }: ClearMemberPresenceOptions) => {
+  await tx
+    .delete(desktopRunners)
+    .where(
+      and(
+        eq(desktopRunners.organizationId, organizationId),
+        eq(desktopRunners.userId, userId),
+      ),
+    );
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-desktop-runners-cleared", memberId, userId },
+  });
+};
+
+const clearMemberPresence = async (options: ClearMemberPresenceOptions) => {
+  const { tx, organizationId, userId, memberId, recordAuditEvent } = options;
+  await clearMemberDesktopRunners(options);
   await runScopedWorkInTransaction({
     tx,
     organizationId,
@@ -1671,6 +1697,10 @@ export type MemberCleanupDisposition =
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
+  // Removal deletes the member's runners; their runs, queued commands and
+  // events cascade, and an open runner socket closes on its next heartbeat.
+  [desktopRunners.userId, "cleared"],
+  [desktopRunnerRuns.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],

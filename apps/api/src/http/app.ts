@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { BunRequest } from "bun";
+import type { BunRequest, WebSocketHandler } from "bun";
 
 import { createResponseSet } from "@/api/http/context";
 import type { HttpServer, RequestContext } from "@/api/http/context";
@@ -14,6 +14,8 @@ import type {
   RouteEntry,
 } from "@/api/http/route";
 import { HttpStatusResponse, unwrapStatus } from "@/api/http/status";
+import { apiWebSocketHandler } from "@/api/http/websocket";
+import type { ApiSocketData } from "@/api/http/websocket";
 
 export type HttpAppOptions = {
   readonly routes: readonly RouteEntry[];
@@ -146,6 +148,8 @@ export type HttpApp = {
     readonly routes: Readonly<Record<string, BunRouteHandler>>;
     readonly fetch: (request: Request, server: HttpServer) => Promise<Response>;
     readonly idleTimeout: number;
+    /** Hands every upgraded socket's events to the session it carries. */
+    readonly websocket: WebSocketHandler<ApiSocketData>;
   };
 };
 
@@ -253,6 +257,7 @@ export const createHttpApp = ({
       fetch: async (request, server) =>
         await handle(request, server, undefined, {}),
       idleTimeout: HTTP_IDLE_TIMEOUT_S,
+      websocket: apiWebSocketHandler,
     },
   };
 };

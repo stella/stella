@@ -183,6 +183,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/desktop/matter-candidates": "crud",
   "GET /v1/desktop/matters": "crud",
   "GET /v1/desktop/presence": "crud",
+  "GET /v1/desktop/runner": "stream",
   "GET /v1/dev/public-law-connection": "crud",
   "GET /v1/dev/seed": "crud",
   "GET /v1/dev/seed-firm-knowledge": "crud",

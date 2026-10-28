@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 10,
+  "reason": "The desktop runner store's writes are socket and queue bookkeeping: which socket holds an installation, run leases and states the desktop reports, queued commands and acknowledged run messages. Each write function carries one directive; the work a run does is audited by the caller that starts it."
+}

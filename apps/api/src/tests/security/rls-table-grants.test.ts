@@ -235,6 +235,12 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_delegation",
   "agent_assertion_replay",
   "desktop_device_proof_replays",
+  // Desktop runner sockets, runs, commands and events: the gateway serves
+  // sockets and sweeps leases across organizations on the owner connection.
+  "desktop_runners",
+  "desktop_runner_runs",
+  "desktop_runner_commands",
+  "desktop_runner_events",
   // Better Auth OAuth control-plane state. Request-role access would expose
   // resource policy or let tenant traffic change token authorization rules.
   "oauth_resource",

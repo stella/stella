@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The desktop runner contract reads TanStack's AG-UI event vocabulary, so @stll/api-contract declares @tanstack/ai from the shared catalog; the API checks each run event against the AG-UI event schemas before storing it and declares @ag-ui/core at the version @stll/chat already pins. No new package resolves."
+}

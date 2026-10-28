@@ -29,6 +29,14 @@ export const TABLE_RETENTION = {
     boundedBy:
       "One observation per account, organization and installation, overwritten by heartbeats and cascade-deleted with the account or organization.",
   },
+  desktop_runners: {
+    boundedBy:
+      "One runner per account, organization and installation, overwritten by each socket and cascade-deleted with the account, the organization or the membership.",
+  },
+  desktop_runner_runs: {
+    boundedBy:
+      "Runs assigned to one runner, cascade-deleted with it; their commands and events cascade with the run.",
+  },
   task_assignees: {
     boundedBy:
       "Unique task and user assignments, cascade-deleted with either parent.",

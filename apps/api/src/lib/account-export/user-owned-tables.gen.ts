@@ -36,6 +36,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "desktop_edit_handoffs",
   "desktop_edit_sessions",
   "desktop_presence",
+  "desktop_runners",
   "desktop_time_entry_batches",
   "document_processing_runs",
   "document_review_findings",
