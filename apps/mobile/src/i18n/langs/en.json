@@ -213,6 +213,13 @@
     "failed": "The camera could not save the scan. Try again."
   },
   "shortcuts": {
-    "search": "Search"
+    "search": "Search",
+    "palette": "Command palette",
+    "next": "Next result",
+    "previous": "Previous result"
+  },
+  "palette": {
+    "placeholder": "Search matters and chats, or run a command",
+    "noResults": "Nothing matches “{query}”"
   }
 }

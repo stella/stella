@@ -213,6 +213,13 @@
     "failed": "L’appareil photo n’a pas pu enregistrer la numérisation. Réessayez."
   },
   "shortcuts": {
-    "search": "Rechercher"
+    "search": "Rechercher",
+    "palette": "Palette de commandes",
+    "next": "Résultat suivant",
+    "previous": "Résultat précédent"
+  },
+  "palette": {
+    "placeholder": "Rechercher des dossiers et des conversations, ou lancer une commande",
+    "noResults": "Aucun résultat pour « {query} »"
   }
 }

@@ -213,6 +213,13 @@
     "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut."
   },
   "shortcuts": {
-    "search": "Suchen"
+    "search": "Suchen",
+    "palette": "Befehlspalette",
+    "next": "Nächstes Ergebnis",
+    "previous": "Vorheriges Ergebnis"
+  },
+  "palette": {
+    "placeholder": "Akten und Chats suchen oder einen Befehl ausführen",
+    "noResults": "Nichts passt zu „{query}“"
   }
 }

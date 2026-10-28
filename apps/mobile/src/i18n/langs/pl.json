@@ -213,6 +213,13 @@
     "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
   },
   "shortcuts": {
-    "search": "Szukaj"
+    "search": "Szukaj",
+    "palette": "Paleta poleceń",
+    "next": "Następny wynik",
+    "previous": "Poprzedni wynik"
+  },
+  "palette": {
+    "placeholder": "Szukaj spraw i rozmów lub uruchom polecenie",
+    "noResults": "Nic nie pasuje do „{query}”"
   }
 }

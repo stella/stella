@@ -66,6 +66,27 @@ final class KeyCommandsView: ExpoView {
     NotificationCenter.default.removeObserver(self)
   }
 
+  /// The keys a command names in words, as UIKit spells them.
+  private static let specialInputs = [
+    "escape": UIKeyCommand.inputEscape,
+    "up": UIKeyCommand.inputUpArrow,
+    "down": UIKeyCommand.inputDownArrow,
+  ]
+
+  /// While a text field is composing, as a Japanese or Chinese keyboard does
+  /// before a word is chosen, the arrows and Escape belong to the field.
+  override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+    if action == #selector(runShortcut(_:)),
+      let command = sender as? UIKeyCommand,
+      !command.modifierFlags.contains(.command),
+      let field = window?.findFirstResponder() as? UITextInput,
+      field.markedTextRange != nil
+    {
+      return false
+    }
+    return super.canPerformAction(action, withSender: sender)
+  }
+
   func setCommands(_ commands: [[String: Any]]) {
     shortcuts = commands.compactMap { command in
       guard let id = command["id"] as? String,
@@ -83,7 +104,7 @@ final class KeyCommandsView: ExpoView {
         }
       }
       return Shortcut(
-        id: id, input: input == "escape" ? UIKeyCommand.inputEscape : input,
+        id: id, input: Self.specialInputs[input] ?? input,
         modifiers: modifiers, title: title)
     }
     takeFocusIfFree()

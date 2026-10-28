@@ -213,6 +213,13 @@
     "failed": "Kaamera ei saanud skanni salvestada. Proovige uuesti."
   },
   "shortcuts": {
-    "search": "Otsi"
+    "search": "Otsi",
+    "palette": "Käsupalett",
+    "next": "Järgmine tulemus",
+    "previous": "Eelmine tulemus"
+  },
+  "palette": {
+    "placeholder": "Otsi asju ja vestlusi või käivita käsk",
+    "noResults": "Päringule „{query}” ei vasta midagi"
   }
 }

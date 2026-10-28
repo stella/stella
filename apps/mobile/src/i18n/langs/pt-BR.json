@@ -213,6 +213,13 @@
     "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
   },
   "shortcuts": {
-    "search": "Pesquisar"
+    "search": "Pesquisar",
+    "palette": "Paleta de comandos",
+    "next": "Próximo resultado",
+    "previous": "Resultado anterior"
+  },
+  "palette": {
+    "placeholder": "Pesquise casos e conversas ou execute um comando",
+    "noResults": "Nada corresponde a “{query}”"
   }
 }

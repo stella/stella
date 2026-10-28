@@ -213,6 +213,13 @@
     "failed": "A kamera nem tudta menteni a szkennelést. Próbálja újra."
   },
   "shortcuts": {
-    "search": "Keresés"
+    "search": "Keresés",
+    "palette": "Parancspaletta",
+    "next": "Következő találat",
+    "previous": "Előző találat"
+  },
+  "palette": {
+    "placeholder": "Ügyek és beszélgetések keresése, vagy parancs futtatása",
+    "noResults": "Semmi sem felel meg ennek: „{query}”"
   }
 }

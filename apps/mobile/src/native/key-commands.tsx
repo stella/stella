@@ -5,7 +5,7 @@ import type { NativeSyntheticEvent, ViewProps } from "react-native";
 /** A hardware keyboard shortcut, named for the iPad's ⌘ overlay. */
 export type KeyCommand = {
   readonly id: string;
-  /** A key, or "escape". */
+  /** A key, or "escape", "up" or "down". */
   readonly input: string;
   readonly modifiers: readonly ("command" | "control" | "option" | "shift")[];
   readonly title: string;

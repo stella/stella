@@ -91,10 +91,10 @@ const Screens = () => {
               headerTransparent: true,
               // The system's own search button, which opens straight into the
               // field, as t3code's search does; the bar's trailing edge holds it.
-              headerSearchBarOptions:
-                tab === "more"
-                  ? undefined
-                  : {
+              ...(tab === "more"
+                ? {}
+                : {
+                    headerSearchBarOptions: {
                       allowToolbarIntegration: false,
                       autoCapitalize: "none",
                       hideWhenScrolling: false,
@@ -111,6 +111,7 @@ const Screens = () => {
                       placement: "integratedButton",
                       ref: searchBar,
                     },
+                  }),
               title: "",
               unstable_headerLeftItems: () =>
                 accountGlyph === null
@@ -150,6 +151,15 @@ const Screens = () => {
             }}
           />
           <Stack.Screen name="thread/[threadId]" />
+          <Stack.Screen
+            name="palette"
+            options={{
+              contentStyle: { backgroundColor: colors.background },
+              presentation: "formSheet",
+              sheetAllowedDetents: [0.75, 1],
+              sheetGrabberVisible: true,
+            }}
+          />
           <Stack.Screen
             name="matter/new"
             options={{
@@ -227,8 +237,9 @@ const TAB_ROUTES: ReadonlyMap<string, Href> = new Map([
 
 /**
  * A hardware keyboard's shortcuts, as t3code gives an iPad: ⌘N for the
- * open tab's "+", ⌘F to search it, ⌘1 to ⌘4 for the tabs, ⌘, for the
- * settings and Escape to close what is open over them.
+ * open tab's "+", ⌘F to search it, ⌘K for the command palette, ⌘1 to ⌘4
+ * for the tabs, ⌘, for the settings and Escape to close what is open over
+ * them.
  */
 function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
   commands: readonly KeyCommand[];
@@ -254,6 +265,7 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
           },
         ]),
     { id: "search", input: "f", modifiers: ["command"], title: t("search") },
+    { id: "palette", input: "k", modifiers: ["command"], title: t("palette") },
     { id: "tab.chat", input: "1", modifiers: ["command"], title: tabs("chat") },
     {
       id: "tab.tasks",
@@ -282,6 +294,8 @@ function useShortcuts(tabItems: readonly NativeStackHeaderItem[]): {
       primary?.onPress();
     } else if (id === "search") {
       searchBar.current?.focus();
+    } else if (id === "palette") {
+      router.push("/palette");
     } else if (id === "settings") {
       router.push("/settings");
     } else if (id === "close") {

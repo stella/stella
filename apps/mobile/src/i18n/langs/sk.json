@@ -213,6 +213,13 @@
     "failed": "Fotoaparát sken neuložil. Skúste to znova."
   },
   "shortcuts": {
-    "search": "Hľadať"
+    "search": "Hľadať",
+    "palette": "Paleta príkazov",
+    "next": "Ďalší výsledok",
+    "previous": "Predchádzajúci výsledok"
+  },
+  "palette": {
+    "placeholder": "Hľadajte spisy a konverzácie alebo spustite príkaz",
+    "noResults": "Nič nezodpovedá „{query}“"
   }
 }

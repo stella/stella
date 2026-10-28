@@ -213,6 +213,13 @@
     "failed": "Kamera negalėjo išsaugoti skenavimo. Bandykite dar kartą."
   },
   "shortcuts": {
-    "search": "Ieškoti"
+    "search": "Ieškoti",
+    "palette": "Komandų paletė",
+    "next": "Kitas rezultatas",
+    "previous": "Ankstesnis rezultatas"
+  },
+  "palette": {
+    "placeholder": "Ieškokite bylų ir pokalbių arba paleiskite komandą",
+    "noResults": "Niekas neatitinka „{query}“"
   }
 }

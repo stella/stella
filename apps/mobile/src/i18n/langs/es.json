@@ -213,6 +213,13 @@
     "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo."
   },
   "shortcuts": {
-    "search": "Buscar"
+    "search": "Buscar",
+    "palette": "Paleta de comandos",
+    "next": "Resultado siguiente",
+    "previous": "Resultado anterior"
+  },
+  "palette": {
+    "placeholder": "Busca asuntos y conversaciones, o ejecuta un comando",
+    "noResults": "Nada coincide con «{query}»"
   }
 }

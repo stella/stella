@@ -213,6 +213,13 @@
     "failed": "Kamera nevarēja saglabāt skenējumu. Mēģiniet vēlreiz."
   },
   "shortcuts": {
-    "search": "Meklēt"
+    "search": "Meklēt",
+    "palette": "Komandu palete",
+    "next": "Nākamais rezultāts",
+    "previous": "Iepriekšējais rezultāts"
+  },
+  "palette": {
+    "placeholder": "Meklējiet lietas un sarunas vai izpildiet komandu",
+    "noResults": "Nekas neatbilst “{query}”"
   }
 }

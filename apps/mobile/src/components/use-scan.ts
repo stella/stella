@@ -8,9 +8,13 @@ import { scanDocument } from "@/native/document-scanner";
 /**
  * Opens the document camera and, once pages are saved, the sheet that
  * uploads them, into `matterId` when the scan began inside a matter. Closing
- * the camera without saving does nothing.
+ * the camera without saving does nothing. `replacing` puts the sheet in
+ * place of the screen the scan began on, as the command palette asks.
  */
-export const useScan = (matterId?: string): (() => void) => {
+export const useScan = (
+  matterId?: string,
+  { replacing = false }: { replacing?: boolean } = {},
+): (() => void) => {
   const t = useTranslations("scan");
   const router = useRouter();
 
@@ -24,7 +28,7 @@ export const useScan = (matterId?: string): (() => void) => {
       if (scanned.value === null) {
         return;
       }
-      router.push({
+      const sheet = {
         pathname: "/scan",
         params: {
           pageCount: String(scanned.value.pageCount),
@@ -33,7 +37,12 @@ export const useScan = (matterId?: string): (() => void) => {
           uri: scanned.value.uri,
           ...(matterId === undefined ? {} : { matterId }),
         },
-      });
+      } as const;
+      if (replacing) {
+        router.replace(sheet);
+      } else {
+        router.push(sheet);
+      }
     })();
   };
 };
