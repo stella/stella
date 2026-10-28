@@ -949,7 +949,7 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
   ).toBeTruthy();
 });
 
-test("reader breadcrumb allocates narrow width to the current number before outer titles", async () => {
+test("reader breadcrumb gives outer levels to the menu before the current title, and keeps every level reachable", async () => {
   const originalObserver = globalThis.ResizeObserver;
   const callbacks: (() => void)[] = [];
   globalThis.ResizeObserver = class {
@@ -960,58 +960,94 @@ test("reader breadcrumb allocates narrow width to the current number before oute
     unobserve() {}
     disconnect() {}
   };
+  const current = path.at(-1) ?? panic("The fixture needs a current heading");
+  // Outer levels are labels alone (84px); the current heading is "§ 5"
+  // (28px) and, with its title, 160px. Each crumb adds 16px of padding.
+  const measured = (part: "label" | "full", anchorId: string) => {
+    if (anchorId !== current.anchorId) {
+      return 84;
+    }
+    return part === "label" ? 28 : 160;
+  };
+  const resizeTo = async (width: number) => {
+    const navigation = screen.getByRole("navigation");
+    Object.defineProperty(navigation, "clientWidth", {
+      value: width,
+      configurable: true,
+    });
+    const stub = (part: "label" | "full") => {
+      for (const element of navigation.querySelectorAll<HTMLElement>(
+        `[data-breadcrumb-${part}]`,
+      )) {
+        const anchorId = element.getAttribute(`data-breadcrumb-${part}`) ?? "";
+        element.getBoundingClientRect = () =>
+          new DOMRect(0, 0, measured(part, anchorId), 16);
+      }
+    };
+    stub("label");
+    stub("full");
+    await act(async () => {
+      for (const resize of callbacks) {
+        resize();
+      }
+    });
+  };
+  const currentCrumb = () =>
+    screen.getByRole("button", { name: /Contents: § 5/u });
   try {
     mount(() => {});
     const navigation = screen.getByRole("navigation");
-    Object.defineProperty(navigation, "clientWidth", {
-      value: 218,
-      configurable: true,
-    });
-    for (const label of navigation.querySelectorAll(
-      "[data-breadcrumb-measure]",
-    )) {
-      label.getBoundingClientRect = () => new DOMRect(0, 0, 84, 16);
-    }
-    const number = navigation.querySelector("[data-breadcrumb-number-measure]");
-    if (number === null) {
-      throw new Error("Number measurement not rendered");
-    }
-    number.getBoundingClientRect = () => new DOMRect(0, 0, 28, 16);
-    await act(async () => {
-      for (const resize of callbacks) {
-        resize();
-      }
-    });
+
+    await resizeTo(600);
     expect(screen.getByRole("button", { name: "Část druhá" }).style.width).toBe(
-      "16px",
+      "100px",
     );
     expect(screen.getByRole("button", { name: "Díl 1" }).style.width).toBe(
-      "16px",
+      "100px",
     );
-    const current = screen.getByRole("button", { name: /Contents: § 5/u });
-    expect(current.style.width).toBe("94px");
-    expect(current.querySelector("bdi")?.textContent).toBe("§ 5");
-    expect(current.querySelector("bdi")?.classList.contains("shrink-0")).toBe(
-      true,
+    expect(currentCrumb().style.width).toBe("176px");
+    expect(
+      [...currentCrumb().querySelectorAll("bdi")].map(
+        (part) => part.textContent,
+      ),
+    ).toEqual(["§ 5", "Žádost o poskytnutí přímé platby"]);
+
+    // The current title keeps a readable part; the outermost level folds.
+    await resizeTo(300);
+    expect(screen.queryByRole("button", { name: "Část druhá" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Díl 1" }).style.width).toBe(
+      "100px",
     );
+    expect(currentCrumb().style.width).toBe("124px");
+    expect(currentCrumb().querySelectorAll("bdi")).toHaveLength(2);
+    // The menu stands where the folded levels were, and lists them in order.
+    const more = screen.getByRole("button", { name: messages.common.showMore });
+    expect(navigation.querySelector("ol > li")?.contains(more)).toBe(true);
+    await act(async () => fireEvent.click(more));
+    expect(
+      within(screen.getByRole("dialog", { name: messages.common.showMore }))
+        .getAllByRole("button")
+        .map((entry) => entry.getAttribute("aria-label")),
+    ).toEqual(["Část druhá", "Hlava I", "Oddíl A"]);
+    await act(async () =>
+      fireEvent.keyDown(
+        screen.getByRole("dialog", { name: messages.common.showMore }),
+        { key: "Escape" },
+      ),
+    );
+
+    // Only the current label is left, and it is never folded.
+    await resizeTo(120);
+    expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
+    expect(currentCrumb().style.width).toBe("44px");
+    expect(
+      [...currentCrumb().querySelectorAll("bdi")].map(
+        (part) => part.textContent,
+      ),
+    ).toEqual(["§ 5"]);
     expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
       path.map(({ title }) => title).join(" › "),
     );
-    Object.defineProperty(navigation, "clientWidth", {
-      value: 60,
-      configurable: true,
-    });
-    await act(async () => {
-      for (const resize of callbacks) {
-        resize();
-      }
-    });
-    expect(screen.queryByRole("button", { name: "Část druhá" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /Contents: § 5/u }).style.width,
-    ).toBe("60px");
   } finally {
     cleanup();
     globalThis.ResizeObserver = originalObserver;

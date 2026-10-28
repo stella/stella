@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
@@ -16,7 +16,12 @@ import { cn } from "@stll/ui/utils";
 import {
   compactReaderPath,
   fitReaderPath,
-  readerProvisionNumber,
+  fitWidth,
+  splitReaderHeading,
+} from "./reader-breadcrumb.logic";
+import type {
+  ReaderBreadcrumbSegment,
+  ReaderHeadingParts,
 } from "./reader-breadcrumb.logic";
 import type { ReaderContentsRow, ReaderTrail } from "./reader-contents.logic";
 
@@ -174,6 +179,104 @@ const ReaderContentsList = ({
   );
 };
 
+/** A crumb's button padding and border, which its measured text leaves out. */
+const CRUMB_PADDING_WIDTH = 16;
+const SEPARATOR_WIDTH = 16;
+const MENU_WIDTH = 44;
+/** Under about a dozen characters a title says nothing worth its width. */
+const MINIMUM_TITLE_WIDTH = 80;
+const MAXIMUM_ANCESTOR_LABEL_WIDTH = 160;
+
+/**
+ * A crumb's text: its label, which is cut only when it stands alone, then its
+ * title, which gives way first.
+ */
+const CrumbText = ({
+  parts,
+  withTitle,
+}: {
+  parts: ReaderHeadingParts;
+  withTitle: boolean;
+}) => {
+  const title = withTitle ? parts.title : null;
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <bdi className={cn(title === null ? "min-w-0 truncate" : "shrink-0")}>
+        {parts.label}
+      </bdi>
+      {title !== null && (
+        <bdi className="min-w-0 truncate font-normal">{title}</bdi>
+      )}
+    </span>
+  );
+};
+
+type TrailMenuProps = {
+  /** Every outer level not on the bar, in document order. */
+  entries: readonly ReaderBreadcrumbSegment[];
+  nameOf: (title: string) => string;
+  onJump: (anchorId: string) => void;
+};
+
+/** The "…" that lists the levels the bar leaves out. */
+const TrailMenu = ({ entries, nameOf, onJump }: TrailMenuProps) => {
+  const t = useTranslations();
+  const [middle, setMiddle] = useState<MiddleState>(MIDDLE_STATE.closed);
+
+  return (
+    <Popover
+      open={middle !== MIDDLE_STATE.closed}
+      onOpenChange={(open, { reason }) =>
+        setMiddle(middleAfterChange(open, reason))
+      }
+    >
+      <PopoverTrigger
+        aria-label={t("common.showMore")}
+        onMouseEnter={() => setMiddle(middleAfterHover)}
+        render={
+          <Button
+            className="size-11 shrink-0"
+            tooltip={t("common.showMore")}
+            variant="ghost"
+          />
+        }
+      >
+        …
+      </PopoverTrigger>
+      <PopoverPopup
+        align="start"
+        aria-label={t("common.showMore")}
+        className="w-80 max-w-[calc(100vw-2rem)]"
+        initialFocus={middle !== MIDDLE_STATE.hovered}
+        padding="sm"
+      >
+        <ScrollArea axis="vertical" className="max-h-72">
+          <ol>
+            {entries.map(({ anchorId, title }) => (
+              <li key={anchorId}>
+                <Button
+                  aria-label={nameOf(title)}
+                  className="min-h-11 w-full justify-start text-start whitespace-normal"
+                  // As in Contents: the row shows its title, and a tooltip
+                  // would take the list's Escape.
+                  tooltip={false}
+                  onClick={() => {
+                    onJump(anchorId);
+                    setMiddle(MIDDLE_STATE.closed);
+                  }}
+                  variant="ghost"
+                >
+                  <bdi>{title}</bdi>
+                </Button>
+              </li>
+            ))}
+          </ol>
+        </ScrollArea>
+      </PopoverPopup>
+    </Popover>
+  );
+};
+
 export const ReaderBreadcrumb = ({
   trail,
   rows,
@@ -197,11 +300,13 @@ export const ReaderBreadcrumb = ({
   const { visible, hidden } = compactReaderPath(path);
   const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
-  const [middle, setMiddle] = useState<MiddleState>(MIDDLE_STATE.closed);
   const current = path.at(-1);
-  const currentNumber = readerProvisionNumber(current?.title ?? "");
-  const currentWidth =
-    current === undefined ? undefined : layout?.widths.at(-1);
+  const ancestors = visible.slice(0, -1);
+  const fitOf = (index: number) => layout?.fits[index];
+  const widthOf = (index: number) => {
+    const fit = fitOf(index);
+    return fit === undefined || fit.type === "folded" ? undefined : fit.width;
+  };
   const measure = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
@@ -210,37 +315,36 @@ export const ReaderBreadcrumb = ({
       if (node.clientWidth === 0) {
         return;
       }
-      const labels = compactReaderPath(path).visible.flatMap(({ anchorId }) => {
-        const label = node.querySelector<HTMLElement>(
-          `[data-breadcrumb-measure="${CSS.escape(anchorId)}"]`,
-        );
-        return label === null ? [] : [label];
-      });
-      const number = node.querySelector<HTMLElement>(
-        "[data-breadcrumb-number-measure]",
-      );
-      const naturalWidths = labels.map(
-        (label) => label.getBoundingClientRect().width + 16,
-      );
-      const minimumWidths = labels.map((_, index) =>
-        index === labels.length - 1
-          ? Math.max(44, (number?.getBoundingClientRect().width ?? 0) + 16)
-          : 16,
-      );
+      const widthOfMeasure = (part: "label" | "full", anchorId: string) =>
+        (node
+          .querySelector<HTMLElement>(
+            `[data-breadcrumb-${part}="${CSS.escape(anchorId)}"]`,
+          )
+          ?.getBoundingClientRect().width ?? 0) + CRUMB_PADDING_WIDTH;
+      const crumbs = compactReaderPath(path).visible.map(({ anchorId }) => ({
+        label: widthOfMeasure("label", anchorId),
+        full: widthOfMeasure("full", anchorId),
+      }));
       // The AI mark beside an analysis trail keeps its own width.
       const mark = node.querySelector<HTMLElement>("[data-breadcrumb-ai-mark]");
       const fitted = fitReaderPath({
         available:
           node.clientWidth - (mark?.getBoundingClientRect().width ?? 0),
-        separatorWidth: 16,
-        middleWidth: hidden.length === 0 ? 0 : 60,
-        naturalWidths,
-        minimumWidths,
+        crumbs,
+        hiddenCount: compactReaderPath(path).hidden.length,
+        separatorWidth: SEPARATOR_WIDTH,
+        menuWidth: MENU_WIDTH,
+        minimumTitleWidth: MINIMUM_TITLE_WIDTH,
+        maximumAncestorLabelWidth: MAXIMUM_ANCESTOR_LABEL_WIDTH,
       });
       setLayout((previous) =>
-        previous?.showMiddle === fitted.showMiddle &&
-        previous.widths.length === fitted.widths.length &&
-        previous.widths.every((width, index) => width === fitted.widths[index])
+        previous?.showMenu === fitted.showMenu &&
+        previous.fits.length === fitted.fits.length &&
+        previous.fits.every(
+          (fit, index) =>
+            fit.type === fitted.fits[index]?.type &&
+            fitWidth(fit) === fitWidth(fitted.fits[index]),
+        )
           ? previous
           : fitted,
       );
@@ -248,35 +352,26 @@ export const ReaderBreadcrumb = ({
     const observer = new ResizeObserver(update);
     observer.observe(node);
     for (const label of node.querySelectorAll<HTMLElement>(
-      "[data-breadcrumb-measure]",
+      "[data-breadcrumb-label], [data-breadcrumb-full]",
     )) {
       observer.observe(label);
     }
     update();
     return () => observer.disconnect();
   };
-  const hiddenEntries = (close: () => void) => (
-    <ol>
-      {hidden.map(({ anchorId, title }) => (
-        <li key={anchorId}>
-          <Button
-            aria-label={nameOf(title)}
-            className="min-h-11 w-full justify-start text-start whitespace-normal"
-            // As in Contents: the row shows its title, and a tooltip would
-            // take the list's Escape.
-            tooltip={false}
-            onClick={() => {
-              onJump(anchorId);
-              close();
-            }}
-            variant="ghost"
-          >
-            <bdi>{title}</bdi>
-          </Button>
-        </li>
-      ))}
-    </ol>
-  );
+  // Every outer level not on the bar, in document order: the middle levels
+  // the trail always keeps off it, and any it folded for want of width.
+  const offBar = path
+    .slice(0, -1)
+    .filter(
+      ({ anchorId }) =>
+        hidden.some((segment) => segment.anchorId === anchorId) ||
+        ancestors.some(
+          (segment, index) =>
+            segment.anchorId === anchorId && fitOf(index)?.type === "folded",
+        ),
+    );
+  const showMenu = layout?.showMenu ?? hidden.length > 0;
   const contentsControl = ({
     label,
     title,
@@ -295,7 +390,7 @@ export const ReaderBreadcrumb = ({
         }
         render={
           <Button
-            className="h-11 min-w-0 sm:h-11"
+            className="h-11 min-w-0 justify-start sm:h-11"
             size="xs"
             style={{ width }}
             variant="ghost"
@@ -324,6 +419,32 @@ export const ReaderBreadcrumb = ({
       </PopoverPopup>
     </Popover>
   );
+  // The bar's items in order. Folding takes outer levels outermost first, so
+  // the menu stands where the levels it lists would: after the outermost
+  // level while that one is shown, at the start once it is folded too.
+  const shownAncestors = ancestors.flatMap((segment, index) =>
+    fitOf(index)?.type === "folded" ? [] : [{ segment, index }],
+  );
+  const menuAt = fitOf(0)?.type === "folded" ? 0 : 1;
+  const items: (
+    | { type: "ancestor"; segment: ReaderBreadcrumbSegment; index: number }
+    | { type: "menu" }
+  )[] = shownAncestors.map(({ segment, index }) => ({
+    type: "ancestor",
+    segment,
+    index,
+  }));
+  if (showMenu) {
+    items.splice(Math.min(menuAt, items.length), 0, { type: "menu" });
+  }
+  const separator = (
+    <DirectionalIcon
+      aria-hidden="true"
+      className="size-4 shrink-0"
+      icon={ChevronRightIcon}
+    />
+  );
+  const currentFit = fitOf(visible.length - 1);
   return (
     <nav
       aria-label={t("statutes.outline")}
@@ -336,130 +457,68 @@ export const ReaderBreadcrumb = ({
       </span>
       <div
         aria-hidden="true"
-        className="pointer-events-none invisible absolute flex w-max text-sm whitespace-nowrap sm:text-xs"
+        className="pointer-events-none invisible absolute flex w-max text-sm font-medium whitespace-nowrap sm:text-xs"
       >
-        {visible.map(({ anchorId, title }) => (
-          <span data-breadcrumb-measure={anchorId} key={anchorId}>
-            {title}
-          </span>
-        ))}
-        <span data-breadcrumb-number-measure>
-          {readerProvisionNumber(current?.title ?? "")}
-        </span>
-      </div>
-      <ol className="flex h-11 min-w-0 items-center">
-        {visible.slice(0, -1).map((segment, index) => {
-          if (layout?.widths[index] === 0) {
-            return null;
-          }
+        {visible.map(({ anchorId, title }) => {
+          const parts = splitReaderHeading(title);
           return (
-            <li
-              className="flex min-w-0 shrink-0 items-center"
-              key={segment.anchorId}
-            >
-              {index > 0 &&
-                visible
-                  .slice(0, index)
-                  .some(
-                    (_, previousIndex) => layout?.widths[previousIndex] !== 0,
-                  ) && (
-                  <DirectionalIcon
-                    aria-hidden="true"
-                    className="size-4 shrink-0"
-                    icon={ChevronRightIcon}
-                  />
-                )}
-              <Button
-                aria-label={nameOf(segment.title)}
-                className="h-11 min-w-0 sm:h-11"
-                size="xs"
-                onClick={() => onJump(segment.anchorId)}
-                style={{ width: layout?.widths[index] }}
-                title={segment.title}
-                variant="ghost"
-              >
-                <bdi className="truncate">{segment.title}</bdi>
-              </Button>
-              {index === 0 &&
-                hidden.length > 0 &&
-                (layout?.showMiddle ?? true) && (
-                  <>
-                    <DirectionalIcon
-                      aria-hidden="true"
-                      className="size-4 shrink-0"
-                      icon={ChevronRightIcon}
-                    />
-                    <Popover
-                      open={middle !== MIDDLE_STATE.closed}
-                      onOpenChange={(open, { reason }) =>
-                        setMiddle(middleAfterChange(open, reason))
-                      }
-                    >
-                      <PopoverTrigger
-                        aria-label={t("common.showMore")}
-                        onMouseEnter={() => setMiddle(middleAfterHover)}
-                        render={
-                          <Button
-                            className="size-11 shrink-0"
-                            tooltip={t("common.showMore")}
-                            variant="ghost"
-                          />
-                        }
-                      >
-                        …
-                      </PopoverTrigger>
-                      <PopoverPopup
-                        align="start"
-                        aria-label={t("common.showMore")}
-                        className="w-80 max-w-[calc(100vw-2rem)]"
-                        initialFocus={middle !== MIDDLE_STATE.hovered}
-                        padding="sm"
-                      >
-                        <ScrollArea axis="vertical" className="max-h-72">
-                          {hiddenEntries(() => setMiddle(MIDDLE_STATE.closed))}
-                        </ScrollArea>
-                      </PopoverPopup>
-                    </Popover>
-                  </>
-                )}
-            </li>
+            <Fragment key={anchorId}>
+              <span data-breadcrumb-label={anchorId}>
+                <CrumbText parts={parts} withTitle={false} />
+              </span>
+              <span data-breadcrumb-full={anchorId}>
+                <CrumbText parts={parts} withTitle />
+              </span>
+            </Fragment>
           );
         })}
+      </div>
+      <ol className="flex h-11 min-w-0 items-center">
+        {items.map((item, position) => (
+          <li
+            className="flex min-w-0 shrink-0 items-center"
+            key={item.type === "menu" ? "menu" : item.segment.anchorId}
+          >
+            {position > 0 && separator}
+            {item.type === "menu" ? (
+              <TrailMenu entries={offBar} nameOf={nameOf} onJump={onJump} />
+            ) : (
+              <Button
+                aria-label={nameOf(item.segment.title)}
+                className="h-11 min-w-0 justify-start sm:h-11"
+                size="xs"
+                onClick={() => onJump(item.segment.anchorId)}
+                style={{ width: widthOf(item.index) }}
+                title={item.segment.title}
+                variant="ghost"
+              >
+                <CrumbText
+                  parts={splitReaderHeading(item.segment.title)}
+                  withTitle={fitOf(item.index)?.type !== "label"}
+                />
+              </Button>
+            )}
+          </li>
+        ))}
         {(current !== undefined || rows.length > 0) && (
           // Keep the Contents root and trigger mounted as scrolling changes
           // the path; Base UI associates an open popup with its trigger id.
           <li className="flex min-w-0 shrink-0 items-center">
-            {visible
-              .slice(0, -1)
-              .some((_, index) => layout?.widths[index] !== 0) && (
-              <DirectionalIcon
-                aria-hidden="true"
-                className="size-4 shrink-0"
-                icon={ChevronRightIcon}
-              />
-            )}
+            {items.length > 0 && separator}
             {contentsControl({
               label:
                 current === undefined ? (
                   t("statutes.outline")
                 ) : (
-                  <span className="flex min-w-0 items-center">
-                    <bdi
-                      className={cn(
-                        currentNumber === null ? "truncate" : "shrink-0",
-                      )}
-                    >
-                      {currentNumber ?? current.title}
-                    </bdi>
-                    {currentNumber !== null && (
-                      <bdi className="ms-1 truncate">
-                        {current.title.replace(currentNumber, "").trim()}
-                      </bdi>
-                    )}
-                  </span>
+                  <CrumbText
+                    parts={splitReaderHeading(current.title)}
+                    withTitle={currentFit?.type !== "label"}
+                  />
                 ),
               ...(current === undefined ? {} : { title: current.title }),
-              ...(currentWidth === undefined ? {} : { width: currentWidth }),
+              ...(current === undefined
+                ? {}
+                : { width: widthOf(visible.length - 1) }),
             })}
             {trail.type === "analysis" && current !== undefined && (
               // A control of its own, so it sits beside the trigger.
