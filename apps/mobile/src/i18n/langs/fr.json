@@ -67,7 +67,10 @@
       "week": "Cette semaine",
       "later": "Plus tard",
       "none": "Sans échéance"
-    }
+    },
+    "markDone": "Marquer comme terminée",
+    "reopen": "Rouvrir",
+    "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",

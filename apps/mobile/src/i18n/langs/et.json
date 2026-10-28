@@ -67,7 +67,10 @@
       "week": "Sel nädalal",
       "later": "Hiljem",
       "none": "Tähtajata"
-    }
+    },
+    "markDone": "Märgi tehtuks",
+    "reopen": "Ava uuesti",
+    "statusFailed": "Ülesannet ei õnnestunud muuta. Proovige uuesti."
   },
   "matters": {
     "emptyTitle": "Toimikuid veel pole",

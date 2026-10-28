@@ -67,7 +67,10 @@
       "week": "W tym tygodniu",
       "later": "Później",
       "none": "Bez terminu"
-    }
+    },
+    "markDone": "Oznacz jako wykonane",
+    "reopen": "Otwórz ponownie",
+    "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",

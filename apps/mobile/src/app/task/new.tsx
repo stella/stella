@@ -50,7 +50,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
   const ui = useUiColors();
   const router = useRouter();
   const { end } = useSession();
-  const { taskAdded } = useTasksView();
+  const { tasksChanged } = useTasksView();
   const timeZone = useTimeZone() ?? "UTC";
   const params = useLocalSearchParams<{ matterId?: string }>();
   const [name, setName] = useState("");
@@ -85,7 +85,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
-        taskAdded();
+        tasksChanged();
         router.back();
         return;
       }

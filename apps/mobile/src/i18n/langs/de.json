@@ -67,7 +67,10 @@
       "week": "Diese Woche",
       "later": "Später",
       "none": "Ohne Fälligkeit"
-    }
+    },
+    "markDone": "Als erledigt markieren",
+    "reopen": "Wieder öffnen",
+    "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",

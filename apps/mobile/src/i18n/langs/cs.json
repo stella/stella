@@ -67,7 +67,10 @@
       "week": "Tento týden",
       "later": "Později",
       "none": "Bez termínu"
-    }
+    },
+    "markDone": "Označit jako hotové",
+    "reopen": "Znovu otevřít",
+    "statusFailed": "Úkol se nepodařilo změnit. Zkuste to znovu."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",

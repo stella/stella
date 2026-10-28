@@ -67,7 +67,10 @@
       "week": "Šonedēļ",
       "later": "Vēlāk",
       "none": "Bez termiņa"
-    }
+    },
+    "markDone": "Atzīmēt kā izpildītu",
+    "reopen": "Atvērt atkārtoti",
+    "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",

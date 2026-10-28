@@ -67,7 +67,10 @@
       "week": "Esta semana",
       "later": "Mais tarde",
       "none": "Sem prazo"
-    }
+    },
+    "markDone": "Marcar como concluída",
+    "reopen": "Reabrir",
+    "statusFailed": "Não foi possível alterar a tarefa. Tente novamente."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",

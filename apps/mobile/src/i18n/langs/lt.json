@@ -67,7 +67,10 @@
       "week": "Šią savaitę",
       "later": "Vėliau",
       "none": "Be termino"
-    }
+    },
+    "markDone": "Pažymėti kaip atliktą",
+    "reopen": "Atidaryti iš naujo",
+    "statusFailed": "Nepavyko pakeisti užduoties. Bandykite dar kartą."
   },
   "matters": {
     "emptyTitle": "Bylų dar nėra",

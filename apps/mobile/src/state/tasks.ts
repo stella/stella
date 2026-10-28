@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
 
+import type { TaskStatus } from "@stll/api-contract/entity-options";
+
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
@@ -82,6 +84,62 @@ export const createTask = async ({
       }),
     );
     return Result.ok(entityId);
+  });
+
+const taskDetailSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+  status: v.nullish(v.string()),
+  dueDate: v.nullish(v.string()),
+});
+
+export type TaskDetail = v.InferOutput<typeof taskDetailSchema>;
+
+/** One task's status and due date, as its sheet shows them. */
+export const readTask = async ({
+  fetch,
+  matterId,
+  source,
+  taskId,
+}: {
+  readonly fetch: Fetch;
+  readonly matterId: string;
+  readonly source: AccessTokenSource;
+  readonly taskId: string;
+}): Promise<Result<TaskDetail, ApiError>> =>
+  await requestApi({
+    fetch,
+    path: `${MY_TASKS_PATH}/${encodeURIComponent(matterId)}/${encodeURIComponent(taskId)}`,
+    schema: taskDetailSchema,
+    source,
+  });
+
+/** Moves a task to `status`, such as done, or open again. */
+export const setTaskStatus = async ({
+  fetch,
+  matterId,
+  source,
+  status,
+  taskId,
+}: {
+  readonly fetch: Fetch;
+  readonly matterId: string;
+  readonly source: AccessTokenSource;
+  readonly status: TaskStatus;
+  readonly taskId: string;
+}): Promise<Result<void, ApiError>> =>
+  await Result.gen(async function* () {
+    yield* Result.await(
+      requestApi({
+        body: { status, taskId },
+        fetch,
+        method: "PATCH",
+        path: `${MY_TASKS_PATH}/${encodeURIComponent(matterId)}`,
+        // Only whether it succeeded matters; the sheet already knows the status.
+        schema: v.unknown(),
+        source,
+      }),
+    );
+    return Result.ok(undefined);
   });
 
 /** When a task falls due, as the list groups them. */

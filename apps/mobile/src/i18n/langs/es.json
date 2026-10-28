@@ -67,7 +67,10 @@
       "week": "Esta semana",
       "later": "Más adelante",
       "none": "Sin vencimiento"
-    }
+    },
+    "markDone": "Marcar como hecha",
+    "reopen": "Reabrir",
+    "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",

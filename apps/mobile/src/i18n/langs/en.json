@@ -67,7 +67,10 @@
       "week": "This week",
       "later": "Later",
       "none": "No due date"
-    }
+    },
+    "markDone": "Mark as done",
+    "reopen": "Reopen",
+    "statusFailed": "The task could not be changed. Try again."
   },
   "matters": {
     "emptyTitle": "No matters yet",

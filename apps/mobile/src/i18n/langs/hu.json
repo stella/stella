@@ -67,7 +67,10 @@
       "week": "Ezen a héten",
       "later": "Később",
       "none": "Nincs határidő"
-    }
+    },
+    "markDone": "Késznek jelölés",
+    "reopen": "Újranyitás",
+    "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
