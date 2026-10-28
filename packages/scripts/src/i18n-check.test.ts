@@ -441,7 +441,7 @@ describe("source lock", () => {
 
   test("sync never clears a changed source and is a fixed point", () => {
     assertProperty(
-      "i18n source lock sync preserves every locked English value",
+      "sync never clears a changed source and is a fixed point",
       fc.property(messages, messages, (source, locked) => {
         const lock = new Map(Object.entries(locked));
         const synced = syncSourceLock(source, lock);
