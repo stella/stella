@@ -6,7 +6,7 @@ import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-a
 import {
   PdfSignPlacementBar,
   PdfSignPlacementLayer,
-} from "@/components/inspector/pdf-sign-placement";
+} from "@/components/inspector/pdf-sign-placement-viewer";
 import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { CreatingBBoxes } from "@/components/pdf/creating-citations";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";

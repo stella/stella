@@ -45,7 +45,7 @@ import { useInspectorCommandStore } from "@/components/inspector/inspector-comma
 import {
   PdfSignPlacementBar,
   PdfSignPlacementLayer,
-} from "@/components/inspector/pdf-sign-placement";
+} from "@/components/inspector/pdf-sign-placement-viewer";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
