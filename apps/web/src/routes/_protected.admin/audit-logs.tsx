@@ -35,6 +35,7 @@ import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { prefetchRouteQuery } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { downloadFile } from "@/lib/utils";
 import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-change-details";
 import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
@@ -45,6 +46,13 @@ import {
 } from "@/routes/_protected.admin/-queries/audit-logs";
 
 export const Route = createFileRoute("/_protected/admin/audit-logs")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "settings.organization.auditLogs",
+      to: "/admin/audit-logs",
+    }),
+  },
   loader: async ({ context }) => {
     await prefetchRouteQuery(
       context.queryClient,

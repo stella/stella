@@ -64,6 +64,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/lib/route-presentation";
 import { IMPORT_EDITABLE_FIELDS } from "@/routes/_protected.contacts/-import-candidate";
 import type { ImportEditableField } from "@/routes/_protected.contacts/-import-candidate";
 import {
@@ -75,6 +76,13 @@ import {
 import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
 export const Route = createFileRoute("/_protected/contacts/import")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "contacts.importStudio.title",
+      to: "/contacts/import",
+    }),
+  },
   head: () => ({
     meta: [{ title: pageTitle("contacts.importStudio.title") }],
   }),

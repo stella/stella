@@ -20,6 +20,7 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
+import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolDetail } from "@/routes/knowledge/-public/public-tool-detail";
@@ -43,6 +44,12 @@ const searchSchema = routeSearchSchema({
  * opens the skill editor.
  */
 export const Route = createFileRoute("/knowledge/tools_/$entry")({
+  staticData: {
+    presentation: routePresentation({
+      type: "knowledge-detail",
+      detail: "skill",
+    }),
+  },
   validateSearch: searchSchema,
   loader: async ({ params }) => {
     const page = await resolveToolEntry(params.entry, {

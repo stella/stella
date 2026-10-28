@@ -12,9 +12,18 @@ import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { VatRatesCard } from "@/routes/_protected.admin/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute("/_protected/admin/vat-rates")({
+  staticData: {
+    organizationSettingsAdmission: "time-billing",
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "billing.vatRates.title",
+      to: "/admin/vat-rates",
+    }),
+  },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -33,7 +42,6 @@ export const Route = createFileRoute("/_protected/admin/vat-rates")({
       });
     }
   },
-  staticData: { organizationSettingsAdmission: "time-billing" },
   loader: async ({ context }) => {
     await prefetchNonCriticalInfiniteQuery(
       context.queryClient,

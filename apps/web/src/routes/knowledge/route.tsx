@@ -3,6 +3,7 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/lib/route-presentation";
 import {
   APP_FRAME_SCOPE,
   MEMBER_PROVIDER_SCOPES,
@@ -22,6 +23,11 @@ const guarded = !isPublicKnowledgeEnabled();
 
 export const Route = createFileRoute("/knowledge")({
   staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "navigation.knowledge",
+      to: "/knowledge",
+    }),
     appFrame: APP_FRAME_SCOPE.knowledge,
     providerScopes: MEMBER_PROVIDER_SCOPES,
   },

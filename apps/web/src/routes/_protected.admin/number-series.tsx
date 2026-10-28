@@ -7,9 +7,18 @@ import { roleOptions } from "@/lib/auth-queries";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { NumberSeriesCard } from "@/routes/_protected.admin/-components/organization/number-series-card";
 
 export const Route = createFileRoute("/_protected/admin/number-series")({
+  staticData: {
+    organizationSettingsAdmission: "time-billing",
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "billing.numberSeries.title",
+      to: "/admin/number-series",
+    }),
+  },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -28,7 +37,6 @@ export const Route = createFileRoute("/_protected/admin/number-series")({
       });
     }
   },
-  staticData: { organizationSettingsAdmission: "time-billing" },
   head: () => ({ meta: [{ title: pageTitle("billing.numberSeries.title") }] }),
   component: NumberSeriesSettingsPage,
 });

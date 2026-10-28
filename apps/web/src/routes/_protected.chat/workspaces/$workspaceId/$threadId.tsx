@@ -4,11 +4,15 @@ import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-w
 import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/$threadId",
 )({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "chat" }),
+  },
   component: WorkspaceThreadRoute,
   // See sibling route at `/_protected/chat/$threadId` — delay the
   // pending splash so consecutive thread navigations don't flash

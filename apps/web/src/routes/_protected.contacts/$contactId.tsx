@@ -26,6 +26,7 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -39,6 +40,9 @@ import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-m
 import { VatPayerSelect } from "@/routes/_protected.contacts/-components/vat-payer-select";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "contact" }),
+  },
   component: ContactDetailPage,
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during

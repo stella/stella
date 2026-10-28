@@ -8,11 +8,19 @@ import {
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { entityViewsOptions } from "@/lib/workspaces/queries/entity-views";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
 export const Route = createFileRoute("/_protected/inbox/")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "navigation.inbox",
+      to: "/inbox",
+    }),
+  },
   beforeLoad: () => {
     if (!import.meta.env.DEV && !isInboxPreviewEnabled()) {
       throw redirect({ to: "/chat" });

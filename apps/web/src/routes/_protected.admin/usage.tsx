@@ -22,12 +22,20 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
 import { UsagePlansCard } from "@/routes/_protected.admin/-components/organization/usage-plans-card";
 import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
 
 export const Route = createFileRoute("/_protected/admin/usage")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "admin.planAndUsage",
+      to: "/admin/usage",
+    }),
+  },
   loader: async ({ context }) => {
     // The catalog exists only behind the usage flag; with the flag off
     // this route must issue exactly the requests it does today (the

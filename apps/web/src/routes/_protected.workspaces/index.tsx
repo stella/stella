@@ -42,6 +42,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import {
   workspacesKeys,
@@ -78,6 +79,13 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/_protected/workspaces/")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.matters",
+      to: "/workspaces",
+    }),
+  },
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     // Prime the workspaces query the page suspends on so the fetch starts

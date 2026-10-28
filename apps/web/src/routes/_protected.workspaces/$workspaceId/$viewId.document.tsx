@@ -120,6 +120,7 @@ import {
 } from "@/lib/workspaces/queries/entity-versions";
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
+import { routePresentation } from "@/lib/route-presentation";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
@@ -145,6 +146,9 @@ const PDFPageOrganizer = lazy(async () => {
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/$viewId/document",
 )({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "pdf" }),
+  },
   component: RouteComponent,
   // v.object: validateSearch receives the full URL search params
   // including params from parent routes; strictObject would reject them.

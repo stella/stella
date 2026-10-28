@@ -48,6 +48,7 @@ import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
 import { filterOrganizationLists } from "@/routes/_protected.admin/-components/organization/members-search.logic";
@@ -130,6 +131,13 @@ const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
   INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
 
 export const Route = createFileRoute("/_protected/admin/members")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.members",
+      to: "/admin/members",
+    }),
+  },
   loader: async ({ context }) => {
     // Prime the org + role queries the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.

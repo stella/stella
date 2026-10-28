@@ -32,6 +32,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
@@ -52,6 +53,9 @@ const extractionPreviewKey = (entityId: string, propertyId: string) =>
   `${entityId}:${propertyId}`;
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "matter" }),
+  },
   component: RouteComponent,
   notFoundComponent: () => {
     // Handles unmatched child routes (e.g. doubled

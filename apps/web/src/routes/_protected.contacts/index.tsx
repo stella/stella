@@ -87,6 +87,7 @@ import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -111,6 +112,13 @@ type ContactFilter = "all" | ContactType;
 const EMPTY_CONTACTS: ContactItem[] = [];
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "navigation.contacts",
+      to: "/contacts",
+    }),
+  },
   loader: async ({ context }) => {
     await ensureRouteInfiniteQueryData(
       context.queryClient,

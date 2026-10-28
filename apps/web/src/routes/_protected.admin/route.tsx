@@ -8,6 +8,7 @@ import { detached } from "@/lib/detached";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { routeSearchSchema } from "@/route-search-params";
@@ -17,6 +18,13 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/_protected/admin")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.organization",
+      to: "/admin",
+    }),
+  },
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location, matches }) => {
     // These routes already require enrolment before commit. Its read is

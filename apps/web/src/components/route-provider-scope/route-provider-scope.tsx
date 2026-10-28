@@ -4,6 +4,7 @@ import type { Context, PropsWithChildren } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import type { RoutePresentation } from "@/lib/route-presentation";
 import type { AppFrameScope, ProviderScope } from "@/routes/-app-frame-scope";
 
 declare module "@tanstack/react-router" {
@@ -12,6 +13,7 @@ declare module "@tanstack/react-router" {
     appFrame?: AppFrameScope;
     providerScopes?: readonly ProviderScope[];
     organizationSettingsAdmission?: "time-billing";
+    presentation?: RoutePresentation;
   }
 }
 

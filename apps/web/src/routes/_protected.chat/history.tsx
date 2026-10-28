@@ -8,12 +8,20 @@ import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { routePresentation } from "@/lib/route-presentation";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { ChatHistoryPage } from "@/routes/_protected.chat/-components/chat-history-page";
 import { chatHistorySearchSchema } from "@/routes/_protected.chat/-components/chat-history.logic";
 import type { ChatHistorySearch } from "@/routes/_protected.chat/-components/chat-history.logic";
 
 export const Route = createFileRoute("/_protected/chat/history")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.history",
+      to: "/chat/history",
+    }),
+  },
   validateSearch: chatHistorySearchSchema,
   loaderDeps: ({ search }) => ({ matter: search.matter, q: search.q }),
   loader: ({ context, deps }) => {

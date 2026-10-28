@@ -7,6 +7,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/lib/route-presentation";
 
 // Deliberately NOT nested under the /chat layout (`chat_` segment):
 // the layout wraps children in <RequireAIKey>, which replaces them
@@ -14,6 +15,7 @@ import { pageTitle } from "@/lib/page-title";
 // redirect must mount unconditionally so /chat/new always lands on
 // /chat/$threadId, where the gate (or the thread) renders as usual.
 export const Route = createFileRoute("/_protected/chat_/new")({
+  staticData: { presentation: routePresentation({ type: "inherit" }) },
   head: () => ({
     meta: [{ title: pageTitle("navigation.chat") }],
   }),

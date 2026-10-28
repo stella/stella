@@ -15,6 +15,7 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { routePresentation } from "@/lib/route-presentation";
 import { routeSearchSchema } from "@/route-search-params";
 import type { ToolDetailPayload } from "@/routes/knowledge/-components/catalogue/tool-detail-view";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
@@ -114,6 +115,13 @@ const searchSchema = routeSearchSchema({
 });
 
 export const Route = createFileRoute("/knowledge/tools")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "knowledge.sections.tools.title",
+      to: "/knowledge/tools",
+    }),
+  },
   validateSearch: searchSchema,
   head: () =>
     createPublicToolsHead({

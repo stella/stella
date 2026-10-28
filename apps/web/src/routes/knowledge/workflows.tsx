@@ -24,6 +24,7 @@ import {
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import { routePresentation } from "@/lib/route-presentation";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
@@ -40,6 +41,13 @@ type View =
   | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/knowledge/workflows")({
+  staticData: {
+    presentation: routePresentation({
+      type: "label",
+      labelKey: "common.workflows",
+      to: "/knowledge/workflows",
+    }),
+  },
   beforeLoad: () => {
     if (!workflowsRouteAvailable()) {
       throw redirect({ to: "/knowledge" });
