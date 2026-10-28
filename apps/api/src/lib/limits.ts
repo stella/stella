@@ -426,6 +426,8 @@ export const LIMITS = {
    * provision cited more widely is checked candidate by candidate instead.
    */
   caseLawProvisionIdSetMax: 5000,
+  /** Ranked decisions examined per broad provision-list request. */
+  caseLawProvisionCandidateBudget: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */

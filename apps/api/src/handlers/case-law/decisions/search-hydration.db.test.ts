@@ -1806,6 +1806,55 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   }
 });
 
+test("a sparse broad provision walk resumes from its bounded examined candidates", async () => {
+  const db = drizzle({ client });
+  await db
+    .update(caseLawDecisions)
+    .set({ citationAuthority: 3 })
+    .where(eq(caseLawDecisions.id, slovakId));
+  const examined: number[] = [];
+  const request = {
+    ...SEARCH_BODY,
+    provision: { work: "262/2006 Sb.", anchor: "par_316" },
+    limit: 1,
+  } as const;
+  const list = async (cursor?: string) =>
+    await listCaseLawProvisionDecisions({
+      body: { ...request, ...(cursor === undefined ? {} : { cursor }) },
+      caseLawDb,
+      dependencies: {
+        candidateBudget: 1,
+        provisionIdSetMax: 0,
+        reportExaminedCandidates: (count) => {
+          examined.push(count);
+        },
+        servingGeneration: GENERATION,
+        provider: "corpus-index",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+      },
+    });
+  try {
+    const first = await list();
+    if (!("hits" in first) || first.nextCursor === null) {
+      throw new Error("expected an empty bounded page with a continuation");
+    }
+    expect(first.hits).toEqual([]);
+    const second = await list(first.nextCursor);
+    if (!("hits" in second)) {
+      throw new Error("expected the resumed page");
+    }
+    expect(second.hits.map(({ decisionId }) => decisionId)).toEqual([
+      String(czechId),
+    ]);
+    expect(examined).toEqual([1, 1]);
+  } finally {
+    await db
+      .update(caseLawDecisions)
+      .set({ citationAuthority: 1 })
+      .where(eq(caseLawDecisions.id, slovakId));
+  }
+});
+
 // The planner picks the decision-id or the work-subtree index by the data's
 // shape; either probes the provision's own links. Neither scans the table,
 // and neither walks every link of the act, which for a civil code is

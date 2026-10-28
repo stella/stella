@@ -3259,6 +3259,12 @@ type ListCaseLawProvisionDecisionsOptions = {
     provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
     /** The court registry, the public one when absent, as search takes it. */
     loadCourtWeights?: typeof loadPublicCourtWeights;
+    /** Test seam for the broad-scope candidate budget. */
+    candidateBudget?: number;
+    /** Test seam for selecting the broad provision path. */
+    provisionIdSetMax?: number;
+    /** Test instrumentation: ranked candidates examined by this request. */
+    reportExaminedCandidates?: (count: number) => void;
   };
 };
 
@@ -3366,7 +3372,7 @@ const provisionListOrder = ({
 };
 
 type ProvisionDecisionPageQueryOptions = {
-  body: SearchDecisionsBody & { provision: CaseLawProvisionFilter };
+  body: SearchDecisionsBody;
   generation: string;
   after: SQL | undefined;
   orderBy: SQL[];
@@ -3408,6 +3414,30 @@ export const provisionDecisionPageQuery = (
     )
     .orderBy(...orderBy)
     .limit(limit);
+
+/**
+ * A bounded rank walk for a broad provision. Provision membership is checked
+ * only after this query has capped the decisions a request may examine.
+ */
+export const provisionDecisionCandidatesQuery = (
+  tx: CaseLawPublicReadTransaction,
+  {
+    body,
+    generation,
+    after,
+    orderBy,
+    limit,
+  }: Omit<ProvisionDecisionPageQueryOptions, "decisionIds">,
+) => {
+  const { provision: _provision, ...candidateBody } = body;
+  return provisionDecisionPageQuery(tx, {
+    body: candidateBody,
+    generation,
+    after,
+    orderBy,
+    limit,
+  });
+};
 
 /**
  * Decisions citing a provision, read in authority or date order with keyset
@@ -3474,34 +3504,66 @@ export const listCaseLawProvisionDecisions = async ({
     generation = target.value.serving.generation;
   }
   // The page, citing sentences and hydrated rows share one snapshot.
-  const { rows, sentences, byId } = await caseLawDb(async (tx) => {
-    const provisionScope = await readCaseLawProvisionScope(tx, scope);
-    const page = await provisionDecisionPageQuery(tx, {
-      body,
-      generation,
-      after: order.after,
-      orderBy: order.orderBy,
-      limit: limit + 1,
-      ...(provisionScope.type === "decisions"
-        ? { decisionIds: provisionScope.decisionIds }
-        : {}),
-    });
-    const pageIds = page.slice(0, limit).map(({ id }) => id);
-    const hydrated = await pageDecisionRowsQuery(tx, {
-      body,
-      generation,
-      ids: pageIds,
-    });
-    return {
-      rows: page,
-      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
-      byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
-    };
-  });
+  const { rows, sentences, byId, candidateRows } = await caseLawDb(
+    async (tx) => {
+      const provisionScope = await readCaseLawProvisionScope(tx, {
+        ...scope,
+        ...(dependencies.provisionIdSetMax === undefined
+          ? {}
+          : { idSetMax: dependencies.provisionIdSetMax }),
+      });
+      const candidateBudget =
+        dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget;
+      const examinedRows =
+        provisionScope.type === "broad"
+          ? await provisionDecisionCandidatesQuery(tx, {
+              body,
+              generation,
+              after: order.after,
+              orderBy: order.orderBy,
+              limit: candidateBudget,
+            })
+          : null;
+      dependencies.reportExaminedCandidates?.(examinedRows?.length ?? 0);
+      const decisionIds =
+        examinedRows?.map(({ id }) => id) ??
+        (provisionScope.type === "decisions" ? provisionScope.decisionIds : []);
+      const page = await provisionDecisionPageQuery(tx, {
+        body,
+        generation,
+        after: order.after,
+        orderBy: order.orderBy,
+        limit: limit + 1,
+        decisionIds,
+      });
+      const pageIds = page.slice(0, limit).map(({ id }) => id);
+      const hydrated = await pageDecisionRowsQuery(tx, {
+        body,
+        generation,
+        ids: pageIds,
+      });
+      return {
+        candidateRows: examinedRows,
+        rows: page,
+        sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+        byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
+      };
+    },
+  );
   const emitted = rows.slice(0, limit);
   const last = emitted.at(-1);
+  const lastExamined = candidateRows?.at(-1);
+  let nextPosition: ProvisionListRow | undefined;
+  if (rows.length > limit) {
+    nextPosition = last;
+  } else if (
+    candidateRows?.length ===
+    (dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget)
+  ) {
+    nextPosition = lastExamined;
+  }
   const nextCursor =
-    rows.length > limit && last !== undefined ? order.cursorAfter(last) : null;
+    nextPosition === undefined ? null : order.cursorAfter(nextPosition);
   const pageRanked: RankedHit[] = emitted.map((row) => ({
     id: String(row.id),
     score: row.citationAuthority,
