@@ -75,8 +75,11 @@ const HEX_DIGITS = "0123456789abcdef";
 // A validated two-digit hex pair as 0..255: each digit's value is its place
 // in HEX_DIGITS.
 const hexPairValue = (pair: string): number => {
-  const [high = "0", low = "0"] = pair.toLowerCase();
-  return HEX_DIGITS.indexOf(high) * 16 + HEX_DIGITS.indexOf(low);
+  const lower = pair.toLowerCase();
+  return (
+    HEX_DIGITS.indexOf(lower.charAt(0)) * 16 +
+    HEX_DIGITS.indexOf(lower.charAt(1))
+  );
 };
 
 /** The 0..255 channels of a `#rgb` or `#rrggbb` colour. */
@@ -86,7 +89,9 @@ const hexChannels = (hex: HexColor): readonly [number, number, number] => {
   }
   const digits =
     hex.length === 4
-      ? [...hex.slice(1)].map((digit) => digit + digit)
+      ? [hex.slice(1, 2), hex.slice(2, 3), hex.slice(3, 4)].map(
+          (digit) => digit + digit,
+        )
       : [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)];
   const [red = 0, green = 0, blue = 0] = digits.map(hexPairValue);
   return [red, green, blue];

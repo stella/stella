@@ -24,10 +24,7 @@ const { createPublicHead } = await import("@/lib/public-seo");
 
 /** `#rgb` as `#rrggbb`, lower-cased, so equal colours compare equal. */
 const fullHex = (hex: string) =>
-  (hex.length === 4
-    ? `#${[...hex.slice(1)].map((digit) => digit + digit).join("")}`
-    : hex
-  ).toLowerCase();
+  hex.replace(/^#(\w)(\w)(\w)$/u, "#$1$1$2$2$3$3").toLowerCase();
 
 describe("root document feature marker", () => {
   test("emits the public knowledge marker only with the flag enabled", () => {
