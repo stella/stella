@@ -10,6 +10,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationOptions } from "@/lib/organization/queries";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationDangerZone } from "@/routes/_protected.admin/-components/organization-danger-zone";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.admin/-components/organization/jurisdictions-card";
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/_protected/admin/general")({
       organizationOptions(context.user.activeOrganizationId),
     );
   },
+  head: () => ({ meta: [{ title: pageTitle("admin.general") }] }),
   component: OrganizationGeneralPage,
 });
 

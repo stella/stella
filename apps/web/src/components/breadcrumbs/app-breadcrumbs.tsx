@@ -124,6 +124,12 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
+      ["/knowledge/workflows"],
+      <BreadcrumbLink to="/knowledge/workflows">
+        {t("common.workflows")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/contacts/"],
       <BreadcrumbLink to="/contacts">
         {t("navigation.contacts")}

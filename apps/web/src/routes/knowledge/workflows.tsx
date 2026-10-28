@@ -23,6 +23,7 @@ import {
   flowsOptions,
   knowledgeKeys,
 } from "@/lib/knowledge/queries";
+import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/knowledge/-components/flow-examples";
@@ -45,6 +46,7 @@ export const Route = createFileRoute("/knowledge/workflows")({
     }
   },
   component: GuardedWorkflowsPage,
+  head: () => ({ meta: [{ title: pageTitle("common.workflows") }] }),
 });
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];

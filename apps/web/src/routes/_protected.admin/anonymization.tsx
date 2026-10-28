@@ -2,9 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { SettingsPageHeader } from "@/components/settings-page-header";
+import { pageTitle } from "@/lib/page-title";
 import { AnonymizationDenyListCard } from "@/routes/_protected.admin/-components/organization/anonymization-deny-list-card";
 
 export const Route = createFileRoute("/_protected/admin/anonymization")({
+  head: () => ({
+    meta: [{ title: pageTitle("settings.organization.anonymization.title") }],
+  }),
   component: OrganizationAnonymizationPage,
 });
 

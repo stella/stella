@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Navigate,
@@ -26,6 +30,7 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
@@ -153,6 +158,9 @@ function RouteComponent() {
     select: (p) => p.workspaceId,
   });
   const queryClient = useQueryClient();
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
+  const liveWorkspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   // Lazy state singleton (mutated in place, identity stable): avoids both
   // the render-scope ref write (React Compiler bailout) and per-render
   // allocation.
@@ -268,6 +276,9 @@ function RouteComponent() {
 
   return (
     <WorkflowStartConfirmationPromptProvider>
+      {liveWorkspace?.name && (
+        <title>{pageTitleLiteral(liveWorkspace.name)}</title>
+      )}
       <WorkspaceLifecycleCleanup
         flushActivityInvalidation={invalidateActivity.flush}
         key={workspaceId}

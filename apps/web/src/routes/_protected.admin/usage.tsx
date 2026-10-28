@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { pageTitle } from "@/lib/page-title";
 import { queryView } from "@/lib/query-view.logic";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
@@ -27,7 +28,6 @@ import { UsagePlansCard } from "@/routes/_protected.admin/-components/organizati
 import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
 
 export const Route = createFileRoute("/_protected/admin/usage")({
-  component: UsageSettingsPage,
   loader: async ({ context }) => {
     // The catalog exists only behind the usage flag; with the flag off
     // this route must issue exactly the requests it does today (the
@@ -49,6 +49,8 @@ export const Route = createFileRoute("/_protected/admin/usage")({
       );
     }
   },
+  component: UsageSettingsPage,
+  head: () => ({ meta: [{ title: pageTitle("admin.planAndUsage") }] }),
 });
 
 function UsageSettingsPage() {

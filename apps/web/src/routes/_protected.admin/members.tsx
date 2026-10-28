@@ -46,6 +46,7 @@ import {
 } from "@/lib/organization/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationListToolbar } from "@/routes/_protected.admin/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.admin/-components/organization/member-role-cell";
@@ -129,8 +130,6 @@ const isSecondaryInvitationColumn = (id: InvitationColumn["id"]) =>
   INVITATION_COLUMNS.some((column) => column.id === id && column.secondary);
 
 export const Route = createFileRoute("/_protected/admin/members")({
-  component: Members,
-  pendingComponent: MembersPendingComponent,
   loader: async ({ context }) => {
     // Prime the org + role queries the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
@@ -142,6 +141,9 @@ export const Route = createFileRoute("/_protected/admin/members")({
       ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
   },
+  component: Members,
+  pendingComponent: MembersPendingComponent,
+  head: () => ({ meta: [{ title: pageTitle("common.members") }] }),
 });
 
 function Members() {

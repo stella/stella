@@ -7,6 +7,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { vatRatesOptions } from "@/lib/organization/vat-rates";
+import { pageTitle } from "@/lib/page-title";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
@@ -14,7 +15,6 @@ import {
 import { VatRatesCard } from "@/routes/_protected.admin/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute("/_protected/admin/vat-rates")({
-  staticData: { organizationSettingsAdmission: "time-billing" },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -33,8 +33,7 @@ export const Route = createFileRoute("/_protected/admin/vat-rates")({
       });
     }
   },
-  // Start the list with the route, not after the card mounts. A failure
-  // stays in the query, so the card shows its own refusal and retry.
+  staticData: { organizationSettingsAdmission: "time-billing" },
   loader: async ({ context }) => {
     await prefetchNonCriticalInfiniteQuery(
       context.queryClient,
@@ -50,6 +49,9 @@ export const Route = createFileRoute("/_protected/admin/vat-rates")({
         }),
     );
   },
+  // Start the list with the route, not after the card mounts. A failure
+  // stays in the query, so the card shows its own refusal and retry.
+  head: () => ({ meta: [{ title: pageTitle("billing.vatRates.title") }] }),
   component: VatRateSettingsPage,
 });
 
