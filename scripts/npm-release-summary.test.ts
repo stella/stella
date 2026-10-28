@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { npmReleaseJobId } from "./generate-npm-release-jobs";
 import { summarizeNpmRelease } from "./npm-release-summary";
+import { npmReleaseJobId } from "./publish-packages";
 
 const graph = [
   { directory: "base", dependencies: [] },

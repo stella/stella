@@ -6,13 +6,12 @@ import * as v from "valibot";
 import {
   NPM_RELEASE_WORKFLOW,
   npmReleaseGraphProblems,
-  npmReleaseJobId,
   readNpmReleaseGraph,
   renderNpmReleaseJobs,
   renderNpmReleaseWorkflow,
 } from "./generate-npm-release-jobs";
 import { evaluate } from "./github-expression";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const workflowSource = () =>

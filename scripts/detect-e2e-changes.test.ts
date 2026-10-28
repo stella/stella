@@ -23,9 +23,8 @@ import {
 } from "./ci-plan-scope";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
-import { npmReleaseJobId } from "./generate-npm-release-jobs";
 import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");

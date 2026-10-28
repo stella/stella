@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 export const NPM_RELEASE_WORKFLOW =
   "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8";
@@ -101,9 +101,6 @@ export const readNpmReleaseGraph = ({
   }
   return graph;
 };
-
-export const npmReleaseJobId = (directory: string): string =>
-  `release-${directory}`;
 
 const selected = (directory: string): string =>
   `contains(fromJSON(needs.pack.outputs.packages), '${directory}')`;

@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import {
-  npmReleaseJobId,
-  readNpmReleaseGraph,
-} from "./generate-npm-release-jobs";
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import { npmReleaseJobId } from "./publish-packages";
 
 type ReleaseJobResult = "success" | "failure" | "skipped" | "cancelled";
 type ReleaseSummaryOptions = {

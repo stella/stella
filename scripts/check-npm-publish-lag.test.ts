@@ -17,11 +17,8 @@ import {
   renderLagTable,
   resolveRef,
 } from "./check-npm-publish-lag";
-import {
-  npmReleaseJobId,
-  readNpmReleaseGraph,
-} from "./generate-npm-release-jobs";
-import { ALL_PACKAGE_ORDER } from "./publish-packages";
+import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import { ALL_PACKAGE_ORDER, npmReleaseJobId } from "./publish-packages";
 
 const cli = { directory: "cli", name: "@stll/cli", version: "3.8.6" };
 const found = (
