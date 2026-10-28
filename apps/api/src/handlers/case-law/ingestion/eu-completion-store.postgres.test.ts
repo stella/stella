@@ -1187,8 +1187,8 @@ if (!databaseUrl || !enabled) {
       // cleanup for the suite hook after every performance assertion finishes.
       const rollback = new TransactionRollbackError();
       const outcome = await Result.tryPromise({
-        try: () =>
-          db.transaction(async (tx) => {
+        try: async () =>
+          await db.transaction(async (tx) => {
             await tx.insert(caseLawSources).values({
               id: sourceId,
               adapterKey: `completion-scale-${sourceId}`,
