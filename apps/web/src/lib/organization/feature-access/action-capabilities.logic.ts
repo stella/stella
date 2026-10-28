@@ -1,10 +1,13 @@
 import type { LinkProps } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 import { acceptsDocumentOcrRequests } from "@stll/api-contract/document-ocr-availability";
 import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 
 import type { TranslationKey } from "@/i18n/types";
+import { anyAvailable } from "@/lib/availability";
+import type { Availability } from "@/lib/availability";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { OrganizationSettings } from "@/queries/organization-settings";
 
@@ -124,16 +127,31 @@ const translationObservation = (
   ai: BooleanObservation,
   deepl: BooleanObservation,
 ): BooleanObservation => {
-  if (typeof ai === "object" || typeof deepl === "object") {
-    return { status: "error" };
+  const toAvailability = (state: BooleanObservation): Availability<void> => {
+    if (state === undefined) {
+      return { status: "pending" };
+    }
+    if (typeof state === "object") {
+      return { status: "error", error: state };
+    }
+    return state
+      ? { status: "ready", value: undefined }
+      : { status: "disabled" };
+  };
+  const combined = anyAvailable(toAvailability(ai), toAvailability(deepl));
+  switch (combined.status) {
+    case "ready":
+      return true;
+    case "disabled":
+      return false;
+    case "pending":
+      return undefined;
+    case "error":
+      return { status: "error" };
+    default:
+      combined satisfies never;
+      return panic("Unknown translation availability");
   }
-  if (ai === true || deepl === true) {
-    return true;
-  }
-  if (ai === false && deepl === false) {
-    return false;
-  }
-  return undefined;
 };
 
 /** Unknown observations never advertise a flow whose prerequisite was not established. */

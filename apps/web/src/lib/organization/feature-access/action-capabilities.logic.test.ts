@@ -134,6 +134,24 @@ test("translation accepts either configured provider but never assumes an unknow
   }
 });
 
+test("translation remains available when either provider is ready", () => {
+  const error = { status: "error" } as const;
+  for (const [ai, deepl, expected] of [
+    [true, error, "available"],
+    [error, true, "available"],
+    [undefined, error, "pending"],
+    [false, true, "available"],
+  ] as const) {
+    expect(
+      resolveActionCapabilities({
+        ...observations(false),
+        ai,
+        deepl,
+      }).capabilities.translation.type,
+    ).toBe(expected);
+  }
+});
+
 test("OCR admits live and batched deployments and keeps the status for the action", () => {
   for (const status of Object.values(DOCUMENT_OCR_AVAILABILITY)) {
     const resolved = resolveActionCapabilities({
