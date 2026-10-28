@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "Versão na data da decisão (inferida)",
       "versionBasisInferredCompact": "Data da decisão · inferida",
       "versionBasisInferredExplanation": "A versão é inferida da data da decisão. A decisão não informa qual redação se aplica."
-    }
+    },
+    "withdrawnByPublisher": "Retirado pelo publicador"
   },
   "catalogue": {
     "addCustom": "Adicionar personalizado",

@@ -1112,6 +1112,17 @@ export const unredactedCaseLawDecisions = p
       .where(unredactedCaseLawDecisionFor(caseLawDecisions)),
   );
 
+export const CASE_LAW_WITHDRAWAL_STATUSES = ["withdrawn"] as const;
+
+/** Only the withdrawal state crosses the public reader boundary. */
+export const caseLawWithdrawalStatus = p.pgView("case_law_withdrawal_status", {
+  decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+  status: p.text("status", { enum: CASE_LAW_WITHDRAWAL_STATUSES }).notNull(),
+  withdrawnAt: timestamptz("withdrawn_at").notNull(),
+}).as(sql`SELECT id AS decision_id, 'withdrawn'::text AS status,
+  redacted_at AS withdrawn_at FROM ${caseLawDecisions}
+  WHERE redacted_at IS NOT NULL`);
+
 /** Searchable identifiers stated by a decision's publisher. */
 export const caseLawDecisionIdentifiers = p.pgTable(
   "case_law_decision_identifiers",

@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "Znění k datu rozhodnutí (odvozené)",
       "versionBasisInferredCompact": "Datum rozhodnutí · odvozeno",
       "versionBasisInferredExplanation": "Znění je odvozeno z data rozhodnutí. Rozhodnutí neuvádí, které znění se použije."
-    }
+    },
+    "withdrawnByPublisher": "Staženo vydavatelem"
   },
   "catalogue": {
     "addCustom": "Přidat vlastní",

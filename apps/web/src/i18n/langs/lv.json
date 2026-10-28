@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "Redakcija lēmuma datumā (izsecināta)",
       "versionBasisInferredCompact": "Nolēmuma datums · izsecināts",
       "versionBasisInferredExplanation": "Redakcija ir izsecināta no nolēmuma datuma. Nolēmumā nav norādīts, kura redakcija ir piemērojama."
-    }
+    },
+    "withdrawnByPublisher": "Izdevējs atsaucis"
   },
   "catalogue": {
     "addCustom": "Pievienot pielāgotu",

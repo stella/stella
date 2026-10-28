@@ -35,6 +35,39 @@ const lint = async (
   });
 
 describe.serial("public-law relation scan", () => {
+  test("withdrawal verdicts are read through their owner", async () => {
+    const cases = [
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema"; void caseLawWithdrawalStatus;',
+      'import { sql } from "drizzle-orm"; export const query = sql`select decision_id from case_law_withdrawal_status`;',
+    ];
+    const results = await Promise.all(
+      cases.map(
+        async (read) =>
+          await lint(
+            [
+              'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db"; void caseLawPublicReadDb;',
+              read,
+            ].join("\n"),
+            "apps/api/src/lib/case-law/other-read.ts",
+          ),
+      ),
+    );
+    for (const result of results) {
+      expect(result).toHaveLength(1);
+    }
+  });
+
+  test("withdrawal status is readable through the public boundary", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema/case-law";',
+      "export const read = () => caseLawPublicReadDb((tx) => tx.select({ decisionId: caseLawWithdrawalStatus.decisionId, status: caseLawWithdrawalStatus.status, withdrawnAt: caseLawWithdrawalStatus.withdrawnAt }).from(caseLawWithdrawalStatus));",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/lib/case-law/withdrawn-copies.ts"),
+    ).toEqual([]);
+  });
+
   test("public case-law reads cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
@@ -231,7 +264,13 @@ describe.serial("public-law relation scan", () => {
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-namespace-helper.fixture",
       ),
-    ).toEqual(new Set(["caseLawDecisions", "unredactedCaseLawDecisions"]));
+    ).toEqual(
+      new Set([
+        "caseLawDecisions",
+        "unredactedCaseLawDecisions",
+        "caseLawWithdrawalStatus",
+      ]),
+    );
     expect(
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-reexport-helper.fixture",

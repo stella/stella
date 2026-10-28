@@ -42,6 +42,11 @@ export const CI_MARKDOWN_READER_INPUTS = [
 
 export const SCHEMA_INTROSPECTION = [
   {
+    path: "apps/api/src/lib/case-law/withdrawn-copy-registry.ts",
+    reason:
+      "Classifies schema-derived decision references without database operations.",
+  },
+  {
     path: "apps/api/scripts/generate-entity-feature-gate-propagation.ts",
     reason:
       "Renders static gate propagation SQL from full-schema metadata without database operations.",

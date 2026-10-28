@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "Version à la date de la décision (déduite)",
       "versionBasisInferredCompact": "Date de la décision · déduite",
       "versionBasisInferredExplanation": "La version est déduite de la date de la décision. La décision ne précise pas quelle rédaction s’applique."
-    }
+    },
+    "withdrawnByPublisher": "Retiré par l’éditeur"
   },
   "catalogue": {
     "addCustom": "Ajouter personnalisé",

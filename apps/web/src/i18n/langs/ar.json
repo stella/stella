@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
       "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
       "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
-    }
+    },
+    "withdrawnByPublisher": "سحبه الناشر"
   },
   "catalogue": {
     "addCustom": "إضافة مخصص",

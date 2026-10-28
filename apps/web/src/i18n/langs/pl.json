@@ -1247,7 +1247,8 @@
       "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
       "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
       "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
-    }
+    },
+    "withdrawnByPublisher": "Wycofane przez wydawcę"
   },
   "catalogue": {
     "addCustom": "Dodaj własne",
