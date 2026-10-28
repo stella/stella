@@ -31,6 +31,19 @@ type UserErrorToastOptions = Omit<
   toastId?: string | undefined;
 };
 
+type ProblemToastOptions = Omit<
+  UserErrorToastOptions,
+  "feature" | "occurrence" | "routeTemplate"
+>;
+
+/**
+ * A user-facing error names its cause. A cause that is always `undefined` or
+ * `null` is a cause-free message, which goes through
+ * {@link notifyUserProblem}; a cause that may be missing is reported only when
+ * it is there (see {@link notifyUserError}).
+ */
+type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
+
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;
   occurrence?: string | number | undefined;
@@ -61,13 +74,17 @@ export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
   currentRouteTemplate = routeTemplate;
 };
 
+/** Report a user-visible failure by its cause; without one there is nothing to report. */
 export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
   { notice, occurrence }: UserVisibleErrorReportOptions = {},
 ): void => {
-  const reportable = error ?? new Error("UserVisibleError");
+  if (error === undefined || error === null) {
+    return;
+  }
+  const reportable = error;
   const template =
     (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
   const isApiError = APIError.is(error);
@@ -119,8 +136,25 @@ export const reportUserVisibleError = (
   });
 };
 
-export const notifyUserError = (
-  error: unknown,
+/**
+ * Tell the user about a problem that has no error behind it: input a form
+ * refuses, a limit, a precondition. Nothing is reported, because there is no
+ * cause to report; a failure with one goes through {@link notifyUserError}.
+ */
+export const notifyUserProblem = (
+  title: string,
+  { toastId, ...options }: ProblemToastOptions = {},
+): void => {
+  const toast = { ...options, title, type: "error" } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return;
+  }
+  stellaToast.add(toast);
+};
+
+export const notifyUserError = <Cause>(
+  error: Cause & NamedCause<Cause>,
   fallback: string,
   {
     feature,
@@ -130,6 +164,11 @@ export const notifyUserError = (
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
+  // An optional cause that is missing leaves a message with nothing behind it.
+  if (error === undefined || error === null) {
+    notifyUserProblem(fallback, { ...options, toastId });
+    return true;
+  }
   if (isCancellation(error)) {
     return false;
   }

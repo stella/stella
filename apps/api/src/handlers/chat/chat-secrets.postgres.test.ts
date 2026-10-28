@@ -721,11 +721,18 @@ if (!databaseUrl || !runPostgres) {
           const safeDb = safeDbFromScoped(
             async (run) => await db.transaction(run),
           );
+          const recordAuditEvent = auditRecorderDouble();
           for (let count = 0; count < 8; count += 1) {
             const result = await consumeChatSecret({
               safeDb,
               ...scope,
               secretRef: receipt.secretRef,
+              recordAuditEvent,
+              operation: {
+                connectorSlug: scope.targetSlug,
+                id: `operation-${String(count)}`,
+                toolName: "list_items",
+              },
             });
             expect(result.isOk()).toBe(true);
           }
@@ -752,6 +759,12 @@ if (!databaseUrl || !runPostgres) {
             safeDb,
             ...scope,
             secretRef: receipt.secretRef,
+            recordAuditEvent,
+            operation: {
+              connectorSlug: scope.targetSlug,
+              id: "operation-exhausted",
+              toolName: "list_items",
+            },
           });
           expect(final.isErr()).toBe(true);
           if (final.isErr()) {

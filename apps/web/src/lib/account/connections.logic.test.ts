@@ -143,7 +143,7 @@ describe("integration status", () => {
       }),
     ).toEqual({
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     });
     expect(
       integrationStatus({
@@ -157,7 +157,7 @@ describe("integration status", () => {
       }),
     ).toEqual({
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     });
   });
 
@@ -200,7 +200,7 @@ describe("integration status", () => {
           responseDisposition: "normal",
         },
       }),
-    ).toEqual({ tone: "success", labelKey: "settings.connections.connected" });
+    ).toEqual({ tone: "success", labelKey: "common.connected" });
   });
 
   test("shared re-approval is visible without this user's connection", () => {

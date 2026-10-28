@@ -17,6 +17,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { isServerChatToolCall } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -185,6 +187,7 @@ import {
   resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
+  buildConnectableMcpConnectorsSystemHint,
   buildExternalMcpSystemHint,
   createLazyExternalMcpToolsLoader,
   loadExternalMcpToolsForUser,
@@ -198,6 +201,7 @@ import {
   PAST_CHAT_SCOPE_TYPE,
   resolvePastChatScope,
 } from "@/api/handlers/chat/tools/past-chat-tools";
+import type { ResolveCurrentChatExecutionContext } from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
 import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
@@ -217,6 +221,7 @@ import {
   restrictChatToolsToScope,
   scopeAllowsTool,
 } from "@/api/handlers/chat/tools/tool-scope";
+import { loadTurnPromptSources } from "@/api/handlers/chat/turn-prompt-sources";
 import type {
   ChatMention,
   ChatMessage,
@@ -242,10 +247,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -257,6 +260,7 @@ import {
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
+import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -283,6 +287,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -1879,6 +1884,7 @@ const prepareValidatedIncomingMessage = async ({
     const validatedMessageResult = await validateMessage({
       message: body.message,
       persistedMessage: validationThreadState.persistedMessage,
+      refRegistry,
       resume,
       safeDb,
       threadId: body.threadId,
@@ -2141,6 +2147,8 @@ type AssembleTurnSystemPromptOptions = {
   };
   /** The connectors the turn may call, after its source chips. */
   externalMcpConnectors: readonly LoadedExternalMcpConnector[];
+  /** Offered only when the turn registers `connect_connector`. */
+  connectableConnectors: ConnectableMcpConnectorCatalog | undefined;
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2154,6 +2162,7 @@ type AssembleTurnSystemPromptOptions = {
 const assembleTurnSystemPrompt = ({
   chatContext,
   externalMcpConnectors,
+  connectableConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2165,6 +2174,7 @@ const assembleTurnSystemPrompt = ({
     chatContext.systemUntrusted,
     [
       buildExternalMcpSystemHint(externalMcpConnectors),
+      buildConnectableMcpConnectorsSystemHint(connectableConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -2179,10 +2189,10 @@ export type SendMessageDependencies = {
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
   /**
-   * Reads the caller's membership when an approved write tool runs. Defaults
-   * to the credential-boundary read; tests bind it to their own database.
+   * Rebuilds live authority when a delayed registry tool runs. Defaults to
+   * fresh credential-boundary membership, matter, and database scopes.
    */
-  resolveCurrentMembership?: ResolveCredentialMemberAuthorization;
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2232,10 +2242,9 @@ const settleInternalPreflight = async <T, E>(
   return result;
 };
 
-const currentMembershipReader = (
-  dependencies: SendMessageDependencies,
-): ResolveCredentialMemberAuthorization =>
-  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
+const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
+  dependencies.resolveCurrentExecutionContext ??
+  resolveCredentialMemberExecutionContext;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2904,7 +2913,8 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
-          resolveCurrentMembership: currentMembershipReader(dependencies),
+          resolveCurrentExecutionContext:
+            currentExecutionContextReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,
@@ -3115,19 +3125,36 @@ export const createSendMessage = (
               : restrictChatToolsToScope(chatTools, body.toolScope),
         });
 
-        const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
-          activeSkillContext: chatContext.activeSkillContext,
-          bindingScope: chatContext.skillBindingScope,
-          catalog: chatContext.skillMetadata,
-          messages: chatContext.hydratedMessages,
-          organizationId: session.activeOrganizationId,
-          recordAuditEvent: recordReadAuditEvent,
-          safeDb,
-          userId: user.id,
+        const promptSources = await loadTurnPromptSources({
+          requestedSkills: {
+            type: "required",
+            load: async () =>
+              loadRequestedSkillsPrompt({
+                activeSkillContext: chatContext.activeSkillContext,
+                bindingScope: chatContext.skillBindingScope,
+                catalog: chatContext.skillMetadata,
+                messages: chatContext.hydratedMessages,
+                organizationId: session.activeOrganizationId,
+                recordAuditEvent: recordReadAuditEvent,
+                safeDb,
+                userId: user.id,
+              }),
+          },
+          connectorCatalog: {
+            type: "optional",
+            load: async () =>
+              streamingTools[CONNECT_CONNECTOR_TOOL_NAME] === undefined
+                ? Promise.resolve(Result.ok(undefined))
+                : loadConnectableMcpConnectorsForUser({
+                    organizationId: session.activeOrganizationId,
+                    safeDb,
+                    userId: user.id,
+                  }),
+          },
         });
-        if (Result.isError(requestedSkillsPrompt)) {
+        if (Result.isError(promptSources)) {
           await lifecycle.failCurrentTurn("internal", true);
-          return Result.err(requestedSkillsPrompt.error);
+          return Result.err(promptSources.error);
         }
         const storedHistory = await loadStoredHistory({
           historyIds: latestMessagePlan.messages.flatMap(({ id }) =>
@@ -3146,11 +3173,12 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
+          connectableConnectors: promptSources.value.connectableConnectors,
           externalMcpConnectors: scopedExternalConnectors(
             sourceScopes,
             externalConnectors,
           ),
-          requestedSkillsPrompt: requestedSkillsPrompt.value,
+          requestedSkillsPrompt: promptSources.value.requestedSkillsPrompt,
           sendMode: body.sendMode,
         });
 

@@ -33,7 +33,7 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus } from "@/api/db/schema";
+import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
   billingArrangements,
   caseLawReplayBatches,
@@ -65,6 +65,8 @@ import { isRecord } from "@/api/lib/type-guards";
 export const AGGREGATE_LOCKS = {
   account: { rank: -20, kind: "row" },
   accountExport: { rank: -10, kind: "row" },
+  accountDeletionRequest: { rank: -10, kind: "row" },
+  organizationObjectIntent: { rank: -1, kind: "advisory" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
@@ -81,8 +83,10 @@ export const AGGREGATE_LOCKS = {
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
+  chatOwnerStoredContentEgress: { rank: 95, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
+  chatStoredContentEgress: { rank: 115, kind: "advisory" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
@@ -99,10 +103,17 @@ export const AGGREGATE_LOCKS = {
   entity: { rank: 500, kind: "row" },
   entityVersion: { rank: 510, kind: "row" },
   field: { rank: 520, kind: "row" },
+  memory: { rank: 530, kind: "row" },
+  searchProjectionRepair: { rank: 540, kind: "row" },
   signal: { rank: 600, kind: "row" },
   automatedFlowRunCap: { rank: 700, kind: "advisory" },
   processingClaim: { rank: 600, kind: "row" },
   contactCapacity: { rank: 700, kind: "advisory" },
+  fileComparisonCapacity: { rank: 700, kind: "advisory" },
+  billingCodeCapacity: { rank: 700, kind: "advisory" },
+  expenseCapacity: { rank: 700, kind: "advisory" },
+  rateTableWorkspace: { rank: 700, kind: "advisory" },
+  mcpOAuthState: { rank: 700, kind: "advisory" },
   personalCatalog: { rank: 700, kind: "advisory" },
   sampleCase: { rank: 700, kind: "advisory" },
   searchHistory: { rank: 710, kind: "row" },
@@ -167,6 +178,12 @@ export const AGGREGATE_CHAINS = {
   caseLawRepublication: ["caseLawRepublication"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
+  chatStoredContent: [
+    "chatOwnerStoredContentEgress",
+    "chatStoredContentEgress",
+    "chatThread",
+    "chatTurn",
+  ],
   memberPrefix: [
     "workspace",
     "memberCleanup",
@@ -176,6 +193,12 @@ export const AGGREGATE_CHAINS = {
     "entity",
   ],
   accountExport: ["account", "accountExport"],
+  accountDeletionRequest: ["account", "accountDeletionRequest"],
+  organizationObjectIntentLifecycle: [
+    "organizationObjectIntent",
+    "organization",
+  ],
+  organizationObjectIntentWriter: ["organizationObjectIntent", "workspace"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
@@ -197,9 +220,16 @@ export const AGGREGATE_CHAINS = {
   signal: ["signal"],
   automatedFlowRunCap: ["automatedFlowRunCap"],
   contactCapacity: ["contactCapacity"],
+  fileComparisonCapacity: ["fileComparisonCapacity"],
+  billingCodeCapacity: ["billingCodeCapacity"],
+  expenseCapacity: ["expenseCapacity"],
+  rateTableWorkspace: ["rateTableWorkspace"],
+  mcpOAuthState: ["mcpOAuthState"],
   personalCatalog: ["personalCatalog"],
   sampleCase: ["workspace", "sampleCase"],
   searchHistory: ["desktopMembership", "searchHistory"],
+  memory: ["memory"],
+  searchProjectionRepair: ["searchProjectionRepair"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
   readerAnnotation: ["readerAnnotation"],
@@ -248,7 +278,9 @@ type AggregateIdentities = {
   };
   account: SafeId<"user">;
   accountExport: { id: string; userId: SafeId<"user"> };
+  accountDeletionRequest: SafeId<"accountDeletionRequest">;
   sampleCase: { workspaceId: SafeId<"workspace"> };
+  organizationObjectIntent: SafeId<"organization">;
   organization: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
@@ -292,6 +324,11 @@ type AggregateIdentities = {
         id: string;
         workspaceId: SafeId<"workspace">;
       };
+  chatOwnerStoredContentEgress: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  chatStoredContentEgress: SafeId<"chatThread">;
   chatThread: {
     id: SafeId<"chatThread">;
     organizationId: SafeId<"organization">;
@@ -336,6 +373,15 @@ type AggregateIdentities = {
     workspaceId: SafeId<"workspace">;
   };
   field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
+  memory: {
+    id: SafeId<"aiMemory">;
+    organizationId: SafeId<"organization">;
+  };
+  searchProjectionRepair: {
+    kind: SearchProjectionKind;
+    revision: string;
+    sourceId: string;
+  };
   signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
   automatedFlowRunCap: SafeId<"flowDefinition">;
   processingClaim: {
@@ -344,6 +390,15 @@ type AggregateIdentities = {
   };
   contactCapacity: { organizationId: SafeId<"organization"> };
   chatToolGrants: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  fileComparisonCapacity: { organizationId: SafeId<"organization"> };
+  billingCodeCapacity: { workspaceId: SafeId<"workspace"> };
+  expenseCapacity: { workspaceId: SafeId<"workspace"> };
+  rateTableWorkspace: { workspaceId: SafeId<"workspace"> };
+  mcpOAuthState: {
+    connectorId: SafeId<"mcpConnector">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -362,6 +417,23 @@ type AggregateIdentities = {
     organizationId: SafeId<"organization">;
   };
 };
+
+// Advisory first-key namespaces are a deployed contract: old and new workers
+// must take the same lock for the same work during a rolling deployment.
+// aggregate-lock-namespaces.json beside this file records each one, and
+// scripts/check-aggregate-locks.ts holds it to the base revision.
+const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
+const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
+const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
+const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+
+const chatOwnerStoredContentEgressKey = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+}) => `${organizationId}\u001f${userId}`;
 
 type ExecuteTransaction = { execute: (statement: SQL) => PromiseLike<unknown> };
 type SavepointTransaction = Pick<Transaction, "execute" | "transaction">;
@@ -827,6 +899,58 @@ const memberCleanupRowResource = (
       return panic("Unknown member cleanup resource");
   }
 };
+type AuxiliaryRowIdentityOptions = Extract<
+  RowIdentityOptions,
+  {
+    aggregate:
+      | "accountDeletionRequest"
+      | "desktopMembership"
+      | "memory"
+      | "searchProjectionRepair";
+  }
+>;
+
+const auxiliaryRowResource = (
+  options: AuxiliaryRowIdentityOptions,
+): RowResource => {
+  switch (options.aggregate) {
+    case "accountDeletionRequest":
+      return {
+        table: "account_deletion_requests",
+        columns: ["id"],
+        values: [options.id],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "desktopMembership":
+      return {
+        table: "member",
+        columns: ["user_id", "organization_id"],
+        values: [options.id.userId, options.id.organizationId],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    case "memory":
+      return byIdWithin(
+        "ai_memories",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
+    case "searchProjectionRepair":
+      return {
+        table: "search_projection_repair_queue",
+        columns: ["kind", "source_id", "revision"],
+        values: [options.id.kind, options.id.sourceId, options.id.revision],
+        scopeColumns: [],
+        scopeValues: [],
+      };
+    default:
+      options satisfies never;
+      return panic("Unknown auxiliary row aggregate");
+  }
+};
+
 const rowResource = (options: RowIdentityOptions): RowResource => {
   switch (options.aggregate) {
     case "account":
@@ -845,14 +969,11 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         "user_id",
         options.id.userId,
       );
+    case "accountDeletionRequest":
     case "desktopMembership":
-      return {
-        table: "member",
-        columns: ["user_id", "organization_id"],
-        values: [options.id.userId, options.id.organizationId],
-        scopeColumns: [],
-        scopeValues: [],
-      };
+    case "memory":
+    case "searchProjectionRepair":
+      return auxiliaryRowResource(options);
     case "searchHistory":
       return {
         table: "search_history_owners",
@@ -1258,6 +1379,12 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "organizationObjectIntent":
+      return {
+        first: sql`${ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
+      };
     case "legislationAmendmentWork":
       return {
         first: sql`${0x0f_10_cc_ad}::integer`,
@@ -1268,6 +1395,20 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.eli,
           options.id.language,
         ],
+      };
+    case "chatOwnerStoredContentEgress": {
+      const key = chatOwnerStoredContentEgressKey(options.id);
+      return {
+        first: sql`${CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${key})`,
+        order: [options.aggregate, key],
+      };
+    }
+    case "chatStoredContentEgress":
+      return {
+        first: sql`${CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE}::integer`,
+        second: sql`hashtext(${options.id})`,
+        order: [options.aggregate, options.id],
       };
     case "desktopBatch":
       return {
@@ -1314,6 +1455,47 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
         ],
       };
+    case "fileComparisonCapacity":
+      return {
+        first: sql`${0x0f_10_cc_b2}::integer`,
+        second: sql`hashtext(${options.id.organizationId})`,
+        order: [options.aggregate, options.id.organizationId],
+      };
+    case "billingCodeCapacity":
+      return {
+        first: sql`hashtext('billing-code-capacity')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "expenseCapacity":
+      return {
+        first: sql`hashtext('expense-capacity')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "rateTableWorkspace":
+      return {
+        first: sql`hashtext('rate-table-workspace')`,
+        second: sql`hashtext(${options.id.workspaceId})`,
+        order: [options.aggregate, options.id.workspaceId],
+      };
+    case "mcpOAuthState":
+      return {
+        first: sql`${0x4d_43_50_4f}::integer`,
+        // A JSON array keeps the three ids apart without a separator they
+        // could contain; PostgreSQL text parameters cannot carry NUL.
+        second: sql`hashtext(${JSON.stringify([
+          options.id.organizationId,
+          options.id.connectorId,
+          options.id.userId,
+        ])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.connectorId,
+          options.id.userId,
+        ],
+      };
     case "personalCatalog":
       return {
         first: sql`hashtext(${options.id.organizationId})`,
@@ -1326,7 +1508,7 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       };
     case "readerAnnotation":
       return {
-        first: sql`${0x0f_10_cc_af}::integer`,
+        first: sql`${READER_ANNOTATION_LOCK_NAMESPACE}::integer`,
         second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
         order: [
           options.aggregate,
@@ -1360,6 +1542,76 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
     default:
       options satisfies never;
       return panic("Unknown advisory aggregate");
+  }
+};
+
+type AggregateSessionConnection = {
+  unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
+};
+
+/**
+ * Hold the thread's stored-content egress fence on one physical session.
+ * Transaction writers use the same key through `withAggregateLock`; holding
+ * this session lock across provider I/O linearizes raw egress with a thread's
+ * irreversible switch to anonymized mode without keeping a transaction open.
+ */
+export const withChatStoredContentEgressSessionLock = async <T>({
+  connection,
+  organizationId,
+  threadId,
+  userId,
+  work,
+}: {
+  connection: AggregateSessionConnection;
+  organizationId: SafeId<"organization">;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  work: () => Promise<T>;
+}): Promise<T> => {
+  const ownerKey = chatOwnerStoredContentEgressKey({ organizationId, userId });
+  let ownerAcquired = false;
+  let threadAcquired = false;
+  try {
+    await connection.unsafe(
+      "SELECT pg_advisory_lock($1::integer, hashtext($2::text))",
+      [CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, ownerKey],
+    );
+    ownerAcquired = true;
+    await connection.unsafe(
+      "SELECT pg_advisory_lock($1::integer, hashtext($2::text))",
+      [CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, threadId],
+    );
+    threadAcquired = true;
+    return await work();
+  } finally {
+    if (threadAcquired) {
+      const rows = await connection.unsafe(
+        "SELECT pg_advisory_unlock($1::integer, hashtext($2::text)) AS released",
+        [CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, threadId],
+      );
+      let released: unknown;
+      if (Array.isArray(rows)) {
+        const values: unknown[] = rows;
+        released = values.at(0);
+      }
+      if (!isRecord(released) || released["released"] !== true) {
+        panic("Chat stored-content egress lock was not held at release");
+      }
+    }
+    if (ownerAcquired) {
+      const rows = await connection.unsafe(
+        "SELECT pg_advisory_unlock($1::integer, hashtext($2::text)) AS released",
+        [CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE, ownerKey],
+      );
+      let released: unknown;
+      if (Array.isArray(rows)) {
+        const values: unknown[] = rows;
+        released = values.at(0);
+      }
+      if (!isRecord(released) || released["released"] !== true) {
+        panic("Chat owner stored-content egress lock was not held at release");
+      }
+    }
   }
 };
 const busy = (aggregate: AggregateName): AggregateLockResult => ({
@@ -1534,6 +1786,9 @@ export const withAggregateLock = async (
   completeAcquisition(history);
   return rows.length > 0 ? { status: "locked" } : { status: "missing" };
 };
+
+/** The queue claim owns this nonblocking row-lock clause. */
+export const chatCompactionQueueClaimLock = () => sql`FOR UPDATE SKIP LOCKED`;
 
 type OpenSigningPageOptions = {
   tx: Transaction;

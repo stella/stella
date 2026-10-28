@@ -9,6 +9,7 @@ import { toAPIError } from "@/lib/errors/api";
 import {
   detachedUserAction,
   notifyUserError,
+  notifyUserProblem,
   resetUserErrorReportDedupeForTests,
 } from "@/lib/errors/user-toast";
 
@@ -46,6 +47,37 @@ const settle = async () => {
 afterEach(() => {
   resetUserErrorReportDedupeForTests();
   mock.restore();
+});
+
+describe("notifyUserProblem", () => {
+  test("shows the problem and reports nothing, having no cause", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("problem-toast");
+
+    notifyUserProblem(FAILURE, { description: "Check the date." });
+
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls.at(0)?.[0]).toMatchObject({
+      title: FAILURE,
+      description: "Check the date.",
+      type: "error",
+    });
+    expect(userVisibleReports(capture)).toEqual([]);
+  });
+
+  test("replaces the toast it is given", () => {
+    const update = spyOn(stellaToast, "update").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("problem-toast");
+
+    notifyUserProblem(FAILURE, { toastId: "upload-progress" });
+
+    expect(add).not.toHaveBeenCalled();
+    expect(update.mock.calls.at(0)?.[0]).toBe("upload-progress");
+  });
 });
 
 describe("detachedUserAction", () => {
@@ -93,6 +125,17 @@ describe("detachedUserAction", () => {
 });
 
 describe("notifyUserError", () => {
+  test("accepts caught unknowns and errors as causes", () => {
+    spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const caught: unknown = new Error("caught");
+
+    notifyUserError(caught, FAILURE);
+    notifyUserError(new Error("plain"), FAILURE);
+
+    expect(add).toHaveBeenCalledTimes(2);
+  });
+
   test("aborted fetch errors are neither shown nor reported", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
@@ -112,26 +155,49 @@ describe("notifyUserError", () => {
     expect(add).not.toHaveBeenCalled();
   });
 
-  test("reports two different notices without errors", () => {
+  test("a missing optional cause shows the message and reports nothing", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const optional = (cause: Error | undefined) => {
+      notifyUserError(cause, FAILURE, { description: "Try again." });
+    };
+
+    optional(undefined);
+    optional(new Error("refused"));
+
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(add.mock.calls.at(0)?.[0]).toMatchObject({
+      title: FAILURE,
+      description: "Try again.",
+      type: "error",
+    });
+    expect(userVisibleReports(capture)).toHaveLength(1);
+  });
+
+  test("reports two different notices of one cause", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
     spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("save refused");
 
-    notifyUserError(undefined, "First notice");
-    notifyUserError(undefined, "Second notice");
+    notifyUserError(failure, "First notice");
+    notifyUserError(failure, "Second notice");
 
     expect(userVisibleReports(capture)).toHaveLength(2);
   });
 
-  test("reports the same notice without an error once", () => {
+  test("reports the same notice of one cause once", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
     );
     spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("save refused");
 
-    notifyUserError(undefined, FAILURE);
-    notifyUserError(undefined, FAILURE);
+    notifyUserError(failure, FAILURE);
+    notifyUserError(failure, FAILURE);
 
     expect(userVisibleReports(capture)).toHaveLength(1);
   });
@@ -141,10 +207,11 @@ describe("notifyUserError", () => {
       () => undefined,
     );
     spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("save refused");
 
-    notifyUserError(undefined, FAILURE, { occurrence: "first" });
-    notifyUserError(undefined, FAILURE, { occurrence: "first" });
-    notifyUserError(undefined, FAILURE, { occurrence: "second" });
+    notifyUserError(failure, FAILURE, { occurrence: "first" });
+    notifyUserError(failure, FAILURE, { occurrence: "first" });
+    notifyUserError(failure, FAILURE, { occurrence: "second" });
 
     expect(userVisibleReports(capture)).toHaveLength(2);
   });
@@ -215,3 +282,12 @@ describe("notifyUserError", () => {
     });
   });
 });
+
+// A user-facing error names its cause; a message with none is a problem notice.
+const missingCauseContract = () => {
+  // @ts-expect-error no cause: use notifyUserProblem for a message with nothing to report
+  notifyUserError(undefined, FAILURE);
+  // @ts-expect-error a null cause is no cause either
+  notifyUserError(null, FAILURE);
+};
+void missingCauseContract;
