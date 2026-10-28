@@ -142,6 +142,10 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_API_KEY: v.optional(v.string()),
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID: v.optional(
+    v.pipe(v.string(), v.trim(), v.minLength(1)),
+  ),
   OPENROUTER_WIF_POLICY_ID: v.optional(
     v.pipe(v.string(), v.trim(), v.minLength(1)),
   ),
@@ -975,6 +979,8 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
     OPENROUTER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_API_KEY?: string | undefined;
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID?: string | undefined;
     OPENROUTER_WIF_POLICY_ID?: string | undefined;
     OPENROUTER_WIF_AUDIENCE?: string | undefined;
     OPENROUTER_WIF_STS_REGION?: string | undefined;
@@ -1012,9 +1018,12 @@ type ManagedProviderCheckInvariantInput = Pick<
   EnvApiInvariantInput,
   | "AI_PROVIDER"
   | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "FEATURE_FREE_TIER"
   | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
   | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
   | "OPENROUTER_API_KEY"
+  | "OPENROUTER_FAST_TIER_API_KEY"
+  | "OPENROUTER_FAST_TIER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_POLICY_ID"
   | "OPENROUTER_WIF_AUDIENCE"
   | "OPENROUTER_WIF_STS_REGION"
@@ -1023,26 +1032,56 @@ type ManagedProviderCheckInvariantInput = Pick<
 const managedProviderCheckInvariantViolation = ({
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
+  FEATURE_FREE_TIER,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
 }: ManagedProviderCheckInvariantInput): string | null => {
-  const configuredWifFields = [
-    OPENROUTER_WIF_POLICY_ID,
+  const configuredSharedWifFields = [
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
   ].filter((value) => value !== undefined).length;
-  if (configuredWifFields !== 0 && configuredWifFields !== 3) {
-    return "OPENROUTER_WIF_POLICY_ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  if (configuredSharedWifFields === 1) {
+    return "OPENROUTER_WIF_AUDIENCE and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    configuredSharedWifFields === 2 &&
+    OPENROUTER_WIF_POLICY_ID === undefined &&
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID === undefined
+  ) {
+    return "An OpenRouter WIF policy ID, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  if (
+    (OPENROUTER_WIF_POLICY_ID !== undefined ||
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID !== undefined) &&
+    configuredSharedWifFields !== 2
+  ) {
+    return "OpenRouter WIF policy IDs, OPENROUTER_WIF_AUDIENCE, and OPENROUTER_WIF_STS_REGION must be configured together.";
+  }
+  // The free floor runs on the fast tier's own credential and never on the
+  // standard one, so a managed free tier without it would refuse every
+  // request; refuse the configuration at boot instead.
+  if (
+    FEATURE_FREE_TIER &&
+    AI_PROVIDER === "openrouter" &&
+    !OPENROUTER_FAST_TIER_API_KEY?.trim() &&
+    !(OPENROUTER_FAST_TIER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+  ) {
+    return "FEATURE_FREE_TIER with AI_PROVIDER=openrouter requires OPENROUTER_FAST_TIER_API_KEY or complete fast-tier OpenRouter WIF configuration.";
   }
   if (FEATURE_MANAGED_PROVIDER_CHECKS) {
     if (AI_PROVIDER !== "openrouter") {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
     }
-    if (!OPENROUTER_API_KEY?.trim() && configuredWifFields !== 3) {
+    if (
+      !OPENROUTER_API_KEY?.trim() &&
+      !(OPENROUTER_WIF_POLICY_ID && configuredSharedWifFields === 2)
+    ) {
       return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY or complete OpenRouter WIF configuration.";
     }
     if (
@@ -1139,6 +1178,8 @@ export const envApiInvariantViolation = ({
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
   MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
   OPENROUTER_API_KEY,
+  OPENROUTER_FAST_TIER_API_KEY,
+  OPENROUTER_FAST_TIER_WIF_POLICY_ID,
   OPENROUTER_WIF_POLICY_ID,
   OPENROUTER_WIF_AUDIENCE,
   OPENROUTER_WIF_STS_REGION,
@@ -1195,9 +1236,12 @@ export const envApiInvariantViolation = ({
     APP_REVIEW_ORGANIZATION_ID,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
+    FEATURE_FREE_TIER,
     MANAGED_PROVIDER_CHECK_INTERVAL_MS,
     MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
     OPENROUTER_API_KEY,
+    OPENROUTER_FAST_TIER_API_KEY,
+    OPENROUTER_FAST_TIER_WIF_POLICY_ID,
     OPENROUTER_WIF_POLICY_ID,
     OPENROUTER_WIF_AUDIENCE,
     OPENROUTER_WIF_STS_REGION,
@@ -1209,7 +1253,6 @@ export const envApiInvariantViolation = ({
     EMAIL_EVENTS_QUEUE_URL,
     EMAIL_EVENTS_TOPIC_ARN,
     EMAIL_EVENTS_DEAD_LETTER_QUEUE_URL,
-    FEATURE_FREE_TIER,
     FEATURE_ORG_ACCESS_STATE,
     FEATURE_ORG_SERVICE_BUDGETS,
     USAGE_ENFORCEMENT_ENABLED,

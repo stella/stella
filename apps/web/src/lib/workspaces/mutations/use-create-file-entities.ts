@@ -472,7 +472,6 @@ const runUploadBatch = async ({
       description: showProgress
         ? labels.progress(0, initialTotal)
         : labels.uploadingDescription,
-      timeout: 0,
       actionProps: {
         children: labels.cancel,
         onClick: () => queue.cancel(),
@@ -537,7 +536,6 @@ const runUploadBatch = async ({
           title: labels.partial(failedCount, total),
           description:
             successCount > 0 ? labels.progress(successCount, total) : undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (failedCount === 0) {
@@ -545,7 +543,6 @@ const runUploadBatch = async ({
           type: "success",
           title: labels.uploadedSuccessfully,
           description: undefined,
-          timeout: undefined,
           actionProps: undefined,
         });
       } else if (successCount > 0) {
