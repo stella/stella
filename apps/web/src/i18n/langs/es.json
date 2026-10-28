@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} columnas × {rows} filas = {answers, plural, one {# respuesta} other {# respuestas}}. Las respuestas consumen presupuesto.",
+    "modelRefused": "El modelo se negó a responder",
+    "nothingFound": "No se encontró nada",
     "refusedBudget": "No ejecutado: presupuesto de respuestas no disponible",
     "rerunAllPage": "Volver a ejecutar todo (esta página)",
     "rerunColumnPage": "Volver a ejecutar columna (esta página)",

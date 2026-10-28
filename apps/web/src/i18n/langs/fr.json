@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} colonnes × {rows} lignes = {answers, plural, one {# réponse} other {# réponses}}. Les réponses consomment le budget.",
+    "modelRefused": "Le modèle a refusé de répondre",
+    "nothingFound": "Aucun résultat",
     "refusedBudget": "Non exécuté : budget de réponses indisponible",
     "rerunAllPage": "Tout relancer (cette page)",
     "rerunColumnPage": "Relancer la colonne (cette page)",

@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} veergu × {rows} rida = {answers, plural, one {# vastus} other {# vastust}}. Vastused kasutavad eelarvet.",
+    "modelRefused": "Mudel keeldus vastamast",
+    "nothingFound": "Midagi ei leitud",
     "refusedBudget": "Käivitamata: vastuste eelarve pole saadaval",
     "rerunAllPage": "Käivita kõik uuesti (sellel lehel)",
     "rerunColumnPage": "Käivita veerg uuesti (sellel lehel)",

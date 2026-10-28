@@ -264,7 +264,7 @@ const readRun = async (runId: string) => {
 
 const readCells = async () =>
   await testDb
-    .select({ content: fields.content })
+    .select({ content: fields.content, aiSettlement: fields.aiSettlement })
     .from(fields)
     .where(
       and(
@@ -322,7 +322,14 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
     expect(generateOptions?.scopedDb).toBe(actor.inputDb);
     expect(generateOptions?.entityVersionId).toBe(ids.entityVersionA1);
     expect(await readCells()).toEqual([
-      { content: { version: 1, type: "text", value: EXTRACTED_VALUE } },
+      {
+        content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+        aiSettlement: {
+          type: "value",
+          runId,
+          settledAt: expect.any(String),
+        },
+      },
     ]);
     expect(await readRun(runId)).toMatchObject({ status: "completed" });
     // The successor run starts as the same requester and plans through the
@@ -332,6 +339,77 @@ describe.each(WORKFLOW_QUEUE_CLASSES)("%s queue class", (queueClass) => {
       userId: ids.userA1,
       scopedDb: actor.inputDb,
     });
+  });
+
+  test("terminal empty outcomes persist and a rerun replaces the settlement", async () => {
+    stragglerSpy.mockImplementation(async () => {
+      await Promise.resolve();
+    });
+    for (const outcome of ["notStated", "refused"] as const) {
+      const first = await queueRun(serviceTier);
+      generateSpy.mockImplementation(async ({ batch }) =>
+        Result.ok({
+          aiResults: [],
+          aiJustifications: [],
+          skippedPropertyIds: [],
+          unsupportedPropertyIds: [],
+          settlements: new Map(
+            batch.properties.map((property) => [property.id, outcome]),
+          ),
+        }),
+      );
+      await first.run();
+      const expectedSettlement =
+        outcome === "refused"
+          ? {
+              type: "refused" as const,
+              reason: "modelRefusal" as const,
+              runId: first.runId,
+              settledAt: expect.any(String),
+            }
+          : {
+              type: "notStated" as const,
+              runId: first.runId,
+              settledAt: expect.any(String),
+            };
+      expect(await readCells()).toEqual([
+        {
+          content: { version: 1, type: "unsupported" },
+          aiSettlement: expectedSettlement,
+        },
+      ]);
+
+      const rerun = await queueRun(serviceTier);
+      generateSpy.mockImplementation(async ({ batch }) =>
+        Result.ok({
+          aiResults: batch.properties.map((property) => ({
+            fieldId: createSafeId<"field">(),
+            propertyId: property.id,
+            content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+          })),
+          aiJustifications: [],
+          skippedPropertyIds: [],
+          unsupportedPropertyIds: [],
+          settlements: new Map(
+            batch.properties.map((property) => [property.id, "answered"]),
+          ),
+        }),
+      );
+      await rerun.run();
+      expect(await readCells()).toEqual([
+        {
+          content: { version: 1, type: "text", value: EXTRACTED_VALUE },
+          aiSettlement: {
+            type: "value",
+            runId: rerun.runId,
+            settledAt: expect.any(String),
+          },
+        },
+      ]);
+      await testDb
+        .delete(fields)
+        .where(eq(fields.propertyId, extractedPropertyId));
+    }
   });
 
   test("completing a cell-scoped run starts catch-up for a column whose start was deferred", async () => {

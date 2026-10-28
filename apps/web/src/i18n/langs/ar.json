@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} أعمدة × {rows} صفوف = {answers, plural, zero {# إجابة} one {# إجابة} two {# إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}. الإجابات تستهلك الميزانية.",
+    "modelRefused": "رفض النموذج الإجابة",
+    "nothingFound": "لم يتم العثور على شيء",
     "refusedBudget": "لم يُشغّل: ميزانية الإجابات غير متاحة",
     "rerunAllPage": "إعادة تشغيل الكل (هذه الصفحة)",
     "rerunColumnPage": "إعادة تشغيل العمود (هذه الصفحة)",

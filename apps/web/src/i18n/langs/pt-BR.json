@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} colunas × {rows} linhas = {answers, plural, one {# resposta} other {# respostas}}. As respostas consomem o orçamento.",
+    "modelRefused": "O modelo se recusou a responder",
+    "nothingFound": "Nada encontrado",
     "refusedBudget": "Não executado: orçamento de respostas indisponível",
     "rerunAllPage": "Executar tudo novamente (esta página)",
     "rerunColumnPage": "Executar coluna novamente (esta página)",

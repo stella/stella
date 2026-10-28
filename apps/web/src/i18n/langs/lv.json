@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "modelRefused": "Modelis atteicās atbildēt",
+    "nothingFound": "Nekas netika atrasts",
     "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
     "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
     "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",

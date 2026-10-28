@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} Spalten × {rows} Zeilen = {answers, plural, one {# Antwort} other {# Antworten}}. Antworten verbrauchen Budget.",
+    "modelRefused": "Das Modell hat die Antwort verweigert",
+    "nothingFound": "Nichts gefunden",
     "refusedBudget": "Nicht ausgeführt: Antwortbudget nicht verfügbar",
     "rerunAllPage": "Alle erneut ausführen (diese Seite)",
     "rerunColumnPage": "Spalte erneut ausführen (diese Seite)",

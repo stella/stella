@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} oszlop × {rows} sor = {answers, plural, one {# válasz} other {# válasz}}. A válaszok felhasználják a keretet.",
+    "modelRefused": "A modell megtagadta a választ",
+    "nothingFound": "Nincs találat",
     "refusedBudget": "Nem futott le: a válaszkeret nem érhető el",
     "rerunAllPage": "Összes újrafuttatása (ezen az oldalon)",
     "rerunColumnPage": "Oszlop újrafuttatása (ezen az oldalon)",

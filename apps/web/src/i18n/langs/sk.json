@@ -81,6 +81,8 @@
   },
   "aiColumns": {
     "countSummary": "{columns} stĺpcov × {rows} riadkov = {answers, plural, one {# odpoveď} few {# odpovede} many {# odpovede} other {# odpovedí}}. Odpovede čerpajú rozpočet.",
+    "modelRefused": "Model odmietol odpovedať",
+    "nothingFound": "Nič sa nenašlo",
     "refusedBudget": "Nespustené: rozpočet na odpovede nie je k dispozícii",
     "rerunAllPage": "Spustiť všetko znova (táto stránka)",
     "rerunColumnPage": "Spustiť stĺpec znova (táto stránka)",

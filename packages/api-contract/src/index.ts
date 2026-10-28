@@ -1004,6 +1004,10 @@ export {
   rulingKeysOf,
   rulingGroupKeys,
 } from "./decision-ruling-identity";
+export {
+  AI_CELL_SETTLEMENT_TYPES,
+  type AiCellSettlement,
+} from "./ai-cell-settlement";
 export type {
   RulingIdentityInput,
   RulingIdentityKeys,
