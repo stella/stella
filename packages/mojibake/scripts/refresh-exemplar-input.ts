@@ -112,7 +112,7 @@ const main = () => {
   if (mode === "prepare") {
     writeFileSync(
       path.join(workDirectory, "locales.regex"),
-      `^(${tags.map((tag) => tag.replaceAll("-", "_")).join("|")})$`,
+      `^(${tags.map((tag) => (tag === "und" ? "root" : tag.replaceAll("-", "_"))).join("|")})$`,
     );
     return;
   }
