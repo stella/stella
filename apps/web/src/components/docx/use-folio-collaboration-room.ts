@@ -249,6 +249,13 @@ const loadCollaborationRuntimeModules =
     return await collaborationRuntimeModulesPromise;
   };
 
+// Seed downloads fail as FetchBoundaryError, typed API calls as APIError;
+// rejoin and read-only recovery branch on the HTTP status of either.
+const httpFailureStatus = (error: unknown): number | null =>
+  error instanceof FetchBoundaryError || APIError.is(error)
+    ? error.status
+    : null;
+
 const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
   const response = await fetchWithTimeout(seedDownloadUrl, {
     timeoutMs: SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS,
@@ -515,11 +522,7 @@ export const useFolioCollaborationRoom = ({
                   return;
                 }
                 if (Result.isError(rejoinResult)) {
-                  const status =
-                    rejoinResult.error instanceof FetchBoundaryError ||
-                    APIError.is(rejoinResult.error)
-                      ? rejoinResult.error.status
-                      : null;
+                  const status = httpFailureStatus(rejoinResult.error);
                   if (!reportedFailure) {
                     reportedFailure = true;
                     getAnalytics().captureError(rejoinResult.error, {
@@ -798,18 +801,12 @@ export const useFolioCollaborationRoom = ({
                   case "superseded":
                     return undefined;
                   case "failed":
-                    if (
-                      receipt.error instanceof FetchBoundaryError &&
-                      receipt.error.status === 409
-                    ) {
+                    if (httpFailureStatus(receipt.error) === 409) {
                       startGenerationRejoin();
                       return undefined;
                     }
                     reportFailure(receipt.error);
-                    if (
-                      receipt.error instanceof FetchBoundaryError &&
-                      receipt.error.status === 403
-                    ) {
+                    if (httpFailureStatus(receipt.error) === 403) {
                       return undefined;
                     }
                     connectedProvider.disconnect();
