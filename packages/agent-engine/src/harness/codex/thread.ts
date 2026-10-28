@@ -96,8 +96,8 @@ export const openThread = async (
     return startThread(client, params, { type: "fresh" });
   }
   const threadId = input.continuation.sessionId;
-  const resume = () =>
-    client.request("thread/resume", {
+  const resume = async () =>
+    await client.request("thread/resume", {
       threadId,
       excludeTurns: true,
       ...params,
