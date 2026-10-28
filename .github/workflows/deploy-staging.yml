@@ -699,6 +699,8 @@ jobs:
           echo "STAGING_STATUS_WRITER=$RUNNER_TEMP/post-staging-verification.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/staging-owner.sh" "$RUNNER_TEMP/staging-owner.sh"
+          echo "STAGING_OWNER_SCRIPT=$RUNNER_TEMP/staging-owner.sh" >> "$GITHUB_ENV"
 
       - name: Checkout workflow actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -742,7 +744,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           STAGING_OWNER_MODE: ${{ inputs.release_ref != '' && 'candidate' || 'ordinary' }}
-        run: bash .gh-retry/scripts/staging-owner.sh
+        run: bash "$STAGING_OWNER_SCRIPT"
 
       - name: Deploy to staging
         # Waits for the infra staging promote; the job's other steps keep the rest.
