@@ -6205,7 +6205,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: x86_64-pc-windows-msvc
 
       - name: Resolve Windows build toolchain
@@ -6379,7 +6379,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6491,7 +6491,7 @@ jobs:
         name: Setup Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: 1.99.0
+          toolchain: 1.99.1
           targets: ${{ matrix.target }}
           components: clippy
 

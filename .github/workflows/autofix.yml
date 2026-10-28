@@ -184,7 +184,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout Dependabot head
@@ -453,7 +453,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.99.1
 
     steps:
       - name: Checkout lockfile tooling
