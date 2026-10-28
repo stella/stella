@@ -304,9 +304,13 @@ const startServer = async (): Promise<void> => {
     ]);
     // Telemetry queued in memory leaves before the process does. Analytics
     // goes first: its flush never rejects and logs a failed delivery, which
-    // the log export then carries.
+    // the log export then carries. Its retries can outlast the whole budget,
+    // so it gets half, and the log export always runs in what remains.
     const flushTelemetry = async (): Promise<void> => {
-      await getServerAnalytics().flush();
+      await Promise.race([
+        getServerAnalytics().flush(),
+        Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS / 2),
+      ]);
       await flushLogExport();
     };
     await Promise.race([
