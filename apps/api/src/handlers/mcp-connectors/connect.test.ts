@@ -10,6 +10,7 @@ import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const connectorUrl = "https://mcp.example.com/rpc";
@@ -58,6 +59,8 @@ const setup = (
   });
   type Context = Parameters<typeof handler.handler>[0];
   const chain = {
+    execute: async (statement: Parameters<typeof aggregateExecutionRows>[0]) =>
+      aggregateExecutionRows(statement),
     select: () => chain,
     from: () => chain,
     leftJoin: () => chain,
@@ -74,8 +77,11 @@ const setup = (
     insert: (table: unknown) =>
       table === mcpOAuthState
         ? {
-            values: async (value: unknown) => {
+            values: (value: unknown) => {
               states.push(value);
+              return {
+                onConflictDoUpdate: async () => await Promise.resolve(),
+              };
             },
           }
         : {
@@ -85,6 +91,13 @@ const setup = (
               },
             }),
           },
+    delete: (table: unknown) => ({
+      where: async () => {
+        if (table === mcpOAuthState) {
+          states.length = 0;
+        }
+      },
+    }),
     query: {
       mcpOAuthClients: {
         findFirst: async () => {
@@ -171,6 +184,19 @@ test("connects using configured connector metadata", async () => {
     expect(setupResult.reviews).toEqual([]);
     expect(setupResult.audits).toEqual([]);
   }
+});
+
+test("a repeated connect leaves one pending authorization", async () => {
+  const fixture = setup(issuer);
+
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+
+  expect(fixture.states).toHaveLength(1);
 });
 
 test("curated approval for another issuer requires administrator approval", async () => {

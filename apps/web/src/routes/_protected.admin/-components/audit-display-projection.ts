@@ -137,6 +137,8 @@ export const AUDIT_RESOURCE_PROJECTIONS = {
     "settings.organization.auditResourceKinds.mcp_connection",
   [AUDIT_RESOURCE_TYPE.MCP_GATEWAY_TOOL]:
     "settings.organization.auditResourceKinds.mcp_gateway_tool",
+  [AUDIT_RESOURCE_TYPE.ORGANIZATION_ACCESS_STATE]:
+    "settings.organization.auditResourceKinds.organization_access_state",
   [AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS]:
     "settings.organization.auditResourceKinds.organization_settings",
   [AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION]:

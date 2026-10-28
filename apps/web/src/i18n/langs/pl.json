@@ -1,6 +1,7 @@
 {
   "account": {
     "sessions": {
+      "activeNow": "Teraz",
       "currentSession": "Bieżąca",
       "device": "Urządzenie",
       "deviceOnOs": "{browser} na {os}",
@@ -997,12 +998,15 @@
       "supreme": "Sądy najwyższe"
     },
     "coverage": {
+      "allCurrent": "Wszystkie źródła są aktualne",
       "completeness": "Kompletność",
+      "completenessHelp": "Zapisane orzeczenia względem liczby podanej przez wydawcę, jego wykazu lub odnotowanej liczby całkowitej.",
+      "countryNavigation": "Przejdź do kraju",
       "courtsHeading": "Według sądu",
       "decisionYears": "Lata orzeczeń",
+      "decisionsAcross": "orzeczeń z {count, plural, one {# jurysdykcji} few {# jurysdykcji} many {# jurysdykcji} other {# jurysdykcji}}",
       "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
       "generatedAt": "Dane na {date}",
-      "globeLabel": "Państwa, których orzecznictwo zawiera korpus, na globusie",
       "healthCurrent": "Aktualne",
       "healthDelayed": "Opóźnione",
       "healthDisabled": "Wyłączone",
@@ -1012,10 +1016,10 @@
       "lastSync": "Ostatnia synchronizacja",
       "notCountedYet": "Jeszcze niepoliczone",
       "notMeasuredYet": "Jeszcze niezmierzone",
-      "reportedByListing": "Policzone z wykazu wydawcy",
-      "reportedByOperator": "Wpisane ręcznie",
-      "reportedByPublisher": "Własne dane wydawcy",
       "searchable": "Wyszukiwalne",
+      "sourceExceptions": "{count, plural, one {# źródło wymaga uwagi} few {# źródła wymagają uwagi} many {# źródeł wymaga uwagi} other {# źródła wymaga uwagi}}",
+      "sourcesCurrent": "Aktualne źródła",
+      "syncedAt": "Zsynchronizowano {time}",
       "title": "Zakres orzecznictwa",
       "totalFrom": "Suma z {date}",
       "unavailable": "Dane o zakresie są chwilowo niedostępne."
@@ -1206,6 +1210,7 @@
       "appliedVersionStatedAmendmentCompact": "Wskazano: <reference>{amendment}</reference>",
       "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
       "appliedVersionStatedDateCompact": "{relation, select, on {Wskazano: {date}} until {Wskazano: do {date}} from {Wskazano: od {date}} other {Wskazano: {date}}}",
+      "caseFileDocuments": "Dokumenty w aktach tej sprawy",
       "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
       "citedDecisionPassage": "Fragment orzeczenia",
@@ -1432,6 +1437,17 @@
         "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
       }
     },
+    "connectConnector": {
+      "checkAction": "Sprawdź połączenie",
+      "description": "Asystent prosi o połączenie łącznika {connector}, aby korzystać z jego narzędzi w tej rozmowie.",
+      "error": "Nie udało się rozpocząć łączenia. Spróbuj ponownie.",
+      "notConnected": "Jeszcze nie połączono. Dokończ logowanie i sprawdź połączenie ponownie.",
+      "openTools": "Otwórz narzędzia",
+      "scopes": "Żądany dostęp: {scopes}",
+      "title": "Połącz łącznik",
+      "tokenRequired": "Łącznik {connector} wymaga tokenu dostępu. Dodaj go na stronie narzędzi, a następnie sprawdź połączenie.",
+      "waiting": "Dokończ logowanie w otwartym oknie."
+    },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
       "autoCompact": "Przy 100% stella automatycznie podsumowuje starsze wiadomości, aby zwolnić miejsce.",
@@ -1506,7 +1522,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
+      "unnamed": "{count, plural, one {# więcej} few {# więcej} many {# więcej} other {# więcej}}"
     },
     "historyTrimmed": "Nie udało się podsumować wcześniejszych wiadomości, dlatego ta odpowiedź uwzględnia tylko najnowszą część rozmowy.",
     "improvePrompt": "Ulepsz prompt",
@@ -1747,6 +1763,7 @@
       "business_registry_lookup": "Wyszukiwanie w rejestrze przedsiębiorstw",
       "compare_versions": "Porównywanie wersji",
       "configure_template_fields": "Skonfiguruj pola szablonu",
+      "connect_connector": "Prośba o połączenie łącznika",
       "counterparty_check": "Weryfikacja kontrahenta",
       "create-document": "Przygotowywanie dokumentu",
       "create_matter_document": "Tworzenie dokumentu",
@@ -2034,6 +2051,7 @@
     "confirm": "Potwierdź",
     "confirmAction": "Czy na pewno?",
     "connect": "Połącz",
+    "connected": "Połączono",
     "connectionLost": "Utracono połączenie",
     "connectionLostDescription": "Utracono połączenie z serwerem. Automatyczne ponowne łączenie.",
     "convertTo": "Konwertuj na",
@@ -2202,6 +2220,8 @@
     "noResults": "Brak wyników",
     "noVersions": "Brak historii wersji",
     "none": "Brak",
+    "notConnected": "Nie połączono",
+    "notNow": "Nie teraz",
     "notStated": "Nie podano",
     "notes": "Notatki",
     "open": "Otwórz",
@@ -2450,10 +2470,10 @@
       "value": "Wartość pola"
     },
     "datePrecision": "Dokładność daty",
-    "deleteContact": "Usuń klienta",
+    "deleteContact": "Usuń kontakt",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
-    "editContact": "Edytuj klienta",
+    "editContact": "Edytuj kontakt",
     "emailTypes": {
       "other": "Inny",
       "personal": "Prywatny",
@@ -2466,7 +2486,7 @@
     "extractProcuracao": {
       "dropZone": "Upuść tutaj pełnomocnictwo (.docx) lub kliknij, aby wybrać plik",
       "extracting": "Wyodrębnianie mocodawcy(-ów)…",
-      "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
+      "fileHint": "stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
       "fileTooLarge": "Plik pełnomocnictwa nie może przekraczać 50 MB.",
       "invalidFileType": "Wybierz plik .docx.",
       "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
@@ -4610,7 +4630,6 @@
       "selectAtLeastOneRole": "Wybierz co najmniej jedną rolę dla tego klucza.",
       "selectModelForEachRole": "Dodaj dostawcę i wybierz model dla każdej kategorii.",
       "selectedProvider": "{provider}",
-      "title": "Konfiguracja AI",
       "usingDefaults": "Używane są ustawienia domyślne"
     },
     "invitations": {
@@ -5038,7 +5057,7 @@
         "title": "Uwierzytelnianie dwuskładnikowe"
       },
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
-      "wordEditShortcut": "Skrót do edycji w programie Word",
+      "wordEditShortcut": "Inicjały do zmian w Wordzie",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",
       "wordEditShortcutPlaceholder": "np. JK"
     },
@@ -5049,7 +5068,6 @@
       "cliInstallLabel": "Instalacja",
       "cliLoginLabel": "Logowanie",
       "cliTitle": "Interfejs wiersza poleceń",
-      "connected": "Połączone",
       "connectedAgo": "Połączono {time}",
       "connectedAppsDescription": "Aplikacje, w których zalogowano się kontem stella. Odłącz te, których już nie używasz.",
       "connectedAppsEmpty": "Jeszcze nic. Skonfiguruj powyżej Claude lub ChatGPT, a pojawi się tutaj.",
@@ -5072,7 +5090,6 @@
       "mcpTitle": "Serwer MCP",
       "mcpUrlLabel": "Adres URL serwera",
       "noMatches": "Żadne połączenie nie pasuje do „{query}”",
-      "notConnected": "Niepołączone",
       "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
       "privateCredentialOnly": "Tylko prywatne dane dostępowe",
       "searchPlaceholder": "Szukaj połączeń",
@@ -5189,6 +5206,7 @@
         "mcp_gateway_tool": "nieznany element: mcp gateway tool",
         "mcp_web_handoff": "nieznany element: mcp web handoff",
         "number_series": "Serie numeracji",
+        "organization_access_state": "nieznany element: organization access state",
         "organization_settings": "nieznany element: organization settings",
         "pdf_signing_session": "nieznany element: pdf signing session",
         "personal_api_key": "nieznany element: personal api key",
@@ -5286,7 +5304,6 @@
       "usageLimitDescriptionNoEntitlement": "Funkcje AI wymagają aktywnego uprawnienia do użycia w tej organizacji.",
       "usageLimitDescriptionUsageLimitExceeded": "Tej akcji nie można uruchomić przy obecnym stanie użycia organizacji.",
       "usageLimitNeeded": "Wymagane",
-      "usageLimitNotNow": "Nie teraz",
       "usageLimitTitleEntitlementInactive": "Uprawnienie do użycia nie jest aktywne",
       "usageLimitTitleNoEntitlement": "Wymagane uprawnienie do użycia",
       "usageLimitTitleUsageLimitExceeded": "Osiągnięto limit użycia AI",
@@ -5527,16 +5544,16 @@
     "savedDescription": "Zapisany zestaw stylów",
     "sourceDocument": "Źródłowy DOCX",
     "stellaDescription": "Kompletne, neutralne formatowanie dokumentów prawnych stella",
-    "stellaStyle": "Stella Style",
+    "stellaStyle": "stella Style",
     "title": "Zestawy stylów",
     "untitledDocument": "Dokument bez tytułu"
   },
   "success": {
     "aiConfigDeleted": "Konfiguracja AI usunięta",
     "aiConfigUpdated": "Konfiguracja AI zaktualizowana",
-    "clientUpdated": "Klient zaktualizowany",
-    "contactCreated": "Klient utworzony",
-    "contactDeleted": "Klient usunięty",
+    "clientUpdated": "Kontakt zaktualizowany",
+    "contactCreated": "Kontakt utworzony",
+    "contactDeleted": "Kontakt usunięty",
     "documentCreated": "Dokument utworzony",
     "folderCreated": "Folder utworzony",
     "invitationCanceled": "Zaproszenie anulowane",
@@ -6073,6 +6090,7 @@
     }
   },
   "validation": {
+    "invalidEmail": "Wpisz prawidłowy adres e-mail.",
     "organizationNameRequired": "Nazwa organizacji jest wymagana",
     "slugFormat": "Slug może zawierać tylko małe litery, cyfry i myślniki",
     "slugRequired": "Slug jest wymagany"

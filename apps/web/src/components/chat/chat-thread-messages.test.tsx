@@ -814,6 +814,60 @@ describe("chat thread messages", () => {
     expect(html).toContain("Provide");
     expect(html).toContain("Decline");
     expect(html).toContain("Use saved credential");
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    expect(
+      root.querySelector('input[type="password"]')?.closest("details"),
+    ).toBeNull();
+  });
+
+  test("keeps the connector sign-in card outside a closed process disclosure", () => {
+    const input = {
+      connectorSlug: "sample",
+      purpose: "Read the selected source",
+    };
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        approvalPendingMessageId={null}
+        messages={[
+          {
+            id: "message-user",
+            parts: [{ type: "text", content: "Read the source" }],
+            role: "user",
+          },
+          {
+            id: "message-connector",
+            parts: [
+              {
+                arguments: JSON.stringify(input),
+                id: "tool-call-connector",
+                input,
+                name: "connect_connector",
+                state: "input-complete",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+        ]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+    const window = new Window();
+    const root = window.document.createElement("div");
+    // safe-html: React's static markup from this test's own components is parsed in a detached document.
+    root.innerHTML = html;
+    const card = root.querySelector('[data-slot="connect-connector-card"]');
+    expect(card).not.toBeNull();
+    expect(card?.closest("details")).toBeNull();
   });
 
   // The same supersession withdraws a user-input card: the runtime has no

@@ -17,6 +17,10 @@ const INFRA_REPO = "example/infra";
 const RUNS_ENDPOINT = `GET /repos/${INFRA_REPO}/actions/workflows/staging-power.yml/runs`;
 const DISPATCH_ENDPOINT = `POST /repos/${INFRA_REPO}/actions/workflows/staging-power.yml/dispatches`;
 const RUN_ENDPOINT = `GET /repos/${INFRA_REPO}/actions/runs/77`;
+const OWNERSHIP_ENDPOINTS = [
+  "GET repos/stella/stella/actions/workflows/deploy-staging.yml/runs",
+  `GET repos/stella/stella/commits/${DEPLOY_SHA}/statuses`,
+];
 const STATUS_ENDPOINT = `POST repos/stella/stella/statuses/${DEPLOY_SHA}`;
 // Created after any dispatch the test makes; the stale run long before it.
 const AFTER_DISPATCH = "2999-01-01T00:00:00Z";
@@ -118,6 +122,22 @@ const baseFixture = (overrides: Fixture = {}): Fixture => ({
   [RUNS_ENDPOINT]: [{ body: { workflow_runs: [] } }, RUNS_AFTER_DISPATCH],
   [RUN_ENDPOINT]: [run("queued", null), run("completed", "success")],
   [STATUS_ENDPOINT]: [{}],
+  "GET repos/stella/stella/actions/workflows/deploy-staging.yml/runs": [
+    {
+      body: {
+        workflow_runs: [
+          {
+            id: 9,
+            head_branch: "main",
+            path: ".github/workflows/deploy-staging.yml",
+            display_title: `Deploy main to staging ${DEPLOY_SHA}`,
+            repository: { full_name: "stella/stella" },
+          },
+        ],
+      },
+    },
+  ],
+  [`GET repos/stella/stella/commits/${DEPLOY_SHA}/statuses`]: [{ body: [[]] }],
   ...overrides,
 });
 
@@ -367,11 +387,17 @@ describe("staging wake for a release candidate", () => {
   test("refuses without dispatching when no token or target is available", async () => {
     const tokenless = await wake({ env: { STAGING_POWER_TOKEN: "" } });
     expectRefusal(tokenless, "staging start failed");
-    expect(tokenless.log.map(({ key }) => key)).toEqual([STATUS_ENDPOINT]);
+    expect(tokenless.log.map(({ key }) => key)).toEqual([
+      ...OWNERSHIP_ENDPOINTS,
+      STATUS_ENDPOINT,
+    ]);
 
     const unconfigured = await wake({ env: { INFRA_REPO: "example/" } });
     expectRefusal(unconfigured, "staging start not configured");
-    expect(unconfigured.log.map(({ key }) => key)).toEqual([STATUS_ENDPOINT]);
+    expect(unconfigured.log.map(({ key }) => key)).toEqual([
+      ...OWNERSHIP_ENDPOINTS,
+      STATUS_ENDPOINT,
+    ]);
   });
 
   test("a failed dispatch refuses and is not repeated", async () => {
@@ -382,6 +408,7 @@ describe("staging wake for a release candidate", () => {
     expectRefusal(result, "staging start failed");
     expect(result.log.map(({ key }) => key)).toEqual([
       DISPATCH_ENDPOINT,
+      ...OWNERSHIP_ENDPOINTS,
       STATUS_ENDPOINT,
     ]);
   });
@@ -444,6 +471,10 @@ describe("the wake in deploy-staging.yml", () => {
           PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
           FAKE_ROOT: root,
           GH_RETRY_SCRIPT: path.join(workspace, "gh-retry.sh"),
+          STAGING_STATUS_WRITER: path.join(
+            import.meta.dir,
+            "post-staging-verification.sh",
+          ),
           GH_TOKEN: "repo-token",
           DEPLOY_SHA,
           DEPLOY_WHEN_UNREACHABLE: "false",
@@ -469,7 +500,7 @@ describe("the wake in deploy-staging.yml", () => {
 
     const ordinary = await decide(false);
     expect(ordinary.exitCode).toBe(1);
-    expect(ordinary.keys).toEqual([STATUS_ENDPOINT]);
+    expect(ordinary.keys).toEqual([...OWNERSHIP_ENDPOINTS, STATUS_ENDPOINT]);
     expect(ordinary.output).toBe("deploy=false\n");
 
     const candidate = await decide(true);
@@ -508,11 +539,17 @@ describe("the wake in deploy-staging.yml", () => {
 
   test("promotes whenever both builds succeeded, whether or not staging needed a wake", async () => {
     const { "promote-staging": job } = await jobs();
-    expect(job?.["needs"]).toEqual(["resolve", "build-api", "build-web"]);
+    expect(job?.["needs"]).toEqual([
+      "resolve",
+      "staging-health",
+      "staging-wake",
+      "build-api",
+      "build-web",
+    ]);
     // Without a status function a skipped wake two levels up would skip the
     // promotion and end the run green with nothing deployed.
     expect(job?.["if"]).toBe(
-      "!cancelled() && github.ref == 'refs/heads/main' && needs.resolve.result == 'success' && needs.build-api.result == 'success' && needs.build-web.result == 'success'",
+      "!cancelled() && github.ref == 'refs/heads/main' && needs.resolve.result == 'success' && ((inputs.release_ref != '' && (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) || (needs.build-api.result == 'success' && needs.build-web.result == 'success'))",
     );
   });
 
@@ -525,7 +562,7 @@ describe("the wake in deploy-staging.yml", () => {
         "staging-wake",
       ]);
       expect(all[name]?.["if"]).toBe(
-        "!cancelled() && github.ref == 'refs/heads/main' && (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')",
+        "!cancelled() && inputs.release_ref == '' && github.ref == 'refs/heads/main' && (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')",
       );
     }
   });
