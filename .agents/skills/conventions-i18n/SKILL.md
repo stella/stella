@@ -37,6 +37,25 @@ the current list of target languages (add translations to every
    branches. Passing key parity is not proof that a translation is natural or
    that placeholders remain grammatically valid.
 
+### Changing existing English
+
+`i18n-source-lock.json` beside each catalog records the English every key's
+translations follow. `i18n:check` fails on a key whose `en.json` value no
+longer matches it, and `i18n:sync` never updates an existing entry.
+
+1. Run `bun run i18n:brief --locale=<code>` for each target locale. It lists
+   every message `i18n:check` fails on for that locale with the English it was
+   written for, the current translation, placeholders, plural forms the locale
+   needs, glossary terms and the source lines that use the key.
+2. Rework each translation to say what the English now says.
+3. Once every locale is updated, record it with
+   `bun run i18n:accept <key> ...`. Accept a key without retranslating only
+   when the English change leaves every translation correct (casing,
+   punctuation).
+
+The product name is lowercase `stella` in every locale and grammatical form,
+sentence starts included (`stellu`, `stelle`).
+
 ## Key Naming
 
 **Prefer generic, reusable keys over feature-specific ones.**

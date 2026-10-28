@@ -1,15 +1,23 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
+  acceptSourceChanges,
   buildCommonValueMap,
   emptyBaseline,
   findCommonDuplicates,
   findSharedValueDuplicates,
+  findSourceChanges,
   findStaleBaselineEntries,
   findUntranslated,
   isSorted,
+  parseSourceLock,
+  serializeSourceLock,
   sortKeys,
   syncMessages,
+  syncSourceLock,
 } from "./i18n-check";
 import type { CheckBaseline, NestedMessages } from "./i18n-check";
 
@@ -420,6 +428,86 @@ describe("findStaleBaselineEntries", () => {
         "duplicatesCommon: tasks.status",
         "duplicateValues: tasks.status",
       ],
+    );
+  });
+});
+
+describe("source lock", () => {
+  // Flat, dot-free keys: nesting is syncMessages' concern, not the lock's.
+  const messages = fc.dictionary(
+    fc.stringMatching(/^[a-z][a-zA-Z]{0,6}$/u),
+    fc.string({ maxLength: 8 }),
+  );
+
+  test("sync never clears a changed source and is a fixed point", () => {
+    assertProperty(
+      "i18n source lock sync preserves every locked English value",
+      fc.property(messages, messages, (source, locked) => {
+        const lock = new Map(Object.entries(locked));
+        const synced = syncSourceLock(source, lock);
+
+        expect([...synced.keys()].toSorted()).toEqual(
+          Object.keys(source).toSorted(),
+        );
+        for (const [key, value] of Object.entries(source)) {
+          expect(synced.get(key)).toBe(lock.get(key) ?? value);
+        }
+        expect(
+          findSourceChanges(source, synced)
+            .map(({ key }) => key)
+            .toSorted(),
+        ).toEqual(
+          Object.entries(source)
+            .filter(([key, value]) => lock.has(key) && lock.get(key) !== value)
+            .map(([key]) => key)
+            .toSorted(),
+        );
+        expect(syncSourceLock(source, synced)).toEqual(synced);
+      }),
+    );
+  });
+
+  test("accepting a key clears its change and no other", () => {
+    const source: NestedMessages = {
+      nav: { knowledge: "Intelligence", matters: "Matters" },
+    };
+    const lock = new Map([
+      ["nav.knowledge", "Knowledge"],
+      ["nav.matters", "Cases"],
+    ]);
+    expect(findSourceChanges(source, lock)).toHaveLength(2);
+
+    const accepted = acceptSourceChanges({
+      source,
+      lock,
+      keys: ["nav.knowledge"],
+    });
+
+    expect(findSourceChanges(source, accepted)).toEqual([
+      { key: "nav.matters", locked: "Cases", current: "Matters" },
+    ]);
+  });
+
+  test("accepting a key the source does not have fails", () => {
+    expect(() =>
+      acceptSourceChanges({
+        source: { nav: { matters: "Matters" } },
+        lock: new Map([["nav.matters", "Matters"]]),
+        keys: ["nav.missing"],
+      }),
+    ).toThrow("nav.missing is not in en.json");
+  });
+
+  test("a lock round-trips through its file and rejects other shapes", () => {
+    const lock = new Map([
+      ["a.b", "Line\nbreak “quoted” ä"],
+      ["c", ""],
+    ]);
+    expect(parseSourceLock(serializeSourceLock(lock), "lock.json")).toEqual(
+      lock,
+    );
+    expect(() => parseSourceLock('{"a":{"b":"x"}}', "lock.json")).toThrow(
+      "lock.json is not a map of message keys to English values",
     );
   });
 });

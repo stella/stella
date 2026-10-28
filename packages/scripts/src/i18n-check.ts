@@ -4,11 +4,17 @@
  * Reports missing/extra keys, untranslated values (same as en), and
  * feature keys that duplicate a common.* value.
  *
- * Usage: i18n-check <langs-dir> [--sync | --write-baseline]
+ * Also fails when en.json changed a value after its translations were last
+ * accepted (see SourceLock).
+ *
+ * Usage: i18n-check <langs-dir> [--sync | --write-baseline | --accept <key> ...]
  *                    [--unused-in=<dir> ...]
  *
  * --sync             Fix structural mismatches: add missing keys
- *                    (English fallback) and remove extra keys.
+ *                    (English fallback) and remove extra keys, in the
+ *                    locales and the source lock.
+ * --accept <key>...  Record that every locale now translates the current
+ *                    English of each key.
  * --write-baseline   Regenerate i18n-check-baseline.json, grandfathering
  *                    the current untranslated/duplicate debt so the gate
  *                    stays green while catching new regressions. Unused
@@ -22,6 +28,7 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { findUnusedKeys, unusedKeysBaselineAfter } from "./i18n-usage";
+import type { SourceFile } from "./i18n-usage";
 
 export type NestedMessages = {
   [key: string]: string | NestedMessages;
@@ -590,21 +597,179 @@ export const findStaleBaselineEntries = ({
   return stale;
 };
 
+// --- source lock ---
+
+/** Each leaf key's message, in catalog order. */
+export const flattenMessages = (
+  messages: NestedMessages,
+): Map<string, string> => {
+  const flat = new Map<string, string>();
+  for (const key of flattenKeys(messages)) {
+    const value = getNestedValue(messages, key);
+    if (typeof value === "string") {
+      flat.set(key, value);
+    }
+  }
+  return flat;
+};
+
+/**
+ * The English each key's translations were written against. A key whose
+ * English no longer matches its entry has translations that may say something
+ * else; `--accept` records that every locale was brought up to date. `--sync`
+ * adds new keys and drops removed ones but never moves an existing entry, so a
+ * reworded source cannot pass unnoticed.
+ */
+export type SourceLock = ReadonlyMap<string, string>;
+
+const SOURCE_LOCK_FILE = "i18n-source-lock.json";
+
+export const parseSourceLock = (text: string, source: string): SourceLock => {
+  const parsed: unknown = JSON.parse(text);
+  const invalid = `${source} is not a map of message keys to English values`;
+  if (!isPlainRecord(parsed)) {
+    return panic(invalid);
+  }
+  const lock = new Map<string, string>();
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      return panic(invalid);
+    }
+    lock.set(key, value);
+  }
+  return lock;
+};
+
+export const serializeSourceLock = (lock: SourceLock): string =>
+  `${JSON.stringify(Object.fromEntries(lock), null, 2)}\n`;
+
+/** The lock with every source key present and no other: new keys lock to their current English. */
+export const syncSourceLock = (
+  source: NestedMessages,
+  lock: SourceLock,
+): SourceLock =>
+  new Map(
+    [...flattenMessages(source)].map(([key, value]) => [
+      key,
+      lock.get(key) ?? value,
+    ]),
+  );
+
+type SourceChange = {
+  key: string;
+  /** The English the translations were written against. */
+  locked: string;
+  current: string;
+};
+
+/** Keys whose English changed since their translations were last accepted. */
+export const findSourceChanges = (
+  source: NestedMessages,
+  lock: SourceLock,
+): SourceChange[] => {
+  const changes: SourceChange[] = [];
+  for (const [key, current] of flattenMessages(source)) {
+    const locked = lock.get(key);
+    if (locked !== undefined && locked !== current) {
+      changes.push({ key, locked, current });
+    }
+  }
+  return changes;
+};
+
+type AcceptSourceChangesOptions = {
+  source: NestedMessages;
+  lock: SourceLock;
+  keys: readonly string[];
+};
+
+/** The lock with each named key moved to its current English. */
+export const acceptSourceChanges = ({
+  source,
+  lock,
+  keys,
+}: AcceptSourceChangesOptions): SourceLock => {
+  const flat = flattenMessages(source);
+  const next = new Map(lock);
+  for (const key of keys) {
+    next.set(key, flat.get(key) ?? panic(`${key} is not in en.json`));
+  }
+  return next;
+};
+
+/** The lock beside a langs dir, or null when the catalog has none yet. */
+export const readSourceLock = async (
+  langsDir: string,
+): Promise<SourceLock | null> => {
+  const lockPath = path.resolve(langsDir, "..", SOURCE_LOCK_FILE);
+  const file = Bun.file(lockPath);
+  return (await file.exists())
+    ? parseSourceLock(await file.text(), lockPath)
+    : null;
+};
+
+/** The check baseline beside a langs dir; empty when the catalog has none. */
+export const readCheckBaseline = async (
+  langsDir: string,
+): Promise<CheckBaseline> => {
+  const baselinePath = path.resolve(langsDir, "..", "i18n-check-baseline.json");
+  const file = Bun.file(baselinePath);
+  if (!(await file.exists())) {
+    return emptyBaseline();
+  }
+  const parsed: unknown = JSON.parse(await file.text());
+  if (!isCheckBaselinePart(parsed)) {
+    return panic(`${baselinePath} is not an i18n-check baseline`);
+  }
+  return { ...emptyBaseline(), ...parsed };
+};
+
+type ReadUsageSourcesOptions = {
+  dirs: readonly string[];
+  langsDir: string;
+};
+
+/** The source files under `dirs` that can name a message key: not the catalog itself, not generated code. */
+export const readUsageSources = async ({
+  dirs,
+  langsDir,
+}: ReadUsageSourcesOptions): Promise<SourceFile[]> => {
+  const langsPath = path.resolve(langsDir);
+  const sources: SourceFile[] = [];
+  for (const dir of dirs) {
+    for (const file of new Bun.Glob("**/*.{ts,tsx,astro}").scanSync(dir)) {
+      const filePath = path.resolve(dir, file);
+      if (
+        filePath.startsWith(`${langsPath}${path.sep}`) ||
+        file.endsWith(".gen.ts")
+      ) {
+        continue;
+      }
+      sources.push({
+        path: path.join(dir, file),
+        text: await Bun.file(filePath).text(),
+      });
+    }
+  }
+  return sources;
+};
+
 // --- CLI ---
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const langsDir = args.find((a) => !a.startsWith("--"));
+  const [langsDir, ...acceptKeys] = args.filter((a) => !a.startsWith("--"));
   const shouldSync = args.includes("--sync");
   const shouldWriteBaseline = args.includes("--write-baseline");
+  const shouldAccept = args.includes("--accept");
   const USAGE_DIR_FLAG = "--unused-in=";
   const usageDirs = args
     .filter((a) => a.startsWith(USAGE_DIR_FLAG))
     .map((a) => a.slice(USAGE_DIR_FLAG.length));
 
-  if (!langsDir) {
+  if (!langsDir || (!shouldAccept && acceptKeys.length > 0)) {
     console.error(
-      "Usage: i18n-check <langs-dir> [--sync | --write-baseline] [--unused-in=<dir> ...]",
+      "Usage: i18n-check <langs-dir> [--sync | --write-baseline | --accept <key> ...] [--unused-in=<dir> ...]",
     );
     process.exit(1);
   }
@@ -618,44 +783,38 @@ if (import.meta.main) {
   const enMessages = sortKeys(enRaw);
   const enKeys = new Set(flattenKeys(enMessages));
 
-  // Baseline grandfathers existing untranslated/duplicate debt (kept beside
-  // the langs dir so the *.json glob does not treat it as a locale).
+  // Baseline and source lock live beside the langs dir so the *.json glob
+  // does not treat them as locales.
   const baselinePath = path.resolve(langsDir, "..", "i18n-check-baseline.json");
-  const readBaseline = async (): Promise<CheckBaseline> => {
-    const file = Bun.file(baselinePath);
-    if (!(await file.exists())) {
-      return emptyBaseline();
+  const baseline = await readCheckBaseline(langsDir);
+  const lockPath = path.resolve(langsDir, "..", SOURCE_LOCK_FILE);
+  const lock = await readSourceLock(langsDir);
+
+  if (shouldAccept) {
+    if (acceptKeys.length === 0) {
+      console.error("Usage: i18n-check <langs-dir> --accept <key> [<key> ...]");
+      process.exit(1);
     }
-    const parsed: unknown = JSON.parse(await file.text());
-    if (!isCheckBaselinePart(parsed)) {
-      return panic(`${baselinePath} is not an i18n-check baseline`);
-    }
-    return { ...emptyBaseline(), ...parsed };
-  };
-  const baseline = await readBaseline();
+    const accepted = acceptSourceChanges({
+      source: enMessages,
+      lock: lock ?? panic(`${lockPath} is missing; run i18n:sync first`),
+      keys: acceptKeys,
+    });
+    await Bun.write(lockPath, serializeSourceLock(accepted));
+    console.log(`Accepted the current English for ${acceptKeys.join(", ")}`);
+    process.exit(0);
+  }
 
   // Keys no source file names, or null when no usage directory was given.
-  const readUnusedKeys = async (): Promise<string[] | null> => {
-    if (usageDirs.length === 0) {
-      return null;
-    }
-    const langsPath = path.resolve(langsDir);
-    const sources: string[] = [];
-    for (const dir of usageDirs) {
-      for (const file of new Bun.Glob("**/*.{ts,tsx}").scanSync(dir)) {
-        const filePath = path.resolve(dir, file);
-        if (
-          filePath.startsWith(`${langsPath}${path.sep}`) ||
-          file.endsWith(".gen.ts")
-        ) {
-          continue;
-        }
-        sources.push(await Bun.file(filePath).text());
-      }
-    }
-    return findUnusedKeys([...enKeys], sources);
-  };
-  const unusedKeys = await readUnusedKeys();
+  const unusedKeys =
+    usageDirs.length === 0
+      ? null
+      : findUnusedKeys(
+          [...enKeys],
+          (await readUsageSources({ dirs: usageDirs, langsDir })).map(
+            ({ text }) => text,
+          ),
+        );
 
   const localeFiles = [...new Bun.Glob("*.json").scanSync(langsDir)]
     .filter((f) => f !== "en.json")
@@ -855,6 +1014,46 @@ if (import.meta.main) {
       console.log(`\n${baselinePath}:`);
       for (const entry of stale) {
         console.log(`  - stale baseline entry: ${entry} (remove it)`);
+      }
+    }
+  }
+
+  const syncedLock = syncSourceLock(enMessages, lock ?? new Map());
+  if (shouldSync) {
+    if (
+      lock === null ||
+      serializeSourceLock(lock) !== serializeSourceLock(syncedLock)
+    ) {
+      await Bun.write(lockPath, serializeSourceLock(syncedLock));
+      console.log(`\n${lockPath}:\n  ✓ synced`);
+    }
+  } else if (lock === null) {
+    hasIssues = true;
+    console.log(`\n${lockPath}:\n  + missing (run i18n:sync)`);
+  } else {
+    const unlocked = [...syncedLock.keys()].filter((key) => !lock.has(key));
+    const removed = [...lock.keys()].filter((key) => !syncedLock.has(key));
+    const changes = findSourceChanges(enMessages, lock);
+    if (unlocked.length > 0 || removed.length > 0 || changes.length > 0) {
+      hasIssues = true;
+      console.log(`\n${lockPath}:`);
+      for (const key of unlocked) {
+        console.log(`  + missing: ${key} (run i18n:sync)`);
+      }
+      for (const key of removed) {
+        console.log(`  - extra:   ${key} (run i18n:sync)`);
+      }
+      for (const { key, locked, current } of changes) {
+        console.log(
+          `  ! source changed: ${key}\n` +
+            `      translations follow: ${JSON.stringify(locked)}\n` +
+            `      en now:              ${JSON.stringify(current)}`,
+        );
+      }
+      if (changes.length > 0) {
+        console.log(
+          "  Update every locale for each changed source (`i18n:brief` lists them per locale), then record it with `i18n:accept <key> ...`.",
+        );
       }
     }
   }

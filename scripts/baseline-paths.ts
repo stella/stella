@@ -94,9 +94,11 @@ export const BASELINE_PATHS = {
   queueAuthority: "scripts/queue-authority-baseline.json",
   /** scripts/queue-authority.ts */
   schedulerTaskAuthority: "scripts/scheduler-task-authority-baseline.json",
-  // The i18n pair is produced by `packages/scripts/src/i18n-*.ts` against the
-  // messages directory it is given, so the package holds the file name and
-  // each app contributes the directory. Both committed pairs are listed.
+  // The i18n baselines and source locks are produced by
+  // `packages/scripts/src/i18n-*.ts` against the messages directory it is
+  // given, so the package holds the file name and each catalog contributes the
+  // directory. Every committed one is listed. A source lock records which
+  // English the translations follow; only `--sync` and `--accept` may write it.
   /** packages/scripts/src/i18n-check.ts, apps/web */
   webI18nCheck: "apps/web/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/web */
@@ -105,6 +107,13 @@ export const BASELINE_PATHS = {
   landingI18nCheck: "apps/landing/src/i18n/i18n-check-baseline.json",
   /** packages/scripts/src/i18n-lint.ts, apps/landing */
   landingI18nLint: "apps/landing/src/i18n/i18n-lint-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/web */
+  webI18nSourceLock: "apps/web/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/landing */
+  landingI18nSourceLock: "apps/landing/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, packages/transactional */
+  transactionalI18nSourceLock:
+    "packages/transactional/i18n/i18n-source-lock.json",
 } as const satisfies Record<string, string>;
 
 export const isSeededBaselineFile = (file: string): boolean =>
