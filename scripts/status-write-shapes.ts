@@ -824,7 +824,7 @@ export const unmanagedTransitionTables = (
       return false;
     }
     seen.add(object);
-    return object.properties.some((property) => {
+    const unmanagedOptions = object.properties.map((property) => {
       if (property.type !== "SpreadElement") {
         const name = staticPropertyName(property);
         if (name === undefined) {
@@ -835,6 +835,7 @@ export const unmanagedTransitionTables = (
       const spread = objectOf(property.argument);
       return spread !== undefined && hasUnmanaged(spread, seen);
     });
+    return unmanagedOptions.includes(true);
   };
   let declarations: ObjectExpression | undefined;
   const visit = (node: Node) => {
