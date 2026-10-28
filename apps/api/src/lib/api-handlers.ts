@@ -4,8 +4,13 @@ import { panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
 import type { ModelTask } from "@stll/ai-catalog";
+import {
+  parseResourceMutationId,
+  RESOURCE_MUTATION_ID_HEADER,
+} from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -1641,14 +1646,22 @@ const createSafeScopedHandler = <
           config.realtime.scope !== "none" &&
           isSuccessfulHandlerResult(result)
         ) {
-          const announcement = Result.try(() =>
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
+          const announcement = await Result.tryPromise(async () => {
+            const mutationDigest =
+              mutationId === undefined
+                ? undefined
+                : await resourceMutationDigest(mutationId);
             announce({
               realtime: config.realtime,
+              ...(mutationDigest === undefined ? {} : { mutationDigest }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
-            }),
-          );
+            });
+          });
           if (Result.isError(announcement)) {
             observeFailure(announcement.error, {
               sink: REALTIME_ANNOUNCEMENT_FAILURE,

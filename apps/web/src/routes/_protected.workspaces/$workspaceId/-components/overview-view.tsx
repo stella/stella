@@ -36,7 +36,6 @@ import {
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import { stellaToast } from "@stll/ui/toast";
 import {
   Tooltip as TooltipRoot,
   TooltipPopup,
@@ -71,7 +70,7 @@ import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { queryView } from "@/lib/query-view.logic";
@@ -81,6 +80,7 @@ import {
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -210,35 +210,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [views],
   );
 
+  const createTask = useCreateTask();
   const createTaskOnce = useSingleFlight();
   const handleCreateTask = async () =>
-    createTaskOnce.run(async () => {
-      const { data: taskData, error: taskError } = await api
-        .tasks({ workspaceId })
-        .put({
-          name: t("tasks.untitled"),
-        });
-      const entityId = taskData?.entityId;
-      if (taskError || !entityId) {
-        notifyUserError(
-          taskError ? toAPIError(taskError) : undefined,
-          t("errors.actionFailed"),
-        );
-        return;
-      }
-      stellaToast.add({
-        title: t("success.taskCreated"),
-        type: "success",
-      });
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
-        "overview-view.invalidate",
-      );
-      useInspectorTabsStore
-        .getState()
-        .openTask({ taskId: entityId, workspaceId, isNew: true });
+    createTaskOnce.runSettled((onSettled) => {
+      createTask.mutate(workspaceId, { onSettled });
     });
 
   const updateTaskStatus = useMutation({

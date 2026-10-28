@@ -1,4 +1,4 @@
-import { hashKey, type QueryKey } from "@tanstack/react-query";
+import { hashKey, partialMatchKey, type QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import {
@@ -274,6 +274,17 @@ const getResourceTypeInvalidationActions = (
       });
     }
   }
+  const activity = workspacesKeys.overviewActivityAll(workspaceId);
+  if (
+    !actions.some((action) =>
+      action.queryKey.every((part, index) => part === activity[index]),
+    )
+  ) {
+    actions.push({
+      type: WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE,
+      queryKey: activity,
+    });
+  }
   return actions;
 };
 
@@ -331,7 +342,7 @@ const getResourceSetUpdatedQueryActions = (
   return actions;
 };
 
-const deduplicateQueryActions = (
+export const coalesceWorkspaceQueryActions = (
   actions: WorkspaceRealtimeQueryAction[],
 ): WorkspaceRealtimeQueryAction[] => {
   const seen = new Set<string>();
@@ -344,7 +355,16 @@ const deduplicateQueryActions = (
     seen.add(key);
     unique.push(action);
   }
-  return unique;
+  return unique.filter(
+    (action) =>
+      action.type !== WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE ||
+      !unique.some(
+        (other) =>
+          other !== action &&
+          other.type === WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE &&
+          partialMatchKey(action.queryKey, other.queryKey),
+      ),
+  );
 };
 
 /**
@@ -365,7 +385,7 @@ export const getWorkspaceReconnectQueryActions = (
       });
     }
   }
-  return deduplicateQueryActions(actions);
+  return coalesceWorkspaceQueryActions(actions);
 };
 
 /**
@@ -403,7 +423,7 @@ export const getWorkspaceRealtimeQueryActions = (
           actions.push(action);
         }
       }
-      return deduplicateQueryActions(actions);
+      return coalesceWorkspaceQueryActions(actions);
     }
     case REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED:
       return getResourceSetUpdatedQueryActions(event.resourceType, workspaceId);

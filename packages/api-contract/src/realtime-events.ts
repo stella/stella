@@ -34,12 +34,28 @@ const nonEmptyStringSchema = v.pipe(v.string(), v.minLength(1));
 
 const resourceRefSchema = v.custom<ResourceRef>(isResourceRef);
 
+export const RESOURCE_MUTATION_ID_HEADER = "x-stella-mutation-id";
+
+const resourceMutationIdSchema = v.pipe(v.string(), v.uuid());
+
+export const parseResourceMutationId = (value: unknown): string | undefined => {
+  const result = v.safeParse(resourceMutationIdSchema, value);
+  return result.success ? result.output : undefined;
+};
+
+const resourceMutationDigestSchema = v.pipe(
+  v.string(),
+  v.regex(/^[0-9a-f]{64}$/u),
+);
+
 const resourceUpdatedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_UPDATED),
   resource: resourceRefSchema,
 });
 
 const resourceDeletedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_DELETED),
   resource: resourceRefSchema,
 });
@@ -56,6 +72,7 @@ const resourceChangeSchema = v.variant("change", [
 ]);
 
 const resourcesChangedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCES_CHANGED),
   changes: v.pipe(
     v.array(resourceChangeSchema),
@@ -72,6 +89,7 @@ const resourceChangeCountSchema = v.pipe(
 );
 
 const resourceSetUpdatedEventSchema = v.object({
+  mutationDigest: v.optional(resourceMutationDigestSchema),
   type: v.literal(REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED),
   resourceType: v.custom<ResourceType>(isResourceType),
 });
@@ -188,10 +206,14 @@ export const resourcesChangedRealtimeEvent = (
   };
 };
 
-export const resourceSetUpdatedRealtimeEvent = (resourceType: ResourceType) =>
+export const resourceSetUpdatedRealtimeEvent = (
+  resourceType: ResourceType,
+  mutationDigest?: string,
+) =>
   ({
     type: REALTIME_EVENT_TYPE.RESOURCE_SET_UPDATED,
     resourceType,
+    ...(mutationDigest === undefined ? {} : { mutationDigest }),
   }) as const satisfies ResourceRealtimeEvent;
 
 const takeoverRequestedEventSchema = v.object({
