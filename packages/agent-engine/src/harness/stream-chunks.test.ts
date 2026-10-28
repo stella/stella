@@ -357,9 +357,10 @@ describe("local harness chunks", () => {
       (chunk) => chunk.type === EventType.TOOL_CALL_RESULT,
     );
     expect(result).toMatchObject({ toolCallId: questionCall.id });
-    expect(JSON.parse(String(result?.content))).toMatchObject({
-      status: "awaiting_reply",
-    });
+    const content = result?.content;
+    expect(
+      typeof content === "string" ? JSON.parse(content) : content,
+    ).toMatchObject({ status: "awaiting_reply" });
   });
 
   test("an interrupted turn ends cancelled and pairs its open tool calls", async () => {
