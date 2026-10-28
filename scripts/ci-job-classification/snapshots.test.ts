@@ -14,6 +14,7 @@ import { decisionKeyFromPath, writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
 import { decisionPathForKey } from "./inputs";
+import { verifyPublicMetadata } from "./public-metadata";
 import { writeSnapshots } from "./snapshots";
 
 const git = (directory: string, ...args: string[]) => {
@@ -438,5 +439,97 @@ test("two old revisions converging on one with different kinds need a review", (
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("Missing or changed job review");
+  }
+});
+
+test("nested composite actions retain the reusable workflow checkout mount", () => {
+  const sha = "a".repeat(40);
+  const fixture = createFixture(
+    reusable(`uses: actions/checkout@${sha}
+        with:
+          ref: \${{ job.workflow_sha }}
+          path: .tooling
+      - uses: ./.tooling/.github/actions/outer`),
+  );
+  for (const [name, next] of [
+    ["outer", "middle"],
+    ["middle", "inner"],
+  ]) {
+    write(
+      fixture.source,
+      `.github/actions/${name}/action.yml`,
+      `runs:
+  using: composite
+  steps:
+    - uses: ./.tooling/.github/actions/${next}
+`,
+    );
+  }
+  write(
+    fixture.source,
+    ".github/actions/inner/action.yml",
+    `runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo nested
+`,
+  );
+  const revision = commit(fixture.source, "nested metadata closure");
+  write(fixture.root, ".github/workflows/caller.yml", caller(revision));
+  writeSnapshots({
+    root: fixture.root,
+    sources: sources(fixture.source, revision),
+    base: fixture.base,
+  });
+  const inputs = readClassificationInputs(fixture.root);
+  const snapshot = Object.values(inputs.snapshots).find(
+    ({ origin }) => origin.sha === revision,
+  );
+  expect(Object.keys(snapshot?.documents ?? {}).toSorted()).toEqual([
+    ".github/actions/inner/action.yml",
+    ".github/actions/middle/action.yml",
+    ".github/actions/outer/action.yml",
+    ".github/workflows/shared.yml",
+  ]);
+  // Fixture review decisions are explicit; production refresh never invents them.
+  generateClassification({
+    ...inputs,
+    observeJobs: (jobs) => {
+      for (const [key, job] of jobs) {
+        writeDecision(fixture.root, key, {
+          kind: "ordinary",
+          qualifier: `fixture ${key}`,
+          reviewedDigest: job.digest,
+        });
+      }
+    },
+  });
+  const generated = generateClassification(
+    readClassificationInputs(fixture.root),
+  );
+  expect(generated.isOk()).toBe(true);
+  if (generated.isErr()) {
+    throw generated.error;
+  }
+  const nested = generated.value.nodes.filter(
+    (node) => node.type === "metadata" && node.path.includes("/actions/"),
+  );
+  expect(nested).toHaveLength(3);
+  const changedOrigin = verifyPublicMetadata({
+    manifest: generated.value,
+    reader: {
+      ...inputs.reader,
+      read: (repository, file) => {
+        const text = inputs.reader.read(repository, file);
+        return file === ".github/workflows/shared.yml"
+          ? text.replace(`\${{ job.workflow_sha }}`, "main")
+          : text;
+      },
+    },
+  });
+  expect(changedOrigin.isErr()).toBe(true);
+  if (changedOrigin.isErr()) {
+    expect(changedOrigin.error.message).toContain("origin mismatch");
   }
 });

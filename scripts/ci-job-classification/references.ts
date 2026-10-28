@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { AdmissionError } from "./yaml";
+import type { ParsedDocument } from "./yaml";
 
 const OWNER = v.pipe(
   v.string(),
@@ -129,4 +130,103 @@ export const verifyRemoteReference = ({
   if (!matches) {
     throw new AdmissionError({ message: "remote metadata path mismatch" });
   }
+};
+
+type LocalMetadataPathOptions = {
+  reference: string;
+  kind: MetadataReferenceKind;
+  relocations: ParsedDocument["relocatedActions"][string];
+  inheritedMount: string | null;
+};
+
+/** Local composite uses paths are workspace-relative, including inside nested composites. */
+export const resolveLocalMetadataPath = ({
+  reference,
+  kind,
+  relocations,
+  inheritedMount,
+}: LocalMetadataPathOptions) => {
+  const localPath = reference.slice(2);
+  const safe = (value: string) =>
+    value !== "" &&
+    !value.includes("\\") &&
+    value
+      .split("/")
+      .every((part) => part !== "" && part !== "." && part !== "..");
+  if (!safe(localPath)) {
+    throw new AdmissionError({ message: "unsafe local metadata reference" });
+  }
+  if (kind === "reusable-workflow") {
+    return { path: localPath, mount: null };
+  }
+  const selections = relocations.map((relocation) => {
+    if (
+      ![
+        null,
+        `\${{ github.repository }}`,
+        `\${{ job.workflow_repository }}`,
+      ].includes(relocation.repository) ||
+      ![
+        null,
+        `\${{ github.workflow_sha }}`,
+        `\${{ job.workflow_sha }}`,
+      ].includes(relocation.ref) ||
+      !safe(relocation.path) ||
+      !localPath.endsWith(`/${relocation.path}`)
+    ) {
+      throw new AdmissionError({
+        message: "local checkout metadata origin mismatch",
+      });
+    }
+    const mount = localPath.slice(0, -(relocation.path.length + 1));
+    if (!safe(mount)) {
+      throw new AdmissionError({ message: "unsafe checkout metadata mount" });
+    }
+    return { path: relocation.path, mount };
+  });
+  const selected = selections.at(0);
+  if (selected) {
+    if (
+      selections.some(
+        (value) =>
+          value.path !== selected.path || value.mount !== selected.mount,
+      )
+    ) {
+      throw new AdmissionError({
+        message: "ambiguous checkout metadata mount",
+      });
+    }
+    return selected;
+  }
+  if (inheritedMount !== null) {
+    if (!localPath.startsWith(`${inheritedMount}/`)) {
+      throw new AdmissionError({
+        message: "local metadata outside inherited checkout mount",
+      });
+    }
+    return {
+      path: localPath.slice(inheritedMount.length + 1),
+      mount: inheritedMount,
+    };
+  }
+  return { path: localPath, mount: null };
+};
+
+/** A single source node cannot silently acquire the first caller's workspace context. */
+type MetadataMountOptions = {
+  mounts: Map<string, string | null>;
+  identity: string;
+  mount: string | null;
+};
+export const recordMetadataMount = ({
+  mounts,
+  identity,
+  mount,
+}: MetadataMountOptions) => {
+  if (mounts.has(identity) && mounts.get(identity) !== mount) {
+    throw new AdmissionError({
+      message: `conflicting checkout metadata context: ${identity}`,
+    });
+  }
+  mounts.set(identity, mount);
 };

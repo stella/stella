@@ -14,7 +14,12 @@ import { decisionKeyFromPath } from "./decisions";
 import { readClassificationInputs } from "./generate";
 import { createGitProvider } from "./git-provider";
 import { decisionPathForKey } from "./inputs";
-import { parseRemoteReference, sameMetadataOrigin } from "./references";
+import {
+  parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
+  sameMetadataOrigin,
+} from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
@@ -215,6 +220,14 @@ const pairSuppliers = ({
   return { replacements, copies };
 };
 
+type VisitDocumentOptions = {
+  identity: string;
+  origin: Snapshot["origin"];
+  file: string;
+  read: (file: string) => string;
+  mount?: string | null;
+};
+
 export const writeSnapshots = ({
   root,
   sources,
@@ -234,6 +247,7 @@ export const writeSnapshots = ({
   const documents = new Map<string, Record<string, string>>();
   const origins = new Map<string, Snapshot["origin"]>();
   const visited = new Set<string>();
+  const mounts = new Map<string, string | null>();
 
   const existingFor = (origin: Snapshot["origin"]) =>
     Object.entries(previous).find(([, snapshot]) =>
@@ -286,15 +300,17 @@ export const writeSnapshots = ({
         throw error;
       }
     }
-    visitDocument(identity, origin, file, read);
+    visitDocument({ identity, origin, file, read });
   };
-  const visitDocument = (
-    identity: string,
-    origin: Snapshot["origin"],
-    file: string,
-    read: (file: string) => string,
-  ) => {
+  const visitDocument = ({
+    identity,
+    origin,
+    file,
+    read,
+    mount = null,
+  }: VisitDocumentOptions) => {
     const visitKey = `${identity}:${file}`;
+    recordMetadataMount({ mounts, identity: visitKey, mount });
     if (visited.has(visitKey)) {
       return;
     }
@@ -311,13 +327,24 @@ export const writeSnapshots = ({
     for (const [reference, kind] of Object.entries(parsed.value.dependencies)) {
       if (reference.startsWith("./") || reference.startsWith("$/")) {
         const relative = reference.slice(2);
-        const sourcePath =
-          parsed.value.relocatedActions[reference]?.at(0)?.path ?? relative;
+        const selected = resolveLocalMetadataPath({
+          reference,
+          kind,
+          relocations: parsed.value.relocatedActions[reference] ?? [],
+          inheritedMount: mount,
+        });
+        const sourcePath = selected.path;
         const target =
           kind === "reusable-workflow"
             ? relative
             : actionPath(read, sourcePath);
-        visitDocument(identity, origin, target, read);
+        visitDocument({
+          identity,
+          origin,
+          file: target,
+          read,
+          mount: selected.mount,
+        });
       } else {
         visitRemote(reference, kind);
       }
@@ -327,7 +354,8 @@ export const writeSnapshots = ({
   const candidateVisited = new Set<string>();
   const readCandidate = (file: string) =>
     readFileSync(path.resolve(root, file), "utf-8");
-  const visitCandidate = (file: string) => {
+  const visitCandidate = (file: string, mount: string | null = null) => {
+    recordMetadataMount({ mounts, identity: `candidate:${file}`, mount });
     if (candidateVisited.has(file)) {
       return;
     }
@@ -339,13 +367,18 @@ export const writeSnapshots = ({
     for (const [reference, kind] of Object.entries(parsed.value.dependencies)) {
       if (reference.startsWith("./") || reference.startsWith("$/")) {
         const relative = reference.slice(2);
-        const sourcePath =
-          parsed.value.relocatedActions[reference]?.at(0)?.path ?? relative;
+        const selected = resolveLocalMetadataPath({
+          reference,
+          kind,
+          relocations: parsed.value.relocatedActions[reference] ?? [],
+          inheritedMount: mount,
+        });
+        const sourcePath = selected.path;
         const target =
           kind === "reusable-workflow"
             ? relative
             : actionPath(readCandidate, sourcePath);
-        visitCandidate(target);
+        visitCandidate(target, selected.mount);
       } else {
         visitRemote(reference, kind);
       }
