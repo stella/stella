@@ -370,8 +370,10 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
-    const entityId = Result.isOk(result) ? result.value.entityId : null;
+    if (!Result.isOk(result)) {
+      expect.unreachable("the task was not created");
+    }
+    const { entityId } = result.value;
     expect(filed).toEqual([
       {
         kind: "task_assigned",
