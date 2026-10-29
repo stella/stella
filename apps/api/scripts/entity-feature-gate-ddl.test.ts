@@ -243,3 +243,35 @@ test("a trigger history leaves in REPLICA mode is repaired to plain ENABLE", asy
     'ALTER TABLE public."legal_list_item_sources" ENABLE TRIGGER entity_feature_gate_write;',
   ]);
 });
+
+// Creating a trigger needs EXECUTE on its routine, which PUBLIC lacks; the
+// gate migration granted it to the migrating session around its triggers.
+test("created triggers are wrapped in a temporary EXECUTE grant made as the routines' owner", async () => {
+  const effective = await readEffectiveEntityFeatureGateDefinitions();
+  const key = "legal_list_item_sources.entity_feature_gate_write";
+  const triggers = new Map(effective.triggers);
+  triggers.delete(key);
+  const statements = entityFeatureGateTableSql(tables, descriptors, {
+    ...effective,
+    triggers,
+  });
+  const routines =
+    "public.entity_feature_gate_write(), public.entity_feature_gate_propagate(), public.entity_feature_gate_repair_missing()";
+  const create = statements.findIndex((statement) =>
+    statement.startsWith("CREATE TRIGGER entity_feature_gate_write "),
+  );
+  expect(statements.slice(create - 5, create)).toEqual([
+    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    "SET LOCAL ROLE stella_entity_gate;",
+    `GRANT EXECUTE ON FUNCTION ${routines} TO SESSION_USER;`,
+    "RESET ROLE;",
+    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+  ]);
+  expect(statements.slice(create + 1, create + 6)).toEqual([
+    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    "SET LOCAL ROLE stella_entity_gate;",
+    `REVOKE EXECUTE ON FUNCTION ${routines} FROM SESSION_USER;`,
+    "RESET ROLE;",
+    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+  ]);
+});

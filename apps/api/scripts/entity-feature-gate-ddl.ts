@@ -84,10 +84,22 @@ const GATE_ROLE_ROUTINES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A routine's replacement statements, run as the role that owns it. The
- * gate migration leaves the migrator a member of the gate role WITH SET
- * FALSE and the gate role without CREATE on the schema, so both are granted
- * for the replacement and withdrawn after, exactly as that migration did.
+ * Statements run as the gate role. The gate migration leaves the migrator a
+ * member of it WITH SET FALSE, so the switch is granted around them and
+ * withdrawn after, exactly as that migration did.
+ */
+const asGateRole = (statements: readonly string[]): string[] => [
+  "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+  "SET LOCAL ROLE stella_entity_gate;",
+  ...statements,
+  "RESET ROLE;",
+  "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+];
+
+/**
+ * A routine's replacement statements, run as the role that owns it. The gate
+ * role holds no CREATE on the schema outside a replacement, so it is granted
+ * for it and revoked after, as the gate migration did.
  */
 export const routineReplacementSql = (
   name: string,
@@ -96,14 +108,40 @@ export const routineReplacementSql = (
   GATE_ROLE_ROUTINES.has(name)
     ? [
         "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
-        "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
-        "SET LOCAL ROLE stella_entity_gate;",
-        ...statements,
-        "RESET ROLE;",
-        "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+        ...asGateRole(statements),
         "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
       ]
     : [...statements];
+
+/** The routines a gate trigger executes. */
+const TRIGGER_ROUTINES =
+  "public.entity_feature_gate_write(), public.entity_feature_gate_propagate(), public.entity_feature_gate_repair_missing()";
+
+/**
+ * Creating a trigger needs EXECUTE on its routine, which PUBLIC lacks. As the
+ * gate migration did, the routines' owner grants the migrating session
+ * EXECUTE before the first CREATE TRIGGER and revokes it after the last.
+ */
+const withTriggerExecute = (statements: readonly string[]): string[] => {
+  const creates = (statement: string) =>
+    statement.startsWith("CREATE TRIGGER ");
+  const first = statements.findIndex(creates);
+  if (first === -1) {
+    return [...statements];
+  }
+  const last = statements.findLastIndex(creates);
+  return [
+    ...statements.slice(0, first),
+    ...asGateRole([
+      `GRANT EXECUTE ON FUNCTION ${TRIGGER_ROUTINES} TO SESSION_USER;`,
+    ]),
+    ...statements.slice(first, last + 1),
+    ...asGateRole([
+      `REVOKE EXECUTE ON FUNCTION ${TRIGGER_ROUTINES} FROM SESSION_USER;`,
+    ]),
+    ...statements.slice(last + 1),
+  ];
+};
 
 /** The routines derived from the census, by name. */
 export const entityFeatureGateRoutines = (
@@ -371,6 +409,8 @@ export const entityFeatureGateTableSql = (
   descriptors: readonly EntityFeatureGateDescriptor[],
   effective: EffectiveEntityFeatureGateDefinitions,
 ): string[] =>
-  entityFeatureGatePieces(tables, descriptors, effective).flatMap(
-    ({ repair }) => [...repair],
+  withTriggerExecute(
+    entityFeatureGatePieces(tables, descriptors, effective).flatMap(
+      ({ repair }) => [...repair],
+    ),
   );
