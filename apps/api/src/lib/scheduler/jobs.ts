@@ -34,6 +34,7 @@ import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingu
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
@@ -285,6 +286,15 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & {
  */
 export const DECLARED_SCHEDULER_JOBS = [
   {
+    description: "Precompute the public case-law coverage answer",
+    id: SCHEDULER_BACKFILL_IDS.coverage,
+    firstRun: "on-registration",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60_000 },
+    task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    reads: "load-governed",
+  },
+  {
     description: "Report scheduler pauses older than 24 hours",
     id: "scheduler.pauseAudit.hourly",
     mode: "recurring",
@@ -382,7 +392,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
-    reads: "unmeasured",
+    reads: { budget: "scheduled.caseLaw.refreshSitemapShards" },
   },
   {
     // Hourly: nothing alarms on these gauges at a finer resolution, and a

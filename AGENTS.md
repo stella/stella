@@ -58,7 +58,7 @@ details unless they are already public in the repository.
 
 - Use Computer Use or desktop/browser UI control only when the user explicitly asks for it. General fix, build, and test requests do not authorize operating user applications; isolated automated tests and code-level checks remain allowed.
 - Never manually reformat code you did not semantically change (auto-formatter output
-  from `bun run format` is fine to include)
+  from `bun fmt` is fine to include)
 - In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
   over em dashes. This does not apply to source code, command syntax, generated
   content, or exact identifiers.
@@ -109,7 +109,7 @@ details unless they are already public in the repository.
   branch lands (merge queue, squash) follows the repository's merge policy; main
   stays linear either way.
 - Enable `git rerere` in the clone, never globally (`git config rerere.enabled
-  true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
+true`, plus `rerere.autoupdate true` to auto-stage what it resolves; one-off:
   `git -c rerere.enabled=true -c rerere.autoupdate=true merge ...`) so conflict
   resolutions are recorded and auto-replayed across repeated or long rebases
 - Fail fast: validate at boundaries, return/throw early
@@ -167,8 +167,8 @@ details unless they are already public in the repository.
   `as const satisfies T`, not a `: T` annotation. `satisfies` checks the value without
   widening it or paying the annotation's instantiation cost.
 - Companion maps over a union (policy, consent, projection, or rendering
-  dispositions per tool/route/kind) must be total: `as const satisfies
-  Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
+  dispositions per tool/route/kind) must be total:
+  `as const satisfies Record<Union, T>`, never `Partial<Record<...>>`; `Partial` lets a new union
   member land without a decision. Derive the union from the source of truth
   (`keyof typeof SOURCE_MAP`, or a mapped filter over it) instead of
   hand-listing names.
@@ -355,8 +355,7 @@ and on a declared input no test reads any more.
 
 Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
 commit, and merges only if it passes. Add ready pull requests directly to the
-merge queue. `ci-result` remains the required aggregate check, and
-`STELLA_MERGE_HOLD` can hold non-release queue entries during a release.
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 

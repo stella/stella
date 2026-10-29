@@ -374,6 +374,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           await fixture.recordAuditEvent(tx, event);
           throw new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Fixture renewal audit failure",
           });
         },

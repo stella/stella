@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
@@ -140,6 +141,36 @@ describe("global search SQL scope", () => {
     ]);
   });
 
+  test.each(["chat", "matter"] as const)(
+    "retains exact chat counts and facets when selecting %s",
+    async (type) => {
+      const dialect = new PgDialect();
+      rootDbExecuteMock.mockImplementation(async (query) => {
+        const text = dialect.sqlToQuery(query).sql;
+        return text.includes("count(*)::int AS total") &&
+          text.includes("FROM chat_thread_search_documents cst")
+          ? [{ total: 7 }]
+          : [];
+      });
+      const result = await searchGlobal({
+        query: "decision",
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+        accessibleWorkspaceIds: [],
+        selectedWorkspaceIds: [],
+        types: [type],
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 10,
+      });
+      expect(result.hits).toEqual([]);
+      expect(result.totalCount).toBe(type === "chat" ? 7 : 0);
+      expect(
+        result.facets.type.find(({ value }) => value === "chat")?.count,
+      ).toBe(7);
+    },
+  );
+
   test("rechecks case-law redistribution on every projected read", async () => {
     await searchGlobal({
       query: "proportionality",
@@ -178,6 +209,7 @@ describe("global search SQL scope", () => {
       file_property_id: "property_1",
       mime_type: "application/pdf",
       headline: "Interim injunction memo",
+      tier: 4,
       score: 0.9,
       updated_at: new Date("2026-04-30T08:00:00.000Z"),
     });
@@ -191,7 +223,7 @@ describe("global search SQL scope", () => {
     });
   });
 
-  test("applies the score/id cursor and bounded lookahead to every source", async () => {
+  test("applies source cursors and bounds each chat candidate batch", async () => {
     const sourceCases = [
       {
         tableSql: "FROM search_documents sd",
@@ -209,10 +241,6 @@ describe("global search SQL scope", () => {
         tableSql: "FROM case_law_search_documents clsd",
         idSql: "'case-law:' || clsd.decision_id::text",
       },
-      {
-        tableSql: "FROM chat_thread_search_documents cst",
-        idSql: "'chat:' || cst.thread_id::text",
-      },
     ] as const;
     const dialect = new PgDialect();
 
@@ -227,6 +255,7 @@ describe("global search SQL scope", () => {
       mimeTypes: [],
       updatedTo: "2026-07-29T08:00:00.000Z",
       cursor: encodeGlobalSearchCursor({
+        tier: 2,
         score: 0.75,
         id: "entity:boundary",
         seen: 3,
@@ -261,11 +290,16 @@ describe("global search SQL scope", () => {
     expect(matterQuery?.params.filter((param) => param === 0.15)).toHaveLength(
       3,
     );
-    expect(sourceQueries.at(4)?.compiled.sql).toContain(
-      "cst.preview_generation =",
+    const chatQuery = compiledQueries.find(({ sql }) =>
+      sql.includes("FROM chat_thread_search_documents cst"),
     );
-    expect(sourceQueries.at(4)?.compiled.params).toContain(
+    expect(chatQuery?.sql).toContain("cst.preview_generation =");
+    expect(chatQuery?.params).toContain(
       CHAT_SEARCH_DISPLAY_METADATA_GENERATION,
+    );
+    expect(chatQuery?.sql).not.toContain('COLLATE "C" <');
+    expect(chatQuery?.params.at(-1)).toBe(
+      LIMITS.searchChatCandidateThreadsMax + 1,
     );
   });
 
@@ -289,7 +323,11 @@ describe("global search SQL scope", () => {
     for (const [query] of rootDbExecuteMock.mock.calls) {
       const compiled = dialect.sqlToQuery(query);
       expect(compiled.sql).not.toContain('COLLATE "C" <');
-      expect(compiled.params.at(-1)).toBe(29);
+      expect(compiled.params.at(-1)).toBe(
+        compiled.sql.includes("FROM chat_thread_search_documents cst")
+          ? LIMITS.searchChatCandidateThreadsMax + 1
+          : 29,
+      );
     }
   });
 
@@ -307,6 +345,7 @@ describe("global search SQL scope", () => {
       editedByUserIds: [],
       mimeTypes: [],
       cursor: encodeGlobalSearchCursor({
+        tier: 0,
         score: cursorValue,
         id: "entity:boundary",
         seen: 3,
@@ -346,6 +385,7 @@ describe("global search SQL scope", () => {
               type: "document",
               title: "First",
               headline: null,
+              tier: 0,
               score: preciseScore,
               updated_at: new Date("2026-07-29T08:00:00.999Z"),
             },
@@ -356,6 +396,7 @@ describe("global search SQL scope", () => {
               type: "document",
               title: "Second",
               headline: null,
+              tier: 0,
               score: preciseScore - 0.4,
               updated_at: new Date("2026-07-29T08:00:00.999Z"),
             },
@@ -382,11 +423,124 @@ describe("global search SQL scope", () => {
       entityResourceName("entity_1"),
     ]);
     expect(decodeGlobalSearchCursor(result.nextCursor ?? undefined)).toEqual({
+      tier: 0,
       score: preciseScore,
       id: "entity:entity_1",
       seen: 1,
     });
   });
+
+  test("ranks a diacritics-insensitive exact filename above fifty weak matters", async () => {
+    const dialect = new PgDialect();
+    rootDbExecuteMock.mockImplementation(
+      async (statement): Promise<Record<string, unknown>[]> => {
+        const queryText = dialect.sqlToQuery(statement).sql;
+        if (queryText.includes("FROM search_documents sd")) {
+          return [
+            {
+              id: "exact_file",
+              workspace_id: "ws_1",
+              workspace_name: "Matter",
+              type: "document",
+              title: "Žaloba Přehled.pdf",
+              tier: 4,
+              score: 0.01,
+              updated_at: new Date("2026-07-29T08:00:00.000Z"),
+            },
+          ];
+        }
+        if (queryText.includes("FROM workspace_search_documents wsd")) {
+          return Array.from({ length: 50 }, (_, index) => ({
+            id: `weak_matter_${index}`,
+            title: `Žaloba matter ${index}`,
+            tier: 1,
+            score: 100 - index,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          }));
+        }
+        return [];
+      },
+    );
+
+    const result = await searchGlobal({
+      query: "Zaloba Prehled.pdf",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document", "matter"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 51,
+    });
+
+    expect(result.hits.at(0)?.id).toBe("entity:exact_file");
+    const rankingQueries = rootDbExecuteMock.mock.calls
+      .map(([statement]) => dialect.sqlToQuery(statement).sql)
+      .filter((queryText) => queryText.includes(" AS tier"));
+    expect(rankingQueries).toHaveLength(2);
+    for (const queryText of rankingQueries) {
+      expect(queryText).toContain("lower(unaccent(arabic_normalize(");
+      expect(queryText).toContain("starts_with(");
+      expect(queryText).toContain("to_tsvector('simple'");
+      expect(queryText).toContain("ORDER BY tier DESC, score DESC");
+    }
+  });
+
+  test("ranks title prefixes above loose body matches", async () => {
+    const dialect = new PgDialect();
+    rootDbExecuteMock.mockImplementation(
+      async (statement): Promise<Record<string, unknown>[]> => {
+        if (
+          !dialect
+            .sqlToQuery(statement)
+            .sql.includes("FROM search_documents sd")
+        ) {
+          return [];
+        }
+        return [
+          {
+            id: "loose",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "Unrelated title",
+            tier: 1,
+            score: 100,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          },
+          {
+            id: "prefix",
+            workspace_id: "ws_1",
+            workspace_name: "Matter",
+            type: "document",
+            title: "Contract review notes",
+            tier: 3,
+            score: 0.01,
+            updated_at: new Date("2026-07-29T08:00:00.000Z"),
+          },
+        ];
+      },
+    );
+
+    const result = await searchGlobal({
+      query: "Contract review",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      limit: 2,
+    });
+
+    expect(result.hits.map(({ id }) => id)).toEqual([
+      "entity:prefix",
+      "entity:loose",
+    ]);
+  });
+
   test("selects the filtered file field and prefers previewable extracted sources", async () => {
     await searchGlobal({
       query: "indemnity",

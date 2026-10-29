@@ -1,51 +1,43 @@
-import { useState } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslations } from "use-intl";
 
-import { StyleSheet, TextInput } from "react-native";
-
-import { EmptyStateScreen } from "@/components/empty-state-screen";
+import { MatterPane } from "@/components/detail-panes";
+import { screenStyles } from "@/components/empty-state-screen";
+import { MattersList } from "@/components/matters-list";
+import { useSelection } from "@/components/selection";
+import { SplitPane } from "@/components/split-pane";
+import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
 
 const MattersScreen = () => {
   const colors = useAppColors();
-  const [query, setQuery] = useState("");
+  const { state } = useSession();
+  const selection = useSelection();
+  const t = useTranslations("matters");
 
   return (
-    <EmptyStateScreen
-      description="Find a matter and get the essential context quickly."
-      emptyDescription="Your recent matters and matching search results will appear here."
-      emptyTitle={query ? "No matching matters" : "No recent matters"}
-      title="Matters"
+    // Left and right: an iPhone Duo docks the tab bar as a rail at the side.
+    <SafeAreaView
+      edges={["left", "right"]}
+      style={[screenStyles.screen, { backgroundColor: colors.background }]}
     >
-      <TextInput
-        accessibilityLabel="Search matters"
-        autoCapitalize="none"
-        clearButtonMode="while-editing"
-        onChangeText={setQuery}
-        placeholder="Search matters"
-        placeholderTextColor={colors.muted}
-        returnKeyType="search"
-        style={[
-          styles.search,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        value={query}
-      />
-    </EmptyStateScreen>
+      {state.status === "signed-in" ? (
+        <SplitPane
+          detail={
+            selection.matter === null ? null : (
+              <MatterPane
+                key={selection.matter.workspaceId}
+                matter={selection.matter}
+              />
+            )
+          }
+          emptyDescription={t("pickDescription")}
+          emptyTitle={t("pickTitle")}
+          list={<MattersList source={state.source} />}
+        />
+      ) : null}
+    </SafeAreaView>
   );
 };
 
 export default MattersScreen;
-
-const styles = StyleSheet.create({
-  search: {
-    borderRadius: 14,
-    borderWidth: 1,
-    fontSize: 16,
-    minHeight: 48,
-    paddingHorizontal: 16,
-  },
-});

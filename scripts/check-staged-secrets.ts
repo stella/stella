@@ -28,6 +28,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { resolveGitleaks } from "./gitleaks";
 
 const SCANNER = "gitleaks";
 const STAGED_SCAN = [
@@ -130,10 +131,12 @@ const stagedLines = (commit: string, file: string): LineRange[] => {
   return ranges;
 };
 
-const runStagedScan = (report: string): Finding[] => {
+type StagedScanOptions = { report: string; scanner: string };
+
+const runStagedScan = ({ report, scanner }: StagedScanOptions): Finding[] => {
   const result = Bun.spawnSync(
     [
-      SCANNER,
+      scanner,
       ...STAGED_SCAN,
       `--exit-code=${FINDINGS_EXIT}`,
       "--report-format=json",
@@ -163,11 +166,14 @@ const runStagedScan = (report: string): Finding[] => {
   return findings.output;
 };
 
-const scanMerge = (heads: string[]): number => {
+const scanMerge = (heads: string[], scanner: string): number => {
   const reports = mkdtempSync(path.join(tmpdir(), "staged-secrets-"));
   let findings: Finding[];
   try {
-    findings = runStagedScan(path.join(reports, "report.json"));
+    findings = runStagedScan({
+      report: path.join(reports, "report.json"),
+      scanner,
+    });
   } finally {
     rmSync(reports, { force: true, recursive: true });
   }
@@ -203,25 +209,24 @@ const scanMerge = (heads: string[]): number => {
   return 1;
 };
 
-if (Bun.which(SCANNER) === null) {
-  console.error(
-    `error: ${SCANNER} is required for pre-commit secret scanning.`,
-  );
-  console.error(
-    "Install it from https://github.com/gitleaks/gitleaks/releases",
-  );
-  console.error("  macOS (Homebrew): brew install gitleaks");
-  console.error("  Other platforms: use the releases page above");
-  process.exit(1);
-}
-
-const heads = mergeHeads();
-if (heads === undefined) {
-  const scan = Bun.spawnSync([SCANNER, ...STAGED_SCAN, "."], {
+export const checkStagedSecrets = (scanner: string): number => {
+  const heads = mergeHeads();
+  if (heads !== undefined) {
+    return scanMerge(heads, scanner);
+  }
+  const scan = Bun.spawnSync([scanner, ...STAGED_SCAN, "."], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
   });
-  process.exit(childExitStatus(scan));
+  return childExitStatus(scan);
+};
+
+if (import.meta.main) {
+  const resolved = await resolveGitleaks();
+  if (resolved.isOk()) {
+    process.exit(checkStagedSecrets(resolved.value));
+  } else {
+    fail(resolved.error.message);
+  }
 }
-process.exit(scanMerge(heads));

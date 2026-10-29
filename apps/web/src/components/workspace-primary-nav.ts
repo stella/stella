@@ -85,7 +85,7 @@ const WORKSPACE_PRIMARY_NAV_ITEMS = [
     id: "caseLaw",
     audience: "public",
     kind: "route",
-    labelKey: "common.caseLaw",
+    labelKey: "common.legalDatabase",
     to: "/law",
   },
   {

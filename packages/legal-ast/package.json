@@ -79,9 +79,17 @@
       "types": "./src/fixtures/statute-viewer.ts",
       "import": "./src/fixtures/statute-viewer.ts"
     },
+    "./fixtures/cz-141-1961-section-72a": {
+      "types": "./src/fixtures/cz-141-1961-section-72a.ts",
+      "import": "./src/fixtures/cz-141-1961-section-72a.ts"
+    },
     "./fixtures/cz-262-2006-section-51": {
       "types": "./src/fixtures/cz-262-2006-section-51.ts",
       "import": "./src/fixtures/cz-262-2006-section-51.ts"
+    },
+    "./fixtures/sk-300-2005-section-128": {
+      "types": "./src/fixtures/sk-300-2005-section-128.ts",
+      "import": "./src/fixtures/sk-300-2005-section-128.ts"
     },
     "./court-paragraph-number": {
       "types": "./src/court-paragraph-number.ts",
@@ -90,6 +98,10 @@
     "./paragraph-range": {
       "types": "./src/paragraph-range.ts",
       "import": "./src/paragraph-range.ts"
+    },
+    "./closed-quotation-paragraphs": {
+      "types": "./src/closed-quotation-paragraphs.ts",
+      "import": "./src/closed-quotation-paragraphs.ts"
     },
     "./court-paragraph-numbers": {
       "types": "./src/court-paragraph-numbers.ts",
@@ -127,9 +139,17 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./spot-place": {
+      "types": "./src/spot-place.ts",
+      "import": "./src/spot-place.ts"
+    },
     "./statute-ast": {
       "types": "./src/statute-ast.ts",
       "import": "./src/statute-ast.ts"
+    },
+    "./statute-list": {
+      "types": "./src/statute-list.ts",
+      "import": "./src/statute-list.ts"
     },
     "./text-sanitize": {
       "types": "./src/text-sanitize.ts",

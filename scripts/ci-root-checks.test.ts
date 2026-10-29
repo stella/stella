@@ -180,6 +180,12 @@ const inputCoversFile = (file: string, declared: readonly string[]) =>
   });
 
 const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
+  "ci-checks-rest/Test staging proof readiness": [
+    "scripts/staging-ecs-readiness.ts",
+    "scripts/staging-proof-readiness-cli.test.ts",
+    "scripts/staging-proof-readiness-cli.ts",
+    "scripts/staging-proof-workflow.test.ts",
+  ],
   "ci-checks-rest/Test release image CI gate": [
     "apps/api/scripts/api-test-plan.ts",
     "apps/api/scripts/test-file-shards.ts",
@@ -592,6 +598,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-policy/Dependabot group guard (installed packages)": [
     "scripts/dependabot-grouping.test.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census self-test": [
+    "scripts/web-raw-json-api-census.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census": [
+    "scripts/web-raw-json-api-census.ts",
   ],
 };
 

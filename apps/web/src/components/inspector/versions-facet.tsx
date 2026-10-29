@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
@@ -9,8 +11,6 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
  * the selection). Document comparison opens as a subview here so
  * version operations stay owned by one inspector facet.
  */
-
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -32,7 +32,8 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileContentQueryKey } from "@/lib/files/file-metadata-query.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   entityVersionsOptions,
   fetchOlderVersions,
@@ -67,7 +68,7 @@ export const VersionsFacet = ({
       filePropertyId: currentFilePropertyId,
     }),
   );
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
