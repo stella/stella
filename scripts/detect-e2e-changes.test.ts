@@ -2040,7 +2040,12 @@ test("every workflow browser command uses the pinned image and no reachable brow
       );
       const runs =
         isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
-      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
+      // Only composite actions have steps to inherit; a node action runs one
+      // entry point and reaches no further workflow steps.
+      const reached =
+        runs["using"] === "composite"
+          ? reachableSteps(stepsOf(runs["steps"], step.uses))
+          : [];
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });
