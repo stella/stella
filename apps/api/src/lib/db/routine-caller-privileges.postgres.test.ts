@@ -169,14 +169,15 @@ required AS (
   FROM relation_calls calls
   JOIN pg_catalog.pg_class relation ON relation.oid = calls.relation
   CROSS JOIN pg_catalog.pg_roles role
-  WHERE EXISTS (
+  -- PostgreSQL built-in roles are not policy callers of this app.
+  WHERE role.rolname !~ '^pg_' AND (EXISTS (
     SELECT 1 FROM (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'),
       ('TRUNCATE'), ('REFERENCES'), ('TRIGGER'), ('MAINTAIN')) privilege(name)
     WHERE pg_catalog.has_table_privilege(role.oid, relation.oid, privilege.name)
   ) OR EXISTS (
     SELECT 1 FROM (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('REFERENCES')) privilege(name)
     WHERE pg_catalog.has_any_column_privilege(role.oid, relation.oid, privilege.name)
-  )
+  ))
 )
 SELECT * FROM required ORDER BY role, relation, kind, object, routine
 `;

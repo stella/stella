@@ -243,21 +243,10 @@ GRANT EXECUTE ON FUNCTION public.sync_time_entry_timer_state() TO stella;--> sta
 REVOKE EXECUTE ON FUNCTION public.user_files_enforce_organization_key() FROM PUBLIC;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.user_files_enforce_organization_key() TO stella;--> statement-breakpoint
 
--- Preserve execution for every existing table or column privilege holder,
--- including built-in data roles, after replacing PUBLIC access with named grants.
-GRANT EXECUTE ON FUNCTION public.delete_service_oauth_client_credential() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_held(uuid,uuid,uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_claim_visible(uuid,uuid,uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_held(uuid,uuid,uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.legal_reader_annotation_document_visible(uuid,uuid,uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_insert() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_contact_update() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_insert() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.mark_sanctions_organization_update() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO pg_maintain, pg_read_all_data, pg_write_all_data, stella_correspondence_source, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_entity_display_name(text,text,uuid,uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) TO pg_maintain, pg_read_all_data, pg_write_all_data, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() TO pg_maintain, pg_read_all_data, pg_write_all_data, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() TO pg_maintain, pg_read_all_data, pg_write_all_data, stella_entity_gate;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.sync_time_entry_timer_state() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.user_files_enforce_organization_key() TO pg_maintain, pg_read_all_data, pg_write_all_data;--> statement-breakpoint
+-- Preserve execution for application and service roles with existing table
+-- or column privileges after replacing PUBLIC access with named grants.
+GRANT EXECUTE ON FUNCTION public.register_uploaded_correspondence_source() TO stella_correspondence_source, stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_entity_display_name(text,text,uuid,uuid) TO stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name(uuid) TO stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_entity() TO stella_entity_gate;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.stella_refresh_entity_display_name_from_field() TO stella_entity_gate;--> statement-breakpoint
