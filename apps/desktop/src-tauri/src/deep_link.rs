@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -82,8 +83,10 @@ pub fn set_self_host_connect_response(approved: bool) {
   let mut guard = SELF_HOST_CONNECT_SENDER
     .lock()
     .unwrap_or_else(|e| e.into_inner());
-  if let Some(sender) = guard.take() {
-    let _ = sender.send(approved);
+  if let Some(sender) = guard.take()
+    && sender.send(approved).is_err()
+  {
+    tracing::debug!("self-host connection answer had no waiter");
   }
 }
 
@@ -856,12 +859,17 @@ pub(crate) async fn show_connection_confirmation(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
-          if let Some(sender) = sender {
-            let _ = sender.send(());
+          if let Some(sender) = sender
+            && sender.send(()).is_err()
+          {
+            tracing::debug!("self-host connection window close had no waiter");
           }
         }
       });
-      let _ = window.set_focus();
+      best_effort(
+        window.set_focus(),
+        "self-host connection window could not be focused",
+      );
       let outcome = match tokio::time::timeout(
         SELF_HOST_CONNECT_APPROVAL_TIMEOUT,
         receiver,
@@ -877,7 +885,10 @@ pub(crate) async fn show_connection_confirmation(
       };
       // The dialog closes itself once the user responds; close it explicitly so
       // a timeout or dropped sender does not leave a ghost window behind.
-      let _ = window.close();
+      best_effort(
+        window.close(),
+        "self-host connection window could not be closed",
+      );
       tokio::time::timeout(ACKNOWLEDGE_TIMEOUT, closed_receiver)
         .await
         .map_err(crate::logging::with_cause_logged(
@@ -898,7 +909,7 @@ pub(crate) async fn show_connection_confirmation(
 }
 
 fn percent_encode(value: &str) -> String {
-  use std::fmt::Write;
+  const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
   let mut encoded = String::with_capacity(value.len());
   for byte in value.bytes() {
@@ -907,7 +918,9 @@ fn percent_encode(value: &str) -> String {
         encoded.push(byte as char);
       }
       _ => {
-        let _ = write!(encoded, "%{byte:02X}");
+        encoded.push('%');
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
       }
     }
   }
@@ -1101,6 +1114,16 @@ async fn redeem_and_open_desktop_edit(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn percent_encoding_spells_every_other_byte_as_uppercase_hex() {
+    assert_eq!(percent_encode("Az09-._~"), "Az09-._~");
+    for character in ['\0', ' ', '%', '/', '\u{7f}', 'é', '€', '😀'] {
+      let text = character.to_string();
+      let expected: String = text.bytes().map(|byte| format!("%{byte:02X}")).collect();
+      assert_eq!(percent_encode(&text), expected);
+    }
+  }
 
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

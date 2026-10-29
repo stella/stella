@@ -4,6 +4,7 @@
 //! with a payload-free event; the window reads the data back through
 //! `activity_get_day`.
 
+use crate::logging::best_effort;
 use chrono::Utc;
 use tauri::{AppHandle, Emitter, State};
 
@@ -37,7 +38,10 @@ fn update<E: From<String>>(
   manager.require_caller(caller).map_err(E::from)?;
   change(&mut manager)?;
   drop(manager);
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  best_effort(
+    app.emit(activity::CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   Ok(())
 }
 
@@ -207,7 +211,10 @@ pub fn activity_set_capture_details(
     caller.require_current(&app)?;
     activity_details::request_permission();
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  best_effort(
+    app.emit(activity::CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   Ok(())
 }
 
@@ -224,7 +231,10 @@ pub fn activity_set_detect_calls(
     manager.require_caller(&caller)?;
     manager.set_detect_calls(enabled, Utc::now())?;
   }
-  let _ = app.emit(activity::CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit(activity::CHANGED_EVENT, ()),
+    "emit activity change",
+  );
   Ok(())
 }
 

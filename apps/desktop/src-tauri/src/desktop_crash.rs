@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use serde::{Deserialize, Serialize};
 use std::{
   fs::{self, OpenOptions},
@@ -536,7 +537,10 @@ fn write_marker(path: &Path, marker: &RunMarker) -> io::Result<()> {
     fs::rename(&temporary, path)
   })();
   if result.is_err() {
-    let _ = fs::remove_file(temporary);
+    best_effort(
+      fs::remove_file(temporary),
+      "temporary crash marker was not removed",
+    );
   }
   result
 }

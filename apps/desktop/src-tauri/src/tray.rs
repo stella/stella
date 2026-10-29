@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use tauri::{
   AppHandle, Manager, Wry,
   menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
@@ -299,14 +300,14 @@ fn refresh_on_main_thread(
     build_tray_menu_with_activity(app, snapshot, None, main_thread)
   };
   if let Ok(menu) = menu {
-    let _ = tray.set_menu(Some(menu));
+    best_effort(tray.set_menu(Some(menu)), "tray menu was not updated");
   }
   let recording = current
     && activity
       .as_ref()
       .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
   if let Ok(icon) = recording_icon(recording) {
-    let _ = set_tray_icon(&tray, icon);
+    best_effort(set_tray_icon(&tray, icon), "tray icon was not updated");
   }
 }
 

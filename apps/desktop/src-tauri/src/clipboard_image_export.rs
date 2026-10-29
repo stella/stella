@@ -187,6 +187,10 @@ mod tests {
 
   impl Drop for TestDirectory {
     fn drop(&mut self) {
+      #[expect(
+        clippy::let_underscore_must_use,
+        reason = "a panic in drop would abort the test run; a leftover temp directory is harmless"
+      )]
       let _ = fs::remove_dir_all(&self.path);
     }
   }

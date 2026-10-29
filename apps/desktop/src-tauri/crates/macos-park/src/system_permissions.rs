@@ -52,7 +52,13 @@ pub fn notification_authorization() -> NotificationAuthorization {
     // SAFETY: the framework passes a live settings object for the duration of
     // the completion handler; only a copied status value leaves the block.
     let status = unsafe { settings.as_ref() }.authorizationStatus();
-    let _ = sender.try_send(status);
+    match sender.try_send(status) {
+      // The caller stops waiting after NOTIFICATION_SETTINGS_TIMEOUT.
+      Ok(()) | Err(mpsc::TrySendError::Disconnected(_)) => {}
+      Err(mpsc::TrySendError::Full(_)) => {
+        unreachable!("notification settings callback delivered more than once");
+      }
+    }
   });
   UNUserNotificationCenter::currentNotificationCenter()
     .getNotificationSettingsWithCompletionHandler(&handler);

@@ -512,7 +512,7 @@ pub fn feature_enabled(app: &AppHandle, feature: DesktopFeature) {
 
 pub fn show(app: &AppHandle) {
   #[cfg(target_os = "macos")]
-  let _ = app.show();
+  crate::logging::best_effort(app.show(), "show onboarding application");
   if let Some(window) = app.get_webview_window(ONBOARDING_WINDOW_LABEL) {
     if window.show().and_then(|()| window.set_focus()).is_err() {
       tracing::warn!("onboarding window could not be focused");
@@ -578,7 +578,10 @@ pub fn shortcut_pressed(app: &AppHandle) {
       .await
       .is_ok()
     {
-      let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+      crate::logging::best_effort(
+        app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+        "emit onboarding change",
+      );
     }
   });
 }
@@ -701,7 +704,10 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
     let progress = restarted(onboarding.progress);
     onboarding.save(progress);
   }
-  let _ = app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ());
+  crate::logging::best_effort(
+    app.emit_to(ONBOARDING_WINDOW_LABEL, CHANGED_EVENT, ()),
+    "emit onboarding change",
+  );
   show(&app);
   Ok(())
 }
@@ -791,7 +797,10 @@ fn document_app() -> Option<DocumentApp> {
     .URLForApplicationToOpenURL(&url)
     .and_then(|app| app.path())
     .map(|path| std::path::PathBuf::from(path.to_string()));
-  let _ = std::fs::remove_file(&probe);
+  crate::logging::best_effort(
+    std::fs::remove_file(&probe),
+    "remove document application probe",
+  );
   let app_path = app_path?;
   let info = plist::Value::from_file(app_path.join("Contents/Info.plist")).ok()?;
   let info = info.as_dictionary()?;

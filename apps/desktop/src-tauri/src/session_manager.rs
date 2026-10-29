@@ -1,3 +1,4 @@
+use crate::logging::best_effort;
 use futures_util::{StreamExt, future::join_all};
 use notify::{
   Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -57,8 +58,9 @@ pub fn set_takeover_response(label: &str, approved: bool) {
   let mut guard = TAKEOVER_SENDERS.lock().unwrap_or_else(|e| e.into_inner());
   if let Some(ref mut map) = *guard
     && let Some(tx) = map.remove(label)
+    && tx.send(approved).is_err()
   {
-    let _ = tx.send(approved);
+    tracing::debug!("takeover answer had no waiter");
   }
 }
 
@@ -1391,7 +1393,10 @@ impl SessionManager {
   }
 
   pub async fn open_edit_root(&self) -> bool {
-    let _ = tokio::fs::create_dir_all(&self.edit_root).await;
+    best_effort(
+      tokio::fs::create_dir_all(&self.edit_root).await,
+      "edit folder could not be created",
+    );
     open_path_native(self.edit_root.to_string_lossy().as_ref()).is_ok()
   }
 
@@ -2234,7 +2239,10 @@ impl SessionManager {
       .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if let Some(ref handle) = self.app_handle {
       let snapshot = self.get_snapshot();
-      let _ = handle.emit_to("main", "state-changed", &snapshot);
+      best_effort(
+        handle.emit_to("main", "state-changed", &snapshot),
+        "session state change was not announced",
+      );
 
       crate::tray::refresh(handle, &snapshot);
     }
@@ -2744,20 +2752,29 @@ fn open_path_native(path: &str) -> Result<(), String> {
 fn reveal_in_folder(path: &str) {
   #[cfg(target_os = "macos")]
   {
-    let _ = std::process::Command::new("open")
-      .args(["-R", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("open")
+        .args(["-R", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "windows")]
   {
-    let _ = std::process::Command::new("explorer")
-      .args(["/select,", path])
-      .spawn();
+    best_effort(
+      std::process::Command::new("explorer")
+        .args(["/select,", path])
+        .spawn(),
+      "file manager could not be opened",
+    );
   }
   #[cfg(target_os = "linux")]
   {
     if let Some(parent) = Path::new(path).parent() {
-      let _ = std::process::Command::new("xdg-open").arg(parent).spawn();
+      best_effort(
+        std::process::Command::new("xdg-open").arg(parent).spawn(),
+        "file manager could not be opened",
+      );
     }
   }
 }

@@ -77,6 +77,7 @@ macro_rules! generate_stella_handler {
   };
 }
 
+use crate::logging::best_effort;
 use clipboard::{ClipboardAppState, ClipboardManager};
 use commands::AppState;
 use session_manager::SessionManager;
@@ -255,7 +256,7 @@ pub fn run() {
             }
             feature_gate::DesktopFeature::TimeBilling => {
               use tauri::Emitter;
-              let _ = app.emit(activity::CHANGED_EVENT, ());
+              best_effort(app.emit(activity::CHANGED_EVENT, ()), "activity change was not announced");
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
@@ -333,10 +334,13 @@ pub fn run() {
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
-                  let _ = handle.notification().builder()
-                    .title(i18n::t("tray.activity"))
-                    .body(i18n::t("activity.errorUpdate"))
-                    .show();
+                  best_effort(
+                    handle.notification().builder()
+                      .title(i18n::t("tray.activity"))
+                      .body(i18n::t("activity.errorUpdate"))
+                      .show(),
+                    "activity recording failure was not notified",
+                  );
                   activity_window::show(&handle);
                 }
               }
@@ -552,12 +556,15 @@ const SETTINGS_WINDOW_HEIGHT: f64 = 460.0;
 pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
   // Accessory apps must explicitly activate to bring windows to front.
   #[cfg(target_os = "macos")]
-  let _ = handle.show();
+  best_effort(handle.show(), "app could not be shown");
 
   if let Some(window) = handle.get_webview_window("main") {
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+    best_effort(window.show(), "settings window could not be shown");
+    best_effort(window.set_focus(), "settings window could not be focused");
+    best_effort(
+      handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab })),
+      "settings tab change was not announced",
+    );
     return;
   }
 
@@ -591,8 +598,10 @@ pub(crate) fn ensure_main_window(handle: &tauri::AppHandle, tab: &str) {
       let tab = tab.to_string();
       tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        let _ =
-          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab }));
+        best_effort(
+          handle.emit_to("main", "activate-tab", serde_json::json!({ "tab": tab })),
+          "tab activation was not announced",
+        );
       });
     }
     Err(e) => {

@@ -12,6 +12,7 @@
 //! whenever recording stops. Nothing here reaches the network: the data is
 //! read only by the activity window, through `ActivityCaller`.
 
+use crate::logging::best_effort;
 use chrono::{DateTime, Days, FixedOffset, Local, NaiveDate, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -2393,7 +2394,10 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
 }
 
 fn emit_changed(app: &AppHandle) {
-  let _ = app.emit(CHANGED_EVENT, ());
+  best_effort(
+    app.emit(CHANGED_EVENT, ()),
+    "activity change was not announced",
+  );
   refresh_tray(app);
 }
 

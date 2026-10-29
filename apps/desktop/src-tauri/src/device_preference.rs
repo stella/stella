@@ -75,7 +75,10 @@ fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
     uuid::Uuid::new_v4()
   ));
   if let Err(error) = fs::write(&temp_path, value) {
-    let _ = fs::remove_file(&temp_path);
+    crate::logging::best_effort(
+      fs::remove_file(&temp_path),
+      "remove failed preference temporary file",
+    );
     return Err(format!("preference write failed: {error}"));
   }
   #[cfg(unix)]
@@ -85,12 +88,18 @@ fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
     if let Err(error) =
       fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
     {
-      let _ = fs::remove_file(&temp_path);
+      crate::logging::best_effort(
+        fs::remove_file(&temp_path),
+        "remove failed preference temporary file",
+      );
       return Err(format!("preference permissions failed: {error}"));
     }
   }
   if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
+    crate::logging::best_effort(
+      fs::remove_file(&temp_path),
+      "remove failed preference temporary file",
+    );
     return Err(format!("preference replace failed: {error}"));
   }
   Ok(())
