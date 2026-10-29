@@ -14,6 +14,11 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  lockCaseLawProjectionRepairIdentifiers,
+  lockCaseLawProjectionRepairRows,
+  lockCaseLawProjectionRepairStates,
+} from "@/api/lib/db/aggregate-lock";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -34,6 +39,7 @@ import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
 
@@ -408,32 +414,10 @@ const lockCaseLawProjectionInput = async (
   // Take the compatible source lock first so per-document projection never
   // inverts that order or exclusively serializes every decision in a source.
   const source = await lockCaseLawProjectionSource(tx, subject);
-  const rows = await tx
-    .select({
-      documentId: caseLawDecisions.id,
-      sourceId: caseLawDecisions.sourceId,
-      jurisdiction: caseLawDecisions.country,
-      language: caseLawDecisions.language,
-      documentType: caseLawDecisions.decisionType,
-      contentHash: caseLawDecisions.contentHash,
-      redactedAt: caseLawDecisions.redactedAt,
-      caseNumber: caseLawDecisions.caseNumber,
-      court: caseLawDecisions.court,
-      courtId: caseLawDecisions.courtId,
-      decisionDate: caseLawDecisions.decisionDate,
-      ecli: caseLawDecisions.ecli,
-      metadata: caseLawDecisions.metadata,
-      projectionEpoch: caseLawDecisions.projectionEpoch,
-    })
-    .from(caseLawDecisions)
-    .where(
-      and(
-        eq(caseLawDecisions.id, subject.entityId),
-        eq(caseLawDecisions.sourceId, source.sourceId),
-      ),
-    )
-    .limit(1)
-    .for("update", { of: caseLawDecisions });
+  const rows = await lockCaseLawProjectionRepairRows(tx, {
+    sourceId: source.sourceId,
+    decisionIds: [subject.entityId],
+  });
   const row = rows.at(0);
   if (row === undefined) {
     throw new CorpusIndexProjectionSubjectMissingError({
@@ -654,7 +638,15 @@ const projectionsFor = async (
               .limit(uncovered.length)
           ).map(({ generation }) => generation),
         );
-  return manifests.flatMap(({ generation, manifest, accepts }) => {
+  return projectionsFromSnapshot(manifests, input, projected);
+};
+
+const projectionsFromSnapshot = (
+  manifests: readonly RegisteredManifest[],
+  input: CorpusIndexProjectionInput,
+  projected: ReadonlySet<string>,
+): GenerationProjection[] =>
+  manifests.flatMap(({ generation, manifest, accepts }) => {
     if (!corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction)) {
       return projected.has(generation)
         ? [{ generation, descriptor: { action: "erase" } as const }]
@@ -665,7 +657,6 @@ const projectionsFor = async (
       ? []
       : [{ generation, descriptor }];
   });
-};
 
 export const readActiveCorpusProjectionManifest = async (
   tx: Transaction,
@@ -907,6 +898,55 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   return { epoch, generationCount: projections.length };
 };
 
+type ReconcileProjectionPlanOptions = {
+  subject: CorpusIndexProjectionSubject;
+  currentEpoch: bigint;
+  existing: readonly (DesiredStateSnapshot & { generation: string })[];
+  projections: readonly GenerationProjection[];
+};
+
+const reconcileProjectionPlan = ({
+  subject,
+  currentEpoch,
+  existing,
+  projections,
+}: ReconcileProjectionPlanOptions) => {
+  const byGeneration = new Map(
+    existing.map((state) => [state.generation, state]),
+  );
+  const existingDrifted = projections.some(({ generation, descriptor }) => {
+    const state = byGeneration.get(generation);
+    return (
+      state !== undefined &&
+      !desiredStateMatches(state, currentEpoch, descriptor)
+    );
+  });
+
+  let epoch = currentEpoch;
+  if (existingDrifted || epoch === 0n) {
+    epoch += 1n;
+  }
+
+  const values = projections
+    .filter(({ generation, descriptor }) => {
+      const state = byGeneration.get(generation);
+      return (
+        existingDrifted ||
+        state === undefined ||
+        !desiredStateMatches(state, epoch, descriptor)
+      );
+    })
+    .map(({ generation, descriptor }) =>
+      buildCorpusIndexProjectionDesiredStateValues({
+        subject,
+        generation,
+        epoch,
+        descriptor,
+      }),
+    );
+  return { epoch, values };
+};
+
 /**
  * Repair or seed desired state from authoritative corpus rows. Plane may call
  * this from bounded sweeps after a projector or source-policy change; exact
@@ -947,40 +987,15 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
       ),
     )
     .for("update");
-  const byGeneration = new Map(
-    existing.map((state) => [state.generation, state]),
-  );
-  const existingDrifted = projections.some(({ generation, descriptor }) => {
-    const state = byGeneration.get(generation);
-    return (
-      state !== undefined &&
-      !desiredStateMatches(state, locked.epoch, descriptor)
-    );
+  const { epoch, values } = reconcileProjectionPlan({
+    subject,
+    currentEpoch: locked.epoch,
+    existing,
+    projections,
   });
-
-  let epoch = locked.epoch;
-  if (existingDrifted || epoch === 0n) {
-    epoch += 1n;
+  if (epoch !== locked.epoch) {
     await setCanonicalProjectionEpoch(tx, subject, epoch);
   }
-
-  const values = projections
-    .filter(({ generation, descriptor }) => {
-      const state = byGeneration.get(generation);
-      return (
-        existingDrifted ||
-        state === undefined ||
-        !desiredStateMatches(state, epoch, descriptor)
-      );
-    })
-    .map(({ generation, descriptor }) =>
-      buildCorpusIndexProjectionDesiredStateValues({
-        subject,
-        generation,
-        epoch,
-        descriptor,
-      }),
-    );
   await writeDesiredStates(tx, values);
   return {
     epoch,
@@ -1188,4 +1203,138 @@ export const eraseServedElsewhereDesiredStateTx = async (
     }),
   ]);
   return { changed: true };
+};
+
+/** A transaction holds at most this many canonical projection locks. */
+export const CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE = 32;
+
+type SynchronizeCaseLawProjectionBatchOptions = {
+  lock: ActiveCorpusProjectionSourceLock;
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/** Reconcile a bounded source batch with set-based reads and writes. */
+export const synchronizeLockedCaseLawProjectionBatchTx = async (
+  tx: Transaction,
+  { lock, sourceId, decisionIds }: SynchronizeCaseLawProjectionBatchOptions,
+): Promise<void> => {
+  if (
+    lock.family !== "case_law" ||
+    decisionIds.length > CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE
+  ) {
+    return panic("Invalid case-law projection repair batch");
+  }
+  if (decisionIds.length === 0) {
+    return;
+  }
+  const source = (
+    await tx
+      .select({ descriptor: caseLawSources.descriptor })
+      .from(caseLawSources)
+      .where(eq(caseLawSources.id, sourceId))
+      .limit(1)
+  ).at(0);
+  if (source === undefined) {
+    return panic("Projection repair source disappeared");
+  }
+  const rows = await lockCaseLawProjectionRepairRows(tx, {
+    sourceId,
+    decisionIds,
+  });
+  const ids = rows.map(({ documentId }) => documentId);
+  if (ids.length !== decisionIds.length) {
+    return panic("Projection repair subject disappeared");
+  }
+  const identifiers = await lockCaseLawProjectionRepairIdentifiers(tx, ids);
+  const byDecision = new Map<string, { type: string; value: string }[]>(
+    ids.map((id) => [id, []]),
+  );
+  for (const identifier of identifiers) {
+    const values =
+      byDecision.get(identifier.decisionId) ??
+      panic("Unrequested projection identifier");
+    values.push({ type: identifier.type, value: identifier.value });
+    if (values.length > DECISION_IDENTIFIER_MAX_COUNT) {
+      return panic("Projection repair identifier limit exceeded");
+    }
+  }
+  const provisionKeys = await readCaseLawProvisionKeys(
+    tx,
+    rows.map(({ documentId, jurisdiction }) => ({
+      id: documentId,
+      jurisdiction,
+    })),
+  );
+  const vacated = await readCaseLawJurisdictionVacatedTx(
+    tx,
+    rows.map(({ jurisdiction }) => jurisdiction),
+  );
+  const manifests = await projectionManifests(tx, "case_law");
+  const states = await lockCaseLawProjectionRepairStates(tx, {
+    decisionIds: ids,
+    generations: manifests.map(({ generation }) => generation),
+  });
+  const values: (typeof corpusIndexProjectionStates.$inferInsert)[] = [];
+  const advanced: { id: SafeId<"caseLawDecision">; epoch: bigint }[] = [];
+  for (const row of rows) {
+    const existing = states.filter(
+      ({ entityId }) => entityId === row.documentId,
+    );
+    const input = caseLawProjectionInputFromCanonical({
+      ...row,
+      identifiers:
+        byDecision.get(row.documentId) ??
+        panic("Projection repair identifiers missing"),
+      provisionKeys:
+        provisionKeys.get(row.documentId) ??
+        panic("Projection repair provision keys missing"),
+      vacatedFrom: vacated.get(row.jurisdiction) ?? null,
+      sourceDescriptor: source.descriptor,
+    });
+    const projections = projectionsFromSnapshot(
+      manifests,
+      input,
+      new Set(
+        existing
+          .filter(({ desiredAction }) => desiredAction === "upsert")
+          .map(({ generation }) => generation),
+      ),
+    );
+    if (projections.length === 0) {
+      continue;
+    }
+    const plan = reconcileProjectionPlan({
+      subject: { family: "case_law", entityId: row.documentId },
+      currentEpoch: row.projectionEpoch,
+      existing,
+      projections,
+    });
+    if (plan.epoch !== row.projectionEpoch) {
+      advanced.push({ id: row.documentId, epoch: plan.epoch });
+    }
+    values.push(...plan.values);
+  }
+
+  if (advanced.length > 0) {
+    // audit: skip — public corpus projection reconciliation; no user action
+    await tx
+      .update(caseLawDecisions)
+      .set({
+        projectionEpoch: sqlCaseFragment({
+          branches: advanced.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${caseLawDecisions.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${caseLawDecisions.projectionEpoch}`,
+        }),
+      })
+      .where(
+        inArray(
+          caseLawDecisions.id,
+          advanced.map(({ id }) => id),
+        ),
+      );
+  }
+  await writeDesiredStates(tx, values);
 };

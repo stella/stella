@@ -192,10 +192,13 @@ export const parseEmptiedDocumentRepairArguments = (
 /** One qualifying decision, as the results file records it. */
 export type EmptiedDocumentRepairRow = {
   id: SafeId<"caseLawDecision">;
-  outcome: "eligible" | "requeued" | "no-longer-eligible";
+
   reason: string | null;
   actor: string | null;
-};
+} & (
+  | { outcome: "eligible" | "requeued" | "no-longer-eligible" }
+  | { outcome: "quarantined"; failureReason: "projection-or-update-failed" }
+);
 
 export type EmptiedDocumentRepairReport = {
   visited: number;
@@ -265,13 +268,23 @@ export const runEmptiedDocumentRepair = async (
     decisionIds: scan.matched,
   });
   for (const { decisionId, outcome } of outcomes) {
-    await record({ id: decisionId, outcome, reason, actor });
+    if (outcome.type === "quarantined") {
+      await record({
+        id: decisionId,
+        outcome: "quarantined",
+        failureReason: outcome.reason,
+        reason,
+        actor,
+      });
+      continue;
+    }
+    await record({ id: decisionId, outcome: outcome.type, reason, actor });
   }
   const requeued = outcomes.filter(
-    ({ outcome }) => outcome === "requeued",
+    ({ outcome }) => outcome.type === "requeued",
   ).length;
   write(
-    `requeued=${String(requeued)} no_longer_eligible=${String(outcomes.length - requeued)}`,
+    `requeued=${String(requeued)} quarantined=${String(outcomes.filter(({ outcome }) => outcome.type === "quarantined").length)} no_longer_eligible=${String(outcomes.filter(({ outcome }) => outcome.type === "no-longer-eligible").length)}`,
   );
   return Result.ok({
     visited: scan.visited,

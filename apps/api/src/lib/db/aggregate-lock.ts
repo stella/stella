@@ -26,6 +26,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
+import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type {
@@ -37,7 +38,10 @@ import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
   caseLawReplayBatches,
+  corpusIndexProjectionStates,
   entities,
   entityVersions,
   fields,
@@ -3202,4 +3206,92 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+const CASE_LAW_PROJECTION_CANONICAL_COLUMNS = {
+  documentId: caseLawDecisions.id,
+  sourceId: caseLawDecisions.sourceId,
+  jurisdiction: caseLawDecisions.country,
+  language: caseLawDecisions.language,
+  documentType: caseLawDecisions.decisionType,
+  contentHash: caseLawDecisions.contentHash,
+  redactedAt: caseLawDecisions.redactedAt,
+  caseNumber: caseLawDecisions.caseNumber,
+  court: caseLawDecisions.court,
+  courtId: caseLawDecisions.courtId,
+  decisionDate: caseLawDecisions.decisionDate,
+  ecli: caseLawDecisions.ecli,
+  metadata: caseLawDecisions.metadata,
+  projectionEpoch: caseLawDecisions.projectionEpoch,
+};
+
+type CaseLawProjectionRepairRowsOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+};
+
+/** Source policy is already locked; acquire canonical rows in id order. */
+export const lockCaseLawProjectionRepairRows = async (
+  tx: Transaction,
+  { sourceId, decisionIds }: CaseLawProjectionRepairRowsOptions,
+) =>
+  await tx
+    .select(CASE_LAW_PROJECTION_CANONICAL_COLUMNS)
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.sourceId, sourceId),
+        inArray(caseLawDecisions.id, [...decisionIds]),
+      ),
+    )
+    .orderBy(asc(caseLawDecisions.id))
+    .limit(decisionIds.length)
+    .for("update");
+
+/** Retain identifier inputs until the matching canonical batch commits. */
+export const lockCaseLawProjectionRepairIdentifiers = async (
+  tx: Transaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+) =>
+  await tx
+    .select({
+      decisionId: caseLawDecisionIdentifiers.decisionId,
+      type: caseLawDecisionIdentifiers.type,
+      value: caseLawDecisionIdentifiers.value,
+    })
+    .from(caseLawDecisionIdentifiers)
+    .where(inArray(caseLawDecisionIdentifiers.decisionId, [...decisionIds]))
+    .orderBy(
+      asc(caseLawDecisionIdentifiers.decisionId),
+      asc(caseLawDecisionIdentifiers.type),
+      asc(caseLawDecisionIdentifiers.value),
+    )
+    .limit(decisionIds.length * DECISION_IDENTIFIER_MAX_COUNT + 1)
+    .for("share");
+
+type CaseLawProjectionRepairStatesOptions = {
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+  generations: readonly string[];
+};
+
+/** Canonical rows precede desired-state rows in the projection lock order. */
+export const lockCaseLawProjectionRepairStates = async (
+  tx: Transaction,
+  { decisionIds, generations }: CaseLawProjectionRepairStatesOptions,
+) =>
+  await tx
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, "case_law"),
+        inArray(corpusIndexProjectionStates.generation, [...generations]),
+        inArray(corpusIndexProjectionStates.entityId, [...decisionIds]),
+      ),
+    )
+    .orderBy(
+      asc(corpusIndexProjectionStates.entityId),
+      asc(corpusIndexProjectionStates.generation),
+    )
+    .limit(decisionIds.length * generations.length)
     .for("update");

@@ -11,6 +11,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_MANIFESTS,
@@ -19,7 +20,9 @@ import {
 import {
   advanceCorpusProjectionDesiredStateTx,
   ensureCorpusProjectionDesiredStateTx,
+  lockActiveCorpusProjectionSourceByIdTx,
   reconcileCorpusProjectionDesiredStateTx,
+  synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -37,12 +40,21 @@ const LEGISLATION_DOCUMENT_ID = toSafeId<"legislationDocument">(
   "0198e331-e578-7000-8000-000000000104",
 );
 
+const statements: string[] = [];
+
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 beforeAll(async () => {
   client = await createTestPglite();
-  db = drizzle({ client });
+  db = drizzle({
+    client,
+    logger: {
+      logQuery: (query) => {
+        statements.push(query);
+      },
+    },
+  });
 });
 
 beforeEach(async () => {
@@ -438,4 +450,90 @@ test("a court correction on a court-partitioned decision replaces its desired pr
   });
   expect(after?.fingerprint).not.toBe(before?.fingerprint);
   expect(await reconcile()).toMatchObject({ changed: false });
+});
+
+test("bounded reconciliation matches single-row repair and remains a fixed point", async () => {
+  const synchronize = async () =>
+    await db.transaction(async (raw) => {
+      const tx = asTestRaw<Transaction>(raw);
+      const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+        family: "case_law",
+        sourceId: CASE_LAW_SOURCE_ID,
+      });
+      if (lock === null) {
+        throw new Error("expected active projection lock");
+      }
+      await synchronizeLockedCaseLawProjectionBatchTx(tx, {
+        lock,
+        sourceId: CASE_LAW_SOURCE_ID,
+        decisionIds: [CASE_LAW_DECISION_ID],
+      });
+    });
+  await synchronize();
+  const before = await db.select().from(corpusIndexProjectionStates);
+  expect(before.length).toBeGreaterThan(0);
+  await synchronize();
+  expect(await db.select().from(corpusIndexProjectionStates)).toEqual(before);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          { family: "case_law", entityId: CASE_LAW_DECISION_ID },
+        ),
+    ),
+  ).toMatchObject({ changed: false, epoch: 1n });
+  await db
+    .update(caseLawDecisions)
+    .set({ caseNumber: "5 As 8/2026" })
+    .where(eq(caseLawDecisions.id, CASE_LAW_DECISION_ID));
+  await synchronize();
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          { family: "case_law", entityId: CASE_LAW_DECISION_ID },
+        ),
+    ),
+  ).toMatchObject({ changed: false, epoch: 2n });
+});
+
+test("projection repair statements stay constant from two to twenty decisions", async () => {
+  const decisions = await db
+    .insert(caseLawDecisions)
+    .values(
+      Array.from({ length: 20 }, (_, index) => ({
+        sourceId: CASE_LAW_SOURCE_ID,
+        caseNumber: `batch-${String(index)}`,
+        court: "Nejvyšší správní soud",
+        country: "CZE",
+        language: "cs",
+        contentHash: "c".repeat(64),
+      })),
+    )
+    .returning({ id: caseLawDecisions.id });
+  const count = async (decisionIds: SafeId<"caseLawDecision">[]) => {
+    statements.length = 0;
+    await db.transaction(async (raw) => {
+      const tx = asTestRaw<Transaction>(raw);
+      const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+        family: "case_law",
+        sourceId: CASE_LAW_SOURCE_ID,
+      });
+      if (lock === null) {
+        throw new Error("expected active projection lock");
+      }
+      await synchronizeLockedCaseLawProjectionBatchTx(tx, {
+        lock,
+        sourceId: CASE_LAW_SOURCE_ID,
+        decisionIds,
+      });
+    });
+    return statements.length;
+  };
+  const small = await count(decisions.slice(0, 2).map(({ id }) => id));
+  const large = await count(decisions.map(({ id }) => id));
+  expect(small).toBeGreaterThan(0);
+  expect(large).toBe(small);
 });

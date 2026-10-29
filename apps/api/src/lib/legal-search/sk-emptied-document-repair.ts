@@ -1,10 +1,11 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   asc,
   eq,
   gt,
   gte,
+  inArray,
   isNotNull,
   isNull,
   lte,
@@ -15,10 +16,11 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import {
-  lockActiveCorpusProjectionSourceTx,
-  synchronizeLockedCorpusProjectionDesiredStateTx,
+  CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
+  lockActiveCorpusProjectionSourceByIdTx,
+  synchronizeLockedCaseLawProjectionBatchTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { storesNoCorpusDocument } from "@/api/lib/legal-search/sk-document-backfill";
 
@@ -148,52 +150,111 @@ export const scanEmptiedDocuments = async ({
   });
 };
 
-/** What a requeue did with one decision. */
+/** Each requested row has an explicit terminal outcome in the results file. */
 export type EmptiedDocumentRequeueOutcome =
-  /** Its text is cleared and its attempts reset: the walk fetches it again. */
-  | "requeued"
-  /** It no longer qualifies (fetched, redacted or refreshed since the scan). */
-  | "no-longer-eligible";
+  | { type: "requeued" }
+  | { type: "no-longer-eligible" }
+  | { type: "quarantined"; reason: "projection-or-update-failed" };
 
-const requeueEmptiedDocumentTx = async (
+class EmptiedDocumentBatchError extends TaggedError(
+  "EmptiedDocumentBatchError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+type EmptiedDocumentRowOutcome = {
+  decisionId: SafeId<"caseLawDecision">;
+  outcome: EmptiedDocumentRequeueOutcome;
+};
+
+type RequeueBatchOptions = {
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+  since: Date;
+  sourceId: SafeId<"caseLawSource">;
+};
+
+const requeueEmptiedDocumentBatchTx = async (
   tx: Transaction,
-  {
-    decisionId,
-    since,
-    sourceId,
-  }: {
-    decisionId: SafeId<"caseLawDecision">;
-    since: Date;
-    sourceId: SafeId<"caseLawSource">;
-  },
-): Promise<EmptiedDocumentRequeueOutcome> => {
-  const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, {
+  { decisionIds, since, sourceId }: RequeueBatchOptions,
+): Promise<EmptiedDocumentRowOutcome[]> => {
+  const lock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
     family: "case_law",
-    entityId: decisionId,
+    sourceId,
   });
-  // audit: skip — operator requeue of public case-law documents; no user action
-  const updated = await tx
-    .update(caseLawDecisions)
-    .set({ fulltext: null, documentFetchAttempts: 0 })
+  await lockCaseLawDecisionRows({ tx, decisionIds });
+  const eligible = await tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
     .where(
       and(
-        eq(caseLawDecisions.id, decisionId),
+        inArray(caseLawDecisions.id, [...decisionIds]),
         eq(caseLawDecisions.sourceId, sourceId),
         emptiedDocumentPredicate(since),
       ),
     )
-    .returning({ id: caseLawDecisions.id });
-  if (updated.length === 0) {
-    return "no-longer-eligible";
+    .orderBy(asc(caseLawDecisions.id))
+    .limit(decisionIds.length);
+  const ids = eligible.map(({ id }) => id);
+  if (ids.length > 0) {
+    // audit: skip — operator requeue of public case-law documents; no user action
+    await tx
+      .update(caseLawDecisions)
+      .set({ fulltext: null, documentFetchAttempts: 0 })
+      .where(inArray(caseLawDecisions.id, ids));
+    if (lock !== null) {
+      await synchronizeLockedCaseLawProjectionBatchTx(tx, {
+        lock,
+        sourceId,
+        decisionIds: ids,
+      });
+    }
   }
-  if (projectionLock !== null) {
-    await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-      lock: projectionLock,
-      subject: { family: "case_law", entityId: decisionId },
-    });
+  const requeued = new Set(ids);
+  return decisionIds.map((decisionId) => ({
+    decisionId,
+    outcome: {
+      type: requeued.has(decisionId) ? "requeued" : "no-longer-eligible",
+    },
+  }));
+};
+
+/** A failed transaction releases its locks before isolating its poison row. */
+const requeueIsolatedBatch = async (
+  scopedDb: ScopedDb,
+  options: RequeueBatchOptions,
+): Promise<EmptiedDocumentRowOutcome[]> => {
+  const attempted = await Result.tryPromise({
+    try: async () =>
+      await scopedDb(
+        async (tx) => await requeueEmptiedDocumentBatchTx(tx, options),
+      ),
+    catch: (cause) =>
+      new EmptiedDocumentBatchError({
+        message: "Emptied document batch failed",
+        cause,
+      }),
+  });
+  if (attempted.isOk()) {
+    return attempted.value;
   }
-  await runDecisionWriteExtension(tx, decisionId);
-  return "requeued";
+  const { decisionIds } = options;
+  if (decisionIds.length === 1) {
+    return decisionIds.map((decisionId) => ({
+      decisionId,
+      outcome: { type: "quarantined", reason: "projection-or-update-failed" },
+    }));
+  }
+  const middle = Math.floor(decisionIds.length / 2);
+  const left = await requeueIsolatedBatch(scopedDb, {
+    ...options,
+    decisionIds: decisionIds.slice(0, middle),
+  });
+  const right = await requeueIsolatedBatch(scopedDb, {
+    ...options,
+    decisionIds: decisionIds.slice(middle),
+  });
+  return left.concat(right);
 };
 
 /** Decisions one requeue call resets at most. */
@@ -207,42 +268,40 @@ export type RequeueEmptiedDocumentsOptions = {
 };
 
 /**
- * Put each listed decision back into the walk, one short transaction per
- * decision, re-checking the selection in its own update. A decision already
- * fetched, or requeued by an earlier run, no longer qualifies and is reported
- * as such, so running the same list twice requeues it once.
- *
- * The text becomes NULL, which is what the walk reads as "not fetched yet",
- * and the attempt count returns to zero. The last attempt's timestamp stays,
- * so a requeued decision waits out one base cooldown rather than arriving at
- * the head of the queue in a burst.
+ * Recheck and reset at most 32 decisions per transaction. Locks live through
+ * the batch commit; a failed batch rolls back before splitting for isolation.
+ * The attempt timestamp stays, preserving the publisher walk's cooldown.
+ * Quarantined rows stay unchanged and are recorded by the command's sink.
  */
 export const requeueEmptiedDocuments = async ({
   decisionIds,
   scopedDb,
   since,
   sourceId,
-}: RequeueEmptiedDocumentsOptions): Promise<
-  {
-    decisionId: SafeId<"caseLawDecision">;
-    outcome: EmptiedDocumentRequeueOutcome;
-  }[]
-> => {
+}: RequeueEmptiedDocumentsOptions): Promise<EmptiedDocumentRowOutcome[]> => {
   if (decisionIds.length > MAX_EMPTIED_DOCUMENT_REQUEUE) {
     return panic(
       `requeue takes at most ${String(MAX_EMPTIED_DOCUMENT_REQUEUE)} decisions, got ${String(decisionIds.length)}`,
     );
   }
-  const outcomes: {
-    decisionId: SafeId<"caseLawDecision">;
-    outcome: EmptiedDocumentRequeueOutcome;
-  }[] = [];
-  for (const decisionId of decisionIds) {
-    const outcome = await scopedDb(
-      async (tx) =>
-        await requeueEmptiedDocumentTx(tx, { decisionId, since, sourceId }),
+  const uniqueIds = [...new Set(decisionIds)].toSorted();
+  const outcomes: EmptiedDocumentRowOutcome[] = [];
+  for (
+    let offset = 0;
+    offset < uniqueIds.length;
+    offset += CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE
+  ) {
+    const batch = uniqueIds.slice(
+      offset,
+      offset + CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,
     );
-    outcomes.push({ decisionId, outcome });
+    outcomes.push(
+      ...(await requeueIsolatedBatch(scopedDb, {
+        decisionIds: batch,
+        since,
+        sourceId,
+      })),
+    );
   }
   return outcomes;
 };

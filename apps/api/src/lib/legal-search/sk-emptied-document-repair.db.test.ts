@@ -149,7 +149,9 @@ beforeAll(async () => {
   testDb = await getTestDb();
   scopedDb = asTestRaw<ScopedDb>(
     async (callback: (tx: TestDatabase) => Promise<unknown>) =>
-      await callback(testDb),
+      await testDb.transaction(
+        async (tx) => await callback(asTestRaw<TestDatabase>(tx)),
+      ),
   );
   const existing = await testDb.query.caseLawSources.findFirst({
     where: { adapterKey: { eq: ADAPTER_KEYS.SK_COURTS } },
@@ -337,7 +339,55 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
     since: SINCE,
     decisionIds: requeued,
   });
-  expect(again.map(({ outcome }) => outcome)).toEqual(
+  expect(again.map(({ outcome }) => outcome.type)).toEqual(
     requeued.map(() => "no-longer-eligible"),
+  );
+});
+
+test("a rejected row is quarantined without rolling back its healthy batch sibling", async () => {
+  const ids = qualifying();
+  await testDb
+    .update(caseLawDecisions)
+    .set({
+      fulltext: "",
+      documentFetchAttempts: 2,
+      documentFetchAttemptedAt: hoursAgo(6),
+    })
+    .where(inArray(caseLawDecisions.id, ids));
+  const poison = ids.at(0);
+  if (poison === undefined) {
+    throw new Error("missing poison fixture");
+  }
+  await testDb.execute(
+    sql`ALTER TABLE case_law_decisions ADD CONSTRAINT reject_empty_requeue
+    CHECK (id <> ${poison} OR fulltext IS NOT NULL)`.inlineParams(),
+  );
+  const result = await requeueEmptiedDocuments({
+    scopedDb,
+    sourceId,
+    since: SINCE,
+    decisionIds: ids,
+  });
+  expect(result).toEqual(
+    ids.map((decisionId) => ({
+      decisionId,
+      outcome:
+        decisionId === poison
+          ? { type: "quarantined", reason: "projection-or-update-failed" }
+          : { type: "requeued" },
+    })),
+  );
+  const stored = await testDb
+    .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+    .from(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, ids));
+  expect(stored.find(({ id }) => id === poison)?.fulltext).toBe("");
+  expect(
+    stored
+      .filter(({ id }) => id !== poison)
+      .every(({ fulltext }) => fulltext === null),
+  ).toBe(true);
+  await testDb.execute(
+    sql`ALTER TABLE case_law_decisions DROP CONSTRAINT reject_empty_requeue`,
   );
 });

@@ -3025,12 +3025,6 @@
   },
   {
     "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
-    "fingerprint": "96c5a6a41c9ab423985e3673ce7ea8f0788a44f3aa6a99ed66794d77af23bfaa",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts",
     "fingerprint": "b83037acf467f904c019812c841d388566d31bd9a17363d2c437c3e545668450",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
