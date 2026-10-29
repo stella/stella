@@ -59,6 +59,17 @@ const e = "opacity-0 hover:opacity-100 pointer-coarse:opacity-100!";`),
   ).toEqual([1, 3]);
 });
 
+test("matches state reveals to every hidden property", async () => {
+  expect(
+    await lint(`const a = "opacity-0 invisible hover:opacity-100 hover:visible data-[state=open]:opacity-100";
+const b = "opacity-0 invisible hover:opacity-100 hover:visible data-[state=open]:visible";
+const c = "opacity-0 invisible hover:opacity-100 hover:visible data-[state=open]:opacity-100 data-[state=open]:visible";
+const d = "opacity-0 invisible hover:opacity-100 hover:visible data-[state=open]:opacity-100 pointer-coarse:visible";
+const e = "opacity-0! hover:opacity-100! data-[state=open]:opacity-100";
+const f = "opacity-0! hover:opacity-100! data-[state=open]:opacity-100!";`),
+  ).toEqual([1, 2, 5]);
+});
+
 test("accepts decoration but not an overlay that takes the pointer", async () => {
   expect(
     await lint(`export const a = () => <span aria-hidden="true" className="opacity-0 group-hover:opacity-100" />;
