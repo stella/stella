@@ -284,35 +284,63 @@ export const emailAttachmentPreviewOptions = ({
     },
   });
 
-export const saveEmailAttachment = async ({
-  attachmentId,
-  destinationWorkspaceId,
-  fieldId,
-  parentId,
-  sourceWorkspaceId,
-}: {
+type SaveEmailAttachmentInput = {
   attachmentId: string;
   destinationWorkspaceId: string;
   fieldId: string;
   parentId: string | null;
   sourceWorkspaceId: string;
-}) => {
-  const fileRoutes = api.files({ workspaceId: sourceWorkspaceId });
-  return await invokeAppOnlyWrite("files.email-attachment.save", async () =>
-    parseSuccessBody(
-      EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
+};
+
+type UpdateDocumentPropertyInput = FileOptionsProps & {
+  propertyKey: AuthoredDocumentPropertyKey;
+  value: string;
+};
+
+export const createFileWrites = (apiClient: typeof api) => ({
+  saveEmailAttachment: async ({
+    attachmentId,
+    destinationWorkspaceId,
+    fieldId,
+    parentId,
+    sourceWorkspaceId,
+  }: SaveEmailAttachmentInput) => {
+    const fileRoutes = apiClient.files({ workspaceId: sourceWorkspaceId });
+    return await invokeAppOnlyWrite("files.email-attachment.save", async () =>
+      parseSuccessBody(
+        EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
+        unwrapApiResponse(
+          await fileRoutes["email-attachment"]({ fieldId })({
+            attachmentId,
+          }).save.post(
+            { destinationWorkspaceId, parentId },
+            { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
+          ),
+        ),
+        "Invalid email attachment save response",
+      ),
+    );
+  },
+  updateDocumentProperty: async ({
+    workspaceId,
+    fieldId,
+    propertyKey,
+    value,
+  }: UpdateDocumentPropertyInput): Promise<void> => {
+    const fileRoutes = apiClient.files({ workspaceId });
+    await invokeAppOnlyWrite("files.document-properties.update", async () =>
       unwrapApiResponse(
-        await fileRoutes["email-attachment"]({ fieldId })({
-          attachmentId,
-        }).save.post(
-          { destinationWorkspaceId, parentId },
+        await fileRoutes["document-properties"]({ fieldId }).patch(
+          { [propertyKey]: value },
           { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
         ),
       ),
-      "Invalid email attachment save response",
-    ),
-  );
-};
+    );
+  },
+});
+
+export const { saveEmailAttachment, updateDocumentProperty } =
+  createFileWrites(api);
 
 /**
  * The file's own embedded properties (DOCX Author and Company, PDF Producer,
@@ -354,26 +382,6 @@ export const documentPropertiesOptions = ({
       await readDocumentProperties({ fieldId, signal, workspaceId }),
     staleTime: Number.POSITIVE_INFINITY,
   });
-
-export const updateDocumentProperty = async ({
-  workspaceId,
-  fieldId,
-  propertyKey,
-  value,
-}: FileOptionsProps & {
-  propertyKey: AuthoredDocumentPropertyKey;
-  value: string;
-}): Promise<void> => {
-  const fileRoutes = api.files({ workspaceId });
-  await invokeAppOnlyWrite("files.document-properties.update", async () =>
-    unwrapApiResponse(
-      await fileRoutes["document-properties"]({ fieldId }).patch(
-        { [propertyKey]: value },
-        { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
-      ),
-    ),
-  );
-};
 
 export const textFileOptions = (props: FileOptionsProps) =>
   queryOptions({

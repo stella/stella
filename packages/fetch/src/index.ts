@@ -66,6 +66,10 @@ const executeFetchWithTimeout = async (
   reset();
   const response = await Promise.resolve()
     .then(async () => await activeFetcher(input, { ...init, signal: combined }))
+    .catch((error: unknown) => {
+      clear();
+      throw error;
+    })
     .finally(() => {
       if (timeout !== undefined) {
         clear();

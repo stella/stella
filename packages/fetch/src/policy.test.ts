@@ -177,19 +177,26 @@ describe("response timeout policies", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test("transport failure before headers retains its reason and clears its timer", async () => {
-    jest.useFakeTimers();
-    const reason = new TypeError("Transport failed");
-    const request = createFetchWithTimeout(async () => {
-      throw reason;
+  for (const policy of [
+    { timeoutMs: 20 },
+    { timeout: { type: "headers", ms: 20 } },
+    { timeout: { type: "idle", ms: 20 } },
+  ] as const) {
+    const type = "timeoutMs" in policy ? "total" : policy.timeout.type;
+    test(`${type} policy clears its timer when the transport rejects before headers`, async () => {
+      jest.useFakeTimers();
+      const reason = new TypeError("Transport failed");
+      const request = createFetchWithTimeout(async () => {
+        throw reason;
+      });
+      expect(
+        await request("https://example.com", policy).catch(
+          (error: unknown) => error,
+        ),
+      ).toBe(reason);
+      expect(jest.getTimerCount()).toBe(0);
     });
-    expect(
-      await request("https://example.com", {
-        timeout: { type: "idle", ms: 20 },
-      }).catch((error: unknown) => error),
-    ).toBe(reason);
-    expect(jest.getTimerCount()).toBe(0);
-  });
+  }
 
   test("synchronous transport failure clears its timer", async () => {
     jest.useFakeTimers();
