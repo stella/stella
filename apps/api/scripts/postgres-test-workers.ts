@@ -297,20 +297,21 @@ export const runPostgresWorkers = async ({
       plan.map(async (workerPlan, index) => {
         let firstFailure = 0;
         for (const [position, batch] of workerPlan.batches.entries()) {
-          if (signal !== undefined) {
-            break;
-          }
           // An exclusive suite starts from the template, not from the rows the
           // suites before it on this worker left behind: its assertions over
           // shared tables then depend on nothing but its own writes.
           const databaseName = databaseNames.at(index);
           if (
+            signal === undefined &&
             position > 0 &&
             databaseName !== undefined &&
             batch.every((file) => exclusivePaths.has(file))
           ) {
             await dropClone(databaseName);
             await cloneTemplate(databaseName);
+          }
+          if (signal !== undefined) {
+            break;
           }
           const status = await runBatch(batch, index);
           if (firstFailure === 0 && status !== 0) {
