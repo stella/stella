@@ -18,6 +18,22 @@ const readJob = (source: unknown, name: string) => {
   );
 };
 
+const readAliasStep = (source: unknown): string => {
+  const { jobs } = v.parse(
+    v.object({ jobs: v.record(v.string(), v.unknown()) }),
+    source,
+  );
+  const { steps } = v.parse(
+    v.object({ steps: v.array(v.record(v.string(), v.unknown())) }),
+    jobs["alias-manifest"],
+  );
+  const run = steps.find((step) => step["id"] === "alias")?.["run"];
+  if (typeof run !== "string") {
+    throw new TypeError("alias-manifest has no alias step");
+  }
+  return run;
+};
+
 const sha = "a".repeat(40);
 const image = (hex: string, targetEnvironment?: string) => ({
   name: "ghcr.io/stella/image",
@@ -46,10 +62,15 @@ test("stable manifest preserves every RC image identity and the proven SHA", () 
     ]);
   const result = run(sha);
   expect(result.exitCode).toBe(0);
-  expect(JSON.parse(result.stdout.toString())).toEqual({
+  const final = JSON.parse(result.stdout.toString());
+  expect(final).toEqual({
     ...manifest,
     version: "v1.2.3",
+    webImage: manifest.productionWebImage,
   });
+  // The production promotion refuses a web image built for another target.
+  expect(final.webImage.targetEnvironment).toBe("production");
+  expect(final.webImage.digest).toBe(manifest.productionWebImage.digest);
   expect(run("b".repeat(40)).exitCode).not.toBe(0);
   rmSync(dir, { recursive: true, force: true });
 });
@@ -76,6 +97,12 @@ test("final release declares no build, smoke, or web-image work", () => {
     "needs.resolve.outputs.channel == 'final'",
   );
   expect(readJob(workflow, "alias-manifest").needs).toBe("resolve");
+  const alias = readAliasStep(workflow);
+  // The dispatched web digest is the manifest entry the promotion validates.
+  expect(alias).toContain(
+    `web="$(jq -r '.webImage.digest' release-manifest.json)"`,
+  );
+  expect(alias).not.toContain(".productionWebImage.digest");
   for (const name of [
     "publish-release",
     "publish-latest",

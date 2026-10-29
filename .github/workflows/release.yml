@@ -1304,8 +1304,10 @@ jobs:
           bash "$GH_RETRY_SCRIPT" release download "$RC_REF" --dir rc
           bash scripts/alias-release-manifest.sh rc/release-manifest.json "$RELEASE_REF" "$RELEASE_SHA" > release-manifest.json
           api="$(jq -r '.image.digest' release-manifest.json)"
-          web="$(jq -r '.productionWebImage.digest' release-manifest.json)"
-          for kind in image productionWebImage; do
+          # The promotion validates the manifest's webImage, so the dispatched
+          # digest is read from that same entry.
+          web="$(jq -r '.webImage.digest' release-manifest.json)"
+          for kind in image webImage; do
             image="$(jq -r --arg kind "$kind" '.[$kind].name' release-manifest.json)"
             digest="$(jq -r --arg kind "$kind" '.[$kind].digest' release-manifest.json)"
             existing="$(docker buildx imagetools inspect "$image:$RELEASE_REF" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
