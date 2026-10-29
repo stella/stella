@@ -1260,6 +1260,8 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write # attest the aliased web image's publication
+      attestations: write
     outputs:
       api-image-digest: ${{ steps.alias.outputs.api }}
       production-web-image-digest: ${{ steps.alias.outputs.web }}
@@ -1323,8 +1325,80 @@ jobs:
             [[ -f "$asset" ]] || continue
             bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$asset" --clobber
           done
-          echo "api=$api" >> "$GITHUB_OUTPUT"
-          echo "web=$web" >> "$GITHUB_OUTPUT"
+          web_target="$(jq -er '.webImage.targetEnvironment' release-manifest.json)"
+          {
+            echo "api=$api"
+            echo "web=$web"
+            echo "web_target=$web_target"
+          } >> "$GITHUB_OUTPUT"
+
+      # Release Desktop reads the tag from this artifact, as on the build path.
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-manifest-${{ needs.resolve.outputs.release_ref }}
+          path: release-manifest.json
+          retention-days: 90
+
+      # The promotion accepts a web image only with a publication attestation
+      # naming the release it promotes. The candidate's attestation names the
+      # RC tag, so the final release attests the same digest under its own ref.
+      - name: Write web image publication predicate
+        env:
+          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+          TARGET_ENV: ${{ steps.alias.outputs.web_target }}
+        run: |
+          jq -n \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            --arg target_environment "$TARGET_ENV" \
+            '{releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
+            > web-image-publication.json
+
+      # Same retry shape as the candidate's attestation: only a refusal that
+      # outlives the retries fails the release.
+      - name: Attest web image publication
+        id: attest-web
+        continue-on-error: true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.alias.outputs.web }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before first retry
+        if: steps.attest-web.outcome == 'failure'
+        run: sleep 30
+
+      - name: Attest web image publication (retry)
+        id: attest-web-retry
+        if: steps.attest-web.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.alias.outputs.web }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
+      - name: Wait before final retry
+        if: steps.attest-web-retry.outcome == 'failure'
+        run: sleep 90
+
+      - name: Attest web image publication (final retry)
+        if: steps.attest-web-retry.outcome == 'failure'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.alias.outputs.web }}
+          predicate-type: ${{ env.WEB_PUBLICATION_PREDICATE }}
+          predicate-path: web-image-publication.json
+          push-to-registry: true
+
       - name: Log out of GitHub Container Registry
         if: always()
         run: docker logout ghcr.io
@@ -1412,6 +1486,7 @@ jobs:
             scripts/gh-retry.sh
             scripts/check-api-deployment.ts
             scripts/api-health.ts
+            apps/api/src/deploy-env-contract.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1426,8 +1501,10 @@ jobs:
       # leave `uses: ./...` unresolvable and fail before dispatching.
       - name: Preserve release verification tooling across source checkouts
         run: |
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/check-api-deployment.ts"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/api-health.ts"
+          mkdir -p "$RUNNER_TEMP/scripts" "$RUNNER_TEMP/apps/api/src"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-api-deployment.ts" "$RUNNER_TEMP/scripts/check-api-deployment.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
 
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1469,7 +1546,7 @@ jobs:
           API_DEPLOYMENT_EXPECTED_ENVIRONMENT: production
           API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
       # Same commit gate as the staging web smoke: the web origin's
       # version marker must stably report the released commit. Read-only
@@ -1480,7 +1557,7 @@ jobs:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_PROBE_PATH: version.json
           API_DEPLOYMENT_URL: https://my.stll.app
-        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/scripts/check-api-deployment.ts"
 
   publish-release:
     runs-on: ubuntu-24.04
@@ -1676,6 +1753,12 @@ jobs:
           persist-credentials: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Reconcile production publication
         timeout-minutes: 5
         env:
@@ -1692,8 +1775,16 @@ jobs:
           health=false
           production=false
           if [[ "$(bash scripts/gh-retry.sh release view "$RELEASE_REF" --json isDraft --jq '.isDraft == false' || true)" == true ]]; then release=true; fi
-          api="$(docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
-          web="$(docker buildx imagetools inspect "${REGISTRY}/${WEB_IMAGE_NAME}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+          latest_digest() {
+            local digest
+            if ! digest="$(docker buildx imagetools inspect "$1:latest" --format '{{.Manifest.Digest}}')"; then
+              echo "::warning::Cannot read $1:latest" >&2
+              return 0
+            fi
+            printf '%s' "$digest"
+          }
+          api="$(latest_digest "${REGISTRY}/${IMAGE_NAME}")"
+          web="$(latest_digest "${REGISTRY}/${WEB_IMAGE_NAME}")"
           if [[ -n "$API_DIGEST" && -n "$WEB_DIGEST" && "$api" == "$API_DIGEST" && "$web" == "$WEB_DIGEST" ]]; then latest=true; fi
           runs="$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/release-health.yml/runs?event=workflow_dispatch&per_page=100")"
           if jq -e --arg title "Release health $RELEASE_REF" 'any(.[].workflow_runs[]; .display_title == $title)' <<< "$runs" >/dev/null; then health=true; fi
@@ -1701,3 +1792,6 @@ jobs:
           jq -n --argjson release "$release" --argjson latest "$latest" --argjson health "$health" --argjson production "$production" \
             '{release: $release, ":latest": $latest, "health-run": $health, production: $production}' > receipts.json
           bash scripts/release-complete.sh receipts.json
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io
