@@ -136,6 +136,9 @@ jobs:
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
       postgres_test_durations_hash: ${{ steps.postgres-test-durations.outputs.hash }}
+      # `i/n` matrix values sized from measured durations; n is this run's own.
+      postgres_shards: ${{ steps.postgres-shards.outputs.postgres_shards || '["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]' }}
+      postgres_shard_count: ${{ steps.postgres-shards.outputs.postgres_shard_count || '8' }}
       postgres_test_selection: ${{ steps.postgres-test-plan.outputs.postgres_test_selection || '{"mode":"all"}' }}
       postgres_selection_reason: ${{ steps.postgres-test-plan.outputs.postgres_selection_reason || 'Planner unavailable; full suite retained.' }}
       # Absent repository switch is OFF; enabling it requires the service job.
@@ -1248,6 +1251,26 @@ jobs:
           overwrite: true
           retention-days: 1
           if-no-files-found: ignore
+
+      # The shard count follows the durations the shards verify: growth adds
+      # a shard, and a projection over budget at the maximum is a warning.
+      # Without the planner the maximum count stands in; time never fails.
+      - name: Plan Postgres test shards
+        id: postgres-shards
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && inputs.pr_depth_only != true
+          && steps.changed-files.outputs.postgres_suites_required == 'true'
+          && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on')
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-postgres-shard-plan.ts; then
+            echo '::warning::Postgres shard planning unavailable; using the maximum shard count.'
+            {
+              echo 'postgres_shards=["1/8","2/8","3/8","4/8","5/8","6/8","7/8","8/8"]'
+              echo 'postgres_shard_count=8'
+            } >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Select changed PR e2e shards
         id: e2e-pr-selection
@@ -3810,7 +3833,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        # ci-plan sizes n from measured durations; each value is `i/n`, so
+        # every shard job name records the n its run planned.
+        shard: ${{ fromJSON(needs.ci-plan.outputs.postgres_shards) }}
     permissions:
       contents: read
       packages: read
@@ -3923,7 +3948,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: bun-install-${{ github.job }}-${{ matrix.shard }}
+          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
@@ -3977,7 +4002,7 @@ jobs:
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
         working-directory: apps/api
         env:
-          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}/3
+          CI_POSTGRES_TEST_SHARD: ${{ matrix.shard }}
           POSTGRES_TEST_DURATIONS_FILE: ${{ runner.temp }}/postgres-test-durations.json
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -4006,7 +4031,7 @@ jobs:
         if: ${{ !cancelled() && steps.postgres-tests.outcome == 'success' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: postgres-test-timings-${{ matrix.shard }}
+          name: postgres-test-timings-${{ strategy.job-index }}
           path: ${{ runner.temp }}/postgres-test-timings/*.json
           retention-days: 1
           if-no-files-found: warn
