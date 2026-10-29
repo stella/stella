@@ -418,6 +418,11 @@ test("the generated-output guards run when their inputs change", () => {
   for (const file of [
     "scripts/check-published-exports.ts",
     "scripts/prepare-publish.ts",
+    "scripts/publish-declarations.ts",
+    "scripts/pack-reproducibly.sh",
+    "scripts/check-publish-reproducibility.sh",
+    "scripts/publish-packages.ts",
+    "scripts/generate-npm-release-jobs.ts",
     "scripts/publish-manifest.ts",
     "scripts/published-export-guards.ts",
   ]) {

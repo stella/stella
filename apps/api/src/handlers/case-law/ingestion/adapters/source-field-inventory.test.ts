@@ -73,6 +73,7 @@ import {
   metadataTextAddressDispositionsForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
 
 const originalFetch = globalThis.fetch;
 
@@ -212,159 +213,170 @@ describe("every adapter accounts for the fields its source states", () => {
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
-      const evidence = fixture();
-      const decision = await evidence.buildDecision();
-      const schema = metadataUrlSchemaForAdapter(key);
-      // The branded contract covers every registered source with no field debt.
-      const normalized = plainTextIngestionResult(decision, schema);
-      for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
-        expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
-          Reflect.get(decision, field),
-        );
-      }
-      const parts = storedPartsOf(key, decision);
+      const fixtures =
+        key === ADAPTER_KEYS.CZ_NSS ? [fixture, nssRecoveryFixture] : [fixture];
+      const observed = new Set<string>();
+      for (const buildFixture of fixtures) {
+        const evidence = buildFixture();
+        const decision = await evidence.buildDecision();
+        const schema = metadataUrlSchemaForAdapter(key);
+        // The branded contract covers every registered source with no field debt.
+        const normalized = plainTextIngestionResult(decision, schema);
+        for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
+          expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
+            Reflect.get(decision, field),
+          );
+        }
+        const parts = storedPartsOf(key, decision);
 
-      expect(
-        unclassifiedMetadataAddresses(decision.metadata, {
+        expect(
+          unclassifiedMetadataAddresses(decision.metadata, {
+            schema,
+            textAddresses: metadataTextAddressDispositionsForAdapter(key),
+            nullOnlyAddresses: metadataNullOnlyAddressesForAdapter(key),
+          }),
+          `${key}: address fields require exact producer declarations`,
+        ).toEqual([]);
+        const metadataCensus = metadataDisplayTextCensus(
+          decision.metadata,
           schema,
-          textAddresses: metadataTextAddressDispositionsForAdapter(key),
-          nullOnlyAddresses: metadataNullOnlyAddressesForAdapter(key),
-        }),
-        `${key}: address fields require exact producer declarations`,
-      ).toEqual([]);
-      const metadataCensus = metadataDisplayTextCensus(
-        decision.metadata,
-        schema,
-      );
-      expect(
-        metadataCensus.unclassified,
-        `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
-      ).toEqual([]);
-      const textOutputs = [
-        { field: "caseNumber", value: decision.caseNumber },
-        { field: "court", value: decision.court },
-        ...(decision.decisionType === undefined
-          ? []
-          : [{ field: "decisionType", value: decision.decisionType }]),
-        ...(decision.judges ?? []).map((judge, index) =>
-          judge.nameAsPrinted === undefined
-            ? {
-                field: `judges.${index}.czechDeclinedName`,
-                value: judge.czechDeclinedName,
-              }
-            : {
-                field: `judges.${index}.nameAsPrinted`,
-                value: judge.nameAsPrinted,
-              },
-        ),
-        ...(decision.fulltext === undefined
-          ? []
-          : [{ field: "fulltext", value: decision.fulltext }]),
-        ...Object.entries(decision.textFields).flatMap(([field, value]) =>
-          value.type === "present"
-            ? [{ field: `textFields.${field}`, value: value.text }]
-            : [],
-        ),
-        ...("blocks" in decision.documentAst
-          ? decision.documentAst.blocks.map((block) => ({
-              field: `documentAst.${block.type}.${block.id}`,
-              value: block.plainText,
-            }))
-          : []),
-        ...(decision.sections ?? []).flatMap((section) => [
-          {
-            field: `sections.${section.index}.title`,
-            value: section.title ?? "",
-          },
-          { field: `sections.${section.index}.text`, value: section.text },
-        ]),
-        ...metadataCensus.texts,
-        ...("blocks" in decision.documentAst &&
-        decision.documentAst.metadata.type !== "guidance"
-          ? [
-              ...decision.documentAst.metadata.keywords.map((value, index) => ({
-                field: `documentAst.metadata.keywords.${index}`,
-                value,
-              })),
-              ...decision.documentAst.metadata.statutes.map((value, index) => ({
-                field: `documentAst.metadata.statutes.${index}`,
-                value,
-              })),
-            ]
-          : []),
-      ];
-      const entityResidues = entityResiduesInStoredText(textOutputs);
-      expect(
-        entityResidues,
-        `${key}: normalized case-law text retains character references`,
-      ).toEqual([]);
-
-      const stated = await sourceFields.listSourceFields(parts);
-      expect(
-        stated.length,
-        `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,
-      ).toBeGreaterThan(0);
-
-      const undeclared = stated.filter(
-        (field) => sourceFields.fields[field] === undefined,
-      );
-      expect(
-        undeclared,
-        `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
-      ).toEqual([]);
-
-      // `excludedSourceField` rejects a blank reason at the call site, so this
-      // is the backstop for a reason that reaches an inventory some other way.
-      const unreasoned = stated.filter((field) => {
-        const disposition: SourceFieldDisposition | undefined =
-          sourceFields.fields[field];
-        return (
-          disposition?.disposition === "excluded" &&
-          disposition.reason.trim().length === 0
         );
-      });
-      expect(
-        unreasoned,
-        `${key}: these fields are excluded with a blank reason: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
-      ).toEqual([]);
+        expect(
+          metadataCensus.unclassified,
+          `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
+        ).toEqual([]);
+        const textOutputs = [
+          { field: "caseNumber", value: decision.caseNumber },
+          { field: "court", value: decision.court },
+          ...(decision.decisionType === undefined
+            ? []
+            : [{ field: "decisionType", value: decision.decisionType }]),
+          ...(decision.judges ?? []).map((judge, index) =>
+            judge.nameAsPrinted === undefined
+              ? {
+                  field: `judges.${index}.czechDeclinedName`,
+                  value: judge.czechDeclinedName,
+                }
+              : {
+                  field: `judges.${index}.nameAsPrinted`,
+                  value: judge.nameAsPrinted,
+                },
+          ),
+          ...(decision.fulltext === undefined
+            ? []
+            : [{ field: "fulltext", value: decision.fulltext }]),
+          ...Object.entries(decision.textFields).flatMap(([field, value]) =>
+            value.type === "present"
+              ? [{ field: `textFields.${field}`, value: value.text }]
+              : [],
+          ),
+          ...("blocks" in decision.documentAst
+            ? decision.documentAst.blocks.map((block) => ({
+                field: `documentAst.${block.type}.${block.id}`,
+                value: block.plainText,
+              }))
+            : []),
+          ...(decision.sections ?? []).flatMap((section) => [
+            {
+              field: `sections.${section.index}.title`,
+              value: section.title ?? "",
+            },
+            { field: `sections.${section.index}.text`, value: section.text },
+          ]),
+          ...metadataCensus.texts,
+          ...("blocks" in decision.documentAst &&
+          decision.documentAst.metadata.type !== "guidance"
+            ? [
+                ...decision.documentAst.metadata.keywords.map(
+                  (value, index) => ({
+                    field: `documentAst.metadata.keywords.${index}`,
+                    value,
+                  }),
+                ),
+                ...decision.documentAst.metadata.statutes.map(
+                  (value, index) => ({
+                    field: `documentAst.metadata.statutes.${index}`,
+                    value,
+                  }),
+                ),
+              ]
+            : []),
+        ];
+        const entityResidues = entityResiduesInStoredText(textOutputs);
+        expect(
+          entityResidues,
+          `${key}: normalized case-law text retains character references`,
+        ).toEqual([]);
 
+        const stated = await sourceFields.listSourceFields(parts);
+        for (const field of stated) {
+          observed.add(field);
+        }
+        expect(
+          stated.length,
+          `${key}: the stored envelope states no fields at all, so this suite would certify nothing. Check listSourceFields against the parts the adapter writes.`,
+        ).toBeGreaterThan(0);
+
+        const undeclared = stated.filter(
+          (field) => sourceFields.fields[field] === undefined,
+        );
+        expect(
+          undeclared,
+          `${key}: its source states fields nothing decided about: ${undeclared.join(", ")}. Store them, or exclude them with the reason.`,
+        ).toEqual([]);
+
+        // `excludedSourceField` rejects a blank reason at the call site, so this
+        // is the backstop for a reason that reaches an inventory some other way.
+        const unreasoned = stated.filter((field) => {
+          const disposition: SourceFieldDisposition | undefined =
+            sourceFields.fields[field];
+          return (
+            disposition?.disposition === "excluded" &&
+            disposition.reason.trim().length === 0
+          );
+        });
+        expect(
+          unreasoned,
+          `${key}: these fields are excluded with a blank reason: ${unreasoned.join(", ")}. An exclusion nobody explained is the silence this suite exists to break.`,
+        ).toEqual([]);
+
+        const unstored = stated.flatMap((field) => {
+          const disposition: SourceFieldDisposition | undefined =
+            sourceFields.fields[field];
+          if (disposition?.disposition !== "stored") {
+            return [];
+          }
+          if (disposition.target.type === "raw") {
+            expect(disposition.target.reason.trim().length).toBeGreaterThan(0);
+            expect(
+              Object.hasOwn(evidence.rawFieldValues ?? {}, field),
+              `${key}: missing source value oracle for ${field}`,
+            ).toBe(true);
+            expect(
+              storedValueOf(decision, disposition.target),
+              `${key}: raw field ${field} changed`,
+            ).toEqual(evidence.rawFieldValues?.[field]);
+            return [];
+          }
+          return isPresent(storedValueOf(decision, disposition.target))
+            ? []
+            : [`${field} -> ${describeTarget(disposition.target)}`];
+        });
+
+        expect(
+          unstored,
+          `${key}: these fields are declared stored, and the decision built from the fixture that states them does not carry them: ${unstored.join("; ")}.`,
+        ).toEqual([]);
+      }
       // The other direction, or a disposition could be declared and never
       // exercised: the checks below only walk what the envelope states, so a
       // stored field the fixture never carries would be certified by nothing.
       const neverObserved = Object.keys(sourceFields.fields).filter(
-        (field) => !stated.includes(field),
+        (field) => !observed.has(field),
       );
       expect(
         neverObserved,
         `${key}: its inventory declares fields the stored envelope never states: ${neverObserved.join(", ")}. The fixture is the union of what the source's pages state, so add them there or drop them from the inventory.`,
-      ).toEqual([]);
-
-      const unstored = stated.flatMap((field) => {
-        const disposition: SourceFieldDisposition | undefined =
-          sourceFields.fields[field];
-        if (disposition?.disposition !== "stored") {
-          return [];
-        }
-        if (disposition.target.type === "raw") {
-          expect(disposition.target.reason.trim().length).toBeGreaterThan(0);
-          expect(
-            Object.hasOwn(evidence.rawFieldValues ?? {}, field),
-            `${key}: missing source value oracle for ${field}`,
-          ).toBe(true);
-          expect(
-            storedValueOf(decision, disposition.target),
-            `${key}: raw field ${field} changed`,
-          ).toEqual(evidence.rawFieldValues?.[field]);
-          return [];
-        }
-        return isPresent(storedValueOf(decision, disposition.target))
-          ? []
-          : [`${field} -> ${describeTarget(disposition.target)}`];
-      });
-
-      expect(
-        unstored,
-        `${key}: these fields are declared stored, and the decision built from the fixture that states them does not carry them: ${unstored.join("; ")}.`,
       ).toEqual([]);
     });
   }

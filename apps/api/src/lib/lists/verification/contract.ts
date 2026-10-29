@@ -8,6 +8,7 @@
 // definition of a claim and a review event.
 
 import type { ReviewDecision } from "@stll/api-contract/review-decision";
+import type { SpotTarget } from "@stll/api-contract/spot";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
@@ -83,9 +84,10 @@ export const CLAIM_ANCHOR_TYPES = ["docx-block", "pdf-page"] as const;
 /** Where a claim sits in the pinned document version. Offsets are UTF-16
  *  code units into the block or page text; the claim's `text` lets a re-parse
  *  re-find the words when offsets no longer line up. */
-export type ClaimAnchor =
-  | { type: "docx-block"; blockId: string; start: number; end: number }
-  | { type: "pdf-page"; pageNumber: number; start: number; end: number };
+export type ClaimAnchor = Extract<
+  SpotTarget,
+  { type: "docx-block" | "pdf-page"; start: number; end: number }
+>;
 
 /** Two anchor facts disagree on the point a claim rests on. Index `i` of
  *  `values` and `governingStates` belongs to `factEntityIds[i]`. */

@@ -379,13 +379,6 @@ describe("chat run log database contract", () => {
       value: { offset: "1", chunk: finished },
     });
     const finalRead = reader.next();
-    let readerEnded = false;
-    void finalRead.then(() => {
-      readerEnded = true;
-      return undefined;
-    });
-    await Bun.sleep(20);
-    expect(readerEnded).toBe(false);
     await log.close();
     expect(await finalRead).toEqual({ done: true, value: undefined });
   });

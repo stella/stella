@@ -269,6 +269,8 @@ const runRecord = async (deploySha: string, statusOwnerRun = 9) => {
       GITHUB_RUN_ID: "9",
       GITHUB_SERVER_URL: "https://github.com",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
       MCP_SMOKE: "success",
       CORPUS_PREFLIGHT: "success",
       CORPUS_SEARCH_WAIVED: "false",
@@ -686,7 +688,12 @@ describe("staging deploy commit", () => {
     ]) {
       expect(workflow).toContain(consumer);
     }
-    for (const job of ["staging-health", "build-api", "build-web"]) {
+    for (const job of [
+      "staging-health",
+      "rc-manifest",
+      "build-api",
+      "build-web",
+    ]) {
       const start = workflow.indexOf(`\n  ${job}:\n`);
       expect(start).toBeGreaterThanOrEqual(0);
       expect(workflow.slice(start, workflow.indexOf("steps:", start))).toMatch(
@@ -694,7 +701,7 @@ describe("staging deploy commit", () => {
       );
     }
     expect(workflow).toContain(
-      "needs: [resolve, staging-health, staging-wake, build-api, build-web]",
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
     );
   });
 });

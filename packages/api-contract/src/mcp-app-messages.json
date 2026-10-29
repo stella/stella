@@ -125,7 +125,8 @@
     "positive": "مُقرّ",
     "supportive": "متَّبع",
     "mixed": "متباين",
-    "unclassified": "غير مصنَّف"
+    "unclassified": "غير مصنَّف",
+    "noDecisionText": "لا يتوفر نص الحكم"
   },
   "cs": {
     "constitutional": "Ústavní soudy",
@@ -253,7 +254,8 @@
     "positive": "Potvrzeno",
     "supportive": "Následováno",
     "mixed": "Smíšené",
-    "unclassified": "Neklasifikováno"
+    "unclassified": "Neklasifikováno",
+    "noDecisionText": "Rozhodnutí nemá text"
   },
   "de": {
     "constitutional": "Verfassungsgerichte",
@@ -381,7 +383,8 @@
     "positive": "Gebilligt",
     "supportive": "Gefolgt",
     "mixed": "Uneinheitlich",
-    "unclassified": "Nicht eingeordnet"
+    "unclassified": "Nicht eingeordnet",
+    "noDecisionText": "Kein Entscheidungstext"
   },
   "en": {
     "constitutional": "Constitutional courts",
@@ -509,7 +512,8 @@
     "positive": "Endorsed",
     "supportive": "Followed",
     "mixed": "Mixed",
-    "unclassified": "Unclassified"
+    "unclassified": "Unclassified",
+    "noDecisionText": "No decision text"
   },
   "et": {
     "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
@@ -637,7 +641,8 @@
     "positive": "Heaks kiidetud",
     "supportive": "Järgitud",
     "mixed": "Vastuoluline",
-    "unclassified": "Liigitamata"
+    "unclassified": "Liigitamata",
+    "noDecisionText": "Lahendi tekst puudub"
   },
   "fr": {
     "constitutional": "Juridictions constitutionnelles",
@@ -765,7 +770,8 @@
     "positive": "Approuvée",
     "supportive": "Suivie",
     "mixed": "Mitigée",
-    "unclassified": "Non classée"
+    "unclassified": "Non classée",
+    "noDecisionText": "Texte de la décision absent"
   },
   "hu": {
     "constitutional": "Alkotmánybíróságok",
@@ -893,7 +899,8 @@
     "positive": "Megerősített",
     "supportive": "Követett",
     "mixed": "Vegyes",
-    "unclassified": "Besorolatlan"
+    "unclassified": "Besorolatlan",
+    "noDecisionText": "Nincs határozatszöveg"
   },
   "lv": {
     "constitutional": "Konstitucionālās tiesas",
@@ -1021,7 +1028,8 @@
     "positive": "Apstiprināts",
     "supportive": "Sekots",
     "mixed": "Pretrunīgs",
-    "unclassified": "Neklasificēts"
+    "unclassified": "Neklasificēts",
+    "noDecisionText": "Nav nolēmuma teksta"
   },
   "lt": {
     "constitutional": "Konstituciniai teismai",
@@ -1149,7 +1157,8 @@
     "positive": "Patvirtintas",
     "supportive": "Sekama",
     "mixed": "Mišrus",
-    "unclassified": "Neklasifikuota"
+    "unclassified": "Neklasifikuota",
+    "noDecisionText": "Nėra sprendimo teksto"
   },
   "pl": {
     "constitutional": "Trybunały konstytucyjne",
@@ -1277,7 +1286,8 @@
     "positive": "Zaaprobowane",
     "supportive": "Podzielone",
     "mixed": "Mieszane",
-    "unclassified": "Niesklasyfikowane"
+    "unclassified": "Niesklasyfikowane",
+    "noDecisionText": "Brak tekstu orzeczenia"
   },
   "pt-BR": {
     "constitutional": "Tribunais constitucionais",
@@ -1405,7 +1415,8 @@
     "positive": "Endossada",
     "supportive": "Seguida",
     "mixed": "Mista",
-    "unclassified": "Não classificada"
+    "unclassified": "Não classificada",
+    "noDecisionText": "Sem texto da decisão"
   },
   "sk": {
     "constitutional": "Ústavné súdy",
@@ -1533,7 +1544,8 @@
     "positive": "Potvrdené",
     "supportive": "Nasledované",
     "mixed": "Zmiešané",
-    "unclassified": "Neklasifikované"
+    "unclassified": "Neklasifikované",
+    "noDecisionText": "Rozhodnutie nemá text"
   },
   "es": {
     "constitutional": "Tribunales constitucionales",
@@ -1661,6 +1673,7 @@
     "positive": "Respaldada",
     "supportive": "Seguida",
     "mixed": "Mixta",
-    "unclassified": "Sin clasificar"
+    "unclassified": "Sin clasificar",
+    "noDecisionText": "Sin texto de la resolución"
   }
 }

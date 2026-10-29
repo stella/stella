@@ -154,6 +154,8 @@ describe("API deployment health receipt", () => {
       CORPUS_SEARCH_WAIVED: "false",
       WAIVE_REASON: "",
       JOB_STATUS: "success",
+      PROOF_READINESS: "ready",
+      PROOF_ENVIRONMENT: "ready",
     };
     const cases = [
       { outcomes: success, state: "success" },
@@ -170,6 +172,14 @@ describe("API deployment health receipt", () => {
         })),
       ),
       { outcomes: { ...success, JOB_STATUS: "cancelled" }, state: "failure" },
+      ...["PROOF_READINESS", "PROOF_ENVIRONMENT"].flatMap((gate) =>
+        ["", "environment-unavailable", "environment-interrupted"].map(
+          (outcome) => ({
+            outcomes: { ...success, [gate]: outcome },
+            state: "error",
+          }),
+        ),
+      ),
     ];
     for (const { outcomes, state } of cases) {
       const result = Bun.spawnSync(
@@ -560,7 +570,7 @@ describe("API deployment health receipt", () => {
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
     expect(promoteJob).toContain(
-      "needs: [resolve, staging-health, staging-wake, build-api, build-web]",
+      "needs:\n      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]",
     );
     expect(promoteJob).not.toContain("Confirm this SHA is still main");
     expect(promoteJob).toContain("web-image-digest:");
@@ -1464,6 +1474,7 @@ describe("deployment environment verification", () => {
           return new Response("Forbidden", { status: 403 });
         }
         return Response.json({
+          status: "ok",
           commit,
           deployEnvironment: reportedEnvironment,
         });
@@ -1532,6 +1543,17 @@ describe("deployment environment verification", () => {
     }
   }
 
+  test("a missing contract readiness field refuses an otherwise matching deployment", async () => {
+    const result = await probe({
+      expectedEnvironment: "production",
+      reportedEnvironment: undefined,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain(
+      "deployEnvironment must be production; observed unset",
+    );
+  });
+
   test("commit-only probes still accept a web version marker without a deployment environment", async () => {
     const result = await probe({
       expectedEnvironment: undefined,
@@ -1573,13 +1595,22 @@ test("hosted promotion API probes declare their deployment environment", () => {
         "utf-8",
       ),
     );
-    const probes = workflowSteps(workflow, file).filter(({ run }) =>
-      run.includes("check-api-deployment.ts"),
+    const probes = workflowSteps(workflow, file).filter(
+      ({ run }) =>
+        run.includes("check-api-deployment.ts") ||
+        run.includes("staging-proof-readiness-cli.ts"),
     );
     const apiProbe = probes.find(
-      ({ env }) => env["API_DEPLOYMENT_URL"] === apiUrl,
+      ({ env }) => (env["API_DEPLOYMENT_URL"] ?? env["E2E_API_URL"]) === apiUrl,
     );
     expect(apiProbe, target).toBeDefined();
+    if (target === "staging") {
+      expect(apiProbe?.run).toContain('staging-proof-readiness-cli.ts" wait');
+      expect(apiProbe?.env["EXPECTED_COMMIT"]).toBe(
+        `\${{ needs.resolve.outputs.sha }}`,
+      );
+      continue;
+    }
     expect(apiProbe?.env["API_DEPLOYMENT_PROBE_PATH"], target).toBe("ready");
     expect(apiProbe?.env["API_DEPLOYMENT_EXPECTED_ENVIRONMENT"], target).toBe(
       target,
