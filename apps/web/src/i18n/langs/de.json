@@ -1580,6 +1580,12 @@
     "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
     "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "mcpReconnect": {
+      "additional": "{count, plural, one {+# weitere} other {+# weitere}}",
+      "dismiss": "Verbindungshinweis ausblenden",
+      "stoppedWorking": "Ihre Verbindung zu <name>{server}</name> funktioniert nicht mehr.",
+      "waitingApproval": "Ihre Verbindung zu <name>{server}</name> wartet auf Genehmigung."
+    },
     "mention": {
       "category": {
         "entities": "In dieser Akte",
@@ -5066,6 +5072,16 @@
       "preferredNamePlaceholder": "Ihr Name",
       "profileDescription": "Verwalten Sie Ihre persönlichen Einstellungen",
       "sendOtpCode": "Bestätigungscode senden",
+      "signInMethods": {
+        "confirmDescription": "Geben Sie einen neuen Code ein, den wir an Ihre E-Mail-Adresse gesendet haben, um diese Anmeldemethode zu trennen.",
+        "confirmTitle": "{provider} trennen?",
+        "description": "Verbinden Sie Konten, die dieselbe bestätigte E-Mail-Adresse verwenden.",
+        "emailCode": "E-Mail-Code",
+        "emailCodeDescription": "Sie können sich jederzeit mit einem Code anmelden, den wir an Ihre E-Mail-Adresse senden.",
+        "lastMethod": "Verbinden Sie ein weiteres Konto, bevor Sie dieses trennen.",
+        "title": "Anmeldemethoden",
+        "unavailable": "Der E-Mail-Versand muss eingerichtet sein, damit Anmeldemethoden getrennt werden können."
+      },
       "timezone": "Zeitzone",
       "timezoneDescription": "Wird für Zeitstempel in Benachrichtigungen und E-Mails verwendet",
       "timezoneSaved": "Zeitzone aktualisiert",

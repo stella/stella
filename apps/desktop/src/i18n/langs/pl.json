@@ -299,7 +299,7 @@
     "moreOptions": "Więcej opcji",
     "moreItemActions": "Więcej działań dla elementu {number}",
     "noResults": "Brak pasujących wycinków",
-    "noResultsDescription": "Czy zamiast tego wyszukać „{query}” w rejestrach?",
+    "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "noGroup": "Bez grupy",
     "newGroupOption": "Nowa grupa…",
     "copyItem": "Kopiuj element {number}",
