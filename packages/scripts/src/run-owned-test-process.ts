@@ -14,8 +14,8 @@ type RunOwnedTestProcessOptions = {
 /** Keep every descendant owned through completion, cancellation and runner exit. */
 export const runOwnedTestProcess = async ({
   command,
-  cwd,
-  env,
+  cwd = process.cwd(),
+  env = process.env,
   stdout,
   stderr,
 }: RunOwnedTestProcessOptions): Promise<number> => {
@@ -24,7 +24,7 @@ export const runOwnedTestProcess = async ({
   };
   const { child, windowsProcesses } = spawnTestProcess({
     command,
-    limitBytes: testInvocationMemoryLimit(env ?? process.env),
+    limitBytes: testInvocationMemoryLimit(env),
     options: {
       cwd,
       env,
