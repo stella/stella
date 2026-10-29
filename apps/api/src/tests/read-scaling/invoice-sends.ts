@@ -257,4 +257,4 @@ export const invoiceSendScalingScenarios = [
         };
       }),
   },
-];
+] as const;
