@@ -513,7 +513,9 @@ export function AuditResourceLabel({
             id: resource.id,
           })}
         </span>
-        <bdi aria-hidden="true">{shortId}</bdi>
+        <bdi aria-hidden="true" title={resource.id}>
+          {shortId}
+        </bdi>
       </div>
     </div>
   );
