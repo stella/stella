@@ -721,6 +721,7 @@ describe("persisted release health records", () => {
   });
 });
 
+// timeout: eight CLI runs, each spawning bun and a fake gh, exceed the default budget under load.
 test("private records roundtrip through authenticated CLI and refuse public stores", () => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-health-store-"));
   try {
@@ -836,4 +837,4 @@ if (args[0] === "api") {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+}, 30_000);
