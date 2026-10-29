@@ -44,6 +44,8 @@ export type DecisionCitationChipProps = {
    * not only its badge.
    */
   citingText?: ReactNode;
+  /** The citation range owner emits the badge; later text runs do not. */
+  showBadge?: boolean | undefined;
 };
 
 const DecisionCitationLabel = ({
@@ -127,7 +129,11 @@ const DecisionCitationTriggerContent = ({
   label,
   paragraph,
   presentation,
-}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  showBadge,
+}: Pick<
+  DecisionCitationChipProps,
+  "citingText" | "decision" | "label" | "showBadge"
+> & {
   /** The court's number, already in the reader's formatting locale. */
   paragraph: string | null;
   presentation: DecisionCitationPresentation;
@@ -155,6 +161,9 @@ const DecisionCitationTriggerContent = ({
   if (citingText === undefined) {
     return badge;
   }
+  if (!showBadge) {
+    return citingText;
+  }
   return (
     <>
       {citingText}
@@ -179,6 +188,7 @@ export const DecisionCitationChip = ({
   onOpen,
   label,
   citingText,
+  showBadge = true,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -262,6 +272,7 @@ export const DecisionCitationChip = ({
           label={label}
           paragraph={paragraph}
           presentation={presentation}
+          showBadge={showBadge}
         />
       </PopoverTrigger>
       <PopoverPanel
