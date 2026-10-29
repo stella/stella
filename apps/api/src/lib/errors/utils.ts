@@ -254,7 +254,9 @@ export const installDevErrorJsonlObserverForTest = (
 ): { drain: () => Promise<void>; restore: () => void } => {
   observeDevErrorRecord = observer;
   return {
-    drain: () => devLogWrites,
+    drain: async () => {
+      await devLogWrites;
+    },
     restore: () => {
       observeDevErrorRecord = null;
     },
