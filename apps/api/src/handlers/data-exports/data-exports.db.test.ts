@@ -6,7 +6,7 @@
  * only marks rows (the bucket lifecycle deletes the files).
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
@@ -34,10 +34,17 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { DataExportPlanRecord } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeDb } from "@/api/db/scoped";
-import { DATA_EXPORT_RECORD_BYTES_CAP } from "@/api/handlers/data-exports/build-export";
-import type { ExportSource } from "@/api/handlers/data-exports/build-export";
+import {
+  DATA_EXPORT_RECORD_BYTES_CAP,
+  planDataExport,
+} from "@/api/handlers/data-exports/build-export";
+import type {
+  ExportPlan,
+  ExportSource,
+} from "@/api/handlers/data-exports/build-export";
 import createDataExport from "@/api/handlers/data-exports/create";
 import {
   DATA_EXPORT_FAILURE_MESSAGE,
@@ -55,6 +62,10 @@ import {
 } from "@/api/handlers/data-exports/start-export";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  DATA_EXPORT_MATTER_RECORD_NAMES,
+  DATA_EXPORT_ORGANIZATION_RECORD_NAMES,
+} from "@/api/lib/data-export/archive-plan";
 import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export/queue";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -194,7 +205,63 @@ const insertExport = async (
   return id;
 };
 
-const memorySink = () => {
+const assertCompleteStoredPlan = (plan: DataExportPlanRecord | null) => {
+  expect(plan).not.toBeNull();
+  if (plan === null) {
+    panic("The export plan must be persisted before writing an archive part");
+  }
+  expect(Object.keys(plan.paths.organization.records).toSorted()).toEqual(
+    Object.keys(DATA_EXPORT_ORGANIZATION_RECORD_NAMES).toSorted(),
+  );
+  for (const paths of Object.values(plan.paths.organization.records)) {
+    expect(paths.json.length).toBeGreaterThan(0);
+    expect(paths.csv.length).toBeGreaterThan(0);
+  }
+  for (const path of Object.values(plan.paths.organization.templateFiles)) {
+    expect(path.length).toBeGreaterThan(0);
+  }
+  expect(Object.keys(plan.paths.matters).toSorted()).toEqual(
+    plan.parts.flatMap((part) => part.matterIds).toSorted(),
+  );
+  expect(
+    plan.parts.every(
+      ({ paths }) => paths.manifest.length > 0 && paths.readme.length > 0,
+    ),
+  ).toBe(true);
+  for (const part of plan.parts) {
+    for (const matterId of part.matterIds) {
+      const matter = plan.paths.matters[matterId];
+      expect(matter).toBeDefined();
+      if (matter === undefined) {
+        panic(`The stored plan is missing matter paths for ${matterId}`);
+      }
+      expect(matter.directory.length).toBeGreaterThan(0);
+      expect(matter.record.length).toBeGreaterThan(0);
+      expect(Object.keys(matter.records).toSorted()).toEqual(
+        Object.keys(DATA_EXPORT_MATTER_RECORD_NAMES).toSorted(),
+      );
+      for (const paths of Object.values(matter.records)) {
+        expect(paths.json.length).toBeGreaterThan(0);
+        expect(paths.csv.length).toBeGreaterThan(0);
+      }
+      for (const paths of Object.values(matter.folders)) {
+        expect(paths.current.length).toBeGreaterThan(0);
+        expect(paths.history.length).toBeGreaterThan(0);
+      }
+      for (const document of Object.values(matter.documents)) {
+        for (const version of Object.values(document.versions)) {
+          for (const path of Object.values(version.files)) {
+            expect(path.length).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  }
+};
+
+const memorySink = (
+  readPlanAtOpen?: () => Promise<DataExportPlanRecord | null>,
+) => {
   const parts = new Map<string, Uint8Array[]>();
   return {
     parts,
@@ -202,8 +269,14 @@ const memorySink = () => {
       openPart: (fileName: string) => {
         const chunks: Uint8Array[] = [];
         parts.set(fileName, chunks);
+        const planAtOpen = readPlanAtOpen?.();
+        let checkedPlan = false;
         return {
           write: async (chunk: Uint8Array) => {
+            if (!checkedPlan && planAtOpen !== undefined) {
+              checkedPlan = true;
+              assertCompleteStoredPlan(await planAtOpen);
+            }
             chunks.push(chunk);
           },
           close: async () => {},
@@ -218,6 +291,7 @@ type RunForOptions = {
   wrapSource?: (source: ExportSource) => ExportSource;
   controller?: AbortController;
   recordBytesCap?: number;
+  verifyPlanBeforeFirstWrite?: boolean;
 };
 
 const runFor = async (
@@ -227,6 +301,7 @@ const runFor = async (
     wrapSource = (source) => source,
     controller = new AbortController(),
     recordBytesCap = DATA_EXPORT_RECORD_BYTES_CAP,
+    verifyPlanBeforeFirstWrite = false,
   }: RunForOptions = {},
 ) => {
   const db = createRootMembershipScopedDb(
@@ -244,7 +319,17 @@ const runFor = async (
   const bytesByFileId = new Map(
     fileIds.map((fileId, index) => [fileId, fileBytes[index]]),
   );
-  const memory = memorySink();
+  const memory = memorySink(
+    verifyPlanBeforeFirstWrite
+      ? async () => {
+          const [row] = await testDb
+            .select({ plan: organizationDataExports.plan })
+            .from(organizationDataExports)
+            .where(eq(organizationDataExports.id, exportId));
+          return row?.plan ?? null;
+        }
+      : undefined,
+  );
   let manifest: Uint8Array | null = null;
   const storageAttempts: number[] = [];
   const now = new Date("2026-10-14T10:00:00.000Z");
@@ -285,6 +370,45 @@ const runFor = async (
     },
   );
   return { outcome, memory, manifest, now, storageAttempts };
+};
+
+const planFor = async (userId: SafeId<"user">): Promise<ExportPlan> => {
+  const db = createRootMembershipScopedDb(
+    { organizationId: ids.orgA, userId },
+    database,
+  );
+  const signal = new AbortController().signal;
+  const pace = async () => {};
+  const source = createExportSource({
+    db,
+    organizationId: ids.orgA,
+    signal,
+    pace,
+  });
+  return (
+    await planDataExport({
+      source,
+      partTargetBytes: Number.MAX_SAFE_INTEGER,
+      recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+      scope: { versions: "all" },
+      pace,
+    })
+  ).unwrap();
+};
+
+const withFirstPartEstimate = (
+  plan: ExportPlan,
+  estimatedBytes: number,
+): ExportPlan => {
+  const firstPart = plan.parts.at(0);
+  if (firstPart === undefined) {
+    panic("The RLS fixture must produce at least one export part");
+  }
+  return {
+    ...plan,
+    parts: [{ ...firstPart, estimatedBytes }, ...plan.parts.slice(1)],
+    bytesTotal: plan.bytesTotal + estimatedBytes - firstPart.estimatedBytes,
+  };
 };
 
 describe("data export permissions", () => {
@@ -377,15 +501,26 @@ describe("data export run", () => {
     const { outcome, memory, manifest, now, storageAttempts } = await runFor(
       ids.userAdmin,
       exportId,
+      { verifyPlanBeforeFirstWrite: true },
     );
     expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
     expect(manifest).not.toBeNull();
+
+    const [row] = await testDb
+      .select()
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, exportId));
+    assertCompleteStoredPlan(row?.plan ?? null);
+    const partManifestPath = row?.plan?.parts.at(0)?.paths.manifest;
+    if (partManifestPath === undefined) {
+      panic("The completed export must store its part manifest path");
+    }
 
     const [partChunks] = [...memory.parts.values()];
     const zip = await JSZip.loadAsync(Buffer.concat(partChunks ?? []));
     const partManifest = v.parse(
       partManifestSchema,
-      JSON.parse((await zip.file("manifest.json")?.async("string")) ?? ""),
+      JSON.parse((await zip.file(partManifestPath)?.async("string")) ?? ""),
     );
     const matterIds = partManifest.matters.map((m) => m.id);
     expect(matterIds).toContain(ids.wsA1);
@@ -406,10 +541,6 @@ describe("data export run", () => {
       expect(stored).toEqual(fileBytes[index]);
     }
 
-    const [row] = await testDb
-      .select()
-      .from(organizationDataExports)
-      .where(eq(organizationDataExports.id, exportId));
     expect(row?.status).toBe("ready");
     expect(row?.parts).toHaveLength(1);
     expect(row?.plan?.parts.map((part) => part.index)).toEqual([1]);
@@ -741,11 +872,19 @@ describe("personal matters", () => {
         // db-await-in-loop: two sequential export runs; each needs the organisation's single export slot
         const { outcome, memory } = await runFor(userId, exportId);
         expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
+        const [row] = await testDb
+          .select({ plan: organizationDataExports.plan })
+          .from(organizationDataExports)
+          .where(eq(organizationDataExports.id, exportId));
+        const partManifestPath = row?.plan?.parts.at(0)?.paths.manifest;
+        if (partManifestPath === undefined) {
+          panic("The completed export must store its part manifest path");
+        }
         const [partChunks] = [...memory.parts.values()];
         const zip = await JSZip.loadAsync(Buffer.concat(partChunks ?? []));
         const manifest = v.parse(
           partManifestSchema,
-          JSON.parse((await zip.file("manifest.json")?.async("string")) ?? ""),
+          JSON.parse((await zip.file(partManifestPath)?.async("string")) ?? ""),
         );
         const matterIds = manifest.matters.map((matter) => matter.id);
         expect(matterIds).toContain(ids.wsA1);
@@ -1107,14 +1246,11 @@ describe("run ownership", () => {
 
   test("an oversized indivisible part fails before opening an upload", async () => {
     const estimatedBytes = STREAMING_UPLOAD_MAX_EXPECTED_BYTES + 1;
+    const planned = await planFor(ids.userAdmin);
     const exportId = await insertExport({
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
-      plan: {
-        parts: [{ index: 1, matterIds: [ids.wsA1], estimatedBytes }],
-        mattersTotal: 1,
-        bytesTotal: estimatedBytes,
-      },
+      plan: withFirstPartEstimate(planned, estimatedBytes),
     });
     const { outcome, memory, manifest } = await runFor(ids.userAdmin, exportId);
     expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
@@ -1134,14 +1270,11 @@ describe("run ownership", () => {
   test("a resumed attempt measures its records again before loading them", async () => {
     // The stored plan came from an earlier attempt; the records have grown
     // past the cap since, so the resumed attempt refuses to load them.
+    const plan = await planFor(ids.userAdmin);
     const exportId = await insertExport({
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
-      plan: {
-        parts: [{ index: 1, matterIds: [ids.wsA1], estimatedBytes: 1 }],
-        mattersTotal: 1,
-        bytesTotal: 1,
-      },
+      plan,
     });
     const { outcome, memory } = await runFor(ids.userAdmin, exportId, {
       recordBytesCap: 1,
@@ -1196,6 +1329,7 @@ describe("run ownership", () => {
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
     });
+    const plannedMatters = new Set<string>();
     const { outcome, memory, storageAttempts } = await runFor(
       ids.userAdmin,
       exportId,
@@ -1205,10 +1339,14 @@ describe("run ownership", () => {
         wrapSource: (source) => ({
           ...source,
           loadMatter: async (matterId, scope) => {
-            await testDb
-              .update(organizationDataExports)
-              .set({ attempt: 2 })
-              .where(eq(organizationDataExports.id, exportId));
+            if (plannedMatters.has(matterId)) {
+              await testDb
+                .update(organizationDataExports)
+                .set({ attempt: 2 })
+                .where(eq(organizationDataExports.id, exportId));
+            } else {
+              plannedMatters.add(matterId);
+            }
             return await source.loadMatter(matterId, scope);
           },
         }),

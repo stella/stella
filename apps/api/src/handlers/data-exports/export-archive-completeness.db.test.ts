@@ -198,6 +198,7 @@ const buildArchive = async (fixture: DataExportCompletenessFixture) => {
       partTargetBytes: Number.MAX_SAFE_INTEGER,
       recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
       scope: { versions: "all" },
+      pace: async () => {},
     })
   ).unwrap();
   expect(plan.parts).toHaveLength(1);
@@ -226,7 +227,11 @@ const buildArchive = async (fixture: DataExportCompletenessFixture) => {
   expect(manifest.parts).toHaveLength(1);
   const [, chunks] = required([...memory.parts.entries()].at(0), "built part");
   const zip = await JSZip.loadAsync(Buffer.concat(chunks));
-  const partFile = required(zip.file("manifest.json"), "part manifest");
+  const plannedPart = required(plan.parts.at(0), "first planned part");
+  const partFile = required(
+    zip.file(plannedPart.paths.manifest),
+    plannedPart.paths.manifest,
+  );
   const part = v.parse(
     partManifestSchema,
     JSON.parse(await partFile.async("string")),

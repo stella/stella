@@ -1,3 +1,4 @@
+import type { DataExportPlanRecord } from "@/api/lib/data-export/archive-plan";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
@@ -12,6 +13,8 @@ import {
   timestamptz,
   user,
 } from "./common";
+
+export type { DataExportPlanRecord } from "@/api/lib/data-export/archive-plan";
 
 /** Lifecycle of one organisation data export. `queued` on insert, `running`
  *  while the worker packs parts, then `ready` or `failed`; a `ready` export
@@ -61,13 +64,6 @@ export type DataExportPartRecord = {
     fileBytes: number;
   };
   problems: DataExportProblemRecord[];
-};
-
-/** The fixed split into parts, so every attempt packs the same parts. */
-export type DataExportPlanRecord = {
-  parts: { index: number; matterIds: string[]; estimatedBytes: number }[];
-  mattersTotal: number;
-  bytesTotal: number;
 };
 
 /** Failed attempts before an export is failed for good. A resume after a

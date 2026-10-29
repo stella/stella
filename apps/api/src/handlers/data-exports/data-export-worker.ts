@@ -546,6 +546,7 @@ export const runDataExport = async (
             partTargetBytes: deps.partTargetBytes,
             recordBytesCap: deps.recordBytesCap,
             scope,
+            pace: deps.pace,
           })
         : (
             await admitDataExportRecords({

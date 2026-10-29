@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   buildDataExport,
   DATA_EXPORT_RECORD_BYTES_CAP,
@@ -16,6 +17,7 @@ import {
 import type {
   CompletedPart,
   ExportFileRef,
+  ExportPlan,
   ExportSource,
   FileRead,
   RecordBytes,
@@ -235,6 +237,7 @@ type RunOptions = {
   completedParts?: CompletedPart[];
   beforePart?: () => Promise<void>;
   source?: ExportSource;
+  plan?: ExportPlan;
 };
 
 const run = async (
@@ -244,17 +247,21 @@ const run = async (
     completedParts = [],
     beforePart = async () => {},
     source = fakeSource(world),
+    plan: persistedPlan,
   }: RunOptions = {},
 ) => {
   const memory = memorySink();
-  const plan = (
-    await planDataExport({
-      source,
-      partTargetBytes,
-      recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
-      scope: { versions: "all" },
-    })
-  ).unwrap();
+  const plan =
+    persistedPlan ??
+    (
+      await planDataExport({
+        source,
+        partTargetBytes,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: "all" },
+        pace: async () => {},
+      })
+    ).unwrap();
   const checkpoints: CompletedPart[] = [];
   let paced = 0;
   const manifest = await buildDataExport({
@@ -277,18 +284,11 @@ const run = async (
     },
     now: () => new Date("2026-10-01T09:00:00.000Z"),
   });
-  if (completedParts.length > 0) {
-    return {
-      manifest,
-      zips: [],
-      partManifests: [],
-      memory,
-      checkpoints,
-      paced,
-    };
-  }
+  const builtParts = manifest.parts.filter((part) =>
+    memory.parts.has(part.fileName),
+  );
   const zips = await Promise.all(
-    manifest.parts.map(async (part) => {
+    builtParts.map(async (part) => {
       const bytes = memory.bytesOf(part.fileName);
       expect(bytes.byteLength).toBe(part.sizeBytes);
       expect(sha256Hex(bytes)).toBe(part.sha256);
@@ -296,15 +296,23 @@ const run = async (
     }),
   );
   const partManifests = await Promise.all(
-    zips.map(async (zip) => {
-      const text = await zip.file("manifest.json")?.async("string");
+    zips.map(async (zip, index) => {
+      const completed = builtParts.at(index);
+      if (completed === undefined) {
+        throw new Error("built ZIP has no completed part");
+      }
+      const planned = plan.parts.find((part) => part.index === completed.index);
+      if (planned === undefined) {
+        throw new Error(`part ${completed.index} is absent from the plan`);
+      }
+      const text = await zip.file(planned.paths.manifest)?.async("string");
       if (text === undefined) {
-        throw new Error("part has no manifest.json");
+        throw new Error(`part has no ${planned.paths.manifest}`);
       }
       return v.parse(partManifestSchema, JSON.parse(text));
     }),
   );
-  return { manifest, zips, partManifests, memory, checkpoints, paced };
+  return { manifest, plan, zips, partManifests, memory, checkpoints, paced };
 };
 
 const basicWorld = (): FakeWorld => {
@@ -363,6 +371,7 @@ describe("organisation data export admission", () => {
         partTargetBytes: 2 * 1024 ** 3,
         recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
+        pace: async () => {},
       })
     ).unwrap();
     const matterId = world.matters.at(0)?.summary.id ?? "";
@@ -378,6 +387,7 @@ describe("organisation data export admission", () => {
         partTargetBytes: 2 * 1024 ** 3,
         recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
+        pace: async () => {},
       })
     ).unwrap();
     expect(withRecords.bytesTotal).toBe(filesOnly.bytesTotal + 1500);
@@ -408,6 +418,7 @@ describe("organisation data export admission", () => {
         partTargetBytes: 2 * 1024 ** 3,
         recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
+        pace: async () => {},
       });
       const error = planned.isErr() ? planned.error : null;
       expect(error).toBeInstanceOf(DataExportRecordsTooLargeError);
@@ -470,12 +481,49 @@ describe("organisation data export archive paths", () => {
     }
     expect(paths.filter((path) => path.includes("/versions/"))).toHaveLength(2);
   });
+
+  test("keeps every file path unique across parts after matter names are shortened", async () => {
+    const world = basicWorld();
+    const sharedPrefix = "x".repeat(240);
+    for (const [index, matter] of world.matters.entries()) {
+      matter.summary.name = `${sharedPrefix}${index === 0 ? "A" : "B"}`;
+    }
+    const result = await run(world, { partTargetBytes: 10 });
+    expect(result.plan.parts.map((part) => part.matterIds)).toEqual([
+      ["m-1"],
+      ["m-2"],
+    ]);
+    const firstDirectory = result.plan.paths.matters["m-1"]?.directory;
+    const secondDirectory = result.plan.paths.matters["m-2"]?.directory;
+    if (firstDirectory === undefined || secondDirectory === undefined) {
+      throw new Error("planned matter directories are missing");
+    }
+    expect(archivePathKey(firstDirectory)).not.toBe(
+      archivePathKey(secondDirectory),
+    );
+
+    const allFilePaths = result.zips.flatMap((zip) =>
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name),
+    );
+    const foldedPaths = allFilePaths.map(archivePathKey);
+    expect(new Set(foldedPaths).size).toBe(allFilePaths.length);
+    for (const [index, planned] of result.plan.parts.entries()) {
+      const zip = result.zips[index];
+      if (zip === undefined) {
+        throw new Error(`missing ZIP for part ${planned.index}`);
+      }
+      expect(zip.file(planned.paths.manifest)).not.toBeNull();
+      expect(zip.file(planned.paths.readme)).not.toBeNull();
+    }
+  });
 });
 
 describe("organisation data export builder", () => {
   test("carries every document version with its verified checksum and path", async () => {
     const world = basicWorld();
-    const { manifest, zips, partManifests } = await run(world);
+    const { manifest, plan, zips, partManifests } = await run(world);
     expect(manifest.parts).toHaveLength(1);
     const zip = zips[0];
     const part = partManifests[0];
@@ -490,10 +538,14 @@ describe("organisation data export builder", () => {
       1, 2, 3,
     ]);
     const files = document?.versions.flatMap((ver) => ver.files) ?? [];
+    const matterDirectory = plan.paths.matters["m-1"]?.directory;
+    if (matterDirectory === undefined) {
+      throw new Error("matter directory was not planned");
+    }
     expect(files.map((f) => f.path)).toEqual([
-      "matters/Alfa v. Beta [REF-m-1]/versions/Pleadings/Žaloba (v1).pdf",
-      "matters/Alfa v. Beta [REF-m-1]/versions/Pleadings/Žaloba (v2).pdf",
-      "matters/Alfa v. Beta [REF-m-1]/documents/Pleadings/Žaloba.pdf",
+      `${matterDirectory}/versions/Pleadings/Žaloba (v1).pdf`,
+      `${matterDirectory}/versions/Pleadings/Žaloba (v2).pdf`,
+      `${matterDirectory}/documents/Pleadings/Žaloba.pdf`,
     ]);
     for (const file of files) {
       const bytes = await zip.file(file.path)?.async("uint8array");
@@ -657,15 +709,17 @@ describe("organisation data export builder", () => {
   });
 
   test("resumes after the last checkpoint without rebuilding finished parts", async () => {
-    const first = await run(basicWorld(), { partTargetBytes: 10 });
+    const originalWorld = basicWorld();
+    const first = await run(originalWorld, { partTargetBytes: 10 });
     expect(first.checkpoints.map((part) => part.index)).toEqual([1, 2]);
     expect(first.paced).toBeGreaterThan(0);
     const firstPart = first.checkpoints.at(0);
     if (firstPart === undefined) {
       throw new Error("expected a first part");
     }
-    const resumed = await run(basicWorld(), {
-      partTargetBytes: 10,
+    const persistedPlan = structuredClone(first.plan);
+    const resumed = await run(originalWorld, {
+      plan: persistedPlan,
       completedParts: [firstPart],
     });
     const secondPart = first.manifest.parts.at(1);
@@ -678,6 +732,51 @@ describe("organisation data export builder", () => {
       first.manifest.parts.map((part) => part.sha256),
     );
     expect(resumed.manifest.totals).toEqual(first.manifest.totals);
+
+    const renamedWorld = basicWorld();
+    const renamedMatter = renamedWorld.matters.find(
+      ({ summary }) => summary.id === "m-2",
+    );
+    if (renamedMatter === undefined) {
+      throw new Error("expected second matter in resumed source");
+    }
+    renamedMatter.summary.name = "Renamed matter after checkpoint";
+    renamedMatter.matter.summary.name = renamedMatter.summary.name;
+    const renamedFolder = renamedMatter.matter.folders.at(0);
+    if (renamedFolder !== undefined) {
+      renamedFolder.name = "Renamed folder";
+    }
+    const renamedDocument = renamedMatter.matter.documents.at(0);
+    if (renamedDocument !== undefined) {
+      renamedDocument.name = "Renamed document";
+      for (const version of renamedDocument.versions) {
+        for (const file of version.files) {
+          file.fileName = "renamed-file.pdf";
+        }
+      }
+    }
+    const resumedAfterRename = await run(renamedWorld, {
+      plan: persistedPlan,
+      completedParts: [firstPart],
+    });
+    expect([...resumedAfterRename.memory.parts.keys()]).toEqual([
+      secondPart.fileName,
+    ]);
+    expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual([
+      2,
+    ]);
+    expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
+    const originalSecondZip = first.zips.at(1);
+    const resumedSecondZip = resumedAfterRename.zips.at(0);
+    if (originalSecondZip === undefined || resumedSecondZip === undefined) {
+      throw new Error("expected second part ZIP in both builds");
+    }
+    const filePaths = (zip: JSZip) =>
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name)
+        .toSorted();
+    expect(filePaths(resumedSecondZip)).toEqual(filePaths(originalSecondZip));
   });
 
   test("stops between files when its signal aborts", async () => {
@@ -689,6 +788,7 @@ describe("organisation data export builder", () => {
         partTargetBytes: 10,
         recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
         scope: { versions: "all" },
+        pace: async () => {},
       })
     ).unwrap();
     const checkpoints: CompletedPart[] = [];

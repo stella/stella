@@ -4,12 +4,23 @@
 
 import { panic } from "better-result";
 
+import { compareCodeUnit } from "@stll/collation";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+
+/** Stable naming order shared by planning and packing. */
+export const compareArchiveNames = (
+  a: { name: string; id: string },
+  b: { name: string; id: string },
+): number =>
+  compareCodeUnit(
+    normalizeUnicode(a.name, "NFC"),
+    normalizeUnicode(b.name, "NFC"),
+  ) || compareCodeUnit(a.id, b.id);
 
 // Device names Windows refuses as a file or folder name, with or without an
 // extension.

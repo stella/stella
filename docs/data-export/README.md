@@ -24,8 +24,8 @@ generated from `apps/api/src/handlers/data-exports/manifest-schema.ts`
 Inside each part:
 
 ```
-manifest.json                       kind: "part"; everything in this part
-README.txt
+parts/part-<n>/manifest.json         kind: "part"; everything in this part
+parts/part-<n>/README.txt
 organization/                       part 1 only
   seller-profiles.json / .csv
   clause-categories.json / .csv
@@ -46,6 +46,12 @@ matters/<matter name> [<reference>]/
   documents/<folders>/<file>        current version of each document
   versions/<folders>/<file> (v<n>).<ext>   earlier versions
 ```
+
+Each export stores one path plan before packing. Matter directories, record
+files, document versions, templates and per-part metadata draw from the same
+namespace across all parts. Resumed attempts reuse those paths even if names
+change; files and folders added after planning belong to a later export.
+Extracting all ZIP parts into one directory preserves every planned file.
 
 ## Rules an importer can rely on
 

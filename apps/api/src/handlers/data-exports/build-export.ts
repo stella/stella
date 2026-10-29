@@ -20,14 +20,11 @@ import { panic, Result, TaggedError } from "better-result";
 import { compareCodeUnit } from "@stll/collation";
 import { createSha256 } from "@stll/sha256/bun";
 import type { Sha256Hasher } from "@stll/sha256/types";
-import { normalizeUnicode } from "@stll/text-normalize";
 
+import { planArchivePaths } from "@/api/handlers/data-exports/archive-path-plan";
 import {
-  ArchivePathAllocator,
+  compareArchiveNames,
   compressionForMimeType,
-  sanitizeArchiveSegment,
-  SEGMENT_SUFFIX_RESERVE,
-  withSegmentSuffix,
 } from "@/api/handlers/data-exports/archive-paths";
 import {
   DATA_EXPORT_FORMAT,
@@ -55,6 +52,14 @@ import type {
   ZipCompression,
   ZipEntryInput,
 } from "@/api/handlers/data-exports/zip-writer";
+import type {
+  DataExportMatterPaths,
+  DataExportMatterRecordKind,
+  DataExportOrganizationPaths,
+  DataExportOrganizationRecordKind,
+  DataExportPlanRecord,
+  DataExportRecordPaths,
+} from "@/api/lib/data-export/archive-plan";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 type RecordRow = Record<string, unknown>;
@@ -124,14 +129,11 @@ export type SourceMatterSummary = {
   estimatedBytes: number;
 };
 
-export type SourceMatter = {
+export type SourceMatter = Record<DataExportMatterRecordKind, RecordTable> & {
   summary: SourceMatterSummary;
   record: RecordRow;
   folders: readonly SourceFolder[];
   documents: readonly SourceDocument[];
-  tasks: RecordTable;
-  timeEntries: RecordTable;
-  expenses: RecordTable;
   invoices: RecordTable;
 };
 
@@ -144,16 +146,10 @@ export type SourceTemplateFile = {
   sizeBytes: number;
 };
 
-export type SourceOrganizationRecords = {
-  sellerProfiles: RecordTable;
-  clauseCategories: RecordTable;
-  templateCategories: RecordTable;
-  contacts: RecordTable;
-  contactRelationships: RecordTable;
-  clauses: RecordTable;
-  templates: RecordTable;
-  unassignedTimeEntries: RecordTable;
-  invoices: RecordTable;
+export type SourceOrganizationRecords = Record<
+  DataExportOrganizationRecordKind,
+  RecordTable
+> & {
   templateFiles: readonly SourceTemplateFile[];
 };
 
@@ -212,11 +208,7 @@ export type ExportSink = {
 };
 
 /** The fixed split of an export into parts, stored before packing starts. */
-export type ExportPlan = {
-  parts: { index: number; matterIds: string[]; estimatedBytes: number }[];
-  mattersTotal: number;
-  bytesTotal: number;
-};
+export type ExportPlan = DataExportPlanRecord;
 
 /** A finished part: its manifest entry plus what the export manifest sums. */
 export type CompletedPart = ExportManifest["parts"][number] & {
@@ -236,36 +228,10 @@ export type ExportProgress = {
  */
 const DEFLATE_IN_MEMORY_MAX_BYTES = 8 * 1024 * 1024;
 
-const MANIFEST_NAME = "manifest.json";
-const README_NAME = "README.txt";
-const ORGANIZATION_DIR = "organization";
-const MATTERS_DIR = "matters";
-
 const encoder = new TextEncoder();
 
 const jsonBytes = (value: unknown): Uint8Array =>
   encoder.encode(`${JSON.stringify(value, null, 2)}\n`);
-
-const byName = (
-  a: { name: string; id: string },
-  b: { name: string; id: string },
-): number =>
-  compareCodeUnit(
-    normalizeUnicode(a.name, "NFC"),
-    normalizeUnicode(b.name, "NFC"),
-  ) || compareCodeUnit(a.id, b.id);
-
-/**
- * `Draft.docx` version 3 becomes `Draft (v3).docx`, shortened by UTF-8
- * bytes where needed so the segment, with room for a collision suffix,
- * stays inside the 255-byte file-name limit.
- */
-const versionedFileName = (fileName: string, versionNumber: number): string =>
-  withSegmentSuffix(
-    sanitizeArchiveSegment(fileName),
-    ` (v${versionNumber})`,
-    SEGMENT_SUFFIX_RESERVE.open,
-  );
 
 const partFileName = ({
   exportId,
@@ -285,15 +251,17 @@ const readme = ({
   exportId,
   index,
   count,
+  manifestPath,
 }: {
   exportId: string;
   index: number;
   count: number;
+  manifestPath: string;
 }): string =>
   [
     `stella data export ${exportId}, part ${index} of ${count}.`,
     "",
-    `${MANIFEST_NAME} lists everything in this part: every matter, document and`,
+    `${manifestPath} lists everything in this part: every matter, document and`,
     "document version, with ids, authors, timestamps, sizes, MIME types and",
     "SHA-256 checksums, and the path of each file in this archive. Its format",
     `("${DATA_EXPORT_FORMAT}", version ${DATA_EXPORT_FORMAT_VERSION}) is described by the JSON Schema at`,
@@ -313,7 +281,6 @@ const readme = ({
   ].join("\n");
 
 type PartContext = {
-  allocator: ArchivePathAllocator;
   problems: ManifestProblem[];
   fileCount: number;
   createdAt: Date;
@@ -335,32 +302,26 @@ const bytesEntry = (
 
 type WriteRecordArgs = {
   context: PartContext;
-  directory: string;
-  baseName: string;
+  paths: DataExportRecordPaths;
   table: RecordTable;
 };
 
 /** JSON (canonical) and CSV entries for one record table. */
 const recordEntries = ({
   context,
-  directory,
-  baseName,
+  paths: { json, csv },
   table,
-}: WriteRecordArgs): { ref: ManifestRecordFile; entries: ZipEntryInput[] } => {
-  const json = context.allocator.reserve(`${directory}/${baseName}.json`);
-  const csv = context.allocator.reserve(`${directory}/${baseName}.csv`);
-  return {
-    ref: { json, csv, count: table.rows.length },
-    entries: [
-      bytesEntry(json, jsonBytes(table.rows), context.createdAt),
-      bytesEntry(
-        csv,
-        encoder.encode(toCsv(table.columns, table.rows)),
-        context.createdAt,
-      ),
-    ],
-  };
-};
+}: WriteRecordArgs): { ref: ManifestRecordFile; entries: ZipEntryInput[] } => ({
+  ref: { json, csv, count: table.rows.length },
+  entries: [
+    bytesEntry(json, jsonBytes(table.rows), context.createdAt),
+    bytesEntry(
+      csv,
+      encoder.encode(toCsv(table.columns, table.rows)),
+      context.createdAt,
+    ),
+  ],
+});
 
 const hashing = async function* (
   chunks: AsyncIterable<Uint8Array>,
@@ -463,88 +424,40 @@ const fileEntry = async function* ({
   return { sha256, sizeBytes };
 };
 
-type FolderDirectoriesArgs = {
-  folders: readonly SourceFolder[];
-  rootDir: string;
-  allocator: ArchivePathAllocator;
-};
-
-/**
- * Map each folder id to its archive directory below `rootDir`. Folders
- * draw their paths from the part's allocator, so a file allocated later can
- * never take a name a folder already holds.
- */
-const folderDirectories = ({
-  folders,
-  rootDir,
-  allocator,
-}: FolderDirectoriesArgs): Map<string, string> => {
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  const directories = new Map<string, string>();
-  const resolving = new Set<string>();
-  const resolve = (id: string | null): string => {
-    if (id === null) {
-      return rootDir;
-    }
-    const cached = directories.get(id);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const folder = byId.get(id);
-    // A parent outside the folder set (a task, a missing row) or a cycle
-    // falls back to the root rather than recursing without end.
-    if (folder === undefined || resolving.has(id)) {
-      return rootDir;
-    }
-    resolving.add(id);
-    const directory = allocator.allocate(resolve(folder.parentId), folder.name);
-    resolving.delete(id);
-    directories.set(id, directory);
-    return directory;
-  };
-  for (const folder of folders.toSorted(byName)) {
-    resolve(folder.id);
-  }
-  return directories;
-};
-
 type MatterEntriesArgs = {
   context: PartContext;
   matter: SourceMatter;
-  matterDir: string;
+  paths: DataExportMatterPaths;
 };
 
 // Yield one matter's entries and return its manifest record.
 const matterEntries = async function* ({
   context,
   matter,
-  matterDir,
+  paths,
 }: MatterEntriesArgs): AsyncGenerator<ZipEntryInput, ManifestMatter> {
   const { summary } = matter;
-  const matterJson = context.allocator.reserve(`${matterDir}/matter.json`);
+  const matterDir = paths.directory;
+  const matterJson = paths.record;
   yield bytesEntry(matterJson, jsonBytes(matter.record), context.createdAt);
   const tasks = recordEntries({
     context,
-    directory: matterDir,
-    baseName: "tasks",
+    paths: paths.records.tasks,
     table: matter.tasks,
   });
   const timeEntries = recordEntries({
     context,
-    directory: matterDir,
-    baseName: "time-entries",
+    paths: paths.records.timeEntries,
     table: matter.timeEntries,
   });
   const expenses = recordEntries({
     context,
-    directory: matterDir,
-    baseName: "expenses",
+    paths: paths.records.expenses,
     table: matter.expenses,
   });
   const invoices = recordEntries({
     context,
-    directory: matterDir,
-    baseName: "invoices",
+    paths: paths.records.invoices,
     table: matter.invoices,
   });
   yield* tasks.entries;
@@ -552,46 +465,30 @@ const matterEntries = async function* ({
   yield* expenses.entries;
   yield* invoices.entries;
 
-  const documentsDir = `${matterDir}/documents`;
-  const versionsDir = `${matterDir}/versions`;
-  const directories = folderDirectories({
-    folders: matter.folders,
-    rootDir: documentsDir,
-    allocator: context.allocator,
-  });
-  // Earlier versions mirror the folder tree under versions/. Its directories
-  // are allocated before any file, like the current ones, so a historical
-  // file's name never takes a directory's path.
-  const historyDirectories = folderDirectories({
-    folders: matter.folders,
-    rootDir: versionsDir,
-    allocator: context.allocator,
-  });
   const documents: ManifestDocument[] = [];
-  for (const document of matter.documents.toSorted(byName)) {
-    const currentDir =
-      document.parentId === null
-        ? documentsDir
-        : (directories.get(document.parentId) ?? documentsDir);
-    const historyDir =
-      document.parentId === null
-        ? versionsDir
-        : (historyDirectories.get(document.parentId) ?? versionsDir);
+  for (const document of matter.documents.toSorted(compareArchiveNames)) {
+    // The durable plan freezes path-bearing identities. Later additions belong
+    // to a later export rather than acquiring new paths during a resume.
+    const documentPaths = paths.documents[document.id];
+    if (documentPaths === undefined) {
+      continue;
+    }
     const versions: ManifestDocument["versions"] = [];
     const orderedVersions = document.versions.toSorted(
       (a, b) =>
         a.versionNumber - b.versionNumber || compareCodeUnit(a.id, b.id),
     );
     for (const version of orderedVersions) {
-      const isCurrent = version.id === document.currentVersionId;
+      const versionPaths = documentPaths.versions[version.id];
+      if (versionPaths === undefined) {
+        continue;
+      }
       const files: ManifestDocument["versions"][number]["files"] = [];
       for (const file of version.files) {
-        const path = isCurrent
-          ? context.allocator.allocate(currentDir, file.fileName)
-          : context.allocator.allocate(
-              historyDir,
-              versionedFileName(file.fileName, version.versionNumber),
-            );
+        const path = versionPaths.files[file.fieldId];
+        if (path === undefined) {
+          continue;
+        }
         const written = yield* fileEntry({
           context,
           ref: {
@@ -655,12 +552,19 @@ const matterEntries = async function* ({
       expenses: expenses.ref,
       invoices: invoices.ref,
     },
-    folders: matter.folders.map((folder) => ({
-      id: folder.id,
-      parentId: folder.parentId,
-      name: folder.name,
-      path: directories.get(folder.id) ?? documentsDir,
-    })),
+    folders: matter.folders.flatMap((folder) => {
+      const folderPaths = paths.folders[folder.id];
+      return folderPaths === undefined
+        ? []
+        : [
+            {
+              id: folder.id,
+              parentId: folder.parentId,
+              name: folder.name,
+              path: folderPaths.current,
+            },
+          ];
+    }),
     documents,
   };
 };
@@ -668,50 +572,36 @@ const matterEntries = async function* ({
 type OrganizationEntriesArgs = {
   context: PartContext;
   records: SourceOrganizationRecords;
+  paths: DataExportOrganizationPaths;
 };
 
 // Yield the organisation-wide records and template files (part 1 only).
 const organizationEntries = async function* ({
   context,
   records,
+  paths,
 }: OrganizationEntriesArgs): AsyncGenerator<
   ZipEntryInput,
   OrganizationRecords
 > {
-  const table = (baseName: string, rows: RecordTable) =>
-    recordEntries({
-      context,
-      directory: ORGANIZATION_DIR,
-      baseName,
-      table: rows,
-    });
+  const table = (key: DataExportOrganizationRecordKind) =>
+    recordEntries({ context, paths: paths.records[key], table: records[key] });
   const tables = {
-    sellerProfiles: table("seller-profiles", records.sellerProfiles),
-    clauseCategories: table("clause-categories", records.clauseCategories),
-    templateCategories: table(
-      "template-categories",
-      records.templateCategories,
-    ),
-    invoices: table("invoices-without-matter", records.invoices),
-    contacts: table("contacts", records.contacts),
-    contactRelationships: table(
-      "contact-relationships",
-      records.contactRelationships,
-    ),
-    clauses: table("clauses", records.clauses),
-    templates: table("templates", records.templates),
-    unassignedTimeEntries: table(
-      "time-entries-without-matter",
-      records.unassignedTimeEntries,
-    ),
+    sellerProfiles: table("sellerProfiles"),
+    clauseCategories: table("clauseCategories"),
+    templateCategories: table("templateCategories"),
+    invoices: table("invoices"),
+    contacts: table("contacts"),
+    contactRelationships: table("contactRelationships"),
+    clauses: table("clauses"),
+    templates: table("templates"),
+    unassignedTimeEntries: table("unassignedTimeEntries"),
   };
   for (const recordFile of Object.values(tables)) {
     yield* recordFile.entries;
   }
 
   const templateFiles: ManifestTemplateFile[] = [];
-  const templateDirs = new ArchivePathAllocator();
-  const templateDirById = new Map<string, string>();
   const orderedFiles = records.templateFiles.toSorted(
     (a, b) =>
       compareCodeUnit(a.templateName, b.templateName) ||
@@ -719,14 +609,10 @@ const organizationEntries = async function* ({
       a.version - b.version,
   );
   for (const file of orderedFiles) {
-    const directory =
-      templateDirById.get(file.templateId) ??
-      templateDirs.allocate(`${ORGANIZATION_DIR}/templates`, file.templateName);
-    templateDirById.set(file.templateId, directory);
-    const path = context.allocator.allocate(
-      directory,
-      versionedFileName(file.fileName, file.version),
-    );
+    const path = paths.templateFiles[file.templateVersionId];
+    if (path === undefined) {
+      continue;
+    }
     const written = yield* fileEntry({
       context,
       ref: { type: "template", templateVersionId: file.templateVersionId },
@@ -794,6 +680,7 @@ type PlanDataExportArgs = {
   partTargetBytes: number;
   recordBytesCap: number;
   scope: { versions: DataExportVersionScope };
+  pace: () => Promise<void>;
 };
 
 /**
@@ -836,10 +723,13 @@ export const planDataExport = async ({
   partTargetBytes,
   recordBytesCap,
   scope,
+  pace,
 }: PlanDataExportArgs): Promise<
   Result<ExportPlan, DataExportRecordsTooLargeError>
 > => {
-  const listed = (await source.listMatters(scope.versions)).toSorted(byName);
+  const listed = (await source.listMatters(scope.versions)).toSorted(
+    compareArchiveNames,
+  );
   // Admission comes first: an export whose records cannot be held in memory
   // is refused before any of them is loaded.
   const admitted = await admitDataExportRecords({
@@ -870,12 +760,16 @@ export const planDataExport = async ({
     targetBytes: partTargetBytes,
     organizationBytes,
   });
+  const pathPlan = await planArchivePaths({
+    source,
+    parts,
+    matters: listed,
+    organization,
+    scope: scope.versions,
+    pace,
+  });
   return Result.ok({
-    parts: parts.map((part) => ({
-      index: part.index,
-      matterIds: part.matterIds,
-      estimatedBytes: part.estimatedBytes,
-    })),
+    ...pathPlan,
     mattersTotal: matters.length,
     bytesTotal:
       organizationBytes +
@@ -965,7 +859,6 @@ export const buildDataExport = async ({
     signal.throwIfAborted();
     await beforePart();
     const context: PartContext = {
-      allocator: new ArchivePathAllocator(),
       problems: [],
       fileCount: 0,
       createdAt,
@@ -973,23 +866,28 @@ export const buildDataExport = async ({
       pace,
       signal,
     };
-    context.allocator.reserve(MANIFEST_NAME);
-    context.allocator.reserve(README_NAME);
-    const matterDirs = new ArchivePathAllocator();
     const manifestMatters: ManifestMatter[] = [];
     let manifestOrganization: OrganizationRecords | null = null;
     let partBytesDone = 0;
 
     const entries = async function* (): AsyncGenerator<ZipEntryInput> {
       yield bytesEntry(
-        README_NAME,
-        encoder.encode(readme({ exportId, index: planned.index, count })),
+        planned.paths.readme,
+        encoder.encode(
+          readme({
+            exportId,
+            index: planned.index,
+            count,
+            manifestPath: planned.paths.manifest,
+          }),
+        ),
         createdAt,
       );
       if (planned.index === 1) {
         manifestOrganization = yield* organizationEntries({
           context,
           records: await source.loadOrganizationRecords(),
+          paths: plan.paths.organization,
         });
       }
       for (const matterId of planned.matterIds) {
@@ -1001,15 +899,13 @@ export const buildDataExport = async ({
         if (matter === null) {
           context.problems.push({ reason: "matter_unavailable", matterId });
         } else {
-          const label =
-            matter.summary.reference.length > 0
-              ? `${matter.summary.name} [${matter.summary.reference}]`
-              : matter.summary.name;
           manifestMatters.push(
             yield* matterEntries({
               context,
               matter,
-              matterDir: matterDirs.allocate(MATTERS_DIR, label),
+              paths:
+                plan.paths.matters[matterId] ??
+                panic(`Matter ${matterId} has no planned paths`),
             }),
           );
           partBytesDone += matter.summary.estimatedBytes;
@@ -1028,7 +924,11 @@ export const buildDataExport = async ({
         matters: manifestMatters,
         problems: context.problems,
       };
-      yield bytesEntry(MANIFEST_NAME, jsonBytes(partManifest), createdAt);
+      yield bytesEntry(
+        planned.paths.manifest,
+        jsonBytes(partManifest),
+        createdAt,
+      );
     };
 
     const fileName = partFileName({ exportId, index: planned.index, count });

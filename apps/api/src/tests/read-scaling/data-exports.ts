@@ -4,6 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import { auditLogs, organizationDataExports } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { planOrganizationPaths } from "@/api/handlers/data-exports/archive-path-plan";
+import { ArchivePathAllocator } from "@/api/handlers/data-exports/archive-paths";
 import downloadDataExport from "@/api/handlers/data-exports/download";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
@@ -36,6 +38,16 @@ export const seedDataExportReadScaling = async (
   const exportIds = Array.from({ length: size }, () =>
     createSafeId<"dataExport">(),
   );
+  const matterIds = Array.from({ length: size }, () =>
+    createSafeId<"workspace">(),
+  );
+  const planPaths = {
+    organization: planOrganizationPaths({
+      allocator: new ArchivePathAllocator(),
+      templateFiles: [],
+    }),
+    matters: {},
+  };
   const exportId =
     exportIds.at(0) ?? panic("Export scaling requires an export");
   const rlsDb = markRlsDatabase(db);
@@ -97,14 +109,17 @@ export const seedDataExportReadScaling = async (
               parts: [
                 {
                   index: 1,
-                  matterIds: Array.from({ length: size }, () =>
-                    createSafeId<"workspace">(),
-                  ),
+                  matterIds,
                   estimatedBytes: size,
+                  paths: {
+                    manifest: "parts/part-01/manifest.json",
+                    readme: "parts/part-01/README.txt",
+                  },
                 },
               ],
               mattersTotal: size,
               bytesTotal: size,
+              paths: planPaths,
             },
             parts: [
               {
@@ -113,9 +128,7 @@ export const seedDataExportReadScaling = async (
                 fileName: "part-0001.zip",
                 sizeBytes: 100,
                 sha256: "a".repeat(64),
-                matterIds: Array.from({ length: size }, () =>
-                  createSafeId<"workspace">(),
-                ),
+                matterIds,
                 fileCount: 1,
                 totals: {
                   matters: size,
